@@ -1,0 +1,40 @@
+{
+  "api": "precision",
+  "pdf_path": "corpus\\raw_pdf\\批判理论（Critical theory） (Max Horkheimer马克斯・霍克海默) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "file_name": "批判理论（Critical theory） (Max Horkheimer马克斯・霍克海默) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "data_id_prefix": "critical-theory",
+  "total_pages": 327,
+  "segment_size": 200,
+  "requested_page_start": 1,
+  "requested_page_end": 327,
+  "model_version": "vlm",
+  "language": "ch",
+  "is_ocr": true,
+  "enable_table": true,
+  "enable_formula": true,
+  "submitted_at": 1783669066,
+  "segments": [
+    {
+      "data_id": "critical-theory-p001-200",
+      "page_ranges": "1-200",
+      "status": "completed",
+      "batch_id": "059665c5-a153-4e98-a959-18a6d8e32df0",
+      "state_file": "corpus\\processed\\mineru\\tasks\\059665c5-a153-4e98-a959-18a6d8e32df0.json",
+      "result_dirs": [
+        "corpus\\processed\\mineru\\results\\critical-theory-p001-200"
+      ],
+      "result_dir": "corpus\\processed\\mineru\\results\\critical-theory-p001-200"
+    },
+    {
+      "data_id": "critical-theory-p201-327",
+      "page_ranges": "201-327",
+      "status": "completed",
+      "batch_id": "16b66691-2c37-4cde-9a17-47356a50d789",
+      "state_file": "corpus\\processed\\mineru\\tasks\\16b66691-2c37-4cde-9a17-47356a50d789.json",
+      "result_dirs": [
+        "corpus\\processed\\mineru\\results\\critical-theory-p201-327"
+      ],
+      "result_dir": "corpus\\processed\\mineru\\results\\critical-theory-p201-327"
+    }
+  ]
+}

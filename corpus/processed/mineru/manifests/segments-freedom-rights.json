@@ -1,0 +1,36 @@
+{
+  "api": "precision",
+  "pdf_path": "corpus\\raw_pdf\\自由的权利 (【德】阿克塞尔·霍耐特（Axel Honneth）) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "file_name": "自由的权利 (【德】阿克塞尔·霍耐特（Axel Honneth）) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+  "data_id_prefix": "freedom-rights",
+  "total_pages": 565,
+  "segment_size": 200,
+  "requested_page_start": 1,
+  "requested_page_end": 565,
+  "model_version": "vlm",
+  "language": "ch",
+  "is_ocr": true,
+  "enable_table": true,
+  "enable_formula": true,
+  "submitted_at": 1783604737,
+  "segments": [
+    {
+      "data_id": "freedom-rights-p001-200",
+      "page_ranges": "1-200",
+      "status": "skipped_existing_result",
+      "result_dir": "corpus\\processed\\mineru\\results\\freedom-rights-p001-200"
+    },
+    {
+      "data_id": "freedom-rights-p201-400",
+      "page_ranges": "201-400",
+      "status": "skipped_existing_result",
+      "result_dir": "corpus\\processed\\mineru\\results\\freedom-rights-p201-400"
+    },
+    {
+      "data_id": "freedom-rights-p401-565",
+      "page_ranges": "401-565",
+      "status": "skipped_existing_result",
+      "result_dir": "corpus\\processed\\mineru\\results\\freedom-rights-p401-565"
+    }
+  ]
+}

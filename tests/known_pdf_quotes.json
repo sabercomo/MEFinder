@@ -1,0 +1,123 @@
+[
+  {
+    "id": "pdf_exact_body_01",
+    "query": "We make and cannot escape making value judgments",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "Critique of Forms of Life",
+    "expected_contains": "We make and cannot escape making value judgments",
+    "expected_citation_page_start": "1",
+    "expected_cross_page": false
+  },
+  {
+    "id": "pdf_front_matter_uncalibrated_01",
+    "query": "Copyright 2018 by the President and Fellows of Harvard College",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "Critique of Forms of Life",
+    "expected_contains": "Copyright",
+    "expected_uncalibrated": true
+  },
+  {
+    "id": "pdf_cross_page_01",
+    "query": "eating bananas or wearing red cowboy boots These things as they say",
+    "mode": "punctuation",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "Critique of Forms of Life",
+    "expected_cross_page": true,
+    "expected_citation_page_start": "1",
+    "expected_citation_page_end": "2"
+  },
+  {
+    "id": "pdf_page_02_01",
+    "query": "neither a question of taste nor a personal matter",
+    "mode": "punctuation",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "Critique of Forms of Life",
+    "expected_citation_page_start": "2"
+  },
+  {
+    "id": "pdf_honneth_reconceiving_01",
+    "query": "Coming to Critical Theory from mainly analytic philosophy",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "Reconceiving Social Philosophy",
+    "expected_contains": "Coming to Critical Theory from mainly analytic philosophy",
+    "expected_citation_page_start": "vii",
+    "expected_mapping_method": "pdf_page_label"
+  },
+  {
+    "id": "pdf_honneth_labor_01",
+    "query": "任何理论都根植于一种前科学经验",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "劳动的主权者：劳动的规范理论",
+    "expected_contains": "任何理论都根植于一种前科学经验",
+    "expected_uncalibrated": true
+  },
+  {
+    "id": "pdf_hegel_philosophy_right_01",
+    "query": "道德是法的真理",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "法哲学原理：或自然法和国家学纲要",
+    "expected_contains": "道德是法的真理",
+    "expected_citation_page_start": "序言第xvi页",
+    "expected_mapping_method": "native_pdf_edge_sequence"
+  },
+  {
+    "id": "pdf_cannibal_capitalism_01",
+    "query": "我们被烤焦了吗",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "食人资本主义",
+    "expected_contains": "我们被烤焦了吗",
+    "expected_uncalibrated": true
+  },
+  {
+    "id": "pdf_critical_theory_mineru_01",
+    "query": "马克思主义需要有新的大发展",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "批判理论",
+    "expected_contains": "马克思主义需要有新的大发展",
+    "expected_uncalibrated": true
+  },
+  {
+    "id": "pdf_critical_theory_citation_page_01",
+    "query": "科学被看作人类的生产力之一",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "批判理论",
+    "expected_contains": "科学被看作人类的生产力之一",
+    "expected_citation_page_start": "1"
+  },
+  {
+    "id": "pdf_critical_theory_after_first_duplicate",
+    "query": "许多例子都可以说明经验主义在整个世界中的作用",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "批判理论",
+    "expected_citation_page_start": "147"
+  },
+  {
+    "id": "pdf_critical_theory_after_second_duplicate",
+    "query": "逻辑与经验主义是相互冲突的",
+    "mode": "auto",
+    "source_type": "pdf",
+    "expected_source_type": "pdf",
+    "expected_document_title": "批判理论",
+    "expected_citation_page_start": "167"
+  }
+]

@@ -1,0 +1,259 @@
+"""Page-calibration library projection built from persisted source state."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+
+from .auto_page_mapping import has_manual_mapping
+from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
+
+
+STATUS_LABELS = {
+    "manual_mapped": "已校准 · 人工映射",
+    "auto_mapped_high": "已校准 · 自动映射",
+    "needs_review": "待确认",
+    "unmapped": "待校准",
+    "auto_mapping_failed": "检测失败",
+    "mapping": "正在检测",
+    "source_missing": "原文件缺失",
+}
+
+
+def build_calibration_library(
+    root: Path,
+    source_files: Sequence[Mapping[str, object]],
+    volumes: Sequence[Mapping[str, object]],
+    documents: Sequence[Mapping[str, object]],
+    latest_runs: Optional[Mapping[str, Mapping[str, object]]] = None,
+    active_source_ids: Optional[Iterable[str]] = None,
+) -> Dict[str, object]:
+    """Return card-ready PDF records and status totals."""
+
+    root = Path(root).resolve()
+    volume_by_source = {
+        str(item.get("source_file_id")): item
+        for item in volumes
+        if item.get("source_file_id")
+    }
+    document_by_source = {
+        str(item.get("source_file_id")): item
+        for item in documents
+        if item.get("source_file_id")
+    }
+    latest_runs = latest_runs or {}
+    active = {str(value) for value in (active_source_ids or [])}
+    items: List[Dict[str, object]] = []
+    for source in source_files:
+        if str(source.get("source_type") or "") != "pdf":
+            continue
+        source_id = str(source.get("source_file_id") or "")
+        if not source_id:
+            continue
+        document = document_by_source.get(source_id, {})
+        volume = volume_by_source.get(source_id, {})
+        profile = source.get("pdf_profile") if isinstance(source.get("pdf_profile"), Mapping) else {}
+        auto_mapping = profile.get("auto_page_mapping") if isinstance(profile.get("auto_page_mapping"), Mapping) else {}
+        page_mapping = document.get("page_mapping") if isinstance(document.get("page_mapping"), Mapping) else {}
+        source_path = _source_path(root, source)
+        source_exists = bool(source_path and source_path.exists())
+        status = _mapping_status(source_id, source_exists, document, profile, active)
+        segments = _display_segments(page_mapping, auto_mapping, status)
+        confidence = max(
+            [_float(item.get("mapping_confidence") or item.get("confidence")) for item in segments] or [0.0]
+        )
+        run = latest_runs.get(source_id, {})
+        metadata = source.get("bibliographic_metadata") if isinstance(source.get("bibliographic_metadata"), Mapping) else {}
+        bibliographic = dict(metadata)
+        for field in METADATA_FIELDS:
+            for candidate in (document.get(field), source.get(field)):
+                if is_valid_bibliographic_value(candidate):
+                    bibliographic[field] = candidate
+                    break
+        if document.get("document_type") or metadata.get("document_type"):
+            bibliographic["document_type"] = document.get("document_type") or metadata.get("document_type")
+        missing_metadata = metadata_missing_fields(bibliographic)
+        title = _first_valid(
+            document.get("title"),
+            metadata.get("title"),
+            source.get("title"),
+            source.get("display_title"),
+            volume.get("display_title"),
+            Path(str(source.get("file_name") or "")).stem,
+        ) or "未命名 PDF"
+        author = _first_valid(document.get("author"), metadata.get("author"), source.get("author"))
+        translator = _first_valid(document.get("translator"), metadata.get("translator"), source.get("translator"))
+        publisher = _first_valid(document.get("publisher"), metadata.get("publisher"), source.get("publisher"))
+        parser_type = str(profile.get("detected_pdf_type") or "")
+        internal_copy = bool(
+            source_path
+            and _is_within(source_path, root / "corpus" / "raw_pdf")
+        )
+        items.append(
+            {
+                "source_file_id": source_id,
+                "document_id": source.get("document_id") or document.get("document_id"),
+                "title": title,
+                "author": author,
+                "translator": translator,
+                "publisher": publisher,
+                "metadata_status": metadata.get("metadata_status") or document.get("metadata_status"),
+                "metadata_missing_fields": missing_metadata,
+                "file_name": source.get("file_name"),
+                "size_bytes": source.get("size_bytes"),
+                "page_count": profile.get("pdf_page_count"),
+                "parser_type": parser_type,
+                "parser_label": "MinerU" if parser_type == "mineru_structured" else "PDF",
+                "status": status,
+                "status_label": STATUS_LABELS[status],
+                "status_group": _status_group(status),
+                "mapping_method": _mapping_method(page_mapping, auto_mapping, status),
+                "mapping_summary": _mapping_summary(segments),
+                "mapping_segment_count": len(segments),
+                "mapping_confidence": confidence,
+                "confidence_level": _confidence_level(confidence),
+                "segments": segments,
+                "exception_pages": list(auto_mapping.get("exception_pages") or []),
+                "mapping_evidence": [item.get("mapping_evidence") for item in segments if item.get("mapping_evidence")],
+                "failure_reasons": list(profile.get("mapping_failure_reasons") or auto_mapping.get("failure_reasons") or []),
+                "imported_at": run.get("started_at") or source.get("imported_at") or source.get("last_modified"),
+                "modified_at": page_mapping.get("updated_at") or run.get("finished_at") or source.get("last_modified"),
+                "source_exists": source_exists,
+                "internal_copy": internal_copy,
+                "can_delete_internal_copy": internal_copy and source_exists,
+            }
+        )
+    stats = _stats(items)
+    return {"items": items, "stats": stats}
+
+
+def _mapping_status(
+    source_id: str,
+    source_exists: bool,
+    document: Mapping[str, object],
+    profile: Mapping[str, object],
+    active: set[str],
+) -> str:
+    if source_id in active:
+        return "mapping"
+    if not source_exists:
+        return "source_missing"
+    if has_manual_mapping(dict(document)):
+        return "manual_mapped"
+    value = str(
+        profile.get("mapping_status")
+        or ((profile.get("auto_page_mapping") or {}).get("mapping_status") if isinstance(profile.get("auto_page_mapping"), Mapping) else "")
+        or ""
+    )
+    if value in {"manual_mapped", "manual_override"}:
+        return "manual_mapped"
+    if value == "auto_mapped_high":
+        return "auto_mapped_high"
+    if value in {"auto_mapped_medium", "needs_review", "auto_mapping_suggested"}:
+        return "needs_review"
+    if value in {"auto_mapping_failed", "failed"}:
+        return "auto_mapping_failed"
+    if value in {"mapping", "detecting", "processing"}:
+        return "mapping"
+    if value == "source_missing":
+        return "source_missing"
+    return "unmapped"
+
+
+def _display_segments(
+    page_mapping: Mapping[str, object],
+    auto_mapping: Mapping[str, object],
+    status: str,
+) -> List[Dict[str, object]]:
+    if status == "manual_mapped":
+        source = page_mapping.get("segments") or []
+    else:
+        source = auto_mapping.get("applied_segments") or auto_mapping.get("selected_segments") or []
+    return [dict(item) for item in source if isinstance(item, Mapping)]
+
+
+def _mapping_method(
+    page_mapping: Mapping[str, object], auto_mapping: Mapping[str, object], status: str
+) -> str:
+    if status == "manual_mapped":
+        return "manual_segment"
+    return str(auto_mapping.get("method") or page_mapping.get("method") or "uncalibrated")
+
+
+def _mapping_summary(segments: Sequence[Mapping[str, object]]) -> Optional[str]:
+    if not segments:
+        return None
+    first = segments[0]
+    start = _int(first.get("pdf_page_start"))
+    citation = first.get("citation_page_start")
+    if start is None:
+        return f"{len(segments)} 个映射区间"
+    if citation in (None, ""):
+        return f"PDF 第 {start + 1} 页起不映射引用页码"
+    return f"PDF 第 {start + 1} 页 → 引用第 {citation} 页"
+
+
+def _stats(items: Sequence[Mapping[str, object]]) -> Dict[str, int]:
+    stats = {"total": len(items), "calibrated": 0, "pending": 0, "review": 0, "failed": 0, "mapping": 0}
+    for item in items:
+        group = str(item.get("status_group") or "")
+        if group in stats:
+            stats[group] += 1
+    return stats
+
+
+def _status_group(status: str) -> str:
+    if status in {"manual_mapped", "auto_mapped_high"}:
+        return "calibrated"
+    if status == "needs_review":
+        return "review"
+    if status in {"auto_mapping_failed", "source_missing"}:
+        return "failed"
+    if status == "mapping":
+        return "mapping"
+    return "pending"
+
+
+def _first_valid(*values: object) -> Optional[str]:
+    for value in values:
+        if is_valid_bibliographic_value(value):
+            return str(value).strip()
+    return None
+
+
+def _source_path(root: Path, source: Mapping[str, object]) -> Optional[Path]:
+    relative = str(source.get("relative_path") or "").strip()
+    if not relative:
+        return None
+    path = (root / relative).resolve()
+    return path if path == root or root in path.parents else None
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _float(value: object) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _int(value: object) -> Optional[int]:
+    try:
+        return int(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _confidence_level(value: float) -> str:
+    if value >= 0.9:
+        return "high"
+    if value >= 0.7:
+        return "medium"
+    return "low" if value > 0 else "unknown"

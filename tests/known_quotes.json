@@ -1,0 +1,148 @@
+[
+  {
+    "id": "exact_01",
+    "category": "完整原句",
+    "query": "宗教是人民的鸦片。",
+    "expected_contains": "宗教是人民的鸦片",
+    "expected_volume": 1,
+    "expected_match_type": "exact"
+  },
+  {
+    "id": "exact_02",
+    "category": "完整原句",
+    "query": "批判的武器当然不能代替武器的批判",
+    "expected_contains": "批判的武器当然不能代替武器的批判",
+    "expected_volume": 1
+  },
+  {
+    "id": "missing_punct_01",
+    "category": "缺少标点",
+    "query": "人创造了宗教而不是宗教创造人",
+    "expected_contains": "人创造了宗教，而不是宗教创造人",
+    "expected_volume": 1
+  },
+  {
+    "id": "missing_punct_02",
+    "category": "缺少标点",
+    "query": "理论一经掌握群众也会变成物质力量",
+    "expected_contains": "理论一经掌握群众，也会变成物质力量",
+    "expected_volume": 1
+  },
+  {
+    "id": "wrong_punct_01",
+    "category": "标点错误",
+    "query": "宗教里的苦难，既是现实的苦难的表现；又是对这种现实的苦难的抗议",
+    "expected_contains": "宗教里的苦难既是现实的苦难的表现",
+    "expected_volume": 1
+  },
+  {
+    "id": "wrong_punct_02",
+    "category": "标点错误",
+    "query": "哲学把无产阶级当做自己的物质武器；同样；无产阶级也把哲学当做自己的精神武器",
+    "expected_contains": "哲学把无产阶级当做自己的物质武器",
+    "expected_volume": 1
+  },
+  {
+    "id": "extra_spaces_01",
+    "category": "多余空格",
+    "query": "宗 教 是 人 民 的 鸦 片",
+    "expected_contains": "宗教是人民的鸦片",
+    "expected_volume": 1
+  },
+  {
+    "id": "extra_spaces_02",
+    "category": "多余空格",
+    "query": "物质 力量 只能 用 物质 力量 来 摧毁",
+    "expected_contains": "物质力量只能用物质力量来摧毁",
+    "expected_volume": 1
+  },
+  {
+    "id": "typo_01",
+    "category": "少量错字",
+    "query": "宗教是人民的阿片",
+    "expected_contains": "宗教是人民的鸦片",
+    "expected_volume": 1,
+    "mode": "fuzzy"
+  },
+  {
+    "id": "typo_02",
+    "category": "少量错字",
+    "query": "批判的武器当然不能代替武器的批评",
+    "expected_contains": "批判的武器当然不能代替武器的批判",
+    "expected_volume": 1,
+    "mode": "fuzzy"
+  },
+  {
+    "id": "omission_01",
+    "category": "少量漏字",
+    "query": "理论一经掌握群众会变成物质力量",
+    "expected_contains": "理论一经掌握群众，也会变成物质力量",
+    "expected_volume": 1,
+    "mode": "fuzzy"
+  },
+  {
+    "id": "omission_02",
+    "category": "少量漏字",
+    "query": "德国人会解放成为人",
+    "expected_contains": "德国人就会解放成为人",
+    "expected_volume": 1,
+    "mode": "fuzzy"
+  },
+  {
+    "id": "fragment_01",
+    "category": "引文截取原句中间部分",
+    "query": "被压迫生灵的叹息",
+    "expected_contains": "被压迫生灵的叹息",
+    "expected_volume": 1
+  },
+  {
+    "id": "fragment_02",
+    "category": "引文截取原句中间部分",
+    "query": "无情世界的情感",
+    "expected_contains": "无情世界的情感",
+    "expected_volume": 1
+  },
+  {
+    "id": "fragment_03",
+    "category": "引文截取原句中间部分",
+    "query": "占统治地位的精神力量",
+    "expected_contains": "占统治地位的精神力量",
+    "expected_volume": 1,
+    "mode": "fuzzy"
+  },
+  {
+    "id": "quote_variant_01",
+    "category": "中文引号差异",
+    "query": "“福音书的精神”和“福音书的词语”",
+    "expected_contains": "福音书的精神",
+    "expected_volume": 1
+  },
+  {
+    "id": "quote_variant_02",
+    "category": "中文引号差异",
+    "query": "《黑格尔法哲学批判》导言",
+    "expected_contains": "黑格尔法哲学批判",
+    "expected_volume": 1
+  },
+  {
+    "id": "repeated_01",
+    "category": "多处重复出现的相同表述",
+    "query": "全世界无产者，联合起来",
+    "expected_contains": "全世界无产者，联合起来",
+    "min_results": 2
+  },
+  {
+    "id": "repeated_02",
+    "category": "多处重复出现的相同表述",
+    "query": "共产党宣言",
+    "expected_contains": "共产党宣言",
+    "min_results": 2
+  },
+  {
+    "id": "middle_01",
+    "category": "引文截取原句中间部分",
+    "query": "人在政治上得到解放",
+    "expected_contains": "人在政治上得到解放",
+    "expected_volume": 1
+  }
+]

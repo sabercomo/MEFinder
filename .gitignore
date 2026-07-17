@@ -1,0 +1,29 @@
+config/mineru_api.local.json
+**/__pycache__/
+*.pyc
+*.pyo
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+data/
+test-output/
+*.sqlite3-*
+*.db-*
+
+# Corpus: copyrighted source books and derived artifacts stay local.
+# Only MinerU segment manifests (page-offset state referenced by
+# config/pdf_imports.json) are tracked.
+corpus/*
+!corpus/processed/
+corpus/processed/*
+!corpus/processed/mineru/
+corpus/processed/mineru/*
+!corpus/processed/mineru/manifests/
+
+# Local per-user state
+config/preferences.json
+.claude/settings.local.json
+.agents/

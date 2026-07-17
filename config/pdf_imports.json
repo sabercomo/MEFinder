@@ -1,0 +1,222 @@
+{
+  "documents": [
+    {
+      "enabled": true,
+      "source_file_id": "pdf-critique-forms-life",
+      "document_id": "PDF-CRITIQUE-FORMS-LIFE",
+      "file_name": "Critique of Forms of Life (Jaeggi, RahelCronin, Ciaran(Translation)) (Z-Library).pdf",
+      "title": "Critique of Forms of Life",
+      "author": "Rahel Jaeggi",
+      "publication_year": "2018",
+      "page_mapping": {
+        "validated_by": "manual_sample_for_mvp",
+        "segments": [
+          {
+            "pdf_page_start": 0,
+            "pdf_page_end": 20,
+            "citation": null,
+            "method": "uncalibrated",
+            "confidence": 0.0,
+            "label": "front_matter_not_calibrated"
+          },
+          {
+            "pdf_page_start": 21,
+            "pdf_page_end": 405,
+            "citation_page_start": "1",
+            "number_style": "arabic",
+            "method": "manual_segment",
+            "confidence": 0.95,
+            "evidence": "MVP 抽样确认 Introduction 首页为 PDF 物理页 22，引用页码为 1。"
+          }
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-honneth-reconceiving-social-philosophy",
+      "document_id": "PDF-HONNETH-RECONCEIVING-SOCIAL-PHILOSOPHY",
+      "file_name": "Axel Honneth Reconceiving Social Philosophy (Dagmar Wilhelm) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "Reconceiving Social Philosophy",
+      "author": "Axel Honneth",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-honneth-sovereign-of-labor",
+      "document_id": "PDF-HONNETH-SOVEREIGN-OF-LABOR",
+      "file_name": "劳动的主权者  劳动的规范理论 ([德] 阿克塞尔·霍耐特,Axel Honneth) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "劳动的主权者：劳动的规范理论",
+      "author": "阿克塞尔·霍耐特",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-honneth-freedom-rights",
+      "document_id": "PDF-HONNETH-FREEDOM-RIGHTS",
+      "file_name": "自由的权利 (【德】阿克塞尔·霍耐特（Axel Honneth）) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "自由的权利",
+      "author": "阿克塞尔·霍耐特",
+      "publication_year": "2013",
+      "mineru": {
+        "manifest": "corpus/processed/mineru/manifests/segments-freedom-rights.json"
+      },
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-macintyre-history-ethics",
+      "document_id": "PDF-MACINTYRE-HISTORY-ETHICS",
+      "file_name": "伦理学简史 (阿拉斯代尔·麦金太尔（Alasdair Macintyre）) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "伦理学简史",
+      "author": "阿拉斯代尔·麦金太尔",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-critical-theory",
+      "document_id": "PDF-CRITICAL-THEORY",
+      "file_name": "批判理论（Critical theory） (Max Horkheimer马克斯・霍克海默) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "批判理论",
+      "author": "马克斯·霍克海默",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": "manual_ui",
+        "segments": [
+          {
+            "pdf_page_start": 47,
+            "pdf_page_end": 140,
+            "citation_page_start": "1",
+            "number_style": "arabic",
+            "method": "manual_segment",
+            "confidence": 0.98,
+            "label": "正文第一段：PDF 第 48-141 页对应引用第 1-94 页"
+          },
+          {
+            "pdf_page_start": 141,
+            "pdf_page_end": 213,
+            "citation_page_start": "94",
+            "number_style": "arabic",
+            "method": "manual_segment",
+            "confidence": 0.98,
+            "label": "PDF 第 141-142 页重复扫描引用第 94 页"
+          },
+          {
+            "pdf_page_start": 214,
+            "pdf_page_end": 324,
+            "citation_page_start": "166",
+            "number_style": "arabic",
+            "method": "manual_segment",
+            "confidence": 0.98,
+            "label": "PDF 第 214-215 页重复扫描引用第 166 页；译后记为第 276 页"
+          }
+        ]
+      },
+      "mineru": {
+        "manifest": "corpus/processed/mineru/manifests/segments-critical-theory.json"
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-hegel-philosophy-right",
+      "document_id": "PDF-HEGEL-PHILOSOPHY-RIGHT",
+      "file_name": "法哲学原理：或自然法和国家学纲要 (（德）黑格尔著 范杨, 张企泰译) (Z-Library).pdf",
+      "title": "法哲学原理：或自然法和国家学纲要",
+      "author": "黑格尔",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-consumer-society",
+      "document_id": "PDF-CONSUMER-SOCIETY",
+      "file_name": "消费社会 (（法）让·鲍德里亚著；刘成富，全成钢译；张一兵丛书主编；周宪，周晓虹副主编 etc.) (Z-Library).pdf",
+      "title": "消费社会",
+      "author": "让·鲍德里亚",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-macintyre-after-virtue",
+      "document_id": "PDF-MACINTYRE-AFTER-VIRTUE",
+      "file_name": "追寻美德 道德理论研究 (（美）麦金太尔著 etc.) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "追寻美德：道德理论研究",
+      "author": "阿拉斯代尔·麦金太尔",
+      "publication_year": null,
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    },
+    {
+      "enabled": true,
+      "source_file_id": "pdf-cannibal-capitalism",
+      "document_id": "PDF-CANNIBAL-CAPITALISM",
+      "file_name": "食人资本主义 ([美]南希·弗雷泽（Nancy Fraser）) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
+      "title": "食人资本主义",
+      "author": "南希·弗雷泽",
+      "translator": "蓝江",
+      "publisher": "上海人民出版社",
+      "publish_place": "上海",
+      "publish_year": "2023",
+      "publication_year": "2023",
+      "isbn": null,
+      "document_type": "translated_book",
+      "metadata_status": "complete",
+      "metadata_source": "manual",
+      "metadata_confidence": 1.0,
+      "metadata_evidence": {
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "［美］南希·弗雷泽著"
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "蓝江译"
+        },
+        "publisher": {
+          "source": "manual",
+          "source_page": null,
+          "evidence_text": "上海人民出版社"
+        },
+        "publish_place": {
+          "source": "manual",
+          "source_page": null,
+          "evidence_text": "上海"
+        },
+        "publish_year": {
+          "source": "manual",
+          "source_page": null,
+          "evidence_text": "2023年"
+        }
+      },
+      "page_mapping": {
+        "validated_by": null,
+        "segments": []
+      }
+    }
+  ]
+}

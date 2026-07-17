@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "me-finder",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "src.me_finder", "serve"],
+      "port": 8765
+    }
+  ]
+}
