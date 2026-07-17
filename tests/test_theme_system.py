@@ -85,7 +85,8 @@ class ThemeMarkupTests(unittest.TestCase):
 
     def test_six_themes_share_one_dom_and_complete_token_contract(self) -> None:
         self.assertEqual(HTML.count('id="page-settings"'), 1)
-        self.assertEqual(HTML.count('id="page-calibration"'), 1)
+        self.assertEqual(HTML.count('id="page-library"'), 1)
+        self.assertEqual(HTML.count('id="page-calibration"'), 0)
         self.assertEqual(VALID_THEMES, frozenset(self.THEMES))
         for theme in self.THEMES:
             self.assertIn(f'html[data-theme="{theme}"]', HTML)

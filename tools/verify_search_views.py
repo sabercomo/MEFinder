@@ -74,20 +74,23 @@ def main() -> int:
         page.locator("#library-view-list").click()
         assert page.locator("#library-list .library-row").count() > 0
 
-        page.locator('.sidebar-item[data-page="calibration"]').click()
-        page.locator("#cal-card-grid .cal-document-entry").first.wait_for()
-        page.locator("#cal-sort-field-select .app-select-trigger").click()
-        page.locator('#cal-sort-field-select [data-value="title"]').click()
-        assert page.locator("#cal-sort-field-label").inner_text() == "书名"
-        page.locator("#cal-sort-direction-select .app-select-trigger").click()
-        page.locator('#cal-sort-direction-select [data-value="asc"]').click()
-        assert page.locator("#cal-sort-direction-label").inner_text() == "升序"
-        page.locator("#cal-view-list").click()
-        page.locator("#cal-card-grid .cal-doc-row").first.wait_for()
-        assert page.locator("#cal-card-grid .cal-doc-row").count() > 0
-        page.screenshot(path=output_dir / "calibration-list-view.png", full_page=True)
-        page.locator("#cal-view-grid").click()
-        assert page.locator("#cal-card-grid .cal-doc-card").count() > 0
+        assert page.locator('.sidebar-item[data-page="calibration"]').count() == 0
+        assert page.locator("#library-stats .status-stat").count() == 5
+        page.locator("#library-sort-field-select .app-select-trigger").click()
+        page.locator('#library-sort-field-select [data-value="status"]').click()
+        assert page.locator("#library-sort-field-label").inner_text() == "校准状态"
+
+        pdf_entry = page.locator("#library-list .library-entry:has(.status-chip)").first
+        pdf_entry.click()
+        page.locator("#library-drawer-calibration").wait_for(state="visible")
+        assert page.locator("#cal-section-body").is_hidden()
+        page.locator("#cal-collapse-toggle").click()
+        page.locator("#cal-editor").wait_for(state="visible")
+        page.locator("#cal-detail-actions .action-btn").first.wait_for()
+        assert page.locator("#cal-segments-body").count() == 1
+        page.screenshot(path=output_dir / "library-drawer-calibration.png", full_page=True)
+        page.locator("#cal-collapse-toggle").click()
+        assert page.locator("#cal-editor").is_hidden()
 
         theme_colors = {}
         for theme, expected in (("rose-mist", "#C9446A"), ("lavender-purple", "#7B5EC7")):

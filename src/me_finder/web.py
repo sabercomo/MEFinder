@@ -1504,6 +1504,59 @@ a { color: var(--accent); text-decoration: none; }
   width: 420px;
   min-width: 420px;
 }
+.library-body.detail-open {
+  display: grid;
+  grid-template-columns: minmax(320px, 36fr) minmax(0, 64fr);
+}
+.library-body.detail-open .library-list-scroll { min-width: 0; }
+.library-body.detail-open .library-drawer,
+.library-body.detail-open .library-drawer.open {
+  width: auto;
+  min-width: 0;
+}
+.library-body.detail-open .library-drawer-inner { width: auto; }
+.library-body.detail-open .library-list-container.library-view-grid { grid-template-columns: minmax(0, 1fr); }
+.library-body.detail-open .library-row-missing { display: none; }
+@media (max-width: 1120px) {
+  .library-body.detail-open { display: block; position: relative; }
+  .library-body.detail-open .library-list-scroll { display: none; }
+  .library-body.detail-open .library-drawer.open { width: 100%; min-width: 0; height: 100%; border-left: 0; }
+}
+.cal-collapse-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+.cal-collapse-head:hover { background: var(--surface-hover); }
+.cal-collapse-head .drawer-section-title { margin: 0; flex-shrink: 0; }
+.cal-collapse-summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cal-collapse-summary .cal-collapse-mapping { overflow: hidden; text-overflow: ellipsis; }
+.cal-collapse-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  transition: transform var(--transition-fast);
+}
+#library-drawer-calibration.expanded .cal-collapse-chevron { transform: rotate(180deg); }
 .library-drawer-inner {
   width: 420px;
   height: 100%;
@@ -2279,12 +2332,6 @@ a { color: var(--accent); text-decoration: none; }
         </span>
         <span>文献库</span>
       </button>
-      <button class="sidebar-item" data-page="calibration" onclick="navigateTo('calibration')">
-        <span class="sidebar-icon">
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12M4 8h8M4 12h10M4 16h6"/></svg>
-        </span>
-        <span>页码校准</span>
-      </button>
       <button class="sidebar-item" data-page="import" onclick="navigateTo('import')">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>
@@ -2451,7 +2498,71 @@ a { color: var(--accent); text-decoration: none; }
           <div id="library-list" class="library-list-container library-view-list"></div>
         </div>
         <div class="library-drawer" id="library-drawer">
-          <div class="library-drawer-inner" id="library-drawer-content"></div>
+          <div class="library-drawer-inner">
+            <div id="library-drawer-content"></div>
+            <div id="library-drawer-calibration" style="display:none">
+              <button class="cal-collapse-head" type="button" id="cal-collapse-toggle" aria-expanded="false" onclick="toggleDrawerCalibration()">
+                <span class="drawer-section-title">页码校准</span>
+                <span class="cal-collapse-summary" id="cal-collapse-summary"></span>
+                <svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+              </button>
+              <div id="cal-section-body" style="display:none">
+                <div class="cal-detail-actions" id="cal-detail-actions"></div>
+                <div id="cal-editor" style="display:none">
+                  <div class="cal-section">
+                    <div class="cal-section-head">
+                      <span class="cal-section-title">自动检测</span>
+                    </div>
+                    <div id="cal-auto-preview" class="auto-detect-panel" style="display:none"></div>
+                  </div>
+                  <div class="cal-section">
+                    <div class="cal-section-head">
+                      <span class="cal-section-title">页码映射分段</span>
+                      <button class="action-btn" onclick="addCalSegment()">+ 添加分段</button>
+                    </div>
+                    <div class="segment-table-wrap">
+                      <table class="segment-table">
+                        <colgroup>
+                          <col class="segment-col-pdf">
+                          <col class="segment-col-pdf">
+                          <col class="segment-col-citation">
+                          <col class="segment-col-style">
+                          <col class="segment-col-note">
+                          <col class="segment-col-action">
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>PDF 起始页</th>
+                            <th>PDF 结束页</th>
+                            <th>引用起始页</th>
+                            <th>编号样式</th>
+                            <th>范围说明</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody id="cal-segments-body"></tbody>
+                      </table>
+                    </div>
+                    <div id="cal-no-segments" class="cal-empty" style="display:none">暂无映射分段，点击上方按钮添加</div>
+                  </div>
+                  <div class="cal-preview">
+                    <div class="cal-preview-row">
+                      <span class="cal-preview-label">预览：PDF 第</span>
+                      <input type="number" class="seg-input narrow" id="cal-preview-input" min="1" value="1" oninput="updateCalPreview()">
+                      <span class="cal-preview-label">页 →</span>
+                      <span class="cal-preview-result" id="cal-preview-result">—</span>
+                    </div>
+                  </div>
+                  <div class="cal-actions">
+                    <button class="action-btn primary" onclick="saveCalibration()">保存校准配置</button>
+                    <button class="action-btn" onclick="loadCalibrationDoc()">放弃修改</button>
+                    <span class="cal-save-hint">保存后自动重建索引</span>
+                  </div>
+                  <div class="cal-danger-zone"><button class="action-btn danger-outline" onclick="openRemoveDocumentModal()">从文献库移除</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2483,124 +2594,6 @@ a { color: var(--accent); text-decoration: none; }
           <div class="import-queue-title">导入队列</div>
           <div id="import-items"></div>
         </div>
-      </div>
-    </div>
-
-    <!-- ── Calibration Page ── -->
-    <div id="page-calibration" class="page">
-      <div class="page-header">
-        <div class="page-header-row">
-          <div>
-            <div class="page-title">页码校准</div>
-            <div class="page-subtitle">管理 PDF 文献的引用页码映射</div>
-          </div>
-          <div class="calibration-header-stats" id="calibration-stats">
-            <button class="status-stat status-stat--info active" type="button" onclick="applyCalStatusFilter('all')"><span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4"/></svg></span><span class="status-stat__label">PDF 总数</span><span class="status-stat__count">—</span></button>
-            <button class="status-stat status-stat--success" type="button" onclick="applyCalStatusFilter('calibrated')"><span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/></svg></span><span class="status-stat__label">已校准</span><span class="status-stat__count">—</span></button>
-            <button class="status-stat status-stat--neutral" type="button" onclick="applyCalStatusFilter('pending')"><span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="status-stat__label">待校准</span><span class="status-stat__count">—</span></button>
-            <button class="status-stat status-stat--warning" type="button" onclick="applyCalStatusFilter('review')"><span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg></span><span class="status-stat__label">待确认</span><span class="status-stat__count">—</span></button>
-            <button class="status-stat status-stat--danger" type="button" onclick="applyCalStatusFilter('failed')"><span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg></span><span class="status-stat__label">检测失败</span><span class="status-stat__count">—</span></button>
-          </div>
-        </div>
-      </div>
-      <div class="calibration-body">
-        <section class="cal-library-pane" id="cal-library-pane">
-          <div class="cal-toolbar">
-            <div class="cal-toolbar-top">
-              <div class="cal-search-wrap">
-                <span class="cal-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
-                <input id="cal-search" class="cal-search" type="search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="renderCalibrationCards()">
-              </div>
-              <button class="cal-refresh-btn" id="cal-refresh-btn" type="button" onclick="refreshCalibrationLibrary()" title="刷新文献列表" aria-label="刷新文献列表"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M16 16h5v5"/></svg></button>
-            </div>
-            <div class="cal-filter-row">
-              <div class="cal-status-tabs" id="cal-status-tabs">
-                <button class="cal-status-tab status-stat--info active" data-status="all" onclick="setCalStatusFilter(this)"><span class="status-stat__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4"/></svg></span><span class="cal-status-tab__label">全部</span></button>
-                <button class="cal-status-tab status-stat--success" data-status="calibrated" onclick="setCalStatusFilter(this)"><span class="status-stat__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/></svg></span><span class="cal-status-tab__label">已校准</span></button>
-                <button class="cal-status-tab status-stat--neutral" data-status="pending" onclick="setCalStatusFilter(this)"><span class="status-stat__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="cal-status-tab__label">待校准</span></button>
-                <button class="cal-status-tab status-stat--warning" data-status="review" onclick="setCalStatusFilter(this)"><span class="status-stat__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg></span><span class="cal-status-tab__label">待确认</span></button>
-                <button class="cal-status-tab status-stat--danger" data-status="failed" onclick="setCalStatusFilter(this)"><span class="status-stat__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg></span><span class="cal-status-tab__label">检测失败</span></button>
-              </div>
-              <div class="cal-toolbar-right">
-                <div class="view-switch" role="group" aria-label="页码校准显示方式">
-                  <button class="view-switch-btn" id="cal-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="false" onclick="setCalibrationView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
-                  <button class="view-switch-btn active" id="cal-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="true" onclick="setCalibrationView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
-                </div>
-                <div class="cal-sort-controls"><span class="cal-sort-label">排序</span>
-                  <div class="app-select cal-sort-field-select" id="cal-sort-field-select">
-                    <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'cal-sort-field-select')"><span class="app-select-value" id="cal-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                    <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setCalSortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setCalSortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setCalSortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setCalSortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="status" onclick="setCalSortOption(event,'field','status')">校准状态</button></div>
-                  </div>
-                  <div class="app-select cal-sort-direction-select" id="cal-sort-direction-select">
-                    <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'cal-sort-direction-select')"><span class="app-select-value" id="cal-sort-direction-label">降序</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                    <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="desc" onclick="setCalSortOption(event,'direction','desc')">降序</button><button class="app-select-option" type="button" data-value="asc" onclick="setCalSortOption(event,'direction','asc')">升序</button></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="cal-card-grid" class="cal-card-grid"></div>
-        </section>
-        <aside class="library-drawer cal-detail-drawer" id="cal-detail-drawer">
-          <div class="library-drawer-inner">
-            <button class="drawer-close" onclick="closeCalibrationDetail()">← 返回文献列表</button>
-            <div id="cal-detail-heading"></div>
-            <div id="cal-doc-info" class="cal-doc-info" style="display:none"></div>
-            <div class="cal-detail-actions" id="cal-detail-actions"></div>
-            <div id="cal-editor" style="display:none">
-          <div class="cal-section">
-            <div class="cal-section-head">
-              <span class="cal-section-title">自动检测</span>
-            </div>
-            <div id="cal-auto-preview" class="auto-detect-panel" style="display:none"></div>
-          </div>
-          <div class="cal-section">
-            <div class="cal-section-head">
-              <span class="cal-section-title">页码映射分段</span>
-              <button class="action-btn" onclick="addCalSegment()">+ 添加分段</button>
-            </div>
-            <div class="segment-table-wrap">
-              <table class="segment-table">
-                <colgroup>
-                  <col class="segment-col-pdf">
-                  <col class="segment-col-pdf">
-                  <col class="segment-col-citation">
-                  <col class="segment-col-style">
-                  <col class="segment-col-note">
-                  <col class="segment-col-action">
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>PDF 起始页</th>
-                    <th>PDF 结束页</th>
-                    <th>引用起始页</th>
-                    <th>编号样式</th>
-                    <th>范围说明</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="cal-segments-body"></tbody>
-              </table>
-            </div>
-            <div id="cal-no-segments" class="cal-empty" style="display:none">暂无映射分段，点击上方按钮添加</div>
-          </div>
-          <div class="cal-preview">
-            <div class="cal-preview-row">
-              <span class="cal-preview-label">预览：PDF 第</span>
-              <input type="number" class="seg-input narrow" id="cal-preview-input" min="1" value="1" oninput="updateCalPreview()">
-              <span class="cal-preview-label">页 →</span>
-              <span class="cal-preview-result" id="cal-preview-result">—</span>
-            </div>
-          </div>
-          <div class="cal-actions">
-            <button class="action-btn primary" onclick="saveCalibration()">保存校准配置</button>
-            <button class="action-btn" onclick="loadCalibrationDoc()">放弃修改</button>
-            <span class="cal-save-hint">保存后自动重建索引</span>
-          </div>
-          <div class="cal-danger-zone"><button class="action-btn danger-outline" onclick="openRemoveDocumentModal()">从文献库移除</button></div>
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
 
@@ -2718,19 +2711,11 @@ let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid
 let libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at';
 let libSortDirection = localStorage.getItem('meFinderLibrarySortDirection') === 'asc' ? 'asc' : 'desc';
 
-let calPdfsLoaded = false;
-let calPdfList = [];
 let calSegments = [];
 let calSelectedDoc = null;
 let calSelectedSourceId = null;
 let calAutoResult = null;
-let calStatusFilter = 'all';
-let calSortField = 'imported_at';
-let calSortDirection = 'desc';
 let calTransientStatus = {};
-let calOpenMenuId = null;
-let calRefreshInProgress = false;
-let calViewMode = localStorage.getItem('meFinderCalibrationView') === 'list' ? 'list' : 'grid';
 let removeDocumentTarget = null;
 let removeSecondStage = false;
 let mineruConfigLoaded = false;
@@ -2747,7 +2732,6 @@ function navigateTo(page) {
   const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
   if (link) link.classList.add('active');
   if (page === 'library' && !libLoaded) loadLibrary();
-  if (page === 'calibration' && !calPdfsLoaded) loadCalPdfs();
   if (page === 'settings') {
     if (!preferencesLoaded) loadPreferences();
     if (!mineruConfigLoaded) loadMineruConfig();
@@ -3502,9 +3486,10 @@ function renderLibraryList() {
     var isSelected = src.source_file_id === libSelectedId;
     var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
     var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
-    var statusGroup = isPdf ? calibrationStatusGroup(src.status) : '';
+    var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
+    var statusGroup = isPdf ? calibrationStatusGroup(itemStatus) : '';
     var statusChip = isPdf
-      ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(src.status)) + '</span>'
+      ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(itemStatus)) + '</span>'
       : '';
     var countMeta = isPdf
       ? (src.page_count ? src.page_count + ' 页' : '页数未知')
@@ -3627,6 +3612,58 @@ function selectLibDoc(sourceId) {
     + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(src.source_file_id) + '\', null)">打开原文</button>' : '')
     + '</div>';
   document.getElementById('library-drawer').classList.add('open');
+  var body = document.querySelector('#page-library .library-body');
+  if (body) body.classList.add('detail-open');
+  renderDrawerCalibration(src);
+}
+
+function renderDrawerCalibrationSummary(src) {
+  var summary = document.getElementById('cal-collapse-summary');
+  if (!summary) return;
+  var status = calTransientStatus[src.source_file_id] || src.status;
+  var group = calibrationStatusGroup(status);
+  summary.innerHTML = '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(group) + ' ' + group + '">' + statusChipIcon(group) + esc(calibrationStatusLabel(status)) + '</span>'
+    + '<span class="cal-collapse-mapping">' + esc(src.mapping_summary || '尚未建立引用页码映射') + '</span>';
+}
+
+function renderDrawerCalibration(src) {
+  var host = document.getElementById('library-drawer-calibration');
+  if (!host) return;
+  var isPdf = src.source_type === 'pdf';
+  host.style.display = isPdf ? 'block' : 'none';
+  host.classList.remove('expanded');
+  document.getElementById('cal-section-body').style.display = 'none';
+  var toggle = document.getElementById('cal-collapse-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  if (!isPdf) {
+    calSelectedSourceId = null;
+    return;
+  }
+  renderDrawerCalibrationSummary(src);
+}
+
+async function toggleDrawerCalibration(forceOpen) {
+  var host = document.getElementById('library-drawer-calibration');
+  var body = document.getElementById('cal-section-body');
+  if (!host || !body) return;
+  var open = forceOpen === true ? true : body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  host.classList.toggle('expanded', open);
+  var toggle = document.getElementById('cal-collapse-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open && libSelectedId && calSelectedSourceId !== libSelectedId) {
+    calSelectedSourceId = libSelectedId;
+    await loadCalibrationDoc(libSelectedId);
+  }
+}
+
+function updateLibraryEntry(sourceId) {
+  renderLibraryStats();
+  renderLibraryList();
+  if (libSelectedId === sourceId) {
+    var src = libSources.find(function(s) { return s.source_file_id === sourceId; });
+    if (src && src.source_type === 'pdf') renderDrawerCalibrationSummary(src);
+  }
 }
 
 function sourceBibliographicMetadata(src) {
@@ -3748,7 +3785,10 @@ async function openMetadataForSource(sourceId) {
 
 function closeLibDrawer() {
   libSelectedId = null;
+  calSelectedSourceId = null;
   document.getElementById('library-drawer').classList.remove('open');
+  var body = document.querySelector('#page-library .library-body');
+  if (body) body.classList.remove('detail-open');
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) { row.classList.remove('selected'); });
 }
 
@@ -3765,7 +3805,6 @@ async function acceptAutoMapping(sourceId) {
     if (!resp.ok || !data.ok) throw new Error(data.error || '接受失败');
     showToast('自动映射已接受为人工映射');
     libLoaded = false;
-    calPdfsLoaded = false;
     await loadMeta();
     await loadLibrary();
     selectLibDoc(sourceId);
@@ -3786,9 +3825,12 @@ function showAutoMappingExceptions(sourceId) {
 }
 
 async function openCalibrationForSource(sourceId) {
-  navigateTo('calibration');
-  if (!calPdfsLoaded) await loadCalPdfs();
-  await selectCalibrationDoc(sourceId);
+  navigateTo('library');
+  if (!libLoaded) await loadLibrary();
+  selectLibDoc(sourceId);
+  await toggleDrawerCalibration(true);
+  var host = document.getElementById('library-drawer-calibration');
+  if (host) host.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 async function openCalibrationAndDetect(sourceId) {
@@ -3818,85 +3860,17 @@ function formatFileSize(bytes) {
 }
 
 /* ═══ Calibration ═══ */
-async function loadCalPdfs(options) {
-  options = options || {};
-  var grid = document.getElementById('cal-card-grid');
-  syncCalibrationViewButtons();
-  if (grid) grid.classList.toggle('is-list', calViewMode === 'list');
-  if (grid && options.showSkeleton !== false) grid.innerHTML = calibrationSkeletonHTML();
-  try {
-    var resp = await fetch('/api/calibration-library');
-    var data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || '加载失败');
-    calPdfList = data.items || [];
-    calPdfsLoaded = true;
-    renderCalibrationStats();
-    renderCalibrationCards();
-    if (calSelectedSourceId && calPdfList.some(function(item) { return item.source_file_id === calSelectedSourceId; })) {
-      await loadCalibrationDoc(calSelectedSourceId);
-    } else if (calSelectedSourceId) {
-      closeCalibrationDetail();
-    }
-  } catch(e) {
-    calPdfsLoaded = false;
-    if (grid) grid.innerHTML = calibrationEmptyHTML('加载失败', e.message, false);
-  }
-}
-
 async function refreshCalibrationSource(sourceId) {
-  var resp = await fetch('/api/calibration-library');
+  var resp = await fetch('/api/library');
   var data = await resp.json();
   if (!resp.ok || data.error) throw new Error(data.error || '刷新文献状态失败');
-  var refreshed = (data.items || []).find(function(item) { return item.source_file_id === sourceId; });
-  if (!refreshed) throw new Error('刷新后未找到当前文献');
-  var index = calPdfList.findIndex(function(item) { return item.source_file_id === sourceId; });
-  if (index >= 0) calPdfList[index] = refreshed;
-  else calPdfList.push(refreshed);
-  calPdfsLoaded = true;
-  updateCalibrationCard(sourceId);
+  libSources = data.items || [];
+  libVolumes = data.volumes || [];
+  libWorks = data.works || [];
+  libStats = data.stats || null;
+  libLoaded = true;
+  updateLibraryEntry(sourceId);
   if (calSelectedSourceId === sourceId) await loadCalibrationDoc(sourceId);
-}
-
-async function refreshCalibrationLibrary() {
-  if (calRefreshInProgress) return;
-  calRefreshInProgress = true;
-  var button = document.getElementById('cal-refresh-btn');
-  var pane = document.getElementById('cal-library-pane');
-  var scrollTop = pane ? pane.scrollTop : 0;
-  if (button) { button.disabled = true; button.classList.add('refreshing'); }
-  try {
-    calPdfsLoaded = false;
-    await loadCalPdfs({showSkeleton:false});
-    if (pane) requestAnimationFrame(function() { pane.scrollTop = scrollTop; });
-  } finally {
-    calRefreshInProgress = false;
-    if (button) { button.disabled = false; button.classList.remove('refreshing'); }
-  }
-}
-
-function calibrationSkeletonHTML() {
-  if (calViewMode === 'list') {
-    return [1,2,3,4,5,6].map(function() {
-      return '<div class="cal-doc-row cal-skeleton"><div><div class="skeleton-line" style="width:34%"></div><div class="skeleton-line" style="width:78%;height:14px"></div></div><div class="skeleton-line" style="width:65%"></div><div class="skeleton-line" style="width:70%"></div><div class="skeleton-line" style="width:56px"></div></div>';
-    }).join('');
-  }
-  return [1,2,3,4,5,6].map(function() {
-    return '<div class="cal-doc-card cal-skeleton"><div class="skeleton-line" style="width:35%"></div><div class="skeleton-line" style="width:82%;margin-top:28px;height:15px"></div><div class="skeleton-line" style="width:48%"></div><div class="skeleton-line" style="width:70%;margin-top:26px"></div></div>';
-  }).join('');
-}
-
-function renderCalibrationStats() {
-  var current = {total:calPdfList.length,calibrated:0,pending:0,review:0,failed:0,mapping:0};
-  calPdfList.forEach(function(item) {
-    var status = calTransientStatus[item.source_file_id] || item.status;
-    var group = calibrationStatusGroup(status);
-    if (current[group] != null) current[group] += 1;
-  });
-  document.getElementById('calibration-stats').innerHTML = calibrationStatButton('all','PDF 总数',current.total,'info','document')
-    + calibrationStatButton('calibrated','已校准',current.calibrated,'success','check')
-    + calibrationStatButton('pending','待校准',current.pending,'neutral','clock')
-    + calibrationStatButton('review','待确认',current.review,'warning','notice')
-    + calibrationStatButton('failed','检测失败',current.failed,'danger','danger');
 }
 
 function statusStatIcon(icon) {
@@ -3927,59 +3901,6 @@ function statusStatButton(status, label, value, variant, icon, activeFilter, han
     + statusStatIcon(icon)
     + '<span class="status-stat__label">' + label + '</span>'
     + '<span class="status-stat__count">' + value + '</span></button>';
-}
-
-function calibrationStatButton(status, label, value, variant, icon) {
-  return statusStatButton(status, label, value, variant, icon, calStatusFilter, 'applyCalStatusFilter');
-}
-
-function setCalStatusFilter(button) {
-  applyCalStatusFilter(button.dataset.status || 'all');
-}
-
-function applyCalStatusFilter(status) {
-  calStatusFilter = status || 'all';
-  document.querySelectorAll('#cal-status-tabs .cal-status-tab').forEach(function(item) { item.classList.toggle('active', item.dataset.status === calStatusFilter); });
-  renderCalibrationStats();
-  renderCalibrationCards();
-}
-
-function setCalSortOption(event, control, value) {
-  event.stopPropagation();
-  var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',status:'校准状态',desc:'降序',asc:'升序'};
-  var selectId;
-  if (control === 'direction') {
-    calSortDirection = value === 'asc' ? 'asc' : 'desc';
-    selectId = 'cal-sort-direction-select';
-    document.getElementById('cal-sort-direction-label').textContent = labels[calSortDirection];
-  } else {
-    calSortField = ['imported_at','title','author','modified_at','status'].indexOf(value) >= 0 ? value : 'imported_at';
-    selectId = 'cal-sort-field-select';
-    document.getElementById('cal-sort-field-label').textContent = labels[calSortField];
-  }
-  document.querySelectorAll('#' + selectId + ' .app-select-option').forEach(function(option) {
-    option.classList.toggle('is-selected', option.dataset.value === (control === 'direction' ? calSortDirection : calSortField));
-  });
-  closeAppSelects();
-  renderCalibrationCards();
-}
-
-function setCalibrationView(mode) {
-  calViewMode = mode === 'list' ? 'list' : 'grid';
-  localStorage.setItem('meFinderCalibrationView', calViewMode);
-  persistDisplayPreference('calibration_view', calViewMode);
-  syncCalibrationViewButtons();
-  renderCalibrationCards();
-}
-
-function syncCalibrationViewButtons() {
-  ['list','grid'].forEach(function(mode) {
-    var button = document.getElementById('cal-view-' + mode);
-    if (!button) return;
-    var active = calViewMode === mode;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', active ? 'true' : 'false');
-  });
 }
 
 const calPinyinCollator = new Intl.Collator('zh-CN-u-co-pinyin', {sensitivity:'base', numeric:true});
@@ -4015,148 +3936,6 @@ function calibrationStatusLabel(status) {
   return labels[status] || '待校准';
 }
 
-function renderCalibrationCards() {
-  var grid = document.getElementById('cal-card-grid');
-  if (!grid) return;
-  grid.classList.toggle('is-list', calViewMode === 'list');
-  syncCalibrationViewButtons();
-  var query = String(document.getElementById('cal-search').value || '').toLowerCase().replace(/\s+/g, '');
-  var items = calPdfList.filter(function(item) {
-    var status = calTransientStatus[item.source_file_id] || item.status;
-    var matchesStatus = calStatusFilter === 'all' || calibrationStatusGroup(status) === calStatusFilter;
-    var haystack = [item.title,item.author,item.translator,item.publisher,item.file_name].map(function(value) { return String(value || '').toLowerCase().replace(/\s+/g,''); }).join('|');
-    return matchesStatus && (!query || haystack.indexOf(query) >= 0);
-  });
-  items.sort(function(a,b) {
-    if (calSortField === 'title' || calSortField === 'author') return calibrationSortText(a[calSortField], b[calSortField], calSortDirection);
-    if (calSortField === 'status') {
-      var order = {manual_mapped:0,auto_mapped_high:1,unmapped:2,needs_review:3,auto_mapping_failed:4,source_missing:5,mapping:6};
-      var av = order[calTransientStatus[a.source_file_id] || a.status] == null ? 99 : order[calTransientStatus[a.source_file_id] || a.status];
-      var bv = order[calTransientStatus[b.source_file_id] || b.status] == null ? 99 : order[calTransientStatus[b.source_file_id] || b.status];
-      return calSortDirection === 'desc' ? bv-av : av-bv;
-    }
-    var av = Date.parse(a[calSortField] || '') || 0;
-    var bv = Date.parse(b[calSortField] || '') || 0;
-    return calSortDirection === 'desc' ? bv-av : av-bv;
-  });
-  if (!calPdfList.length) {
-    grid.innerHTML = calibrationEmptyHTML('尚未导入 PDF 文献','导入 PDF 后，可以在这里自动检测和校准页码。',true);
-    return;
-  }
-  if (!items.length) {
-    grid.innerHTML = calibrationEmptyHTML('没有符合当前条件的文献','可以清除搜索和状态筛选。',false);
-    return;
-  }
-  grid.innerHTML = items.map(calViewMode === 'list' ? calibrationListRowHTML : calibrationCardHTML).join('');
-}
-
-function updateCalibrationCard(sourceId) {
-  renderCalibrationStats();
-  if (calStatusFilter !== 'all' || calSortField === 'status') {
-    renderCalibrationCards();
-    return;
-  }
-  var item = calPdfList.find(function(value) { return value.source_file_id === sourceId; });
-  var current = document.querySelector('#cal-card-grid .cal-document-entry[data-id="' + CSS.escape(sourceId) + '"]');
-  if (!item || !current) {
-    renderCalibrationCards();
-    return;
-  }
-  var template = document.createElement('template');
-  template.innerHTML = (calViewMode === 'list' ? calibrationListRowHTML(item) : calibrationCardHTML(item)).trim();
-  var replacement = template.content.firstElementChild;
-  replacement.style.opacity = '0.45';
-  current.replaceWith(replacement);
-  requestAnimationFrame(function() { replacement.style.opacity = '1'; });
-}
-
-function calibrationEmptyHTML(title, note, importAction) {
-  return '<div class="cal-grid-empty"><div><div class="cal-empty-title">' + esc(title) + '</div><div class="cal-empty-note">' + esc(note) + '</div><button class="action-btn' + (importAction ? ' primary' : '') + '" style="margin-top:14px" onclick="' + (importAction ? "navigateTo('import')" : 'clearCalibrationFilters()') + '">' + (importAction ? '导入 PDF' : '清除筛选') + '</button></div></div>';
-}
-
-function clearCalibrationFilters() {
-  document.getElementById('cal-search').value = '';
-  applyCalStatusFilter('all');
-}
-
-function calibrationCardHTML(item) {
-  var status = calTransientStatus[item.source_file_id] || item.status;
-  var group = calibrationStatusGroup(status);
-  var action = group === 'calibrated' ? '查看映射' : (group === 'review' ? '检查结果' : (group === 'failed' ? '重新检测' : '自动检测页码'));
-  var pageMeta = item.page_count ? item.page_count + ' 页' : '页数未知';
-  var sizeMeta = formatFileSize(item.size_bytes);
-  var imported = formatCalDate(item.imported_at);
-  var mapping = item.mapping_summary || (group === 'failed' ? '未找到可靠页码序列' : (group === 'review' ? '已检测到映射，等待确认' : '尚未建立引用页码映射'));
-  var segmentText = item.mapping_segment_count ? '共 ' + item.mapping_segment_count + ' 个映射区间' : '';
-  var methodText = calibrationMappingMethodText(item, status);
-  var metadataMissing = bibliographicMissingText(item);
-  var selected = calSelectedSourceId === item.source_file_id ? ' selected' : '';
-  return '<article class="cal-doc-card cal-document-entry' + selected + '" data-id="' + esc(item.source_file_id) + '" onclick="selectCalibrationDoc(\'' + esc(item.source_file_id) + '\')">'
-    + '<div class="cal-card-top"><div class="cal-card-badges"><span class="type-badge ' + (item.parser_label === 'MinerU' ? 'mineru' : 'pdf') + '">' + esc(item.parser_label) + '</span><span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(group) + ' ' + group + '">' + statusChipIcon(group) + esc(calibrationStatusLabel(status)) + '</span></div>'
-    + '<button class="cal-more-btn" title="更多操作" aria-label="更多操作" onclick="toggleCalibrationMore(event,\'' + esc(item.source_file_id) + '\')">⋯</button></div>'
-    + (calOpenMenuId === item.source_file_id ? calibrationMoreMenuHTML(item.source_file_id) : '')
-    + '<div class="cal-card-title">' + esc(item.title) + '</div><div class="cal-card-author">' + esc(item.author || '作者信息待完善') + '</div>'
-    + (metadataMissing ? '<div class="cal-card-bib-missing">' + esc(metadataMissing) + '</div>' : '')
-    + '<div class="cal-card-meta"><div>' + esc(pageMeta + ' · ' + sizeMeta) + '</div></div>'
-    + '<div class="cal-card-mapping' + (group === 'failed' ? ' failed' : (group === 'review' ? ' review' : '')) + '">' + esc(mapping) + '</div><div class="cal-card-segments">' + esc(segmentText) + '</div>'
-    + '<div class="cal-card-method' + (group === 'failed' ? ' failed' : (group === 'review' ? ' review' : '')) + '">' + esc(methodText) + '</div>'
-    + '<div class="cal-card-footer"><button class="cal-card-action' + (group === 'calibrated' ? '' : ' needs-action') + '" onclick="calibrationPrimaryAction(event,\'' + esc(item.source_file_id) + '\')">' + action + '</button><span class="cal-card-date">' + esc(imported) + ' 导入</span></div></article>';
-}
-
-function calibrationListRowHTML(item) {
-  var status = calTransientStatus[item.source_file_id] || item.status;
-  var group = calibrationStatusGroup(status);
-  var action = group === 'calibrated' ? '查看映射' : (group === 'review' ? '检查结果' : (group === 'failed' ? '重新检测' : '自动检测'));
-  var pageMeta = item.page_count ? item.page_count + ' 页' : '页数未知';
-  var mapping = item.mapping_summary || (group === 'failed' ? '未找到可靠页码序列' : (group === 'review' ? '已检测到映射，等待确认' : '尚未建立引用页码映射'));
-  var method = calibrationMappingMethodText(item, status);
-  var segments = item.mapping_segment_count ? item.mapping_segment_count + ' 个映射区间' : '';
-  var metadataMissing = bibliographicMissingText(item);
-  var selected = calSelectedSourceId === item.source_file_id ? ' selected' : '';
-  return '<article class="cal-doc-row cal-document-entry' + selected + '" data-id="' + esc(item.source_file_id) + '" onclick="selectCalibrationDoc(\'' + esc(item.source_file_id) + '\')">'
-    + '<div class="cal-row-identity"><div class="cal-row-badges"><span class="type-badge ' + (item.parser_label === 'MinerU' ? 'mineru' : 'pdf') + '">' + esc(item.parser_label) + '</span><span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(group) + ' ' + group + '">' + statusChipIcon(group) + esc(calibrationStatusLabel(status)) + '</span></div><div class="cal-row-title">' + esc(item.title) + '</div><div class="cal-row-author">' + esc(item.author || '作者信息待完善') + '</div>' + (metadataMissing ? '<div class="cal-row-bib-missing">' + esc(metadataMissing) + '</div>' : '') + '</div>'
-    + '<div class="cal-row-file"><div>' + esc(pageMeta + ' · ' + formatFileSize(item.size_bytes)) + '</div><div class="cal-row-date">' + esc(formatCalDate(item.imported_at)) + ' 导入</div></div>'
-    + '<div class="cal-row-mapping"><div class="cal-row-mapping-main' + (group === 'failed' ? ' failed' : (group === 'review' ? ' review' : '')) + '">' + esc(mapping) + '</div><div class="cal-row-mapping-sub">' + esc([segments, method].filter(Boolean).join(' · ')) + '</div></div>'
-    + '<div class="cal-row-actions"><button class="cal-card-action' + (group === 'calibrated' ? '' : ' needs-action') + '" onclick="calibrationPrimaryAction(event,\'' + esc(item.source_file_id) + '\')">' + action + '</button><button class="cal-more-btn" title="更多操作" aria-label="更多操作" onclick="toggleCalibrationMore(event,\'' + esc(item.source_file_id) + '\')">⋯</button></div>'
-    + (calOpenMenuId === item.source_file_id ? calibrationMoreMenuHTML(item.source_file_id) : '') + '</article>';
-}
-
-function calibrationMappingMethodText(item, status) {
-  if (status === 'manual_mapped') return '人工映射';
-  if (status === 'auto_mapped_high') return '自动映射 · 高可信';
-  if (status === 'needs_review') return '自动检测 · 等待确认';
-  if (status === 'mapping') return '正在分析页码序列';
-  if (status === 'auto_mapping_failed' || status === 'source_missing') return '';
-  return '';
-}
-
-function calibrationMoreMenuHTML(sourceId) {
-  return '<div class="cal-more-menu" onclick="event.stopPropagation()">'
-    + '<button onclick="calibrationMenuAction(event,\'open\',\'' + esc(sourceId) + '\')">打开原文</button>'
-    + '<button onclick="calibrationMenuAction(event,\'view\',\'' + esc(sourceId) + '\')">查看映射</button>'
-    + '<button onclick="calibrationMenuAction(event,\'detect\',\'' + esc(sourceId) + '\')">自动检测页码</button>'
-    + '<button onclick="calibrationMenuAction(event,\'metadata\',\'' + esc(sourceId) + '\')">编辑书目信息</button>'
-    + '<div class="menu-divider"></div><button class="danger" onclick="calibrationMenuAction(event,\'remove\',\'' + esc(sourceId) + '\')">从文献库移除</button></div>';
-}
-
-async function calibrationMenuAction(event, action, sourceId) {
-  event.stopPropagation();
-  calOpenMenuId = null;
-  if (action === 'open') return openSource(sourceId, 1);
-  if (action === 'view') return selectCalibrationDoc(sourceId);
-  if (action === 'detect') return openCalibrationAndDetect(sourceId);
-  if (action === 'metadata') return openMetadataForSource(sourceId);
-  if (action === 'remove') return openRemoveDocumentModal(sourceId);
-}
-
-async function calibrationPrimaryAction(event, sourceId) {
-  event.stopPropagation();
-  var item = calPdfList.find(function(value) { return value.source_file_id === sourceId; });
-  await selectCalibrationDoc(sourceId);
-  var group = calibrationStatusGroup(calTransientStatus[sourceId] || (item ? item.status : 'unmapped'));
-  if (group === 'pending' || group === 'failed') await runAutoDetection(sourceId);
-}
-
 function formatCalDate(value) {
   if (!value) return '未知';
   var date = new Date(value);
@@ -4164,36 +3943,11 @@ function formatCalDate(value) {
   return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
 }
 
-function toggleCalibrationMore(event, sourceId) {
-  event.stopPropagation();
-  calOpenMenuId = calOpenMenuId === sourceId ? null : sourceId;
-  renderCalibrationCards();
-}
-
-async function selectCalibrationDoc(sourceId) {
-  calOpenMenuId = null;
-  calSelectedSourceId = sourceId;
-  renderCalibrationCards();
-  document.getElementById('cal-detail-drawer').classList.add('open');
-  document.querySelector('#page-calibration .calibration-body').classList.add('detail-open');
-  await loadCalibrationDoc(sourceId);
-}
-
-function closeCalibrationDetail() {
-  calSelectedSourceId = null;
-  calSelectedDoc = null;
-  document.getElementById('cal-detail-drawer').classList.remove('open');
-  document.querySelector('#page-calibration .calibration-body').classList.remove('detail-open');
-  renderCalibrationCards();
-}
-
 async function loadCalibrationDoc(sourceId) {
   sourceId = sourceId || calSelectedSourceId;
   var editor = document.getElementById('cal-editor');
-  var infoEl = document.getElementById('cal-doc-info');
   if (!sourceId) {
     editor.style.display = 'none';
-    infoEl.style.display = 'none';
     calSelectedDoc = null;
     calSegments = [];
     calAutoResult = null;
@@ -4209,16 +3963,8 @@ async function loadCalibrationDoc(sourceId) {
     }
     var mapping = calSelectedDoc.page_mapping || {};
     calSegments = (mapping.segments || []).map(function(s) { return Object.assign({}, s); });
-    var pdf = calPdfList.find(function(p) { return p.source_file_id === sourceId; });
-    var pages = pdf ? pdf.page_count || '?' : '?';
-    var pdfType = pdf ? pdf.parser_label || 'PDF' : '—';
-    var detailStatusGroup = calibrationStatusGroup(pdf ? pdf.status : 'unmapped');
-    document.getElementById('cal-detail-heading').innerHTML = '<div class="drawer-title">' + esc(pdf ? pdf.title : 'PDF 文献') + '</div><div class="drawer-subtitle">' + esc(pdf && pdf.author ? pdf.author : '作者信息未完善') + '</div><div class="cal-detail-status"><span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(detailStatusGroup) + ' ' + detailStatusGroup + '">' + statusChipIcon(detailStatusGroup) + esc(calibrationStatusLabel(pdf ? pdf.status : 'unmapped')) + '</span></div>';
-    infoEl.style.display = 'flex';
-    infoEl.innerHTML = '<span class="detail-pill">PDF ' + pages + ' 页</span>'
-      + '<span class="detail-pill">' + esc(pdfType) + '</span>'
-      + (mapping.validated_by ? '<span class="detail-pill accent">已验证</span>' : '<span class="detail-pill">未验证</span>');
-    document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" onclick="runAutoDetection()">自动检测页码</button><button class="action-btn" onclick="scrollToManualMapping()">手动设置</button><button class="action-btn" onclick="showCalibrationEvidence()">查看识别依据</button><button class="action-btn" onclick="openSource(\'' + esc(sourceId) + '\',1)">打开原文</button>';
+    document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" onclick="runAutoDetection()">自动检测页码</button><button class="action-btn" onclick="scrollToManualMapping()">手动设置</button><button class="action-btn" onclick="showCalibrationEvidence()">查看识别依据</button>'
+      + '<span class="detail-pill" style="margin-left:auto">' + (mapping.validated_by ? '已验证' : '未验证') + '</span>';
     editor.style.display = 'block';
     calAutoResult = null;
     document.getElementById('cal-auto-preview').style.display = 'none';
@@ -4236,7 +3982,7 @@ async function runAutoDetection(sourceId) {
     return;
   }
   calTransientStatus[sourceId] = 'mapping';
-  updateCalibrationCard(sourceId);
+  updateLibraryEntry(sourceId);
   var panel = document.getElementById('cal-auto-preview');
   var button = document.getElementById('cal-auto-detect-btn');
   panel.style.display = 'block';
@@ -4252,7 +3998,7 @@ async function runAutoDetection(sourceId) {
     if (!resp.ok || !data.ok) throw new Error(data.error || '检测失败');
     calAutoResult = data.result;
     renderAutoDetectionResult(calAutoResult);
-    var current = calPdfList.find(function(item) { return item.source_file_id === sourceId; });
+    var current = libSources.find(function(item) { return item.source_file_id === sourceId; });
     var segments = (calAutoResult.selected_segments || []).filter(function(item) { return item && item.confidence_level !== 'low'; });
     calTransientStatus[sourceId] = current && current.status === 'manual_mapped' ? 'manual_mapped' : (segments.length ? 'needs_review' : 'auto_mapping_failed');
   } catch(e) {
@@ -4261,7 +4007,7 @@ async function runAutoDetection(sourceId) {
     panel.innerHTML = '<div class="auto-detect-title">自动检测失败</div><div class="auto-detect-note">' + esc(e.message) + '</div>';
   } finally {
     if (button) button.disabled = false;
-    updateCalibrationCard(sourceId);
+    updateLibraryEntry(sourceId);
   }
 }
 
@@ -4545,12 +4291,12 @@ async function saveCalibration() {
 }
 
 function scrollToManualMapping() {
-  var table = document.querySelector('#cal-detail-drawer .segment-table-wrap');
+  var table = document.querySelector('#library-drawer .segment-table-wrap');
   if (table) table.scrollIntoView({behavior:'smooth', block:'center'});
 }
 
 function showCalibrationEvidence() {
-  var item = calPdfList.find(function(value) { return value.source_file_id === calSelectedSourceId; });
+  var item = libSources.find(function(value) { return value.source_file_id === calSelectedSourceId; });
   if (!item) return;
   var panel = document.getElementById('cal-auto-preview');
   var evidence = item.mapping_evidence || [];
@@ -4569,9 +4315,9 @@ function showCalibrationEvidence() {
 
 function openRemoveDocumentModal(sourceId) {
   if (sourceId && typeof sourceId === 'string') calSelectedSourceId = sourceId;
-  var item = calPdfList.find(function(value) { return value.source_file_id === calSelectedSourceId; });
+  var targetId = calSelectedSourceId || libSelectedId;
+  var item = libSources.find(function(value) { return value.source_file_id === targetId; });
   if (!item) return;
-  calOpenMenuId = null;
   removeDocumentTarget = item;
   removeSecondStage = false;
   document.getElementById('remove-modal-title').textContent = '从文献库移除《' + item.title + '》？';
@@ -4583,7 +4329,6 @@ function openRemoveDocumentModal(sourceId) {
   document.getElementById('confirm-remove-btn').textContent = '从文献库移除';
   document.getElementById('confirm-remove-btn').disabled = false;
   document.getElementById('remove-document-modal').classList.add('open');
-  renderCalibrationCards();
 }
 
 function closeRemoveDocumentModal() {
@@ -4613,19 +4358,15 @@ async function confirmRemoveDocument() {
     var resp = await fetch('/api/documents/remove', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,delete_generated_artifacts:document.getElementById('remove-generated').checked,delete_internal_copy:deleteInternal})});
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '移除失败');
-    calPdfList = calPdfList.filter(function(item) { return item.source_file_id !== sourceId; });
     delete calTransientStatus[sourceId];
     closeRemoveDocumentModal();
-    closeCalibrationDetail();
-    renderCalibrationStats();
-    renderCalibrationCards();
-    libLoaded = false;
+    closeLibDrawer();
     searchDocumentsLoaded = false;
     if (searchDocumentId === sourceId) searchDocumentId = '';
     await ensureSearchDocuments(true);
     updateSearchDocumentLabel();
-    calPdfsLoaded = true;
     await loadMeta();
+    await loadLibrary();
     window.dispatchEvent(new CustomEvent('library_changed', {detail:{source_id:sourceId}}));
     var query = document.getElementById('query').value.trim();
     if (query && searchResults.some(function(item) { return item.source_file_id === sourceId; })) await runSearch();
@@ -4706,11 +4447,9 @@ async function loadPreferences() {
     if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
     applyTheme(data.theme || 'frost-blue');
     if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
-    if (data.calibration_view === 'list' || data.calibration_view === 'grid') calViewMode = data.calibration_view;
+    else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
     syncLibraryViewButtons();
-    syncCalibrationViewButtons();
     if (libLoaded) renderLibraryList();
-    if (calPdfsLoaded) renderCalibrationCards();
     preferencesLoaded = true;
   } catch (e) {
     showToast('读取外观设置失败：' + e.message);
@@ -5013,7 +4752,6 @@ function pollImportJob(id) {
         q.status = 'done';
         q.message = data.message || '导入完成，已自动更新索引';
         libLoaded = false;
-        calPdfsLoaded = false;
         searchDocumentsLoaded = false;
         ensureSearchDocuments(true).then(updateSearchDocumentLabel);
       } else if (data.status === 'failed') {
@@ -5045,20 +4783,16 @@ async function loadMeta() {
 /* ═══ Init ═══ */
 document.addEventListener('click', function(event) {
   if (!event.target.closest('.app-select')) closeAppSelects();
-  if (calOpenMenuId && !event.target.closest('.cal-more-menu') && !event.target.closest('.cal-more-btn')) {
-    calOpenMenuId = null;
-    renderCalibrationCards();
-  }
 });
 loadMeta();
 loadPreferences();
 syncLibraryViewButtons();
-syncCalibrationViewButtons();
 renderSearchDocumentOptions();
 ensureSearchDocuments().then(function() { renderSearchDocumentOptions(); updateSearchDocumentLabel(); });
 initDropZone();
 const requestedInitialPage = new URLSearchParams(window.location.search).get('page');
-if (['search','library','import','calibration','settings'].indexOf(requestedInitialPage) >= 0) navigateTo(requestedInitialPage);
+const initialPage = requestedInitialPage === 'calibration' ? 'library' : requestedInitialPage;
+if (['search','library','import','settings'].indexOf(initialPage) >= 0) navigateTo(initialPage);
 if (currentPage === 'search') document.getElementById('query').focus();
 </script>
 </body>

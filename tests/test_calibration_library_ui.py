@@ -158,38 +158,27 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(result["volumes"][0]["volume_id"], "vol-1")
         self.assertEqual(len(result["works"]), 2)
 
-    def test_calibration_html_has_card_library_pinyin_sort_and_safe_remove_copy(self) -> None:
+    def test_merged_library_keeps_pinyin_sort_and_safe_remove_copy(self) -> None:
         self.assertNotIn("cal-doc-select", HTML)
         self.assertNotIn("请选择 PDF 文献", HTML)
-        self.assertIn("cal-card-grid", HTML)
+        self.assertNotIn('id="cal-card-grid"', HTML)
+        self.assertNotIn('id="page-calibration"', HTML)
         self.assertIn("zh-CN-u-co-pinyin", HTML)
-        self.assertIn("全部</button>", HTML)
-        self.assertIn('class="cal-status-tab__label">待确认</span>', HTML)
-        self.assertIn('class="cal-status-tab__label">检测失败</span>', HTML)
         self.assertIn("从文献库移除", HTML)
         self.assertIn("同时删除应用内保存的 PDF 副本", HTML)
         self.assertIn("/api/documents/remove", HTML)
 
-    def test_visual_polish_uses_complete_svg_refresh_and_interactive_stats(self) -> None:
-        self.assertIn('id="cal-refresh-btn"', HTML)
-        self.assertIn('title="刷新文献列表"', HTML)
-        self.assertIn('aria-label="刷新文献列表"', HTML)
-        self.assertIn('viewBox="0 0 24 24"', HTML)
-        self.assertIn('M21 12a9 9 0 0 0-15.5-6.2L3 8', HTML)
-        self.assertIn('M3 12a9 9 0 0 0 15.5 6.2L21 16', HTML)
-        self.assertIn('.cal-refresh-btn.refreshing svg', HTML)
-        self.assertIn('button.classList.add(\'refreshing\')', HTML)
-        self.assertIn('button.disabled = true', HTML)
-        self.assertIn('var scrollTop = pane ? pane.scrollTop : 0', HTML)
-        self.assertIn('loadCalPdfs({showSkeleton:false})', HTML)
-        self.assertIn("onclick=\"applyCalStatusFilter", HTML)
+    def test_library_stats_are_interactive_and_drive_status_filter(self) -> None:
+        self.assertIn('id="library-stats"', HTML)
+        self.assertIn("function renderLibraryStats()", HTML)
+        self.assertIn("function applyLibStatusFilter(status)", HTML)
+        self.assertIn("statusStatButton('failed','检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
+        self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
-        self.assertIn('class="status-stat status-stat--danger"', HTML)
-        self.assertIn('class="status-stat__icon"', HTML)
-        self.assertIn('class="status-stat__label">检测失败</span>', HTML)
-        self.assertIn('class="status-stat__count">—</span>', HTML)
-        self.assertIn('calibrationStatButton(\'failed\',\'检测失败\',current.failed,\'danger\',\'danger\')', HTML)
+        self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
+        self.assertIn('class="status-stat status-stat--', HTML)
+        self.assertIn('function statusStatIcon(icon)', HTML)
         self.assertIn('width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"', HTML)
         self.assertIn('.status-stat__icon { width: 16px; height: 16px; flex: 0 0 auto;', HTML)
         self.assertIn('.status-stat--danger .status-stat__icon { color: var(--danger-icon); opacity: 1; }', HTML)
@@ -209,34 +198,31 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('function statusChipIcon(group)', HTML)
         self.assertIn('class="status-chip__icon', HTML)
 
-    def test_filter_tabs_keep_icon_and_label_separate(self) -> None:
-        self.assertIn('class="cal-status-tab__label">全部</span>', HTML)
-        self.assertIn('class="cal-status-tab__label">检测失败</span>', HTML)
-        tab_rule = HTML.split('.cal-status-tab {', 1)[1].split('}', 1)[0]
-        self.assertIn('display: inline-flex;', tab_rule)
-        self.assertIn('align-items: center;', tab_rule)
-        self.assertIn('gap: 7px;', tab_rule)
-        self.assertIn('white-space: nowrap;', tab_rule)
-        self.assertNotIn('.cal-status-badge.mapping::before', HTML)
-        self.assertIn('background: var(--danger-soft); border: 1px solid var(--danger-border);', HTML)
+    def test_library_rows_and_cards_show_status_chip_for_pdf_only(self) -> None:
+        self.assertIn("var statusChip = isPdf", HTML)
+        self.assertIn("calTransientStatus[src.source_file_id] || src.status", HTML)
+        self.assertIn("src.mapping_summary || '尚未建立引用页码映射'", HTML)
+        self.assertIn("src.page_count ? src.page_count + ' 页' : '页数未知'", HTML)
+        self.assertIn("(src.works_count || 1) + ' 篇'", HTML)
 
-    def test_card_hierarchy_and_more_menu_match_polished_interaction(self) -> None:
-        self.assertIn("作者信息待完善", HTML)
-        self.assertIn("mapping_segment_count", HTML)
-        self.assertIn("自动映射 · 高可信", HTML)
-        self.assertIn("人工映射", HTML)
-        self.assertIn("未找到可靠页码序列", HTML)
-        for label in ("打开原文", "查看映射", "自动检测页码", "编辑书目信息", "从文献库移除"):
-            self.assertIn(label, HTML)
-        self.assertIn("calibrationPrimaryAction", HTML)
-        self.assertIn("updateCalibrationCard(sourceId)", HTML)
+    def test_drawer_calibration_section_is_collapsible_and_pdf_scoped(self) -> None:
+        self.assertIn('id="library-drawer-calibration"', HTML)
+        self.assertIn('id="cal-collapse-toggle"', HTML)
+        self.assertIn('id="cal-section-body"', HTML)
+        self.assertIn('function toggleDrawerCalibration(forceOpen)', HTML)
+        self.assertIn("host.style.display = isPdf ? 'block' : 'none'", HTML)
+        self.assertIn('function renderDrawerCalibrationSummary(src)', HTML)
+        drawer = HTML.split('id="library-drawer"', 1)[1].split('<!-- ── Import Page ── -->', 1)[0]
+        for element_id in ('id="cal-editor"', 'id="cal-auto-preview"', 'id="cal-segments-body"', 'id="cal-preview-input"', 'id="cal-detail-actions"'):
+            self.assertIn(element_id, drawer)
 
-    def test_sidebar_keeps_library_and_calibration_adjacent(self) -> None:
+    def test_sidebar_has_no_calibration_entry_and_deep_links_stay_in_library(self) -> None:
+        self.assertNotIn('data-page="calibration"', HTML)
         library = HTML.index('data-page="library"')
-        calibration = HTML.index('data-page="calibration"')
         importing = HTML.index('data-page="import"')
-        self.assertLess(library, calibration)
-        self.assertLess(calibration, importing)
+        self.assertLess(library, importing)
+        self.assertNotIn("navigateTo('calibration')", HTML)
+        self.assertIn("navigateTo('library');\n  if (!libLoaded) await loadLibrary();", HTML)
 
     def test_library_drawer_actions_wrap_without_compressing_labels(self) -> None:
         drawer_rule = HTML.split('.drawer-actions {', 1)[1].split('}', 1)[0]

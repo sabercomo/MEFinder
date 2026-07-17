@@ -23,12 +23,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_all_dropdowns_use_application_menus(self) -> None:
         self.assertNotIn("<select", HTML.lower())
-        self.assertIn('id="cal-sort-field-select"', HTML)
-        self.assertIn('id="cal-sort-direction-select"', HTML)
         self.assertIn('id="library-sort-field-select"', HTML)
         self.assertIn('id="library-sort-direction-select"', HTML)
         self.assertIn("setLibrarySortOption(event,'field','title')", HTML)
         self.assertIn("setLibrarySortOption(event,'field','source_type')", HTML)
+        self.assertIn("setLibrarySortOption(event,'field','status')", HTML)
         self.assertIn("function librarySortProjection(source)", HTML)
         self.assertIn("localStorage.setItem('meFinderLibrarySortField'", HTML)
         self.assertIn('id="citation-style-control"', HTML)
@@ -55,13 +54,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('library-view-grid', HTML)
         self.assertIn('class="library-card library-entry', HTML)
 
-    def test_calibration_has_persistent_list_and_card_views(self) -> None:
-        self.assertIn('aria-label="页码校准显示方式"', HTML)
-        self.assertIn('id="cal-view-list"', HTML)
-        self.assertIn('id="cal-view-grid"', HTML)
-        self.assertIn("localStorage.setItem('meFinderCalibrationView', calViewMode)", HTML)
-        self.assertIn('function calibrationListRowHTML(item)', HTML)
-        self.assertIn('cal-doc-row cal-document-entry', HTML)
+    def test_calibration_lives_inside_library_drawer_not_a_page(self) -> None:
+        self.assertNotIn('id="page-calibration"', HTML)
+        self.assertNotIn('aria-label="页码校准显示方式"', HTML)
+        self.assertNotIn("meFinderCalibrationView", HTML)
+        self.assertIn('id="library-drawer-calibration"', HTML)
+        self.assertIn("persistDisplayPreference('library_view', libViewMode)", HTML)
+        self.assertIn("data.calibration_view === 'list' || data.calibration_view === 'grid'", HTML)
 
 
 if __name__ == "__main__":

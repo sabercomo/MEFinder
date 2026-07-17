@@ -54,22 +54,22 @@ class CitationPageDisplayMarkupTests(unittest.TestCase):
         )
 
 
-class CalibrationWorkspaceLayoutMarkupTests(unittest.TestCase):
+class LibraryWorkspaceLayoutMarkupTests(unittest.TestCase):
     def test_detail_workspace_uses_a_36_64_split(self) -> None:
-        rule = re.search(r"\.calibration-body\.detail-open\s*\{([^}]+)\}", HTML, re.S)
+        rule = re.search(r"\.library-body\.detail-open\s*\{([^}]+)\}", HTML, re.S)
         self.assertIsNotNone(rule)
         self.assertIn("grid-template-columns: minmax(320px, 36fr) minmax(0, 64fr);", rule.group(1))
 
     def test_open_detail_uses_a_single_column_document_list(self) -> None:
         self.assertIn(
-            ".calibration-body.detail-open .cal-card-grid { grid-template-columns: minmax(0, 1fr);",
+            ".library-body.detail-open .library-list-container.library-view-grid { grid-template-columns: minmax(0, 1fr); }",
             HTML,
         )
 
     def test_narrow_window_switches_to_a_full_width_detail_panel(self) -> None:
         self.assertIn("@media (max-width: 1120px)", HTML)
-        self.assertIn(".calibration-body.detail-open .cal-library-pane { display: none; }", HTML)
-        self.assertIn(".calibration-body.detail-open .cal-detail-drawer.open { width: 100%;", HTML)
+        self.assertIn(".library-body.detail-open .library-list-scroll { display: none; }", HTML)
+        self.assertIn(".library-body.detail-open .library-drawer.open { width: 100%;", HTML)
 
     def test_mapping_table_is_fixed_width_without_horizontal_scroll(self) -> None:
         table_wrap = re.search(r"\.segment-table-wrap\s*\{([^}]+)\}", HTML, re.S)
@@ -87,7 +87,7 @@ class CalibrationWorkspaceLayoutMarkupTests(unittest.TestCase):
         self.assertEqual(HTML.count('id="cal-auto-detect-btn"'), 1)
 
     def test_selected_document_has_background_border_and_accent_bar(self) -> None:
-        self.assertIn(".cal-doc-card.selected::before", HTML)
+        self.assertIn(".library-row.selected", HTML)
         self.assertIn("background: var(--surface-selected);", HTML)
         self.assertIn("background: var(--accent);", HTML)
 
