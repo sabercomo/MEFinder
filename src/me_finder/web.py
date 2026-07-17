@@ -1670,6 +1670,25 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
+.import-route-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.import-route-badge.native {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+.import-route-badge.mineru {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+}
 .import-item-remove {
   font-size: 18px;
   color: var(--text-tertiary);
@@ -3273,7 +3292,9 @@ async function openSource(sourceId, page) {
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '打开失败');
-    showToast(data.app === 'system_default' ? '已打开原文' : '已调用 Adobe DC');
+    if (data.page && data.page_jump) showToast('已打开原文并跳转到 PDF 第 ' + data.page + ' 页');
+    else if (data.page) showToast('已用系统默认阅读器打开，请手动翻到 PDF 第 ' + data.page + ' 页');
+    else showToast('已打开原文');
   } catch(e) {
     showToast(e.message || '打开失败');
   }
@@ -4836,6 +4857,20 @@ function handleFileSelect(files) {
   });
 }
 
+function importStepsFor(q) {
+  if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
+  if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
+  return ['读取文件', '类型检测', '本地解析', '建立索引'];
+}
+
+function importRouteBadge(q) {
+  if (q.type !== 'pdf' || !q.detectedType) return '';
+  var mineru = q.route === 'mineru';
+  return '<span class="import-route-badge ' + (mineru ? 'mineru' : 'native') + '">'
+    + esc(pdfTypeLabel(q.detectedType)) + (mineru ? ' · 提交 MinerU' : ' · 本地解析')
+    + '</span>';
+}
+
 function renderImportQueue() {
   var queueEl = document.getElementById('import-queue');
   var itemsEl = document.getElementById('import-items');
@@ -4844,9 +4879,9 @@ function renderImportQueue() {
     return;
   }
   queueEl.style.display = 'block';
-  var steps = ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
   itemsEl.innerHTML = importQueue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : 'word';
+    var steps = importStepsFor(q);
     var stepsHTML = steps.map(function(label, i) {
       var cls = '';
       if (q.status === 'error' && i === q.step) cls = 'error';
@@ -4862,6 +4897,7 @@ function renderImportQueue() {
       + '<div class="import-item-header">'
       + '<span class="type-badge ' + typeCls + '">' + (q.type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
       + '<span class="import-item-name">' + esc(q.name) + '</span>'
+      + importRouteBadge(q)
       + '<span class="import-item-size">' + formatFileSize(q.size) + '</span>'
       + '<button class="import-item-remove" onclick="removeImport(\'' + q.id + '\')" title="移除">&times;</button>'
       + '</div>'
@@ -4879,7 +4915,6 @@ function removeImport(id) {
 async function uploadImport(id) {
   var q = importQueue.find(function(q) { return q.id === id; });
   if (!q) return;
-  var steps = ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
   q.status = 'processing';
   q.step = 0;
   q.message = '正在读取文件…';
@@ -4896,8 +4931,16 @@ async function uploadImport(id) {
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
     q.jobId = data.job_id;
-    q.step = 1;
-    q.message = data.detected_pdf_type ? ('检测结果：' + pdfTypeLabel(data.detected_pdf_type)) : '文件已保存，正在建立索引…';
+    if (q.type === 'pdf' && data.detected_pdf_type) {
+      q.detectedType = data.detected_pdf_type;
+      q.route = data.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+      q.step = 2;
+      q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
+        + (q.route === 'mineru' ? '，将提交 MinerU 解析' : '，本地解析，无需 MinerU');
+    } else {
+      q.step = 1;
+      q.message = '文件已保存，正在建立索引…';
+    }
     renderImportQueue();
     if (q.jobId) pollImportJob(q.id);
   } catch (e) {
@@ -4914,10 +4957,13 @@ function pollImportJob(id) {
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
-      if (data.phase === 'mineru_processing') q.step = 2;
-      else if (data.phase === 'rebuilding_index') q.step = 4;
-      else if (data.phase === 'metadata_recognition') q.step = 4;
-      else if (data.status === 'completed') q.step = 5;
+      if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
+      else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
+      var steps = importStepsFor(q);
+      if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
+      else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('文本入库');
+      else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
+      else if (data.status === 'completed') q.step = steps.length;
       q.message = data.message || q.message;
       if (data.status === 'completed') {
         q.status = 'done';
@@ -5338,21 +5384,37 @@ def make_handler(index_path: Path):
         target = source_path_from_id(source_id)
         suffix = target.suffix.lower()
         if suffix == ".pdf":
-            adobe = find_adobe_pdf_app()
-            if adobe is None:
-                raise MinerUError("未找到 Adobe Acrobat/Reader DC。请确认已安装 Adobe DC。")
-            args = [str(adobe)]
             try:
                 page_number = int(page) if page not in (None, "") else None
             except (TypeError, ValueError):
                 page_number = None
-            if page_number and page_number > 0:
-                args.extend(["/A", f"page={page_number}"])
-            args.append(str(target))
-            subprocess.Popen(args, close_fds=True)
-            return {"ok": True, "app": str(adobe), "file": target.name, "page": page_number}
+            if page_number is not None and page_number <= 0:
+                page_number = None
+            # Adobe is only required for the page-jump feature (its /A page=N
+            # switch); every other case goes through the system default viewer
+            # so machines without Adobe (WPS, Edge, ...) still work.
+            if page_number:
+                adobe = find_adobe_pdf_app()
+                if adobe is not None:
+                    args = [str(adobe), "/A", f"page={page_number}", str(target)]
+                    subprocess.Popen(args, close_fds=True)
+                    return {
+                        "ok": True,
+                        "app": str(adobe),
+                        "page_jump": True,
+                        "file": target.name,
+                        "page": page_number,
+                    }
+            os.startfile(str(target))  # type: ignore[attr-defined]
+            return {
+                "ok": True,
+                "app": "system_default",
+                "page_jump": False,
+                "file": target.name,
+                "page": page_number,
+            }
         os.startfile(str(target))  # type: ignore[attr-defined]
-        return {"ok": True, "app": "system_default", "file": target.name}
+        return {"ok": True, "app": "system_default", "page_jump": False, "file": target.name}
 
     def configured_document(source_id: str) -> Tuple[Path, Dict[str, object], Dict[str, object]]:
         config_path = root / "config" / "pdf_imports.json"
