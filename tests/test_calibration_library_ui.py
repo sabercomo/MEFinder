@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.me_finder.calibration_library import build_calibration_library
+from src.me_finder.calibration_library import build_calibration_library, build_library
 from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
@@ -77,6 +77,86 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(by_id["pending"]["title"], "pending")
         self.assertEqual(by_id["active"]["status"], "mapping")
         self.assertEqual(result["stats"], {"total": 6, "calibrated": 2, "pending": 1, "review": 1, "failed": 1, "mapping": 1})
+
+    def test_build_library_includes_word_sources_and_keeps_pdf_only_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw_pdf = root / "corpus" / "raw_pdf"
+            raw_pdf.mkdir(parents=True)
+            raw_docx = root / "corpus" / "raw_docx"
+            raw_docx.mkdir(parents=True)
+            (raw_pdf / "critique.pdf").write_bytes(b"pdf")
+            (raw_docx / "volume1.docx").write_bytes(b"docx")
+            sources = [
+                {
+                    "source_file_id": "pdf-critique",
+                    "source_type": "pdf",
+                    "file_name": "critique.pdf",
+                    "relative_path": "corpus/raw_pdf/critique.pdf",
+                    "size_bytes": 3,
+                    "pdf_profile": {"pdf_page_count": 400, "mapping_status": "manual_mapped"},
+                },
+                {
+                    "source_file_id": "word-vol1",
+                    "source_type": "word",
+                    "file_name": "volume1.docx",
+                    "relative_path": "corpus/raw_docx/volume1.docx",
+                    "size_bytes": 4,
+                    "last_modified": "2026-07-01T08:00:00",
+                },
+            ]
+            volumes = [
+                {
+                    "source_file_id": "word-vol1",
+                    "volume_id": "vol-1",
+                    "display_title": "马克思恩格斯文集 第1卷",
+                    "corpus_title": "马克思恩格斯文集",
+                    "primary_structure": "docx_sections",
+                }
+            ]
+            works = [
+                {"volume_id": "vol-1", "title": "导言", "author_label": "马克思"},
+                {"volume_id": "vol-1", "title": "黑格尔法哲学批判", "author_label": "马克思"},
+            ]
+            documents = [
+                {
+                    "source_file_id": "pdf-critique",
+                    "title": "Critique of Forms of Life",
+                    "page_mapping": {
+                        "validated_by": "manual_ui",
+                        "segments": [
+                            {"pdf_page_start": 21, "pdf_page_end": 405, "citation_page_start": "1"}
+                        ],
+                    },
+                }
+            ]
+            result = build_library(root, sources, volumes, works, documents)
+        by_id = {item["source_file_id"]: item for item in result["items"]}
+        self.assertEqual(len(result["items"]), 2)
+
+        word = by_id["word-vol1"]
+        self.assertEqual(word["source_type"], "word")
+        self.assertEqual(word["title"], "马克思恩格斯文集 第1卷")
+        self.assertEqual(word["author"], "马克思")
+        self.assertEqual(word["works_count"], 2)
+        self.assertTrue(word["source_exists"])
+        self.assertEqual(word["modified_at"], "2026-07-01T08:00:00")
+        self.assertIsNone(word.get("status"))
+
+        pdf = by_id["pdf-critique"]
+        self.assertEqual(pdf["source_type"], "pdf")
+        self.assertEqual(pdf["status"], "manual_mapped")
+        self.assertEqual(pdf["status_group"], "calibrated")
+        self.assertEqual(pdf["title"], "Critique of Forms of Life")
+        self.assertEqual(pdf["mapping_summary"], "PDF 第 22 页 → 引用第 1 页")
+        self.assertEqual(pdf["pdf_profile"]["pdf_page_count"], 400)
+
+        self.assertEqual(
+            result["stats"],
+            {"total": 1, "calibrated": 1, "pending": 0, "review": 0, "failed": 0, "mapping": 0},
+        )
+        self.assertEqual(result["volumes"][0]["volume_id"], "vol-1")
+        self.assertEqual(len(result["works"]), 2)
 
     def test_calibration_html_has_card_library_pinyin_sort_and_safe_remove_copy(self) -> None:
         self.assertNotIn("cal-doc-select", HTML)

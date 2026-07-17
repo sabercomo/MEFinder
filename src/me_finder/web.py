@@ -28,7 +28,7 @@ from .bibliographic_metadata import (
 )
 from .mineru_api import MinerUError, mineru_config_summary, resolve_mineru_config_path, save_mineru_config
 from .preferences import read_preferences, resolve_preferences_path, save_preferences
-from .calibration_library import build_calibration_library
+from .calibration_library import build_calibration_library, build_library
 from .document_deletion import DocumentDeletionService
 from .pdf_extractors import extract_pdf_source
 from .pdf_import_service import (
@@ -5093,23 +5093,40 @@ def make_handler(index_path: Path):
             result[str(source_id)] = payload
         return result
 
-    def calibration_library_data() -> Dict[str, object]:
+    def library_context() -> Tuple[List, List, List, List, set]:
         config_path = root / "config" / "pdf_imports.json"
         config = json.loads(config_path.read_text("utf-8")) if config_path.exists() else {"documents": []}
         with runtime_lock:
             current_engine = runtime["engine"]
             sources = list(current_engine.index.get("source_files", []))
             volumes = list(current_engine.index.get("volumes", []))
+            works = list(current_engine.index.get("works", []))
             active = set(calibration_active_sources)
         with import_jobs_lock:
             for job in import_jobs.values():
                 if job.get("status") == "processing" and job.get("source_file_id"):
                     active.add(str(job["source_file_id"]))
+        return sources, volumes, works, config.get("documents", []), active
+
+    def calibration_library_data() -> Dict[str, object]:
+        sources, volumes, _works, documents, active = library_context()
         return build_calibration_library(
             root,
             sources,
             volumes,
-            config.get("documents", []),
+            documents,
+            latest_runs=latest_pdf_import_runs(),
+            active_source_ids=active,
+        )
+
+    def library_data() -> Dict[str, object]:
+        sources, volumes, works, documents, active = library_context()
+        return build_library(
+            root,
+            sources,
+            volumes,
+            works,
+            documents,
             latest_runs=latest_pdf_import_runs(),
             active_source_ids=active,
         )
@@ -5554,6 +5571,12 @@ def make_handler(index_path: Path):
                     self._send_json(calibration_library_data())
                 except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                     self._send_json({"error": f"页码校准文献加载失败：{exc}"}, status=500)
+                return
+            if parsed.path == "/api/library":
+                try:
+                    self._send_json(library_data())
+                except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                    self._send_json({"error": f"文献库加载失败：{exc}"}, status=500)
                 return
             if parsed.path == "/api/import-status":
                 params = parse_qs(parsed.query)

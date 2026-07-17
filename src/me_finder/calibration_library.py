@@ -20,6 +20,78 @@ STATUS_LABELS = {
 }
 
 
+def build_library(
+    root: Path,
+    source_files: Sequence[Mapping[str, object]],
+    volumes: Sequence[Mapping[str, object]],
+    works: Sequence[Mapping[str, object]],
+    documents: Sequence[Mapping[str, object]],
+    latest_runs: Optional[Mapping[str, Mapping[str, object]]] = None,
+    active_source_ids: Optional[Iterable[str]] = None,
+) -> Dict[str, object]:
+    """Return the unified library payload for every source.
+
+    Each item is the raw source record merged with the PDF calibration
+    projection where applicable; Word sources get resolved display fields
+    (title/author/works_count) instead of calibration status. ``stats``
+    stays PDF-only. ``volumes``/``works`` ride along as lookup tables for
+    the detail drawer.
+    """
+
+    root = Path(root).resolve()
+    calibration = build_calibration_library(
+        root, source_files, volumes, documents,
+        latest_runs=latest_runs, active_source_ids=active_source_ids,
+    )
+    projection_by_id = {
+        str(item.get("source_file_id")): item for item in calibration["items"]
+    }
+    volume_by_source = {
+        str(item.get("source_file_id")): item
+        for item in volumes
+        if item.get("source_file_id")
+    }
+    works_by_volume: Dict[str, List[Mapping[str, object]]] = {}
+    for work in works:
+        works_by_volume.setdefault(str(work.get("volume_id")), []).append(work)
+
+    items: List[Dict[str, object]] = []
+    for source in source_files:
+        source_id = str(source.get("source_file_id") or "")
+        if not source_id:
+            continue
+        item = dict(source)
+        projection = projection_by_id.get(source_id)
+        if projection is not None:
+            item.update(projection)
+        else:
+            volume = volume_by_source.get(source_id, {})
+            volume_works = works_by_volume.get(str(volume.get("volume_id")), []) if volume else []
+            metadata = source.get("bibliographic_metadata") if isinstance(source.get("bibliographic_metadata"), Mapping) else {}
+            first_work = volume_works[0] if volume_works else {}
+            item["title"] = _first_valid(
+                volume.get("display_title"),
+                source.get("display_title"),
+                source.get("title"),
+                Path(str(source.get("file_name") or "")).stem,
+            ) or source_id
+            item["author"] = _first_valid(
+                metadata.get("author"), source.get("author"), first_work.get("author_label")
+            )
+            item["works_count"] = len(volume_works)
+            item["imported_at"] = source.get("imported_at") or source.get("last_modified")
+            item["modified_at"] = source.get("last_modified") or source.get("imported_at")
+            source_path = _source_path(root, source)
+            item["source_exists"] = bool(source_path and source_path.exists())
+        items.append(item)
+    return {
+        "items": items,
+        "stats": calibration["stats"],
+        "volumes": list(volumes),
+        "works": list(works),
+    }
+
+
 def build_calibration_library(
     root: Path,
     source_files: Sequence[Mapping[str, object]],
