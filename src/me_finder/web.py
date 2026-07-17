@@ -2413,17 +2413,14 @@ a { color: var(--accent); text-decoration: none; }
             <div class="page-subtitle">管理已导入的文献及其索引状态</div>
           </div>
           <div class="page-header-meta">
-            <div class="status-badge" id="library-status">
-              <span class="dot"></span>
-              <span id="library-total">加载中…</span>
-            </div>
+            <div class="calibration-header-stats" id="library-stats"></div>
           </div>
         </div>
         <div class="library-search-wrap">
           <span class="library-search-icon">
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
           </span>
-          <input type="text" id="lib-search" class="library-search" placeholder="搜索文献…" autocomplete="off" oninput="filterLibrary()">
+          <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
         </div>
         <div class="library-controls-row">
           <div class="segmented-control" id="lib-type-control">
@@ -2439,7 +2436,7 @@ a { color: var(--accent); text-decoration: none; }
             <div class="library-sort-controls"><span class="library-sort-label">排序</span>
               <div class="app-select library-sort-field-select" id="library-sort-field-select">
                 <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-field-select')"><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button></div>
+                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button><button class="app-select-option" type="button" data-value="status" onclick="setLibrarySortOption(event,'field','status')">校准状态</button></div>
               </div>
               <div class="app-select library-sort-direction-select" id="library-sort-direction-select">
                 <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-direction-select')"><span class="app-select-value" id="library-sort-direction-label">降序</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
@@ -2712,11 +2709,13 @@ let searchDocumentsLoaded = false;
 let libSources = [];
 let libVolumes = [];
 let libWorks = [];
+let libStats = null;
 let libLoaded = false;
 let libTypeFilter = 'all';
+let libStatusFilter = 'all';
 let libSelectedId = null;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';
-let libSortField = ['imported_at','title','author','modified_at','source_type'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at';
+let libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at';
 let libSortDirection = localStorage.getItem('meFinderLibrarySortDirection') === 'asc' ? 'asc' : 'desc';
 
 let calPdfsLoaded = false;
@@ -3310,23 +3309,59 @@ function showToast(msg) {
 /* ═══ Library ═══ */
 async function loadLibrary() {
   try {
-    const resp = await fetch('/api/sources');
+    const resp = await fetch('/api/library');
     const data = await resp.json();
-    libSources = data.source_files || [];
+    if (data.error) throw new Error(data.error);
+    libSources = data.items || [];
     libVolumes = data.volumes || [];
     libWorks = data.works || [];
+    libStats = data.stats || null;
     libLoaded = true;
-    document.getElementById('library-total').textContent = libSources.length + ' 部文献';
+    renderLibraryStats();
     syncLibraryViewButtons();
     syncLibrarySortControls();
     renderLibraryList();
   } catch(e) {
-    document.getElementById('library-total').textContent = '加载失败';
+    document.getElementById('library-list').innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">' + esc(e.message || '文献库加载失败') + '</div></div>';
   }
+}
+
+function renderLibraryStats() {
+  var container = document.getElementById('library-stats');
+  if (!container) return;
+  var current = {total:0,calibrated:0,pending:0,review:0,failed:0,mapping:0};
+  libSources.forEach(function(item) {
+    if (item.source_type !== 'pdf') return;
+    current.total += 1;
+    var group = calibrationStatusGroup(item.status);
+    if (current[group] != null) current[group] += 1;
+  });
+  container.innerHTML = statusStatButton('all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('pending','待校准',current.pending,'neutral','clock',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('review','待确认',current.review,'warning','notice',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('failed','检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter');
+}
+
+function applyLibStatusFilter(status) {
+  libStatusFilter = status || 'all';
+  if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
+    libTypeFilter = 'all';
+    document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.type === 'all');
+    });
+  }
+  closeLibDrawer();
+  renderLibraryStats();
+  renderLibraryList();
 }
 
 function setLibFilter(btn) {
   libTypeFilter = btn.dataset.type;
+  if (libTypeFilter === 'word' && libStatusFilter !== 'all') {
+    libStatusFilter = 'all';
+    renderLibraryStats();
+  }
   document.querySelectorAll('#lib-type-control .seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   closeLibDrawer();
@@ -3361,7 +3396,7 @@ function setLibrarySortOption(event, control, value) {
     libSortDirection = value === 'asc' ? 'asc' : 'desc';
     localStorage.setItem('meFinderLibrarySortDirection', libSortDirection);
   } else {
-    libSortField = ['imported_at','title','author','modified_at','source_type'].indexOf(value) >= 0 ? value : 'imported_at';
+    libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(value) >= 0 ? value : 'imported_at';
     localStorage.setItem('meFinderLibrarySortField', libSortField);
   }
   syncLibrarySortControls();
@@ -3370,7 +3405,7 @@ function setLibrarySortOption(event, control, value) {
 }
 
 function syncLibrarySortControls() {
-  var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',source_type:'来源类型',desc:'降序',asc:'升序'};
+  var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',source_type:'来源类型',status:'校准状态',desc:'降序',asc:'升序'};
   var fieldLabel = document.getElementById('library-sort-field-label');
   var directionLabel = document.getElementById('library-sort-direction-label');
   if (fieldLabel) fieldLabel.textContent = labels[libSortField] || labels.imported_at;
@@ -3384,14 +3419,11 @@ function syncLibrarySortControls() {
 }
 
 function librarySortProjection(source) {
-  var volume = libVolumes.find(function(item) { return item.source_file_id === source.source_file_id; });
-  var worksForSource = libWorks.filter(function(work) { return volume && work.volume_id === volume.volume_id; });
-  var bib = sourceBibliographicMetadata(source);
   return {
-    title: (volume && volume.display_title) || source.display_title || source.title || source.file_name || source.source_file_id,
-    author: bib.author || (worksForSource[0] && worksForSource[0].author_label) || '',
+    title: source.title || source.file_name || source.source_file_id,
+    author: source.author || '',
     imported_at: source.imported_at || source.last_modified || '',
-    modified_at: source.last_modified || source.imported_at || '',
+    modified_at: source.modified_at || source.last_modified || '',
     source_type: source.source_type === 'word' ? 'Word' : 'PDF'
   };
 }
@@ -3410,13 +3442,16 @@ function getFilteredSources() {
   if (libTypeFilter !== 'all') {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }
-  const q = (document.getElementById('lib-search').value || '').trim().toLowerCase();
+  if (libStatusFilter !== 'all') {
+    sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) === libStatusFilter);
+  }
+  const q = (document.getElementById('lib-search').value || '').trim().toLowerCase().replace(/\s+/g, '');
   if (q) {
     sources = sources.filter(s => {
-      const vol = libVolumes.find(v => v.source_file_id === s.source_file_id);
-      const title = (vol ? vol.display_title : s.file_name || '').toLowerCase();
-      const fname = (s.file_name || '').toLowerCase();
-      return title.includes(q) || fname.includes(q);
+      const haystack = [s.title, s.author, s.translator, s.publisher, s.file_name]
+        .map(function(value) { return String(value || '').toLowerCase().replace(/\s+/g, ''); })
+        .join('|');
+      return haystack.indexOf(q) >= 0;
     });
   }
   sources.sort(function(a, b) {
@@ -3425,6 +3460,11 @@ function getFilteredSources() {
     var result;
     if (libSortField === 'imported_at' || libSortField === 'modified_at') {
       result = compareLibraryDates(left[libSortField], right[libSortField]);
+    } else if (libSortField === 'status') {
+      var order = {manual_mapped:0,auto_mapped_high:1,unmapped:2,needs_review:3,auto_mapping_failed:4,source_missing:5,mapping:6};
+      var av = a.source_type === 'pdf' && order[a.status] != null ? order[a.status] : 99;
+      var bv = b.source_type === 'pdf' && order[b.status] != null ? order[b.status] : 99;
+      result = libSortDirection === 'desc' ? bv - av : av - bv;
     } else {
       result = calibrationSortText(left[libSortField], right[libSortField], libSortDirection);
     }
@@ -3453,39 +3493,39 @@ function renderLibraryList() {
   }
   listEl.innerHTML = sources.map(function(src) {
     var vol = libVolumes.find(function(v) { return v.source_file_id === src.source_file_id; });
-    var title = vol ? vol.display_title : (src.file_name || src.source_file_id);
-    var worksForSrc = libWorks.filter(function(w) { return vol && w.volume_id === vol.volume_id; });
+    var isPdf = src.source_type === 'pdf';
+    var title = src.title || (src.file_name || src.source_file_id);
+    var author = src.author || '作者信息待完善';
     var bib = sourceBibliographicMetadata(src);
-    var author = bib.author || (worksForSrc[0] && worksForSrc[0].author_label) || '作者信息待完善';
-    var missingMetadataText = src.source_type === 'pdf' ? bibliographicMissingText(bib) : '';
+    var missingMetadataText = isPdf ? bibliographicMissingText(bib) : '';
     var size = formatFileSize(src.size_bytes);
     var isSelected = src.source_file_id === libSelectedId;
-    var typeCls = src.source_type === 'pdf' ? 'pdf' : 'word';
-    var typeLabel = src.source_type === 'pdf' ? 'PDF' : 'Word';
-    if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.detected_pdf_type === 'mineru_structured') {
-      typeCls = 'mineru';
-      typeLabel = 'MinerU';
-    }
-    var mappingStatus = src.source_type === 'pdf' && src.pdf_profile
-      ? mappingStatusLabel(src.pdf_profile.mapping_status)
+    var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
+    var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
+    var statusGroup = isPdf ? calibrationStatusGroup(src.status) : '';
+    var statusChip = isPdf
+      ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(src.status)) + '</span>'
       : '';
+    var countMeta = isPdf
+      ? (src.page_count ? src.page_count + ' 页' : '页数未知')
+      : ((src.works_count || 1) + ' 篇');
     if (libViewMode === 'grid') {
       var imported = formatCalDate(src.imported_at || src.last_modified);
-      var secondary = src.source_type === 'word' ? ((vol && vol.corpus_title) || '') : mappingStatus;
+      var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
       return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + '" data-id="' + esc(src.source_file_id) + '" onclick="selectLibDoc(\'' + esc(src.source_file_id) + '\')">'
-        + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div></div>'
+        + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div></div>'
         + '<div class="library-card-title">' + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
         + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
-        + '<div class="library-card-meta">' + esc((worksForSrc.length || 1) + ' 篇 · ' + size) + '</div>'
-        + '<div class="library-card-mapping">' + esc(src.source_type === 'pdf' ? (mappingStatus || '页码状态待检查') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
+        + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
+        + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
         + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
     }
     return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + '" data-id="' + esc(src.source_file_id) + '" onclick="selectLibDoc(\'' + esc(src.source_file_id) + '\')">'
       + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
       + '<span class="library-row-title">' + esc(title) + '</span>'
       + '<span class="library-row-info">'
-      + (worksForSrc.length > 0 ? '<span class="works-count">' + worksForSrc.length + ' 篇</span>' : '')
-      + (mappingStatus ? '<span>' + esc(mappingStatus) + '</span>' : '')
+      + statusChip
+      + '<span class="works-count">' + esc(countMeta) + '</span>'
       + (missingMetadataText ? '<span class="library-row-missing" title="' + esc(missingMetadataText) + '">' + esc(missingMetadataText) + '</span>' : '')
       + '<span>' + size + '</span>'
       + '</span>'
@@ -3882,11 +3922,15 @@ function statusChipIcon(group) {
   return '<span class="status-chip__icon' + spinning + '" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (icons[group] || icons.pending) + '</svg></span>';
 }
 
-function calibrationStatButton(status, label, value, variant, icon) {
-  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (calStatusFilter === status ? ' active' : '') + '" onclick="applyCalStatusFilter(\'' + status + '\')">'
+function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName) {
+  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" onclick="' + handlerName + '(\'' + status + '\')">'
     + statusStatIcon(icon)
     + '<span class="status-stat__label">' + label + '</span>'
     + '<span class="status-stat__count">' + value + '</span></button>';
+}
+
+function calibrationStatButton(status, label, value, variant, icon) {
+  return statusStatButton(status, label, value, variant, icon, calStatusFilter, 'applyCalStatusFilter');
 }
 
 function setCalStatusFilter(button) {
