@@ -42,12 +42,17 @@ def read_preferences(path: Path | None = None) -> dict[str, str]:
     theme = payload.get("theme") if isinstance(payload, dict) else None
     if theme not in VALID_THEMES:
         theme = DEFAULT_THEME
-    library_view = payload.get("library_view") if isinstance(payload, dict) else None
-    if library_view not in VALID_LIBRARY_VIEWS:
-        library_view = DEFAULT_LIBRARY_VIEW
     calibration_view = payload.get("calibration_view") if isinstance(payload, dict) else None
     if calibration_view not in VALID_CALIBRATION_VIEWS:
         calibration_view = DEFAULT_CALIBRATION_VIEW
+    library_view = payload.get("library_view") if isinstance(payload, dict) else None
+    if library_view not in VALID_LIBRARY_VIEWS:
+        legacy_calibration_view = payload.get("calibration_view") if isinstance(payload, dict) else None
+        library_view = (
+            str(legacy_calibration_view)
+            if legacy_calibration_view in VALID_CALIBRATION_VIEWS
+            else DEFAULT_LIBRARY_VIEW
+        )
     return {
         "theme": theme,
         "library_view": library_view,

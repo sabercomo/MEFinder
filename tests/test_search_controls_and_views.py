@@ -60,6 +60,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="document-filter-query"', HTML)
         self.assertIn('function renderSearchDocumentOptions()', HTML)
         self.assertIn('function selectSearchDocument(event, sourceId)', HTML)
+        self.assertIn("var response = await fetch('/api/library')", HTML)
+        self.assertIn("searchSourceFiles = data.items || []", HTML)
+        self.assertNotIn("fetch('/api/sources')", HTML)
+        self.assertIn("var bib = source.bibliographic || source.bibliographic_metadata || {}", HTML)
         self.assertIn('source_file_id: searchDocumentId || null', HTML)
         self.assertIn('payload.get("source_file_id")', WEB_SOURCE)
 
@@ -77,7 +81,6 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("meFinderCalibrationView", HTML)
         self.assertIn('id="library-drawer-calibration"', HTML)
         self.assertIn("persistDisplayPreference('library_view', libViewMode)", HTML)
-        self.assertIn("data.calibration_view === 'list' || data.calibration_view === 'grid'", HTML)
 
 
 if __name__ == "__main__":

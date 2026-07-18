@@ -127,10 +127,10 @@ async function ensureSearchDocuments(force) {
   var options = document.getElementById('document-options');
   if (options) options.innerHTML = '<div class="document-options-empty">正在读取文献库…</div>';
   try {
-    var response = await fetch('/api/sources');
+    var response = await fetch('/api/library');
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '读取失败');
-    searchSourceFiles = data.source_files || [];
+    searchSourceFiles = data.items || [];
     searchVolumes = data.volumes || [];
     searchDocumentsLoaded = true;
   } catch (error) {
@@ -141,9 +141,9 @@ async function ensureSearchDocuments(force) {
 
 function searchDocumentView(source) {
   var volume = searchVolumes.find(function(item) { return item.source_file_id === source.source_file_id; });
-  var bib = source.bibliographic_metadata || {};
-  var title = bib.title || source.title || (volume && volume.display_title) || source.display_title || source.file_name || source.source_file_id;
-  var author = bib.author || source.author || '';
+  var bib = source.bibliographic || source.bibliographic_metadata || {};
+  var title = source.title || bib.title || (volume && volume.display_title) || source.display_title || source.file_name || source.source_file_id;
+  var author = source.author || bib.author || '';
   return {title:title, author:author, sourceType:source.source_type === 'pdf' ? 'PDF' : 'Word'};
 }
 
@@ -635,7 +635,7 @@ function renderLibraryStats() {
     var group = calibrationStatusGroup(item.status);
     if (current[group] != null) current[group] += 1;
   });
-  container.innerHTML = statusStatButton('all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
+  container.innerHTML = statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('pending','待校准',current.pending,'neutral','clock',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('review','待确认',current.review,'warning','notice',libStatusFilter,'applyLibStatusFilter')
@@ -643,7 +643,8 @@ function renderLibraryStats() {
 }
 
 function applyLibStatusFilter(status) {
-  libStatusFilter = status || 'all';
+  var requested = status || 'all';
+  libStatusFilter = requested === libStatusFilter ? 'all' : requested;
   if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
     libTypeFilter = 'all';
     document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) {
@@ -752,7 +753,9 @@ function getFilteredSources() {
   if (libLangFilter !== 'all') {
     sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
   }
-  if (libStatusFilter !== 'all') {
+  if (libStatusFilter === 'pdf_all') {
+    sources = sources.filter(s => s.source_type === 'pdf');
+  } else if (libStatusFilter !== 'all') {
     sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) === libStatusFilter);
   }
   const q = (document.getElementById('lib-search').value || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -825,6 +828,7 @@ function renderLibraryList() {
     var statusChip = isPdf
       ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(itemStatus)) + '</span>'
       : '';
+    var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : '';
     var countMeta = isPdf
       ? (src.page_count ? src.page_count + ' 页' : '页数未知')
       : ((src.works_count || 1) + ' 篇');
@@ -832,7 +836,7 @@ function renderLibraryList() {
       var imported = formatCalDate(src.imported_at || src.last_modified);
       var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
       return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + '" data-id="' + esc(src.source_file_id) + '" onclick="selectLibDoc(\'' + esc(src.source_file_id) + '\')">'
-        + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div></div>'
+        + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div></div>'
         + '<div class="library-card-title">' + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
         + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
         + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
@@ -844,6 +848,7 @@ function renderLibraryList() {
       + '<span class="library-row-title">' + esc(title) + '</span>'
       + '<span class="library-row-info">'
       + statusChip
+      + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '')
       + '<span class="works-count">' + esc(countMeta) + '</span>'
       + (missingMetadataText ? '<span class="library-row-missing" title="' + esc(missingMetadataText) + '">' + esc(missingMetadataText) + '</span>' : '')
       + '<span>' + size + '</span>'

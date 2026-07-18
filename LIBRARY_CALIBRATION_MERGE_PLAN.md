@@ -1,7 +1,7 @@
 # 文献库与页码校准合并方案
 
 日期：2026-07-17
-状态：已实施（2026-07-17，提交 46f4b13…2b7ebd6；桌面包重建待做，校准页死 CSS 待清理）
+状态：合并主线已实施（2026-07-17 至 2026-07-18；桌面包已重建，校准页死 CSS 与首轮回归问题已清理；§7 未标“已实施”的独立优化仍待排期）
 
 ## 1. 动机
 
@@ -77,14 +77,14 @@
 - **无版本控制**：`.git` 目前是空目录，5700 行单文件重构无回退手段。第 1 步必须先建立 git 基线。
 - **测试断言页面 id**：缓解——校准编辑器 DOM id 全部原样迁移。
 - **抽屉过长**：缓解——校准区默认折叠。
-- **桌面包滞后**：`dist/MEFinder` 为 7-15 构建，落后于主题修正与本次合并，完成后需 `build_desktop.cmd full` 重建。
+- **桌面包滞后**（已化解）：`dist/MEFinder` 已于 2026-07-18 重建，模板、CSS、JS 已随包分发。
 
 ## 7. 顺带优化建议（独立于合并，另行排期）
 
 1. **web.py 拆分 + 校准页死 CSS 清理**（已实施 2026-07-18：web.py 5722→1071 行纯 Python，模板/CSS/JS 拆至 `templates/index.html` + `static/app.css` + `app.js`，拼接结果字节级一致；死 CSS 两遍清理共删 258 行；`desktop.spec` 已加 datas，桌面包重建并验证冻结环境资源加载）。原方案：web.py 约 5800 行单字符串（HTML+CSS+JS 内嵌 Python），拆为 `static/app.css`、`static/app.js`、`templates/index.html`，构建时读入拼接（PyInstaller data files 需同步 `desktop.spec`）。拆分 CSS 时顺手清掉校准页残留死 CSS（约百余行，无功能影响）：`.calibration-body`、`.cal-library-pane`、`.cal-toolbar*`、`.cal-card-grid`、`.cal-doc-card*`、`.cal-doc-row*`、`.cal-status-tab*`、`.cal-skeleton`、`.cal-more-*`、`.cal-detail-drawer`、`#page-calibration` 及相关媒体查询分支。⚠️ 以下类仍被合并后 UI 使用，不得删除：`.calibration-header-stats`、`.status-stat*`、`.status-chip*`、`.cal-status-badge`、`.cal-section*`、`.cal-detail-actions`、`.segment-table*`、`.seg-*`、`.auto-detect*`、`.cal-preview*`、`.cal-actions`、`.cal-save-hint`、`.cal-danger-zone`、`.cal-empty`、`.cal-collapse-*`；注意 2283 行附近的媒体查询在同一行里混有存活类（`.calibration-header-stats`），需拆行处理而非整行删除。
 2. **书目元数据补全**：多本 PDF 卡片显示"缺少：出版社、出版地、出版年份"（劳动的主权者、伦理学简史、批判理论等），影响 GB/T 引文导出完整性。可在应用内逐本补录。
-3. **PDF 卡片"1 篇"指标**：每本 PDF 恒为 1 篇，无信息量；PDF 卡片此位置改显页数（`page_count` 已在投影中），Word 卡片保留篇数。
+3. **PDF 卡片"1 篇"指标**（已实施 2026-07-18）：PDF 卡片改显 `page_count`，Word 卡片保留篇数。
 4. **JSON 导出改为可选**：`data/index.json` 281MB 仅作备份，每次重建索引都全量重写。建议 `build-index --export-json` 显式开启，缩短重建时间、省一半磁盘。
-5. **搜索页文献范围下拉复用统一投影**：合并后 `renderSearchDocumentOptions()` 改用 `/api/library` 的标题/作者字段，与文献库显示口径一致。
+5. **搜索页文献范围下拉复用统一投影**（已实施 2026-07-18）：`renderSearchDocumentOptions()` 已改用 `/api/library` 的标题/作者字段，与文献库显示口径一致。
 6. **导入队列按实际路径显示步骤**（已实施 2026-07-17）：此前所有文件（含 Word 和原生文本 PDF）都显示同一套含"MinerU 解析"的五步进度条，误导用户以为所有导入都经过 MinerU。现改为动态步骤：Word 三步（读取文件/文本入库/建立索引）、原生文本 PDF 四步（读取文件/类型检测/本地解析/建立索引）、扫描或损坏 PDF 五步（含 MinerU 解析）；类型检测完成后条目显示路径徽章（绿色"原生文本 · 本地解析"/橙色"扫描版 · 提交 MinerU"）。
 7. **打开原文去除 Adobe 硬依赖**（已实施 2026-07-17）：此前打开 PDF 强制要求 Adobe Acrobat/Reader（为了 `/A page=N` 精确跳页参数），未安装则直接报错。现改为降级策略：有目标页码且检测到 Adobe 时仍用 Adobe 精确跳页（能力保留）；其余情况交给系统默认阅读器（WPS、Edge 等均可用）。提示语如实反映实际行为，默认阅读器打开且有目标页时提示手动翻页。后续可选：支持 WPS/SumatraPDF 的跳页参数（非必须）。

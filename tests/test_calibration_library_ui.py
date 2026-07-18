@@ -174,7 +174,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('id="library-stats"', HTML)
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
+        self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
         self.assertIn("statusStatButton('failed','检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
+        self.assertIn("libStatusFilter = requested === libStatusFilter ? 'all' : requested", HTML)
+        self.assertIn("if (libStatusFilter === 'pdf_all')", HTML)
+        self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
         self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
@@ -203,6 +207,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
     def test_library_rows_and_cards_show_status_chip_for_pdf_only(self) -> None:
         self.assertIn("var statusChip = isPdf", HTML)
         self.assertIn("calTransientStatus[src.source_file_id] || src.status", HTML)
+        self.assertIn("var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : ''", HTML)
         self.assertIn("src.mapping_summary || '尚未建立引用页码映射'", HTML)
         self.assertIn("src.page_count ? src.page_count + ' 页' : '页数未知'", HTML)
         self.assertIn("(src.works_count || 1) + ' 篇'", HTML)

@@ -54,6 +54,17 @@ def main() -> int:
 
         page.locator('.sidebar-item[data-page="library"]').click()
         page.locator("#library-list .library-entry").first.wait_for()
+        # The user's persisted preference may open the library in card mode.
+        # Normalize the verifier before making list-specific assertions.
+        page.locator("#library-view-list").click()
+        page.locator("#library-list .library-row").first.wait_for()
+        all_document_count = page.locator("#library-list .library-entry").count()
+        pdf_total = int(page.locator('#library-stats [data-status="pdf_all"] .status-stat__count').inner_text())
+        page.locator('#library-stats [data-status="pdf_all"]').click()
+        assert page.locator("#library-list .library-entry").count() == pdf_total
+        assert page.locator("#library-list .library-entry:not(:has(.status-chip))").count() == 0
+        page.locator('#library-stats [data-status="pdf_all"]').click()
+        assert page.locator("#library-list .library-entry").count() == all_document_count
         page.locator("#library-sort-field-select .app-select-trigger").click()
         page.locator('#library-sort-field-select [data-value="title"]').click()
         assert page.locator("#library-sort-field-label").inner_text() == "书名"
@@ -93,10 +104,23 @@ def main() -> int:
         assert page.locator("#cal-editor").is_hidden()
 
         theme_colors = {}
-        for theme, expected in (("rose-mist", "#C9446A"), ("lavender-purple", "#7B5EC7")):
+        for theme, expected in (
+            ("frost-blue", "#1677FF"),
+            ("sage-ivory", "#637A50"),
+            ("warm-sand", "#B85C2B"),
+            ("rose-mist", "#C9446A"),
+            ("lavender-purple", "#7B5EC7"),
+            ("midnight", "#2485FF"),
+        ):
             page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+            page.wait_for_timeout(250)
             color = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()")
             assert color == expected, (theme, color)
+            calibration_bg = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--calibration-card-bg').trim()")
+            surface_bg = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--surface-secondary').trim()")
+            rendered_bg = page.locator("#cal-collapse-toggle").evaluate("element => getComputedStyle(element).backgroundColor")
+            assert calibration_bg and calibration_bg.lower() != surface_bg.lower(), (theme, calibration_bg, surface_bg)
+            assert rendered_bg != "rgba(0, 0, 0, 0)", (theme, rendered_bg)
             theme_colors[theme] = color
             page.screenshot(path=output_dir / f"{theme}-current-source.png", full_page=True)
 

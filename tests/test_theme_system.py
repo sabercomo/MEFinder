@@ -52,6 +52,16 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertEqual(saved["calibration_view"], "list")
             self.assertEqual(read_preferences(path), saved)
 
+    def test_legacy_calibration_view_migrates_when_library_view_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            path.write_text('{"theme":"frost-blue","calibration_view":"grid"}', encoding="utf-8")
+            migrated = read_preferences(path)
+            self.assertEqual(migrated["library_view"], "grid")
+            saved = save_preferences({"theme": "rose-mist"}, path)
+            self.assertEqual(saved["library_view"], "grid")
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["library_view"], "grid")
+
     def test_unsupported_theme_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(ValueError):
@@ -189,6 +199,36 @@ class ThemeMarkupTests(unittest.TestCase):
             self.assertIn("color: var(--match-inline-text);", block)
             self.assertIn("border: 1px solid var(--match-inline-border);", block)
             self.assertIsNone(re.search(r"255,204,0|234,179,8", block))
+
+    def test_calibration_card_has_a_distinct_palette_in_every_theme(self) -> None:
+        expected_backgrounds = {
+            "frost-blue": "#DCEBFF",
+            "sage-ivory": "#E1EBD5",
+            "warm-sand": "#F9DDC8",
+            "rose-mist": "#F8DCE6",
+            "lavender-purple": "#E8DFF7",
+            "midnight": "#13345B",
+        }
+        for theme, expected_background in expected_backgrounds.items():
+            block = re.search(
+                rf'[^{{}}]*html\[data-theme="{re.escape(theme)}"\][^{{}}]*\{{([^}}]+)\}}',
+                HTML,
+            )
+            self.assertIsNotNone(block, theme)
+            css = block.group(1)
+            background = re.search(r"--calibration-card-bg:\s*([^;]+);", css).group(1).strip()
+            surface = re.search(r"--surface-secondary:\s*([^;]+);", css).group(1).strip()
+            self.assertEqual(background, expected_background)
+            self.assertNotEqual(background.lower(), surface.lower())
+            for token in (
+                "--calibration-card-hover", "--calibration-card-border",
+                "--calibration-card-text", "--calibration-card-shadow",
+            ):
+                self.assertRegex(css, rf"{re.escape(token)}:\s*[^;]+;")
+        self.assertIn("background: var(--calibration-card-bg);", HTML)
+        self.assertIn("border: 1px solid var(--calibration-card-border);", HTML)
+        self.assertIn("color: var(--calibration-card-text);", HTML)
+        self.assertIn("background: var(--calibration-card-hover);", HTML)
 
 
 class DesktopThemeShellTests(unittest.TestCase):
