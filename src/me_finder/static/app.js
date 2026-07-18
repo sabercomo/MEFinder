@@ -916,8 +916,7 @@ function selectLibDoc(sourceId) {
   }
 
   var el = document.getElementById('library-drawer-content');
-  el.innerHTML = '<button class="drawer-close" onclick="closeLibDrawer()">← 关闭</button>'
-    + '<div class="drawer-title">' + esc(title) + '</div>'
+  el.innerHTML = '<div class="drawer-title">' + esc(title) + '</div>'
     + (corpusTitle ? '<div class="drawer-subtitle">' + esc(corpusTitle) + '</div>' : '')
     + '<div class="detail-pills" style="margin-top:12px">'
     + '<span class="detail-pill">' + (src.source_type === 'pdf' ? 'PDF' : 'Word') + '</span>'
