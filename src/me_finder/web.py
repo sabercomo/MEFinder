@@ -526,12 +526,18 @@ def make_handler(index_path: Path):
             raise MinerUError("PDF 配置中找不到该文献。")
         return config_path, config, document
 
-    def front_matter_pages(source_id: str, limit: int = 20) -> List[Dict[str, object]]:
+    def front_matter_pages(source_id: str, limit: int = 20, tail: int = 8) -> List[Dict[str, object]]:
+        """Front pages plus the trailing pages: Chinese colophons often sit at the back."""
         connection = sqlite3.connect(str(index_path))
         try:
+            total_row = connection.execute(
+                "SELECT MAX(pdf_page_index) FROM pdf_pages WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()
+            total = int(total_row[0]) + 1 if total_row and total_row[0] is not None else 0
             rows = connection.execute(
-                "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? AND pdf_page_index < ? ORDER BY pdf_page_index",
-                (source_id, limit),
+                "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? AND (pdf_page_index < ? OR pdf_page_index >= ?) ORDER BY pdf_page_index",
+                (source_id, limit, max(limit, total - tail)),
             ).fetchall()
             return [json.loads(row[0]) for row in rows]
         finally:

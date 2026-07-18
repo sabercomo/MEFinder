@@ -116,6 +116,7 @@ def detect_pdf_bibliographic_metadata(
     *,
     force: bool = False,
     scan_pages: int = 20,
+    tail_pages: int = 8,
 ) -> Dict[str, object]:
     """Detect front-matter metadata while preserving user-maintained values."""
 
@@ -161,13 +162,23 @@ def detect_pdf_bibliographic_metadata(
             evidence[field] = {"source": "pdf_metadata", "source_page": None, "evidence_text": embedded_value}
             confidence[field] = 0.72
 
+    page_indexes: List[int] = []
+    for page in pages:
+        try:
+            page_indexes.append(int(page.get("pdf_page_index") or 0))
+        except (TypeError, ValueError):
+            continue
+    total_pages = max(page_indexes) + 1 if page_indexes else 0
+    # 中文书的版权页常在书末（图书在版编目 + 版次/定价），因此除前置页外
+    # 也扫描末尾几页。
+    tail_start = max(scan_pages, total_pages - tail_pages)
     texts: List[Tuple[int, str]] = []
     for page in pages:
         try:
             page_idx = int(page.get("pdf_page_index") or 0)
         except (TypeError, ValueError):
             continue
-        if page_idx >= scan_pages:
+        if page_idx >= scan_pages and page_idx < tail_start:
             continue
         text = str(page.get("text_raw") or "").strip()
         if text:
@@ -570,43 +581,47 @@ def _extract_from_front_matter(
                         "publisher_alias",
                     )
 
-            isbn_matches = list(
-                re.finditer(
-                    r"(?:ISBN\s*[:：]?\s*(?:HB|PB|HC|SC|EBOOK|ELECTRONIC)?\s*)?"
-                    r"(?<!\d)(97[89][0-9XxIlOo\- ]{9,20}|[0-9][0-9XxIlOo\- ]{8,18}[0-9XxIlOo])(?!\d)",
-                    line,
-                    flags=re.IGNORECASE,
+            # ISBN 扫描用双行窗口：中文 CIP 常把"ISBN"标签与号码分在两行；
+            # 版权页的号码还常被 OCR 打散成"978 - 7 - 2 0 8 - …"，978 分支
+            # 因此放宽长度上限。
+            for isbn_text in windows:
+                isbn_matches = list(
+                    re.finditer(
+                        r"(?:ISBN\s*[:：]?\s*(?:HB|PB|HC|SC|EBOOK|ELECTRONIC)?\s*)?"
+                        r"(?<!\d)(97[89][0-9XxIlOo\- ]{9,34}|[0-9][0-9XxIlOo\- ]{8,18}[0-9XxIlOo])(?!\d)",
+                        isbn_text,
+                        flags=re.IGNORECASE,
+                    )
                 )
-            )
-            isbn_label_position = line.casefold().find("isbn")
-            for isbn in isbn_matches:
-                if isbn_label_position < 0 or isbn.start(1) < isbn_label_position:
-                    continue
-                raw_isbn = isbn.group(1).translate(str.maketrans({"I": "1", "l": "1", "O": "0", "o": "0"}))
-                digits = re.sub(r"[^0-9Xx]", "", raw_isbn)
-                if len(digits) not in {10, 13}:
-                    continue
-                leading_context = line[max(0, isbn.start() - 14) : isbn.start()]
-                trailing_context = line[isbn.end() : min(len(line), isbn.end() + 30)]
-                if re.search(r"ebook|electronic|电子", trailing_context, flags=re.IGNORECASE):
-                    isbn_confidence, isbn_rule = 0.78, "isbn_electronic"
-                elif re.search(
-                    r"\b(?:HB|HC)\b",
-                    leading_context,
-                    flags=re.IGNORECASE,
-                ) or re.search(r"\b(?:cloth|print)\b|精装", trailing_context, flags=re.IGNORECASE):
-                    isbn_confidence, isbn_rule = 0.99, "isbn_print_edition"
-                else:
-                    isbn_confidence, isbn_rule = 0.96, "isbn_label"
-                _add_candidate(
-                    candidates,
-                    "isbn",
-                    re.sub(r"\s+", "", raw_isbn).rstrip("-"),
-                    page_idx,
-                    line,
-                    isbn_confidence,
-                    isbn_rule,
-                )
+                isbn_label_position = isbn_text.casefold().find("isbn")
+                for isbn in isbn_matches:
+                    if isbn_label_position < 0 or isbn.start(1) < isbn_label_position:
+                        continue
+                    raw_isbn = isbn.group(1).translate(str.maketrans({"I": "1", "l": "1", "O": "0", "o": "0"}))
+                    digits = re.sub(r"[^0-9Xx]", "", raw_isbn)
+                    if len(digits) not in {10, 13}:
+                        continue
+                    leading_context = isbn_text[max(0, isbn.start() - 14) : isbn.start()]
+                    trailing_context = isbn_text[isbn.end() : min(len(isbn_text), isbn.end() + 30)]
+                    if re.search(r"ebook|electronic|电子", trailing_context, flags=re.IGNORECASE):
+                        isbn_confidence, isbn_rule = 0.78, "isbn_electronic"
+                    elif re.search(
+                        r"\b(?:HB|HC)\b",
+                        leading_context,
+                        flags=re.IGNORECASE,
+                    ) or re.search(r"\b(?:cloth|print)\b|精装", trailing_context, flags=re.IGNORECASE):
+                        isbn_confidence, isbn_rule = 0.99, "isbn_print_edition"
+                    else:
+                        isbn_confidence, isbn_rule = 0.96, "isbn_label"
+                    _add_candidate(
+                        candidates,
+                        "isbn",
+                        re.sub(r"\s+", "", raw_isbn).rstrip("-"),
+                        page_idx,
+                        isbn_text,
+                        isbn_confidence,
+                        isbn_rule,
+                    )
 
             _extract_chinese_people(line, page_idx, candidates)
             for window in windows:

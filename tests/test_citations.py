@@ -419,6 +419,39 @@ class CitationFormatTests(unittest.TestCase):
         )
         self.assertEqual(detected["title"], "Critique of Forms of Life")
 
+    def test_back_matter_colophon_supplies_metadata(self) -> None:
+        # 真实场景（劳动的主权者）：中文版权页在全书最后一页，CIP 的 ISBN
+        # 标签与号码分在两行，版权页号码被 OCR 打散成"978 - 7 - 2 0 8 …"。
+        pages = [
+            {"pdf_page_index": 0, "text_raw": "劳动的主权者\n劳动的规范理论"},
+            {"pdf_page_index": 150, "text_raw": "正文中间的一页，不含书目信息。"},
+            {
+                "pdf_page_index": 286,
+                "text_raw": (
+                    "图书在版编目(O P)数据\n"
+                    "劳动的主权者：劳动的规范理论/ ( 德）阿克塞尔\n"
+                    "• 霍耐特（ Axel Honneth)著 ；周爱民译. 一 上 海 ：\n"
+                    "上海人民出版社，2025.— (霍耐特选集)• 一  ISBN \n"
+                    "978-7-208-19833-3\n"
+                    "发\n行 上海人民出版社发行中心\n"
+                    "版\n次 2025年 12月第1 版\n"
+                    "ISBN 978 - 7 - 2 0 8 - 1 9 8 3 3 -3 /0  759\n"
+                    "定\n价\n88.00 元"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("missing.pdf"),
+            pages,
+            {"title": "劳动的主权者：劳动的规范理论", "author": "阿克塞尔·霍耐特"},
+        )
+        self.assertEqual(detected["translator"], "周爱民")
+        self.assertEqual(detected["publisher"], "上海人民出版社")
+        self.assertEqual(detected["publish_place"], "上海")
+        self.assertEqual(detected["publish_year"], "2025")
+        self.assertEqual(detected["isbn"], "978-7-208-19833-3")
+        self.assertEqual(detected["metadata_status"], "complete")
+
     def test_series_list_does_not_supply_this_books_translator(self) -> None:
         pages = [
             {
