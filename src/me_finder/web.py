@@ -3585,6 +3585,11 @@ function selectLibDoc(sourceId) {
   if (src.source_type === 'pdf') {
     autoActions += '<button class="action-btn primary" onclick="openCalibrationAndDetect(\'' + esc(src.source_file_id) + '\')">自动检测页码</button>';
   }
+  if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.detected_pdf_type && src.pdf_profile.detected_pdf_type !== 'native_text') {
+    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : '提交 MinerU 解析';
+    var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
+    autoActions += '<button class="action-btn" id="mineru-reparse-btn"' + (ocrRunning ? ' disabled' : '') + ' onclick="submitMineruReparse(\'' + esc(src.source_file_id) + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
+  }
   if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.auto_page_mapping) {
     var autoMapForActions = src.pdf_profile.auto_page_mapping;
     if (autoMapForActions.applied_segments && autoMapForActions.applied_segments.length) {
@@ -3790,6 +3795,51 @@ function closeLibDrawer() {
   var body = document.querySelector('#page-library .library-body');
   if (body) body.classList.remove('detail-open');
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) { row.classList.remove('selected'); });
+}
+
+async function submitMineruReparse(sourceId) {
+  try {
+    var resp = await fetch('/api/mineru-reparse', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_id: sourceId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || '提交失败');
+    showToast(data.already_running ? 'MinerU 解析已在进行中' : '已提交 MinerU 解析，完成后自动重建索引');
+    calTransientStatus[sourceId] = 'mapping';
+    updateLibraryEntry(sourceId);
+    if (libSelectedId === sourceId) selectLibDoc(sourceId);
+    pollMineruReparse(sourceId, data.job_id);
+  } catch(e) {
+    showToast('提交 MinerU 解析失败：' + e.message);
+  }
+}
+
+function pollMineruReparse(sourceId, jobId) {
+  fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === 'completed') {
+        delete calTransientStatus[sourceId];
+        showToast('MinerU 解析完成，索引已更新');
+        refreshCalibrationSource(sourceId).then(function() {
+          if (libSelectedId === sourceId) selectLibDoc(sourceId);
+        }).catch(function() {});
+        return;
+      }
+      if (data.status === 'failed' || data.error) {
+        delete calTransientStatus[sourceId];
+        updateLibraryEntry(sourceId);
+        if (libSelectedId === sourceId) selectLibDoc(sourceId);
+        showToast('MinerU 解析失败：' + (data.message || data.error || '未知错误'));
+        return;
+      }
+      setTimeout(function() { pollMineruReparse(sourceId, jobId); }, 4000);
+    })
+    .catch(function() {
+      setTimeout(function() { pollMineruReparse(sourceId, jobId); }, 8000);
+    });
 }
 
 async function acceptAutoMapping(sourceId) {
@@ -5494,6 +5544,50 @@ def make_handler(index_path: Path):
                     self._send_json({"error": f"打开原文失败：{exc}"}, status=500)
                     return
                 self._send_json(result)
+                return
+            if parsed.path == "/api/mineru-reparse":
+                sid = str(payload.get("source_id") or "")
+                if not sid:
+                    self._send_json({"error": "invalid request"}, status=400)
+                    return
+                try:
+                    with runtime_lock:
+                        record = runtime["source_files"].get(sid)
+                    if not record or str(record.get("source_type")) != "pdf":
+                        raise MinerUError("PDF 文献未找到。")
+                    with import_jobs_lock:
+                        running = next(
+                            (
+                                job for job in import_jobs.values()
+                                if job.get("source_file_id") == sid and job.get("status") == "processing"
+                            ),
+                            None,
+                        )
+                    if running:
+                        self._send_json({
+                            "ok": True,
+                            "job_id": running["job_id"],
+                            "already_running": True,
+                            "detected_pdf_type": running.get("detected_pdf_type"),
+                        })
+                        return
+                    target = source_path_from_id(sid)
+                    profile = detect_imported_pdf(target)
+                    if str(profile.get("detected_pdf_type")) == "native_text":
+                        raise MinerUError("该 PDF 是原生文本，本地解析即可，无需 MinerU OCR。")
+                    job_id = start_import_job(target, profile, sid, True)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except Exception as exc:
+                    self._send_json({"error": f"提交 MinerU 解析失败：{exc}"}, status=500)
+                    return
+                self._send_json({
+                    "ok": True,
+                    "job_id": job_id,
+                    "already_running": False,
+                    "detected_pdf_type": profile.get("detected_pdf_type"),
+                })
                 return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)

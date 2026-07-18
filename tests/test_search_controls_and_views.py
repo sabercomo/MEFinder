@@ -33,6 +33,16 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="citation-style-control"', HTML)
         self.assertIn('segment-style-select', HTML)
 
+    def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
+        self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
+        self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
+        self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
+        self.assertIn("function submitMineruReparse(sourceId)", HTML)
+        self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertIn("提交 MinerU 解析", HTML)
+        self.assertIn("重新 OCR", HTML)
+        self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
         self.assertIn('phase="metadata_recognition"', WEB_SOURCE)
         self.assertIn('persist_bibliographic_metadata(source_file_id, metadata)', WEB_SOURCE)
