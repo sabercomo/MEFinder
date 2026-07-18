@@ -173,6 +173,55 @@ class AutoPageMappingTests(unittest.TestCase):
         self.assertIn("roman_lower", styles)
         self.assertIn("arabic", styles)
 
+    def test_body_discussing_disorder_is_not_classified_as_preface(self) -> None:
+        # Regression for 追寻美德/法哲学原理: body text about 无序/秩序 plus an
+        # arabic-numeral chapter heading must classify as body, not preface.
+        page_texts = {
+            9: "目录\n序……(1)\n第 1 章 一个令人忧虑的联想 …… (1)",
+            11: "第1章 一个令人忧虑的联想\n想像一下自然科学遭受一场浩劫后的可怕情形。",
+            12: "处于一种严重的无序状态。我们会注意到有序与无序的标准。",
+            13: "道德语言的秩序问题贯穿全书。",
+        }
+        candidates = [cand(11 + i, 1 + i) for i in range(30)]
+        result = infer(candidates, page_count=400, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "body")
+
+    def test_true_preface_heading_line_still_classifies_as_preface(self) -> None:
+        page_texts = {
+            5: "译 序\n本书作者阿拉斯代尔·麦金太尔是当代德性伦理学的代表人物。",
+            6: "译序继续讨论翻译体例与术语。",
+        }
+        candidates = [cand(5 + i, 1 + i) for i in range(6)]
+        result = infer(candidates, page_count=400, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "preface")
+
+    def test_long_segment_is_never_classified_as_preface(self) -> None:
+        page_texts = {20: "序言\n这个分段有一个像序言的开头，但长达六十页。"}
+        candidates = [cand(20 + i, 1 + i) for i in range(60)]
+        result = infer(candidates, page_count=400, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "body")
+
+    def test_pages_before_segment_do_not_taint_scope(self) -> None:
+        page_texts = {
+            9: "序言\n真正的序言在分段开始之前。",
+            10: "出版说明",
+            11: "平实的正文段落，没有任何标题。",
+        }
+        candidates = [cand(11 + i, 1 + i) for i in range(10)]
+        result = infer(candidates, page_count=400, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "body")
+
+    def test_preface_part_title_beats_noisy_body_heading_later_in_window(self) -> None:
+        # 法哲学原理式场景：序言分段首页是整行"序"扉页标题，窗口内某页的
+        # OCR 噪声混有"第一节"字样，不应把序言误判为正文。
+        page_texts = {
+            54: "序\n我的职务是担任讲授法哲学，需要发给听众讲授提纲。",
+            60: "序\n士\n同\n……第一节……",
+        }
+        candidates = [cand(54 + i, 1 + i) for i in range(18)]
+        result = infer(candidates, page_count=500, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "preface")
+
     def test_missing_chapter_first_page_is_backfilled(self) -> None:
         result = infer([cand(51 + i, 2 + i) for i in range(4)])
         segment = result["applied_segments"][0]

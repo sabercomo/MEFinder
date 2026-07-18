@@ -32,11 +32,7 @@ AUTO_PAGE_MAPPING_THRESHOLDS: Dict[str, float] = {
 }
 
 STRUCTURE_KEYWORDS = {
-    "toc": ["目录"],
-    "preface": ["序", "序言", "前言", "译序", "出版说明"],
     "intro": ["导言", "绪论"],
-    "body": ["第一章", "第一编", "第一部", "第一节"],
-    "appendix": ["附录", "后记", "索引"],
 }
 
 
@@ -677,18 +673,43 @@ def _format_citation_label(number: int, style: str, scope: str) -> str:
     return label
 
 
+_BODY_HEADING_RE = re.compile(r"第\s*(?:一|1)\s*[章编部节卷]")
+# 整行标题才算序言；正文里的“无序/秩序/顺序”等子串不再误触发。
+_PREFACE_HEADING_RE = re.compile(r"^(?:译者|作者)?[自代译]?序言?$|^前言$|^出版说明$")
+_MAX_PREFACE_SPAN_PAGES = 40
+
+
+def _has_preface_heading(text: str) -> bool:
+    for line in text.split("\n")[:8]:
+        compact = re.sub(r"[\s　]+", "", line)
+        if compact and _PREFACE_HEADING_RE.match(compact):
+            return True
+    return False
+
+
 def _structure_signal(page_texts: Dict[int, str], start: int, end: int, family: str) -> Optional[str]:
-    sample = "\n".join(str(page_texts.get(page, ""))[:600] for page in range(max(0, start - 2), min(end + 3, start + 8)))
-    if not sample:
+    # 只采样分段内部的页面：起点之前的目录/序言页不能替正文分段做分类。
+    pages = [str(page_texts.get(page, ""))[:600] for page in range(start, min(end + 1, start + 8))]
+    sample = "\n".join(pages)
+    if not sample.strip():
         return "front_matter" if family == "roman" else None
-    if any(keyword in sample for keyword in STRUCTURE_KEYWORDS["body"]):
+    span_ok_for_preface = end - start + 1 <= _MAX_PREFACE_SPAN_PAGES
+    # 分段首页的整行"序/序言/前言"扉页标题是最强信号，优先于窗口内
+    # 其他页面 OCR 噪声里可能混入的正文标题字样。
+    if span_ok_for_preface and any(_has_preface_heading(text) for text in pages[:2]):
+        return "preface"
+    if family.startswith("roman"):
+        # 中文书籍的罗马页码段属于前置部分；目录页上的"第一章……"
+        # 等条目不代表正文，不参与正文判定。
+        if span_ok_for_preface and any(_has_preface_heading(text) for text in pages):
+            return "preface"
+        return "front_matter"
+    if _BODY_HEADING_RE.search(sample):
         return "body"
     if any(keyword in sample for keyword in STRUCTURE_KEYWORDS["intro"]):
         return "body"
-    if any(keyword in sample for keyword in STRUCTURE_KEYWORDS["preface"]):
+    if span_ok_for_preface and any(_has_preface_heading(text) for text in pages):
         return "preface"
-    if family == "roman":
-        return "front_matter"
     return None
 
 
