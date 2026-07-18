@@ -361,6 +361,64 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(detected["isbn"], "9780674737754")
         self.assertEqual(detected["document_type"], "translated_book")
 
+    def test_loc_cip_block_overrides_stale_config_title_and_author(self) -> None:
+        # 真实场景（Wilhelm, Axel Honneth: Reconceiving Social Philosophy）：
+        # MVP 时代手工写进配置的书名/作者是错的（把研究对象当成了作者），
+        # 且没有 metadata_source 标记；美国国会图书馆 CIP 数据应以高置信度
+        # 覆盖这类无出处旧值。年份取版权行 © 2019，而非 CIP 登记年 [2018]。
+        pages = [
+            {
+                "pdf_page_index": 4,
+                "text_raw": (
+                    "Axel Honneth\n"
+                    "Reconceiving Social Philosophy\n"
+                    "Dagmar Wilhelm\n"
+                    "London • New York"
+                ),
+            },
+            {
+                "pdf_page_index": 5,
+                "text_raw": (
+                    "Published by Rowman & Littlefield International, Ltd.\n"
+                    "6 Tinworth Street, London SE11 5AL, United Kingdom\n"
+                    "Copyright © 2019 by Dagmar Wilhelm\n"
+                    "Library of Congress Cataloging-in-Publication Data\n"
+                    "Names: Wilhelm, Dagmar, 1975– author.\n"
+                    "Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm.\n"
+                    "Description: London ; New York : Rowman & Littlefield International Ltd, [2018] | Series: Refram-\n"
+                    "ing the boundaries: thinking the political | Includes bibliographical references and index.\n"
+                    "Identifiers: LCCN 2018041794"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("missing.pdf"),
+            pages,
+            {"title": "Reconceiving Social Philosophy", "author": "Axel Honneth"},
+        )
+        self.assertEqual(detected["title"], "Axel Honneth: Reconceiving Social Philosophy")
+        self.assertEqual(detected["author"], "Dagmar Wilhelm")
+        self.assertEqual(detected["publisher"], "Rowman & Littlefield International")
+        self.assertEqual(detected["publish_place"], "London")
+        self.assertEqual(detected["publish_year"], "2019")
+        self.assertEqual(detected["metadata_status"], "complete")
+
+    def test_existing_value_with_same_words_keeps_its_casing(self) -> None:
+        # CIP 行的小写书名与配置里既有的正确大小写只是大小写差异时，
+        # 保留既有写法，不做无谓替换。
+        pages = [
+            {
+                "pdf_page_index": 4,
+                "text_raw": "Title: Critique of forms of life / Rahel Jaeggi.\nIdentifiers: LCCN 2018",
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("missing.pdf"),
+            pages,
+            {"title": "Critique of Forms of Life", "author": "Rahel Jaeggi"},
+        )
+        self.assertEqual(detected["title"], "Critique of Forms of Life")
+
     def test_series_list_does_not_supply_this_books_translator(self) -> None:
         pages = [
             {
@@ -393,9 +451,9 @@ class CitationFormatTests(unittest.TestCase):
         )
         self.assertEqual(detected["author"], "Dagmar Wilhelm")
         self.assertIsNone(detected["translator"])
-        self.assertEqual(detected["publisher"], "Rowman & Littlefield International Ltd")
-        self.assertEqual(detected["publish_place"], "London; New York")
-        self.assertEqual(detected["publish_year"], "2018")
+        self.assertEqual(detected["publisher"], "Rowman & Littlefield International")
+        self.assertEqual(detected["publish_place"], "London")
+        self.assertEqual(detected["publish_year"], "2019")
         self.assertEqual(detected["isbn"], "9781783486397")
 
     def test_preface_references_are_not_used_as_book_metadata(self) -> None:

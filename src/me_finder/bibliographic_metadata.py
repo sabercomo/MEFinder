@@ -203,15 +203,27 @@ def detect_pdf_bibliographic_metadata(
     for field, value in detected.items():
         current_evidence = evidence.get(field) if isinstance(evidence.get(field), Mapping) else {}
         current_source = str(current_evidence.get("source") or "")
+        # 检测值与既有值只是大小写/标点差异时视为同一值：保留既有写法
+        # （通常大小写更规范），只补充证据。
+        same_value_modulo_case = (
+            is_valid_bibliographic_value(result.get(field))
+            and _compact_value_key(str(result.get(field))) == _compact_value_key(str(value))
+        )
         should_replace = (
             force
             or not is_valid_bibliographic_value(result.get(field))
             or current_source == "pdf_metadata"
             or (field in {"author", "translator"} and _has_suspicious_person_punctuation(result.get(field)))
+            # 既有值没有经过人工确认（manual 已在入口提前返回）：来自导入配置
+            # 或旧的自动识别。版权页/CIP 级别的高置信度检测应当覆盖它们，
+            # 否则错误的初始配置永远无法被自动识别纠正。
+            or (not same_value_modulo_case and detected_confidence.get(field, 0.0) >= 0.95)
         )
-        if value == result.get(field) and not current_evidence:
+        if (value == result.get(field) or same_value_modulo_case) and not current_evidence:
             evidence[field] = detected_evidence[field]
             confidence[field] = detected_confidence[field]
+            continue
+        if same_value_modulo_case:
             continue
         if is_valid_bibliographic_value(value) and should_replace:
             result[field] = value
@@ -746,6 +758,11 @@ def _extract_from_front_matter(
                 and not _candidate_values_are_compatible(value, second_value)
             ):
                 conflicts.append({"field": field, "values": [value, second_value]})
+    if detected.get("title") and isinstance(evidence.get("title"), dict) and evidence["title"].get("rule") == "english_catalog_title":
+        repaired = _repair_english_title_casing(str(detected["title"]), texts)
+        if repaired and repaired != detected["title"]:
+            detected["title"] = repaired
+            evidence["title"]["rule"] = "english_catalog_title_with_title_page_casing"
     return detected, evidence, confidence, conflicts
 
 
@@ -822,6 +839,34 @@ def _add_candidate(
                 candidates[field][index] = candidate
             return
     candidates[field].append(candidate)
+
+
+def _compact_value_key(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9㐀-鿿]", "", str(value or "")).casefold()
+
+
+def _repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -> Optional[str]:
+    """LoC CIP 的书名是全小写；若书名页有大小写规范的同一书名，用其写法。"""
+
+    target = _compact_value_key(title)
+    if not target:
+        return None
+    for _page_idx, text in texts:
+        lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+        for index in range(len(lines)):
+            for width in (1, 2, 3):
+                parts = lines[index:index + width]
+                if len(parts) < width:
+                    break
+                joined = " ".join(parts)
+                if _compact_value_key(joined) != target:
+                    continue
+                if joined.upper() == joined:
+                    continue  # 全大写的书名页写法不如 CIP 原文
+                if width > 1 and ":" not in joined:
+                    return f"{parts[0]}: {' '.join(parts[1:])}"
+                return joined
+    return None
 
 
 def _candidate_group_score(items: Sequence[_MetadataCandidate]) -> float:
@@ -994,7 +1039,7 @@ def _extract_english_publication_statement(
         flags=re.IGNORECASE,
     )
     if published_by:
-        publisher = re.sub(r"\s+", " ", published_by.group("publisher")).rstrip(" .,\n")
+        publisher = _clean_publisher(re.sub(r"\s+", " ", published_by.group("publisher")).rstrip(" .,\n"))
         _add_candidate(
             candidates,
             "publisher",
@@ -1005,19 +1050,37 @@ def _extract_english_publication_statement(
             "english_published_by",
         )
 
+    copyright_year = re.search(
+        r"(?:Copyright\s*(?:©|\(c\))?|©)\s*(?P<year>(?:19|20)\d{2})\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if copyright_year:
+        _add_candidate(
+            candidates,
+            "publish_year",
+            copyright_year.group("year"),
+            page_idx,
+            text,
+            0.99,
+            "english_copyright_year",
+        )
+
     statement = re.search(
         r"(?P<place>[A-Z][A-Za-z .\-]{1,48}(?:\s*[;,]\s*[A-Z][A-Za-z .\-]{1,48}){0,2})\s*:\s*"
         r"(?P<publisher>(?:The\s+)?[A-Z][A-Za-z0-9&'’.\- ]{1,110}"
         r"(?:University Press|Publishers?|Publishing(?: Group)?|Press|Verlag|International(?:\s*,?\s*Ltd\.?)?))"
-        r"\s*,\s*\[?(?P<year>(?:19|20)\d{2})\]?",
+        r"\s*,\s*(?P<bracket>\[)?(?P<year>(?:19|20)\d{2})\]?",
         text,
     )
     if not statement:
         return
+    # 多个出版地（London ; New York）只取第一个，与引文习惯一致。
+    first_place = re.split(r"\s*[;]\s*", re.sub(r"\s+", " ", statement.group("place")))[0].strip()
     _add_candidate(
         candidates,
         "publish_place",
-        re.sub(r"\s*;\s*", "; ", re.sub(r"\s+", " ", statement.group("place"))),
+        first_place,
         page_idx,
         text,
         0.92,
@@ -1026,19 +1089,20 @@ def _extract_english_publication_statement(
     _add_candidate(
         candidates,
         "publisher",
-        re.sub(r"\s+", " ", statement.group("publisher")),
+        _clean_publisher(re.sub(r"\s+", " ", statement.group("publisher"))),
         page_idx,
         text,
         0.99,
         "english_catalog_statement",
     )
+    # LoC CIP 的方括号年份（[2018]）是登记年而非出版年，置信度低于版权行 ©。
     _add_candidate(
         candidates,
         "publish_year",
         statement.group("year"),
         page_idx,
         text,
-        0.98,
+        0.9 if statement.group("bracket") else 0.98,
         "english_catalog_statement",
     )
 
@@ -1064,7 +1128,7 @@ def _extract_english_title_page(
         if not publisher_match:
             continue
 
-        publisher = re.sub(r"\s+", " ", publisher_match.group("publisher"))
+        publisher = _clean_publisher(re.sub(r"\s+", " ", publisher_match.group("publisher")))
         _add_candidate(
             candidates,
             "publisher",
@@ -1182,7 +1246,11 @@ def _clean_people(value: str) -> str:
 def _clean_publisher(value: str) -> str:
     text = unicodedata.normalize("NFKC", str(value or ""))
     text = text.replace("•", "·").replace("・", "·").replace("‧", "·")
-    return text.strip(" ,，:：;；.。[]［］【】〔〕()（）")
+    text = text.strip(" ,，:：;；.。[]［］【】〔〕()（）")
+    # 引文里不带英文公司后缀（Rowman & Littlefield International, Ltd. →
+    # Rowman & Littlefield International）。
+    text = re.sub(r"[\s,，]*\b(?:Ltd|Limited|Inc|Incorporated|LLC|GmbH)\.?$", "", text, flags=re.IGNORECASE)
+    return text.strip(" ,，:：;；.。")
 
 
 def _json(value: object) -> str:
