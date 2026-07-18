@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .auto_page_mapping import has_manual_mapping
 from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
+
+
+_CJK_RE = re.compile(r"[㐀-鿿]")
+
+
+def _item_language(title: object, author: object) -> str:
+    """中文文献（含中译本）与外文文献两类：书名含汉字即中文，否则看作者。"""
+
+    if _CJK_RE.search(str(title or "")):
+        return "chinese"
+    if _CJK_RE.search(str(author or "")):
+        return "chinese"
+    return "foreign"
 
 
 STATUS_LABELS = {
@@ -83,6 +97,7 @@ def build_library(
             item["modified_at"] = source.get("last_modified") or source.get("imported_at")
             source_path = _source_path(root, source)
             item["source_exists"] = bool(source_path and source_path.exists())
+        item["language"] = _item_language(item.get("title"), item.get("author"))
         items.append(item)
     return {
         "items": items,

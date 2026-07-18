@@ -19,6 +19,7 @@ let libWorks = [];
 let libStats = null;
 let libLoaded = false;
 let libTypeFilter = 'all';
+let libLangFilter = 'all';
 let libStatusFilter = 'all';
 let libSelectedId = null;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';
@@ -666,6 +667,14 @@ function setLibFilter(btn) {
   renderLibraryList();
 }
 
+function setLibLangFilter(btn) {
+  libLangFilter = btn.dataset.lang;
+  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  closeLibDrawer();
+  renderLibraryList();
+}
+
 function filterLibrary() {
   renderLibraryList();
 }
@@ -740,6 +749,9 @@ function getFilteredSources() {
   if (libTypeFilter !== 'all') {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }
+  if (libLangFilter !== 'all') {
+    sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
+  }
   if (libStatusFilter !== 'all') {
     sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) === libStatusFilter);
   }
@@ -783,6 +795,14 @@ function renderLibraryList() {
     var c = t === 'all' ? allCount : t === 'word' ? wordCount : pdfCount;
     var label = t === 'all' ? '全部' : t === 'word' ? 'Word' : 'PDF';
     btn.textContent = label + ' (' + c + ')';
+  });
+  const chineseCount = libSources.filter(s => (s.language || 'chinese') === 'chinese').length;
+  const foreignCount = libSources.length - chineseCount;
+  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(btn) {
+    var lang = btn.dataset.lang;
+    var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
+    var label = lang === 'all' ? '全部语言' : lang === 'chinese' ? '中文文献' : '外文文献';
+    btn.textContent = label + ' (' + count + ')';
   });
 
   if (sources.length === 0) {

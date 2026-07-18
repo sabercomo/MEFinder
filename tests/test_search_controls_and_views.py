@@ -33,6 +33,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="citation-style-control"', HTML)
         self.assertIn('segment-style-select', HTML)
 
+    def test_library_filters_by_language_alongside_file_type(self) -> None:
+        self.assertIn('id="lib-lang-control"', HTML)
+        self.assertIn('data-lang="chinese"', HTML)
+        self.assertIn('data-lang="foreign"', HTML)
+        self.assertIn("function setLibLangFilter(btn)", HTML)
+        self.assertIn("(s.language || 'chinese') === libLangFilter", HTML)
+
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)

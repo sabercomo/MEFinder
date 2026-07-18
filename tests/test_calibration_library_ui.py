@@ -142,9 +142,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertTrue(word["source_exists"])
         self.assertEqual(word["modified_at"], "2026-07-01T08:00:00")
         self.assertIsNone(word.get("status"))
+        self.assertEqual(word["language"], "chinese")
 
         pdf = by_id["pdf-critique"]
         self.assertEqual(pdf["source_type"], "pdf")
+        self.assertEqual(pdf["language"], "foreign")
         self.assertEqual(pdf["status"], "manual_mapped")
         self.assertEqual(pdf["status_group"], "calibrated")
         self.assertEqual(pdf["title"], "Critique of Forms of Life")

@@ -169,6 +169,11 @@
             <button class="seg-btn" data-type="word" onclick="setLibFilter(this)">Word</button>
             <button class="seg-btn" data-type="pdf" onclick="setLibFilter(this)">PDF</button>
           </div>
+          <div class="segmented-control" id="lib-lang-control">
+            <button class="seg-btn active" data-lang="all" onclick="setLibLangFilter(this)">全部语言</button>
+            <button class="seg-btn" data-lang="chinese" onclick="setLibLangFilter(this)">中文文献</button>
+            <button class="seg-btn" data-lang="foreign" onclick="setLibLangFilter(this)">外文文献</button>
+          </div>
           <div class="library-toolbar-right">
             <div class="view-switch" role="group" aria-label="文献库显示方式">
               <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
