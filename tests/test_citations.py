@@ -42,7 +42,9 @@ class CitationFormatTests(unittest.TestCase):
             ["translator", "publisher", "publish_place"],
         )
 
-    def test_journal_citation_uses_hit_page_not_article_range(self) -> None:
+    def test_journal_citation_chinese_hit_page_gb_article_range(self) -> None:
+        # 中文脚注引命中页；GB/T 条目引文章起止页（用户示例：
+        # 郑作彧. …[J]. 社会科学, 2021(3): 49-60.）。
         metadata = {
             "document_type": "journal_article",
             "author": "郑作彧",
@@ -59,9 +61,74 @@ class CitationFormatTests(unittest.TestCase):
         )
         self.assertEqual(
             format_citation(metadata, hit_page, "gb"),
-            "郑作彧. 化用的生活形式，还是共鸣的世界关系？——批判理论第四代的共识与分歧[J]. 社会科学, 2021(3):53.",
+            "郑作彧. 化用的生活形式，还是共鸣的世界关系？——批判理论第四代的共识与分歧[J]. 社会科学, 2021(3): 49-60.",
         )
         self.assertNotIn("49-60", format_citation(metadata, hit_page, "chinese"))
+
+    def test_journal_citation_with_volume_matches_user_example(self) -> None:
+        # 孙向晨《学术月刊》2017 年第 4 期（第 49 卷），文章 15-27 页，命中第 18 页。
+        metadata = {
+            "document_type": "journal_article",
+            "author": "孙向晨",
+            "title": "现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
+            "journal_name": "学术月刊",
+            "publish_year": "2017",
+            "volume": "49",
+            "issue": "4",
+            "page_range": "15-27",
+        }
+        hit_page = {"start": "18"}
+        self.assertEqual(
+            format_citation(metadata, hit_page, "gb"),
+            "孙向晨. 现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读[J]. 学术月刊, 2017, 49(4): 15-27.",
+        )
+        self.assertEqual(
+            format_citation(metadata, hit_page, "chinese"),
+            "孙向晨：《现代社会中的“家庭”及其所代表的伦理性原则——黑格尔〈法哲学原理〉中“家庭”问题的解读》，《学术月刊》2017年第4期，第18页。",
+        )
+
+    def test_zotero_filename_pattern_beats_cnki_embedded_author(self) -> None:
+        detected = detect_pdf_bibliographic_metadata(
+            Path("孙向晨 - 2017 - 现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读.pdf"),
+            [],
+            {
+                "title": "孙向晨 - 2017 - 现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
+                "author": "CNKI",
+                "metadata_source": "automatic_recognition",
+            },
+        )
+        self.assertEqual(detected["author"], "孙向晨")
+        self.assertEqual(detected["publish_year"], "2017")
+        self.assertEqual(
+            detected["title"],
+            "现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
+        )
+
+    def test_manual_metadata_accepts_journal_article_type(self) -> None:
+        from src.me_finder.bibliographic_metadata import manual_metadata
+
+        saved = manual_metadata({
+            "document_type": "journal_article",
+            "author": "孙向晨",
+            "title": "现代社会中的“家庭”及其所代表的伦理性原则",
+            "journal_name": "学术月刊",
+            "publish_year": "2017",
+            "volume": "49",
+            "issue": "4",
+            "page_range": "15-27",
+        })
+        self.assertEqual(saved["document_type"], "journal_article")
+        self.assertEqual(saved["metadata_status"], "complete")
+        self.assertEqual(saved["journal_name"], "学术月刊")
+        self.assertEqual(saved["metadata_missing_fields"], [])
+        partial = manual_metadata({
+            "document_type": "journal_article",
+            "author": "孙向晨",
+            "title": "某篇论文",
+        })
+        self.assertIn("journal_name", partial["metadata_missing_fields"])
+        self.assertIn("issue", partial["metadata_missing_fields"])
+        self.assertNotIn("publisher", partial["metadata_missing_fields"])
 
     def test_book_and_translated_book_formats(self) -> None:
         book = {

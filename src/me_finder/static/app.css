@@ -1491,7 +1491,10 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--calibration-card-hover);
   border-color: var(--accent);
 }
-#library-drawer-calibration.expanded .cal-collapse-chevron { transform: rotate(180deg); }
+#library-drawer-calibration.expanded .cal-collapse-chevron,
+.drawer-collapse.expanded .cal-collapse-chevron { transform: rotate(180deg); }
+.drawer-collapse-body { padding-top: 4px; }
+.bibliographic-type-control { margin: 10px 0 12px; }
 .library-drawer-inner {
   width: 420px;
   height: 100%;

@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 
-METADATA_FIELDS = ("title", "author", "country", "translator", "publisher", "publish_place", "publish_year", "isbn")
+METADATA_FIELDS = (
+    "title", "author", "country", "translator", "publisher", "publish_place",
+    "publish_year", "isbn", "journal_name", "volume", "issue", "page_range",
+)
+DOCUMENT_TYPES = ("book", "translated_book", "journal_article")
 PUBLISHER_PLACES = {
     "上海人民出版社": "上海",
     "上海译文出版社": "上海",
@@ -150,6 +154,13 @@ def detect_pdf_bibliographic_metadata(
                 "reason": "suspicious_person_punctuation",
             }
             continue
+        if field == "author" and embedded_value and not _is_plausible_person_name(str(embedded_value)):
+            rejected_evidence[field] = {
+                "source": "pdf_metadata",
+                "evidence_text": embedded_value,
+                "reason": "artifact_author_name",
+            }
+            continue
         replace_filename_title = (
             field == "title"
             and embedded_value
@@ -284,9 +295,14 @@ def detect_pdf_bibliographic_metadata(
 
 
 def metadata_missing_fields(metadata: Mapping[str, object]) -> List[str]:
-    required = ["author", "title", "publisher", "publish_place", "publish_year"]
-    if str(metadata.get("document_type") or "") == "translated_book":
-        required.insert(2, "translator")
+    doc_type = str(metadata.get("document_type") or "")
+    if doc_type == "journal_article":
+        # 期刊论文不需要出版社/出版地；卷次和起止页可选。
+        required = ["author", "title", "journal_name", "publish_year", "issue"]
+    else:
+        required = ["author", "title", "publisher", "publish_place", "publish_year"]
+        if doc_type == "translated_book":
+            required.insert(2, "translator")
     return [field for field in required if not is_valid_bibliographic_value(metadata.get(field))]
 
 
@@ -297,7 +313,13 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
         raise ValueError("以下书目字段包含无效问号或不可用文本：" + "、".join(invalid))
     for field in METADATA_FIELDS:
         result[field] = str(payload.get(field) or "").strip() or None
-    result["document_type"] = "translated_book" if result.get("translator") else "book"
+    requested_type = str(payload.get("document_type") or "").strip()
+    if requested_type in DOCUMENT_TYPES:
+        result["document_type"] = requested_type
+    elif requested_type:
+        raise ValueError(f"未知文献类型：{requested_type}")
+    else:
+        result["document_type"] = "translated_book" if result.get("translator") else "book"
     missing = metadata_missing_fields(result)
     result["metadata_status"] = "complete" if not missing else "partial"
     result["metadata_source"] = "manual"
@@ -390,6 +412,33 @@ def _extract_explicit_filename_metadata(
     """Read explicit Chinese author/translator roles from a descriptive filename."""
 
     normalized = unicodedata.normalize("NFKC", str(file_stem or ""))
+
+    # Zotero/CNKI 导出命名："作者 - 年份 - 标题"。这类文件的 PDF 内嵌
+    # 属性常是"CNKI"之类的产库署名，文件名反而是最可靠的来源。
+    zotero = re.fullmatch(
+        r"\s*(?P<author>[^-]{1,40}?)\s*-\s*(?P<year>(?:19|20)\d{2})\s*-\s*(?P<title>.{4,})\s*",
+        normalized,
+    )
+    if zotero and _is_plausible_person_name(zotero.group("author")):
+        values = {
+            "author": _clean_people(zotero.group("author")),
+            "publish_year": zotero.group("year"),
+            "title": zotero.group("title").strip().replace(":", "："),
+        }
+        values = {field: value for field, value in values.items() if is_valid_bibliographic_value(value)}
+        scores = {"author": 0.97, "publish_year": 0.96, "title": 0.97}
+        evidence = {
+            field: {
+                "source": "file_name",
+                "source_page": None,
+                "evidence_text": normalized,
+                "rule": "zotero_filename_pattern",
+                "confidence": scores[field],
+            }
+            for field in values
+        }
+        return values, evidence, {field: scores[field] for field in values}
+
     match = re.search(
         rf"\(\s*(?:\((?P<country>[^()]{{1,8}})\)\s*)?"
         rf"(?P<author>[{_CHINESE_NAME_CHARS}\s]{{2,30}}?)\s*著\s*"
@@ -934,8 +983,18 @@ def _reconcile_fused_people(ocr_value: str, filename_parts: Sequence[str]) -> Op
     return "，".join(slices)
 
 
+_ARTIFACT_AUTHOR_NAMES = {
+    "cnki", "中国知网", "知网", "superstar", "超星", "adobe", "acrobat",
+    "microsoft", "word", "wps", "office", "unknown", "admin", "administrator",
+    "user", "pdf", "epub", "z-library", "zlibrary",
+}
+
+
 def _is_plausible_person_name(value: str) -> bool:
     compact = re.sub(r"\s+", "", value)
+    # 产库/软件署名不是作者（知网 PDF 的内嵌 Author 常是"CNKI"）。
+    if compact.casefold() in _ARTIFACT_AUTHOR_NAMES:
+        return False
     if compact in {"作者", "著者", "译者", "主编", "编辑", "的翻", "的译", "本书", "此书"}:
         return False
     if re.match(r"^(?:本书|此书|该书|由此|其中|的翻|的译)", compact):
@@ -1214,6 +1273,10 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         "publish_place": ("publish_place", "publication_place"),
         "publish_year": ("publish_year", "publication_year"),
         "isbn": ("isbn",),
+        "journal_name": ("journal_name", "journal_title", "journal", "periodical"),
+        "volume": ("volume", "journal_volume"),
+        "issue": ("issue", "issue_number", "journal_issue"),
+        "page_range": ("page_range", "pages", "article_pages"),
     }
     for field, keys in aliases.items():
         result[field] = next((source.get(key) for key in keys if source.get(key) not in (None, "")), None)

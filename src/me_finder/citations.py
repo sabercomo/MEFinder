@@ -92,9 +92,14 @@ def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
         base = _join_gb([_author_plain(meta), f"{title}[J]" if title else ""])
         journal = _first(meta, "journal_name", "journal_title", "journal", "periodical")
         year = _year(meta)
+        volume = _first(meta, "volume", "journal_volume")
         issue = _first(meta, "issue", "issue_number", "journal_issue")
-        journal_part = _journal_gb(journal, year, issue)
-        return _finish_gb(_join_gb_with_page([base, journal_part], page, separator=":"))
+        journal_part = _journal_gb(journal, year, volume, issue)
+        # GB/T 期刊条目引用文章的起止页码（如 15-27），而非命中页。
+        page_range = _clean(_first(meta, "page_range", "pages", "article_pages"))
+        if page_range:
+            return _finish_gb(_join_gb([base, f"{journal_part}: {page_range}" if journal_part else page_range]))
+        return _finish_gb(_join_gb_with_page([base, journal_part], page, separator=": "))
     if doc_type in {"book_chapter", "collection_article"}:
         title = _title(meta)
         base = _join_gb([_author_plain(meta), f"{title}[M]" if title else ""])
@@ -265,16 +270,24 @@ def _journal_chinese(meta: CitationMetadata) -> str:
     return "".join(pieces)
 
 
-def _journal_gb(journal: str, year: str, issue: str) -> str:
+def _journal_gb(journal: str, year: str, volume: str, issue: str) -> str:
     pieces = []
     if journal:
         pieces.append(journal)
-    if year and issue:
-        pieces.append(f"{year}({issue})")
+    issue_part = ""
+    if volume and issue:
+        issue_part = f"{volume}({issue})"
+    elif issue:
+        issue_part = f"({issue})"
+    elif volume:
+        issue_part = volume
+    if year and issue_part:
+        # 有卷次时用逗号分隔（2017, 49(4)），只有期号时紧跟年份（2021(3)）。
+        pieces.append(f"{year}, {issue_part}" if volume else f"{year}{issue_part}")
     elif year:
         pieces.append(year)
-    elif issue:
-        pieces.append(f"({issue})")
+    elif issue_part:
+        pieces.append(issue_part)
     return ", ".join(pieces)
 
 

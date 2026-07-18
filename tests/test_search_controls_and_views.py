@@ -50,6 +50,21 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("重新 OCR", HTML)
         self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
 
+    def test_drawer_file_info_collapses_and_editor_is_type_aware(self) -> None:
+        self.assertIn('id="drawer-file-info"', HTML)
+        self.assertIn("function toggleDrawerSection(event, sectionId)", HTML)
+        self.assertIn('<div class="drawer-collapse-body" style="display:none">', HTML)
+        self.assertIn('id="bib-doctype-control"', HTML)
+        for label in ("图书", "译著", "期刊论文"):
+            self.assertIn(label, HTML)
+        self.assertIn("function setBibliographicType(sourceId, docType)", HTML)
+        self.assertIn("'出版刊物'", HTML)
+        self.assertIn("'卷次'", HTML)
+        self.assertIn("'期号'", HTML)
+        self.assertIn("'页码（起止页）'", HTML)
+        self.assertIn("document_type: typeButton ? typeButton.dataset.doctype : 'book'", HTML)
+        self.assertIn("['author','title','journal_name','publish_year','issue']", HTML)
+
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
         self.assertIn('phase="metadata_recognition"', WEB_SOURCE)
         self.assertIn('persist_bibliographic_metadata(source_file_id, metadata)', WEB_SOURCE)

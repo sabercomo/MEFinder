@@ -940,6 +940,15 @@ function selectLibDoc(sourceId) {
     autoActions += '<button class="action-btn" onclick="openCalibrationForSource(\'' + esc(src.source_file_id) + '\')">编辑区间</button>';
   }
 
+  var fileInfoHTML = '<div class="drawer-collapse" id="drawer-file-info">'
+    + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
+    + '<span class="drawer-section-title">文件信息</span>'
+    + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
+    + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
+    + '</button>'
+    + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
+    + '</div>';
+
   var el = document.getElementById('library-drawer-content');
   el.innerHTML = '<div class="drawer-title">' + esc(title) + '</div>'
     + (corpusTitle ? '<div class="drawer-subtitle">' + esc(corpusTitle) + '</div>' : '')
@@ -947,7 +956,7 @@ function selectLibDoc(sourceId) {
     + '<span class="detail-pill">' + (src.source_type === 'pdf' ? 'PDF' : 'Word') + '</span>'
     + (vol && vol.primary_structure ? '<span class="detail-pill">' + structureLabel(vol.primary_structure) + '</span>' : '')
     + '</div>'
-    + '<div class="drawer-info">' + info + '</div>'
+    + fileInfoHTML
     + bibliographicHTML
     + worksHTML
     + '<div class="drawer-actions">'
@@ -1012,19 +1021,27 @@ function updateLibraryEntry(sourceId) {
 function sourceBibliographicMetadata(src) {
   var nested = src && src.bibliographic_metadata ? src.bibliographic_metadata : {};
   var meta = Object.assign({}, nested);
-  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
+  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','journal_name','volume','issue','page_range','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
     if (src && src[key] != null && src[key] !== '') meta[key] = src[key];
   });
   return meta;
 }
 
-const bibliographicFieldLabels = {author:'作者',title:'书名',translator:'译者',publisher:'出版社',publish_place:'出版地',publish_year:'出版年份'};
+const bibliographicFieldLabels = {author:'作者',title:'书名',translator:'译者',publisher:'出版社',publish_place:'出版地',publish_year:'出版年份',journal_name:'出版刊物',volume:'卷次',issue:'期号',page_range:'页码'};
+
+function bibliographicDocType(meta) {
+  var value = String((meta && meta.document_type) || '');
+  return ['book','translated_book','journal_article'].indexOf(value) >= 0 ? value : 'book';
+}
 
 function bibliographicMissingFields(meta) {
   meta = meta || {};
+  var docType = bibliographicDocType(meta);
   var listed = Array.isArray(meta.metadata_missing_fields) ? meta.metadata_missing_fields.slice() : null;
-  var required = listed || ['author','title','publisher','publish_place','publish_year'];
-  if (!listed && meta.document_type === 'translated_book') required.splice(2, 0, 'translator');
+  var required = listed || (docType === 'journal_article'
+    ? ['author','title','journal_name','publish_year','issue']
+    : ['author','title','publisher','publish_place','publish_year']);
+  if (!listed && docType === 'translated_book') required.splice(2, 0, 'translator');
   return required.filter(function(field, index, values) {
     if (field === 'isbn' || !bibliographicFieldLabels[field] || values.indexOf(field) !== index) return false;
     if (listed) return true;
@@ -1043,28 +1060,68 @@ function bibliographicMissingBadge(meta) {
   return '<span class="bibliographic-missing" title="ISBN 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
 }
 
+let bibEditorTypeOverride = {};
+
 function bibliographicEditorHTML(src) {
   var meta = sourceBibliographicMetadata(src);
-  var missing = bibliographicMissingFields(meta);
+  var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
+  var missing = bibliographicMissingFields(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}));
   function field(id, metadataField, label, value, full) {
     var isMissing = missing.indexOf(metadataField) >= 0;
     return '<div class="bibliographic-field' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '"><label for="bib-' + id + '">' + label + (isMissing ? ' · 缺少' : '') + '</label><input id="bib-' + id + '" value="' + esc(value || '') + '"></div>';
   }
-  return '<div class="drawer-section-title">书目信息</div>'
-    + bibliographicMissingBadge(meta)
+  function typeButton(value, label) {
+    return '<button class="seg-btn' + (docType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" onclick="setBibliographicType(\'' + esc(src.source_file_id) + '\',\'' + value + '\')">' + label + '</button>';
+  }
+  var fieldsHTML;
+  if (docType === 'journal_article') {
+    fieldsHTML = field('title','title','标题（篇名）',meta.title,true)
+      + field('author','author','作者',meta.author,false)
+      + field('journal-name','journal_name','出版刊物',meta.journal_name,false)
+      + field('volume','volume','卷次',meta.volume,false)
+      + field('issue','issue','期号',meta.issue,false)
+      + field('publish-year','publish_year','时间（年份）',meta.publish_year,false)
+      + field('page-range','page_range','页码（起止页）',meta.page_range,false);
+  } else {
+    fieldsHTML = field('author','author','作者',meta.author,false) + field('country','country','国别',meta.country,false)
+      + field('title','title','书名',meta.title,false) + field('translator','translator','译者',meta.translator,false)
+      + field('publish-place','publish_place','出版地',meta.publish_place,false)
+      + field('publisher','publisher','出版社',meta.publisher,false) + field('publish-year','publish_year','出版年份',meta.publish_year,false)
+      + field('isbn','isbn','ISBN',meta.isbn,true);
+  }
+  return '<div id="bibliographic-editor">'
+    + '<div class="drawer-section-title">书目信息</div>'
+    + '<div class="segmented-control bibliographic-type-control" id="bib-doctype-control" role="group" aria-label="文献类型">'
+    + typeButton('book','图书') + typeButton('translated_book','译著') + typeButton('journal_article','期刊论文')
+    + '</div>'
+    + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
     + '<div class="bibliographic-grid">'
-    + field('author','author','作者',meta.author,false) + field('country','country','国别',meta.country,false)
-    + field('title','title','书名',meta.title,false) + field('translator','translator','译者',meta.translator,false)
-    + field('publish-place','publish_place','出版地',meta.publish_place,false)
-    + field('publisher','publisher','出版社',meta.publisher,false) + field('publish-year','publish_year','出版年份',meta.publish_year,false)
-    + field('isbn','isbn','ISBN',meta.isbn,true) + '</div>'
+    + fieldsHTML + '</div>'
     + '<div class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</div>'
     + '<div class="auto-detect-actions">'
     + '<button class="action-btn" onclick="detectBibliographicMetadata(\'' + esc(src.source_file_id) + '\',false)">自动识别书目信息</button>'
     + (meta.metadata_source === 'manual' ? '<button class="action-btn" onclick="detectBibliographicMetadata(\'' + esc(src.source_file_id) + '\',true)">重新识别并覆盖表单</button>' : '')
     + '<button class="action-btn primary" onclick="saveBibliographicMetadata(\'' + esc(src.source_file_id) + '\')">保存</button>'
     + '<button class="action-btn" onclick="showBibliographicEvidence(\'' + esc(src.source_file_id) + '\')">查看识别依据</button>'
+    + '</div>'
     + '</div>';
+}
+
+function setBibliographicType(sourceId, docType) {
+  var current = collectBibliographicForm();
+  bibEditorTypeOverride[sourceId] = docType;
+  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var editor = document.getElementById('bibliographic-editor');
+  if (!src || !editor) return;
+  var template = document.createElement('template');
+  template.innerHTML = bibliographicEditorHTML(src).trim();
+  editor.replaceWith(template.content.firstElementChild);
+  // 切换字段集时保留已填写的公共字段。
+  Object.keys(current).forEach(function(key) {
+    if (key === 'document_type' || !current[key]) return;
+    var input = document.getElementById('bib-' + key.replace(/_/g, '-'));
+    if (input && !input.value) input.value = current[key];
+  });
 }
 
 function metadataStatusLabel(status) {
@@ -1077,7 +1134,15 @@ function metadataSourceLabel(source) {
 
 function collectBibliographicForm() {
   function value(id) { var el = document.getElementById('bib-' + id); return el ? el.value.trim() : ''; }
-  return {author:value('author'),country:value('country'),title:value('title'),translator:value('translator'),publish_place:value('publish-place'),publisher:value('publisher'),publish_year:value('publish-year'),isbn:value('isbn')};
+  var typeButton = document.querySelector('#bib-doctype-control .seg-btn.active');
+  return {
+    document_type: typeButton ? typeButton.dataset.doctype : 'book',
+    author: value('author'), country: value('country'), title: value('title'),
+    translator: value('translator'), publish_place: value('publish-place'),
+    publisher: value('publisher'), publish_year: value('publish-year'), isbn: value('isbn'),
+    journal_name: value('journal-name'), volume: value('volume'),
+    issue: value('issue'), page_range: value('page-range')
+  };
 }
 
 async function detectBibliographicMetadata(sourceId, force) {
@@ -1103,6 +1168,7 @@ async function saveBibliographicMetadata(sourceId) {
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '保存失败');
     showToast('书目信息已保存并立即生效');
+    delete bibEditorTypeOverride[sourceId];
     libLoaded = false;
     await loadLibrary();
     selectLibDoc(sourceId);
@@ -1133,6 +1199,18 @@ function closeLibDrawer() {
   var body = document.querySelector('#page-library .library-body');
   if (body) body.classList.remove('detail-open');
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) { row.classList.remove('selected'); });
+}
+
+function toggleDrawerSection(event, sectionId) {
+  var section = document.getElementById(sectionId);
+  if (!section) return;
+  var body = section.querySelector('.drawer-collapse-body');
+  var head = section.querySelector('.cal-collapse-head');
+  if (!body) return;
+  var open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  section.classList.toggle('expanded', open);
+  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 async function submitMineruReparse(sourceId) {
