@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="frost-blue">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文献原句定位器</title>
+<style>
+/*__APP_CSS__*/</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══ Sidebar ═══ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">文献原句定位器</div>
+    <nav class="sidebar-nav">
+      <button class="sidebar-item active" data-page="search" onclick="navigateTo('search')">
+        <span class="sidebar-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+        </span>
+        <span>文献检索</span>
+      </button>
+      <button class="sidebar-item" data-page="library" onclick="navigateTo('library')">
+        <span class="sidebar-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><line x1="7" y1="3" x2="7" y2="17"/></svg>
+        </span>
+        <span>文献库</span>
+      </button>
+      <button class="sidebar-item" data-page="import" onclick="navigateTo('import')">
+        <span class="sidebar-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>
+        </span>
+        <span>文献导入</span>
+      </button>
+      <button class="sidebar-item" data-page="settings" onclick="navigateTo('settings')">
+        <span class="sidebar-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"/><path d="M10 1v3M10 16v3M1 10h3M16 10h3M3.5 3.5l2 2M14.5 14.5l2 2M3.5 16.5l2-2M14.5 5.5l2-2"/></svg>
+        </span>
+        <span>设置</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">ME_Finder v0.1.0</div>
+  </aside>
+
+  <!-- ═══ Main ═══ -->
+  <div class="main-area">
+
+    <!-- ── Search Page ── -->
+    <div id="page-search" class="page active">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">文献检索</div>
+            <div class="page-subtitle">在本地文献库中定位原句、文献与准确页码</div>
+          </div>
+          <div class="page-header-meta">
+            <div class="status-badge" id="index-status">
+              <span class="dot"></span>
+              <span id="index-count">加载中…</span>
+            </div>
+          </div>
+        </div>
+        <div class="search-box-wrap">
+          <span class="search-icon">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+          </span>
+          <input type="text" id="query" class="search-box" placeholder="输入中文引文…" autocomplete="off">
+          <button class="search-submit" id="search-btn" onclick="runSearch()">搜索</button>
+        </div>
+        <div class="search-controls-row">
+          <div class="segmented-control" id="mode-control">
+            <button class="seg-btn active" data-mode="auto" onclick="setMode(this)">综合检索</button>
+            <button class="seg-btn" data-mode="exact" onclick="setMode(this)">精确匹配</button>
+            <button class="seg-btn" data-mode="fuzzy" onclick="setMode(this)">模糊检索</button>
+          </div>
+          <div class="search-filter-controls">
+            <div class="search-control-group">
+              <span class="search-control-label">来源</span>
+              <div class="source-type-control" id="source-type-control" role="group" aria-label="来源类型">
+                <button class="source-type-btn active" type="button" data-source="all" onclick="setSearchSourceType('all')">全部</button>
+                <button class="source-type-btn" type="button" data-source="word" onclick="setSearchSourceType('word')">Word</button>
+                <button class="source-type-btn" type="button" data-source="pdf" onclick="setSearchSourceType('pdf')">PDF</button>
+              </div>
+            </div>
+            <div class="search-control-group">
+              <span class="search-control-label">文献范围</span>
+              <div class="app-select document-select" id="document-select">
+                <button class="app-select-trigger" id="document-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSearchSelect(event,'document-select')">
+                  <span class="app-select-value" id="document-select-label">全部文献</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                </button>
+                <div class="app-select-menu document-menu" role="listbox">
+                  <div class="document-menu-search-wrap">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.7"/><path d="m13 13 4 4"/></svg>
+                    <input class="document-menu-search" id="document-filter-query" type="search" placeholder="搜索书名或文件名…" autocomplete="off" oninput="renderSearchDocumentOptions()">
+                  </div>
+                  <div class="document-options" id="document-options"></div>
+                </div>
+              </div>
+            </div>
+            <div class="search-control-group">
+              <span class="search-control-label">返回数量</span>
+              <div class="app-select" id="limit-select">
+                <button class="app-select-trigger" id="limit-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSearchSelect(event,'limit-select')">
+                  <span class="app-select-value" id="limit-select-label">10 条</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                </button>
+                <div class="app-select-menu" role="listbox" id="limit-options">
+                  <button class="app-select-option is-selected" type="button" data-value="10" onclick="setSearchLimit(event,10)"><span>10 条</span></button>
+                  <button class="app-select-option" type="button" data-value="20" onclick="setSearchLimit(event,20)"><span>20 条</span></button>
+                  <button class="app-select-option" type="button" data-value="50" onclick="setSearchLimit(event,50)"><span>50 条</span></button>
+                  <button class="app-select-option" type="button" data-value="100" onclick="setSearchLimit(event,100)"><span>100 条</span></button>
+                  <button class="app-select-option" type="button" data-value="200" onclick="setSearchLimit(event,200)"><span>200 条</span></button>
+                  <button class="app-select-option" type="button" data-value="all" onclick="setSearchLimit(event,'all')"><span>全部</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="results-area">
+        <div class="results-list-pane">
+          <div class="results-status" id="results-status" style="display:none"></div>
+          <div id="results-list">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><circle cx="20" cy="20" r="14"/><line x1="30" y1="30" x2="42" y2="42"/></svg>
+              </div>
+              <div class="empty-state-text">输入引文开始检索</div>
+              <div class="empty-state-hint">支持精确匹配和模糊检索</div>
+            </div>
+          </div>
+        </div>
+        <div class="results-detail-pane">
+          <div id="detail-panel">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><rect x="8" y="6" width="32" height="36" rx="3"/><line x1="16" y1="16" x2="32" y2="16"/><line x1="16" y1="22" x2="32" y2="22"/><line x1="16" y1="28" x2="28" y2="28"/></svg>
+              </div>
+              <div class="empty-state-text">选择一条结果查看详情</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Library Page ── -->
+    <div id="page-library" class="page">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">文献库</div>
+            <div class="page-subtitle">管理已导入的文献及其索引状态</div>
+          </div>
+          <div class="page-header-meta">
+            <div class="calibration-header-stats" id="library-stats"></div>
+          </div>
+        </div>
+        <div class="library-search-wrap">
+          <span class="library-search-icon">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+          </span>
+          <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
+        </div>
+        <div class="library-controls-row">
+          <div class="segmented-control" id="lib-type-control">
+            <button class="seg-btn active" data-type="all" onclick="setLibFilter(this)">全部</button>
+            <button class="seg-btn" data-type="word" onclick="setLibFilter(this)">Word</button>
+            <button class="seg-btn" data-type="pdf" onclick="setLibFilter(this)">PDF</button>
+          </div>
+          <div class="library-toolbar-right">
+            <div class="view-switch" role="group" aria-label="文献库显示方式">
+              <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
+              <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
+            </div>
+            <div class="library-sort-controls"><span class="library-sort-label">排序</span>
+              <div class="app-select library-sort-field-select" id="library-sort-field-select">
+                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-field-select')"><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button><button class="app-select-option" type="button" data-value="status" onclick="setLibrarySortOption(event,'field','status')">校准状态</button></div>
+              </div>
+              <div class="app-select library-sort-direction-select" id="library-sort-direction-select">
+                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-direction-select')"><span class="app-select-value" id="library-sort-direction-label">降序</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="desc" onclick="setLibrarySortOption(event,'direction','desc')">降序</button><button class="app-select-option" type="button" data-value="asc" onclick="setLibrarySortOption(event,'direction','asc')">升序</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="library-body">
+        <div class="library-list-scroll">
+          <div id="library-list" class="library-list-container library-view-list"></div>
+        </div>
+        <div class="library-drawer" id="library-drawer">
+          <div class="library-drawer-inner">
+            <div id="library-drawer-content"></div>
+            <div id="library-drawer-calibration" style="display:none">
+              <button class="cal-collapse-head" type="button" id="cal-collapse-toggle" aria-expanded="false" onclick="toggleDrawerCalibration()">
+                <span class="drawer-section-title">页码校准</span>
+                <span class="cal-collapse-summary" id="cal-collapse-summary"></span>
+                <svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+              </button>
+              <div id="cal-section-body" style="display:none">
+                <div class="cal-detail-actions" id="cal-detail-actions"></div>
+                <div id="cal-editor" style="display:none">
+                  <div class="cal-section">
+                    <div class="cal-section-head">
+                      <span class="cal-section-title">自动检测</span>
+                    </div>
+                    <div id="cal-auto-preview" class="auto-detect-panel" style="display:none"></div>
+                  </div>
+                  <div class="cal-section">
+                    <div class="cal-section-head">
+                      <span class="cal-section-title">页码映射分段</span>
+                      <button class="action-btn" onclick="addCalSegment()">+ 添加分段</button>
+                    </div>
+                    <div class="segment-table-wrap">
+                      <table class="segment-table">
+                        <colgroup>
+                          <col class="segment-col-pdf">
+                          <col class="segment-col-pdf">
+                          <col class="segment-col-citation">
+                          <col class="segment-col-style">
+                          <col class="segment-col-note">
+                          <col class="segment-col-action">
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>PDF 起始页</th>
+                            <th>PDF 结束页</th>
+                            <th>引用起始页</th>
+                            <th>编号样式</th>
+                            <th>范围说明</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody id="cal-segments-body"></tbody>
+                      </table>
+                    </div>
+                    <div id="cal-no-segments" class="cal-empty" style="display:none">暂无映射分段，点击上方按钮添加</div>
+                  </div>
+                  <div class="cal-preview">
+                    <div class="cal-preview-row">
+                      <span class="cal-preview-label">预览：PDF 第</span>
+                      <input type="number" class="seg-input narrow" id="cal-preview-input" min="1" value="1" oninput="updateCalPreview()">
+                      <span class="cal-preview-label">页 →</span>
+                      <span class="cal-preview-result" id="cal-preview-result">—</span>
+                    </div>
+                  </div>
+                  <div class="cal-actions">
+                    <button class="action-btn primary" onclick="saveCalibration()">保存校准配置</button>
+                    <button class="action-btn" onclick="loadCalibrationDoc()">放弃修改</button>
+                    <span class="cal-save-hint">保存后自动重建索引</span>
+                  </div>
+                  <div class="cal-danger-zone"><button class="action-btn danger-outline" onclick="openRemoveDocumentModal()">从文献库移除</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Import Page ── -->
+    <div id="page-import" class="page">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">文献导入</div>
+            <div class="page-subtitle">导入 PDF 或 DOCX 文献到本地索引</div>
+          </div>
+        </div>
+      </div>
+      <div class="import-content">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <div class="drop-zone-icon">
+            <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
+          </div>
+          <div class="drop-zone-text">拖放文件到此处，或点击选择</div>
+          <div class="drop-zone-hint">支持单个或多个文件同时导入</div>
+          <div class="drop-zone-formats">
+            <span class="format-tag">PDF</span>
+            <span class="format-tag">DOCX</span>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <div class="import-queue" id="import-queue" style="display:none">
+          <div class="import-queue-title">导入队列</div>
+          <div id="import-items"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Settings Page ── -->
+    <div id="page-settings" class="page">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">设置</div>
+            <div class="page-subtitle">应用配置与索引管理</div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-page-content">
+        <section class="settings-card appearance-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-card-title">外观</div>
+              <div class="settings-card-subtitle">选择适合当前阅读环境的应用主题，切换会立即生效。</div>
+            </div>
+          </div>
+          <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
+        </section>
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-card-title">MinerU API</div>
+              <div class="settings-card-subtitle">用于扫描版、乱码或复杂排版 PDF 的精准解析。</div>
+            </div>
+            <span id="mineru-config-status" class="settings-status">读取中…</span>
+          </div>
+          <div id="mineru-expiry-detail" class="settings-expiry-detail">API 到期时间：读取中…</div>
+          <div class="settings-form">
+            <div class="settings-field">
+              <label for="mineru-token">Bearer Token</label>
+              <div class="settings-input-row">
+                <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="输入 MinerU API Token">
+                <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
+              </div>
+              <small>在 MinerU 的 API 管理页面创建或复制。留空表示保留当前已保存的 Token。</small>
+            </div>
+            <div class="settings-field">
+              <label for="mineru-access-key-id">Access Key ID（可选）</label>
+              <input id="mineru-access-key-id" class="settings-input" type="text" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Access Key ID，再填写">
+            </div>
+            <div class="settings-field">
+              <label for="mineru-secret-access-key">Secret Access Key（可选）</label>
+              <div class="settings-input-row">
+                <input id="mineru-secret-access-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Secret Access Key，再填写">
+                <button id="mineru-secret-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-secret-access-key','mineru-secret-toggle')">显示</button>
+              </div>
+            </div>
+            <div class="settings-field">
+              <label for="mineru-api-base">API 地址</label>
+              <input id="mineru-api-base" class="settings-input" type="url" value="https://mineru.net" spellcheck="false">
+            </div>
+            <div class="settings-field">
+              <label for="mineru-expires-at">Token 到期日期（可选）</label>
+              <input id="mineru-expires-at" class="settings-input" type="date">
+              <small>只用于本地提醒，不会自动停用 API。</small>
+            </div>
+            <div class="settings-actions">
+              <button class="action-btn primary" type="button" onclick="saveMineruConfig()">保存 API 配置</button>
+              <button class="action-btn" type="button" onclick="loadMineruConfig()">重新读取</button>
+              <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机。</span>
+            </div>
+          </div>
+          <div class="settings-notice">保存后，命令行 MinerU 处理和以后接入应用内导入功能都会使用这份本机配置。当前页面不会显示已经保存的密钥。</div>
+        </section>
+      </div>
+    </div>
+
+  </div><!-- /main-area -->
+</div><!-- /app-shell -->
+
+<div id="toast" class="toast"></div>
+<div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">
+  <div class="remove-modal" role="dialog" aria-modal="true" aria-labelledby="remove-modal-title">
+    <div class="remove-modal-title" id="remove-modal-title">从文献库移除？</div>
+    <div class="remove-modal-copy" id="remove-modal-copy"></div>
+    <div class="remove-options">
+      <label class="remove-option"><input type="checkbox" id="remove-generated" checked><span>删除解析缓存和 MinerU 产物<small>再次导入时需要重新解析或 OCR；共享产物不会删除。</small></span></label>
+      <label class="remove-option" id="remove-internal-option"><input type="checkbox" id="remove-internal-copy"><span>同时删除应用内保存的 PDF 副本<small>默认不勾选。外部原始文件永远不会被删除。</small></span></label>
+    </div>
+    <div class="remove-modal-warning" id="remove-modal-warning">删除应用内 PDF 副本后无法恢复。请再次确认此操作。</div>
+    <div class="remove-modal-actions"><button class="action-btn" onclick="closeRemoveDocumentModal()">取消</button><button class="action-btn danger-outline" id="confirm-remove-btn" onclick="confirmRemoveDocument()">从文献库移除</button></div>
+  </div>
+</div>
+
+<script>
+//__APP_JS__</script>
+</body>
+</html>
