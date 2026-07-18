@@ -7,7 +7,10 @@ a = Analysis(
     ['desktop.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[
+        ('src/me_finder/templates', 'src/me_finder/templates'),
+        ('src/me_finder/static', 'src/me_finder/static'),
+    ],
     hiddenimports=[
         'src',
         'src.me_finder',
