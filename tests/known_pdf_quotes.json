@@ -46,7 +46,7 @@
     "mode": "auto",
     "source_type": "pdf",
     "expected_source_type": "pdf",
-    "expected_document_title": "Reconceiving Social Philosophy",
+    "expected_document_title": "Axel Honneth: Reconceiving Social Philosophy",
     "expected_contains": "Coming to Critical Theory from mainly analytic philosophy",
     "expected_citation_page_start": "vii",
     "expected_mapping_method": "pdf_page_label"

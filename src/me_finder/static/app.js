@@ -1903,6 +1903,25 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   try { localStorage.setItem('meFinderTheme', theme); } catch (_) {}
   renderThemeSelection();
+  updateAppearanceSummary();
+}
+
+function updateAppearanceSummary() {
+  var el = document.getElementById('appearance-current');
+  if (!el) return;
+  var current = THEME_OPTIONS.find(function(t) { return t.id === currentTheme; });
+  el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(current ? current.name : '');
+}
+
+function toggleAppearance() {
+  var card = document.getElementById('appearance-card');
+  var body = document.getElementById('appearance-body');
+  var head = card ? card.querySelector('.settings-collapse-head') : null;
+  if (!card || !body) return;
+  var open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  card.classList.toggle('expanded', open);
+  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 async function loadPreferences() {
@@ -2016,14 +2035,9 @@ renderThemeOptions();
 /* ═══ MinerU API settings ═══ */
 async function loadMineruConfig() {
   var status = document.getElementById('mineru-config-status');
-  var expiryDetail = document.getElementById('mineru-expiry-detail');
   if (!status) return;
   status.className = 'settings-status';
   status.textContent = '读取中…';
-  if (expiryDetail) {
-    expiryDetail.className = 'settings-expiry-detail';
-    expiryDetail.textContent = 'API 到期时间：读取中…';
-  }
   try {
     var resp = await fetch('/api/mineru-config');
     var data = await resp.json();
@@ -2034,47 +2048,21 @@ async function loadMineruConfig() {
     document.getElementById('mineru-access-key-id').value = '';
     document.getElementById('mineru-secret-access-key').value = '';
     if (data.configured) {
-      status.className = 'settings-status ready';
-      var parts = ['已配置'];
-      if (data.expires_at) parts.push('到期 ' + data.expires_at);
-      status.textContent = parts.join(' · ');
+      var expiryStatus = data.expiry_status || 'ok';
+      var variant = (expiryStatus === 'expired' || expiryStatus === 'invalid') ? 'warning'
+        : (expiryStatus === 'expires_today' || expiryStatus === 'unset') ? 'warning' : 'ready';
+      status.className = 'settings-status ' + variant;
+      status.textContent = '已配置' + (data.expiry_label ? ' · ' + data.expiry_label : '');
     } else {
       status.className = 'settings-status warning';
       status.textContent = '尚未配置 Token';
     }
-    updateMineruExpiryDetail(data);
     mineruConfigLoaded = true;
   } catch (e) {
     status.className = 'settings-status warning';
     status.textContent = '读取失败';
-    if (expiryDetail) {
-      expiryDetail.className = 'settings-expiry-detail warning';
-      expiryDetail.textContent = 'API 到期时间：读取失败';
-    }
     showToast('读取 MinerU 配置失败：' + e.message);
   }
-}
-
-function updateMineruExpiryDetail(data) {
-  var el = document.getElementById('mineru-expiry-detail');
-  if (!el) return;
-  var configured = !!(data && data.configured);
-  var status = data ? data.expiry_status : 'unset';
-  var label = data && data.expiry_label ? data.expiry_label : '';
-  el.className = 'settings-expiry-detail';
-  if (!configured) {
-    el.classList.add('warning');
-    el.textContent = 'API 到期时间：尚未配置 Token';
-    return;
-  }
-  if (status === 'expired' || status === 'invalid') {
-    el.classList.add('error');
-  } else if (status === 'expires_today' || status === 'unset') {
-    el.classList.add('warning');
-  } else {
-    el.classList.add('ready');
-  }
-  el.textContent = 'API 到期时间：' + (label || '未设置到期时间');
 }
 
 function toggleMineruSecret(inputId, buttonId) {

@@ -777,8 +777,11 @@ class CitationFormatTests(unittest.TestCase):
             self.assertIn("chinese", item["citation_formats"])
             self.assertIn("gb", item["citation_formats"])
             self.assertIn("第147页", item["citation_formats"]["chinese"])
-            self.assertEqual(item["citation_formats"]["gb_status"], "metadata_incomplete")
-            self.assertIn("无法生成完整 GB/T 引文", item["citation_formats"]["gb"])
+            self.assertEqual(item["citation_formats"]["gb_status"], "complete")
+            self.assertEqual(
+                item["citation_formats"]["gb"],
+                "[德]马克斯·霍克海默. 批判理论[M]. 李小兵等, 译. 重庆: 重庆出版社, 1990: 147.",
+            )
         finally:
             engine.close()
 
