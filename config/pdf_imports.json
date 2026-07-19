@@ -29,6 +29,158 @@
             "evidence": "MVP 抽样确认 Introduction 首页为 PDF 物理页 22，引用页码为 1。"
           }
         ]
+      },
+      "country": null,
+      "translator": "Ciaran Cronin",
+      "publisher": "The Belknap Press of Harvard University Press",
+      "publish_place": "Cambridge, Massachusetts",
+      "publish_year": "2018",
+      "isbn": "9780674737754",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "translated_book",
+      "metadata_status": "complete",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.9843,
+      "metadata_evidence": {
+        "title": {
+          "source": "front_matter_text",
+          "source_page": 5,
+          "evidence_text": "Names: Jaeggi, Rahel, author. Title: Critique of forms of life / Rahel Jaeggi ; translated by Ciaran Cronin.",
+          "rule": "english_catalog_title",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 5,
+          "evidence_text": "Library of Congress Cataloging- in- Publication Data Names: Jaeggi, Rahel, author.",
+          "rule": "english_catalog_author",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 4,
+          "evidence_text": "translated by Ciaran Cronin",
+          "rule": "english_translated_by",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 5,
+          "evidence_text": "Description: Cambridge, Mas sa chu setts : The Belknap Press of Harvard University Press, 2018. | “This book was originally published as Kritik von Lebensformen (c) Suhrkamp",
+          "rule": "english_catalog_statement",
+          "confidence": 0.99,
+          "support_count": 2
+        },
+        "publish_place": {
+          "source": "front_matter_text",
+          "source_page": 4,
+          "evidence_text": "Cambridge, Massachusetts",
+          "rule": "english_title_page_place",
+          "confidence": 0.95,
+          "support_count": 1
+        },
+        "publish_year": {
+          "source": "front_matter_text",
+          "source_page": 5,
+          "evidence_text": "Copyright © 2018 by the President and Fellows of Harvard College",
+          "rule": "english_copyright_year",
+          "confidence": 0.99,
+          "support_count": 4
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 5,
+          "evidence_text": "Verlag, Berlin 2014” — Title page verso. | Includes bibliographical references and index. Identifiers: LCCN 2018010776 | ISBN 9780674737754 (cloth)",
+          "rule": "isbn_print_edition",
+          "confidence": 0.99,
+          "support_count": 3
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [],
+      "bibliographic_metadata": {
+        "title": "Critique of Forms of Life",
+        "author": "Rahel Jaeggi",
+        "country": null,
+        "translator": "Ciaran Cronin",
+        "publisher": "The Belknap Press of Harvard University Press",
+        "publish_place": "Cambridge, Massachusetts",
+        "publish_year": "2018",
+        "isbn": "9780674737754",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "translated_book",
+        "metadata_status": "complete",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.9843,
+        "metadata_evidence": {
+          "title": {
+            "source": "front_matter_text",
+            "source_page": 5,
+            "evidence_text": "Names: Jaeggi, Rahel, author. Title: Critique of forms of life / Rahel Jaeggi ; translated by Ciaran Cronin.",
+            "rule": "english_catalog_title",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "author": {
+            "source": "front_matter_text",
+            "source_page": 5,
+            "evidence_text": "Library of Congress Cataloging- in- Publication Data Names: Jaeggi, Rahel, author.",
+            "rule": "english_catalog_author",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "translator": {
+            "source": "front_matter_text",
+            "source_page": 4,
+            "evidence_text": "translated by Ciaran Cronin",
+            "rule": "english_translated_by",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 5,
+            "evidence_text": "Description: Cambridge, Mas sa chu setts : The Belknap Press of Harvard University Press, 2018. | “This book was originally published as Kritik von Lebensformen (c) Suhrkamp",
+            "rule": "english_catalog_statement",
+            "confidence": 0.99,
+            "support_count": 2
+          },
+          "publish_place": {
+            "source": "front_matter_text",
+            "source_page": 4,
+            "evidence_text": "Cambridge, Massachusetts",
+            "rule": "english_title_page_place",
+            "confidence": 0.95,
+            "support_count": 1
+          },
+          "publish_year": {
+            "source": "front_matter_text",
+            "source_page": 5,
+            "evidence_text": "Copyright © 2018 by the President and Fellows of Harvard College",
+            "rule": "english_copyright_year",
+            "confidence": 0.99,
+            "support_count": 4
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 5,
+            "evidence_text": "Verlag, Berlin 2014” — Title page verso. | Includes bibliographical references and index. Identifiers: LCCN 2018010776 | ISBN 9780674737754 (cloth)",
+            "rule": "isbn_print_edition",
+            "confidence": 0.99,
+            "support_count": 3
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": []
       }
     },
     {
@@ -36,12 +188,148 @@
       "source_file_id": "pdf-honneth-reconceiving-social-philosophy",
       "document_id": "PDF-HONNETH-RECONCEIVING-SOCIAL-PHILOSOPHY",
       "file_name": "Axel Honneth Reconceiving Social Philosophy (Dagmar Wilhelm) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
-      "title": "Reconceiving Social Philosophy",
-      "author": "Axel Honneth",
-      "publication_year": null,
+      "title": "Axel Honneth: Reconceiving Social Philosophy",
+      "author": "Dagmar Wilhelm",
+      "publication_year": "2019",
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": null,
+      "translator": null,
+      "publisher": "Rowman & Littlefield International",
+      "publish_place": "London",
+      "publish_year": "2019",
+      "isbn": "9781783486397",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "book",
+      "metadata_status": "complete",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.9833,
+      "metadata_evidence": {
+        "title": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "Names: Wilhelm, Dagmar, 1975– author. Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm.",
+          "rule": "english_catalog_title_with_title_page_casing",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "Library of Congress Cataloging-in-Publication Data Names: Wilhelm, Dagmar, 1975– author.",
+          "rule": "english_catalog_author",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm. Description: London ; New York : Rowman & Littlefield International Ltd, [2018] | Series: Refram-",
+          "rule": "english_catalog_statement",
+          "confidence": 0.99,
+          "support_count": 5
+        },
+        "publish_place": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm. Description: London ; New York : Rowman & Littlefield International Ltd, [2018] | Series: Refram-",
+          "rule": "english_catalog_statement",
+          "confidence": 0.95,
+          "support_count": 3
+        },
+        "publish_year": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "www.rowman.com Copyright © 2019 by Dagmar Wilhelm",
+          "rule": "english_copyright_year",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 6,
+          "evidence_text": "Identifiers: LCCN 2018034388 (print) | LCCN 2018040056 (ebook) | ISBN 9781783486410 (elec- tronic) | ISBN 9781783486397 | ISBN 9781783486397 (cloth : alk. paper)",
+          "rule": "isbn_print_edition",
+          "confidence": 0.99,
+          "support_count": 3
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [],
+      "bibliographic_metadata": {
+        "title": "Axel Honneth: Reconceiving Social Philosophy",
+        "author": "Dagmar Wilhelm",
+        "country": null,
+        "translator": null,
+        "publisher": "Rowman & Littlefield International",
+        "publish_place": "London",
+        "publish_year": "2019",
+        "isbn": "9781783486397",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "book",
+        "metadata_status": "complete",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.9833,
+        "metadata_evidence": {
+          "title": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "Names: Wilhelm, Dagmar, 1975– author. Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm.",
+            "rule": "english_catalog_title_with_title_page_casing",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "author": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "Library of Congress Cataloging-in-Publication Data Names: Wilhelm, Dagmar, 1975– author.",
+            "rule": "english_catalog_author",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm. Description: London ; New York : Rowman & Littlefield International Ltd, [2018] | Series: Refram-",
+            "rule": "english_catalog_statement",
+            "confidence": 0.99,
+            "support_count": 5
+          },
+          "publish_place": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "Title: Axel Honneth : reconceiving social philosophy / Dagmar Wilhelm. Description: London ; New York : Rowman & Littlefield International Ltd, [2018] | Series: Refram-",
+            "rule": "english_catalog_statement",
+            "confidence": 0.95,
+            "support_count": 3
+          },
+          "publish_year": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "www.rowman.com Copyright © 2019 by Dagmar Wilhelm",
+            "rule": "english_copyright_year",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 6,
+            "evidence_text": "Identifiers: LCCN 2018034388 (print) | LCCN 2018040056 (ebook) | ISBN 9781783486410 (elec- tronic) | ISBN 9781783486397 | ISBN 9781783486397 (cloth : alk. paper)",
+            "rule": "isbn_print_edition",
+            "confidence": 0.99,
+            "support_count": 3
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": []
       }
     },
     {
@@ -51,10 +339,158 @@
       "file_name": "劳动的主权者  劳动的规范理论 ([德] 阿克塞尔·霍耐特,Axel Honneth) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
       "title": "劳动的主权者：劳动的规范理论",
       "author": "阿克塞尔·霍耐特",
-      "publication_year": null,
+      "publication_year": "2025",
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": "德",
+      "translator": "周爱民",
+      "publisher": "上海人民出版社",
+      "publish_place": "上海",
+      "publish_year": "2025",
+      "isbn": "978-7-208-19833-3",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "translated_book",
+      "metadata_status": "complete",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.9179,
+      "metadata_evidence": {
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "[德] 阿克塞尔· 霍耐特著",
+          "rule": "chinese_author_role",
+          "confidence": 0.96,
+          "support_count": 1
+        },
+        "country": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "[德] 阿克塞尔· 霍耐特著",
+          "rule": "chinese_author_role",
+          "confidence": 0.96,
+          "support_count": 1
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "· 霜耐特( Axel Honneth)著 ;周爱民译. 一 上 海 :",
+          "rule": "chinese_translator_after_author",
+          "confidence": 0.99,
+          "support_count": 2
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "上海人民出版社,2025.— (霍耐特选集)· 一 ISBN",
+          "rule": "known_publisher",
+          "confidence": 0.915,
+          "support_count": 2
+        },
+        "publish_year": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "2025年 12月第1 版",
+          "rule": "latest_chinese_edition_statement",
+          "confidence": 0.99,
+          "support_count": 2
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 287,
+          "evidence_text": "上海人民出版社,2025.— (霍耐特选集)· 一 ISBN 978-7-208-19833-3",
+          "rule": "isbn_label",
+          "confidence": 0.99,
+          "support_count": 4
+        },
+        "publish_place": {
+          "source": "inferred_from_publisher",
+          "source_page": 287,
+          "evidence_text": "上海人民出版社",
+          "confidence": "inferred_from_publisher"
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [],
+      "bibliographic_metadata": {
+        "title": "劳动的主权者：劳动的规范理论",
+        "author": "阿克塞尔·霍耐特",
+        "country": "德",
+        "translator": "周爱民",
+        "publisher": "上海人民出版社",
+        "publish_place": "上海",
+        "publish_year": "2025",
+        "isbn": "978-7-208-19833-3",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "translated_book",
+        "metadata_status": "complete",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.9179,
+        "metadata_evidence": {
+          "author": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "[德] 阿克塞尔· 霍耐特著",
+            "rule": "chinese_author_role",
+            "confidence": 0.96,
+            "support_count": 1
+          },
+          "country": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "[德] 阿克塞尔· 霍耐特著",
+            "rule": "chinese_author_role",
+            "confidence": 0.96,
+            "support_count": 1
+          },
+          "translator": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "· 霜耐特( Axel Honneth)著 ;周爱民译. 一 上 海 :",
+            "rule": "chinese_translator_after_author",
+            "confidence": 0.99,
+            "support_count": 2
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "上海人民出版社,2025.— (霍耐特选集)· 一 ISBN",
+            "rule": "known_publisher",
+            "confidence": 0.915,
+            "support_count": 2
+          },
+          "publish_year": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "2025年 12月第1 版",
+            "rule": "latest_chinese_edition_statement",
+            "confidence": 0.99,
+            "support_count": 2
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 287,
+            "evidence_text": "上海人民出版社,2025.— (霍耐特选集)· 一 ISBN 978-7-208-19833-3",
+            "rule": "isbn_label",
+            "confidence": 0.99,
+            "support_count": 4
+          },
+          "publish_place": {
+            "source": "inferred_from_publisher",
+            "source_page": 287,
+            "evidence_text": "上海人民出版社",
+            "confidence": "inferred_from_publisher"
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": []
       }
     },
     {
@@ -71,6 +507,142 @@
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": null,
+      "translator": "王旭",
+      "publisher": "社会科学文献出版社",
+      "publish_place": "北京",
+      "publish_year": "2013",
+      "isbn": "978-7-5097-4387-4",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "translated_book",
+      "metadata_status": "complete",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.9883,
+      "metadata_evidence": {
+        "title": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+          "rule": "chinese_cip_statement",
+          "confidence": 0.99,
+          "support_count": 1
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013.4",
+          "rule": "chinese_translator_after_author",
+          "confidence": 0.98,
+          "support_count": 1
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+          "rule": "chinese_cip_statement",
+          "confidence": 0.99,
+          "support_count": 6
+        },
+        "publish_place": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+          "rule": "chinese_cip_statement",
+          "confidence": 0.99,
+          "support_count": 2
+        },
+        "publish_year": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+          "rule": "chinese_cip_statement",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 3,
+          "evidence_text": "(莱茵译丛) ISBN 978-7-5097-4387-4",
+          "rule": "isbn_label",
+          "confidence": 0.99,
+          "support_count": 8
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [],
+      "bibliographic_metadata": {
+        "title": "自由的权利",
+        "author": "阿克塞尔·霍耐特",
+        "country": null,
+        "translator": "王旭",
+        "publisher": "社会科学文献出版社",
+        "publish_place": "北京",
+        "publish_year": "2013",
+        "isbn": "978-7-5097-4387-4",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "translated_book",
+        "metadata_status": "complete",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.9883,
+        "metadata_evidence": {
+          "title": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+            "rule": "chinese_cip_statement",
+            "confidence": 0.99,
+            "support_count": 1
+          },
+          "translator": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013.4",
+            "rule": "chinese_translator_after_author",
+            "confidence": 0.98,
+            "support_count": 1
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+            "rule": "chinese_cip_statement",
+            "confidence": 0.99,
+            "support_count": 6
+          },
+          "publish_place": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+            "rule": "chinese_cip_statement",
+            "confidence": 0.99,
+            "support_count": 2
+          },
+          "publish_year": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "自由的权利/(德)霍耐特(Honneth,A.)著;王旭译.—北京:社会科学文献出版社,2013",
+            "rule": "chinese_cip_statement",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 3,
+            "evidence_text": "(莱茵译丛) ISBN 978-7-5097-4387-4",
+            "rule": "isbn_label",
+            "confidence": 0.99,
+            "support_count": 8
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": []
       }
     },
     {
@@ -84,6 +656,52 @@
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": null,
+      "translator": null,
+      "publisher": null,
+      "publish_place": null,
+      "publish_year": null,
+      "isbn": null,
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "book",
+      "metadata_status": "partial",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.0,
+      "metadata_evidence": {},
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [
+        "publisher",
+        "publish_place",
+        "publish_year"
+      ],
+      "bibliographic_metadata": {
+        "title": "伦理学简史",
+        "author": "阿拉斯代尔·麦金太尔",
+        "country": null,
+        "translator": null,
+        "publisher": null,
+        "publish_place": null,
+        "publish_year": null,
+        "isbn": null,
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "book",
+        "metadata_status": "partial",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.0,
+        "metadata_evidence": {},
+        "metadata_conflicts": [],
+        "metadata_missing_fields": [
+          "publisher",
+          "publish_place",
+          "publish_year"
+        ]
       }
     },
     {
@@ -93,7 +711,7 @@
       "file_name": "批判理论（Critical theory） (Max Horkheimer马克斯・霍克海默) (z-library.sk, 1lib.sk, z-lib.sk).pdf",
       "title": "批判理论",
       "author": "马克斯·霍克海默",
-      "publication_year": null,
+      "publication_year": "1990",
       "page_mapping": {
         "validated_by": "manual_ui",
         "segments": [
@@ -128,6 +746,154 @@
       },
       "mineru": {
         "manifest": "corpus/processed/mineru/manifests/segments-critical-theory.json"
+      },
+      "country": "德",
+      "translator": "李小兵等",
+      "publisher": "重庆出版社",
+      "publish_place": "重庆",
+      "publish_year": "1990",
+      "isbn": "7-5366-0898-5",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "translated_book",
+      "metadata_status": "complete",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.9143,
+      "metadata_evidence": {
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+          "rule": "chinese_author_role",
+          "confidence": 0.96,
+          "support_count": 1
+        },
+        "country": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+          "rule": "chinese_author_role",
+          "confidence": 0.96,
+          "support_count": 1
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+          "rule": "chinese_translator_after_author",
+          "confidence": 0.98,
+          "support_count": 1
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "重庆出版社出版、发行(重庆长江二路205号)",
+          "rule": "known_publisher",
+          "confidence": 0.9,
+          "support_count": 1
+        },
+        "publish_year": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "1990年9月第一版",
+          "rule": "latest_chinese_edition_statement",
+          "confidence": 0.99,
+          "support_count": 1
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "印数:3201—6200 ISBN 7-5366-0898-5/D·26",
+          "rule": "isbn_label",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "publish_place": {
+          "source": "inferred_from_publisher",
+          "source_page": 1,
+          "evidence_text": "重庆出版社",
+          "confidence": "inferred_from_publisher"
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [],
+      "bibliographic_metadata": {
+        "title": "批判理论",
+        "author": "马克斯·霍克海默",
+        "country": "德",
+        "translator": "李小兵等",
+        "publisher": "重庆出版社",
+        "publish_place": "重庆",
+        "publish_year": "1990",
+        "isbn": "7-5366-0898-5",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "translated_book",
+        "metadata_status": "complete",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.9143,
+        "metadata_evidence": {
+          "author": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+            "rule": "chinese_author_role",
+            "confidence": 0.96,
+            "support_count": 1
+          },
+          "country": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+            "rule": "chinese_author_role",
+            "confidence": 0.96,
+            "support_count": 1
+          },
+          "translator": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "[德]马克斯·霍克海默著 李小兵等译",
+            "rule": "chinese_translator_after_author",
+            "confidence": 0.98,
+            "support_count": 1
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "重庆出版社出版、发行(重庆长江二路205号)",
+            "rule": "known_publisher",
+            "confidence": 0.9,
+            "support_count": 1
+          },
+          "publish_year": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "1990年9月第一版",
+            "rule": "latest_chinese_edition_statement",
+            "confidence": 0.99,
+            "support_count": 1
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "印数:3201—6200 ISBN 7-5366-0898-5/D·26",
+            "rule": "isbn_label",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "publish_place": {
+            "source": "inferred_from_publisher",
+            "source_page": 1,
+            "evidence_text": "重庆出版社",
+            "confidence": "inferred_from_publisher"
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": []
       }
     },
     {
@@ -141,6 +907,156 @@
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": "德",
+      "translator": "范扬、张企泰",
+      "publisher": "商务印书馆",
+      "publish_place": "北京",
+      "publish_year": null,
+      "isbn": "978-7-100-01910-1",
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "translated_book",
+      "metadata_status": "partial",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.92,
+      "metadata_evidence": {
+        "author": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "〔德〕黑格尔著",
+          "rule": "chinese_author_role",
+          "confidence": 0.99,
+          "support_count": 4
+        },
+        "country": {
+          "source": "front_matter_text",
+          "source_page": 1,
+          "evidence_text": "〔德〕黑格尔著",
+          "rule": "chinese_author_role",
+          "confidence": 0.99,
+          "support_count": 3
+        },
+        "translator": {
+          "source": "front_matter_text",
+          "source_page": 484,
+          "evidence_text": "法哲学原理 / c 德)黑格尔著;范扬 ,张企 泰译 .",
+          "rule": "chinese_translator_after_author",
+          "confidence": 0.98,
+          "support_count": 1
+        },
+        "publisher": {
+          "source": "front_matter_text",
+          "source_page": 7,
+          "evidence_text": "商务印书馆编辑部",
+          "rule": "known_publisher",
+          "confidence": 0.93,
+          "support_count": 3
+        },
+        "isbn": {
+          "source": "front_matter_text",
+          "source_page": 484,
+          "evidence_text": "(汉译世界学术名著丛书) ISBN 978 - 7 - 100 - 0191 0 - 1",
+          "rule": "isbn_label",
+          "confidence": 0.99,
+          "support_count": 4
+        },
+        "title": {
+          "source": "file_name",
+          "source_page": null,
+          "evidence_text": "((德)黑格尔著 范杨, 张企泰译)",
+          "rule": "explicit_filename_responsibility",
+          "confidence": 0.94
+        },
+        "publish_place": {
+          "source": "inferred_from_publisher",
+          "source_page": 7,
+          "evidence_text": "商务印书馆",
+          "confidence": "inferred_from_publisher"
+        }
+      },
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [
+        "publish_year"
+      ],
+      "bibliographic_metadata": {
+        "title": "法哲学原理：或自然法和国家学纲要",
+        "author": "黑格尔",
+        "country": "德",
+        "translator": "范扬、张企泰",
+        "publisher": "商务印书馆",
+        "publish_place": "北京",
+        "publish_year": null,
+        "isbn": "978-7-100-01910-1",
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "translated_book",
+        "metadata_status": "partial",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.92,
+        "metadata_evidence": {
+          "author": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "〔德〕黑格尔著",
+            "rule": "chinese_author_role",
+            "confidence": 0.99,
+            "support_count": 4
+          },
+          "country": {
+            "source": "front_matter_text",
+            "source_page": 1,
+            "evidence_text": "〔德〕黑格尔著",
+            "rule": "chinese_author_role",
+            "confidence": 0.99,
+            "support_count": 3
+          },
+          "translator": {
+            "source": "front_matter_text",
+            "source_page": 484,
+            "evidence_text": "法哲学原理 / c 德)黑格尔著;范扬 ,张企 泰译 .",
+            "rule": "chinese_translator_after_author",
+            "confidence": 0.98,
+            "support_count": 1
+          },
+          "publisher": {
+            "source": "front_matter_text",
+            "source_page": 7,
+            "evidence_text": "商务印书馆编辑部",
+            "rule": "known_publisher",
+            "confidence": 0.93,
+            "support_count": 3
+          },
+          "isbn": {
+            "source": "front_matter_text",
+            "source_page": 484,
+            "evidence_text": "(汉译世界学术名著丛书) ISBN 978 - 7 - 100 - 0191 0 - 1",
+            "rule": "isbn_label",
+            "confidence": 0.99,
+            "support_count": 4
+          },
+          "title": {
+            "source": "file_name",
+            "source_page": null,
+            "evidence_text": "((德)黑格尔著 范杨, 张企泰译)",
+            "rule": "explicit_filename_responsibility",
+            "confidence": 0.94
+          },
+          "publish_place": {
+            "source": "inferred_from_publisher",
+            "source_page": 7,
+            "evidence_text": "商务印书馆",
+            "confidence": "inferred_from_publisher"
+          }
+        },
+        "metadata_conflicts": [],
+        "metadata_missing_fields": [
+          "publish_year"
+        ]
       }
     },
     {
@@ -154,6 +1070,52 @@
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": null,
+      "translator": null,
+      "publisher": null,
+      "publish_place": null,
+      "publish_year": null,
+      "isbn": null,
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "book",
+      "metadata_status": "partial",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.0,
+      "metadata_evidence": {},
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [
+        "publisher",
+        "publish_place",
+        "publish_year"
+      ],
+      "bibliographic_metadata": {
+        "title": "消费社会",
+        "author": "让·鲍德里亚",
+        "country": null,
+        "translator": null,
+        "publisher": null,
+        "publish_place": null,
+        "publish_year": null,
+        "isbn": null,
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "book",
+        "metadata_status": "partial",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.0,
+        "metadata_evidence": {},
+        "metadata_conflicts": [],
+        "metadata_missing_fields": [
+          "publisher",
+          "publish_place",
+          "publish_year"
+        ]
       }
     },
     {
@@ -167,6 +1129,52 @@
       "page_mapping": {
         "validated_by": null,
         "segments": []
+      },
+      "country": null,
+      "translator": null,
+      "publisher": null,
+      "publish_place": null,
+      "publish_year": null,
+      "isbn": null,
+      "journal_name": null,
+      "volume": null,
+      "issue": null,
+      "page_range": null,
+      "document_type": "book",
+      "metadata_status": "partial",
+      "metadata_source": "automatic_recognition",
+      "metadata_confidence": 0.0,
+      "metadata_evidence": {},
+      "metadata_conflicts": [],
+      "metadata_missing_fields": [
+        "publisher",
+        "publish_place",
+        "publish_year"
+      ],
+      "bibliographic_metadata": {
+        "title": "追寻美德：道德理论研究",
+        "author": "阿拉斯代尔·麦金太尔",
+        "country": null,
+        "translator": null,
+        "publisher": null,
+        "publish_place": null,
+        "publish_year": null,
+        "isbn": null,
+        "journal_name": null,
+        "volume": null,
+        "issue": null,
+        "page_range": null,
+        "document_type": "book",
+        "metadata_status": "partial",
+        "metadata_source": "automatic_recognition",
+        "metadata_confidence": 0.0,
+        "metadata_evidence": {},
+        "metadata_conflicts": [],
+        "metadata_missing_fields": [
+          "publisher",
+          "publish_place",
+          "publish_year"
+        ]
       }
     },
     {

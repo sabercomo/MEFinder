@@ -50,6 +50,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("重新 OCR", HTML)
         self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
 
+    def test_batch_metadata_detection_is_wired(self) -> None:
+        self.assertIn('id="batch-metadata-btn"', HTML)
+        self.assertIn("function runBatchMetadataDetection()", HTML)
+        self.assertIn("fetch('/api/bibliographic-metadata/batch-detect'", HTML)
+        self.assertIn('"/api/bibliographic-metadata/batch-detect"', WEB_SOURCE)
+        self.assertIn("def batch_metadata_candidates()", WEB_SOURCE)
+        self.assertIn('if source == "manual":', WEB_SOURCE)
+        self.assertIn("batchmeta-", WEB_SOURCE)
+
     def test_directory_scan_ui_and_endpoints_are_wired(self) -> None:
         self.assertIn('id="scan-section"', HTML)
         self.assertIn('id="scan-dir-list"', HTML)

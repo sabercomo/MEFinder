@@ -606,6 +606,59 @@ def make_handler(index_path: Path):
         metadata = manual_metadata(payload, document)
         return persist_bibliographic_metadata(source_id, metadata)
 
+    def batch_metadata_candidates() -> List[Dict[str, object]]:
+        """PDF sources with missing bibliographic fields, excluding manual ones."""
+        data = library_data()
+        candidates = []
+        for item in data.get("items", []):
+            if str(item.get("source_type") or "") != "pdf":
+                continue
+            if not item.get("metadata_missing_fields"):
+                continue
+            nested = item.get("bibliographic_metadata")
+            source = str((nested or {}).get("metadata_source") or item.get("metadata_source") or "")
+            if source == "manual":
+                continue
+            candidates.append(item)
+        return candidates
+
+    def run_batch_metadata_job(job_id: str, candidates: List[Dict[str, object]]) -> None:
+        updated = 0
+        unchanged = 0
+        failures: List[Dict[str, object]] = []
+        total = len(candidates)
+        compare_fields = tuple(METADATA_FIELDS) + ("document_type", "metadata_status")
+        for index, item in enumerate(candidates):
+            source_id = str(item.get("source_file_id"))
+            title = str(item.get("title") or source_id)
+            update_import_job(
+                job_id,
+                phase="metadata_recognition",
+                message=f"正在识别 {index + 1}/{total}：{title}",
+            )
+            try:
+                before = canonical_metadata(item.get("bibliographic_metadata") or item)
+                detected = detect_bibliographic_metadata(source_id)
+                if any(detected.get(field) != before.get(field) for field in compare_fields):
+                    persist_bibliographic_metadata(source_id, detected)
+                    updated += 1
+                else:
+                    unchanged += 1
+            except Exception as exc:
+                failures.append({"source_file_id": source_id, "title": title, "error": str(exc)})
+        summary = f"批量识别完成：更新 {updated} 部，无变化 {unchanged} 部"
+        if failures:
+            summary += f"，失败 {len(failures)} 部"
+        update_import_job(
+            job_id,
+            status="completed",
+            phase="completed",
+            message=summary,
+            batch_updated=updated,
+            batch_unchanged=unchanged,
+            batch_failures=failures,
+        )
+
     class Handler(BaseHTTPRequestHandler):
         def _send(
             self,
@@ -868,6 +921,42 @@ def make_handler(index_path: Path):
                     "already_running": False,
                     "detected_pdf_type": profile.get("detected_pdf_type"),
                 })
+                return
+            if parsed.path == "/api/bibliographic-metadata/batch-detect":
+                with import_jobs_lock:
+                    running = next(
+                        (
+                            job for job in import_jobs.values()
+                            if str(job.get("job_id", "")).startswith("batchmeta-")
+                            and job.get("status") == "processing"
+                        ),
+                        None,
+                    )
+                if running:
+                    self._send_json({"ok": True, "job_id": running["job_id"], "already_running": True})
+                    return
+                try:
+                    candidates = batch_metadata_candidates()
+                except Exception as exc:
+                    self._send_json({"error": f"筛选待识别文献失败：{exc}"}, status=500)
+                    return
+                if not candidates:
+                    self._send_json({"ok": True, "job_id": None, "candidates": 0})
+                    return
+                job_id = f"batchmeta-{uuid.uuid4().hex[:12]}"
+                with import_jobs_lock:
+                    import_jobs[job_id] = {
+                        "job_id": job_id,
+                        "status": "processing",
+                        "phase": "metadata_recognition",
+                        "message": f"准备识别 {len(candidates)} 部文献…",
+                    }
+                threading.Thread(
+                    target=run_batch_metadata_job,
+                    args=(job_id, candidates),
+                    daemon=True,
+                ).start()
+                self._send_json({"ok": True, "job_id": job_id, "candidates": len(candidates), "already_running": False})
                 return
             if parsed.path == "/api/import-local":
                 raw_paths = payload.get("paths")

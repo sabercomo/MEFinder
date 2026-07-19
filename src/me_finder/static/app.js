@@ -2134,6 +2134,53 @@ function initDropZone() {
   });
 }
 
+async function runBatchMetadataDetection() {
+  var button = document.getElementById('batch-metadata-btn');
+  try {
+    var resp = await fetch('/api/bibliographic-metadata/batch-detect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '启动失败');
+    if (!data.job_id) {
+      showToast('没有缺少书目信息的文献，无需补全');
+      return;
+    }
+    showToast(data.already_running ? '批量识别已在进行中' : '已开始批量识别 ' + (data.candidates || '') + ' 部文献');
+    if (button) { button.disabled = true; button.textContent = '识别中…'; }
+    pollBatchMetadata(data.job_id, button);
+  } catch (e) {
+    showToast('批量识别失败：' + e.message);
+    if (button) { button.disabled = false; button.textContent = '补全书目'; }
+  }
+}
+
+function pollBatchMetadata(jobId, button) {
+  fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === 'completed') {
+        if (button) { button.disabled = false; button.textContent = '补全书目'; }
+        showToast(data.message || '批量识别完成');
+        libLoaded = false;
+        loadLibrary();
+        return;
+      }
+      if (data.status === 'failed' || data.error) {
+        if (button) { button.disabled = false; button.textContent = '补全书目'; }
+        showToast('批量识别失败：' + (data.message || data.error || '未知错误'));
+        return;
+      }
+      if (button && data.message) button.textContent = data.message.length > 18 ? '识别中…' : data.message;
+      setTimeout(function() { pollBatchMetadata(jobId, button); }, 2000);
+    })
+    .catch(function() {
+      setTimeout(function() { pollBatchMetadata(jobId, button); }, 4000);
+    });
+}
+
 let scanEntries = [];
 
 async function runDirectoryScan() {
