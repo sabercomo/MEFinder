@@ -104,6 +104,30 @@ class CitationFormatTests(unittest.TestCase):
             "现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
         )
 
+    def test_article_footnote_publishers_are_not_book_metadata(self) -> None:
+        # 论文正文脚注引用"北京：人民出版社，1972年版"与版权页声明同形，
+        # 不得被当作本篇的出版社/出版地/出版年份（孙向晨一文的真实污染源）。
+        pages = [
+            {
+                "pdf_page_index": 3,
+                "text_raw": (
+                    "在《法哲学原理》中，黑格尔把家庭作为伦理生活的第一环节。\n"
+                    "① 黑格尔：《法哲学原理》，范扬、张企泰译，北京：人民出版社，1972年版，第175页。\n"
+                    "② 黑格尔：《精神现象学》，贺麟、王玖兴译，北京：商务印书馆，1979年版，第122页。"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("孙向晨 - 2017 - 现代社会中的“家庭”及其所代表的伦理性原则.pdf"),
+            pages,
+            {},
+        )
+        self.assertNotEqual(detected.get("publisher"), "人民出版社")
+        self.assertNotEqual(detected.get("publish_year"), "1972")
+        self.assertNotEqual(detected.get("publish_place"), "北京")
+        self.assertEqual(detected.get("publish_year"), "2017")
+        self.assertEqual(detected.get("author"), "孙向晨")
+
     def test_manual_metadata_accepts_journal_article_type(self) -> None:
         from src.me_finder.bibliographic_metadata import manual_metadata
 

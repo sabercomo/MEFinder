@@ -615,6 +615,12 @@ def _extract_from_front_matter(
             if line_index + 1 < len(lines):
                 windows.append(f"{line} {lines[line_index + 1]}")
 
+            # 论文脚注/参考文献里的“黑格尔：《法哲学原理》，北京：人民出版社，
+            # 1972年版”与版权页声明同形。含书名号或“年版”的行是引文，
+            # 不参与本篇出版社/出版地/年份提取（真正的版权页不用书名号）。
+            if "《" in line or "》" in line or "年版" in line:
+                continue
+
             for publisher in KNOWN_PUBLISHERS:
                 if publisher in line:
                     _add_candidate(candidates, "publisher", publisher, page_idx, line, 0.9, "known_publisher")
