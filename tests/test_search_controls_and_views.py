@@ -50,6 +50,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("重新 OCR", HTML)
         self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
 
+    def test_directory_scan_ui_and_endpoints_are_wired(self) -> None:
+        self.assertIn('id="scan-section"', HTML)
+        self.assertIn('id="scan-dir-list"', HTML)
+        self.assertIn('id="scan-dir-input"', HTML)
+        self.assertIn("function runDirectoryScan()", HTML)
+        self.assertIn("function importSelectedScanned()", HTML)
+        self.assertIn("fetch('/api/scan-directories')", HTML)
+        self.assertIn("fetch('/api/import-local'", HTML)
+        self.assertIn("原始文件永远不会被移动或删除", HTML)
+        self.assertIn("消耗 MinerU 配额", HTML)
+        self.assertIn('"/api/scan-directories"', WEB_SOURCE)
+        self.assertIn('"/api/import-local"', WEB_SOURCE)
+        self.assertIn("不在已配置的文献目录内", WEB_SOURCE)
+
     def test_drawer_file_info_collapses_and_editor_is_type_aware(self) -> None:
         self.assertIn('id="drawer-file-info"', HTML)
         self.assertIn("function toggleDrawerSection(event, sectionId)", HTML)

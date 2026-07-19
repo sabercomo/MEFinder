@@ -1651,6 +1651,75 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-primary);
   margin-bottom: 10px;
 }
+.scan-section { margin-top: 24px; }
+.scan-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.scan-section-head .import-queue-title { margin-bottom: 0; }
+.scan-section-actions { display: flex; gap: 8px; }
+.scan-status {
+  margin: 10px 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.scan-group-title {
+  margin: 16px 0 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.scan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--divider);
+  border-radius: var(--widget-radius);
+  background: var(--surface);
+  margin-bottom: 6px;
+  min-width: 0;
+}
+.scan-row.is-imported { opacity: 0.55; }
+.scan-check { flex: 0 0 auto; accent-color: var(--accent); width: 15px; height: 15px; }
+.scan-check-placeholder { flex: 0 0 15px; }
+.scan-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.scan-row-size { flex: 0 0 auto; color: var(--text-tertiary); font-size: 12px; }
+.scan-row-note { flex: 0 1 auto; overflow: hidden; color: var(--warning); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.scan-dir-list { display: flex; flex-direction: column; gap: 6px; }
+.scan-dir-empty { color: var(--text-tertiary); font-size: 13px; }
+.scan-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--divider);
+  border-radius: var(--widget-radius);
+  background: var(--surface-secondary);
+}
+.scan-dir-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
 .import-item {
   background: var(--surface);
   border: 1px solid var(--divider);

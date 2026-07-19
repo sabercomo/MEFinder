@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
+import uuid
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Mapping, Optional, Sequence
 
 from .indexer import build_index
 from .mineru_api import (
@@ -23,6 +25,104 @@ from .pdf_extractors import detect_pdf_type, file_sha256
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
+
+
+def scan_directories_for_documents(
+    directories: Sequence[str],
+    imported_names: Mapping[str, int],
+    *,
+    max_entries: int = 500,
+    detect_limit: int = 60,
+) -> Dict[str, object]:
+    """List PDF/DOCX files under the configured literature directories.
+
+    ``imported_names`` maps already-imported file names to size in bytes.
+    Detection of the PDF text-layer type only runs for new files and only
+    while the new-file count stays within ``detect_limit`` (opening every
+    PDF in a huge folder would make scanning crawl).
+    """
+
+    entries: List[Dict[str, object]] = []
+    errors: List[Dict[str, object]] = []
+    limit_reached = False
+    detected_count = 0
+    for directory in directories:
+        base = Path(str(directory))
+        if not base.is_dir():
+            errors.append({"directory": str(directory), "error": "目录不存在或不可访问"})
+            continue
+        try:
+            paths = sorted(base.rglob("*"))
+        except OSError as exc:
+            errors.append({"directory": str(directory), "error": str(exc)})
+            continue
+        for path in paths:
+            if len(entries) >= max_entries:
+                limit_reached = True
+                break
+            suffix = path.suffix.lower()
+            if suffix not in {".pdf", ".docx"}:
+                continue
+            if path.name.startswith(("~$", ".")):
+                continue
+            try:
+                if not path.is_file():
+                    continue
+                size = path.stat().st_size
+            except OSError:
+                continue
+            imported_size = imported_names.get(path.name)
+            if imported_size is None:
+                status = "new"
+            elif imported_size and size and imported_size != size:
+                status = "name_conflict"
+            else:
+                status = "imported"
+            entry: Dict[str, object] = {
+                "path": str(path),
+                "name": path.name,
+                "directory": str(directory),
+                "size_bytes": size,
+                "file_type": "pdf" if suffix == ".pdf" else "docx",
+                "status": status,
+            }
+            if suffix == ".pdf" and status == "new":
+                if detected_count < detect_limit:
+                    detected_count += 1
+                    try:
+                        profile = detect_pdf_type(path)
+                        detected = str(profile.get("detected_pdf_type") or "")
+                        entry["detected_pdf_type"] = detected
+                        entry["needs_ocr"] = bool(detected) and detected != "native_text"
+                    except Exception:
+                        entry["detected_pdf_type"] = None
+                        entry["needs_ocr"] = None
+                else:
+                    entry["detected_pdf_type"] = None
+                    entry["needs_ocr"] = None
+            entries.append(entry)
+        if limit_reached:
+            break
+    return {"entries": entries, "errors": errors, "limit_reached": limit_reached}
+
+
+def copy_local_document(root: Path, source_path: Path) -> Path:
+    """Copy one scanned file into the corpus, never touching the original."""
+
+    root = Path(root)
+    source_path = Path(source_path)
+    suffix = source_path.suffix.lower()
+    if suffix not in {".pdf", ".docx"}:
+        raise MinerUError("只支持 PDF 或 DOCX 文件。")
+    directory = root / "corpus" / ("raw_pdf" if suffix == ".pdf" else "raw_docx")
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / source_path.name
+    if target.exists():
+        target = directory / f"{source_path.stem} (imported-{uuid.uuid4().hex[:8]}){suffix}"
+    temp_path = directory / f".{target.name}.{uuid.uuid4().hex}.copying"
+    shutil.copy2(source_path, temp_path)
+    temp_path.replace(target)
+    return target
 
 
 def load_import_config(path: Path) -> Dict[str, object]:

@@ -32,11 +32,13 @@ from .calibration_library import build_calibration_library, build_library
 from .document_deletion import DocumentDeletionService
 from .pdf_extractors import extract_pdf_source
 from .pdf_import_service import (
+    copy_local_document,
     detect_imported_pdf,
     parse_pdf_with_mineru,
     rebuild_local_index,
     register_pdf,
     save_import_config,
+    scan_directories_for_documents,
 )
 from .runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
 from .search import SearchEngine
@@ -667,6 +669,23 @@ def make_handler(index_path: Path):
                 except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                     self._send_json({"error": f"文献库加载失败：{exc}"}, status=500)
                 return
+            if parsed.path == "/api/scan-directories":
+                try:
+                    preferences = read_preferences(resolve_preferences_path(root))
+                    directories = list(preferences.get("scan_directories") or [])
+                    with runtime_lock:
+                        sources = list(runtime["engine"].index.get("source_files", []))
+                    imported_names = {
+                        str(item.get("file_name")): int(item.get("size_bytes") or 0)
+                        for item in sources
+                        if item.get("file_name")
+                    }
+                    result = scan_directories_for_documents(directories, imported_names)
+                    result["directories"] = directories
+                    self._send_json(result)
+                except Exception as exc:
+                    self._send_json({"error": f"扫描文献目录失败：{exc}"}, status=500)
+                return
             if parsed.path == "/api/import-status":
                 params = parse_qs(parsed.query)
                 job_id = (params.get("job_id") or [None])[0]
@@ -849,6 +868,49 @@ def make_handler(index_path: Path):
                     "already_running": False,
                     "detected_pdf_type": profile.get("detected_pdf_type"),
                 })
+                return
+            if parsed.path == "/api/import-local":
+                raw_paths = payload.get("paths")
+                if not isinstance(raw_paths, list) or not raw_paths:
+                    self._send_json({"error": "没有选择要导入的文件。"}, status=400)
+                    return
+                preferences = read_preferences(resolve_preferences_path(root))
+                allowed_bases = [Path(item).resolve() for item in preferences.get("scan_directories") or []]
+                jobs: List[Dict[str, object]] = []
+                import_errors: List[Dict[str, object]] = []
+                for raw in raw_paths[:50]:
+                    try:
+                        source_path = Path(str(raw)).resolve()
+                        # 只允许导入配置目录内的文件，防止任意路径读取。
+                        if not any(
+                            base == source_path or base in source_path.parents
+                            for base in allowed_bases
+                        ):
+                            raise MinerUError("不在已配置的文献目录内。")
+                        if not source_path.is_file():
+                            raise MinerUError("文件不存在。")
+                        target = copy_local_document(root, source_path)
+                        is_pdf = target.suffix.lower() == ".pdf"
+                        if is_pdf:
+                            profile = detect_imported_pdf(target)
+                            document = register_pdf(root, target)
+                            source_file_id = str(document["source_file_id"])
+                        else:
+                            profile = {"detected_pdf_type": "docx"}
+                            source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+                        job_id = start_import_job(target, profile, source_file_id, is_pdf)
+                        jobs.append({
+                            "path": str(raw),
+                            "job_id": job_id,
+                            "file_name": target.name,
+                            "size_bytes": target.stat().st_size,
+                            "source_file_id": source_file_id,
+                            "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
+                            "file_type": "pdf" if is_pdf else "docx",
+                        })
+                    except (MinerUError, OSError, ValueError) as exc:
+                        import_errors.append({"path": str(raw), "error": str(exc)})
+                self._send_json({"ok": True, "jobs": jobs, "errors": import_errors})
                 return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)

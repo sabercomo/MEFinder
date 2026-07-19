@@ -1914,11 +1914,68 @@ async function loadPreferences() {
     applyTheme(data.theme || 'frost-blue');
     if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
     else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
+    scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
+    renderScanDirectories();
     syncLibraryViewButtons();
     if (libLoaded) renderLibraryList();
     preferencesLoaded = true;
   } catch (e) {
     showToast('读取外观设置失败：' + e.message);
+  }
+}
+
+let scanDirectories = [];
+
+function renderScanDirectories() {
+  var container = document.getElementById('scan-dir-list');
+  if (!container) return;
+  if (!scanDirectories.length) {
+    container.innerHTML = '<div class="scan-dir-empty">尚未配置文献目录。</div>';
+    return;
+  }
+  container.innerHTML = scanDirectories.map(function(dir, index) {
+    return '<div class="scan-dir-row"><span class="scan-dir-path" title="' + esc(dir) + '">' + esc(dir) + '</span>'
+      + '<button class="action-btn" type="button" onclick="removeScanDirectory(' + index + ')">移除</button></div>';
+  }).join('');
+}
+
+async function persistScanDirectories() {
+  var resp = await fetch('/api/preferences', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({scan_directories: scanDirectories})
+  });
+  var data = await resp.json();
+  if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+  scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : scanDirectories;
+  renderScanDirectories();
+}
+
+async function addScanDirectory() {
+  var input = document.getElementById('scan-dir-input');
+  var value = (input.value || '').trim();
+  if (!value) return;
+  scanDirectories = scanDirectories.concat([value]);
+  try {
+    await persistScanDirectories();
+    input.value = '';
+    showToast('文献目录已保存');
+  } catch (e) {
+    scanDirectories = scanDirectories.slice(0, -1);
+    showToast('保存失败：' + e.message);
+  }
+}
+
+async function removeScanDirectory(index) {
+  var removed = scanDirectories[index];
+  scanDirectories = scanDirectories.filter(function(_, i) { return i !== index; });
+  try {
+    await persistScanDirectories();
+    showToast('已移除目录');
+  } catch (e) {
+    if (removed != null) scanDirectories.splice(index, 0, removed);
+    renderScanDirectories();
+    showToast('移除失败：' + e.message);
   }
 }
 
@@ -2075,6 +2132,133 @@ function initDropZone() {
     zone.classList.remove('dragover');
     handleFileSelect(e.dataTransfer.files);
   });
+}
+
+let scanEntries = [];
+
+async function runDirectoryScan() {
+  var statusEl = document.getElementById('scan-status');
+  var button = document.getElementById('scan-run-btn');
+  if (!scanDirectories.length) {
+    statusEl.textContent = '尚未配置文献目录，请先到“设置 → 文献目录”添加。';
+    return;
+  }
+  button.disabled = true;
+  statusEl.textContent = '正在扫描 ' + scanDirectories.length + ' 个目录…';
+  try {
+    var resp = await fetch('/api/scan-directories');
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '扫描失败');
+    scanEntries = data.entries || [];
+    renderScanResults(data);
+  } catch (e) {
+    statusEl.textContent = '扫描失败：' + e.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function scanEntryRow(entry, index, checkable, checked) {
+  var typeCls = entry.file_type === 'pdf' ? 'pdf' : 'word';
+  var note = '';
+  if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
+  else if (entry.needs_ocr === true) note = '需 OCR：导入后将提交 MinerU（消耗配额）';
+  else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
+  return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
+    + (checkable
+      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="updateScanImportButton()">'
+      : '<span class="scan-check-placeholder"></span>')
+    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
+    + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
+    + '<span class="scan-row-size">' + formatFileSize(entry.size_bytes) + '</span>'
+    + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')
+    + '</div>';
+}
+
+function renderScanResults(data) {
+  var statusEl = document.getElementById('scan-status');
+  var resultsEl = document.getElementById('scan-results');
+  var groups = {ready: [], ocr: [], unknown: [], imported: [], conflict: []};
+  scanEntries.forEach(function(entry, index) {
+    if (entry.status === 'imported') groups.imported.push(index);
+    else if (entry.status === 'name_conflict') groups.conflict.push(index);
+    else if (entry.needs_ocr === true) groups.ocr.push(index);
+    else if (entry.file_type === 'pdf' && entry.needs_ocr === null) groups.unknown.push(index);
+    else groups.ready.push(index);
+  });
+  var pieces = [];
+  function section(title, indexes, checkable, checked) {
+    if (!indexes.length) return;
+    pieces.push('<div class="scan-group-title">' + title + '（' + indexes.length + '）</div>');
+    pieces.push(indexes.map(function(i) { return scanEntryRow(scanEntries[i], i, checkable, checked); }).join(''));
+  }
+  section('可直接导入的新文件', groups.ready, true, true);
+  section('需 OCR 的新文件（默认不勾选，导入将消耗 MinerU 配额）', groups.ocr, true, false);
+  section('未预检测的新文件', groups.unknown, true, false);
+  section('同名冲突', groups.conflict, false, false);
+  section('已导入', groups.imported, false, false);
+  resultsEl.innerHTML = pieces.join('');
+  var newCount = groups.ready.length + groups.ocr.length + groups.unknown.length;
+  var summary = '发现 ' + scanEntries.length + ' 个文件：新文件 ' + newCount + '，已导入 ' + groups.imported.length + '，同名冲突 ' + groups.conflict.length + '。';
+  if (data.limit_reached) summary += '（数量超出上限，仅显示前 ' + scanEntries.length + ' 个）';
+  (data.errors || []).forEach(function(err) { summary += ' ' + err.directory + '：' + err.error + '。'; });
+  statusEl.textContent = summary;
+  updateScanImportButton();
+}
+
+function updateScanImportButton() {
+  var button = document.getElementById('scan-import-btn');
+  var checked = document.querySelectorAll('#scan-results .scan-check:checked').length;
+  button.style.display = checked ? 'inline-flex' : 'none';
+  button.textContent = '导入所选（' + checked + '）';
+}
+
+async function importSelectedScanned() {
+  var checks = Array.from(document.querySelectorAll('#scan-results .scan-check:checked'));
+  if (!checks.length) return;
+  var paths = checks.map(function(box) { return scanEntries[Number(box.dataset.index)].path; });
+  var button = document.getElementById('scan-import-btn');
+  button.disabled = true;
+  try {
+    var resp = await fetch('/api/import-local', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({paths: paths})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
+    (data.jobs || []).forEach(function(job, i) {
+      var q = {
+        id: 'scan-' + job.job_id,
+        name: job.file_name,
+        size: job.size_bytes,
+        type: job.file_type,
+        status: 'processing',
+        step: 0,
+        jobId: job.job_id,
+        message: '文件已复制，正在处理…'
+      };
+      if (job.file_type === 'pdf' && job.detected_pdf_type) {
+        q.detectedType = job.detected_pdf_type;
+        q.route = job.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+        q.step = 2;
+        q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type);
+      } else if (job.file_type !== 'pdf') {
+        q.step = 1;
+      }
+      importQueue.push(q);
+      pollImportJob(q.id);
+    });
+    renderImportQueue();
+    var failed = (data.errors || []);
+    showToast('已开始导入 ' + (data.jobs || []).length + ' 个文件' + (failed.length ? '，' + failed.length + ' 个失败' : ''));
+    failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });
+    await runDirectoryScan();
+  } catch (e) {
+    showToast('批量导入失败：' + e.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function handleFileSelect(files) {

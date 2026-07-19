@@ -20,12 +20,25 @@ from src.me_finder.web import HTML, render_html
 
 class PreferencePersistenceTests(unittest.TestCase):
     @staticmethod
-    def default_preferences(theme: str = DEFAULT_THEME) -> dict[str, str]:
+    def default_preferences(theme: str = DEFAULT_THEME) -> dict[str, object]:
         return {
             "theme": theme,
             "library_view": DEFAULT_LIBRARY_VIEW,
             "calibration_view": DEFAULT_CALIBRATION_VIEW,
+            "scan_directories": [],
         }
+
+    def test_scan_directories_round_trip_and_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            saved = save_preferences(
+                {"scan_directories": ["D:\\文献\\哲学", "  ", "D:\\文献\\哲学", "E:/papers"]},
+                path,
+            )
+            self.assertEqual(saved["scan_directories"], ["D:\\文献\\哲学", "E:\\papers"])
+            self.assertEqual(read_preferences(path)["scan_directories"], ["D:\\文献\\哲学", "E:\\papers"])
+            with self.assertRaises(ValueError):
+                save_preferences({"scan_directories": "D:\\单个路径"}, path)
 
     def test_missing_or_invalid_preference_uses_frost_blue(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

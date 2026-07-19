@@ -292,6 +292,17 @@
           </div>
         </div>
         <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <div class="scan-section" id="scan-section">
+          <div class="scan-section-head">
+            <div class="import-queue-title">文献目录扫描</div>
+            <div class="scan-section-actions">
+              <button class="action-btn" type="button" id="scan-run-btn" onclick="runDirectoryScan()">扫描目录</button>
+              <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" onclick="importSelectedScanned()">导入所选</button>
+            </div>
+          </div>
+          <div id="scan-status" class="scan-status">在“设置 → 文献目录”配置文件夹后，可在这里一键扫描新文献。</div>
+          <div id="scan-results"></div>
+        </div>
         <div class="import-queue" id="import-queue" style="display:none">
           <div class="import-queue-title">导入队列</div>
           <div id="import-items"></div>
@@ -318,6 +329,22 @@
             </div>
           </div>
           <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
+        </section>
+        <section class="settings-card">
+          <div class="settings-card-head">
+            <div>
+              <div class="settings-card-title">文献目录</div>
+              <div class="settings-card-subtitle">配置本机文献文件夹后，可在“文献导入”页扫描并批量导入其中的 PDF / DOCX。</div>
+            </div>
+          </div>
+          <div class="settings-form">
+            <div id="scan-dir-list" class="scan-dir-list"></div>
+            <div class="settings-input-row">
+              <input id="scan-dir-input" class="settings-input" type="text" spellcheck="false" placeholder="粘贴文件夹完整路径，例如 D:\文献\哲学">
+              <button class="action-btn" type="button" onclick="addScanDirectory()">添加目录</button>
+            </div>
+            <small>原始文件永远不会被移动或删除；导入时会复制到应用语料目录。</small>
+          </div>
         </section>
         <section class="settings-card">
           <div class="settings-card-head">

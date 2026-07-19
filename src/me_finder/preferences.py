@@ -53,11 +53,28 @@ def read_preferences(path: Path | None = None) -> dict[str, str]:
             if legacy_calibration_view in VALID_CALIBRATION_VIEWS
             else DEFAULT_LIBRARY_VIEW
         )
+    raw_directories = payload.get("scan_directories") if isinstance(payload, dict) else None
+    scan_directories = _normalized_scan_directories(raw_directories)
     return {
         "theme": theme,
         "library_view": library_view,
         "calibration_view": calibration_view,
+        "scan_directories": scan_directories,
     }
+
+
+def _normalized_scan_directories(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item or "").strip().strip('"')
+        if not text:
+            continue
+        normalized = str(Path(text))
+        if normalized not in result:
+            result.append(normalized)
+    return result[:20]
 
 
 def save_preferences(
@@ -80,6 +97,11 @@ def save_preferences(
         if calibration_view not in VALID_CALIBRATION_VIEWS:
             raise ValueError("不支持的页码校准显示方式")
         current["calibration_view"] = str(calibration_view)
+    if "scan_directories" in updates:
+        directories = updates["scan_directories"]
+        if not isinstance(directories, list):
+            raise ValueError("文献目录必须是路径列表")
+        current["scan_directories"] = _normalized_scan_directories(directories)
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")
