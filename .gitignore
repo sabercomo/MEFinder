@@ -8,6 +8,7 @@ config/mineru_api.local.json
 .ruff_cache/
 build/
 dist/
+release/
 data/
 test-output/
 *.sqlite3-*
@@ -30,3 +31,4 @@ config/preferences.json
 
 # Local backup archives
 config/backups/
+config/*.pre-restore

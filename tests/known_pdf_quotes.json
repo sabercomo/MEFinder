@@ -69,7 +69,7 @@
     "expected_source_type": "pdf",
     "expected_document_title": "法哲学原理：或自然法和国家学纲要",
     "expected_contains": "道德是法的真理",
-    "expected_citation_page_start": "序言第xvi页",
+    "expected_citation_page_start": "xvi",
     "expected_mapping_method": "native_pdf_edge_sequence"
   },
   {

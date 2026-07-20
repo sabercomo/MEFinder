@@ -27,6 +27,7 @@ import webview
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
 
 APP_TITLE = "文献原句定位器"
+PORTABLE_MARKER = "portable.flag"
 
 LOADING_HTML = """<!doctype html>
 <html lang="zh-CN">
@@ -108,10 +109,20 @@ def local_app_data_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "MEFinder"
 
 
+def is_portable_bundle(bundle_root: Path) -> bool:
+    return bool(getattr(sys, "frozen", False) and (Path(bundle_root) / PORTABLE_MARKER).is_file())
+
+
+def webview_storage_path(root: Path, portable: bool) -> str | None:
+    return str(Path(root) / "webview-data") if portable else None
+
+
 def prepare_runtime_root(bundle_root: Path) -> Path:
     """Keep mutable corpus/index data outside the replaceable exe folder."""
 
     if not getattr(sys, "frozen", False):
+        return bundle_root
+    if is_portable_bundle(bundle_root):
         return bundle_root
     runtime_root = local_app_data_root() / "runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
@@ -189,15 +200,21 @@ def setup_logging(root: Path) -> None:
 
 def main() -> None:
     bundle_root = app_root()
+    portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
     os.chdir(root)
-    if getattr(sys, "frozen", False):
+    if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(mineru_config_path)
         preferences_path = local_app_data_root() / "preferences.json"
         os.environ["ME_FINDER_PREFERENCES"] = str(preferences_path)
+    elif portable:
+        preferences_path = root / "config" / "preferences.json"
+        os.environ["ME_FINDER_MINERU_CONFIG"] = str(root / "config" / "mineru_api.local.json")
+        os.environ["ME_FINDER_PREFERENCES"] = str(preferences_path)
     else:
         preferences_path = root / "config" / "preferences.json"
+        os.environ.setdefault("ME_FINDER_MINERU_CONFIG", str(root / "config" / "mineru_api.local.json"))
         os.environ.setdefault("ME_FINDER_PREFERENCES", str(preferences_path))
     theme = read_preferences(preferences_path)["theme"]
     setup_logging(root)
@@ -244,7 +261,7 @@ def main() -> None:
             logging.exception("backend failed to start")
             win.load_html(error_html("后台启动失败", traceback.format_exc(), theme))
 
-    webview.start(start_backend, window)
+    webview.start(start_backend, window, storage_path=webview_storage_path(root, portable))
     server = state["server"]
     if server is not None:
         server.shutdown()

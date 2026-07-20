@@ -10,12 +10,13 @@ import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
     has_manual_mapping,
 )
+from .bibliographic_metadata import METADATA_FIELDS
 from .normalization import compact_text, normalize_text, punctuationless_text, split_sentences
 from .page_mapping_service import PageMappingService
 from .pdf_page_mapping import PageMapper, mapped_page_display
@@ -24,6 +25,32 @@ from .pdf_page_mapping import PageMapper, mapped_page_display
 PDF_TYPES = {"native_text", "scanned", "broken_text", "complex_layout"}
 CROSS_PAGE_TAIL_CHARS = 900
 CROSS_PAGE_HEAD_CHARS = 900
+
+_BIBLIOGRAPHIC_STATE_FIELDS = (
+    "document_type",
+    "metadata_status",
+    "metadata_source",
+    "metadata_confidence",
+    "metadata_evidence",
+    "metadata_conflicts",
+    "metadata_missing_fields",
+)
+
+
+def _attach_bibliographic_metadata(
+    source_file: Dict[str, object], bibliographic: Mapping[str, object]
+) -> None:
+    """Copy every canonical bibliographic field into the searchable source record."""
+    top_level_fields = (*METADATA_FIELDS, "publication_year", *_BIBLIOGRAPHIC_STATE_FIELDS)
+    nested_fields = (*METADATA_FIELDS, *_BIBLIOGRAPHIC_STATE_FIELDS)
+    for field in top_level_fields:
+        if bibliographic.get(field) not in (None, ""):
+            source_file[field] = bibliographic[field]
+    source_file["bibliographic_metadata"] = {
+        field: bibliographic[field]
+        for field in nested_fields
+        if bibliographic.get(field) not in (None, "")
+    }
 
 
 class PDFExtractionError(RuntimeError):
@@ -128,41 +155,7 @@ def extract_pdf_source(
     source_file = source_file_record(path, root, source_file_id, document_id, title, profile)
     bibliographic = config.get("bibliographic_metadata") or config
     if isinstance(bibliographic, dict):
-        for field in (
-            "title",
-            "author",
-            "translator",
-            "publisher",
-            "publish_place",
-            "publish_year",
-            "publication_year",
-            "isbn",
-            "document_type",
-            "metadata_status",
-            "metadata_source",
-            "metadata_confidence",
-            "metadata_evidence",
-        ):
-            if bibliographic.get(field) not in (None, ""):
-                source_file[field] = bibliographic[field]
-        source_file["bibliographic_metadata"] = {
-            field: bibliographic.get(field)
-            for field in (
-                "title",
-                "author",
-                "translator",
-                "publisher",
-                "publish_place",
-                "publish_year",
-                "isbn",
-                "document_type",
-                "metadata_status",
-                "metadata_source",
-                "metadata_confidence",
-                "metadata_evidence",
-            )
-            if bibliographic.get(field) not in (None, "")
-        }
+        _attach_bibliographic_metadata(source_file, bibliographic)
     volume = {
         "volume_id": document_id,
         "source_type": "pdf",

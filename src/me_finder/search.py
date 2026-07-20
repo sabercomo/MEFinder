@@ -483,6 +483,7 @@ class SearchEngine:
             for key in (
                 "title",
                 "author",
+                "country",
                 "translator",
                 "publisher",
                 "publish_place",

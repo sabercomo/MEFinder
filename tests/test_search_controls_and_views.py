@@ -48,6 +48,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function libraryDocType(source)", HTML)
         self.assertIn("libraryDocType(s) === libDocTypeFilter", HTML)
 
+    def test_library_filter_groups_stay_together_before_toolbar(self) -> None:
+        filters_start = HTML.index('class="library-filter-controls"')
+        toolbar_start = HTML.index('class="library-toolbar-right"', filters_start)
+        filters = HTML[filters_start:toolbar_start]
+        self.assertLess(filters.index('id="lib-type-control"'), filters.index('id="lib-lang-control"'))
+        self.assertLess(filters.index('id="lib-lang-control"'), filters.index('id="lib-doctype-control"'))
+
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)

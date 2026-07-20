@@ -164,20 +164,22 @@
           <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
         </div>
         <div class="library-controls-row">
-          <div class="segmented-control" id="lib-type-control">
-            <button class="seg-btn active" data-type="all" onclick="setLibFilter(this)">全部</button>
-            <button class="seg-btn" data-type="word" onclick="setLibFilter(this)">Word</button>
-            <button class="seg-btn" data-type="pdf" onclick="setLibFilter(this)">PDF</button>
-          </div>
-          <div class="segmented-control" id="lib-lang-control">
-            <button class="seg-btn active" data-lang="all" onclick="setLibLangFilter(this)">全部语言</button>
-            <button class="seg-btn" data-lang="chinese" onclick="setLibLangFilter(this)">中文文献</button>
-            <button class="seg-btn" data-lang="foreign" onclick="setLibLangFilter(this)">外文文献</button>
-          </div>
-          <div class="segmented-control" id="lib-doctype-control">
-            <button class="seg-btn active" data-doctype="all" onclick="setLibDocTypeFilter(this)">全部类型</button>
-            <button class="seg-btn" data-doctype="book" onclick="setLibDocTypeFilter(this)">著作</button>
-            <button class="seg-btn" data-doctype="journal_article" onclick="setLibDocTypeFilter(this)">期刊论文</button>
+          <div class="library-filter-controls">
+            <div class="segmented-control" id="lib-type-control">
+              <button class="seg-btn active" data-type="all" onclick="setLibFilter(this)">全部</button>
+              <button class="seg-btn" data-type="word" onclick="setLibFilter(this)">Word</button>
+              <button class="seg-btn" data-type="pdf" onclick="setLibFilter(this)">PDF</button>
+            </div>
+            <div class="segmented-control" id="lib-lang-control">
+              <button class="seg-btn active" data-lang="all" onclick="setLibLangFilter(this)">全部语言</button>
+              <button class="seg-btn" data-lang="chinese" onclick="setLibLangFilter(this)">中文文献</button>
+              <button class="seg-btn" data-lang="foreign" onclick="setLibLangFilter(this)">外文文献</button>
+            </div>
+            <div class="segmented-control" id="lib-doctype-control">
+              <button class="seg-btn active" data-doctype="all" onclick="setLibDocTypeFilter(this)">全部类型</button>
+              <button class="seg-btn" data-doctype="book" onclick="setLibDocTypeFilter(this)">著作</button>
+              <button class="seg-btn" data-doctype="journal_article" onclick="setLibDocTypeFilter(this)">期刊论文</button>
+            </div>
           </div>
           <div class="library-toolbar-right">
             <button class="action-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>

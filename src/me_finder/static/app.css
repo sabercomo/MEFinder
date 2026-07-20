@@ -1355,9 +1355,20 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: 30px;
   padding-bottom: 14px;
 }
+.library-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.library-filter-controls::-webkit-scrollbar { display: none; }
+.library-filter-controls .segmented-control { flex: 0 0 auto; margin-top: 0; }
 .library-controls-row .view-switch { flex: 0 0 auto; }
 .library-toolbar-right {
   display: flex;

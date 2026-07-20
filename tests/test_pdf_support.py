@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.me_finder.database import DEFAULT_DATABASE_PATH
 from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
-from src.me_finder.pdf_extractors import detect_pdf_type
+from src.me_finder.pdf_extractors import _attach_bibliographic_metadata, detect_pdf_type
 from src.me_finder.pdf_page_mapping import PageMapper
 from src.me_finder.search import SearchEngine
 
@@ -94,6 +94,26 @@ class PDFPageMappingTests(unittest.TestCase):
         self.assertEqual(mapper.map_page(213).citation_page, "166")
         self.assertEqual(mapper.map_page(214).citation_page, "166")
         self.assertEqual(mapper.map_page(324).citation_page, "276")
+
+
+class PDFBibliographicProjectionTests(unittest.TestCase):
+    def test_source_projection_keeps_country_and_journal_fields(self) -> None:
+        source = {"source_file_id": "pdf-test"}
+        _attach_bibliographic_metadata(
+            source,
+            {
+                "author": "马克斯·霍克海默",
+                "country": "德",
+                "journal_name": "哲学研究",
+                "issue": "2",
+                "metadata_status": "complete",
+            },
+        )
+
+        self.assertEqual(source["country"], "德")
+        self.assertEqual(source["bibliographic_metadata"]["country"], "德")
+        self.assertEqual(source["bibliographic_metadata"]["journal_name"], "哲学研究")
+        self.assertEqual(source["bibliographic_metadata"]["issue"], "2")
 
 
 class PDFDetectionTests(unittest.TestCase):
