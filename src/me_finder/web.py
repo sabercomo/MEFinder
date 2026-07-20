@@ -41,6 +41,7 @@ from .pdf_import_service import (
     scan_directories_for_documents,
 )
 from .runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
+from .backup_service import restore_backup, write_backup
 from .search import SearchEngine
 
 
@@ -304,6 +305,51 @@ def make_handler(index_path: Path):
             args=(job_id, target, source_file_id, profile, is_pdf),
             daemon=True,
         ).start()
+        return job_id
+
+    def backup_app_data_root() -> Path:
+        return resolve_preferences_path(root).parent
+
+    def export_runtime_backup() -> Dict[str, object]:
+        app_data = backup_app_data_root()
+        dest_dir = app_data / "backups"
+        target = write_backup(root, dest_dir, app_data_root=app_data)
+        return {"ok": True, "path": str(target), "size_bytes": target.stat().st_size}
+
+    def import_runtime_backup(source_path: str) -> str:
+        path = Path(str(source_path)).expanduser()
+        if not path.is_file():
+            raise MinerUError("备份文件不存在。")
+        if path.suffix.lower() != ".zip":
+            raise MinerUError("请选择 .zip 备份文件。")
+        summary = restore_backup(root, path.read_bytes(), app_data_root=backup_app_data_root())
+        job_id = f"restore-{uuid.uuid4().hex[:12]}"
+        with import_jobs_lock:
+            import_jobs[job_id] = {
+                "job_id": job_id,
+                "status": "processing",
+                "phase": "rebuilding_index",
+                "message": f"已恢复 {summary['count']} 项，正在重建索引…",
+            }
+
+        def run_restore_job() -> None:
+            try:
+                rebuild_runtime_index(job_id)
+                update_import_job(
+                    job_id,
+                    status="completed",
+                    phase="completed",
+                    message=f"备份已恢复并重建索引：{summary['count']} 项",
+                )
+            except Exception as exc:
+                update_import_job(
+                    job_id,
+                    status="failed",
+                    phase="failed",
+                    message=f"文件已恢复，但索引重建失败：{exc}",
+                )
+
+        threading.Thread(target=run_restore_job, daemon=True).start()
         return job_id
 
     def store_upload(filename: str, length: int, is_pdf: bool, reader) -> Path:
@@ -957,6 +1003,27 @@ def make_handler(index_path: Path):
                     daemon=True,
                 ).start()
                 self._send_json({"ok": True, "job_id": job_id, "candidates": len(candidates), "already_running": False})
+                return
+            if parsed.path == "/api/backup/export":
+                try:
+                    self._send_json(export_runtime_backup())
+                except (OSError, ValueError) as exc:
+                    self._send_json({"error": f"导出备份失败：{exc}"}, status=500)
+                return
+            if parsed.path == "/api/backup/import":
+                source_path = str(payload.get("path") or "").strip()
+                if not source_path:
+                    self._send_json({"error": "请填写备份文件路径。"}, status=400)
+                    return
+                try:
+                    job_id = import_runtime_backup(source_path)
+                except (MinerUError, ValueError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except OSError as exc:
+                    self._send_json({"error": f"读取备份失败：{exc}"}, status=500)
+                    return
+                self._send_json({"ok": True, "job_id": job_id})
                 return
             if parsed.path == "/api/import-local":
                 raw_paths = payload.get("paths")

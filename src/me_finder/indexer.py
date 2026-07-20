@@ -32,6 +32,7 @@ def build_index(
     database_path: Path = DEFAULT_DATABASE_PATH,
     pdf_limit: int | None = None,
     backup_existing: bool = False,
+    export_json: bool = False,
 ) -> Dict[str, object]:
     root = Path(".").resolve()
     corpus_dir = Path(corpus_dir)
@@ -108,11 +109,14 @@ def build_index(
         "pdf_import_runs": pdf_import_runs,
         "audit_issues": audit_issues,
     }
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    if backup_existing and index_path.exists():
-        backup_index(index_path)
-    with index_path.open("w", encoding="utf-8") as fh:
-        json.dump(index, fh, ensure_ascii=False, indent=2)
+    # SQLite 是唯一权威索引；JSON 仅作离线备份，默认不再随每次重建
+    # 全量重写（300MB）。需要时用 export_json=True（CLI 的 --export-json）。
+    if export_json:
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        if backup_existing and index_path.exists():
+            backup_index(index_path)
+        with index_path.open("w", encoding="utf-8") as fh:
+            json.dump(index, fh, ensure_ascii=False, indent=2)
     build_database(index, Path(database_path), backup_existing=backup_existing)
     return index
 

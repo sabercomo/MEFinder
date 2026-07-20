@@ -20,6 +20,7 @@ let libStats = null;
 let libLoaded = false;
 let libTypeFilter = 'all';
 let libLangFilter = 'all';
+let libDocTypeFilter = 'all';
 let libStatusFilter = 'all';
 let libSelectedId = null;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';
@@ -676,6 +677,18 @@ function setLibLangFilter(btn) {
   renderLibraryList();
 }
 
+function libraryDocType(source) {
+  return String((source && source.document_type) || '') === 'journal_article' ? 'journal_article' : 'book';
+}
+
+function setLibDocTypeFilter(btn) {
+  libDocTypeFilter = btn.dataset.doctype;
+  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  closeLibDrawer();
+  renderLibraryList();
+}
+
 function filterLibrary() {
   renderLibraryList();
 }
@@ -753,6 +766,9 @@ function getFilteredSources() {
   if (libLangFilter !== 'all') {
     sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
   }
+  if (libDocTypeFilter !== 'all') {
+    sources = sources.filter(s => libraryDocType(s) === libDocTypeFilter);
+  }
   if (libStatusFilter === 'pdf_all') {
     sources = sources.filter(s => s.source_type === 'pdf');
   } else if (libStatusFilter !== 'all') {
@@ -805,6 +821,14 @@ function renderLibraryList() {
     var lang = btn.dataset.lang;
     var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
     var label = lang === 'all' ? '全部语言' : lang === 'chinese' ? '中文文献' : '外文文献';
+    btn.textContent = label + ' (' + count + ')';
+  });
+  const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
+  const bookCount = allCount - journalCount;
+  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(btn) {
+    var dt = btn.dataset.doctype;
+    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : bookCount;
+    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : '著作';
     btn.textContent = label + ' (' + count + ')';
   });
 
@@ -2062,6 +2086,57 @@ async function loadMineruConfig() {
     status.textContent = '读取失败';
     showToast('读取 MinerU 配置失败：' + e.message);
   }
+}
+
+async function exportBackup() {
+  var hint = document.getElementById('backup-export-hint');
+  try {
+    if (hint) hint.textContent = '正在导出…';
+    var resp = await fetch('/api/backup/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
+    if (hint) hint.textContent = '已导出到：' + data.path;
+    showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
+  } catch (e) {
+    if (hint) hint.textContent = '生成一个包含页码映射、书目信息和偏好的小体积 zip。';
+    showToast('导出备份失败：' + e.message);
+  }
+}
+
+async function importBackup() {
+  var input = document.getElementById('backup-import-path');
+  var path = (input.value || '').trim();
+  if (!path) { showToast('请先填写备份文件路径'); return; }
+  if (!confirm('导入将覆盖当前的页码映射与书目信息，并重建索引。确认继续吗？')) return;
+  try {
+    var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: path})});
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
+    showToast('已恢复备份，正在重建索引…');
+    pollBackupRestore(data.job_id);
+  } catch (e) {
+    showToast('导入备份失败：' + e.message);
+  }
+}
+
+function pollBackupRestore(jobId) {
+  fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      if (data.status === 'completed') {
+        showToast(data.message || '备份已恢复');
+        libLoaded = false;
+        searchDocumentsLoaded = false;
+        loadMeta();
+        return;
+      }
+      if (data.status === 'failed' || data.error) {
+        showToast('恢复失败：' + (data.message || data.error || '未知错误'));
+        return;
+      }
+      setTimeout(function() { pollBackupRestore(jobId); }, 2000);
+    })
+    .catch(function() { setTimeout(function() { pollBackupRestore(jobId); }, 4000); });
 }
 
 function toggleMineruSecret(inputId, buttonId) {

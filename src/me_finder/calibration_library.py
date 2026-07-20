@@ -98,6 +98,12 @@ def build_library(
             source_path = _source_path(root, source)
             item["source_exists"] = bool(source_path and source_path.exists())
         item["language"] = _item_language(item.get("title"), item.get("author"))
+        bibliographic = item.get("bibliographic_metadata") if isinstance(item.get("bibliographic_metadata"), Mapping) else {}
+        item["document_type"] = (
+            item.get("document_type")
+            or bibliographic.get("document_type")
+            or ("book" if item.get("source_type") == "pdf" else None)
+        )
         items.append(item)
     return {
         "items": items,

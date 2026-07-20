@@ -147,6 +147,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         pdf = by_id["pdf-critique"]
         self.assertEqual(pdf["source_type"], "pdf")
         self.assertEqual(pdf["language"], "foreign")
+        self.assertEqual(pdf["document_type"], "book")
+        self.assertIsNone(word.get("document_type"))
         self.assertEqual(pdf["status"], "manual_mapped")
         self.assertEqual(pdf["status_group"], "calibrated")
         self.assertEqual(pdf["title"], "Critique of Forms of Life")

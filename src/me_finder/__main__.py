@@ -55,6 +55,7 @@ def main() -> None:
     build.add_argument("--parsed-pdf-dir", default=str(DEFAULT_PARSED_PDF_DIR))
     build.add_argument("--pdf-limit", type=int, default=None)
     build.add_argument("--no-backup", action="store_true", help="do not back up an existing index before writing")
+    build.add_argument("--export-json", action="store_true", help="also write the JSON index backup (data/index.json, ~300MB); SQLite is always built")
 
     search = sub.add_parser("search", help="search the local index")
     search.add_argument("query")
@@ -151,10 +152,12 @@ def main() -> None:
             database_path=Path(args.database),
             pdf_limit=args.pdf_limit,
             backup_existing=not args.no_backup,
+            export_json=args.export_json,
         )
         meta = index["metadata"]
+        built = f"{args.index} and {args.database}" if args.export_json else args.database
         print(
-            f"Built {args.index} and {args.database}: {meta['source_count']} source files, "
+            f"Built {built}: {meta['source_count']} source files, "
             f"{meta['paragraph_count']} paragraphs, {meta['eligible_paragraph_count']} searchable."
         )
     elif args.command == "search":

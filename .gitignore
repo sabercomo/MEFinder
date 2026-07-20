@@ -27,3 +27,6 @@ corpus/processed/mineru/*
 config/preferences.json
 .claude/settings.local.json
 .agents/
+
+# Local backup archives
+config/backups/

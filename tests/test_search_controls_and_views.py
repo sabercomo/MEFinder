@@ -40,6 +40,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function setLibLangFilter(btn)", HTML)
         self.assertIn("(s.language || 'chinese') === libLangFilter", HTML)
 
+    def test_library_filters_by_document_type(self) -> None:
+        self.assertIn('id="lib-doctype-control"', HTML)
+        self.assertIn('data-doctype="book"', HTML)
+        self.assertIn('data-doctype="journal_article"', HTML)
+        self.assertIn("function setLibDocTypeFilter(btn)", HTML)
+        self.assertIn("function libraryDocType(source)", HTML)
+        self.assertIn("libraryDocType(s) === libDocTypeFilter", HTML)
+
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
@@ -49,6 +57,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("提交 MinerU 解析", HTML)
         self.assertIn("重新 OCR", HTML)
         self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+
+    def test_backup_export_import_is_wired(self) -> None:
+        self.assertIn('onclick="exportBackup()"', HTML)
+        self.assertIn('id="backup-import-path"', HTML)
+        self.assertIn("function exportBackup()", HTML)
+        self.assertIn("function importBackup()", HTML)
+        self.assertIn("fetch('/api/backup/export'", HTML)
+        self.assertIn("fetch('/api/backup/import'", HTML)
+        self.assertIn('"/api/backup/export"', WEB_SOURCE)
+        self.assertIn('"/api/backup/import"', WEB_SOURCE)
+        self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
 
     def test_batch_metadata_detection_is_wired(self) -> None:
         self.assertIn('id="batch-metadata-btn"', HTML)
