@@ -301,7 +301,11 @@
               <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" onclick="importSelectedScanned()">导入所选</button>
             </div>
           </div>
-          <div id="scan-status" class="scan-status">在“设置 → 文献目录”配置文件夹后，可在这里一键扫描新文献。</div>
+          <div class="scan-dir-chips" id="scan-dir-chips">
+            <span id="scan-dir-list" class="scan-dir-chip-list"></span>
+            <input id="scan-dir-input" class="scan-dir-add" type="text" spellcheck="false" placeholder="添加文件夹路径，回车确认…" onkeydown="if(event.key==='Enter')addScanDirectory()">
+          </div>
+          <div id="scan-status" class="scan-status">添加文献文件夹后点击“扫描目录”。原始文件永远不会被移动或删除；导入时会复制到应用语料目录。</div>
           <div id="scan-results"></div>
         </div>
         <div class="import-queue" id="import-queue" style="display:none">
@@ -322,13 +326,9 @@
         </div>
       </div>
       <div class="settings-page-content">
-        <section class="settings-card settings-collapse" id="appearance-card">
-          <button class="settings-card-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="appearance-body" onclick="toggleAppearance()">
-            <span class="settings-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.2"/><circle cx="17.5" cy="10.5" r="1.2"/><circle cx="8.5" cy="7.5" r="1.2"/><circle cx="6.5" cy="12.5" r="1.2"/><path d="M12 2a10 10 0 0 0 0 20c1.4 0 2-1 2-2 0-.6-.3-1-.7-1.4-.4-.4-.6-.8-.6-1.3 0-1 .8-1.8 1.8-1.8H16a6 6 0 0 0 6-6c0-4.4-4.5-8-10-8Z"/></svg></span>
-            <span class="settings-card-headings">
-              <span class="settings-card-title">外观</span>
-              <span class="settings-card-subtitle">主题、显示密度</span>
-            </span>
+        <section class="settings-section settings-collapse" id="appearance-card">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="appearance-body" onclick="toggleAppearance()">
+            <span class="settings-section-title">外观</span>
             <span class="settings-current-theme" id="appearance-current"></span>
             <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
           </button>
@@ -336,68 +336,48 @@
             <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
           </div>
         </section>
-        <section class="settings-card">
-          <div class="settings-card-head">
-            <span class="settings-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
-            <span class="settings-card-headings">
-              <span class="settings-card-title">文献目录</span>
-              <span class="settings-card-subtitle">配置后可在“文献导入”页扫描并批量导入其中的 PDF / DOCX。</span>
-            </span>
-          </div>
-          <div class="settings-form">
-            <div id="scan-dir-list" class="scan-dir-list"></div>
-            <div class="settings-input-row">
-              <input id="scan-dir-input" class="settings-input" type="text" spellcheck="false" placeholder="粘贴文件夹完整路径，例如 D:\文献\哲学">
-              <button class="action-btn primary settings-inline-btn" type="button" onclick="addScanDirectory()">添加目录</button>
-            </div>
-            <small>原始文件永远不会被移动或删除；导入时会复制到应用语料目录。</small>
-          </div>
-        </section>
-        <section class="settings-card">
-          <div class="settings-card-head">
-            <span class="settings-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 9.5a3.5 3.5 0 0 1 .5 6.97"/><path d="M12 12v6"/><path d="m9.5 15 2.5-3 2.5 3"/></svg></span>
-            <span class="settings-card-headings">
-              <span class="settings-card-title">MinerU API</span>
-              <span class="settings-card-subtitle">扫描版、乱码或复杂排版 PDF 的精准解析。</span>
-            </span>
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <span class="settings-section-title">MinerU API</span>
+            <span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span>
             <span id="mineru-config-status" class="settings-status">读取中…</span>
           </div>
-          <div class="settings-form">
-            <div class="settings-field">
-              <label for="mineru-token">Bearer Token</label>
+          <div class="settings-grid">
+            <label class="settings-label" for="mineru-token">Bearer Token</label>
+            <div class="settings-control">
               <div class="settings-input-row">
                 <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="输入 MinerU API Token">
                 <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
               </div>
               <small>在 MinerU 的 API 管理页面创建或复制。留空表示保留当前已保存的 Token。</small>
             </div>
-            <div class="settings-field-row">
-              <div class="settings-field">
-                <label for="mineru-api-base">API 地址</label>
-                <input id="mineru-api-base" class="settings-input" type="url" value="https://mineru.net" spellcheck="false">
-              </div>
-              <div class="settings-field">
-                <label for="mineru-expires-at">Token 到期日期（可选）</label>
-                <input id="mineru-expires-at" class="settings-input" type="date">
-              </div>
+            <label class="settings-label" for="mineru-api-base">API 地址</label>
+            <div class="settings-control settings-control-inline">
+              <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
+              <label class="settings-inline-label" for="mineru-expires-at">Token 到期日期</label>
+              <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
             </div>
-            <details class="settings-advanced">
-              <summary><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 4 4-4 4"/></svg><span>高级：Access Key ID / Secret Access Key（可选）</span></summary>
-              <div class="settings-advanced-body">
-                <div class="settings-field">
-                  <label for="mineru-access-key-id">Access Key ID</label>
-                  <input id="mineru-access-key-id" class="settings-input" type="text" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Access Key ID，再填写">
-                </div>
-                <div class="settings-field">
-                  <label for="mineru-secret-access-key">Secret Access Key</label>
-                  <div class="settings-input-row">
-                    <input id="mineru-secret-access-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Secret Access Key，再填写">
-                    <button id="mineru-secret-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-secret-access-key','mineru-secret-toggle')">显示</button>
+            <span class="settings-label"></span>
+            <div class="settings-control">
+              <details class="settings-advanced">
+                <summary><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 4 4-4 4"/></svg><span>高级：Access Key ID / Secret Access Key（可选）</span></summary>
+                <div class="settings-advanced-body">
+                  <div class="settings-field">
+                    <label for="mineru-access-key-id">Access Key ID</label>
+                    <input id="mineru-access-key-id" class="settings-input" type="text" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Access Key ID，再填写">
+                  </div>
+                  <div class="settings-field">
+                    <label for="mineru-secret-access-key">Secret Access Key</label>
+                    <div class="settings-input-row">
+                      <input id="mineru-secret-access-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Secret Access Key，再填写">
+                      <button id="mineru-secret-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-secret-access-key','mineru-secret-toggle')">显示</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </details>
-            <div class="settings-actions">
+              </details>
+            </div>
+            <span class="settings-label"></span>
+            <div class="settings-control settings-actions">
               <button class="action-btn primary" type="button" onclick="saveMineruConfig()">保存 API 配置</button>
               <button class="action-btn" type="button" onclick="loadMineruConfig()">重新读取</button>
               <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机。</span>

@@ -496,7 +496,9 @@ def _extract_chinese_cip_statement(
         return
     statement_text = flat[marker.end() : marker.end() + 520]
     statement = re.search(
-        rf"(?P<title>[^/／]{{2,130}}?)\s*[/／]\s*"
+        # 题名/责任者分隔斜杠后面跟的是责任者（（美）… / 人名），不会是
+        # 数字；数字间的斜杠（《24/7》）属于题名本身。
+        rf"(?P<title>.{{2,130}}?)\s*[/／](?!\d)\s*"
         rf"(?P<responsibility>.{{2,110}}?)\s*"
         rf"(?:[.。．]\s*)?[—–―一\-]{{1,2}}\s*"
         rf"(?P<place>[\u3400-\u9fff]{{2,8}})\s*[:：]\s*"
@@ -594,6 +596,9 @@ def _clean_cip_title(value: str) -> str:
     text = re.sub(r"[.．]\s*(?=第\s*\d+\s*卷)", " ", text)
     text = re.sub(r"(第\s*\d+\s*卷)\s*[,，]\s*", r"\1：", text, count=1)
     text = re.sub(r"第\s*(\d+)\s*卷", r"第\1卷", text)
+    # NFKC 会把全角冒号压成半角；中文书名恢复全角。
+    if re.search(r"[㐀-鿿]", text):
+        text = text.replace(":", "：")
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -1101,7 +1106,9 @@ def _extract_english_people(
         author = f"{catalog_author.group('first').strip()} {catalog_author.group('last').strip()}"
         _add_candidate(candidates, "author", author, page_idx, text, 0.99, "english_catalog_author")
 
-    catalog_title = re.search(r"\bTitle\s*:\s*(?P<title>.+?)\s*/", text, flags=re.IGNORECASE)
+    # LoC CIP 的题名/责任者分隔符是两侧带空格的" / "；不带空格的斜杠
+    # （24/7）属于题名本身。
+    catalog_title = re.search(r"\bTitle\s*:\s*(?P<title>.+?)\s+/\s+", text, flags=re.IGNORECASE)
     if catalog_title:
         title = re.sub(r"\s+([:;,.])", r"\1", catalog_title.group("title")).strip(" .")
         _add_candidate(candidates, "title", title, page_idx, text, 0.98, "english_catalog_title")

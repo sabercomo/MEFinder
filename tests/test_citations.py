@@ -104,6 +104,24 @@ class CitationFormatTests(unittest.TestCase):
             "现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
         )
 
+    def test_slash_inside_title_is_not_a_responsibility_separator(self) -> None:
+        # 《24/7：晚期资本主义与睡眠的终结》：CIP 题名里数字间的斜杠
+        # 不是题名/责任者分隔符，书名不得被截断成"24"。
+        pages = [
+            {
+                "pdf_page_index": 2,
+                "text_raw": (
+                    "图书在版编目(CIP)数据\n"
+                    "24/7：晚期资本主义与睡眠的终结/（美）乔纳森·克拉里著；许多译. — 北京：中信出版社，2015.9\n"
+                    "ISBN 978-7-5086-5122-6"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(Path("missing.pdf"), pages, {})
+        self.assertEqual(detected["title"], "24/7：晚期资本主义与睡眠的终结")
+        self.assertEqual(detected["publisher"], "中信出版社")
+        self.assertEqual(detected["publish_year"], "2015")
+
     def test_article_footnote_publishers_are_not_book_metadata(self) -> None:
         # 论文正文脚注引用"北京：人民出版社，1972年版"与版权页声明同形，
         # 不得被当作本篇的出版社/出版地/出版年份（孙向晨一文的真实污染源）。

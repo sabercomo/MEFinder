@@ -1948,13 +1948,12 @@ let scanDirectories = [];
 function renderScanDirectories() {
   var container = document.getElementById('scan-dir-list');
   if (!container) return;
-  if (!scanDirectories.length) {
-    container.innerHTML = '<div class="scan-dir-empty">尚未配置文献目录。</div>';
-    return;
-  }
   container.innerHTML = scanDirectories.map(function(dir, index) {
-    return '<div class="scan-dir-row"><span class="scan-dir-path" title="' + esc(dir) + '">' + esc(dir) + '</span>'
-      + '<button class="action-btn" type="button" onclick="removeScanDirectory(' + index + ')">移除</button></div>';
+    return '<span class="scan-dir-chip" title="' + esc(dir) + '">'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
+      + '<span class="scan-dir-chip-path">' + esc(dir) + '</span>'
+      + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">×</button>'
+      + '</span>';
   }).join('');
 }
 
@@ -2175,7 +2174,7 @@ async function runDirectoryScan() {
   var statusEl = document.getElementById('scan-status');
   var button = document.getElementById('scan-run-btn');
   if (!scanDirectories.length) {
-    statusEl.textContent = '尚未配置文献目录，请先到“设置 → 文献目录”添加。';
+    statusEl.textContent = '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
     return;
   }
   button.disabled = true;
