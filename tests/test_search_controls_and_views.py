@@ -57,13 +57,26 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
-        self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
+        self.assertNotIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
+        self.assertIn("start_import_job(target, profile, sid, True, force_mineru=True)", WEB_SOURCE)
         self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
-        self.assertIn("提交 MinerU 解析", HTML)
+        self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
-        self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+        self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+        self.assertIn("将把这份 PDF 上传到 MinerU 在线服务重新解析", HTML)
+
+    def test_import_page_can_force_native_pdf_through_mineru(self) -> None:
+        self.assertIn('name="pdf-parse-mode" value="auto" checked', HTML)
+        self.assertIn('name="pdf-parse-mode" value="mineru"', HTML)
+        self.assertIn("function selectedPdfParseMode()", HTML)
+        self.assertIn("'X-PDF-Parse-Mode': q.parseMode || 'auto'", HTML)
+        self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
+        self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
+        self.assertIn('payload.get("pdf_parse_mode") or "auto"', WEB_SOURCE)
+        self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
+        self.assertIn('"parse_route": parse_route', WEB_SOURCE)
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('onclick="exportBackup()"', HTML)

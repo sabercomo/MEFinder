@@ -6,7 +6,7 @@
 
 ## Windows 绿色免安装版
 
-从仓库的 **Releases** 页面下载 `MEFinder-v0.1.0-windows-portable.zip`，完整解压后双击 `文献原句定位器.exe` 即可运行，无需安装 Python。
+从仓库的 **Releases** 页面下载 `MEFinder-v0.1.1-windows-portable.zip`，完整解压后双击 `文献原句定位器.exe` 即可运行，无需安装 Python。
 
 - 支持 Windows 10 21H2 及以上系统；
 - 程序、索引、导入文献、设置和日志均保存在解压目录；

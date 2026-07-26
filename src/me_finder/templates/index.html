@@ -288,6 +288,17 @@
         </div>
       </div>
       <div class="import-content">
+        <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
+          <div class="pdf-parse-mode-title">PDF 解析方式</div>
+          <label class="pdf-parse-option">
+            <input type="radio" name="pdf-parse-mode" value="auto" checked>
+            <span><strong>自动选择（默认）</strong><small>原生 PDF 快速解析；没有可靠文字层时自动使用 MinerU。</small></span>
+          </label>
+          <label class="pdf-parse-option pdf-parse-option-online">
+            <input type="radio" name="pdf-parse-mode" value="mineru">
+            <span><strong>MinerU 在线解析</strong><small>强制上传 PDF 并进行 OCR，适合乱码、断字或复杂排版。</small></span>
+          </label>
+        </div>
         <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
           <div class="drop-zone-icon">
             <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>

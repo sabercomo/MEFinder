@@ -948,8 +948,8 @@ function selectLibDoc(sourceId) {
   if (src.source_type === 'pdf') {
     autoActions += '<button class="action-btn primary" onclick="openCalibrationAndDetect(\'' + esc(src.source_file_id) + '\')">自动检测页码</button>';
   }
-  if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.detected_pdf_type && src.pdf_profile.detected_pdf_type !== 'native_text') {
-    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : '提交 MinerU 解析';
+  if (src.source_type === 'pdf') {
+    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
     var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
     autoActions += '<button class="action-btn" id="mineru-reparse-btn"' + (ocrRunning ? ' disabled' : '') + ' onclick="submitMineruReparse(\'' + esc(src.source_file_id) + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
   }
@@ -1238,6 +1238,7 @@ function toggleDrawerSection(event, sectionId) {
 }
 
 async function submitMineruReparse(sourceId) {
+  if (!window.confirm('将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入，是否继续？')) return;
   try {
     var resp = await fetch('/api/mineru-reparse', {
       method: 'POST',
@@ -2332,7 +2333,7 @@ async function importSelectedScanned() {
     var resp = await fetch('/api/import-local', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({paths: paths})
+      body: JSON.stringify({paths: paths, pdf_parse_mode: selectedPdfParseMode()})
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
@@ -2349,9 +2350,10 @@ async function importSelectedScanned() {
       };
       if (job.file_type === 'pdf' && job.detected_pdf_type) {
         q.detectedType = job.detected_pdf_type;
-        q.route = job.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+        q.route = job.parse_route || (job.detected_pdf_type === 'native_text' ? 'native' : 'mineru');
         q.step = 2;
-        q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type);
+        q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type)
+          + (q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
       } else if (job.file_type !== 'pdf') {
         q.step = 1;
       }
@@ -2370,9 +2372,15 @@ async function importSelectedScanned() {
   }
 }
 
+function selectedPdfParseMode() {
+  var selected = document.querySelector('input[name="pdf-parse-mode"]:checked');
+  return selected && selected.value === 'mineru' ? 'mineru' : 'auto';
+}
+
 function handleFileSelect(files) {
   if (!files || files.length === 0) return;
   var validExts = ['.pdf', '.docx'];
+  var pdfParseMode = selectedPdfParseMode();
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
     var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -2387,6 +2395,7 @@ function handleFileSelect(files) {
       name: file.name,
       size: file.size,
       type: ext === '.pdf' ? 'pdf' : 'docx',
+      parseMode: ext === '.pdf' ? pdfParseMode : null,
       status: 'queued',
       step: 0,
       message: '等待处理'
@@ -2466,7 +2475,8 @@ async function uploadImport(id) {
       method: 'POST',
       headers: {
         'Content-Type': q.file.type || (q.type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-        'X-File-Name': encodeURIComponent(q.name)
+        'X-File-Name': encodeURIComponent(q.name),
+        'X-PDF-Parse-Mode': q.parseMode || 'auto'
       },
       body: q.file
     });
@@ -2475,10 +2485,10 @@ async function uploadImport(id) {
     q.jobId = data.job_id;
     if (q.type === 'pdf' && data.detected_pdf_type) {
       q.detectedType = data.detected_pdf_type;
-      q.route = data.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+      q.route = data.parse_route || (data.detected_pdf_type === 'native_text' ? 'native' : 'mineru');
       q.step = 2;
       q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
-        + (q.route === 'mineru' ? '，将提交 MinerU 解析' : '，本地解析，无需 MinerU');
+        + (q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
     } else {
       q.step = 1;
       q.message = '文件已保存，正在建立索引…';
@@ -2499,6 +2509,7 @@ function pollImportJob(id) {
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
+      if (data.parse_route) q.route = data.parse_route;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
       var steps = importStepsFor(q);

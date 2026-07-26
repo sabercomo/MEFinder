@@ -248,10 +248,25 @@ def make_handler(index_path: Path):
                     runtime["rebuilding"] = False
                 raise
 
-    def run_import_job(job_id: str, target: Path, source_file_id: str, profile: Dict[str, object], is_pdf: bool) -> None:
+    def run_import_job(
+        job_id: str,
+        target: Path,
+        source_file_id: str,
+        profile: Dict[str, object],
+        is_pdf: bool,
+        force_mineru: bool = False,
+    ) -> None:
         try:
-            if is_pdf and str(profile.get("detected_pdf_type")) != "native_text":
-                update_import_job(job_id, phase="mineru_submitting", message="文本层不可靠，正在自动提交 MinerU…")
+            use_mineru = is_pdf and (
+                force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+            )
+            if use_mineru:
+                message = (
+                    "已选择 MinerU 在线解析，正在上传 PDF…"
+                    if force_mineru
+                    else "文本层不可靠，正在自动提交 MinerU…"
+                )
+                update_import_job(job_id, phase="mineru_submitting", message=message, parse_route="mineru")
                 parse_pdf_with_mineru(
                     root,
                     target,
@@ -259,7 +274,12 @@ def make_handler(index_path: Path):
                     on_progress=lambda update: progress_import_job(job_id, update),
                 )
             else:
-                update_import_job(job_id, phase="text_parsing", message="原生文本，跳过 MinerU，正在建立索引…")
+                update_import_job(
+                    job_id,
+                    phase="text_parsing",
+                    message="原生文本，使用快速解析，正在建立索引…",
+                    parse_route="native",
+                )
             rebuild_runtime_index(job_id)
             metadata_note = ""
             if is_pdf:
@@ -288,8 +308,21 @@ def make_handler(index_path: Path):
         except Exception as exc:
             update_import_job(job_id, status="failed", phase="failed", message=str(exc))
 
-    def start_import_job(target: Path, profile: Dict[str, object], source_file_id: str, is_pdf: bool) -> str:
+    def start_import_job(
+        target: Path,
+        profile: Dict[str, object],
+        source_file_id: str,
+        is_pdf: bool,
+        force_mineru: bool = False,
+    ) -> str:
         job_id = f"import-{uuid.uuid4().hex[:12]}"
+        parse_route = None
+        if is_pdf:
+            parse_route = (
+                "mineru"
+                if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                else "native"
+            )
         with import_jobs_lock:
             import_jobs[job_id] = {
                 "job_id": job_id,
@@ -299,10 +332,12 @@ def make_handler(index_path: Path):
                 "file_name": target.name,
                 "source_file_id": source_file_id,
                 "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
+                "parse_route": parse_route,
+                "force_mineru": bool(force_mineru),
             }
         threading.Thread(
             target=run_import_job,
-            args=(job_id, target, source_file_id, profile, is_pdf),
+            args=(job_id, target, source_file_id, profile, is_pdf, force_mineru),
             daemon=True,
         ).start()
         return job_id
@@ -845,6 +880,9 @@ def make_handler(index_path: Path):
                     self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
                     return
                 try:
+                    pdf_parse_mode = str(self.headers.get("X-PDF-Parse-Mode", "auto")).strip().lower()
+                    if pdf_parse_mode not in {"auto", "mineru"}:
+                        raise MinerUError("PDF 解析方式无效。")
                     length = int(self.headers.get("Content-Length", "0"))
                     target = store_upload(filename, length, suffix == ".pdf", self.rfile)
                     is_pdf = suffix == ".pdf"
@@ -855,13 +893,28 @@ def make_handler(index_path: Path):
                     else:
                         profile = {"detected_pdf_type": "docx"}
                         source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                    job_id = start_import_job(target, profile, source_file_id, is_pdf)
+                    force_mineru = is_pdf and pdf_parse_mode == "mineru"
+                    job_id = start_import_job(
+                        target,
+                        profile,
+                        source_file_id,
+                        is_pdf,
+                        force_mineru=force_mineru,
+                    )
+                    parse_route = None
+                    if is_pdf:
+                        parse_route = (
+                            "mineru"
+                            if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                            else "native"
+                        )
                     self._send_json({
                         "ok": True,
                         "job_id": job_id,
                         "file_name": target.name,
                         "source_file_id": source_file_id,
                         "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
+                        "parse_route": parse_route,
                     })
                 except (MinerUError, OSError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
@@ -952,9 +1005,7 @@ def make_handler(index_path: Path):
                         return
                     target = source_path_from_id(sid)
                     profile = detect_imported_pdf(target)
-                    if str(profile.get("detected_pdf_type")) == "native_text":
-                        raise MinerUError("该 PDF 是原生文本，本地解析即可，无需 MinerU OCR。")
-                    job_id = start_import_job(target, profile, sid, True)
+                    job_id = start_import_job(target, profile, sid, True, force_mineru=True)
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -1030,6 +1081,10 @@ def make_handler(index_path: Path):
                 if not isinstance(raw_paths, list) or not raw_paths:
                     self._send_json({"error": "没有选择要导入的文件。"}, status=400)
                     return
+                pdf_parse_mode = str(payload.get("pdf_parse_mode") or "auto").strip().lower()
+                if pdf_parse_mode not in {"auto", "mineru"}:
+                    self._send_json({"error": "PDF 解析方式无效。"}, status=400)
+                    return
                 preferences = read_preferences(resolve_preferences_path(root))
                 allowed_bases = [Path(item).resolve() for item in preferences.get("scan_directories") or []]
                 jobs: List[Dict[str, object]] = []
@@ -1054,7 +1109,21 @@ def make_handler(index_path: Path):
                         else:
                             profile = {"detected_pdf_type": "docx"}
                             source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                        job_id = start_import_job(target, profile, source_file_id, is_pdf)
+                        force_mineru = is_pdf and pdf_parse_mode == "mineru"
+                        job_id = start_import_job(
+                            target,
+                            profile,
+                            source_file_id,
+                            is_pdf,
+                            force_mineru=force_mineru,
+                        )
+                        parse_route = None
+                        if is_pdf:
+                            parse_route = (
+                                "mineru"
+                                if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                                else "native"
+                            )
                         jobs.append({
                             "path": str(raw),
                             "job_id": job_id,
@@ -1063,6 +1132,7 @@ def make_handler(index_path: Path):
                             "source_file_id": source_file_id,
                             "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
                             "file_type": "pdf" if is_pdf else "docx",
+                            "parse_route": parse_route,
                         })
                     except (MinerUError, OSError, ValueError) as exc:
                         import_errors.append({"path": str(raw), "error": str(exc)})
