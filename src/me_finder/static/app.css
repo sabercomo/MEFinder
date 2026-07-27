@@ -1367,6 +1367,29 @@ a { color: var(--accent); text-decoration: none; }
 .vision-model-row { align-items: flex-start; }
 .vision-model-row .action-btn { white-space: nowrap; }
 .vision-model-combo { position: relative; flex: 1; min-width: 180px; }
+.vision-base-combo .settings-input { padding-right: 36px; }
+.combo-toggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.combo-toggle svg { width: 16px; height: 16px; transition: transform var(--transition-fast); }
+.combo-toggle:hover { background: var(--surface-hover); color: var(--text-primary); }
+.combo-toggle.is-open { color: var(--accent); }
+.combo-toggle.is-open svg { transform: rotate(180deg); }
 .vision-model-pop {
   position: absolute;
   top: calc(100% + 6px);

@@ -439,6 +439,7 @@
                 <div class="settings-control">
                   <div class="vision-model-combo vision-base-combo">
                     <input id="vision-api-base" class="settings-input" type="url" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-base-pop" placeholder="点击选择常见服务商，或直接粘贴接口地址">
+                    <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" onclick="toggleVisionBaseList(event)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div id="vision-base-pop" class="vision-model-pop" hidden></div>
                   </div>
                   <small>从列表选择会自动填写地址和名称；也可以粘贴任意兼容 OpenAI Chat Completions 的地址。</small>

@@ -2268,12 +2268,16 @@ function visionAvatarHtml(provider, extraClass) {
 var visionBasePopOpen = false;
 var visionBaseActiveIndex = -1;
 var visionBaseFlat = [];
+var visionBaseShowAll = false;
 
 function visionBaseFiltered() {
   var input = document.getElementById('vision-api-base');
   var query = input ? input.value.trim().toLowerCase() : '';
   var presets = VISION_BRAND_RULES.filter(function(rule) { return rule.base; });
-  if (!query) return presets;
+  if (!query || visionBaseShowAll) return presets;
+  // A field holding exactly one preset's address should still offer the others,
+  // so switching providers does not require clearing it first.
+  if (presets.some(function(rule) { return rule.base.toLowerCase() === query; })) return presets;
   return presets.filter(function(rule) {
     return rule.name.toLowerCase().indexOf(query) >= 0
       || rule.base.toLowerCase().indexOf(query) >= 0;
@@ -2283,14 +2287,17 @@ function visionBaseFiltered() {
 function renderVisionBasePop() {
   var pop = document.getElementById('vision-base-pop');
   var input = document.getElementById('vision-api-base');
+  var toggle = document.getElementById('vision-base-toggle');
   if (!pop) return;
   visionBaseFlat = visionBaseFiltered();
   if (!visionBasePopOpen || !visionBaseFlat.length) {
     pop.hidden = true;
     pop.innerHTML = '';
     if (input) input.setAttribute('aria-expanded', 'false');
+    if (toggle) toggle.classList.remove('is-open');
     return;
   }
+  if (toggle) toggle.classList.add('is-open');
   pop.innerHTML = '<div class="vision-model-group">常见服务商</div>'
     + visionBaseFlat.map(function(rule, index) {
         return '<div class="vision-model-item vision-base-item' + (index === visionBaseActiveIndex ? ' active' : '')
@@ -2316,7 +2323,21 @@ function closeVisionBasePop() {
   if (!visionBasePopOpen) return;
   visionBasePopOpen = false;
   visionBaseActiveIndex = -1;
+  visionBaseShowAll = false;
   renderVisionBasePop();
+}
+
+function toggleVisionBaseList(event) {
+  if (event) event.stopPropagation();
+  if (visionBasePopOpen && visionBaseShowAll) {
+    closeVisionBasePop();
+    return;
+  }
+  visionBaseShowAll = true;
+  visionBaseActiveIndex = -1;
+  openVisionBasePop();
+  var input = document.getElementById('vision-api-base');
+  if (input) input.focus();
 }
 
 function pickVisionBase(base) {
@@ -3383,6 +3404,7 @@ document.addEventListener('click', function(event) {
     base.addEventListener('input', function() {
       autoFillVisionName();
       visionBaseActiveIndex = -1;
+      visionBaseShowAll = false;
       openVisionBasePop();
     });
     base.addEventListener('focus', openVisionBasePop);
