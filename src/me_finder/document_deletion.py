@@ -130,8 +130,14 @@ class DocumentDeletionService:
         return self._unique_safe_paths(candidates)
 
     def _manifest_path(self, document: Mapping[str, object]) -> Optional[Path]:
-        mineru = document.get("mineru") if isinstance(document.get("mineru"), Mapping) else {}
-        value = str(mineru.get("manifest") or "").strip()
+        parser_results = (
+            document.get("parser_results")
+            if isinstance(document.get("parser_results"), Mapping)
+            else document.get("mineru")
+            if isinstance(document.get("mineru"), Mapping)
+            else {}
+        )
+        value = str(parser_results.get("manifest") or "").strip()
         if not value:
             return None
         path = Path(value)

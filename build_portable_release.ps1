@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.0"
+    [string]$Version = "0.1.2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +19,9 @@ if (-not $stageFull.StartsWith($releaseFull + '\', [StringComparison]::OrdinalIg
 
 Push-Location $ProjectRoot
 try {
+    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views
+    if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
+
     py -3 -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
@@ -46,6 +49,7 @@ try {
 
     $forbiddenNames = @(
         "mineru_api.local.json",
+        "vision_api.local.json",
         "preferences.json",
         "pdf_imports.json.pre-restore",
         "index.json",

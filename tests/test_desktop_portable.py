@@ -13,6 +13,13 @@ from tools.create_portable_zip import create_portable_zip
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_optional_vision_credentials_use_local_private_config(self) -> None:
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+        release_source = Path("build_portable_release.ps1").read_text(encoding="utf-8")
+        self.assertIn("ME_FINDER_VISION_CONFIG", desktop_source)
+        self.assertIn("vision_api.local.json", desktop_source)
+        self.assertIn('"vision_api.local.json"', release_source)
+
     def test_portable_marker_keeps_frozen_runtime_beside_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)

@@ -35,6 +35,10 @@ let calTransientStatus = {};
 let removeDocumentTarget = null;
 let removeSecondStage = false;
 let mineruConfigLoaded = false;
+let visionConfigLoaded = false;
+let visionConfig = {providers: [], default_provider_id: null, auto_fallback_from_mineru: false};
+let visionModelOptions = [];
+let visionModelRequestSerial = 0;
 let preferencesLoaded = false;
 let currentTheme = document.documentElement.dataset.theme || 'frost-blue';
 
@@ -48,9 +52,11 @@ function navigateTo(page) {
   const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
   if (link) link.classList.add('active');
   if (page === 'library' && !libLoaded) loadLibrary();
+  if (page === 'import' && !visionConfigLoaded) loadVisionProviders();
   if (page === 'settings') {
     if (!preferencesLoaded) loadPreferences();
     if (!mineruConfigLoaded) loadMineruConfig();
+    if (!visionConfigLoaded) loadVisionProviders();
   }
 }
 
@@ -948,8 +954,8 @@ function selectLibDoc(sourceId) {
   if (src.source_type === 'pdf') {
     autoActions += '<button class="action-btn primary" onclick="openCalibrationAndDetect(\'' + esc(src.source_file_id) + '\')">自动检测页码</button>';
   }
-  if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.detected_pdf_type && src.pdf_profile.detected_pdf_type !== 'native_text') {
-    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : '提交 MinerU 解析';
+  if (src.source_type === 'pdf') {
+    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
     var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
     autoActions += '<button class="action-btn" id="mineru-reparse-btn"' + (ocrRunning ? ' disabled' : '') + ' onclick="submitMineruReparse(\'' + esc(src.source_file_id) + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
   }
@@ -1238,6 +1244,7 @@ function toggleDrawerSection(event, sectionId) {
 }
 
 async function submitMineruReparse(sourceId) {
+  if (!window.confirm('将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入，是否继续？')) return;
   try {
     var resp = await fetch('/api/mineru-reparse', {
       method: 'POST',
@@ -1333,7 +1340,7 @@ function drawerInfoRow(label, value) {
 }
 
 function pdfTypeLabel(type) {
-  var labels = {native_text:'原生文本',scanned:'扫描版',broken_text:'文本损坏',complex_layout:'复杂排版',mineru_structured:'MinerU 结构化'};
+  var labels = {native_text:'原生文本',scanned:'扫描版',broken_text:'文本损坏',complex_layout:'复杂排版',mineru_structured:'MinerU 结构化',api_structured:'视觉 API 结构化'};
   return labels[type] || type || '未知';
 }
 
@@ -2176,6 +2183,736 @@ async function saveMineruConfig() {
   }
 }
 
+/* ═══ Optional OpenAI-compatible vision providers ═══ */
+var VISION_BRAND_RULES = [
+  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com'},
+  {re: /dashscope|aliyuncs/i, name: '通义千问', color: '#615CED', icon: 'qwen-color.svg', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
+  {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', base: 'https://api.moonshot.cn/v1'},
+  {re: /bigmodel|zhipu/i, name: '智谱 GLM', color: '#3859FF', icon: 'zhipu-color.svg', base: 'https://open.bigmodel.cn/api/paas/v4'},
+  {re: /siliconflow/i, name: '硅基流动', color: '#7C3AED', icon: 'siliconcloud-color.svg', base: 'https://api.siliconflow.cn/v1'},
+  {re: /volces|volcengine|doubao/i, name: '火山方舟（豆包）', color: '#3370FF', icon: 'doubao-color.svg', base: 'https://ark.cn-beijing.volces.com/api/v3'},
+  {re: /hunyuan/i, name: '腾讯混元', color: '#0052D9', icon: 'hunyuan-color.svg', base: 'https://api.hunyuan.cloud.tencent.com/v1'},
+  {re: /baidubce|qianfan/i, name: '百度千帆', color: '#2932E1', icon: 'wenxin-color.svg', base: 'https://qianfan.baidubce.com/v2'},
+  {re: /stepfun/i, name: '阶跃星辰', color: '#0057FF', icon: 'stepfun-color.svg', base: 'https://api.stepfun.com/v1'},
+  {re: /minimax/i, name: 'MiniMax', color: '#F23F5D', icon: 'minimax-color.svg', base: 'https://api.minimaxi.com/v1'},
+  {re: /openrouter/i, name: 'OpenRouter', color: '#8B5CF6', icon: 'openrouter-color.svg', base: 'https://openrouter.ai/api/v1'},
+  {re: /openai\.com/i, name: 'OpenAI', color: '#10A37F', icon: 'openai.svg', base: 'https://api.openai.com/v1'},
+  {re: /googleapis|gemini/i, name: 'Gemini', color: '#4285F4', icon: 'gemini-color.svg', base: 'https://generativelanguage.googleapis.com/v1beta/openai'},
+  {re: /anthropic/i, name: 'Claude', color: '#D97757', icon: 'claude-color.svg', base: 'https://api.anthropic.com/v1'},
+  {re: /(^|\W)x\.ai|grok/i, name: 'Grok', color: '#1D1F23', icon: 'grok.svg', base: 'https://api.x.ai/v1'},
+  {re: /mistral/i, name: 'Mistral', color: '#FA520F', icon: 'mistral-color.svg', base: 'https://api.mistral.ai/v1'},
+  {re: /groq/i, name: 'Groq', color: '#F55036', icon: 'groq.svg', base: 'https://api.groq.com/openai/v1'},
+  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'}
+];
+var VISION_AVATAR_PALETTE = ['#1677FF', '#7B5EC7', '#C9446A', '#B85C2B', '#637A50', '#0E8A8A', '#B0499B', '#4D6BFE'];
+var VISION_PLUS_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
+var VISION_BOLT_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5 4.5 11H9l-1 6.5L14.5 9H10l1-6.5z"/></svg>';
+var VISION_TRASH_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13M8 5.2V3.5h4v1.7M5.2 5.5l.7 11h8.2l.7-11M8.2 8.5v5.2M11.8 8.5v5.2"/></svg>';
+
+function visionHash(text) {
+  var h = 0;
+  for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function visionBrandFromBase(apiBase) {
+  if (!apiBase) return null;
+  for (var i = 0; i < VISION_BRAND_RULES.length; i++) {
+    if (VISION_BRAND_RULES[i].re.test(apiBase)) return VISION_BRAND_RULES[i];
+  }
+  var host = '';
+  try {
+    host = new URL(apiBase.indexOf('://') >= 0 ? apiBase : 'https://' + apiBase).hostname;
+  } catch (e) {
+    return null;
+  }
+  if (!host) return null;
+  var parts = host.split('.').filter(Boolean);
+  var label = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+  if ((label === 'api' || !label) && parts.length) label = parts[0];
+  if (!label) return null;
+  return {
+    name: label.charAt(0).toUpperCase() + label.slice(1),
+    color: VISION_AVATAR_PALETTE[visionHash(host) % VISION_AVATAR_PALETTE.length]
+  };
+}
+
+function visionHostLabel(apiBase) {
+  try {
+    return new URL(apiBase.indexOf('://') >= 0 ? apiBase : 'https://' + apiBase).hostname || apiBase;
+  } catch (e) {
+    return apiBase || '';
+  }
+}
+
+function visionAvatarFor(provider) {
+  var brand = visionBrandFromBase(provider.api_base);
+  var name = (provider.name || (brand && brand.name) || '').trim();
+  var color = (brand && brand.color)
+    || VISION_AVATAR_PALETTE[visionHash(name || '?') % VISION_AVATAR_PALETTE.length];
+  return {letter: (name.charAt(0) || '?').toUpperCase(), color: color};
+}
+
+function visionAvatarHtml(provider, extraClass) {
+  var brand = visionBrandFromBase(provider.api_base);
+  var cls = 'vision-avatar' + (extraClass ? ' ' + extraClass : '');
+  if (brand && brand.icon) {
+    return '<span class="' + cls + ' has-icon"><img src="/static/brands/' + brand.icon + '" alt=""></span>';
+  }
+  var info = visionAvatarFor(provider);
+  return '<span class="' + cls + '" style="background:' + info.color + '">' + esc(info.letter) + '</span>';
+}
+
+/* API 地址的常见服务商下拉 */
+var visionBasePopOpen = false;
+var visionBaseActiveIndex = -1;
+var visionBaseFlat = [];
+
+function visionBaseFiltered() {
+  var input = document.getElementById('vision-api-base');
+  var query = input ? input.value.trim().toLowerCase() : '';
+  var presets = VISION_BRAND_RULES.filter(function(rule) { return rule.base; });
+  if (!query) return presets;
+  return presets.filter(function(rule) {
+    return rule.name.toLowerCase().indexOf(query) >= 0
+      || rule.base.toLowerCase().indexOf(query) >= 0;
+  });
+}
+
+function renderVisionBasePop() {
+  var pop = document.getElementById('vision-base-pop');
+  var input = document.getElementById('vision-api-base');
+  if (!pop) return;
+  visionBaseFlat = visionBaseFiltered();
+  if (!visionBasePopOpen || !visionBaseFlat.length) {
+    pop.hidden = true;
+    pop.innerHTML = '';
+    if (input) input.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  pop.innerHTML = '<div class="vision-model-group">常见服务商</div>'
+    + visionBaseFlat.map(function(rule, index) {
+        return '<div class="vision-model-item vision-base-item' + (index === visionBaseActiveIndex ? ' active' : '')
+          + '" data-base="' + esc(rule.base) + '">'
+          + visionAvatarHtml({api_base: rule.base, name: rule.name}, 'vision-avatar-sm')
+          + '<span class="vision-base-name">' + esc(rule.name) + '</span>'
+          + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
+          + '</div>';
+      }).join('');
+  pop.hidden = false;
+  if (input) input.setAttribute('aria-expanded', 'true');
+  var active = pop.querySelector('.vision-model-item.active');
+  if (active) active.scrollIntoView({block: 'nearest'});
+}
+
+function openVisionBasePop() {
+  closeVisionModelPop();
+  visionBasePopOpen = true;
+  renderVisionBasePop();
+}
+
+function closeVisionBasePop() {
+  if (!visionBasePopOpen) return;
+  visionBasePopOpen = false;
+  visionBaseActiveIndex = -1;
+  renderVisionBasePop();
+}
+
+function pickVisionBase(base) {
+  var input = document.getElementById('vision-api-base');
+  if (input) input.value = base || '';
+  closeVisionBasePop();
+  autoFillVisionName();
+  maybeAutoFetchVisionModels();
+  if (input) input.focus();
+}
+
+function visionBaseKeydown(event) {
+  if (event.key === 'Escape') { closeVisionBasePop(); return; }
+  if (!visionBasePopOpen) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      openVisionBasePop();
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!visionBaseFlat.length) return;
+    var delta = event.key === 'ArrowDown' ? 1 : -1;
+    visionBaseActiveIndex = (visionBaseActiveIndex + delta + visionBaseFlat.length) % visionBaseFlat.length;
+    renderVisionBasePop();
+  } else if (event.key === 'Enter') {
+    if (visionBaseActiveIndex >= 0 && visionBaseActiveIndex < visionBaseFlat.length) {
+      event.preventDefault();
+      pickVisionBase(visionBaseFlat[visionBaseActiveIndex].base);
+    }
+  }
+}
+
+function setVisionModelHint(message, state) {
+  var hint = document.getElementById('vision-model-hint');
+  if (!hint) return;
+  hint.textContent = message;
+  hint.className = 'vision-model-hint' + (state ? ' ' + state : '');
+}
+
+var visionModelPopOpen = false;
+var visionModelActiveIndex = -1;
+var visionModelFlat = [];
+
+function visionModelFiltered() {
+  var input = document.getElementById('vision-model');
+  var query = input ? input.value.trim().toLowerCase() : '';
+  if (!query) return visionModelOptions;
+  return visionModelOptions.filter(function(item) {
+    return item.id.toLowerCase().indexOf(query) >= 0
+      || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
+  });
+}
+
+function renderVisionModelPop() {
+  var pop = document.getElementById('vision-model-pop');
+  var input = document.getElementById('vision-model');
+  if (!pop) return;
+  var items = visionModelFiltered();
+  visionModelFlat = [];
+  if (!visionModelPopOpen || !items.length) {
+    pop.hidden = true;
+    pop.innerHTML = '';
+    if (input) input.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  var owners = [];
+  var byOwner = {};
+  items.forEach(function(item) {
+    var owner = String(item.owned_by || '其他');
+    if (!byOwner[owner]) { byOwner[owner] = []; owners.push(owner); }
+    byOwner[owner].push(item);
+  });
+  var html = owners.map(function(owner) {
+    return '<div class="vision-model-group">' + esc(owner) + '</div>'
+      + byOwner[owner].map(function(item) {
+          var index = visionModelFlat.length;
+          visionModelFlat.push(item);
+          return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
+            + '" data-model="' + esc(item.id) + '">'
+            + '<span class="vision-model-id">' + esc(item.id) + '</span>'
+            + (item.likely_vision ? '<span class="vision-model-badge">可能支持图片</span>' : '')
+            + '</div>';
+        }).join('');
+  }).join('');
+  pop.innerHTML = html;
+  pop.hidden = false;
+  if (input) input.setAttribute('aria-expanded', 'true');
+  var active = pop.querySelector('.vision-model-item.active');
+  if (active) active.scrollIntoView({block: 'nearest'});
+}
+
+function openVisionModelPop() {
+  closeVisionBasePop();
+  visionModelPopOpen = true;
+  renderVisionModelPop();
+}
+
+function closeVisionModelPop() {
+  if (!visionModelPopOpen) return;
+  visionModelPopOpen = false;
+  visionModelActiveIndex = -1;
+  renderVisionModelPop();
+}
+
+function pickVisionModel(modelId) {
+  var input = document.getElementById('vision-model');
+  if (input) input.value = modelId || '';
+  closeVisionModelPop();
+  if (input) input.focus();
+}
+
+function visionModelKeydown(event) {
+  if (event.key === 'Escape') { closeVisionModelPop(); return; }
+  if (!visionModelPopOpen) {
+    if (event.key === 'ArrowDown' && visionModelOptions.length) {
+      event.preventDefault();
+      openVisionModelPop();
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (!visionModelFlat.length) return;
+    var delta = event.key === 'ArrowDown' ? 1 : -1;
+    visionModelActiveIndex = (visionModelActiveIndex + delta + visionModelFlat.length) % visionModelFlat.length;
+    renderVisionModelPop();
+  } else if (event.key === 'Enter') {
+    if (visionModelActiveIndex >= 0 && visionModelActiveIndex < visionModelFlat.length) {
+      event.preventDefault();
+      pickVisionModel(visionModelFlat[visionModelActiveIndex].id);
+    }
+  }
+}
+
+function clearVisionModelOptions(message) {
+  visionModelOptions = [];
+  visionModelActiveIndex = -1;
+  renderVisionModelPop();
+  if (message) setVisionModelHint(message, '');
+}
+
+function resetVisionModelButton() {
+  var button = document.getElementById('vision-model-refresh');
+  if (!button) return;
+  button.disabled = false;
+  button.textContent = '获取模型';
+}
+
+function renderVisionModelOptions(models) {
+  visionModelOptions = (models || []).filter(function(item) {
+    return item && typeof item.id === 'string' && item.id.trim();
+  });
+  visionModelActiveIndex = -1;
+  renderVisionModelPop();
+}
+
+function currentVisionProviderDraft() {
+  return {
+    id: document.getElementById('vision-provider-id').value.trim(),
+    name: document.getElementById('vision-provider-name').value.trim(),
+    api_base: document.getElementById('vision-api-base').value.trim(),
+    api_key: document.getElementById('vision-api-key').value.trim()
+  };
+}
+
+function visionDraftHasUsableKey(provider) {
+  if (provider.api_key) return true;
+  if (!provider.id) return false;
+  var saved = (visionConfig.providers || []).find(function(item) {
+    return item.id === provider.id;
+  });
+  return !!(saved && saved.has_api_key);
+}
+
+async function fetchVisionModels(options) {
+  options = options || {};
+  var silent = !!options.silent;
+  var provider = currentVisionProviderDraft();
+  if (!provider.api_base) {
+    setVisionModelHint('请先填写 API 地址；模型名称也可以手动输入。', 'is-error');
+    if (!silent) showToast('请先填写 API 地址');
+    return;
+  }
+  if (!visionDraftHasUsableKey(provider)) {
+    setVisionModelHint('请先填写 API Key；模型名称也可以手动输入。', 'is-error');
+    if (!silent) showToast('请先填写 API Key');
+    return;
+  }
+
+  var requestSerial = ++visionModelRequestSerial;
+  var button = document.getElementById('vision-model-refresh');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '获取中…';
+  }
+  setVisionModelHint('正在读取接口可用模型…', 'is-loading');
+  try {
+    var resp = await fetch('/api/vision-providers/models', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({provider: provider})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '获取模型失败');
+    if (requestSerial !== visionModelRequestSerial) return;
+    renderVisionModelOptions(data.models || []);
+    setVisionModelHint(
+      '已获取 ' + visionModelOptions.length + ' 个模型。点击输入框选择；“可能支持图片”仅为名称提示。',
+      'is-ready'
+    );
+    if (!silent) {
+      openVisionModelPop();
+      showToast('已获取 ' + visionModelOptions.length + ' 个模型');
+    }
+  } catch (e) {
+    if (requestSerial !== visionModelRequestSerial) return;
+    clearVisionModelOptions();
+    setVisionModelHint((e.message || '无法自动获取模型') + ' 仍可手动填写模型名称。', 'is-error');
+    if (!silent) showToast('获取模型失败：' + e.message);
+  } finally {
+    if (requestSerial === visionModelRequestSerial && button) {
+      button.disabled = false;
+      button.textContent = '获取模型';
+    }
+  }
+}
+
+function maybeAutoFetchVisionModels() {
+  var provider = currentVisionProviderDraft();
+  visionModelRequestSerial += 1;
+  resetVisionModelButton();
+  clearVisionModelOptions('地址或密钥已更新，正在准备读取模型…');
+  if (provider.api_base && visionDraftHasUsableKey(provider)) {
+    fetchVisionModels({silent: true});
+  } else {
+    setVisionModelHint('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入。', '');
+  }
+}
+
+function configuredVisionProviders() {
+  return (visionConfig.providers || []).filter(function(provider) {
+    return provider.enabled && provider.configured;
+  });
+}
+
+function syncImportVisionProviders() {
+  var select = document.getElementById('import-vision-provider');
+  var option = document.getElementById('vision-parse-option');
+  var radio = option ? option.querySelector('input[name="pdf-parse-mode"]') : null;
+  if (!select || !option || !radio) return;
+  var providers = configuredVisionProviders();
+  select.innerHTML = providers.length
+    ? providers.map(function(provider) {
+        return '<option value="' + esc(provider.id) + '">' + esc(provider.name) + ' · ' + esc(provider.model) + '</option>';
+      }).join('')
+    : '<option value="">请先在设置中配置</option>';
+  var preferred = visionConfig.default_provider_id || '';
+  if (providers.some(function(provider) { return provider.id === preferred; })) select.value = preferred;
+  radio.disabled = providers.length === 0;
+  select.disabled = providers.length === 0;
+  option.classList.toggle('is-disabled', providers.length === 0);
+  if (!providers.length && radio.checked) {
+    var auto = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
+    if (auto) auto.checked = true;
+  }
+}
+
+function renderVisionProviders() {
+  var list = document.getElementById('vision-provider-list');
+  var status = document.getElementById('vision-config-status');
+  var defaultSelect = document.getElementById('vision-default-provider');
+  var autoFallback = document.getElementById('vision-auto-fallback');
+  if (status) {
+    var readyCount = configuredVisionProviders().length;
+    status.className = 'settings-status ' + (readyCount ? 'ready' : 'warning');
+    status.textContent = readyCount ? '已配置 ' + readyCount + ' 个接口' : '尚未配置';
+  }
+  if (list) {
+    if (!(visionConfig.providers || []).length) {
+      list.innerHTML = '<div class="vision-provider-empty">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
+        + '<strong>尚未添加其他解析接口</strong>'
+        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问、DeepSeek 等视觉模型。</span>'
+        + '</div>';
+    } else {
+      var editingId = (document.getElementById('vision-provider-id') || {}).value || '';
+      list.innerHTML = visionConfig.providers.map(function(provider) {
+        var state = provider.configured && provider.enabled ? '可用' : provider.enabled ? '缺少密钥' : '已停用';
+        var stateClass = provider.configured && provider.enabled ? '' : provider.enabled ? ' warning' : ' muted';
+        return '<div class="vision-provider-card' + (editingId === provider.id ? ' selected' : '')
+          + '" role="button" tabindex="0" title="点击编辑这个接口"'
+          + ' onclick="editVisionProvider(\'' + provider.id + '\')"'
+          + ' onkeydown="if(event.key===\'Enter\')editVisionProvider(\'' + provider.id + '\')">'
+          + visionAvatarHtml(provider)
+          + '<div class="vision-provider-card-main">'
+          + '<div class="vision-provider-card-name">' + esc(provider.name)
+          + '<span class="vision-provider-state' + stateClass + '">' + state + '</span></div>'
+          + '<div class="vision-provider-card-model" title="' + esc(provider.api_base) + '">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</div>'
+          + '</div>'
+          + '<div class="vision-provider-card-actions" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">'
+          + '<label class="ui-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
+          + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
+          + '<span class="ui-switch-track" aria-hidden="true"></span></label>'
+          + '<button class="icon-btn" type="button" title="发送测试图片，验证连通" aria-label="测试连接" onclick="testVisionProvider(\'' + provider.id + '\')">' + VISION_BOLT_SVG + '</button>'
+          + '<button class="icon-btn danger" type="button" title="删除接口" aria-label="删除接口" onclick="deleteVisionProvider(\'' + provider.id + '\')">' + VISION_TRASH_SVG + '</button>'
+          + '</div></div>';
+      }).join('');
+    }
+  }
+  if (defaultSelect) {
+    var providers = configuredVisionProviders();
+    defaultSelect.innerHTML = '<option value="">失败后仅提示，不自动切换</option>'
+      + providers.map(function(provider) {
+          return '<option value="' + esc(provider.id) + '">' + esc(provider.name) + ' · ' + esc(provider.model) + '</option>';
+        }).join('');
+    defaultSelect.value = visionConfig.default_provider_id || '';
+  }
+  if (autoFallback) {
+    autoFallback.checked = !!visionConfig.auto_fallback_from_mineru;
+    autoFallback.disabled = configuredVisionProviders().length === 0;
+  }
+  syncImportVisionProviders();
+}
+
+async function loadVisionProviders() {
+  var status = document.getElementById('vision-config-status');
+  if (status) {
+    status.className = 'settings-status';
+    status.textContent = '读取中…';
+  }
+  try {
+    var resp = await fetch('/api/vision-providers');
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    visionConfig = data;
+    visionConfigLoaded = true;
+    renderVisionProviders();
+  } catch (e) {
+    visionConfigLoaded = false;
+    if (status) {
+      status.className = 'settings-status warning';
+      status.textContent = '读取失败';
+    }
+    syncImportVisionProviders();
+    showToast('读取其他解析 API 配置失败：' + e.message);
+  }
+}
+
+var visionNameAutoValue = '';
+
+function updateVisionEditorHead() {
+  var title = document.getElementById('vision-editor-title');
+  var avatar = document.getElementById('vision-editor-avatar');
+  var cancel = document.getElementById('vision-cancel-edit');
+  if (!title || !avatar) return;
+  var editing = !!document.getElementById('vision-provider-id').value.trim();
+  var name = document.getElementById('vision-provider-name').value.trim();
+  var base = document.getElementById('vision-api-base').value.trim();
+  title.textContent = editing
+    ? '编辑接口' + (name ? ' · ' + name : '')
+    : (name ? '添加接口 · ' + name : '添加解析接口');
+  if (name || base) {
+    var brand = visionBrandFromBase(base);
+    avatar.classList.add('has-brand');
+    if (brand && brand.icon) {
+      avatar.classList.add('has-icon');
+      avatar.style.background = '';
+      avatar.innerHTML = '<img src="/static/brands/' + brand.icon + '" alt="">';
+    } else {
+      avatar.classList.remove('has-icon');
+      var info = visionAvatarFor({name: name, api_base: base});
+      avatar.style.background = info.color;
+      avatar.textContent = info.letter;
+    }
+  } else {
+    avatar.classList.remove('has-brand', 'has-icon');
+    avatar.style.background = '';
+    avatar.innerHTML = VISION_PLUS_SVG;
+  }
+  if (cancel) cancel.hidden = !editing;
+}
+
+function autoFillVisionName() {
+  var nameInput = document.getElementById('vision-provider-name');
+  if (!nameInput) return;
+  var current = nameInput.value.trim();
+  if (!current || current === visionNameAutoValue) {
+    var brand = visionBrandFromBase(document.getElementById('vision-api-base').value.trim());
+    var suggested = brand ? brand.name : '';
+    nameInput.value = suggested;
+    visionNameAutoValue = suggested;
+  }
+  updateVisionEditorHead();
+}
+
+function resetVisionProviderForm() {
+  visionModelRequestSerial += 1;
+  resetVisionModelButton();
+  closeVisionModelPop();
+  ['vision-provider-id','vision-provider-name','vision-api-base','vision-model','vision-api-key'].forEach(function(id) {
+    var input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  visionNameAutoValue = '';
+  var enabled = document.getElementById('vision-provider-enabled');
+  if (enabled) enabled.checked = true;
+  var hint = document.getElementById('vision-save-hint');
+  if (hint) hint.textContent = '';
+  clearVisionModelOptions('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入。');
+  updateVisionEditorHead();
+  renderVisionProviders();
+}
+
+function startAddVisionProvider() {
+  resetVisionProviderForm();
+  var card = document.getElementById('vision-editor-card');
+  if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  var base = document.getElementById('vision-api-base');
+  if (base) base.focus();
+}
+
+function editVisionProvider(providerId) {
+  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  if (!provider) return;
+  document.getElementById('vision-provider-id').value = provider.id;
+  document.getElementById('vision-provider-name').value = provider.name || '';
+  document.getElementById('vision-api-base').value = provider.api_base || '';
+  document.getElementById('vision-model').value = provider.model || '';
+  document.getElementById('vision-api-key').value = '';
+  document.getElementById('vision-provider-enabled').checked = !!provider.enabled;
+  document.getElementById('vision-save-hint').textContent = provider.has_api_key ? '已保存密钥；留空不会覆盖。' : '尚未保存 API Key。';
+  visionNameAutoValue = '';
+  visionModelRequestSerial += 1;
+  resetVisionModelButton();
+  closeVisionModelPop();
+  clearVisionModelOptions('正在读取这个接口的模型列表…');
+  updateVisionEditorHead();
+  renderVisionProviders();
+  var card = document.getElementById('vision-editor-card');
+  if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  if (provider.api_base && provider.has_api_key) fetchVisionModels({silent: true});
+}
+
+async function quickToggleVisionProvider(providerId, enabled) {
+  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  if (!provider) return;
+  try {
+    var resp = await fetch('/api/vision-providers', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'save_provider',
+        provider: {
+          id: provider.id,
+          name: provider.name,
+          api_base: provider.api_base,
+          model: provider.model,
+          api_key: '',
+          enabled: enabled
+        }
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '切换失败');
+    visionConfig = data;
+    visionConfigLoaded = true;
+    renderVisionProviders();
+    showToast(provider.name + (enabled ? ' 已启用' : ' 已停用'));
+  } catch (e) {
+    renderVisionProviders();
+    showToast('切换失败：' + e.message);
+  }
+}
+
+async function saveVisionProvider() {
+  var hint = document.getElementById('vision-save-hint');
+  var provider = {
+    id: document.getElementById('vision-provider-id').value.trim(),
+    name: document.getElementById('vision-provider-name').value.trim(),
+    api_base: document.getElementById('vision-api-base').value.trim(),
+    model: document.getElementById('vision-model').value.trim(),
+    api_key: document.getElementById('vision-api-key').value.trim(),
+    enabled: document.getElementById('vision-provider-enabled').checked
+  };
+  if (!provider.api_base) {
+    showToast('请先填写 API 地址');
+    document.getElementById('vision-api-base').focus();
+    return;
+  }
+  if (!provider.id && !provider.api_key && !visionDraftHasUsableKey(provider)) {
+    showToast('请填写 API Key');
+    document.getElementById('vision-api-key').focus();
+    return;
+  }
+  if (!provider.model) {
+    showToast('请填写或选择视觉模型');
+    document.getElementById('vision-model').focus();
+    return;
+  }
+  if (!provider.name) {
+    var brand = visionBrandFromBase(provider.api_base);
+    provider.name = brand ? brand.name : visionHostLabel(provider.api_base) || '自定义接口';
+    document.getElementById('vision-provider-name').value = provider.name;
+  }
+  if (hint) hint.textContent = '正在保存…';
+  try {
+    var resp = await fetch('/api/vision-providers', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'save_provider', provider: provider})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    visionConfig = data;
+    visionConfigLoaded = true;
+    resetVisionProviderForm();
+    renderVisionProviders();
+    showToast('其他解析 API 已保存');
+  } catch (e) {
+    if (hint) hint.textContent = '保存失败';
+    showToast('保存解析接口失败：' + e.message);
+  }
+}
+
+async function deleteVisionProvider(providerId) {
+  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  if (!provider || !confirm('删除解析接口“' + provider.name + '”？')) return;
+  try {
+    var resp = await fetch('/api/vision-providers', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'delete_provider', provider_id: providerId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
+    visionConfig = data;
+    resetVisionProviderForm();
+    renderVisionProviders();
+    showToast('解析接口已删除');
+  } catch (e) {
+    showToast('删除解析接口失败：' + e.message);
+  }
+}
+
+async function testVisionProvider(providerId) {
+  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  if (!provider) return;
+  if (!provider.configured) {
+    showToast('请先保存 API Key、地址和模型名称');
+    return;
+  }
+  if (!confirm('测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入。继续吗？')) return;
+  showToast('正在测试 ' + provider.name + '…');
+  try {
+    var resp = await fetch('/api/vision-providers/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({provider_id: providerId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
+    showToast(provider.name + ' 视觉连接成功 · ' + data.latency_ms + ' ms');
+  } catch (e) {
+    showToast(provider.name + ' 连接失败：' + e.message);
+  }
+}
+
+async function saveVisionPolicy() {
+  var providerId = document.getElementById('vision-default-provider').value;
+  var autoFallback = document.getElementById('vision-auto-fallback').checked;
+  if (autoFallback && !providerId) {
+    showToast('请先选择默认备用接口');
+    return;
+  }
+  if (autoFallback && !confirm('开启后，MinerU 解析失败会自动改用默认备用接口重试。确认开启吗？')) return;
+  try {
+    var resp = await fetch('/api/vision-providers', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'save_policy',
+        default_provider_id: providerId,
+        auto_fallback_from_mineru: autoFallback
+      })
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    visionConfig = data;
+    renderVisionProviders();
+    showToast(autoFallback ? '已开启 MinerU 失败后自动切换' : 'MinerU 失败后将只提示用户');
+  } catch (e) {
+    showToast('保存自动切换设置失败：' + e.message);
+  }
+}
+
 /* ═══ Import ═══ */
 let importQueue = [];
 
@@ -2332,7 +3069,11 @@ async function importSelectedScanned() {
     var resp = await fetch('/api/import-local', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({paths: paths})
+      body: JSON.stringify({
+        paths: paths,
+        pdf_parse_mode: selectedPdfParseMode(),
+        vision_provider_id: selectedVisionProviderId()
+      })
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
@@ -2345,13 +3086,17 @@ async function importSelectedScanned() {
         status: 'processing',
         step: 0,
         jobId: job.job_id,
+        providerId: job.provider_id || null,
+        providerName: ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
         message: '文件已复制，正在处理…'
       };
       if (job.file_type === 'pdf' && job.detected_pdf_type) {
         q.detectedType = job.detected_pdf_type;
-        q.route = job.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+        q.route = job.parse_route || (job.detected_pdf_type === 'native_text' ? 'native' : 'mineru');
         q.step = 2;
-        q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type);
+        q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type)
+          + (q.route === 'vision' ? '，将使用其他视觉 API'
+            : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
       } else if (job.file_type !== 'pdf') {
         q.step = 1;
       }
@@ -2370,9 +3115,22 @@ async function importSelectedScanned() {
   }
 }
 
+function selectedPdfParseMode() {
+  var selected = document.querySelector('input[name="pdf-parse-mode"]:checked');
+  return selected && ['auto','mineru','vision'].indexOf(selected.value) >= 0 ? selected.value : 'auto';
+}
+
+function selectedVisionProviderId() {
+  var select = document.getElementById('import-vision-provider');
+  return selectedPdfParseMode() === 'vision' && select ? select.value : '';
+}
+
 function handleFileSelect(files) {
   if (!files || files.length === 0) return;
   var validExts = ['.pdf', '.docx'];
+  var pdfParseMode = selectedPdfParseMode();
+  var selectedProviderId = selectedVisionProviderId();
+  var selectedProvider = (visionConfig.providers || []).find(function(item) { return item.id === selectedProviderId; });
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
     var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -2387,6 +3145,9 @@ function handleFileSelect(files) {
       name: file.name,
       size: file.size,
       type: ext === '.pdf' ? 'pdf' : 'docx',
+      parseMode: ext === '.pdf' ? pdfParseMode : null,
+      providerId: ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId : null,
+      providerName: ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name : null,
       status: 'queued',
       step: 0,
       message: '等待处理'
@@ -2402,14 +3163,17 @@ function handleFileSelect(files) {
 function importStepsFor(q) {
   if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
   if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
+  if (q.route === 'vision') return ['读取文件', '类型检测', (q.providerName || '其他 API') + ' 解析', '文本入库', '建立索引'];
   return ['读取文件', '类型检测', '本地解析', '建立索引'];
 }
 
 function importRouteBadge(q) {
   if (q.type !== 'pdf' || !q.detectedType) return '';
   var mineru = q.route === 'mineru';
-  return '<span class="import-route-badge ' + (mineru ? 'mineru' : 'native') + '">'
-    + esc(pdfTypeLabel(q.detectedType)) + (mineru ? ' · 提交 MinerU' : ' · 本地解析')
+  var vision = q.route === 'vision';
+  return '<span class="import-route-badge ' + (mineru ? 'mineru' : vision ? 'vision' : 'native') + '">'
+    + esc(pdfTypeLabel(q.detectedType))
+    + (mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : ' · 本地解析')
     + '</span>';
 }
 
@@ -2435,6 +3199,14 @@ function renderImportQueue() {
         + '</div>';
     }).join('');
     var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : '';
+    var retryHTML = '';
+    if (q.status === 'error' && q.canRetryVision) {
+      retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
+        + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>'
+        + '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">切换设置</button></div>';
+    } else if (q.status === 'error' && q.needsProviderConfig) {
+      retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="navigateTo(\'settings\')">配置其他解析 API</button></div>';
+    }
     return '<div class="import-item" data-id="' + q.id + '">'
       + '<div class="import-item-header">'
       + '<span class="type-badge ' + typeCls + '">' + (q.type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
@@ -2445,6 +3217,7 @@ function renderImportQueue() {
       + '</div>'
       + '<div class="import-steps">' + stepsHTML + '</div>'
       + '<div class="import-item-status' + statusCls + '">' + esc(q.message) + '</div>'
+      + retryHTML
       + '</div>';
   }).join('');
 }
@@ -2466,19 +3239,23 @@ async function uploadImport(id) {
       method: 'POST',
       headers: {
         'Content-Type': q.file.type || (q.type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-        'X-File-Name': encodeURIComponent(q.name)
+        'X-File-Name': encodeURIComponent(q.name),
+        'X-PDF-Parse-Mode': q.parseMode || 'auto',
+        'X-Vision-Provider-ID': q.providerId || ''
       },
       body: q.file
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
     q.jobId = data.job_id;
+    q.providerId = data.provider_id || q.providerId;
     if (q.type === 'pdf' && data.detected_pdf_type) {
       q.detectedType = data.detected_pdf_type;
-      q.route = data.detected_pdf_type === 'native_text' ? 'native' : 'mineru';
+      q.route = data.parse_route || (data.detected_pdf_type === 'native_text' ? 'native' : 'mineru');
       q.step = 2;
       q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
-        + (q.route === 'mineru' ? '，将提交 MinerU 解析' : '，本地解析，无需 MinerU');
+        + (q.route === 'vision' ? '，将使用其他视觉 API'
+          : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
     } else {
       q.step = 1;
       q.message = '文件已保存，正在建立索引…';
@@ -2499,10 +3276,15 @@ function pollImportJob(id) {
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
       if (data.error) throw new Error(data.error);
+      if (data.parse_route) q.route = data.parse_route;
+      if (data.provider_id) q.providerId = data.provider_id;
+      if (data.provider_name) q.providerName = data.provider_name;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
+      else if (data.phase === 'vision_processing') q.route = 'vision';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
       var steps = importStepsFor(q);
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
+      else if (data.phase === 'vision_processing') q.step = 2;
       else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('文本入库');
       else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
       else if (data.status === 'completed') q.step = steps.length;
@@ -2516,6 +3298,10 @@ function pollImportJob(id) {
       } else if (data.status === 'failed') {
         q.status = 'error';
         q.message = data.message || '导入失败';
+        q.canRetryVision = !!data.can_retry_with_provider;
+        q.retryProviderId = data.retry_provider_id || q.providerId || null;
+        q.retryProviderName = data.retry_provider_name || q.providerName || null;
+        q.needsProviderConfig = !!data.needs_provider_config;
       }
       renderImportQueue();
       if (q.status === 'processing') setTimeout(function() { pollImportJob(id); }, 2500);
@@ -2525,6 +3311,42 @@ function pollImportJob(id) {
       q.message = err.message || '读取导入状态失败';
       renderImportQueue();
     });
+}
+
+async function retryImportWithVision(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (!q || !q.jobId) return;
+  var providerId = q.retryProviderId || visionConfig.default_provider_id || selectedVisionProviderId();
+  if (!providerId) {
+    navigateTo('settings');
+    showToast('请先配置一个其他解析 API');
+    return;
+  }
+  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  var providerName = (provider && provider.name) || q.retryProviderName || '其他解析 API';
+  if (!confirm('将改用“' + providerName + '”重新解析这份 PDF，可能产生费用。继续吗？')) return;
+  try {
+    var resp = await fetch('/api/import-retry', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: q.jobId, provider_id: providerId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '重试失败');
+    q.jobId = data.job_id;
+    q.status = 'processing';
+    q.route = 'vision';
+    q.providerId = data.provider_id;
+    q.providerName = data.provider_name || providerName;
+    q.step = 2;
+    q.message = '正在切换到 ' + q.providerName + '…';
+    q.canRetryVision = false;
+    q.needsProviderConfig = false;
+    renderImportQueue();
+    pollImportJob(q.id);
+  } catch (e) {
+    showToast('切换解析接口失败：' + e.message);
+  }
 }
 
 /* ═══ Load index metadata ═══ */
@@ -2543,6 +3365,49 @@ async function loadMeta() {
 document.addEventListener('click', function(event) {
   if (!event.target.closest('.app-select')) closeAppSelects();
 });
+(function initVisionEditor() {
+  var base = document.getElementById('vision-api-base');
+  var key = document.getElementById('vision-api-key');
+  var name = document.getElementById('vision-provider-name');
+  var model = document.getElementById('vision-model');
+  var pop = document.getElementById('vision-model-pop');
+  var basePop = document.getElementById('vision-base-pop');
+  if (base) {
+    base.addEventListener('change', maybeAutoFetchVisionModels);
+    base.addEventListener('input', function() {
+      autoFillVisionName();
+      visionBaseActiveIndex = -1;
+      openVisionBasePop();
+    });
+    base.addEventListener('focus', openVisionBasePop);
+    base.addEventListener('keydown', visionBaseKeydown);
+  }
+  if (basePop) basePop.addEventListener('mousedown', function(event) {
+    event.preventDefault();
+    var item = event.target.closest('.vision-base-item');
+    if (item) pickVisionBase(item.getAttribute('data-base'));
+  });
+  if (key) key.addEventListener('change', maybeAutoFetchVisionModels);
+  if (name) name.addEventListener('input', updateVisionEditorHead);
+  if (model) {
+    model.addEventListener('focus', openVisionModelPop);
+    model.addEventListener('input', function() {
+      visionModelActiveIndex = -1;
+      openVisionModelPop();
+    });
+    model.addEventListener('keydown', visionModelKeydown);
+  }
+  if (pop) pop.addEventListener('mousedown', function(event) {
+    event.preventDefault();
+    var item = event.target.closest('.vision-model-item');
+    if (item) pickVisionModel(item.getAttribute('data-model'));
+  });
+  document.addEventListener('click', function(event) {
+    var combo = event.target.closest('.vision-model-combo');
+    if (!combo || !combo.querySelector('#vision-model')) closeVisionModelPop();
+    if (!combo || !combo.querySelector('#vision-api-base')) closeVisionBasePop();
+  });
+})();
 loadMeta();
 loadPreferences();
 syncLibraryViewButtons();

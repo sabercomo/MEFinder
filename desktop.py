@@ -206,15 +206,19 @@ def main() -> None:
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(mineru_config_path)
+        vision_config_path = local_app_data_root() / "vision_api.local.json"
+        os.environ["ME_FINDER_VISION_CONFIG"] = str(vision_config_path)
         preferences_path = local_app_data_root() / "preferences.json"
         os.environ["ME_FINDER_PREFERENCES"] = str(preferences_path)
     elif portable:
         preferences_path = root / "config" / "preferences.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(root / "config" / "mineru_api.local.json")
+        os.environ["ME_FINDER_VISION_CONFIG"] = str(root / "config" / "vision_api.local.json")
         os.environ["ME_FINDER_PREFERENCES"] = str(preferences_path)
     else:
         preferences_path = root / "config" / "preferences.json"
         os.environ.setdefault("ME_FINDER_MINERU_CONFIG", str(root / "config" / "mineru_api.local.json"))
+        os.environ.setdefault("ME_FINDER_VISION_CONFIG", str(root / "config" / "vision_api.local.json"))
         os.environ.setdefault("ME_FINDER_PREFERENCES", str(preferences_path))
     theme = read_preferences(preferences_path)["theme"]
     setup_logging(root)

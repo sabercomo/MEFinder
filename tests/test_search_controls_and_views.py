@@ -21,8 +21,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('data-value="all"', HTML)
         self.assertIn("searchLimit = limit === 'all'", HTML)
 
-    def test_all_dropdowns_use_application_menus(self) -> None:
-        self.assertNotIn("<select", HTML.lower())
+    def test_primary_search_and_library_dropdowns_use_application_menus(self) -> None:
         self.assertIn('id="library-sort-field-select"', HTML)
         self.assertIn('id="library-sort-direction-select"', HTML)
         self.assertIn("setLibrarySortOption(event,'field','title')", HTML)
@@ -57,13 +56,51 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
-        self.assertIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
+        self.assertNotIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
+        self.assertIn("start_import_job(target, profile, sid, True, force_mineru=True)", WEB_SOURCE)
         self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
-        self.assertIn("提交 MinerU 解析", HTML)
+        self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
-        self.assertIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+        self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
+        self.assertIn("将把这份 PDF 上传到 MinerU 在线服务重新解析", HTML)
+
+    def test_import_page_can_force_native_pdf_through_mineru(self) -> None:
+        self.assertIn('name="pdf-parse-mode" value="auto" checked', HTML)
+        self.assertIn('name="pdf-parse-mode" value="mineru"', HTML)
+        self.assertIn("function selectedPdfParseMode()", HTML)
+        self.assertIn("'X-PDF-Parse-Mode': q.parseMode || 'auto'", HTML)
+        self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
+        self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
+        self.assertIn('payload.get("pdf_parse_mode") or "auto"', WEB_SOURCE)
+        self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
+        self.assertIn('"parse_route": parse_route', WEB_SOURCE)
+
+    def test_optional_vision_api_and_mineru_fallback_are_wired(self) -> None:
+        mineru_section = HTML.index('<span class="settings-section-title">MinerU API</span>')
+        vision_section = HTML.index('<span class="settings-section-title">其他解析 API</span>')
+        self.assertLess(mineru_section, vision_section)
+        self.assertIn('name="pdf-parse-mode" value="vision"', HTML)
+        self.assertIn('id="import-vision-provider"', HTML)
+        self.assertIn('id="vision-auto-fallback"', HTML)
+        self.assertIn("function loadVisionProviders()", HTML)
+        self.assertIn("function retryImportWithVision(id)", HTML)
+        self.assertIn("fetch('/api/import-retry'", HTML)
+        self.assertIn('"X-Vision-Provider-ID"', WEB_SOURCE)
+        self.assertIn('"/api/vision-providers"', WEB_SOURCE)
+        self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
+        self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
+
+    def test_vision_models_can_be_discovered_or_entered_manually(self) -> None:
+        self.assertIn('id="vision-model"', HTML)
+        self.assertIn('id="vision-model-pop"', HTML)
+        self.assertIn('id="vision-model-refresh"', HTML)
+        self.assertIn("function renderVisionModelPop()", HTML)
+        self.assertIn("function fetchVisionModels(options)", HTML)
+        self.assertIn("fetch('/api/vision-providers/models'", HTML)
+        self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
+        self.assertIn("manual_entry_allowed", WEB_SOURCE)
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('onclick="exportBackup()"', HTML)

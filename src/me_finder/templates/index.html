@@ -39,7 +39,7 @@
         <span>设置</span>
       </button>
     </nav>
-    <div class="sidebar-footer">ME_Finder v0.1.0</div>
+    <div class="sidebar-footer">ME_Finder v0.1.2</div>
   </aside>
 
   <!-- ═══ Main ═══ -->
@@ -288,6 +288,25 @@
         </div>
       </div>
       <div class="import-content">
+        <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
+          <div class="pdf-parse-mode-title">PDF 解析方式</div>
+          <label class="pdf-parse-option">
+            <input type="radio" name="pdf-parse-mode" value="auto" checked>
+            <span><strong>自动选择（默认）</strong><small>原生 PDF 快速解析；没有可靠文字层时自动使用 MinerU。</small></span>
+          </label>
+          <label class="pdf-parse-option pdf-parse-option-online">
+            <input type="radio" name="pdf-parse-mode" value="mineru">
+            <span><strong>MinerU 在线解析（免费）</strong><small>强制上传 PDF 并进行 OCR，适合乱码、断字或复杂排版。</small></span>
+          </label>
+          <label class="pdf-parse-option pdf-parse-option-paid" id="vision-parse-option">
+            <input type="radio" name="pdf-parse-mode" value="vision">
+            <span>
+              <strong>其他视觉 API</strong>
+              <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析。</small>
+              <select id="import-vision-provider" class="pdf-provider-select" onclick="event.stopPropagation()" onchange="document.querySelector('input[name=&quot;pdf-parse-mode&quot;][value=&quot;vision&quot;]').checked=true" aria-label="选择其他解析 API"></select>
+            </span>
+          </label>
+        </div>
         <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
           <div class="drop-zone-icon">
             <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
@@ -393,6 +412,85 @@
         </section>
         <section class="settings-section">
           <div class="settings-section-head">
+            <span class="settings-section-title">其他解析 API</span>
+            <span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span>
+            <span id="vision-config-status" class="settings-status">读取中…</span>
+            <button class="action-btn vision-add-btn" type="button" onclick="startAddVisionProvider()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
+          </div>
+          <div class="vision-provider-layout">
+            <div id="vision-provider-list" class="vision-provider-list"></div>
+            <div class="vision-editor-card" id="vision-editor-card">
+              <div class="vision-editor-head">
+                <span id="vision-editor-avatar" class="vision-avatar vision-avatar-lg" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg></span>
+                <div class="vision-editor-titles">
+                  <strong id="vision-editor-title">添加解析接口</strong>
+                  <small>兼容 OpenAI Chat Completions 的视觉模型或中转站</small>
+                </div>
+                <label class="ui-switch" title="启用后可在导入页选择这个接口">
+                  <input id="vision-provider-enabled" type="checkbox" checked>
+                  <span class="ui-switch-track" aria-hidden="true"></span>
+                  <span class="ui-switch-text">启用</span>
+                </label>
+              </div>
+              <div class="settings-grid vision-provider-editor">
+                <input id="vision-provider-id" type="hidden">
+                <label class="settings-label" for="vision-api-base">API 地址</label>
+                <div class="settings-control">
+                  <div class="vision-model-combo vision-base-combo">
+                    <input id="vision-api-base" class="settings-input" type="url" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-base-pop" placeholder="点击选择常见服务商，或直接粘贴接口地址">
+                    <div id="vision-base-pop" class="vision-model-pop" hidden></div>
+                  </div>
+                  <small>从列表选择会自动填写地址和名称；也可以粘贴任意兼容 OpenAI Chat Completions 的地址。</small>
+                </div>
+                <label class="settings-label" for="vision-api-key">API Key</label>
+                <div class="settings-control">
+                  <div class="settings-input-row">
+                    <input id="vision-api-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key">
+                    <button id="vision-key-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('vision-api-key','vision-key-toggle')">显示</button>
+                  </div>
+                  <small>编辑已有接口时留空表示保留原密钥。密钥只保存在本机。</small>
+                </div>
+                <label class="settings-label" for="vision-provider-name">显示名称</label>
+                <div class="settings-control">
+                  <input id="vision-provider-name" class="settings-input" type="text" maxlength="80" placeholder="根据 API 地址自动生成，可修改">
+                  <small>只用来在接口列表和导入页里区分，不影响调用。</small>
+                </div>
+                <label class="settings-label" for="vision-model">视觉模型</label>
+                <div class="settings-control">
+                  <div class="settings-input-row vision-model-row">
+                    <div class="vision-model-combo">
+                      <input id="vision-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-model-pop" placeholder="填写地址和 Key 后选择模型，也可手动输入">
+                      <div id="vision-model-pop" class="vision-model-pop" hidden></div>
+                    </div>
+                    <button id="vision-model-refresh" class="action-btn settings-toggle" type="button" onclick="fetchVisionModels()">获取模型</button>
+                  </div>
+                  <small id="vision-model-hint" class="vision-model-hint">填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入。</small>
+                </div>
+                <span class="settings-label"></span>
+                <div class="settings-control settings-actions">
+                  <button class="action-btn primary" type="button" onclick="saveVisionProvider()">保存接口</button>
+                  <button class="action-btn" id="vision-cancel-edit" type="button" onclick="startAddVisionProvider()" hidden>取消编辑</button>
+                  <span id="vision-save-hint" class="settings-hint"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="vision-fallback-policy">
+            <div class="vision-policy-copy">
+              <strong>MinerU 失败后的处理</strong>
+              <small>默认只提示失败，开启后会自动改用默认备用接口重试。</small>
+            </div>
+            <select id="vision-default-provider" class="settings-input vision-default-select" aria-label="默认备用接口"></select>
+            <label class="ui-switch vision-auto-check">
+              <input id="vision-auto-fallback" type="checkbox">
+              <span class="ui-switch-track" aria-hidden="true"></span>
+              <span class="ui-switch-text">MinerU 失败时自动切换</span>
+            </label>
+            <button class="action-btn" type="button" onclick="saveVisionPolicy()">保存切换设置</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <div class="settings-section-head">
             <span class="settings-section-title">数据备份</span>
             <span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span>
           </div>
@@ -426,7 +524,7 @@
     <div class="remove-modal-title" id="remove-modal-title">从文献库移除？</div>
     <div class="remove-modal-copy" id="remove-modal-copy"></div>
     <div class="remove-options">
-      <label class="remove-option"><input type="checkbox" id="remove-generated" checked><span>删除解析缓存和 MinerU 产物<small>再次导入时需要重新解析或 OCR；共享产物不会删除。</small></span></label>
+      <label class="remove-option"><input type="checkbox" id="remove-generated" checked><span>删除解析缓存和在线解析产物<small>再次导入时需要重新解析或 OCR；共享产物不会删除。</small></span></label>
       <label class="remove-option" id="remove-internal-option"><input type="checkbox" id="remove-internal-copy"><span>同时删除应用内保存的 PDF 副本<small>默认不勾选。外部原始文件永远不会被删除。</small></span></label>
     </div>
     <div class="remove-modal-warning" id="remove-modal-warning">删除应用内 PDF 副本后无法恢复。请再次确认此操作。</div>

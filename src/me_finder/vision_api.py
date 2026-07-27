@@ -1,0 +1,816 @@
+"""OpenAI-compatible vision providers used as optional PDF parsers.
+
+Provider credentials are stored in a separate local-only JSON file.  The
+public summary helpers never return API keys.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+import re
+import time
+import urllib.error
+import urllib.request
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Dict, Mapping, Optional
+from urllib.parse import urlparse
+
+from .pdf_extractors import load_pymupdf
+
+
+DEFAULT_VISION_CONFIG_PATH = Path("config/vision_api.local.json")
+DEFAULT_VISION_RESULT_DIR = Path("corpus/processed/vision/results")
+DEFAULT_VISION_MANIFEST_DIR = Path("corpus/processed/vision/manifests")
+MAX_PROVIDER_COUNT = 12
+MAX_DISCOVERED_MODELS = 2000
+MAX_MODELS_RESPONSE_BYTES = 4 * 1024 * 1024
+VISION_TEST_IMAGE_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAYklEQVR4nO3PQQ0A"
+    "IRDAQEScf5f8TwQkZZOpgs7aw1v1wGkAdQB1AHUAdQB1AHUAdQB1AHVHgO9SAAAA"
+    "AAAAAAAAAAAAAAAAAACzAC8EUAdQB1AHUAdQB1AHUAdQB1A3HvAD6EoDmRtp1t4A"
+    "AAAASUVORK5CYII="
+)
+ProgressCallback = Callable[[Dict[str, object]], None]
+
+
+class VisionAPIError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class VisionProviderConfig:
+    provider_id: str
+    name: str
+    api_base: str
+    api_key: str
+    model: str
+    enabled: bool = True
+    use_env_proxy: bool = False
+
+
+def resolve_vision_config_path(root: Optional[Path] = None) -> Path:
+    override = os.environ.get("ME_FINDER_VISION_CONFIG", "").strip()
+    if override:
+        return Path(override)
+    if root is not None:
+        return Path(root) / DEFAULT_VISION_CONFIG_PATH
+    return DEFAULT_VISION_CONFIG_PATH
+
+
+def read_vision_config_data(
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    path = Path(path)
+    if not path.exists():
+        return {
+            "providers": [],
+            "default_provider_id": None,
+            "auto_fallback_from_mineru": False,
+        }
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise VisionAPIError("其他解析 API 配置文件无法读取。") from exc
+    if not isinstance(data, dict):
+        raise VisionAPIError("其他解析 API 配置必须是 JSON 对象。")
+    providers = data.get("providers")
+    if not isinstance(providers, list):
+        data["providers"] = []
+    data["auto_fallback_from_mineru"] = bool(data.get("auto_fallback_from_mineru"))
+    return data
+
+
+def _provider_summary(provider: Mapping[str, object]) -> Dict[str, object]:
+    api_key = str(provider.get("api_key") or "").strip()
+    return {
+        "id": str(provider.get("id") or ""),
+        "name": str(provider.get("name") or "未命名接口"),
+        "api_type": "openai_compatible",
+        "api_base": str(provider.get("api_base") or ""),
+        "model": str(provider.get("model") or ""),
+        "enabled": bool(provider.get("enabled", True)),
+        "configured": bool(
+            api_key
+            and str(provider.get("api_base") or "").strip()
+            and str(provider.get("model") or "").strip()
+        ),
+        "has_api_key": bool(api_key),
+    }
+
+
+def vision_config_summary(
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    data = read_vision_config_data(path)
+    providers = [
+        _provider_summary(item)
+        for item in data.get("providers", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    default_provider_id = str(data.get("default_provider_id") or "")
+    configured_ids = [
+        str(item["id"])
+        for item in providers
+        if item.get("configured") and item.get("enabled")
+    ]
+    if default_provider_id not in configured_ids:
+        default_provider_id = configured_ids[0] if configured_ids else ""
+    return {
+        "providers": providers,
+        "default_provider_id": default_provider_id or None,
+        "auto_fallback_from_mineru": bool(
+            data.get("auto_fallback_from_mineru") and default_provider_id
+        ),
+        "has_configured_provider": bool(configured_ids),
+    }
+
+
+def _validated_url(value: object) -> str:
+    text = str(value or "").strip().rstrip("/")
+    if not text or len(text) > 2048:
+        raise VisionAPIError("请填写有效的 API 地址。")
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise VisionAPIError("API 地址必须是以 http:// 或 https:// 开头的网址。")
+    if parsed.username or parsed.password:
+        raise VisionAPIError("API 地址中不能包含用户名或密码。")
+    return text
+
+
+def _validated_provider_id(value: object, *, allow_empty: bool = False) -> str:
+    provider_id = str(value or "").strip()
+    if not provider_id and allow_empty:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", provider_id):
+        raise VisionAPIError("解析服务 ID 无效。")
+    return provider_id
+
+
+def _write_vision_config(path: Path, data: Mapping[str, object]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(dict(data), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+
+
+def save_vision_provider(
+    updates: Mapping[str, object],
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    data = read_vision_config_data(path)
+    providers = [
+        dict(item)
+        for item in data.get("providers", [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    requested_id = _validated_provider_id(updates.get("id"), allow_empty=True)
+    provider_id = requested_id or f"provider-{uuid.uuid4().hex[:12]}"
+    existing = next(
+        (item for item in providers if str(item.get("id")) == provider_id),
+        None,
+    )
+    if existing is None:
+        if len(providers) >= MAX_PROVIDER_COUNT:
+            raise VisionAPIError(f"最多只能保存 {MAX_PROVIDER_COUNT} 个解析接口。")
+        existing = {"id": provider_id}
+        providers.append(existing)
+
+    name = str(updates.get("name") or "").strip()
+    model = str(updates.get("model") or "").strip()
+    api_key = str(updates.get("api_key") or "").strip()
+    if not name or len(name) > 80:
+        raise VisionAPIError("请填写 1–80 个字符的显示名称（会根据 API 地址自动生成，也可以自己修改）。")
+    if not model or len(model) > 160:
+        raise VisionAPIError("请填写有效的视觉模型名称。")
+    existing.update(
+        {
+            "id": provider_id,
+            "name": name,
+            "api_type": "openai_compatible",
+            "api_base": _validated_url(updates.get("api_base")),
+            "model": model,
+            "enabled": bool(updates.get("enabled", True)),
+        }
+    )
+    if api_key:
+        if len(api_key) > 8192:
+            raise VisionAPIError("API Key 过长。")
+        existing["api_key"] = api_key
+    elif "api_key" not in existing:
+        existing["api_key"] = ""
+
+    data["providers"] = providers
+    eligible_ids = [
+        str(item.get("id"))
+        for item in providers
+        if item.get("enabled", True)
+        and item.get("api_key")
+        and item.get("api_base")
+        and item.get("model")
+    ]
+    if str(data.get("default_provider_id") or "") not in eligible_ids:
+        data["default_provider_id"] = eligible_ids[0] if eligible_ids else None
+        if not eligible_ids:
+            data["auto_fallback_from_mineru"] = False
+    _write_vision_config(Path(path), data)
+    return vision_config_summary(Path(path))
+
+
+def delete_vision_provider(
+    provider_id: str,
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    provider_id = _validated_provider_id(provider_id)
+    data = read_vision_config_data(path)
+    providers = [
+        dict(item)
+        for item in data.get("providers", [])
+        if isinstance(item, dict) and str(item.get("id")) != provider_id
+    ]
+    data["providers"] = providers
+    if str(data.get("default_provider_id") or "") == provider_id:
+        data["default_provider_id"] = next(
+            (
+                str(item.get("id"))
+                for item in providers
+                if item.get("enabled", True)
+                and item.get("api_key")
+                and item.get("api_base")
+                and item.get("model")
+            ),
+            None,
+        )
+        if not data["default_provider_id"]:
+            data["auto_fallback_from_mineru"] = False
+    _write_vision_config(Path(path), data)
+    return vision_config_summary(Path(path))
+
+
+def save_vision_policy(
+    updates: Mapping[str, object],
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    data = read_vision_config_data(path)
+    provider_id = _validated_provider_id(
+        updates.get("default_provider_id"), allow_empty=True
+    )
+    provider_ids = {
+        str(item.get("id"))
+        for item in data.get("providers", [])
+        if isinstance(item, dict)
+        and item.get("enabled", True)
+        and item.get("api_key")
+        and item.get("api_base")
+        and item.get("model")
+    }
+    if provider_id and provider_id not in provider_ids:
+        raise VisionAPIError("默认备用接口不存在、未启用或尚未配置完整。")
+    auto_fallback = bool(updates.get("auto_fallback_from_mineru"))
+    if auto_fallback and not provider_id:
+        raise VisionAPIError("开启自动切换前，请先选择一个默认备用接口。")
+    data["default_provider_id"] = provider_id or None
+    data["auto_fallback_from_mineru"] = auto_fallback
+    _write_vision_config(Path(path), data)
+    return vision_config_summary(Path(path))
+
+
+def load_vision_provider(
+    provider_id: Optional[str] = None,
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> VisionProviderConfig:
+    data = read_vision_config_data(path)
+    requested = str(provider_id or data.get("default_provider_id") or "").strip()
+    providers = [
+        item for item in data.get("providers", []) if isinstance(item, dict)
+    ]
+    if not requested:
+        requested = next(
+            (
+                str(item.get("id"))
+                for item in providers
+                if item.get("enabled", True)
+                and item.get("api_key")
+                and item.get("api_base")
+                and item.get("model")
+            ),
+            "",
+        )
+    raw = next(
+        (item for item in providers if str(item.get("id") or "") == requested),
+        None,
+    )
+    if raw is None:
+        raise VisionAPIError("没有找到可用的其他解析 API。")
+    if not raw.get("enabled", True):
+        raise VisionAPIError("所选解析 API 已停用。")
+    api_key = str(raw.get("api_key") or "").strip()
+    model = str(raw.get("model") or "").strip()
+    if not api_key or not model:
+        raise VisionAPIError("所选解析 API 尚未配置完整。")
+    return VisionProviderConfig(
+        provider_id=requested,
+        name=str(raw.get("name") or requested),
+        api_base=_validated_url(raw.get("api_base")),
+        api_key=api_key,
+        model=model,
+        enabled=True,
+        use_env_proxy=bool(raw.get("use_env_proxy")),
+    )
+
+
+def default_fallback_provider(
+    path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Optional[VisionProviderConfig]:
+    data = read_vision_config_data(path)
+    if not data.get("auto_fallback_from_mineru"):
+        return None
+    try:
+        return load_vision_provider(
+            str(data.get("default_provider_id") or "") or None,
+            path,
+        )
+    except VisionAPIError:
+        return None
+
+
+def _chat_endpoint(api_base: str) -> str:
+    base = api_base.rstrip("/")
+    if base.lower().endswith("/chat/completions"):
+        return base
+    return base + "/chat/completions"
+
+
+def _models_endpoint(api_base: str) -> str:
+    parsed = urlparse(api_base.rstrip("/"))
+    path = parsed.path.rstrip("/")
+    lowered = path.lower()
+    if lowered.endswith("/chat/completions"):
+        path = path[: -len("/chat/completions")]
+    elif lowered.endswith("/responses"):
+        path = path[: -len("/responses")]
+    if not path.lower().endswith("/models"):
+        path += "/models"
+    return parsed._replace(path=path, params="", fragment="").geturl()
+
+
+def _likely_vision_model(model_id: str, item: Mapping[str, object]) -> bool:
+    modalities = item.get("input_modalities") or item.get("modalities")
+    if isinstance(modalities, list) and any(
+        str(modality).strip().lower() in {"image", "images", "vision"}
+        for modality in modalities
+    ):
+        return True
+    normalized = model_id.strip().lower()
+    hints = (
+        "vision",
+        "qwen-vl",
+        "qwen2-vl",
+        "qwen2.5-vl",
+        "qwen3-vl",
+        "qvq",
+        "internvl",
+        "minicpm-v",
+        "glm-4v",
+        "glm-4.5v",
+        "glm-4.6v",
+        "kimi-vl",
+        "yi-vision",
+        "step-1v",
+        "pixtral",
+        "llava",
+        "gemini",
+        "claude",
+        "gpt-4o",
+        "gpt-4.1",
+        "gpt-5",
+        "omni",
+    )
+    return any(hint in normalized for hint in hints)
+
+
+def _normalize_model_list(data: object) -> list[Dict[str, object]]:
+    if isinstance(data, dict):
+        candidates = data.get("data")
+        if not isinstance(candidates, list):
+            candidates = data.get("models")
+    elif isinstance(data, list):
+        candidates = data
+    else:
+        candidates = None
+    if not isinstance(candidates, list):
+        raise VisionAPIError("接口返回的模型列表格式无法识别，请手动填写模型名称。")
+
+    models: list[Dict[str, object]] = []
+    seen: set[str] = set()
+    for raw in candidates:
+        if isinstance(raw, str):
+            model_id = raw.strip()
+            item: Mapping[str, object] = {}
+        elif isinstance(raw, dict):
+            model_id = str(
+                raw.get("id") or raw.get("model") or raw.get("name") or ""
+            ).strip()
+            item = raw
+        else:
+            continue
+        if not model_id or len(model_id) > 256 or model_id in seen:
+            continue
+        seen.add(model_id)
+        owned_by = str(item.get("owned_by") or item.get("provider") or "").strip()
+        models.append(
+            {
+                "id": model_id,
+                "owned_by": owned_by[:160],
+                "likely_vision": _likely_vision_model(model_id, item),
+            }
+        )
+        if len(models) >= MAX_DISCOVERED_MODELS:
+            break
+    if not models:
+        raise VisionAPIError("接口没有返回可选模型，请手动填写模型名称。")
+    models.sort(
+        key=lambda item: (
+            not bool(item.get("likely_vision")),
+            str(item.get("id") or "").casefold(),
+        )
+    )
+    return models
+
+
+def _model_discovery_credentials(
+    provider: Mapping[str, object],
+    config_path: Path,
+) -> tuple[str, str, str, bool]:
+    provider_id = _validated_provider_id(provider.get("id"), allow_empty=True)
+    existing: Mapping[str, object] = {}
+    if provider_id:
+        data = read_vision_config_data(config_path)
+        existing = next(
+            (
+                item
+                for item in data.get("providers", [])
+                if isinstance(item, dict)
+                and str(item.get("id") or "") == provider_id
+            ),
+            {},
+        )
+    api_base = str(provider.get("api_base") or existing.get("api_base") or "").strip()
+    api_key = str(provider.get("api_key") or existing.get("api_key") or "").strip()
+    name = str(provider.get("name") or existing.get("name") or "该接口").strip()
+    if not api_key:
+        raise VisionAPIError("请先填写 API Key，再获取模型列表。")
+    if len(api_key) > 8192:
+        raise VisionAPIError("API Key 过长。")
+    return (
+        _validated_url(api_base),
+        api_key,
+        name[:80] or "该接口",
+        bool(existing.get("use_env_proxy")),
+    )
+
+
+def discover_vision_models(
+    provider: Mapping[str, object],
+    config_path: Path = DEFAULT_VISION_CONFIG_PATH,
+    *,
+    timeout: int = 45,
+) -> Dict[str, object]:
+    api_base, api_key, provider_name, use_env_proxy = _model_discovery_credentials(
+        provider,
+        Path(config_path),
+    )
+    opener = (
+        urllib.request.build_opener()
+        if use_env_proxy
+        else urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    )
+    request = urllib.request.Request(
+        _models_endpoint(api_base),
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="GET",
+    )
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            raw_bytes = response.read(MAX_MODELS_RESPONSE_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403}:
+            message = "API Key 无效，或当前账号无权查看模型列表。"
+        elif exc.code == 404:
+            message = "该接口不支持自动获取模型列表，请手动填写模型名称。"
+        elif exc.code == 429:
+            message = "获取模型请求过于频繁，请稍后再试。"
+        else:
+            message = f"获取模型列表失败（HTTP {exc.code}），可以改为手动填写。"
+        raise VisionAPIError(message) from exc
+    except urllib.error.URLError as exc:
+        raise VisionAPIError(
+            f"{provider_name} 网络请求失败：{exc.reason}"
+        ) from exc
+    if len(raw_bytes) > MAX_MODELS_RESPONSE_BYTES:
+        raise VisionAPIError("模型列表响应过大，请手动填写模型名称。")
+    try:
+        data = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError as exc:
+        raise VisionAPIError("接口返回了非 JSON 模型列表，请手动填写模型名称。") from exc
+    models = _normalize_model_list(data)
+    return {
+        "models": models,
+        "count": len(models),
+        "provider_name": provider_name,
+    }
+
+
+def _message_text(data: Mapping[str, object]) -> str:
+    try:
+        choices = data["choices"]
+        message = choices[0]["message"]
+        content = message["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise VisionAPIError("接口响应中没有可用的模型输出。") from exc
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        texts = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text.strip())
+        return "\n".join(texts).strip()
+    raise VisionAPIError("接口返回了无法识别的模型输出格式。")
+
+
+class OpenAICompatibleVisionClient:
+    def __init__(self, config: VisionProviderConfig) -> None:
+        self.config = config
+        if config.use_env_proxy:
+            self.opener = urllib.request.build_opener()
+        else:
+            self.opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({})
+            )
+
+    def _request(
+        self, messages: list[Dict[str, object]], timeout: int = 240
+    ) -> str:
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": 4096,
+        }
+        request = urllib.request.Request(
+            _chat_endpoint(self.config.api_base),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.config.api_key}",
+            },
+            method="POST",
+        )
+        try:
+            with self.opener.open(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise VisionAPIError(
+                f"{self.config.name} 返回 HTTP {exc.code}：{detail or '请求失败'}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise VisionAPIError(
+                f"{self.config.name} 网络请求失败：{exc.reason}"
+            ) from exc
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise VisionAPIError(
+                f"{self.config.name} 返回了非 JSON 响应。"
+            ) from exc
+        if not isinstance(data, dict):
+            raise VisionAPIError(f"{self.config.name} 返回格式无效。")
+        return _message_text(data)
+
+    def extract_page(self, image_bytes: bytes, mime_type: str = "image/png") -> str:
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        messages: list[Dict[str, object]] = [
+            {
+                "role": "system",
+                "content": (
+                    "你是文献 PDF 的逐页文字识别器。只转写图片中真实可见的文字，"
+                    "按自然阅读顺序输出；保留段落、标题、脚注和页码；不要总结、解释、"
+                    "补写或使用 Markdown 代码围栏。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "请完整转写这一页。若页面没有文字，返回空字符串。",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{encoded}",
+                        },
+                    },
+                ],
+            },
+        ]
+        text = self._request(messages)
+        fenced = re.fullmatch(r"```(?:text|markdown)?\s*(.*?)\s*```", text, re.S)
+        return (fenced.group(1) if fenced else text).strip()
+
+    def test_connection(self) -> str:
+        return self._request(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "这是一项视觉输入能力测试。若能读取随附图片，"
+                                "且看到中央深色方块，请仅回复 OK。"
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": (
+                                    "data:image/png;base64,"
+                                    f"{VISION_TEST_IMAGE_BASE64}"
+                                )
+                            },
+                        },
+                    ],
+                }
+            ],
+            timeout=60,
+        )
+
+
+def test_vision_provider(
+    provider_id: str,
+    config_path: Path = DEFAULT_VISION_CONFIG_PATH,
+) -> Dict[str, object]:
+    config = load_vision_provider(provider_id, config_path)
+    started = time.monotonic()
+    response = OpenAICompatibleVisionClient(config).test_connection()
+    return {
+        "ok": True,
+        "provider_id": config.provider_id,
+        "provider_name": config.name,
+        "model": config.model,
+        "latency_ms": round((time.monotonic() - started) * 1000),
+        "response_preview": response[:80],
+    }
+
+
+def parse_pdf_with_vision_provider(
+    root: Path,
+    pdf_path: Path,
+    source_file_id: str,
+    provider_id: Optional[str] = None,
+    *,
+    config_path: Optional[Path] = None,
+    on_progress: Optional[ProgressCallback] = None,
+) -> Dict[str, object]:
+    root = Path(root)
+    pdf_path = Path(pdf_path)
+    if not pdf_path.is_file():
+        raise VisionAPIError("待解析 PDF 不存在。")
+    fitz = load_pymupdf()
+    if fitz is None:
+        raise VisionAPIError("其他视觉 API 解析需要 PyMuPDF 才能逐页渲染 PDF。")
+    config_path = Path(config_path or resolve_vision_config_path(root))
+    provider = load_vision_provider(provider_id, config_path)
+    client = OpenAICompatibleVisionClient(provider)
+    result_parent = root / DEFAULT_VISION_RESULT_DIR / source_file_id
+    result_dir = result_parent / f"run-{uuid.uuid4().hex[:12]}"
+    result_dir.mkdir(parents=True, exist_ok=False)
+
+    document = fitz.open(str(pdf_path))
+    content: list[Dict[str, object]] = []
+    try:
+        total = len(document)
+        if total <= 0:
+            raise VisionAPIError("PDF 没有可解析的页面。")
+        for page_index in range(total):
+            if on_progress:
+                on_progress(
+                    {
+                        "phase": "vision_processing",
+                        "completed": page_index,
+                        "total": total,
+                        "page": page_index + 1,
+                        "provider_id": provider.provider_id,
+                        "provider_name": provider.name,
+                    }
+                )
+            page = document.load_page(page_index)
+            rect = page.rect
+            longest = max(float(rect.width), float(rect.height), 1.0)
+            scale = min(2.0, max(1.0, 1800 / longest))
+            pixmap = page.get_pixmap(
+                matrix=fitz.Matrix(scale, scale),
+                alpha=False,
+            )
+            text = client.extract_page(pixmap.tobytes("png"))
+            content.append(
+                {
+                    "type": "text",
+                    "text": text,
+                    "page_idx": page_index,
+                    "parser": "openai_compatible",
+                    "provider_id": provider.provider_id,
+                    "model": provider.model,
+                }
+            )
+            if on_progress:
+                on_progress(
+                    {
+                        "phase": "vision_processing",
+                        "completed": page_index + 1,
+                        "total": total,
+                        "page": page_index + 1,
+                        "provider_id": provider.provider_id,
+                        "provider_name": provider.name,
+                    }
+                )
+    finally:
+        document.close()
+
+    (result_dir / "content_list.json").write_text(
+        json.dumps(content, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (result_dir / "layout.json").write_text(
+        json.dumps(
+            {
+                "_version_name": "openai-compatible-vision-v1",
+                "provider_id": provider.provider_id,
+                "provider_name": provider.name,
+                "model": provider.model,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    relative_result = result_dir.resolve().relative_to(root.resolve())
+    manifest = {
+        "api": "openai_compatible_vision",
+        "pdf_path": str(pdf_path),
+        "file_name": pdf_path.name,
+        "data_id_prefix": source_file_id,
+        "total_pages": len(content),
+        "provider_id": provider.provider_id,
+        "provider_name": provider.name,
+        "model": provider.model,
+        "created_at": int(time.time()),
+        "segments": [
+            {
+                "data_id": f"{source_file_id}-{provider.provider_id}",
+                "page_ranges": f"1-{len(content)}",
+                "status": "completed",
+                "result_dir": str(relative_result),
+                "result_dirs": [str(relative_result)],
+                "parser": "openai_compatible",
+                "provider_id": provider.provider_id,
+                "provider_name": provider.name,
+                "model": provider.model,
+            }
+        ],
+    }
+    manifest_dir = root / DEFAULT_VISION_MANIFEST_DIR
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / f"vision-{source_file_id}.json"
+    temporary = manifest_path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(manifest_path)
+    return {
+        "manifest_path": str(manifest_path),
+        "provider_id": provider.provider_id,
+        "provider_name": provider.name,
+        "model": provider.model,
+        "pages": len(content),
+        "status": "completed",
+    }

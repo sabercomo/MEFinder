@@ -22,6 +22,10 @@ from .mineru_api import (
     submit_local_pdf_segments,
 )
 from .pdf_extractors import detect_pdf_type, file_sha256
+from .vision_api import (
+    VisionAPIError,
+    parse_pdf_with_vision_provider,
+)
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
@@ -183,6 +187,48 @@ def attach_mineru_manifest(root: Path, source_file_id: str, manifest_path: Path,
     except ValueError:
         pass
     document["mineru"] = {"manifest": relative_manifest.as_posix()}
+    document.pop("parser_results", None)
+    save_import_config(config_path, data)
+
+
+def attach_parser_manifest(
+    root: Path,
+    source_file_id: str,
+    manifest_path: Path,
+    *,
+    provider_id: str,
+    provider_name: str,
+    model: str,
+    config_path: Optional[Path] = None,
+) -> None:
+    """Attach one non-MinerU structured parser result to a configured PDF."""
+
+    root = Path(root)
+    config_path = Path(config_path or root / "config" / "pdf_imports.json")
+    data = load_import_config(config_path)
+    document = next(
+        (
+            item
+            for item in data["documents"]
+            if item.get("source_file_id") == source_file_id
+        ),
+        None,
+    )
+    if document is None:
+        raise VisionAPIError(f"PDF config not found: {source_file_id}")
+    relative_manifest = Path(manifest_path)
+    try:
+        relative_manifest = relative_manifest.resolve().relative_to(root.resolve())
+    except ValueError:
+        pass
+    document["parser_results"] = {
+        "manifest": relative_manifest.as_posix(),
+        "parser": "openai_compatible",
+        "provider_id": provider_id,
+        "provider_name": provider_name,
+        "model": model,
+    }
+    document.pop("mineru", None)
     save_import_config(config_path, data)
 
 
@@ -267,6 +313,33 @@ def parse_pdf_with_mineru(
     manifest_path = save_segment_manifest(str(manifest.get("data_id_prefix") or source_file_id), manifest, manifest_dir)
     attach_mineru_manifest(root, source_file_id, manifest_path)
     return {"manifest_path": str(manifest_path), "segments": len(segments), "status": "completed"}
+
+
+def parse_pdf_with_provider(
+    root: Path,
+    pdf_path: Path,
+    source_file_id: str,
+    provider_id: str,
+    on_progress: Optional[ProgressCallback] = None,
+) -> Dict[str, object]:
+    """Parse a PDF through a configured OpenAI-compatible vision provider."""
+
+    result = parse_pdf_with_vision_provider(
+        root,
+        pdf_path,
+        source_file_id,
+        provider_id,
+        on_progress=on_progress,
+    )
+    attach_parser_manifest(
+        root,
+        source_file_id,
+        Path(str(result["manifest_path"])),
+        provider_id=str(result["provider_id"]),
+        provider_name=str(result["provider_name"]),
+        model=str(result["model"]),
+    )
+    return result
 
 
 def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = None) -> Dict[str, object]:

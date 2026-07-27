@@ -1,4 +1,5 @@
 config/mineru_api.local.json
+config/vision_api.local.json
 **/__pycache__/
 *.pyc
 *.pyo
@@ -32,3 +33,4 @@ config/preferences.json
 # Local backup archives
 config/backups/
 config/*.pre-restore
+.project-memory/

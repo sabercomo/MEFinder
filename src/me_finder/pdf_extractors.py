@@ -150,8 +150,8 @@ def extract_pdf_source(
     document_id = str(config.get("document_id") or source_file_id)
     title = str(config.get("title") or path.stem)
     author = config.get("author")
-    mineru_segments = load_mineru_segments(config)
-    profile = mineru_profile(path, mineru_segments) if mineru_segments else detect_pdf_type(path)
+    structured_segments = load_mineru_segments(config)
+    profile = mineru_profile(path, structured_segments) if structured_segments else detect_pdf_type(path)
     source_file = source_file_record(path, root, source_file_id, document_id, title, profile)
     bibliographic = config.get("bibliographic_metadata") or config
     if isinstance(bibliographic, dict):
@@ -186,13 +186,13 @@ def extract_pdf_source(
         "notes": "PDF MVP 将整本 PDF 作为一个文献单元。",
     }
     audit_issues: List[Dict[str, object]] = []
-    if mineru_segments:
-        pages = load_mineru_pdf_pages(path, source_file_id, document_id, config, mineru_segments)
+    if structured_segments:
+        pages = load_mineru_pdf_pages(path, source_file_id, document_id, config, structured_segments)
         manual_mapping = has_manual_mapping(config)
         auto_mapping = PageMappingService().infer(
             path,
             pages,
-            mineru_segments=mineru_segments,
+            mineru_segments=structured_segments,
             page_count=int(profile.get("pdf_page_count") or len(pages) or 0),
             manual_mapping_present=manual_mapping,
         )
@@ -224,7 +224,7 @@ def extract_pdf_source(
         source_file["pdf_profile"] = profile
         paragraphs = make_pdf_paragraphs(source_file_id, document_id, title, author, path.name, pages, work["work_id"])
         for paragraph in paragraphs:
-            paragraph["text_source"] = "mineru"
+            paragraph["text_source"] = str(profile.get("parser") or "mineru")
         applied_segments = ((profile.get("auto_page_mapping") or {}).get("applied_segments") or [])
         mapping_method = "manual_segment" if manual_mapping else str(
             (profile.get("auto_page_mapping") or {}).get("method") or "uncalibrated"
@@ -250,7 +250,13 @@ def extract_pdf_source(
             "pdf_pages": pages,
             "pdf_page_mappings": [pdf_page_mapping],
             "pdf_import_runs": [
-                import_run_record(source_file_id, profile, started_at, "success", parser="mineru")
+                import_run_record(
+                    source_file_id,
+                    profile,
+                    started_at,
+                    "success",
+                    parser=str(profile.get("parser") or "mineru"),
+                )
             ],
             "audit_issues": audit_issues,
         }
@@ -459,11 +465,15 @@ def write_parsed_pdf_snapshot(
 
 
 def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
-    mineru = config.get("mineru") or config.get("mineru_results")
-    if not isinstance(mineru, dict):
+    parser_results = (
+        config.get("parser_results")
+        or config.get("mineru")
+        or config.get("mineru_results")
+    )
+    if not isinstance(parser_results, dict):
         return []
     segments: List[Dict[str, object]] = []
-    manifest_path = mineru.get("manifest")
+    manifest_path = parser_results.get("manifest")
     if manifest_path:
         manifest = json.loads(Path(str(manifest_path)).read_text(encoding="utf-8-sig"))
         for segment in manifest.get("segments", []):
@@ -472,10 +482,21 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item = dict(segment)
             item.setdefault("data_id", segment.get("data_id"))
             item.setdefault("result_dir", segment.get("result_dir"))
+            item.setdefault("parser", manifest.get("parser") or (
+                "mineru" if manifest.get("api") == "precision" else manifest.get("api")
+            ))
+            item.setdefault("provider_id", manifest.get("provider_id"))
+            item.setdefault("provider_name", manifest.get("provider_name"))
+            item.setdefault("model", manifest.get("model"))
             segments.append(item)
-    for segment in mineru.get("segments", []):
+    for segment in parser_results.get("segments", []):
         if isinstance(segment, dict):
-            segments.append(dict(segment))
+            item = dict(segment)
+            item.setdefault("parser", parser_results.get("parser"))
+            item.setdefault("provider_id", parser_results.get("provider_id"))
+            item.setdefault("provider_name", parser_results.get("provider_name"))
+            item.setdefault("model", parser_results.get("model"))
+            segments.append(item)
     return [segment for segment in segments if segment.get("result_dir")]
 
 
@@ -493,21 +514,36 @@ def mineru_profile(path: Path, segments: Sequence[Dict[str, object]]) -> Dict[st
         page_range = parse_mineru_page_range(str(segment.get("page_ranges") or ""))
         if page_range:
             covered_pages += page_range[1] - page_range[0] + 1
+    first = segments[0] if segments else {}
+    parser = str(first.get("parser") or "mineru")
+    is_mineru = parser in {"mineru", "precision"}
+    provider_name = str(first.get("provider_name") or ("MinerU" if is_mineru else "其他视觉 API"))
+    model = str(first.get("model") or "")
     return {
-        "detected_pdf_type": "mineru_structured",
-        "parser": "mineru",
+        "detected_pdf_type": "mineru_structured" if is_mineru else "api_structured",
+        "parser": "mineru" if is_mineru else parser,
+        "parser_label": provider_name,
+        "provider_id": first.get("provider_id"),
+        "provider_name": provider_name,
+        "model": model or None,
         "parser_version": "unknown",
         "pdf_page_count": page_count,
         "mineru_segment_count": len(segments),
+        "structured_segment_count": len(segments),
         "mineru_covered_pages": covered_pages,
+        "structured_covered_pages": covered_pages,
         "has_page_labels": False,
         "image_object_count": None,
         "to_unicode_map_count": None,
         "text_extractable_page_ratio": None,
         "avg_text_chars_per_page": None,
         "garbled_text_ratio": None,
-        "layout_complexity_hint": "mineru_layout_available",
-        "notes": ["使用 MinerU content_list.json/layout.json 作为 PDF 索引来源。"],
+        "layout_complexity_hint": "mineru_layout_available" if is_mineru else "vision_text_available",
+        "notes": [
+            "使用 MinerU content_list.json/layout.json 作为 PDF 索引来源。"
+            if is_mineru
+            else f"使用 {provider_name}{(' / ' + model) if model else ''} 的逐页视觉识别结果作为 PDF 索引来源。"
+        ],
     }
 
 
@@ -522,6 +558,8 @@ def load_mineru_pdf_pages(
     page_texts: Dict[int, List[str]] = {}
     page_blocks: Dict[int, List[Dict[str, object]]] = {}
     parser_version = "unknown"
+    parser_name = "mineru"
+    provider_name = "MinerU"
     for segment in segments:
         page_range = parse_mineru_page_range(str(segment.get("page_ranges") or ""))
         if page_range is None:
@@ -530,6 +568,13 @@ def load_mineru_pdf_pages(
         else:
             start_1based, end_1based = page_range
         result_dir = Path(str(segment["result_dir"]))
+        segment_parser = str(segment.get("parser") or "mineru")
+        is_mineru = segment_parser in {"mineru", "precision"}
+        parser_name = "mineru" if is_mineru else segment_parser
+        provider_name = str(
+            segment.get("provider_name")
+            or ("MinerU" if is_mineru else "其他视觉 API")
+        )
         content_path = find_mineru_content_list(result_dir)
         layout_path = result_dir / "layout.json"
         if layout_path.exists():
@@ -560,7 +605,9 @@ def load_mineru_pdf_pages(
                 {
                     "block_index": len(page_blocks.get(global_index, [])),
                     "mineru_item_index": item_index,
+                    "parser_item_index": item_index,
                     "mineru_type": item.get("type"),
+                    "parser_type": item.get("type"),
                     "text_level": item.get("text_level"),
                     "bbox": item.get("bbox"),
                     "text": text,
@@ -589,9 +636,10 @@ def load_mineru_pdf_pages(
                 "page_mapping_confidence": mapping.confidence,
                 "text_raw": raw_text,
                 "normalized_text": normalize_pdf_text(raw_text),
-                "text_source": "mineru",
+                "text_source": parser_name,
                 "blocks": page_blocks.get(pdf_page_index, []),
-                "parser": "mineru",
+                "parser": parser_name,
+                "parser_label": provider_name,
                 "parser_version": parser_version,
             }
         )

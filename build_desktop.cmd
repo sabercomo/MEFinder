@@ -6,7 +6,8 @@ rem Desktop packaging script (see DESKTOP_PACKAGING_PLAN.md).
 rem   build_desktop.cmd        build exe + copy index + page config
 rem   build_desktop.cmd full   also copy corpus files (~400MB) for
 rem                            the "open original file" button
-rem NEVER copy config\mineru_api.local.json into dist: desktop credentials
+rem NEVER copy config\mineru_api.local.json or config\vision_api.local.json into dist:
+rem both contain desktop credentials.
 rem live under %%LOCALAPPDATA%%\MEFinder and survive application upgrades.
 
 py -3 -m PyInstaller desktop.spec --clean --noconfirm

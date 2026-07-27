@@ -27,6 +27,16 @@ from .bibliographic_metadata import (
     update_metadata_in_database,
 )
 from .mineru_api import MinerUError, mineru_config_summary, resolve_mineru_config_path, save_mineru_config
+from .vision_api import (
+    VisionAPIError,
+    delete_vision_provider,
+    discover_vision_models,
+    resolve_vision_config_path,
+    save_vision_policy,
+    save_vision_provider,
+    test_vision_provider,
+    vision_config_summary,
+)
 from .preferences import read_preferences, resolve_preferences_path, save_preferences
 from .calibration_library import build_calibration_library, build_library
 from .document_deletion import DocumentDeletionService
@@ -35,6 +45,7 @@ from .pdf_import_service import (
     copy_local_document,
     detect_imported_pdf,
     parse_pdf_with_mineru,
+    parse_pdf_with_provider,
     rebuild_local_index,
     register_pdf,
     save_import_config,
@@ -132,6 +143,7 @@ def make_handler(index_path: Path):
     rebuild_lock = threading.Lock()
     metadata_lock = threading.Lock()
     import_jobs: Dict[str, Dict[str, object]] = {}
+    import_job_contexts: Dict[str, Dict[str, object]] = {}
     import_jobs_lock = threading.RLock()
     calibration_active_sources: set[str] = set()
 
@@ -146,6 +158,12 @@ def make_handler(index_path: Path):
         message = "正在处理…"
         if phase == "mineru_processing":
             message = f"MinerU 解析中：{update.get('completed', 0)}/{update.get('total', 0)} 个分段"
+        elif phase == "vision_processing":
+            provider_name = str(update.get("provider_name") or "其他视觉 API")
+            message = (
+                f"{provider_name} 解析中："
+                f"{update.get('completed', 0)}/{update.get('total', 0)} 页"
+            )
         elif phase == "rebuilding_index":
             message = "正在重建本地 SQLite 索引…"
         update_import_job(job_id, phase=phase, message=message, progress=update)
@@ -248,18 +266,149 @@ def make_handler(index_path: Path):
                     runtime["rebuilding"] = False
                 raise
 
-    def run_import_job(job_id: str, target: Path, source_file_id: str, profile: Dict[str, object], is_pdf: bool) -> None:
+    def run_import_job(
+        job_id: str,
+        target: Path,
+        source_file_id: str,
+        profile: Dict[str, object],
+        is_pdf: bool,
+        force_mineru: bool = False,
+        vision_provider_id: Optional[str] = None,
+    ) -> None:
         try:
-            if is_pdf and str(profile.get("detected_pdf_type")) != "native_text":
-                update_import_job(job_id, phase="mineru_submitting", message="文本层不可靠，正在自动提交 MinerU…")
-                parse_pdf_with_mineru(
+            use_vision = bool(is_pdf and vision_provider_id)
+            use_mineru = is_pdf and not use_vision and (
+                force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+            )
+            if use_vision:
+                provider_name = str(
+                    import_jobs.get(job_id, {}).get("provider_name")
+                    or "其他视觉 API"
+                )
+                update_import_job(
+                    job_id,
+                    phase="vision_processing",
+                    message=f"正在使用 {provider_name} 逐页解析 PDF…",
+                    parse_route="vision",
+                )
+                parse_pdf_with_provider(
                     root,
                     target,
                     source_file_id,
+                    str(vision_provider_id),
                     on_progress=lambda update: progress_import_job(job_id, update),
                 )
+            elif use_mineru:
+                message = (
+                    "已选择 MinerU 在线解析，正在上传 PDF…"
+                    if force_mineru
+                    else "文本层不可靠，正在自动提交 MinerU…"
+                )
+                update_import_job(job_id, phase="mineru_submitting", message=message, parse_route="mineru")
+                try:
+                    parse_pdf_with_mineru(
+                        root,
+                        target,
+                        source_file_id,
+                        on_progress=lambda update: progress_import_job(job_id, update),
+                    )
+                except Exception as mineru_exc:
+                    config_path = resolve_vision_config_path(root)
+                    try:
+                        summary = vision_config_summary(config_path)
+                    except VisionAPIError:
+                        summary = {
+                            "providers": [],
+                            "default_provider_id": None,
+                            "auto_fallback_from_mineru": False,
+                        }
+                    providers = [
+                        item
+                        for item in summary.get("providers", [])
+                        if isinstance(item, dict)
+                        and item.get("enabled")
+                        and item.get("configured")
+                    ]
+                    default_id = str(summary.get("default_provider_id") or "")
+                    fallback = next(
+                        (
+                            item
+                            for item in providers
+                            if str(item.get("id")) == default_id
+                        ),
+                        providers[0] if providers else None,
+                    )
+                    auto_fallback = bool(
+                        summary.get("auto_fallback_from_mineru")
+                        and fallback
+                    )
+                    if not auto_fallback:
+                        message = f"MinerU 解析失败：{mineru_exc}"
+                        if fallback:
+                            message += (
+                                f"。可手动改用 {fallback.get('name') or '其他解析 API'}；"
+                                "也可在设置中开启失败后自动切换。"
+                            )
+                        else:
+                            message += "。可在设置中配置其他解析 API 后自行切换。"
+                        update_import_job(
+                            job_id,
+                            status="failed",
+                            phase="failed",
+                            message=message,
+                            mineru_failed=True,
+                            can_retry_with_provider=bool(fallback),
+                            retry_provider_id=fallback.get("id") if fallback else None,
+                            retry_provider_name=fallback.get("name") if fallback else None,
+                            needs_provider_config=not bool(fallback),
+                            original_error=str(mineru_exc),
+                        )
+                        return
+                    fallback_id = str(fallback.get("id"))
+                    fallback_name = str(fallback.get("name") or "其他视觉 API")
+                    update_import_job(
+                        job_id,
+                        phase="vision_processing",
+                        message=(
+                            f"MinerU 解析失败，已按设置自动切换到 {fallback_name}…"
+                        ),
+                        parse_route="vision",
+                        provider_id=fallback_id,
+                        provider_name=fallback_name,
+                        mineru_failed=True,
+                        fallback_used=True,
+                        original_error=str(mineru_exc),
+                    )
+                    try:
+                        parse_pdf_with_provider(
+                            root,
+                            target,
+                            source_file_id,
+                            fallback_id,
+                            on_progress=lambda update: progress_import_job(job_id, update),
+                        )
+                    except Exception as fallback_exc:
+                        update_import_job(
+                            job_id,
+                            status="failed",
+                            phase="failed",
+                            message=(
+                                f"MinerU 解析失败：{mineru_exc}；自动切换到 "
+                                f"{fallback_name} 后仍失败：{fallback_exc}"
+                            ),
+                            fallback_error=str(fallback_exc),
+                            can_retry_with_provider=True,
+                            retry_provider_id=fallback_id,
+                            retry_provider_name=fallback_name,
+                        )
+                        return
             else:
-                update_import_job(job_id, phase="text_parsing", message="原生文本，跳过 MinerU，正在建立索引…")
+                update_import_job(
+                    job_id,
+                    phase="text_parsing",
+                    message="原生文本，使用快速解析，正在建立索引…",
+                    parse_route="native",
+                )
             rebuild_runtime_index(job_id)
             metadata_note = ""
             if is_pdf:
@@ -288,8 +437,40 @@ def make_handler(index_path: Path):
         except Exception as exc:
             update_import_job(job_id, status="failed", phase="failed", message=str(exc))
 
-    def start_import_job(target: Path, profile: Dict[str, object], source_file_id: str, is_pdf: bool) -> str:
+    def start_import_job(
+        target: Path,
+        profile: Dict[str, object],
+        source_file_id: str,
+        is_pdf: bool,
+        force_mineru: bool = False,
+        vision_provider_id: Optional[str] = None,
+    ) -> str:
         job_id = f"import-{uuid.uuid4().hex[:12]}"
+        parse_route = None
+        provider_name = None
+        if vision_provider_id:
+            try:
+                summary = vision_config_summary(resolve_vision_config_path(root))
+                provider = next(
+                    (
+                        item
+                        for item in summary.get("providers", [])
+                        if isinstance(item, dict)
+                        and str(item.get("id")) == str(vision_provider_id)
+                    ),
+                    None,
+                )
+                provider_name = provider.get("name") if provider else None
+            except VisionAPIError:
+                provider_name = None
+        if is_pdf:
+            parse_route = (
+                "vision"
+                if vision_provider_id
+                else "mineru"
+                if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                else "native"
+            )
         with import_jobs_lock:
             import_jobs[job_id] = {
                 "job_id": job_id,
@@ -299,10 +480,28 @@ def make_handler(index_path: Path):
                 "file_name": target.name,
                 "source_file_id": source_file_id,
                 "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
+                "parse_route": parse_route,
+                "force_mineru": bool(force_mineru),
+                "provider_id": vision_provider_id,
+                "provider_name": provider_name,
+            }
+            import_job_contexts[job_id] = {
+                "target": Path(target),
+                "source_file_id": source_file_id,
+                "profile": dict(profile),
+                "is_pdf": is_pdf,
             }
         threading.Thread(
             target=run_import_job,
-            args=(job_id, target, source_file_id, profile, is_pdf),
+            args=(
+                job_id,
+                target,
+                source_file_id,
+                profile,
+                is_pdf,
+                force_mineru,
+                vision_provider_id,
+            ),
             daemon=True,
         ).start()
         return job_id
@@ -732,6 +931,14 @@ def make_handler(index_path: Path):
                 body = render_html(theme).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
+            if parsed.path.startswith("/static/brands/"):
+                name = parsed.path.rsplit("/", 1)[-1]
+                icon_path = _PACKAGE_DIR / "static" / "brands" / name
+                if re.fullmatch(r"[a-z0-9][a-z0-9-]*\.svg", name) and icon_path.is_file():
+                    self._send(200, icon_path.read_bytes(), "image/svg+xml")
+                else:
+                    self._send(404, b"not found", "text/plain; charset=utf-8")
+                return
             if parsed.path == "/api/index-meta":
                 with runtime_lock:
                     self._send_json(runtime["index_metadata"])
@@ -742,6 +949,13 @@ def make_handler(index_path: Path):
                     self._send_json(mineru_config_summary(config_path))
                 except (MinerUError, OSError, json.JSONDecodeError):
                     self._send_json({"error": "本机 MinerU 配置文件无法读取。"}, status=500)
+                return
+            if parsed.path == "/api/vision-providers":
+                config_path = resolve_vision_config_path(root)
+                try:
+                    self._send_json(vision_config_summary(config_path))
+                except VisionAPIError as exc:
+                    self._send_json({"error": str(exc)}, status=500)
                 return
             if parsed.path == "/api/preferences":
                 preferences_path = resolve_preferences_path(root)
@@ -845,6 +1059,16 @@ def make_handler(index_path: Path):
                     self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
                     return
                 try:
+                    pdf_parse_mode = str(self.headers.get("X-PDF-Parse-Mode", "auto")).strip().lower()
+                    if pdf_parse_mode not in {"auto", "mineru", "vision"}:
+                        raise MinerUError("PDF 解析方式无效。")
+                    vision_provider_id = (
+                        str(self.headers.get("X-Vision-Provider-ID", "")).strip()
+                        if pdf_parse_mode == "vision"
+                        else ""
+                    )
+                    if pdf_parse_mode == "vision" and not vision_provider_id:
+                        raise MinerUError("请选择一个其他解析 API。")
                     length = int(self.headers.get("Content-Length", "0"))
                     target = store_upload(filename, length, suffix == ".pdf", self.rfile)
                     is_pdf = suffix == ".pdf"
@@ -855,15 +1079,34 @@ def make_handler(index_path: Path):
                     else:
                         profile = {"detected_pdf_type": "docx"}
                         source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                    job_id = start_import_job(target, profile, source_file_id, is_pdf)
+                    force_mineru = is_pdf and pdf_parse_mode == "mineru"
+                    job_id = start_import_job(
+                        target,
+                        profile,
+                        source_file_id,
+                        is_pdf,
+                        force_mineru=force_mineru,
+                        vision_provider_id=vision_provider_id or None,
+                    )
+                    parse_route = None
+                    if is_pdf:
+                        parse_route = (
+                            "vision"
+                            if vision_provider_id
+                            else "mineru"
+                            if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                            else "native"
+                        )
                     self._send_json({
                         "ok": True,
                         "job_id": job_id,
                         "file_name": target.name,
                         "source_file_id": source_file_id,
                         "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
+                        "parse_route": parse_route,
+                        "provider_id": vision_provider_id or None,
                     })
-                except (MinerUError, OSError, ValueError) as exc:
+                except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
                     self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
@@ -952,9 +1195,7 @@ def make_handler(index_path: Path):
                         return
                     target = source_path_from_id(sid)
                     profile = detect_imported_pdf(target)
-                    if str(profile.get("detected_pdf_type")) == "native_text":
-                        raise MinerUError("该 PDF 是原生文本，本地解析即可，无需 MinerU OCR。")
-                    job_id = start_import_job(target, profile, sid, True)
+                    job_id = start_import_job(target, profile, sid, True, force_mineru=True)
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -967,6 +1208,66 @@ def make_handler(index_path: Path):
                     "already_running": False,
                     "detected_pdf_type": profile.get("detected_pdf_type"),
                 })
+                return
+            if parsed.path == "/api/import-retry":
+                previous_job_id = str(payload.get("job_id") or "").strip()
+                provider_id = str(payload.get("provider_id") or "").strip()
+                if not previous_job_id or not provider_id:
+                    self._send_json(
+                        {"error": "缺少原任务或备用解析接口。"},
+                        status=400,
+                    )
+                    return
+                with import_jobs_lock:
+                    previous_job = import_jobs.get(previous_job_id)
+                    context = import_job_contexts.get(previous_job_id)
+                if not previous_job or not context:
+                    self._send_json({"error": "原导入任务不存在。"}, status=404)
+                    return
+                if previous_job.get("status") != "failed":
+                    self._send_json(
+                        {"error": "只有失败的导入任务可以切换接口重试。"},
+                        status=400,
+                    )
+                    return
+                target = Path(context["target"])
+                if not target.is_file():
+                    self._send_json({"error": "待重试的 PDF 已不存在。"}, status=404)
+                    return
+                try:
+                    summary = vision_config_summary(resolve_vision_config_path(root))
+                    provider = next(
+                        (
+                            item
+                            for item in summary.get("providers", [])
+                            if isinstance(item, dict)
+                            and str(item.get("id")) == provider_id
+                            and item.get("enabled")
+                            and item.get("configured")
+                        ),
+                        None,
+                    )
+                    if provider is None:
+                        raise VisionAPIError("所选备用解析接口不可用。")
+                    job_id = start_import_job(
+                        target,
+                        dict(context["profile"]),
+                        str(context["source_file_id"]),
+                        bool(context["is_pdf"]),
+                        vision_provider_id=provider_id,
+                    )
+                except VisionAPIError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "job_id": job_id,
+                        "provider_id": provider_id,
+                        "provider_name": provider.get("name"),
+                        "parse_route": "vision",
+                    }
+                )
                 return
             if parsed.path == "/api/bibliographic-metadata/batch-detect":
                 with import_jobs_lock:
@@ -1030,6 +1331,18 @@ def make_handler(index_path: Path):
                 if not isinstance(raw_paths, list) or not raw_paths:
                     self._send_json({"error": "没有选择要导入的文件。"}, status=400)
                     return
+                pdf_parse_mode = str(payload.get("pdf_parse_mode") or "auto").strip().lower()
+                if pdf_parse_mode not in {"auto", "mineru", "vision"}:
+                    self._send_json({"error": "PDF 解析方式无效。"}, status=400)
+                    return
+                vision_provider_id = (
+                    str(payload.get("vision_provider_id") or "").strip()
+                    if pdf_parse_mode == "vision"
+                    else ""
+                )
+                if pdf_parse_mode == "vision" and not vision_provider_id:
+                    self._send_json({"error": "请选择一个其他解析 API。"}, status=400)
+                    return
                 preferences = read_preferences(resolve_preferences_path(root))
                 allowed_bases = [Path(item).resolve() for item in preferences.get("scan_directories") or []]
                 jobs: List[Dict[str, object]] = []
@@ -1054,7 +1367,24 @@ def make_handler(index_path: Path):
                         else:
                             profile = {"detected_pdf_type": "docx"}
                             source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                        job_id = start_import_job(target, profile, source_file_id, is_pdf)
+                        force_mineru = is_pdf and pdf_parse_mode == "mineru"
+                        job_id = start_import_job(
+                            target,
+                            profile,
+                            source_file_id,
+                            is_pdf,
+                            force_mineru=force_mineru,
+                            vision_provider_id=vision_provider_id or None,
+                        )
+                        parse_route = None
+                        if is_pdf:
+                            parse_route = (
+                                "vision"
+                                if vision_provider_id
+                                else "mineru"
+                                if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
+                                else "native"
+                            )
                         jobs.append({
                             "path": str(raw),
                             "job_id": job_id,
@@ -1063,8 +1393,10 @@ def make_handler(index_path: Path):
                             "source_file_id": source_file_id,
                             "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
                             "file_type": "pdf" if is_pdf else "docx",
+                            "parse_route": parse_route,
+                            "provider_id": vision_provider_id or None,
                         })
-                    except (MinerUError, OSError, ValueError) as exc:
+                    except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
                         import_errors.append({"path": str(raw), "error": str(exc)})
                 self._send_json({"ok": True, "jobs": jobs, "errors": import_errors})
                 return
@@ -1079,6 +1411,74 @@ def make_handler(index_path: Path):
                     self._send_json({"error": "本机配置文件无法保存，请检查应用目录是否可写。"}, status=500)
                     return
                 self._send_json({"ok": True, **summary})
+                return
+            if parsed.path == "/api/vision-providers":
+                config_path = resolve_vision_config_path(root)
+                action = str(payload.get("action") or "").strip().lower()
+                try:
+                    if action == "save_provider":
+                        provider = payload.get("provider")
+                        if not isinstance(provider, dict):
+                            raise VisionAPIError("解析接口配置格式无效。")
+                        summary = save_vision_provider(provider, config_path)
+                    elif action == "delete_provider":
+                        summary = delete_vision_provider(
+                            str(payload.get("provider_id") or ""),
+                            config_path,
+                        )
+                    elif action == "save_policy":
+                        summary = save_vision_policy(payload, config_path)
+                    else:
+                        raise VisionAPIError("不支持的配置操作。")
+                except VisionAPIError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except (OSError, json.JSONDecodeError):
+                    self._send_json(
+                        {"error": "其他解析 API 配置无法保存，请检查配置目录。"},
+                        status=500,
+                    )
+                    return
+                self._send_json({"ok": True, **summary})
+                return
+            if parsed.path == "/api/vision-providers/models":
+                provider = payload.get("provider")
+                if not isinstance(provider, dict):
+                    self._send_json(
+                        {
+                            "error": "解析接口配置格式无效。",
+                            "manual_entry_allowed": True,
+                        },
+                        status=400,
+                    )
+                    return
+                try:
+                    result = discover_vision_models(
+                        provider,
+                        resolve_vision_config_path(root),
+                    )
+                except VisionAPIError as exc:
+                    self._send_json(
+                        {
+                            "error": str(exc),
+                            "manual_entry_allowed": True,
+                        },
+                        status=400,
+                    )
+                    return
+                self._send_json({"ok": True, **result})
+                return
+            if parsed.path == "/api/vision-providers/test":
+                provider_id = str(payload.get("provider_id") or "").strip()
+                try:
+                    result = test_vision_provider(
+                        provider_id,
+                        resolve_vision_config_path(root),
+                    )
+                except VisionAPIError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json(result)
                 return
             if parsed.path == "/api/calibration":
                 sid = payload.get("source_id")

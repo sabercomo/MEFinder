@@ -178,6 +178,11 @@ def build_calibration_library(
         translator = _first_valid(document.get("translator"), metadata.get("translator"), source.get("translator"))
         publisher = _first_valid(document.get("publisher"), metadata.get("publisher"), source.get("publisher"))
         parser_type = str(profile.get("detected_pdf_type") or "")
+        parser_label = str(
+            profile.get("parser_label")
+            or profile.get("provider_name")
+            or ("MinerU" if parser_type == "mineru_structured" else "PDF")
+        )
         internal_copy = bool(
             source_path
             and _is_within(source_path, root / "corpus" / "raw_pdf")
@@ -196,7 +201,7 @@ def build_calibration_library(
                 "size_bytes": source.get("size_bytes"),
                 "page_count": profile.get("pdf_page_count"),
                 "parser_type": parser_type,
-                "parser_label": "MinerU" if parser_type == "mineru_structured" else "PDF",
+                "parser_label": parser_label,
                 "status": status,
                 "status_label": STATUS_LABELS[status],
                 "status_group": _status_group(status),
