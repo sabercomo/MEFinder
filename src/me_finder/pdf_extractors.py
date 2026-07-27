@@ -396,6 +396,20 @@ def extract_pdf_source(
     }
 
 
+def relative_to_root(path: Path, root: Path) -> str:
+    """Bookkeeping path for a source file, tolerant of files outside the root.
+
+    The data root and the process working directory are not the same thing in
+    packaged builds, so a file living elsewhere must not fail the import.
+    """
+
+    resolved_path = Path(path).resolve()
+    try:
+        return str(resolved_path.relative_to(Path(root).resolve())).replace("\\", "/")
+    except ValueError:
+        return resolved_path.as_posix()
+
+
 def source_file_record(
     path: Path,
     root: Path,
@@ -404,14 +418,12 @@ def source_file_record(
     title: str,
     profile: Dict[str, object],
 ) -> Dict[str, object]:
-    resolved_path = path.resolve()
-    resolved_root = root.resolve()
     return {
         "source_file_id": source_file_id,
         "source_type": "pdf",
         "document_id": document_id,
         "collection_id": "PDF",
-        "relative_path": str(resolved_path.relative_to(resolved_root)).replace("\\", "/"),
+        "relative_path": relative_to_root(path, root),
         "volume_number": None,
         "file_format": "pdf",
         "container_format": "pdf",

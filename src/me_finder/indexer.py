@@ -33,8 +33,11 @@ def build_index(
     pdf_limit: int | None = None,
     backup_existing: bool = False,
     export_json: bool = False,
+    root: Path | None = None,
 ) -> Dict[str, object]:
-    root = Path(".").resolve()
+    # Packaged builds keep their data outside the working directory, so callers
+    # that know the data root pass it in; the CLI keeps using the current one.
+    root = Path(root).resolve() if root is not None else Path(".").resolve()
     corpus_dir = Path(corpus_dir)
     index_path = Path(index_path)
     files = sorted(

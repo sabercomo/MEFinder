@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 import time
 import uuid
 from pathlib import Path
@@ -342,11 +343,40 @@ def parse_pdf_with_provider(
     return result
 
 
+def indexed_word_source_count(database_path: Path) -> int:
+    """How many Word sources the current index holds, 0 when it cannot be read."""
+
+    database_path = Path(database_path)
+    if not database_path.exists():
+        return 0
+    try:
+        connection = sqlite3.connect(str(database_path))
+    except sqlite3.Error:
+        return 0
+    try:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM source_files WHERE source_type = 'word'"
+        ).fetchone()
+    except sqlite3.Error:
+        return 0
+    finally:
+        connection.close()
+    return int(row[0]) if row else 0
+
+
 def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = None) -> Dict[str, object]:
     root = Path(root)
     corpus_dir = root / "corpus" / "raw_docx"
     if not corpus_dir.exists():
-        raise MinerUError("当前应用包没有附带完整 Word 原始语料，无法自动重建索引。")
+        # Public builds ship without Word corpus; PDF-only indexing is normal there.
+        # Refuse only when Word documents are indexed, since rebuilding without the
+        # originals would silently drop them from search.
+        if indexed_word_source_count(root / "data" / "index.sqlite3"):
+            raise MinerUError(
+                "找不到 Word 原始语料目录 corpus\\raw_docx，但索引中仍有 Word 文献。"
+                "为避免它们从索引中消失，本次没有重建；请恢复该目录后重试。"
+            )
+        corpus_dir.mkdir(parents=True, exist_ok=True)
     if on_progress:
         on_progress({"phase": "rebuilding_index"})
     return build_index(
@@ -358,6 +388,7 @@ def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = No
         pdf_config_path=root / "config" / "pdf_imports.json",
         parsed_pdf_dir=root / "corpus" / "parsed" / "pdf",
         backup_existing=True,
+        root=root,
     )
 
 
