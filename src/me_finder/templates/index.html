@@ -304,6 +304,7 @@
               <strong>其他视觉 API</strong>
               <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析。</small>
               <select id="import-vision-provider" class="pdf-provider-select" onclick="event.stopPropagation()" onchange="document.querySelector('input[name=&quot;pdf-parse-mode&quot;][value=&quot;vision&quot;]').checked=true" aria-label="选择其他解析 API"></select>
+              <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();navigateTo('settings')" hidden>尚未配置，去设置里添加接口 →</a>
             </span>
           </label>
         </div>

@@ -1991,9 +1991,22 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 12px;
   line-height: 1.45;
 }
-.pdf-parse-option-online strong { color: var(--warning); }
-.pdf-parse-option-paid strong { color: var(--accent); }
 .pdf-parse-option.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.pdf-parse-option.is-disabled .pdf-provider-config-link { pointer-events: auto; }
+.pdf-provider-config-link {
+  margin-top: 5px;
+  color: var(--accent);
+  font-size: 11.5px;
+  text-decoration: none;
+}
+.pdf-provider-config-link:hover { text-decoration: underline; }
+@media (max-width: 1150px) {
+  .pdf-parse-mode { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pdf-parse-mode-title { grid-column: 1 / -1; padding-right: 0; }
+}
+@media (max-width: 800px) {
+  .pdf-parse-mode { grid-template-columns: 1fr; }
+}
 .pdf-provider-select {
   width: 100%;
   height: 29px;

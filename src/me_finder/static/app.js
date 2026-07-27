@@ -2574,6 +2574,9 @@ function syncImportVisionProviders() {
         return '<option value="' + esc(provider.id) + '">' + esc(provider.name) + ' · ' + esc(provider.model) + '</option>';
       }).join('')
     : '<option value="">请先在设置中配置</option>';
+  select.hidden = providers.length === 0;
+  var configLink = document.getElementById('vision-parse-config-link');
+  if (configLink) configLink.hidden = providers.length > 0;
   var preferred = visionConfig.default_provider_id || '';
   if (providers.some(function(provider) { return provider.id === preferred; })) select.value = preferred;
   radio.disabled = providers.length === 0;
