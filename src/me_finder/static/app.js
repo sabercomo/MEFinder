@@ -2187,7 +2187,7 @@ async function saveMineruConfig() {
 var VISION_BRAND_RULES = [
   {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com'},
   {re: /dashscope|aliyuncs/i, name: '通义千问', color: '#615CED', icon: 'qwen-color.svg', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
-  {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', base: 'https://api.moonshot.cn/v1'},
+  {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', iconBg: '#101319', base: 'https://api.moonshot.cn/v1'},
   {re: /bigmodel|zhipu/i, name: '智谱 GLM', color: '#3859FF', icon: 'zhipu-color.svg', base: 'https://open.bigmodel.cn/api/paas/v4'},
   {re: /siliconflow/i, name: '硅基流动', color: '#7C3AED', icon: 'siliconcloud-color.svg', base: 'https://api.siliconflow.cn/v1'},
   {re: /volces|volcengine|doubao/i, name: '火山方舟（豆包）', color: '#3370FF', icon: 'doubao-color.svg', base: 'https://ark.cn-beijing.volces.com/api/v3'},
@@ -2257,7 +2257,8 @@ function visionAvatarHtml(provider, extraClass) {
   var brand = visionBrandFromBase(provider.api_base);
   var cls = 'vision-avatar' + (extraClass ? ' ' + extraClass : '');
   if (brand && brand.icon) {
-    return '<span class="' + cls + ' has-icon"><img src="/static/brands/' + brand.icon + '" alt=""></span>';
+    return '<span class="' + cls + ' has-icon"' + (brand.iconBg ? ' style="background:' + brand.iconBg + '"' : '')
+      + '><img src="/static/brands/' + brand.icon + '" alt=""></span>';
   }
   var info = visionAvatarFor(provider);
   return '<span class="' + cls + '" style="background:' + info.color + '">' + esc(info.letter) + '</span>';
@@ -2365,6 +2366,8 @@ function visionModelFiltered() {
   var input = document.getElementById('vision-model');
   var query = input ? input.value.trim().toLowerCase() : '';
   if (!query) return visionModelOptions;
+  var exactMatch = visionModelOptions.some(function(item) { return item.id.toLowerCase() === query; });
+  if (exactMatch) return visionModelOptions;
   return visionModelOptions.filter(function(item) {
     return item.id.toLowerCase().indexOf(query) >= 0
       || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
@@ -2687,7 +2690,7 @@ function updateVisionEditorHead() {
     avatar.classList.add('has-brand');
     if (brand && brand.icon) {
       avatar.classList.add('has-icon');
-      avatar.style.background = '';
+      avatar.style.background = brand.iconBg || '';
       avatar.innerHTML = '<img src="/static/brands/' + brand.icon + '" alt="">';
     } else {
       avatar.classList.remove('has-icon');
