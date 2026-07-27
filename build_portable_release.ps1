@@ -19,7 +19,7 @@ if (-not $stageFull.StartsWith($releaseFull + '\', [StringComparison]::OrdinalIg
 
 Push-Location $ProjectRoot
 try {
-    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views
+    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     py -3 -m PyInstaller desktop.spec --clean --noconfirm
