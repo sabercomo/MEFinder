@@ -307,7 +307,7 @@
               <strong>其他视觉 API</strong>
               <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析。</small>
               <select id="import-vision-provider" class="pdf-provider-select" onclick="event.stopPropagation()" onchange="document.querySelector('input[name=&quot;pdf-parse-mode&quot;][value=&quot;vision&quot;]').checked=true" aria-label="选择其他解析 API"></select>
-              <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();navigateTo('settings')" hidden>尚未配置，去设置里添加接口 →</a>
+              <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
             </span>
           </label>
         </div>
@@ -386,13 +386,15 @@
             </label>
           </div>
         </section>
-        <section class="settings-section">
-          <div class="settings-section-head">
+        <section class="settings-section settings-collapse" id="mineru-settings-card">
+          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="mineru-settings-body" onclick="toggleSettingsCollapse('mineru-settings-card','mineru-settings-body')">
             <span class="settings-section-title">MinerU API</span>
             <span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span>
             <span id="mineru-config-status" class="settings-status">读取中…</span>
-          </div>
-          <div class="settings-grid">
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="mineru-settings-body" style="display:none">
+            <div class="settings-grid">
             <label class="settings-label" for="mineru-token">Bearer Token</label>
             <div class="settings-control">
               <div class="settings-input-row">
@@ -432,16 +434,21 @@
               <button class="action-btn" type="button" onclick="loadMineruConfig()">重新读取</button>
               <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机。</span>
             </div>
+            </div>
           </div>
         </section>
-        <section class="settings-section">
-          <div class="settings-section-head">
-            <span class="settings-section-title">其他解析 API</span>
-            <span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span>
-            <span id="vision-config-status" class="settings-status">读取中…</span>
+        <section class="settings-section settings-collapse" id="vision-settings-card">
+          <div class="settings-collapse-row">
+            <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="vision-settings-body" onclick="toggleSettingsCollapse('vision-settings-card','vision-settings-body')">
+              <span class="settings-section-title">其他解析 API</span>
+              <span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span>
+              <span id="vision-config-status" class="settings-status">读取中…</span>
+              <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+            </button>
             <button class="action-btn vision-add-btn" type="button" onclick="startAddVisionProvider()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
           </div>
-          <div class="vision-provider-layout">
+          <div class="settings-collapse-body" id="vision-settings-body" style="display:none">
+            <div class="vision-provider-layout">
             <div id="vision-provider-list" class="vision-provider-list"></div>
             <div class="vision-editor-card" id="vision-editor-card">
               <div class="vision-editor-head">
@@ -499,19 +506,23 @@
                 </div>
               </div>
             </div>
-          </div>
-          <div class="vision-fallback-policy">
-            <div class="vision-policy-copy">
-              <strong>MinerU 失败后的处理</strong>
-              <small>默认只提示失败，开启后会自动改用默认备用接口重试。</small>
             </div>
-            <select id="vision-default-provider" class="settings-input vision-default-select" aria-label="默认备用接口"></select>
-            <label class="ui-switch vision-auto-check">
-              <input id="vision-auto-fallback" type="checkbox">
-              <span class="ui-switch-track" aria-hidden="true"></span>
-              <span class="ui-switch-text">MinerU 失败时自动切换</span>
-            </label>
-            <button class="action-btn" type="button" onclick="saveVisionPolicy()">保存切换设置</button>
+            <div class="vision-fallback-policy">
+              <div class="vision-policy-copy">
+                <strong>MinerU 失败后的处理</strong>
+                <small>默认只提示失败，开启后会自动改用默认备用接口重试。</small>
+              </div>
+              <span class="vision-default-select-wrap">
+                <select id="vision-default-provider" class="settings-input vision-default-select" aria-label="默认备用接口"></select>
+                <svg class="vision-default-select-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+              </span>
+              <label class="ui-switch vision-auto-check">
+                <input id="vision-auto-fallback" type="checkbox">
+                <span class="ui-switch-track" aria-hidden="true"></span>
+                <span class="ui-switch-text">MinerU 失败时自动切换</span>
+              </label>
+              <button class="action-btn" type="button" onclick="saveVisionPolicy()">保存切换设置</button>
+            </div>
           </div>
         </section>
         <section class="settings-section">

@@ -92,6 +92,23 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
         self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
 
+    def test_api_settings_collapse_and_fallback_select_match_the_app_style(self) -> None:
+        self.assertIn('id="mineru-settings-card"', HTML)
+        self.assertIn('aria-controls="mineru-settings-body"', HTML)
+        self.assertIn('id="mineru-settings-body" style="display:none"', HTML)
+        self.assertIn('id="vision-settings-card"', HTML)
+        self.assertIn('aria-controls="vision-settings-body"', HTML)
+        self.assertIn('id="vision-settings-body" style="display:none"', HTML)
+        self.assertIn("function toggleSettingsCollapse(cardId, bodyId)", HTML)
+        self.assertIn("setSettingsCollapse('vision-settings-card', 'vision-settings-body', true)", HTML)
+        self.assertIn('class="vision-default-select-wrap"', HTML)
+        self.assertIn('id="vision-default-provider"', HTML)
+        self.assertIn('class="vision-default-select-chevron"', HTML)
+        self.assertIn("-webkit-appearance: none;", HTML)
+        self.assertIn("appearance: none;", HTML)
+        self.assertIn("openVisionSettings()", HTML)
+        self.assertIn("head.focus({preventScroll: true})", HTML)
+
     def test_vision_models_can_be_discovered_or_entered_manually(self) -> None:
         self.assertIn('id="vision-model"', HTML)
         self.assertIn('id="vision-model-pop"', HTML)
