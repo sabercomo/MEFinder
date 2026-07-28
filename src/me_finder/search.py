@@ -408,9 +408,17 @@ class SearchEngine:
         if source_type == "pdf":
             copy_text = f"{paragraph.get('document_title') or paragraph.get('work_title') or 'PDF 文献'}，{page}：{raw}"
             volume_display = str(paragraph.get("volume_display") or paragraph.get("document_title") or "PDF 文献")
-        else:
+        elif self._is_marx_engels_volume(paragraph):
             copy_text = f"《马克思恩格斯文集》第{paragraph.get('volume_number')}卷，{paragraph.get('work_title') or '未识别文献'}，第{page}页：{raw}"
             volume_display = f"《马克思恩格斯文集》第{paragraph.get('volume_number')}卷"
+        else:
+            volume_display = str(
+                paragraph.get("volume_display")
+                or paragraph.get("document_title")
+                or paragraph.get("work_title")
+                or "Word 文献"
+            )
+            copy_text = f"{volume_display}，{page}：{raw}"
         citation_metadata = self._citation_metadata(paragraph, source_type)
         citation_formats = build_citation_formats(citation_metadata, self._hit_page(paragraph, source_type, page))
         return {
@@ -503,7 +511,7 @@ class SearchEngine:
                     metadata[key] = bibliographic[key]
             if bibliographic.get("title"):
                 metadata["document_title"] = bibliographic["title"]
-        if source_type == "word":
+        if source_type == "word" and self._is_marx_engels_volume(metadata):
             metadata.setdefault("document_type", "marx_engels_collection")
             metadata.setdefault("collection_title", self._infer_marx_engels_collection_title(metadata))
             if metadata.get("collection_title") == "马克思恩格斯文集":
@@ -530,6 +538,13 @@ class SearchEngine:
         return "马克思恩格斯文集"
 
     @staticmethod
+    def _is_marx_engels_volume(record: Dict[str, object]) -> bool:
+        return (
+            record.get("volume_number") is not None
+            and str(record.get("volume_id") or "").upper().startswith("MEWJ-")
+        )
+
+    @staticmethod
     def _hit_page(paragraph: Dict[str, object], source_type: str, page_display: object) -> Dict[str, object]:
         if source_type == "pdf":
             start = paragraph.get("citation_page_start")
@@ -540,10 +555,16 @@ class SearchEngine:
                 "display": page_display or "引用页码尚未校准",
                 "uncalibrated": True,
             }
+        start = paragraph.get("original_page_start")
+        if start:
+            return {
+                "start": start,
+                "end": paragraph.get("original_page_end"),
+                "display": page_display,
+            }
         return {
-            "start": paragraph.get("original_page_start") or page_display,
-            "end": paragraph.get("original_page_end"),
-            "display": page_display,
+            "display": page_display or "页码未验证",
+            "uncalibrated": True,
         }
 
     def _context(self, paragraph: Dict[str, object], before: bool) -> List[Dict[str, str]]:

@@ -59,6 +59,22 @@ def volume_number_from_name(name: str) -> int:
     raise ValueError(f"Cannot determine volume number from {name!r}")
 
 
+def is_marx_engels_volume_name(name: str) -> bool:
+    """Return whether a Word file is one of the legacy MEWJ volume sources."""
+
+    compact_name = re.sub(r"\s+", "", name)
+    if not any(
+        marker in compact_name
+        for marker in ("马恩文集", "马克思恩格斯文集")
+    ):
+        return False
+    try:
+        volume_number_from_name(name)
+    except ValueError:
+        return False
+    return True
+
+
 def page_display(start: Optional[str], end: Optional[str] = None) -> Optional[str]:
     if not start:
         return None
@@ -85,6 +101,50 @@ def source_file_record(path: Path, root: Path) -> Dict[str, object]:
         "size_bytes": path.stat().st_size,
         "sha256": file_sha256(path),
         "last_modified": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
+    }
+
+
+def generic_docx_source_file_record(path: Path, root: Path) -> Dict[str, object]:
+    """Build a stable catalog record for a standalone, non-volume DOCX."""
+
+    resolved_path = path.resolve()
+    resolved_root = root.resolve()
+    digest = file_sha256(path)
+    identity = hashlib.sha256(
+        f"{path.name}\0{digest}".encode("utf-8", "ignore")
+    ).hexdigest()[:32]
+    try:
+        relative_path = resolved_path.relative_to(resolved_root).as_posix()
+    except ValueError:
+        relative_path = resolved_path.as_posix()
+    title = re.sub(
+        r"\s+\(imported-[0-9a-f]{8}\)$", "", path.stem, flags=re.I
+    ).strip() or path.stem
+    return {
+        "source_file_id": f"docx-{identity}",
+        "source_type": "word",
+        "relative_path": relative_path,
+        "volume_number": None,
+        "file_format": "docx",
+        "container_format": "openxml_zip",
+        "file_name": path.name,
+        "size_bytes": path.stat().st_size,
+        "sha256": digest,
+        "last_modified": datetime.fromtimestamp(
+            path.stat().st_mtime, timezone.utc
+        ).isoformat(),
+        "display_title": title,
+        "document_title": title,
+        "title": title,
+        "document_type": "book",
+        "bibliographic_metadata": {
+            "title": title,
+            "document_type": "book",
+            "metadata_status": "partial",
+            "metadata_source": "file_name",
+            "metadata_confidence": 0.35,
+            "metadata_missing_fields": ["author", "publisher", "publish_year"],
+        },
     }
 
 
@@ -343,6 +403,121 @@ def extract_docx(path: Path, root: Path) -> Dict[str, object]:
                 "issue_type": "page_unverified",
                 "message": "DOCX 页码来自分节推断，需按 PAGE_NUMBER_STRATEGY.md 抽样验证后才能视为可靠原书页码。",
                 "source_file_id": source["source_file_id"],
+            }
+        ],
+    }
+
+
+def extract_generic_docx(path: Path, root: Path) -> Dict[str, object]:
+    """Extract a standalone DOCX without inventing a collection volume number."""
+
+    source = generic_docx_source_file_record(path, root)
+    source_id = str(source["source_file_id"])
+    title = str(source["document_title"])
+    volume_id = f"{source_id}-document"
+    work_id_value = f"{source_id}-work"
+    volume = {
+        "volume_id": volume_id,
+        "source_file_id": source_id,
+        "source_type": "word",
+        "display_title": title,
+        "document_title": title,
+        "volume_number": None,
+        "primary_structure": "standalone_document",
+        "document_type": "book",
+    }
+    work = {
+        "work_id": work_id_value,
+        "volume_id": volume_id,
+        "source_type": "word",
+        "parent_work_id": None,
+        "work_order": 1,
+        "title": title,
+        "subtitle": None,
+        "author_label": None,
+        "date_label": None,
+        "title_source": "file_name",
+        "boundary_source": "whole_document",
+        "toc_page_start": None,
+        "toc_page_end": None,
+        "confidence": 0.35,
+        "notes": "独立 DOCX，未从文件名推定文集卷号。",
+    }
+    paragraphs: List[Dict[str, object]] = []
+
+    with zipfile.ZipFile(str(path)) as archive:
+        styles = read_docx_styles(archive)
+        doc = ET.fromstring(archive.read("word/document.xml"))
+        xml_paragraphs = doc.findall(".//w:p", NS)
+        section_for_para: Dict[int, Dict[str, object]] = {}
+        for span in build_docx_section_spans(xml_paragraphs, doc):
+            for paragraph_index in range(
+                int(span["start_para"]), int(span["end_para"]) + 1
+            ):
+                section_for_para[paragraph_index] = span
+
+        for index, paragraph in enumerate(xml_paragraphs):
+            text = text_only(paragraph)
+            p_pr = paragraph.find("w:pPr", NS)
+            p_style = p_pr.find("w:pStyle", NS) if p_pr is not None else None
+            jc = p_pr.find("w:jc", NS) if p_pr is not None else None
+            style_id = w_attr(p_style, "val")
+            style_name = styles.get(style_id, style_id)
+            align = w_attr(jc, "val")
+            span = section_for_para.get(index, {})
+            paragraph_record: Dict[str, object] = {
+                "paragraph_id": f"{source_id}-P{index:06d}",
+                "source_file_id": source_id,
+                "source_type": "word",
+                "volume_id": volume_id,
+                "volume_number": None,
+                "volume_display": title,
+                "work_id": work_id_value,
+                "work_title": title,
+                "document_title": title,
+                "author_label": None,
+                "paragraph_index": index,
+                "section_index": span.get("section_index"),
+                "text_raw": text,
+                "style_name": style_name,
+                "alignment": align,
+                "font_summary": summarize_docx_fonts(paragraph),
+                "is_title_candidate": is_docx_title_candidate(
+                    text, style_name, align
+                ),
+                "is_toc_entry": False,
+                "is_index_entry": False,
+                "original_page_start": span.get("page_label"),
+                "original_page_end": span.get("page_label"),
+                "page_source_type": (
+                    "section_break_inferred" if span.get("page_label") else "unknown"
+                ),
+                "page_confidence": 0.55 if span.get("page_label") else 0.0,
+                "page_display": span.get("page_label"),
+                "original_file_name": path.name,
+                "eligible_for_search": bool(text),
+            }
+            enrich_paragraph_text(paragraph_record)
+            paragraphs.append(paragraph_record)
+
+    return {
+        "source_file": source,
+        "volume": volume,
+        "works": [work],
+        "toc_entries": [],
+        "paragraphs": paragraphs,
+        "page_anchors": make_page_anchors_from_paragraphs(
+            paragraphs, volume_id, source_id
+        ),
+        "audit_issues": [
+            {
+                "severity": "warning",
+                "issue_type": "page_unverified",
+                "message": (
+                    "独立 DOCX 不依赖文件名卷号；页码仅来自分节推断，"
+                    "未出现分节页码时保持未校验。"
+                ),
+                "source_file_id": source_id,
             }
         ],
     }
@@ -740,7 +915,9 @@ def make_page_anchors_from_paragraphs(
 
 def extract_source(path: Path, root: Path) -> Dict[str, object]:
     if path.suffix.lower() == ".docx":
-        return extract_docx(path, root)
+        if is_marx_engels_volume_name(path.name):
+            return extract_docx(path, root)
+        return extract_generic_docx(path, root)
     if path.suffix.lower() == ".doc":
         return extract_doc(path, root)
     raise ValueError(f"Unsupported corpus file: {path}")

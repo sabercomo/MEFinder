@@ -11,7 +11,7 @@ project_root = Path.cwd()
 stage_root = project_root / "build" / "macos-stage"
 target_arch = os.environ.get("MEFINDER_TARGET_ARCH") or None
 codesign_identity = os.environ.get("MEFINDER_CODESIGN_IDENTITY") or None
-app_version = os.environ.get("MEFINDER_APP_VERSION") or "0.1.5"
+app_version = os.environ.get("MEFINDER_APP_VERSION") or "0.1.6"
 pdfkit_hiddenimports = collect_submodules("Quartz.PDFKit")
 
 required_stage_files = (
