@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sqlite3
 import unittest
+import zipfile
+from html import escape
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
-from docx import Document
 
 from src.me_finder.database import build_database
 from src.me_finder.extractors import extract_source
@@ -48,10 +48,16 @@ def write_native_pdf(path: Path) -> None:
 
 
 def write_standalone_docx(path: Path, body: str = "这段唯一文本用于验证普通 DOCX 可以直接进入本地索引。") -> None:
-    document = Document()
-    document.add_heading("没有卷号的独立论文", level=1)
-    document.add_paragraph(body)
-    document.save(str(path))
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>"
+        f"<w:p><w:r><w:t>{escape('没有卷号的独立论文')}</w:t></w:r></w:p>"
+        f"<w:p><w:r><w:t>{escape(body)}</w:t></w:r></w:p>"
+        "</w:body></w:document>"
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("word/document.xml", document_xml)
 
 
 def make_public_build_root(base: Path) -> Path:

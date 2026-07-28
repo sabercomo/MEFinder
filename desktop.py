@@ -24,6 +24,10 @@ import traceback
 from pathlib import Path
 
 from src.me_finder import __version__
+from src.me_finder.data_location import (
+    default_macos_data_root,
+    read_macos_data_root,
+)
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
 
 APP_TITLE = "文献原句定位器"
@@ -183,7 +187,7 @@ def installed_data_root_override(bundle_root: Path | None = None) -> Path | None
     user picked on first install instead of resetting to the default.
     """
 
-    if os.name != "nt" or not getattr(sys, "frozen", False):
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return None
     root = Path(bundle_root) if bundle_root is not None else app_root()
     if is_portable_bundle(root):
@@ -215,8 +219,8 @@ def local_app_data_root(home: Path | None = None) -> Path:
         return override
     user_home = Path(home) if home is not None else Path.home()
     if sys.platform == "darwin":
-        return user_home / "Library" / "Application Support" / "MEFinder"
-    if os.name == "nt":
+        return read_macos_data_root(user_home)
+    if sys.platform == "win32":
         return Path(os.environ.get("LOCALAPPDATA") or user_home / "AppData" / "Local") / "MEFinder"
     xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
     if xdg_data_home:
@@ -443,6 +447,16 @@ def main() -> None:
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
+    app_data_root = (
+        local_app_data_root()
+        if getattr(sys, "frozen", False) and not portable
+        else None
+    )
+    default_app_data_root = (
+        default_macos_data_root()
+        if sys.platform == "darwin" and app_data_root is not None
+        else None
+    )
     os.chdir(root)
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
@@ -509,6 +523,19 @@ def main() -> None:
         "update_service": update_service,
     }
 
+    def choose_data_directory() -> str | None:
+        if sys.platform != "darwin" or app_data_root is None:
+            return None
+        initial_directory = app_data_root.parent
+        if not initial_directory.is_dir():
+            initial_directory = Path.home()
+        selection = window.create_file_dialog(
+            webview.FileDialog.FOLDER,
+            directory=str(initial_directory),
+            allow_multiple=False,
+        )
+        return str(selection[0]) if selection else None
+
     def start_backend(win) -> None:
         try:
             index_path = root / "data" / "index.sqlite3"
@@ -533,6 +560,9 @@ def main() -> None:
                 native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
+                native_directory_chooser=choose_data_directory,
+                app_data_root=app_data_root,
+                default_app_data_root=default_app_data_root,
             )
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             state["server"] = server

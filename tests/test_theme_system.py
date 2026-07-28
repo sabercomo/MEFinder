@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from desktop import error_html, loading_html
+from src.me_finder import __version__
 from src.me_finder.preferences import (
     DEFAULT_AUTO_UPDATE,
     DEFAULT_CALIBRATION_VIEW,
@@ -231,6 +232,34 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
         )
 
+    def test_macos_settings_offer_manual_updates_and_data_location_migration(self) -> None:
+        self.assertIn('id="macos-update-settings"', HTML)
+        self.assertIn('id="macos-update-body" hidden', HTML)
+        self.assertIn("function checkMacosUpdate()", HTML)
+        self.assertIn("fetch('/api/macos-update'", HTML)
+        self.assertIn("打开 Releases 下载 DMG", HTML)
+        self.assertIn("不会后台下载或自动替换应用", HTML)
+        self.assertIn(f"当前版本 v{__version__}", HTML)
+        self.assertNotIn("__APP_VERSION__", HTML)
+
+        self.assertIn('id="data-location-settings"', HTML)
+        self.assertIn('id="data-location-body" hidden', HTML)
+        self.assertIn(
+            "toggleSettingsSection('data-location-settings')",
+            HTML,
+        )
+        self.assertIn("外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive", HTML)
+        self.assertIn("function chooseDataLocation()", HTML)
+        self.assertIn("function migrateDataLocation()", HTML)
+        self.assertIn("fetch('/api/data-location/choose'", HTML)
+        self.assertIn("fetch('/api/data-location/migrate'", HTML)
+        self.assertIn("旧位置的数据会保留", HTML)
+        self.assertIn("不要让两台电脑同时打开同一份云盘或 NAS 数据库", HTML)
+        self.assertIn(
+            'html[data-desktop-shell="macos"] .macos-data-location-settings',
+            HTML,
+        )
+
     def test_theme_previews_reuse_the_real_design_tokens(self) -> None:
         for theme in self.THEMES:
             self.assertIn(f'.theme-preview[data-preview-theme="{theme}"]', HTML)
@@ -312,11 +341,13 @@ class ThemeMarkupTests(unittest.TestCase):
         )
         self.assertIn("margin-top: var(--windows-titlebar-height);", rendered)
 
-    def test_all_six_top_level_settings_sections_are_collapsible(self) -> None:
+    def test_all_top_level_settings_sections_are_collapsible(self) -> None:
         sections = {
             "appearance-card": "appearance-body",
             "pdf-reader-settings": "pdf-reader-body",
             "software-update-settings": "software-update-body",
+            "macos-update-settings": "macos-update-body",
+            "data-location-settings": "data-location-body",
             "mineru-api-settings": "mineru-api-body",
             "vision-api-settings": "vision-api-body",
             "backup-settings": "backup-settings-body",
