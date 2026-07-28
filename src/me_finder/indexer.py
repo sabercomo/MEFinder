@@ -10,7 +10,11 @@ from typing import Dict, List
 
 from . import __version__
 from .database import DEFAULT_DATABASE_PATH, build_database, load_database_index
-from .extractors import extract_source, volume_number_from_name
+from .extractors import (
+    extract_source,
+    is_marx_engels_volume_name,
+    volume_number_from_name,
+)
 from .pdf_extractors import extract_configured_pdfs
 
 
@@ -19,6 +23,17 @@ DEFAULT_PDF_CORPUS_DIR = Path("corpus/raw_pdf")
 DEFAULT_PDF_CONFIG_PATH = Path("config/pdf_imports.json")
 DEFAULT_PARSED_PDF_DIR = Path("corpus/parsed/pdf")
 DEFAULT_INDEX_PATH = Path("data/index.json")
+
+
+def word_source_sort_key(path: Path) -> tuple[int, int, str]:
+    """Sort canonical numbered volumes first and standalone documents by name."""
+
+    try:
+        if not is_marx_engels_volume_name(path.name):
+            raise ValueError
+        return (0, volume_number_from_name(path.name), path.name.casefold())
+    except ValueError:
+        return (1, 0, path.name.casefold())
 
 
 def build_index(
@@ -42,7 +57,7 @@ def build_index(
     index_path = Path(index_path)
     files = sorted(
         [p for p in corpus_dir.iterdir() if p.is_file() and p.suffix.lower() in {".docx", ".doc"}],
-        key=lambda p: volume_number_from_name(p.name),
+        key=word_source_sort_key,
     )
     source_files: List[Dict[str, object]] = []
     volumes: List[Dict[str, object]] = []

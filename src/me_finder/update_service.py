@@ -6,14 +6,16 @@ import hashlib
 import json
 import re
 import secrets
+import ssl
 import subprocess
 import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Mapping, Optional, Tuple
+from urllib.error import URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener, urlopen
 
 
 DEFAULT_RELEASE_API = "https://api.github.com/repos/sabercomo/MEFinder/releases?per_page=20"
@@ -141,8 +143,45 @@ def _request(url: str) -> Request:
     )
 
 
-def _read_limited(opener: Callable, url: str, limit: int, timeout: int = 20) -> bytes:
-    with opener(_request(url), timeout=timeout) as response:
+def _direct_urlopen(request: Request, timeout: int):
+    """Open trusted HTTPS without environment/system proxy settings."""
+
+    opener = build_opener(
+        ProxyHandler({}),
+        HTTPSHandler(context=ssl.create_default_context()),
+    )
+    return opener.open(request, timeout=timeout)
+
+
+def _open_request(
+    opener: Callable,
+    url: str,
+    timeout: int,
+    direct_opener: Optional[Callable] = None,
+):
+    try:
+        return opener(_request(url), timeout=timeout)
+    except URLError as exc:
+        # Some local Windows proxy clients accept Schannel/Go TLS but reject
+        # Python OpenSSL during CONNECT. Retry the same allow-listed GitHub URL
+        # directly with normal certificate verification; never bypass HTTPS.
+        if (
+            direct_opener is None
+            or not _trusted_download_url(url)
+            or not isinstance(getattr(exc, "reason", None), ssl.SSLError)
+        ):
+            raise
+        return direct_opener(_request(url), timeout=timeout)
+
+
+def _read_limited(
+    opener: Callable,
+    url: str,
+    limit: int,
+    timeout: int = 20,
+    direct_opener: Optional[Callable] = None,
+) -> bytes:
+    with _open_request(opener, url, timeout, direct_opener) as response:
         data = response.read(limit + 1)
     if len(data) > limit:
         raise UpdateError("更新服务器返回的数据过大。")
@@ -169,6 +208,7 @@ class UpdateService:
         platform: str = sys.platform,
         release_api: str = DEFAULT_RELEASE_API,
         opener: Callable = urlopen,
+        direct_opener: Optional[Callable] = _direct_urlopen,
         process_launcher: Callable = subprocess.Popen,
         on_install_started: Optional[Callable[[], None]] = None,
     ) -> None:
@@ -178,6 +218,7 @@ class UpdateService:
         self.platform = platform
         self.release_api = release_api
         self.opener = opener
+        self.direct_opener = direct_opener
         self.process_launcher = process_launcher
         self.on_install_started = on_install_started
         self._lock = threading.RLock()
@@ -220,7 +261,12 @@ class UpdateService:
             install_token=None,
         )
         try:
-            raw = _read_limited(self.opener, self.release_api, MAX_RELEASE_BYTES)
+            raw = _read_limited(
+                self.opener,
+                self.release_api,
+                MAX_RELEASE_BYTES,
+                direct_opener=self.direct_opener,
+            )
             payload = json.loads(raw.decode("utf-8"))
             if isinstance(payload, Mapping):
                 payloads = [payload]
@@ -299,7 +345,12 @@ class UpdateService:
         ) if asset.size else MAX_INSTALLER_BYTES
         digest = hashlib.sha256()
         written = 0
-        with self.opener(_request(asset.url), timeout=60) as response, destination.open("wb") as handle:
+        with _open_request(
+            self.opener,
+            asset.url,
+            60,
+            self.direct_opener,
+        ) as response, destination.open("wb") as handle:
             while True:
                 chunk = response.read(1024 * 1024)
                 if not chunk:
@@ -340,7 +391,10 @@ class UpdateService:
         partial = target.with_suffix(target.suffix + ".part")
         try:
             checksum_text = _read_limited(
-                self.opener, checksum.url, MAX_CHECKSUM_BYTES
+                self.opener,
+                checksum.url,
+                MAX_CHECKSUM_BYTES,
+                direct_opener=self.direct_opener,
             ).decode("ascii", errors="replace")
             expected = parse_sha256_text(checksum_text)
             if target.is_file() and _sha256_file(target) == expected:

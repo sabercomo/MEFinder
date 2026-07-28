@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from docx import Document
+
 from src.me_finder.database import build_database
+from src.me_finder.extractors import extract_source
 from src.me_finder.indexer import build_index
 from src.me_finder.mineru_api import MinerUError
 from src.me_finder.pdf_extractors import relative_to_root
@@ -15,6 +18,7 @@ from src.me_finder.pdf_import_service import (
     rebuild_local_index,
     register_pdf,
 )
+from src.me_finder.search import SearchEngine
 
 BODY = (
     "本文以马克思主义基本原理为指导，"
@@ -41,6 +45,13 @@ def write_native_pdf(path: Path) -> None:
         writer.write_text(page)
     document.save(str(path))
     document.close()
+
+
+def write_standalone_docx(path: Path, body: str = "这段唯一文本用于验证普通 DOCX 可以直接进入本地索引。") -> None:
+    document = Document()
+    document.add_heading("没有卷号的独立论文", level=1)
+    document.add_paragraph(body)
+    document.save(str(path))
 
 
 def make_public_build_root(base: Path) -> Path:
@@ -105,6 +116,101 @@ class PortableIndexRebuildTests(unittest.TestCase):
     def test_indexed_word_source_count_tolerates_a_missing_database(self) -> None:
         with TemporaryDirectory() as tmp:
             self.assertEqual(indexed_word_source_count(Path(tmp) / "absent.sqlite3"), 0)
+
+    def test_standalone_docx_import_does_not_require_a_volume_in_the_filename(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = make_public_build_root(base)
+            source = base / "用户下载的普通论文.docx"
+            write_standalone_docx(source)
+
+            stored = copy_local_document(root, source)
+            first_index = rebuild_local_index(root)
+            second_index = rebuild_local_index(root)
+
+            word_sources = [
+                item
+                for item in first_index["source_files"]
+                if item.get("source_type") == "word"
+            ]
+            self.assertEqual(len(word_sources), 1)
+            self.assertEqual(word_sources[0]["file_name"], source.name)
+            self.assertIsNone(word_sources[0]["volume_number"])
+            self.assertEqual(word_sources[0]["document_title"], source.stem)
+            self.assertEqual(
+                word_sources[0]["source_file_id"],
+                second_index["source_files"][0]["source_file_id"],
+            )
+            self.assertEqual(stored.parent, root / "corpus" / "raw_docx")
+
+            engine = SearchEngine(root / "data" / "index.sqlite3")
+            try:
+                result = engine.search("普通 DOCX 可以直接进入本地索引", source_type="word")
+            finally:
+                engine.close()
+            self.assertEqual(result["total"], 1)
+            hit = result["results"][0]
+            self.assertEqual(hit["volume_display"], source.stem)
+            self.assertNotIn("马克思恩格斯文集", hit["copy_text"])
+            self.assertIn("页码尚未校准", hit["citation_formats"]["chinese"])
+
+    def test_non_marx_volume_name_stays_a_standalone_document(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = make_public_build_root(base)
+            source = base / "杜威全集 第08卷.docx"
+            write_standalone_docx(source)
+
+            stored = copy_local_document(root, source)
+            index = rebuild_local_index(root)
+
+            word_source = index["source_files"][0]
+            self.assertEqual(word_source["file_name"], source.name)
+            self.assertIsNone(word_source["volume_number"])
+            self.assertTrue(word_source["source_file_id"].startswith("docx-"))
+            self.assertFalse(index["volumes"][0]["volume_id"].startswith("MEWJ-"))
+            self.assertEqual(stored.parent, root / "corpus" / "raw_docx")
+
+    def test_multiple_standalone_docx_files_have_distinct_stable_ids(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = make_public_build_root(base)
+            first = base / "第一份论文.docx"
+            second = base / "第二份论文.docx"
+            write_standalone_docx(first, "两份文件可以包含相同正文。")
+            write_standalone_docx(second, "两份文件可以包含相同正文。")
+            copy_local_document(root, first)
+            copy_local_document(root, second)
+
+            first_index = rebuild_local_index(root)
+            second_index = rebuild_local_index(root)
+
+            source_ids = [item["source_file_id"] for item in first_index["source_files"]]
+            volume_ids = [item["volume_id"] for item in first_index["volumes"]]
+            work_ids = [item["work_id"] for item in first_index["works"]]
+            paragraph_ids = [item["paragraph_id"] for item in first_index["paragraphs"]]
+            self.assertEqual(len(source_ids), len(set(source_ids)))
+            self.assertEqual(len(volume_ids), len(set(volume_ids)))
+            self.assertEqual(len(work_ids), len(set(work_ids)))
+            self.assertEqual(len(paragraph_ids), len(set(paragraph_ids)))
+            self.assertEqual(
+                source_ids,
+                [item["source_file_id"] for item in second_index["source_files"]],
+            )
+
+    def test_marx_engels_volume_keeps_the_legacy_volume_model(self) -> None:
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = make_public_build_root(base)
+            source = root / "corpus" / "raw_docx" / "《马恩文集》第1卷.docx"
+            source.parent.mkdir(parents=True)
+            write_standalone_docx(source)
+
+            extracted = extract_source(source, root)
+
+            self.assertEqual(extracted["source_file"]["source_file_id"], "source-01")
+            self.assertEqual(extracted["volume"]["volume_id"], "MEWJ-01")
+            self.assertEqual(extracted["volume"]["corpus_title"], "马克思恩格斯文集")
 
 
 class DataRootIndependentOfWorkingDirectoryTests(unittest.TestCase):

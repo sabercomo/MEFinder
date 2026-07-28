@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import ssl
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from urllib.error import URLError
 
 from src.me_finder.update_service import (
     ReleaseAsset,
@@ -146,6 +148,72 @@ class UpdateServiceTests(unittest.TestCase):
         self.assertTrue(state["update_available"])
         self.assertTrue(state["can_self_update"])
         self.assertEqual(opener.requests[0][0].get_header("User-agent"), "MEFinder-Windows-Updater")
+
+    def test_proxy_tls_failure_retries_trusted_github_urls_without_proxy(self) -> None:
+        setup_name = "MEFinder-v0.1.7-windows-setup.exe"
+        setup_url = (
+            "https://github.com/sabercomo/MEFinder/releases/download/v0.1.7/"
+            + setup_name
+        )
+        checksum_url = setup_url + ".sha256.txt"
+        setup_bytes = b"MZ-direct-tls-fallback"
+        digest = hashlib.sha256(setup_bytes).hexdigest()
+        payload = [
+            _release(
+                "0.1.7",
+                [
+                    _asset(setup_name, setup_url, len(setup_bytes)),
+                    _asset(setup_name + ".sha256.txt", checksum_url),
+                ],
+            )
+        ]
+        primary = mock.Mock(
+            side_effect=URLError(ssl.SSLError("ssl/tls alert handshake failure"))
+        )
+        direct = _Opener(
+            {
+                self.release_api: json.dumps(payload).encode("utf-8"),
+                checksum_url: f"{digest}  {setup_name}\n".encode("ascii"),
+                setup_url: setup_bytes,
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = UpdateService(
+                "0.1.6",
+                Path(temp_dir),
+                install_kind="installed",
+                platform="win32",
+                opener=primary,
+                direct_opener=direct,
+            ).check(auto_download=True)
+
+        self.assertEqual(state["status"], "ready")
+        self.assertTrue(state["downloaded"])
+        self.assertEqual(primary.call_count, 3)
+        self.assertEqual(
+            [request.full_url for request, _timeout in direct.requests],
+            [self.release_api, checksum_url, setup_url],
+        )
+
+    def test_proxy_tls_failure_does_not_bypass_proxy_for_untrusted_hosts(self) -> None:
+        primary = mock.Mock(
+            side_effect=URLError(ssl.SSLError("ssl/tls alert handshake failure"))
+        )
+        direct = mock.Mock()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = UpdateService(
+                "0.1.6",
+                Path(temp_dir),
+                install_kind="installed",
+                platform="win32",
+                release_api="https://example.com/releases",
+                opener=primary,
+                direct_opener=direct,
+            ).check()
+
+        self.assertEqual(state["status"], "error")
+        direct.assert_not_called()
 
     def test_check_reports_current_when_releases_have_no_windows_installer(self) -> None:
         payload = [_release("0.1.8", [_asset("MEFinder-v0.1.8-macos.dmg", "https://github.com/mac")])]
