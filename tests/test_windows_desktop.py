@@ -100,6 +100,7 @@ class WindowsTitlebarTests(unittest.TestCase):
         frame_refresher = mock.Mock(return_value=1)
         attribute_setter = mock.Mock(return_value=0)
         maximize_bounds_preparer = mock.Mock(return_value=True)
+        top_inset_remover = mock.Mock(return_value=True)
 
         with mock.patch.object(windows_desktop.sys, "platform", "win32"):
             configured = configure_windows_chromeless(
@@ -109,6 +110,7 @@ class WindowsTitlebarTests(unittest.TestCase):
                 frame_refresher=frame_refresher,
                 attribute_setter=attribute_setter,
                 maximize_bounds_preparer=maximize_bounds_preparer,
+                top_inset_remover=top_inset_remover,
             )
 
         expected_style = (
@@ -125,6 +127,7 @@ class WindowsTitlebarTests(unittest.TestCase):
         frame_refresher.assert_called_once_with(321)
         attribute_setter.assert_called_once_with(321, 33, 2)
         maximize_bounds_preparer.assert_called_once_with(window)
+        top_inset_remover.assert_called_once_with(321)
 
     def test_chromeless_configuration_is_a_noop_outside_windows(self) -> None:
         style_getter = mock.Mock()

@@ -35,6 +35,20 @@ _SWP_NOMOVE = 0x0002
 _SWP_NOZORDER = 0x0004
 _SWP_NOACTIVATE = 0x0010
 _SWP_FRAMECHANGED = 0x0020
+_WM_NCCALCSIZE = 0x0083
+
+_SUBCLASSPROC = ctypes.WINFUNCTYPE(
+    ctypes.c_ssize_t,
+    ctypes.c_void_p,
+    ctypes.c_uint,
+    ctypes.c_size_t,
+    ctypes.c_ssize_t,
+    ctypes.c_size_t,
+    ctypes.c_size_t,
+)
+
+# Subclass callbacks must outlive the native window or Windows calls freed code.
+_top_inset_subclasses: Dict[int, object] = {}
 
 _TITLEBAR_PALETTES = {
     "frost-blue": ("#F5F8FC", "#172033", "#DDE5EF"),
@@ -114,6 +128,50 @@ def _refresh_native_window_frame(hwnd: int) -> int:
     return int(refresher(hwnd, None, 0, 0, 0, 0, flags))
 
 
+def remove_windows_top_resize_inset(hwnd: int) -> bool:
+    """Keep the client area flush with the top edge of the frameless window.
+
+    ``WS_THICKFRAME`` reserves a resize inset on every edge during
+    ``WM_NCCALCSIZE``; the top one has no caption to cover it and renders as a
+    system-colored line above the HTML titlebar. Restoring the pre-default top
+    keeps left/right/bottom resize borders while the top edge paints web
+    content only (top-edge resizing is given up for the seamless titlebar).
+    """
+
+    if hwnd in _top_inset_subclasses:
+        return True
+    comctl32 = ctypes.windll.comctl32
+    comctl32.SetWindowSubclass.argtypes = [
+        ctypes.c_void_p,
+        _SUBCLASSPROC,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+    ]
+    comctl32.SetWindowSubclass.restype = wintypes.BOOL
+    comctl32.DefSubclassProc.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_size_t,
+        ctypes.c_ssize_t,
+    ]
+    comctl32.DefSubclassProc.restype = ctypes.c_ssize_t
+
+    def proc(handle, message, wparam, lparam, _subclass_id, _ref_data):
+        if message == _WM_NCCALCSIZE and wparam and lparam:
+            rect = ctypes.cast(lparam, ctypes.POINTER(wintypes.RECT)).contents
+            top_before_default = rect.top
+            result = comctl32.DefSubclassProc(handle, message, wparam, lparam)
+            rect.top = top_before_default
+            return result
+        return comctl32.DefSubclassProc(handle, message, wparam, lparam)
+
+    callback = _SUBCLASSPROC(proc)
+    if not comctl32.SetWindowSubclass(hwnd, callback, 1, 0):
+        return False
+    _top_inset_subclasses[hwnd] = callback
+    return True
+
+
 def prepare_windows_maximized_bounds(window: object) -> bool:
     """Constrain a frameless maximize operation to the monitor work area."""
 
@@ -144,13 +202,15 @@ def prepare_windows_maximized_bounds(window: object) -> bool:
         client_width = client.right - client.left
         client_height = client.bottom - client.top
         border_x = max(0, (outer_width - client_width) // 2)
-        border_y = max(0, (outer_height - client_height) // 2)
+        # The top resize inset is removed by remove_windows_top_resize_inset,
+        # so the remaining vertical non-client area is the bottom border alone.
+        border_y = max(0, outer_height - client_height)
         work = Screen.FromHandle(native.Handle).WorkingArea
         native.MaximizedBounds = Rectangle(
             work.X - border_x,
-            work.Y - border_y,
+            work.Y,
             work.Width + border_x * 2,
-            work.Height + border_y * 2,
+            work.Height + border_y,
         )
 
     if bool(getattr(native, "InvokeRequired", False)):
@@ -170,6 +230,7 @@ def configure_windows_chromeless(
     frame_refresher: Optional[Callable[[int], int]] = None,
     attribute_setter: Optional[Callable[[int, int, int], int]] = None,
     maximize_bounds_preparer: Optional[Callable[[object], bool]] = None,
+    top_inset_remover: Optional[Callable[[int], bool]] = None,
 ) -> bool:
     """Keep native resize/snap behavior while the HTML owns the titlebar.
 
@@ -194,6 +255,10 @@ def configure_windows_chromeless(
         | _WS_MAXIMIZEBOX
     )
     setter(hwnd, chromeless_style)
+    try:
+        (top_inset_remover or remove_windows_top_resize_inset)(hwnd)
+    except Exception:
+        logging.debug("top resize inset removal is unavailable", exc_info=True)
     refresher(hwnd)
 
     # DWMWA_WINDOW_CORNER_PREFERENCE=33, DWMWCP_ROUND=2 (Windows 11).

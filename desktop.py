@@ -175,10 +175,44 @@ def app_root() -> Path:
     return Path(__file__).resolve().parent
 
 
+def installed_data_root_override(bundle_root: Path | None = None) -> Path | None:
+    """Read the data directory chosen in the Windows installer, if any.
+
+    The installer writes ``data_root.txt`` beside the executable so a silent
+    self-update (which never shows wizard pages) keeps using the directory the
+    user picked on first install instead of resetting to the default.
+    """
+
+    if os.name != "nt" or not getattr(sys, "frozen", False):
+        return None
+    root = Path(bundle_root) if bundle_root is not None else app_root()
+    if is_portable_bundle(root):
+        return None
+    marker = root / "data_root.txt"
+    try:
+        raw = marker.read_bytes()
+    except OSError:
+        return None
+    for encoding in ("utf-8-sig", "utf-8"):
+        try:
+            text = raw.decode(encoding).strip()
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text = raw.decode(errors="replace").strip()
+    if not text:
+        return None
+    return Path(text).expanduser().resolve()
+
+
 def local_app_data_root(home: Path | None = None) -> Path:
     configured_root = os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
     if configured_root:
         return Path(configured_root).expanduser().resolve()
+    override = installed_data_root_override()
+    if override is not None:
+        return override
     user_home = Path(home) if home is not None else Path.home()
     if sys.platform == "darwin":
         return user_home / "Library" / "Application Support" / "MEFinder"

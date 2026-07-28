@@ -589,14 +589,14 @@
                 <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
                 <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip。</span>
               </div>
-              <label class="settings-label" for="backup-import-path">导入</label>
-              <div class="settings-control">
-                <div class="settings-input-row">
-                  <input id="backup-import-path" class="settings-input" type="text" spellcheck="false" placeholder="粘贴备份 zip 的完整路径…">
-                  <button class="action-btn settings-toggle" type="button" onclick="importBackup()">导入并恢复</button>
-                </div>
-                <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内。</small>
+            </div>
+            <label class="settings-label" for="backup-import-path">导入</label>
+            <div class="settings-control">
+              <div class="settings-input-row">
+                <input id="backup-import-path" class="settings-input" type="text" spellcheck="false" placeholder="粘贴备份 zip 的完整路径…">
+                <button class="action-btn settings-toggle" type="button" onclick="importBackup()">导入并恢复</button>
               </div>
+              <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内。</small>
             </div>
             </div>
           </div>

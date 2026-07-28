@@ -274,6 +274,42 @@ class DesktopPortableTests(unittest.TestCase):
         ):
             self.assertEqual(desktop.local_app_data_root(), configured.resolve())
 
+    def test_windows_installer_marker_relocates_the_data_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            chosen = Path(directory) / "D-drive-stand-in" / "MEFinderData"
+            (bundle / "data_root.txt").write_text(str(chosen), encoding="utf-8")
+            with (
+                mock.patch.dict(desktop.os.environ, {}, clear=True),
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.os, "name", "nt"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+                mock.patch.object(desktop, "app_root", return_value=bundle),
+            ):
+                self.assertEqual(desktop.local_app_data_root(), chosen.resolve())
+
+    def test_windows_installer_marker_is_ignored_for_portable_bundles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            (bundle / desktop.PORTABLE_MARKER).touch()
+            (bundle / "data_root.txt").write_text("Z:\\should-not-be-used", encoding="utf-8")
+            with (
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.os, "name", "nt"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+            ):
+                self.assertIsNone(desktop.installed_data_root_override(bundle))
+
+    def test_windows_installer_marker_absent_falls_back_to_localappdata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            with (
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.os, "name", "nt"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+            ):
+                self.assertIsNone(desktop.installed_data_root_override(bundle))
+
     def test_frozen_macos_resources_seed_writable_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
