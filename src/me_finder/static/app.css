@@ -1119,7 +1119,19 @@ html[data-desktop-shell="macos"] .main-area {
   cursor: pointer;
 }
 .settings-collapse-head .settings-section-title { flex: 1; }
+.settings-collapse-head-detailed .settings-section-title { flex: 0 0 auto; }
 .settings-collapse-head:hover .settings-section-title { color: var(--accent); }
+.settings-collapse-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+}
+.settings-collapse-row .settings-collapse-head {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
 .settings-grid {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
@@ -1149,6 +1161,8 @@ html[data-desktop-shell="macos"] .main-area {
 }
 .settings-collapse.expanded .settings-collapse-chevron { transform: rotate(180deg); }
 .settings-collapse-body { container-type: inline-size; margin-top: 18px; }
+.settings-collapse-body > .settings-grid:first-child,
+.settings-collapse-body > .vision-provider-layout:first-child { margin-top: 0; }
 .settings-current-theme {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1556,7 +1570,30 @@ html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
 .vision-policy-copy { display: grid; gap: 3px; }
 .vision-policy-copy strong { color: var(--text-primary); font-size: 13px; }
 .vision-policy-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
-.vision-default-select { background: var(--input-bg); }
+.vision-default-select-wrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.vision-default-select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  background: var(--input-bg);
+  cursor: pointer;
+}
+.vision-default-select:hover { border-color: var(--border-strong); }
+.vision-default-select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.vision-default-select-wrap:focus-within .vision-default-select-chevron { color: var(--accent); }
 .vision-auto-check { white-space: nowrap; }
 @media (max-width: 960px) {
   .vision-fallback-policy { grid-template-columns: 1fr 1fr; }

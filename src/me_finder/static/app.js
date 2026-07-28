@@ -1948,15 +1948,35 @@ function updateAppearanceSummary() {
   el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(current ? current.name : '');
 }
 
-function toggleAppearance() {
-  var card = document.getElementById('appearance-card');
-  var body = document.getElementById('appearance-body');
+function setSettingsCollapse(cardId, bodyId, open) {
+  var card = document.getElementById(cardId);
+  var body = document.getElementById(bodyId);
   var head = card ? card.querySelector('.settings-collapse-head') : null;
   if (!card || !body) return;
-  var open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
   card.classList.toggle('expanded', open);
   if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function toggleSettingsCollapse(cardId, bodyId) {
+  var body = document.getElementById(bodyId);
+  if (!body) return;
+  setSettingsCollapse(cardId, bodyId, body.style.display === 'none');
+}
+
+function toggleAppearance() {
+  toggleSettingsCollapse('appearance-card', 'appearance-body');
+}
+
+function openVisionSettings() {
+  navigateTo('settings');
+  setSettingsCollapse('vision-settings-card', 'vision-settings-body', true);
+  var card = document.getElementById('vision-settings-card');
+  if (card) requestAnimationFrame(function() {
+    card.scrollIntoView({behavior: 'smooth', block: 'start'});
+    var head = card.querySelector('.settings-collapse-head');
+    if (head) head.focus({preventScroll: true});
+  });
 }
 
 function renderPdfOpenMode() {
@@ -2799,6 +2819,7 @@ function resetVisionProviderForm() {
 }
 
 function startAddVisionProvider() {
+  setSettingsCollapse('vision-settings-card', 'vision-settings-body', true);
   resetVisionProviderForm();
   var card = document.getElementById('vision-editor-card');
   if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
@@ -3385,7 +3406,7 @@ async function retryImportWithVision(id) {
   if (!q || !q.jobId) return;
   var providerId = q.retryProviderId || visionConfig.default_provider_id || selectedVisionProviderId();
   if (!providerId) {
-    navigateTo('settings');
+    openVisionSettings();
     showToast('请先配置一个其他解析 API');
     return;
   }
