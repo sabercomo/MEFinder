@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import re
 import sqlite3
 import subprocess
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .database import DEFAULT_DATABASE_PATH
@@ -59,6 +61,8 @@ from .search import SearchEngine
 def find_adobe_pdf_app() -> Optional[Path]:
     """Find an installed Adobe Acrobat/Reader executable on Windows."""
 
+    if sys.platform != "win32":
+        return None
     candidate_paths = []
     for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
         base = os.environ.get(env_name)
@@ -105,6 +109,123 @@ def _adobe_paths_from_registry() -> List[Path]:
     return paths
 
 
+def open_path_with_default_app(target: Path) -> None:
+    """Open a local file with the platform's default application."""
+
+    target = Path(target)
+    if sys.platform == "win32":
+        os.startfile(str(target))  # type: ignore[attr-defined]
+        return
+    command = ["open", str(target)] if sys.platform == "darwin" else ["xdg-open", str(target)]
+    subprocess.Popen(command, close_fds=True)
+
+
+def open_path_in_macos_preview(target: Path) -> None:
+    """Open a local file explicitly in Preview.app."""
+
+    if sys.platform != "darwin":
+        raise RuntimeError("预览.app 仅在 macOS 上可用。")
+    subprocess.Popen(["open", "-a", "Preview", str(Path(target))], close_fds=True)
+
+
+def _normalized_pdf_page(page: object) -> Optional[int]:
+    try:
+        page_number = int(page) if page not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+    return page_number if page_number is not None and page_number > 0 else None
+
+
+NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
+
+
+def open_pdf_with_platform(
+    target: Path,
+    page: object = None,
+    *,
+    preferences_path: Path | None = None,
+    native_pdf_opener: NativePDFOpener | None = None,
+) -> Dict[str, object]:
+    """Open one PDF according to the persisted platform preference."""
+
+    target = Path(target)
+    page_number = _normalized_pdf_page(page)
+    preferences = read_preferences(preferences_path)
+    open_mode = str(preferences.get("pdf_open_mode") or "native")
+
+    if open_mode == "system" and sys.platform == "darwin":
+        open_path_in_macos_preview(target)
+        return {
+            "ok": True,
+            "app": "preview",
+            "viewer_mode": "system",
+            "page_jump": False,
+            "file": target.name,
+            "page": page_number,
+        }
+
+    native_error: Exception | None = None
+    if native_pdf_opener is not None:
+        try:
+            native_result = native_pdf_opener(target, page_number)
+            actual_page = page_number
+            page_count = native_result.get("page_count")
+            if page_number is not None:
+                try:
+                    returned_page = int(native_result.get("page") or page_number)
+                except (TypeError, ValueError):
+                    returned_page = page_number
+                actual_page = returned_page if returned_page > 0 else page_number
+            return {
+                "ok": True,
+                "app": "pdfkit" if sys.platform == "darwin" else "native",
+                "viewer_mode": "native",
+                "page_jump": bool(actual_page),
+                "file": target.name,
+                "page": actual_page,
+                "requested_page": page_number,
+                "page_count": page_count,
+                "page_adjusted": (
+                    page_number is not None and actual_page != page_number
+                ),
+            }
+        except Exception as exc:
+            native_error = exc
+            logging.exception("native PDF reader failed; falling back to an external app")
+
+    # Adobe is only required for the Windows page-jump feature (its /A page=N
+    # switch); machines without Adobe still fall back to the default PDF app.
+    if sys.platform == "win32" and page_number:
+        adobe = find_adobe_pdf_app()
+        if adobe is not None:
+            args = [str(adobe), "/A", f"page={page_number}", str(target)]
+            subprocess.Popen(args, close_fds=True)
+            return {
+                "ok": True,
+                "app": str(adobe),
+                "viewer_mode": "adobe",
+                "page_jump": True,
+                "file": target.name,
+                "page": page_number,
+            }
+
+    if native_error is not None and sys.platform == "darwin":
+        open_path_in_macos_preview(target)
+        app = "preview"
+    else:
+        open_path_with_default_app(target)
+        app = "system_default"
+    return {
+        "ok": True,
+        "app": app,
+        "viewer_mode": "system",
+        "page_jump": False,
+        "fallback": native_error is not None,
+        "file": target.name,
+        "page": page_number,
+    }
+
+
 _PACKAGE_DIR = Path(__file__).resolve().parent
 
 
@@ -123,10 +244,17 @@ def render_html(theme: str) -> str:
     """Inject the persisted theme before the browser paints the first frame."""
 
     marker = '<html lang="zh-CN" data-theme="frost-blue">'
-    return HTML.replace(marker, f'<html lang="zh-CN" data-theme="{theme}">', 1)
+    desktop_shell = os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower()
+    shell_attribute = ' data-desktop-shell="macos"' if desktop_shell == "macos" else ""
+    replacement = f'<html lang="zh-CN" data-theme="{theme}"{shell_attribute}>'
+    return HTML.replace(marker, replacement, 1)
 
 
-def make_handler(index_path: Path):
+def make_handler(
+    index_path: Path,
+    *,
+    native_pdf_opener: NativePDFOpener | None = None,
+):
     engine = SearchEngine(index_path)
     root = Path(".").resolve()
     runtime = {
@@ -731,36 +859,13 @@ def make_handler(index_path: Path):
         target = source_path_from_id(source_id)
         suffix = target.suffix.lower()
         if suffix == ".pdf":
-            try:
-                page_number = int(page) if page not in (None, "") else None
-            except (TypeError, ValueError):
-                page_number = None
-            if page_number is not None and page_number <= 0:
-                page_number = None
-            # Adobe is only required for the page-jump feature (its /A page=N
-            # switch); every other case goes through the system default viewer
-            # so machines without Adobe (WPS, Edge, ...) still work.
-            if page_number:
-                adobe = find_adobe_pdf_app()
-                if adobe is not None:
-                    args = [str(adobe), "/A", f"page={page_number}", str(target)]
-                    subprocess.Popen(args, close_fds=True)
-                    return {
-                        "ok": True,
-                        "app": str(adobe),
-                        "page_jump": True,
-                        "file": target.name,
-                        "page": page_number,
-                    }
-            os.startfile(str(target))  # type: ignore[attr-defined]
-            return {
-                "ok": True,
-                "app": "system_default",
-                "page_jump": False,
-                "file": target.name,
-                "page": page_number,
-            }
-        os.startfile(str(target))  # type: ignore[attr-defined]
+            return open_pdf_with_platform(
+                target,
+                page,
+                preferences_path=resolve_preferences_path(root),
+                native_pdf_opener=native_pdf_opener,
+            )
+        open_path_with_default_app(target)
         return {"ok": True, "app": "system_default", "page_jump": False, "file": target.name}
 
     def configured_document(source_id: str) -> Tuple[Path, Dict[str, object], Dict[str, object]]:

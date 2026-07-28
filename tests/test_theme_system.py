@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from desktop import error_html, loading_html
 from src.me_finder.preferences import (
     DEFAULT_CALIBRATION_VIEW,
     DEFAULT_LIBRARY_VIEW,
+    DEFAULT_PDF_OPEN_MODE,
     DEFAULT_THEME,
+    VALID_PDF_OPEN_MODES,
     VALID_THEMES,
     read_preferences,
     save_preferences,
@@ -26,6 +30,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "library_view": DEFAULT_LIBRARY_VIEW,
             "calibration_view": DEFAULT_CALIBRATION_VIEW,
             "scan_directories": [],
+            "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
         }
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
@@ -35,8 +40,9 @@ class PreferencePersistenceTests(unittest.TestCase):
                 {"scan_directories": ["D:\\文献\\哲学", "  ", "D:\\文献\\哲学", "E:/papers"]},
                 path,
             )
-            self.assertEqual(saved["scan_directories"], ["D:\\文献\\哲学", "E:\\papers"])
-            self.assertEqual(read_preferences(path)["scan_directories"], ["D:\\文献\\哲学", "E:\\papers"])
+            expected = [str(Path("D:\\文献\\哲学")), str(Path("E:/papers"))]
+            self.assertEqual(saved["scan_directories"], expected)
+            self.assertEqual(read_preferences(path)["scan_directories"], expected)
             with self.assertRaises(ValueError):
                 save_preferences({"scan_directories": "D:\\单个路径"}, path)
 
@@ -79,6 +85,19 @@ class PreferencePersistenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(ValueError):
                 save_preferences({"theme": "pitch-black"}, Path(temp_dir) / "preferences.json")
+
+    def test_pdf_open_mode_defaults_to_native_and_round_trips(self) -> None:
+        self.assertEqual(VALID_PDF_OPEN_MODES, frozenset({"native", "system"}))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            self.assertEqual(read_preferences(path)["pdf_open_mode"], "native")
+            self.assertEqual(
+                save_preferences({"pdf_open_mode": "system"}, path)["pdf_open_mode"],
+                "system",
+            )
+            self.assertEqual(read_preferences(path)["pdf_open_mode"], "system")
+            with self.assertRaises(ValueError):
+                save_preferences({"pdf_open_mode": "browser"}, path)
 
 
 class ThemeMarkupTests(unittest.TestCase):
@@ -151,6 +170,19 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('@container (min-width: 960px)', HTML)
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
 
+    def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
+        self.assertIn('id="pdf-reader-settings"', HTML)
+        self.assertIn('data-pdf-open-choice="native"', HTML)
+        self.assertIn('data-pdf-open-choice="system"', HTML)
+        self.assertIn("使用 macOS PDFKit", HTML)
+        self.assertIn("macOS 预览", HTML)
+        self.assertIn("function setPdfOpenMode(mode)", HTML)
+        self.assertIn("pdf_open_mode: mode", HTML)
+        self.assertIn(
+            'html[data-desktop-shell="macos"] .macos-pdf-settings',
+            HTML,
+        )
+
     def test_theme_previews_reuse_the_real_design_tokens(self) -> None:
         for theme in self.THEMES:
             self.assertIn(f'.theme-preview[data-preview-theme="{theme}"]', HTML)
@@ -165,9 +197,37 @@ class ThemeMarkupTests(unittest.TestCase):
             self.assertIn(f"var({token})", preview_css)
 
     def test_initial_html_is_server_rendered_for_selected_theme(self) -> None:
-        for theme in self.THEMES:
-            rendered = render_html(theme)
-            self.assertIn(f'<html lang="zh-CN" data-theme="{theme}">', rendered)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            for theme in self.THEMES:
+                rendered = render_html(theme)
+                self.assertIn(f'<html lang="zh-CN" data-theme="{theme}">', rendered)
+
+    def test_macos_desktop_shell_adds_a_theme_driven_titlebar(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"ME_FINDER_DESKTOP_SHELL": "macos"},
+            clear=True,
+        ):
+            rendered = render_html("midnight")
+
+        self.assertIn(
+            '<html lang="zh-CN" data-theme="midnight" data-desktop-shell="macos">',
+            rendered,
+        )
+        self.assertIn('class="macos-titlebar"', rendered)
+        self.assertIn('class="macos-titlebar-title">文献原句定位器</span>', rendered)
+        self.assertIn('html[data-desktop-shell="macos"] .macos-titlebar', rendered)
+        self.assertIn("var(--sidebar-bg) var(--sidebar-width)", rendered)
+        self.assertIn("var(--app-bg) 100%", rendered)
+        self.assertIn("height: calc(100vh - var(--macos-titlebar-height));", rendered)
+
+    def test_browser_shell_does_not_show_the_macos_titlebar(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            rendered = render_html("midnight")
+
+        self.assertIn('<html lang="zh-CN" data-theme="midnight">', rendered)
+        self.assertNotIn('data-desktop-shell="macos"', rendered.splitlines()[1])
+        self.assertIn(".macos-titlebar { display: none; }", rendered)
 
     def test_svg_icons_do_not_have_fixed_color_values(self) -> None:
         icon_color = re.compile(r'<(?:svg|path|circle|rect|line|polyline|polygon)[^>]*(?:stroke|fill)="#[0-9a-f]{3,8}"', re.I)

@@ -41,6 +41,7 @@ let visionModelOptions = [];
 let visionModelRequestSerial = 0;
 let preferencesLoaded = false;
 let currentTheme = document.documentElement.dataset.theme || 'frost-blue';
+let currentPdfOpenMode = 'native';
 
 /* ═══ Navigation ═══ */
 function navigateTo(page) {
@@ -597,7 +598,10 @@ async function openSource(sourceId, page) {
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '打开失败');
-    if (data.page && data.page_jump) showToast('已打开原文并跳转到 PDF 第 ' + data.page + ' 页');
+    if (data.fallback && data.page) showToast('内置阅读器暂时不可用，已改用预览；请手动翻到 PDF 第 ' + data.page + ' 页');
+    else if (data.page_adjusted) showToast('请求页超出当前 PDF 范围，已定位到第 ' + data.page + ' 页' + (data.page_count ? '（共 ' + data.page_count + ' 页）' : ''));
+    else if (data.page && data.page_jump) showToast('已打开原文并跳转到 PDF 第 ' + data.page + ' 页');
+    else if (data.page && data.app === 'preview') showToast('已用 macOS 预览打开，请手动翻到 PDF 第 ' + data.page + ' 页');
     else if (data.page) showToast('已用系统默认阅读器打开，请手动翻到 PDF 第 ' + data.page + ' 页');
     else showToast('已打开原文');
   } catch(e) {
@@ -1955,8 +1959,42 @@ function toggleAppearance() {
   if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
+function renderPdfOpenMode() {
+  document.querySelectorAll('.pdf-open-option').forEach(function(option) {
+    var selected = option.dataset.pdfOpenChoice === currentPdfOpenMode;
+    option.classList.toggle('selected', selected);
+    var input = option.querySelector('input[name="pdf-open-mode"]');
+    if (input) input.checked = selected;
+  });
+}
+
+async function setPdfOpenMode(mode) {
+  if (mode !== 'native' && mode !== 'system') return;
+  var previousMode = currentPdfOpenMode;
+  currentPdfOpenMode = mode;
+  renderPdfOpenMode();
+  try {
+    var resp = await fetch('/api/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pdf_open_mode: mode})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+    preferencesLoaded = true;
+    renderPdfOpenMode();
+    showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用 macOS 预览打开');
+  } catch (e) {
+    currentPdfOpenMode = previousMode;
+    renderPdfOpenMode();
+    showToast('PDF 打开方式保存失败：' + e.message);
+  }
+}
+
 async function loadPreferences() {
   renderThemeSelection();
+  renderPdfOpenMode();
   try {
     var resp = await fetch('/api/preferences');
     var data = await resp.json();
@@ -1964,13 +2002,15 @@ async function loadPreferences() {
     applyTheme(data.theme || 'frost-blue');
     if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
     else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
+    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+    renderPdfOpenMode();
     scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
     renderScanDirectories();
     syncLibraryViewButtons();
     if (libLoaded) renderLibraryList();
     preferencesLoaded = true;
   } catch (e) {
-    showToast('读取外观设置失败：' + e.message);
+    showToast('读取应用设置失败：' + e.message);
   }
 }
 

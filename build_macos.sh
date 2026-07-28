@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "This build script must run on macOS." >&2
+  exit 1
+fi
+
+MEFINDER_PYTHON="${MEFINDER_PYTHON:-python3}"
+MEFINDER_ARCH="${MEFINDER_TARGET_ARCH:-$(uname -m)}"
+MEFINDER_CODESIGN_IDENTITY="${MEFINDER_CODESIGN_IDENTITY:--}"
+MEFINDER_STAGE="build/macos-stage"
+MEFINDER_VERSION="$("$MEFINDER_PYTHON" -c 'from src.me_finder import __version__; print(__version__)')"
+MEFINDER_PACKAGE="MEFinder-v${MEFINDER_VERSION}-macos-${MEFINDER_ARCH}"
+MEFINDER_TEMP_ROOT="$(mktemp -d "${TMPDIR:-/private/tmp}/mefinder-build.XXXXXX")"
+MEFINDER_TEMP_DIST="$MEFINDER_TEMP_ROOT/dist"
+MEFINDER_BUILT_APP="$MEFINDER_TEMP_DIST/MEFinder.app"
+MEFINDER_ZIP="release/${MEFINDER_PACKAGE}.zip"
+MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"
+MEFINDER_TEMP_ZIP="$MEFINDER_TEMP_ROOT/${MEFINDER_PACKAGE}.zip"
+MEFINDER_TEMP_DMG="$MEFINDER_TEMP_ROOT/${MEFINDER_PACKAGE}.dmg"
+MEFINDER_DMG_STAGE="$MEFINDER_TEMP_ROOT/dmg-stage"
+MEFINDER_DMG_MOUNT="$MEFINDER_TEMP_ROOT/dmg-mount"
+MEFINDER_DMG_VERIFY_COPY="$MEFINDER_TEMP_ROOT/dmg-verify-copy/MEFinder.app"
+MEFINDER_DMG_ATTACHED=0
+MEFINDER_CODESIGN_ARGS=(--force --deep --sign "$MEFINDER_CODESIGN_IDENTITY")
+if [[ "$MEFINDER_CODESIGN_IDENTITY" != "-" ]]; then
+  MEFINDER_CODESIGN_ARGS+=(--options runtime --timestamp)
+fi
+
+cleanup() {
+  if [[ "$MEFINDER_DMG_ATTACHED" == "1" ]]; then
+    hdiutil detach "$MEFINDER_DMG_MOUNT" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$MEFINDER_TEMP_ROOT"
+}
+trap cleanup EXIT
+
+clean_app_metadata() {
+  local app_path="$1"
+  local app_attributes
+  xattr -crs "$app_path"
+  app_attributes="$(xattr -lrs "$app_path" 2>/dev/null || true)"
+  if LC_ALL=C grep -Eq \
+    'com\.apple\.(FinderInfo|ResourceFork):' \
+    <<<"$app_attributes"; then
+    echo "Build failed: disallowed Finder metadata remains in $app_path." >&2
+    return 1
+  fi
+  if find "$app_path" -name '._*' -print -quit | LC_ALL=C grep -q .; then
+    echo "Build failed: AppleDouble metadata remains in $app_path." >&2
+    return 1
+  fi
+}
+
+verify_app_signature() {
+  codesign --verify --deep --strict "$1"
+}
+
+"$MEFINDER_PYTHON" -c \
+  "import PyInstaller, webview; from Quartz.PDFKit import PDFDocument, PDFView" \
+  >/dev/null
+
+rm -rf "$MEFINDER_STAGE"
+mkdir -p "$MEFINDER_STAGE/data" "$MEFINDER_STAGE/config"
+
+"$MEFINDER_PYTHON" -m tools.create_empty_index "$MEFINDER_STAGE/data/index.sqlite3"
+cp "config/pdf_imports.empty.json" "$MEFINDER_STAGE/config/pdf_imports.json"
+cp "config/mineru_api.local.example.json" "$MEFINDER_STAGE/config/mineru_api.local.example.json"
+
+MEFINDER_ICONSET="$MEFINDER_STAGE/MEFinder.iconset"
+mkdir -p "$MEFINDER_ICONSET"
+# Rasterize each size directly from SVG. qlmanage thumbnails flatten transparent
+# corners onto white, which makes the Dock icon appear as a sharp-edged square.
+for MEFINDER_SIZE in 16 32 128 256 512; do
+  sips -s format png -z "$MEFINDER_SIZE" "$MEFINDER_SIZE" "assets/app_icon.svg" \
+    --out "$MEFINDER_ICONSET/icon_${MEFINDER_SIZE}x${MEFINDER_SIZE}.png" >/dev/null
+  MEFINDER_RETINA_SIZE=$((MEFINDER_SIZE * 2))
+  sips -s format png -z "$MEFINDER_RETINA_SIZE" "$MEFINDER_RETINA_SIZE" "assets/app_icon.svg" \
+    --out "$MEFINDER_ICONSET/icon_${MEFINDER_SIZE}x${MEFINDER_SIZE}@2x.png" >/dev/null
+done
+iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
+
+"$MEFINDER_PYTHON" -m unittest \
+  tests.test_desktop_portable \
+  tests.test_macos_pdf_viewer \
+  tests.test_platform_open \
+  tests.test_theme_system \
+  tests.test_portable_index_rebuild
+
+MEFINDER_APP_VERSION="$MEFINDER_VERSION" \
+MEFINDER_TARGET_ARCH="$MEFINDER_ARCH" \
+  "$MEFINDER_PYTHON" -m PyInstaller desktop_macos.spec \
+    --clean \
+    --noconfirm \
+    --distpath "$MEFINDER_TEMP_DIST"
+
+if [[ ! -d "$MEFINDER_BUILT_APP" ]]; then
+  echo "Build failed: $MEFINDER_BUILT_APP was not created." >&2
+  exit 1
+fi
+
+if ! find "$MEFINDER_BUILT_APP" -type f \
+  -path '*/Quartz/PDFKit/_PDFKit*.so' -print -quit | grep -q .; then
+  echo "Build failed: the app does not contain the PyObjC PDFKit bridge." >&2
+  exit 1
+fi
+
+if find "$MEFINDER_BUILT_APP" -type f \( \
+  -name "mineru_api.local.json" -o \
+  -name "vision_api.local.json" -o \
+  -name "preferences.json" -o \
+  -name "desktop.log" \
+\) -print -quit | grep -q .; then
+  echo "Build failed: the app contains private or generated state." >&2
+  exit 1
+fi
+
+clean_app_metadata "$MEFINDER_BUILT_APP"
+codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$MEFINDER_BUILT_APP"
+verify_app_signature "$MEFINDER_BUILT_APP"
+
+# Build every release artifact under the local temporary directory. A project
+# stored in Documents/iCloud Drive can have FinderInfo reattached asynchronously
+# by File Provider, which makes an otherwise valid signed bundle fail strict
+# verification. Never package from the workspace's dist/ copy.
+mkdir -p release
+ditto -c -k --keepParent \
+  --norsrc \
+  --noextattr \
+  --noqtn \
+  --noacl \
+  "$MEFINDER_BUILT_APP" \
+  "$MEFINDER_TEMP_ZIP"
+MEFINDER_ZIP_CONTENTS="$(zipinfo -1 "$MEFINDER_TEMP_ZIP")"
+if LC_ALL=C grep -Eq '(^|/)\._' <<<"$MEFINDER_ZIP_CONTENTS"; then
+  echo "Build failed: ZIP contains AppleDouble metadata." >&2
+  exit 1
+fi
+mkdir -p "$MEFINDER_TEMP_ROOT/verify"
+ditto -x -k "$MEFINDER_TEMP_ZIP" "$MEFINDER_TEMP_ROOT/verify"
+verify_app_signature "$MEFINDER_TEMP_ROOT/verify/MEFinder.app"
+
+mkdir -p "$MEFINDER_DMG_STAGE" "$MEFINDER_DMG_MOUNT" "$(dirname "$MEFINDER_DMG_VERIFY_COPY")"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$MEFINDER_BUILT_APP" \
+  "$MEFINDER_DMG_STAGE/MEFinder.app"
+ln -s /Applications "$MEFINDER_DMG_STAGE/Applications"
+clean_app_metadata "$MEFINDER_DMG_STAGE/MEFinder.app"
+verify_app_signature "$MEFINDER_DMG_STAGE/MEFinder.app"
+
+hdiutil create \
+  -volname "MEFinder ${MEFINDER_VERSION}" \
+  -srcfolder "$MEFINDER_DMG_STAGE" \
+  -ov \
+  -format UDZO \
+  "$MEFINDER_TEMP_DMG"
+hdiutil verify "$MEFINDER_TEMP_DMG"
+hdiutil attach \
+  -readonly \
+  -nobrowse \
+  -noautoopen \
+  -mountpoint "$MEFINDER_DMG_MOUNT" \
+  "$MEFINDER_TEMP_DMG" >/dev/null
+MEFINDER_DMG_ATTACHED=1
+
+if [[ ! -L "$MEFINDER_DMG_MOUNT/Applications" ]] \
+  || [[ "$(readlink "$MEFINDER_DMG_MOUNT/Applications")" != "/Applications" ]]; then
+  echo "Build failed: the DMG does not contain an /Applications shortcut." >&2
+  exit 1
+fi
+verify_app_signature "$MEFINDER_DMG_MOUNT/MEFinder.app"
+
+# Simulate copying the app out of the mounted image and verify that the copied
+# application remains valid.
+ditto "$MEFINDER_DMG_MOUNT/MEFinder.app" "$MEFINDER_DMG_VERIFY_COPY"
+verify_app_signature "$MEFINDER_DMG_VERIFY_COPY"
+
+hdiutil detach "$MEFINDER_DMG_MOUNT" >/dev/null
+MEFINDER_DMG_ATTACHED=0
+
+rm -f \
+  "$MEFINDER_ZIP" \
+  "${MEFINDER_ZIP}.sha256.txt" \
+  "$MEFINDER_DMG" \
+  "${MEFINDER_DMG}.sha256.txt"
+ditto --norsrc --noextattr --noqtn --noacl "$MEFINDER_TEMP_ZIP" "$MEFINDER_ZIP"
+ditto --norsrc --noextattr --noqtn --noacl "$MEFINDER_TEMP_DMG" "$MEFINDER_DMG"
+hdiutil verify "$MEFINDER_DMG"
+(
+  cd release
+  shasum -a 256 "${MEFINDER_PACKAGE}.zip" > "${MEFINDER_PACKAGE}.zip.sha256.txt"
+  shasum -a 256 "${MEFINDER_PACKAGE}.dmg" > "${MEFINDER_PACKAGE}.dmg.sha256.txt"
+  shasum -a 256 -c "${MEFINDER_PACKAGE}.zip.sha256.txt"
+  shasum -a 256 -c "${MEFINDER_PACKAGE}.dmg.sha256.txt"
+)
+
+echo "Release ZIP: $MEFINDER_ZIP"
+echo "Installer DMG: $MEFINDER_DMG"
+echo "Runtime data: ~/Library/Application Support/MEFinder"

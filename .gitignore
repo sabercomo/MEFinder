@@ -34,3 +34,4 @@ config/preferences.json
 config/backups/
 config/*.pre-restore
 .project-memory/
+.venv*/

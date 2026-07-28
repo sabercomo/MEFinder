@@ -2,12 +2,13 @@
 
 开发模式运行：
 
-    py -3 desktop.py
+    python3 desktop.py
 
-打包后（PyInstaller onedir）exe 在自身目录查找 data/index.sqlite3。
+打包后从 Windows onedir 目录或 macOS .app Resources 读取初始资源，
+再把可变数据放到对应平台的用户数据目录。
 SQLite 索引约数百 MB，首次加载需等待一段时间，因此先显示加载页，后台加载完成后再切换。
 服务只绑定 127.0.0.1，端口由系统自动分配。
-日志写入 exe 同目录的 desktop.log（目录不可写时退回 %TEMP%）。
+日志写入运行时数据目录的 desktop.log（目录不可写时退回系统临时目录）。
 """
 
 from __future__ import annotations
@@ -22,12 +23,11 @@ import threading
 import traceback
 from pathlib import Path
 
-import webview
-
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
 
 APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = "portable.flag"
+DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
 
 LOADING_HTML = """<!doctype html>
 <html lang="zh-CN">
@@ -101,12 +101,32 @@ ERROR_HTML = """<!doctype html>
 
 def app_root() -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        executable_dir = Path(sys.executable).resolve().parent
+        if sys.platform == "darwin":
+            contents_dir = executable_dir.parent
+            if executable_dir.name == "MacOS" and contents_dir.name == "Contents":
+                return contents_dir / "Resources"
+        return executable_dir
     return Path(__file__).resolve().parent
 
 
-def local_app_data_root() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "MEFinder"
+def local_app_data_root(home: Path | None = None) -> Path:
+    configured_root = os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser().resolve()
+    user_home = Path(home) if home is not None else Path.home()
+    if sys.platform == "darwin":
+        return user_home / "Library" / "Application Support" / "MEFinder"
+    if os.name == "nt":
+        return Path(os.environ.get("LOCALAPPDATA") or user_home / "AppData" / "Local") / "MEFinder"
+    xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
+    if xdg_data_home:
+        return Path(xdg_data_home).expanduser() / "MEFinder"
+    return user_home / ".local" / "share" / "MEFinder"
+
+
+def python_launcher() -> str:
+    return "py -3" if os.name == "nt" else "python3"
 
 
 def is_portable_bundle(bundle_root: Path) -> bool:
@@ -181,6 +201,40 @@ def error_html(title: str, detail: str, theme: str = DEFAULT_THEME) -> str:
     )
 
 
+def configure_macos_titlebar(window) -> None:
+    """Extend the web content into a transparent native titlebar on macOS."""
+
+    if sys.platform != "darwin":
+        return
+    try:
+        import AppKit
+
+        native_window = window.native
+        full_size_content = getattr(
+            AppKit,
+            "NSWindowStyleMaskFullSizeContentView",
+            getattr(AppKit, "NSFullSizeContentViewWindowMask", 1 << 15),
+        )
+        native_window.setStyleMask_(native_window.styleMask() | full_size_content)
+        native_window.setTitlebarAppearsTransparent_(True)
+        native_window.setTitleVisibility_(getattr(AppKit, "NSWindowTitleHidden", 1))
+        if hasattr(native_window, "setTitlebarSeparatorStyle_"):
+            native_window.setTitlebarSeparatorStyle_(
+                getattr(AppKit, "NSTitlebarSeparatorStyleNone", 0)
+            )
+        try:
+            titlebar_view = (
+                native_window.contentView().superview().subviews().lastObject()
+            )
+            titlebar_view.setBackgroundColor_(AppKit.NSColor.clearColor())
+        except Exception:
+            # Older macOS releases can expose a different private titlebar view tree.
+            pass
+    except Exception:
+        # The themed titlebar is progressive enhancement; never block app startup.
+        logging.exception("failed to configure macOS titlebar")
+
+
 def setup_logging(root: Path) -> None:
     handlers = []
     for log_dir in (root, Path(tempfile.gettempdir())):
@@ -199,6 +253,8 @@ def setup_logging(root: Path) -> None:
 
 
 def main() -> None:
+    import webview
+
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
@@ -220,11 +276,19 @@ def main() -> None:
         os.environ.setdefault("ME_FINDER_MINERU_CONFIG", str(root / "config" / "mineru_api.local.json"))
         os.environ.setdefault("ME_FINDER_VISION_CONFIG", str(root / "config" / "vision_api.local.json"))
         os.environ.setdefault("ME_FINDER_PREFERENCES", str(preferences_path))
+    os.environ[DESKTOP_SHELL_ENV] = "macos" if sys.platform == "darwin" else sys.platform
     theme = read_preferences(preferences_path)["theme"]
+    palette = theme_palette(theme)
     setup_logging(root)
     logging.info("app root: %s", root)
     if root != bundle_root:
         logging.info("bundle root: %s", bundle_root)
+
+    pdf_viewer = None
+    if sys.platform == "darwin":
+        from src.me_finder.macos_pdf_viewer import MacOSPDFViewer
+
+        pdf_viewer = MacOSPDFViewer()
 
     window = webview.create_window(
         APP_TITLE,
@@ -232,8 +296,12 @@ def main() -> None:
         width=1280,
         height=820,
         min_size=(900, 600),
+        background_color=palette["app_bg"],
     )
-    state = {"server": None}
+    if sys.platform == "darwin":
+        window.events.before_show += configure_macos_titlebar
+        window.events.closing += pdf_viewer.close
+    state = {"server": None, "pdf_viewer": pdf_viewer}
 
     def start_backend(win) -> None:
         try:
@@ -244,7 +312,7 @@ def main() -> None:
                     "未找到索引数据库 data/index.sqlite3",
                     "请把 index.sqlite3 放到：\n%s\n\n"
                     "索引数据库可在项目目录用命令生成：\n"
-                    "py -3 -m src.me_finder build-index" % index_path,
+                    "%s -m src.me_finder build-index" % (index_path, python_launcher()),
                     theme,
                 ))
                 return
@@ -253,7 +321,10 @@ def main() -> None:
 
             from src.me_finder.web import make_handler
 
-            handler = make_handler(index_path)
+            handler = make_handler(
+                index_path,
+                native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
+            )
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             state["server"] = server
             port = int(server.server_address[1])
