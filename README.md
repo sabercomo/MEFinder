@@ -117,27 +117,16 @@ corpus/parsed/pdf/
 
 如果 PDF 被识别为扫描版、乱码文本层或复杂布局，可以先用 MinerU API 处理少量页码，下载结构化结果后再导入项目。
 
-首次配置密钥：
-
-```powershell
-setup_mineru_key.cmd
-```
-
-密钥会保存到本机私有文件：
+在桌面应用的“设置 → MinerU API”中填写 Bearer Token；高级用户也可以填写
+Access Key ID / Secret Access Key。配置会保存到本机私有文件：
 
 ```text
 config/mineru_api.local.json
 ```
 
-这个文件已被 `.gitignore` 排除，不要发给别人。MinerU 官方接口使用 `Authorization: Bearer <token>`；如果 API 页面给了单独的 Bearer Token，请在设置工具里填写。如果页面只给 Access Key ID / Secret Access Key，可以先留空 Token 试运行；若返回 Token 错误，需要回到 MinerU API 管理页创建或查看 Token。
-
-如果已经填过 Access Key / Secret，后来才找到 Bearer Token，可以只运行：
-
-```powershell
-setup_mineru_token.cmd
-```
-
-它只更新 `token` 字段，不需要重新打开 JSON。
+这个文件已被 `.gitignore` 排除，不要发给别人。MinerU 官方接口使用
+`Authorization: Bearer <token>`；如果页面只提供 Access Key ID / Secret Access
+Key，可以先留空 Token 试运行，若返回 Token 错误，再回到 MinerU API 管理页创建或查看 Token。
 
 建议先提交小范围页码，不要直接跑整本书：
 
@@ -293,15 +282,9 @@ PDF 结束页：324
 py -3 desktop.py
 ```
 
-打包成可分发的文件夹（需要先 `py -3 -m pip install pywebview pyinstaller`）：
-
-```powershell
-build_desktop.cmd
-```
-
 生成带空白索引、隐私检查和 SHA256 的绿色发布 ZIP，可直接双击：
 
-```text
+```powershell
 rebuild_portable_release.cmd
 ```
 
@@ -313,15 +296,8 @@ rebuild_portable_release.cmd
 
 安装版与发布流程详见 `WINDOWS_BUILD.md`。
 
-如需让"打开原文"按钮可用，把语料一并复制（约 400MB）：
-
-```powershell
-build_desktop.cmd full
-```
-
-产物在 `dist\MEFinder\`，双击其中的 `文献原句定位器.exe` 启动。桌面包使用 SQLite 索引，首次启动期间窗口会显示加载页。出错时窗口内会显示错误信息，详细日志在 exe 同目录的 `desktop.log`。
-
-整个 `dist\MEFinder\` 文件夹可以拷给别人（对方需要 Windows 10 21H2+ 自带的 WebView2）。构建脚本不会复制本机私有 API 密钥；每个 Windows 用户在应用“设置”中填写自己的 Token。
+绿色版 ZIP 和安装程序都会生成到 `release\`。构建脚本只携带空白索引和示例配置，
+不会复制本机语料或私有 API 密钥；每位用户在应用中导入自己的文献，并在“设置”中填写 Token。
 
 ## 命令行搜索
 
