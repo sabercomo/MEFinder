@@ -1979,6 +1979,20 @@ function openVisionSettings() {
   });
 }
 
+var preferencesLoadPromise = null;
+var pdfOpenModeSaving = false;
+
+function setPdfOpenModeControlsDisabled(disabled) {
+  var options = document.querySelector('.pdf-open-options');
+  if (options) {
+    options.classList.toggle('is-busy', disabled);
+    options.setAttribute('aria-busy', disabled ? 'true' : 'false');
+  }
+  document.querySelectorAll('input[name="pdf-open-mode"]').forEach(function(input) {
+    input.disabled = disabled;
+  });
+}
+
 function renderPdfOpenMode() {
   document.querySelectorAll('.pdf-open-option').forEach(function(option) {
     var selected = option.dataset.pdfOpenChoice === currentPdfOpenMode;
@@ -1986,12 +2000,36 @@ function renderPdfOpenMode() {
     var input = option.querySelector('input[name="pdf-open-mode"]');
     if (input) input.checked = selected;
   });
+  var current = document.getElementById('pdf-reader-current');
+  if (current) {
+    current.className = 'settings-status';
+    current.textContent = currentPdfOpenMode === 'system' ? 'macOS 预览' : '应用内阅读器';
+  }
+}
+
+function applyPreferencesData(data) {
+  applyTheme(data.theme || 'frost-blue');
+  if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
+  else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
+  currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+  renderPdfOpenMode();
+  scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
+  renderScanDirectories();
+  syncLibraryViewButtons();
+  if (libLoaded) renderLibraryList();
+  preferencesLoaded = true;
 }
 
 async function setPdfOpenMode(mode) {
   if (mode !== 'native' && mode !== 'system') return;
+  if (pdfOpenModeSaving || preferencesLoadPromise) {
+    renderPdfOpenMode();
+    return;
+  }
   var previousMode = currentPdfOpenMode;
   currentPdfOpenMode = mode;
+  pdfOpenModeSaving = true;
+  setPdfOpenModeControlsDisabled(true);
   renderPdfOpenMode();
   try {
     var resp = await fetch('/api/preferences', {
@@ -2001,37 +2039,47 @@ async function setPdfOpenMode(mode) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
-    preferencesLoaded = true;
-    renderPdfOpenMode();
+    applyPreferencesData(data);
     showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用 macOS 预览打开');
   } catch (e) {
     currentPdfOpenMode = previousMode;
     renderPdfOpenMode();
     showToast('PDF 打开方式保存失败：' + e.message);
+  } finally {
+    pdfOpenModeSaving = false;
+    if (!preferencesLoadPromise) setPdfOpenModeControlsDisabled(false);
   }
 }
 
 async function loadPreferences() {
+  if (preferencesLoadPromise) return preferencesLoadPromise;
+  if (pdfOpenModeSaving) return null;
   renderThemeSelection();
-  renderPdfOpenMode();
-  try {
-    var resp = await fetch('/api/preferences');
-    var data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
-    applyTheme(data.theme || 'frost-blue');
-    if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
-    else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
-    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
-    renderPdfOpenMode();
-    scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
-    renderScanDirectories();
-    syncLibraryViewButtons();
-    if (libLoaded) renderLibraryList();
-    preferencesLoaded = true;
-  } catch (e) {
-    showToast('读取应用设置失败：' + e.message);
+  setPdfOpenModeControlsDisabled(true);
+  var current = document.getElementById('pdf-reader-current');
+  if (current) {
+    current.className = 'settings-status';
+    current.textContent = '读取中…';
   }
+  preferencesLoadPromise = (async function() {
+    try {
+      var resp = await fetch('/api/preferences');
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+      applyPreferencesData(data);
+    } catch (e) {
+      var failedStatus = document.getElementById('pdf-reader-current');
+      if (failedStatus) {
+        failedStatus.className = 'settings-status warning';
+        failedStatus.textContent = '读取失败';
+      }
+      showToast('读取应用设置失败：' + e.message);
+    } finally {
+      preferencesLoadPromise = null;
+      if (!pdfOpenModeSaving) setPdfOpenModeControlsDisabled(false);
+    }
+  })();
+  return preferencesLoadPromise;
 }
 
 let scanDirectories = [];
@@ -2675,10 +2723,12 @@ function syncImportVisionProviders() {
 function renderVisionProviders() {
   var list = document.getElementById('vision-provider-list');
   var status = document.getElementById('vision-config-status');
-  var defaultSelect = document.getElementById('vision-default-provider');
   var autoFallback = document.getElementById('vision-auto-fallback');
+  var fallbackSummary = document.getElementById('vision-fallback-summary');
+  var readyProviders = configuredVisionProviders();
+  var fallbackProvider = readyProviders[0] || null;
   if (status) {
-    var readyCount = configuredVisionProviders().length;
+    var readyCount = readyProviders.length;
     status.className = 'settings-status ' + (readyCount ? 'ready' : 'warning');
     status.textContent = readyCount ? '已配置 ' + readyCount + ' 个接口' : '尚未配置';
   }
@@ -2714,17 +2764,18 @@ function renderVisionProviders() {
       }).join('');
     }
   }
-  if (defaultSelect) {
-    var providers = configuredVisionProviders();
-    defaultSelect.innerHTML = '<option value="">失败后仅提示，不自动切换</option>'
-      + providers.map(function(provider) {
-          return '<option value="' + esc(provider.id) + '">' + esc(provider.name) + ' · ' + esc(provider.model) + '</option>';
-        }).join('');
-    defaultSelect.value = visionConfig.default_provider_id || '';
-  }
   if (autoFallback) {
     autoFallback.checked = !!visionConfig.auto_fallback_from_mineru;
-    autoFallback.disabled = configuredVisionProviders().length === 0;
+    autoFallback.disabled = !fallbackProvider;
+  }
+  if (fallbackSummary) {
+    if (!fallbackProvider) {
+      fallbackSummary.textContent = '请先添加并启用一个解析接口，之后即可开启自动切换。';
+    } else if (visionConfig.auto_fallback_from_mineru) {
+      fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用“' + fallbackProvider.name + '”，可能产生调用费用。';
+    } else {
+      fallbackSummary.textContent = '已关闭；开启后将使用“' + fallbackProvider.name + '”，可能产生调用费用。';
+    }
   }
   syncImportVisionProviders();
 }
@@ -2973,30 +3024,36 @@ async function testVisionProvider(providerId) {
   }
 }
 
-async function saveVisionPolicy() {
-  var providerId = document.getElementById('vision-default-provider').value;
-  var autoFallback = document.getElementById('vision-auto-fallback').checked;
-  if (autoFallback && !providerId) {
-    showToast('请先选择默认备用接口');
+async function setVisionAutoFallback(enabled) {
+  var toggle = document.getElementById('vision-auto-fallback');
+  var providers = configuredVisionProviders();
+  var provider = providers[0] || null;
+  var previous = !!visionConfig.auto_fallback_from_mineru;
+  if (enabled && !provider) {
+    if (toggle) toggle.checked = false;
+    showToast('请先添加并启用一个其他解析 API');
     return;
   }
-  if (autoFallback && !confirm('开启后，MinerU 解析失败会自动改用默认备用接口重试。确认开启吗？')) return;
+  if (toggle) toggle.disabled = true;
   try {
     var resp = await fetch('/api/vision-providers', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         action: 'save_policy',
-        default_provider_id: providerId,
-        auto_fallback_from_mineru: autoFallback
+        auto_fallback_from_mineru: !!enabled
       })
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
     visionConfig = data;
     renderVisionProviders();
-    showToast(autoFallback ? '已开启 MinerU 失败后自动切换' : 'MinerU 失败后将只提示用户');
+    showToast(enabled ? '已开启；MinerU 失败后将自动改用 ' + provider.name : '已关闭 MinerU 失败后自动切换');
   } catch (e) {
+    if (toggle) {
+      toggle.checked = previous;
+      toggle.disabled = providers.length === 0;
+    }
     showToast('保存自动切换设置失败：' + e.message);
   }
 }

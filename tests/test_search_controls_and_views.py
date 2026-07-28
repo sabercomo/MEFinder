@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -92,7 +93,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
         self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
 
-    def test_api_settings_collapse_and_fallback_select_match_the_app_style(self) -> None:
+    def test_api_settings_collapse_and_fallback_uses_one_auto_saving_switch(self) -> None:
         self.assertIn('id="mineru-settings-card"', HTML)
         self.assertIn('aria-controls="mineru-settings-body"', HTML)
         self.assertIn('id="mineru-settings-body" style="display:none"', HTML)
@@ -101,11 +102,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="vision-settings-body" style="display:none"', HTML)
         self.assertIn("function toggleSettingsCollapse(cardId, bodyId)", HTML)
         self.assertIn("setSettingsCollapse('vision-settings-card', 'vision-settings-body', true)", HTML)
-        self.assertIn('class="vision-default-select-wrap"', HTML)
-        self.assertIn('id="vision-default-provider"', HTML)
-        self.assertIn('class="vision-default-select-chevron"', HTML)
-        self.assertIn("-webkit-appearance: none;", HTML)
-        self.assertIn("appearance: none;", HTML)
+        self.assertIn('class="vision-fallback-toggle"', HTML)
+        self.assertIn('id="vision-fallback-summary"', HTML)
+        self.assertIn('onchange="setVisionAutoFallback(this.checked)"', HTML)
+        self.assertIn("function setVisionAutoFallback(enabled)", HTML)
+        self.assertNotIn('id="vision-default-provider"', HTML)
+        self.assertNotIn('class="vision-default-select-wrap"', HTML)
+        self.assertNotIn("function saveVisionPolicy()", HTML)
+        self.assertNotIn("保存切换设置", HTML)
+        policy_start = HTML.index("async function setVisionAutoFallback(enabled)")
+        policy_end = HTML.index("/* ═══ Import ═══ */", policy_start)
+        policy_script = HTML[policy_start:policy_end]
+        self.assertNotIn("default_provider_id", policy_script)
+        self.assertIn("toggle.disabled = true", policy_script)
+        self.assertIn("toggle.checked = previous", policy_script)
         self.assertIn("openVisionSettings()", HTML)
         self.assertIn("head.focus({preventScroll: true})", HTML)
 
@@ -120,6 +130,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("manual_entry_allowed", WEB_SOURCE)
 
     def test_backup_export_import_is_wired(self) -> None:
+        self.assertIn('id="backup-settings-card"', HTML)
+        self.assertIn('aria-controls="backup-settings-body"', HTML)
+        self.assertIn('id="backup-settings-body" style="display:none"', HTML)
+        self.assertIn(
+            "toggleSettingsCollapse('backup-settings-card','backup-settings-body')",
+            HTML,
+        )
         self.assertIn('onclick="exportBackup()"', HTML)
         self.assertIn('id="backup-import-path"', HTML)
         self.assertIn("function exportBackup()", HTML)
@@ -129,6 +146,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/backup/export"', WEB_SOURCE)
         self.assertIn('"/api/backup/import"', WEB_SOURCE)
         self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
+
+    def test_every_top_level_settings_section_is_collapsible(self) -> None:
+        settings_start = HTML.index('<div class="settings-page-content">')
+        settings_end = HTML.index('</div><!-- /main-area -->', settings_start)
+        section_classes = re.findall(
+            r'<section class="([^"]+)"',
+            HTML[settings_start:settings_end],
+        )
+        self.assertGreaterEqual(len(section_classes), 5)
+        for classes in section_classes:
+            self.assertIn("settings-collapse", classes)
 
     def test_batch_metadata_detection_is_wired(self) -> None:
         self.assertIn('id="batch-metadata-btn"', HTML)
