@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-rem Desktop packaging script (see DESKTOP_PACKAGING_PLAN.md).
+rem Desktop packaging script (see WINDOWS_BUILD.md).
 rem   build_desktop.cmd        build exe + copy index + page config
 rem   build_desktop.cmd full   also copy corpus files (~400MB) for
 rem                            the "open original file" button

@@ -385,6 +385,13 @@ PDF 测试样例位于：
 tests/known_pdf_quotes.json
 ```
 
+## 开发文档
+
+- `CORPUS_AUDIT.md`：初始 Word 语料结构与风险审计；
+- `PROPOSED_DATA_SCHEMA.md`：索引核心实体与可信度字段；
+- `PAGE_NUMBER_STRATEGY.md`：Word 原书页码的来源、限制和校验规则；
+- `PDF_PAGE_MODEL.md`：PDF 物理页、页码标签与引用页码的边界。
+
 ## 已知限制
 
 - DOCX 页码依赖文档分节和页面结构；导入后仍建议人工抽样核验。
