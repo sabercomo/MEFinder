@@ -42,6 +42,8 @@ let visionModelRequestSerial = 0;
 let preferencesLoaded = false;
 let currentTheme = document.documentElement.dataset.theme || 'frost-blue';
 let currentPdfOpenMode = 'native';
+let dataLocationLoaded = false;
+let pendingDataLocation = '';
 
 /* ═══ Navigation ═══ */
 function navigateTo(page) {
@@ -58,6 +60,7 @@ function navigateTo(page) {
     if (!preferencesLoaded) loadPreferences();
     if (!mineruConfigLoaded) loadMineruConfig();
     if (!visionConfigLoaded) loadVisionProviders();
+    if (!dataLocationLoaded) loadDataLocation();
   }
 }
 
@@ -2004,6 +2007,173 @@ function renderPdfOpenMode() {
   if (current) {
     current.className = 'settings-status';
     current.textContent = currentPdfOpenMode === 'system' ? 'macOS 预览' : '应用内阅读器';
+  }
+}
+
+function renderMacosUpdateState(state) {
+  var badge = document.getElementById('macos-update-status');
+  var message = document.getElementById('macos-update-message');
+  var release = document.getElementById('macos-update-release');
+  if (badge) {
+    var labels = {
+      checking: '检查中',
+      up_to_date: '已是最新',
+      available: '有新版本',
+      unavailable: '暂无更新',
+      error: '检查失败',
+      unsupported: '不支持'
+    };
+    badge.className = 'settings-status';
+    if (state.status === 'up_to_date') badge.classList.add('ready');
+    if (state.status === 'available' || state.status === 'unavailable') badge.classList.add('warning');
+    if (state.status === 'error') badge.classList.add('error');
+    badge.textContent = labels[state.status] || '未检查';
+  }
+  if (message) message.textContent = state.message || '更新状态未知。';
+  if (release) {
+    var canOpen = state.status === 'available' && !!state.release_url;
+    release.style.display = canOpen ? '' : 'none';
+    if (canOpen) release.href = state.release_url;
+    else release.removeAttribute('href');
+  }
+}
+
+async function checkMacosUpdate() {
+  var button = document.getElementById('macos-update-check');
+  if (button && button.disabled) return;
+  if (button) button.disabled = true;
+  renderMacosUpdateState({
+    status: 'checking',
+    message: '正在检查 GitHub Releases 中适用于当前 Mac 的 DMG…'
+  });
+  try {
+    var resp = await fetch('/api/macos-update', {cache: 'no-store'});
+    var state = await resp.json();
+    if (!resp.ok && state.status !== 'unsupported') {
+      throw new Error(state.message || '检查更新失败');
+    }
+    renderMacosUpdateState(state);
+    if (state.status === 'available') {
+      showToast('发现 Mac 新版本 v' + state.latest_version);
+    } else if (state.status === 'up_to_date') {
+      showToast('当前已是最新 Mac 版本');
+    }
+  } catch (e) {
+    renderMacosUpdateState({
+      status: 'error',
+      message: e.message || '检查更新失败，请稍后重试。'
+    });
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function renderDataLocation(data) {
+  var badge = document.getElementById('data-location-status');
+  var current = document.getElementById('data-location-current');
+  if (!badge || !current) return;
+  current.textContent = data.current_path || '未知位置';
+  current.title = data.current_path || '';
+  badge.className = 'settings-status' + (data.is_custom ? ' ready' : '');
+  badge.textContent = data.is_custom ? '自定义位置' : '默认位置';
+}
+
+async function loadDataLocation() {
+  if (!document.getElementById('data-location-settings')) return;
+  try {
+    var resp = await fetch('/api/data-location', {cache: 'no-store'});
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    renderDataLocation(data);
+    dataLocationLoaded = true;
+  } catch (e) {
+    var badge = document.getElementById('data-location-status');
+    if (badge) {
+      badge.className = 'settings-status warning';
+      badge.textContent = '读取失败';
+    }
+  }
+}
+
+function renderPendingDataLocation(targetPath) {
+  pendingDataLocation = targetPath || '';
+  var pending = document.getElementById('data-location-pending');
+  var target = document.getElementById('data-location-target');
+  if (pending) pending.style.display = pendingDataLocation ? 'flex' : 'none';
+  if (target) {
+    target.textContent = pendingDataLocation;
+    target.title = pendingDataLocation;
+  }
+}
+
+async function chooseDataLocation() {
+  var button = document.getElementById('data-location-choose');
+  if (button && button.disabled) return;
+  if (button) {
+    button.disabled = true;
+    button.textContent = '正在选择…';
+  }
+  try {
+    var resp = await fetch('/api/data-location/choose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '选择位置失败');
+    if (!data.cancelled) {
+      renderPendingDataLocation(data.target_path);
+      showToast('已选择新位置，确认后开始迁移');
+    }
+  } catch (e) {
+    showToast('选择数据位置失败：' + e.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = '选择位置';
+    }
+  }
+}
+
+async function migrateDataLocation() {
+  if (!pendingDataLocation) return;
+  if (!confirm(
+    '将把索引、语料和本机设置复制到：\n\n'
+    + pendingDataLocation
+    + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留。继续吗？'
+  )) return;
+  var button = document.getElementById('data-location-migrate');
+  var choose = document.getElementById('data-location-choose');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '正在迁移…';
+  }
+  if (choose) choose.disabled = true;
+  try {
+    var resp = await fetch('/api/data-location/migrate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({target_path: pendingDataLocation})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '迁移失败');
+    var badge = document.getElementById('data-location-status');
+    if (badge) {
+      badge.className = 'settings-status warning';
+      badge.textContent = '重启后生效';
+    }
+    var pending = document.getElementById('data-location-pending');
+    var hint = pending ? pending.querySelector('small') : null;
+    if (hint) hint.textContent = '迁移完成。退出并重新打开应用后将使用此位置；旧位置的数据仍保留。';
+    if (button) button.style.display = 'none';
+    showToast('数据迁移完成，请重启应用');
+  } catch (e) {
+    showToast('迁移数据失败：' + e.message);
+    if (button) {
+      button.disabled = false;
+      button.textContent = '迁移并切换';
+    }
+    if (choose) choose.disabled = false;
   }
 }
 

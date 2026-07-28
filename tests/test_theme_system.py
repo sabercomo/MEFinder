@@ -210,6 +210,34 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
         )
 
+    def test_macos_settings_offer_manual_updates_and_data_location_migration(self) -> None:
+        self.assertIn('id="macos-update-settings"', HTML)
+        self.assertIn('id="macos-update-body" style="display:none"', HTML)
+        self.assertIn("function checkMacosUpdate()", HTML)
+        self.assertIn("fetch('/api/macos-update'", HTML)
+        self.assertIn("打开 Releases 下载 DMG", HTML)
+        self.assertIn("不会后台下载或自动替换应用", HTML)
+        self.assertIn("当前版本 v0.1.6", HTML)
+        self.assertNotIn("__APP_VERSION__", HTML)
+
+        self.assertIn('id="data-location-settings"', HTML)
+        self.assertIn('id="data-location-body" style="display:none"', HTML)
+        self.assertIn(
+            "toggleSettingsCollapse('data-location-settings','data-location-body')",
+            HTML,
+        )
+        self.assertIn("外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive", HTML)
+        self.assertIn("function chooseDataLocation()", HTML)
+        self.assertIn("function migrateDataLocation()", HTML)
+        self.assertIn("fetch('/api/data-location/choose'", HTML)
+        self.assertIn("fetch('/api/data-location/migrate'", HTML)
+        self.assertIn("旧位置的数据会保留", HTML)
+        self.assertIn("不要让两台电脑同时打开同一份云盘或 NAS 数据库", HTML)
+        self.assertIn(
+            'html[data-desktop-shell="macos"] .macos-data-location-settings',
+            HTML,
+        )
+
     def test_theme_previews_reuse_the_real_design_tokens(self) -> None:
         for theme in self.THEMES:
             self.assertIn(f'.theme-preview[data-preview-theme="{theme}"]', HTML)

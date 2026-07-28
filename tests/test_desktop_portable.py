@@ -205,6 +205,22 @@ class DesktopPortableTests(unittest.TestCase):
                 Path("/Users/example/Library/Application Support/MEFinder"),
             )
 
+    def test_macos_app_data_uses_saved_custom_location(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "home"
+            default = home / "Library" / "Application Support" / "MEFinder"
+            custom = Path(directory) / "OneDrive" / "MEFinder"
+            default.mkdir(parents=True)
+            (default / "data_root.txt").write_text(
+                str(custom) + "\n",
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(desktop.os.environ, {}, clear=True),
+                mock.patch.object(desktop.sys, "platform", "darwin"),
+            ):
+                self.assertEqual(desktop.local_app_data_root(home), custom.resolve())
+
     def test_app_data_override_supports_isolated_smoke_tests(self) -> None:
         configured = Path("/private/tmp/mefinder-smoke-data")
         with mock.patch.dict(

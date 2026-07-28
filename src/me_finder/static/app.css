@@ -1239,6 +1239,132 @@ html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
 }
 .pdf-open-option.selected .pdf-open-option-check { border: 4px solid var(--accent); }
 @media (max-width: 760px) { .pdf-open-options { grid-template-columns: 1fr; } }
+.macos-update-settings { display: none; }
+html[data-desktop-shell="macos"] .macos-update-settings { display: block; }
+.macos-update-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-primary);
+}
+.macos-update-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.macos-update-icon svg { width: 22px; height: 22px; }
+.macos-update-copy { min-width: 0; display: grid; gap: 5px; }
+.macos-update-copy strong { color: var(--text-primary); font-size: 13px; font-weight: 650; }
+.macos-update-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.macos-update-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.macos-update-release { text-decoration: none; }
+@media (max-width: 760px) {
+  .macos-update-card { align-items: flex-start; flex-direction: column; }
+  .macos-update-actions { width: 100%; margin-left: 0; }
+}
+.macos-data-location-settings { display: none; }
+html[data-desktop-shell="macos"] .macos-data-location-settings { display: block; }
+.data-location-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-primary);
+}
+.data-location-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.data-location-icon svg { width: 22px; height: 22px; }
+.data-location-copy {
+  min-width: 0;
+  display: grid;
+  flex: 1;
+  gap: 5px;
+}
+.data-location-copy strong { color: var(--text-primary); font-size: 13px; font-weight: 650; }
+.data-location-copy code,
+.data-location-pending code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.data-location-copy small,
+.data-location-pending small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.data-location-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.data-location-pending > div {
+  min-width: 0;
+  display: grid;
+  flex: 1;
+  gap: 4px;
+}
+.data-location-pending > div > span {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+.data-location-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.data-location-warning svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--warning);
+}
+@media (max-width: 760px) {
+  .data-location-card,
+  .data-location-pending { align-items: flex-start; flex-direction: column; }
+}
 .settings-status {
   flex-shrink: 0;
   font-size: 12px;
@@ -1249,6 +1375,7 @@ html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
 }
 .settings-status.ready { color: var(--success); background: var(--success-soft); }
 .settings-status.warning { color: var(--warning); background: var(--warning-soft); }
+.settings-status.error { color: var(--danger); background: var(--danger-soft); }
 .settings-form { display: grid; gap: 16px; }
 .settings-field { display: grid; gap: 7px; }
 .settings-field label { font-size: 13px; font-weight: 600; color: var(--text-primary); }

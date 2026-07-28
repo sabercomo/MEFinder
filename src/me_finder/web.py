@@ -18,7 +18,14 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
+from . import __version__
 from .database import DEFAULT_DATABASE_PATH
+from .data_location import (
+    DataLocationError,
+    data_location_summary,
+    migrate_data_root,
+    proposed_data_root,
+)
 from .auto_page_mapping import has_manual_mapping
 from .bibliographic_metadata import (
     METADATA_FIELDS,
@@ -29,6 +36,7 @@ from .bibliographic_metadata import (
     update_metadata_in_database,
 )
 from .mineru_api import MinerUError, mineru_config_summary, resolve_mineru_config_path, save_mineru_config
+from .macos_update import check_macos_update
 from .vision_api import (
     VisionAPIError,
     delete_vision_provider,
@@ -137,6 +145,7 @@ def _normalized_pdf_page(page: object) -> Optional[int]:
 
 
 NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
+NativeDirectoryChooser = Callable[[], Optional[str]]
 
 
 def open_pdf_with_platform(
@@ -237,6 +246,7 @@ HTML = (
     _load_asset("templates/index.html")
     .replace("/*__APP_CSS__*/", _load_asset("static/app.css"), 1)
     .replace("//__APP_JS__", _load_asset("static/app.js"), 1)
+    .replace("__APP_VERSION__", __version__)
 )
 
 
@@ -254,6 +264,9 @@ def make_handler(
     index_path: Path,
     *,
     native_pdf_opener: NativePDFOpener | None = None,
+    native_directory_chooser: NativeDirectoryChooser | None = None,
+    app_data_root: Path | None = None,
+    default_app_data_root: Path | None = None,
 ):
     engine = SearchEngine(index_path)
     root = Path(".").resolve()
@@ -1058,6 +1071,44 @@ def make_handler(
                 preferences_path = resolve_preferences_path(root)
                 self._send_json(read_preferences(preferences_path))
                 return
+            if parsed.path == "/api/macos-update":
+                desktop_shell = os.environ.get(
+                    "ME_FINDER_DESKTOP_SHELL", ""
+                ).strip().lower()
+                if desktop_shell != "macos":
+                    self._send_json(
+                        {
+                            "status": "unsupported",
+                            "current_version": __version__,
+                            "update_available": False,
+                            "message": "此更新入口仅用于 macOS 应用。",
+                        },
+                        status=404,
+                    )
+                    return
+                self._send_json(check_macos_update(__version__))
+                return
+            if parsed.path == "/api/data-location":
+                desktop_shell = os.environ.get(
+                    "ME_FINDER_DESKTOP_SHELL", ""
+                ).strip().lower()
+                if (
+                    desktop_shell != "macos"
+                    or app_data_root is None
+                    or default_app_data_root is None
+                ):
+                    self._send_json(
+                        {
+                            "available": False,
+                            "error": "数据位置选择仅适用于已打包的 macOS 应用。",
+                        },
+                        status=404,
+                    )
+                    return
+                self._send_json(
+                    data_location_summary(app_data_root, default_app_data_root)
+                )
+                return
             if parsed.path == "/api/sources":
                 with runtime_lock:
                     current_engine = runtime["engine"]
@@ -1248,6 +1299,75 @@ def make_handler(
                     self._send_json({"error": "外观设置无法保存，请检查配置目录是否可写。"}, status=500)
                     return
                 self._send_json({"ok": True, **preferences})
+                return
+            if parsed.path == "/api/data-location/choose":
+                if (
+                    app_data_root is None
+                    or default_app_data_root is None
+                    or native_directory_chooser is None
+                ):
+                    self._send_json(
+                        {"error": "当前运行方式不支持选择数据位置。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    selected_folder = native_directory_chooser()
+                    if not selected_folder:
+                        self._send_json({"ok": True, "cancelled": True})
+                        return
+                    target = proposed_data_root(selected_folder)
+                except (DataLocationError, OSError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "cancelled": False,
+                        "selected_folder": str(selected_folder),
+                        "target_path": str(target),
+                    }
+                )
+                return
+            if parsed.path == "/api/data-location/migrate":
+                if app_data_root is None or default_app_data_root is None:
+                    self._send_json(
+                        {"error": "当前运行方式不支持迁移数据位置。"},
+                        status=400,
+                    )
+                    return
+                target_value = str(payload.get("target_path") or "").strip()
+                if not target_value:
+                    self._send_json({"error": "请先选择新的数据位置。"}, status=400)
+                    return
+                with import_jobs_lock:
+                    has_active_job = any(
+                        job.get("status") == "processing"
+                        for job in import_jobs.values()
+                    )
+                if has_active_job:
+                    self._send_json(
+                        {"error": "文献正在导入或索引正在更新，请完成后再迁移。"},
+                        status=409,
+                    )
+                    return
+                try:
+                    with runtime_lock:
+                        result = migrate_data_root(
+                            app_data_root,
+                            Path(target_value),
+                            default_app_data_root,
+                        )
+                except DataLocationError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except (OSError, sqlite3.Error) as exc:
+                    self._send_json(
+                        {"error": f"迁移数据失败：{exc}"},
+                        status=500,
+                    )
+                    return
+                self._send_json(result)
                 return
             if parsed.path == "/api/open-source":
                 sid = str(payload.get("source_id") or "")

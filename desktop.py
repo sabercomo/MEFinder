@@ -23,6 +23,10 @@ import threading
 import traceback
 from pathlib import Path
 
+from src.me_finder.data_location import (
+    default_macos_data_root,
+    read_macos_data_root,
+)
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
 
 APP_TITLE = "文献原句定位器"
@@ -116,7 +120,7 @@ def local_app_data_root(home: Path | None = None) -> Path:
         return Path(configured_root).expanduser().resolve()
     user_home = Path(home) if home is not None else Path.home()
     if sys.platform == "darwin":
-        return user_home / "Library" / "Application Support" / "MEFinder"
+        return read_macos_data_root(user_home)
     if os.name == "nt":
         return Path(os.environ.get("LOCALAPPDATA") or user_home / "AppData" / "Local") / "MEFinder"
     xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
@@ -258,6 +262,16 @@ def main() -> None:
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
+    app_data_root = (
+        local_app_data_root()
+        if getattr(sys, "frozen", False) and not portable
+        else None
+    )
+    default_app_data_root = (
+        default_macos_data_root()
+        if sys.platform == "darwin" and app_data_root is not None
+        else None
+    )
     os.chdir(root)
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
@@ -303,6 +317,19 @@ def main() -> None:
         window.events.closing += pdf_viewer.close
     state = {"server": None, "pdf_viewer": pdf_viewer}
 
+    def choose_data_directory() -> str | None:
+        if sys.platform != "darwin" or app_data_root is None:
+            return None
+        initial_directory = app_data_root.parent
+        if not initial_directory.is_dir():
+            initial_directory = Path.home()
+        selection = window.create_file_dialog(
+            webview.FileDialog.FOLDER,
+            directory=str(initial_directory),
+            allow_multiple=False,
+        )
+        return str(selection[0]) if selection else None
+
     def start_backend(win) -> None:
         try:
             index_path = root / "data" / "index.sqlite3"
@@ -324,6 +351,9 @@ def main() -> None:
             handler = make_handler(
                 index_path,
                 native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
+                native_directory_chooser=choose_data_directory,
+                app_data_root=app_data_root,
+                default_app_data_root=default_app_data_root,
             )
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             state["server"] = server
