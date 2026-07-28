@@ -111,14 +111,12 @@ def vision_config_summary(
         for item in data.get("providers", [])
         if isinstance(item, dict) and item.get("id")
     ]
-    default_provider_id = str(data.get("default_provider_id") or "")
     configured_ids = [
         str(item["id"])
         for item in providers
         if item.get("configured") and item.get("enabled")
     ]
-    if default_provider_id not in configured_ids:
-        default_provider_id = configured_ids[0] if configured_ids else ""
+    default_provider_id = configured_ids[0] if configured_ids else ""
     return {
         "providers": providers,
         "default_provider_id": default_provider_id or None,
@@ -150,6 +148,21 @@ def _validated_provider_id(value: object, *, allow_empty: bool = False) -> str:
     return provider_id
 
 
+def _eligible_provider_ids(providers: object) -> list[str]:
+    if not isinstance(providers, list):
+        return []
+    return [
+        str(item.get("id")).strip()
+        for item in providers
+        if isinstance(item, dict)
+        and str(item.get("id") or "").strip()
+        and item.get("enabled", True)
+        and str(item.get("api_key") or "").strip()
+        and str(item.get("api_base") or "").strip()
+        and str(item.get("model") or "").strip()
+    ]
+
+
 def _write_vision_config(path: Path, data: Mapping[str, object]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -171,6 +184,7 @@ def save_vision_provider(
         for item in data.get("providers", [])
         if isinstance(item, dict) and item.get("id")
     ]
+    previously_eligible_ids = _eligible_provider_ids(providers)
     requested_id = _validated_provider_id(updates.get("id"), allow_empty=True)
     provider_id = requested_id or f"provider-{uuid.uuid4().hex[:12]}"
     existing = next(
@@ -208,18 +222,10 @@ def save_vision_provider(
         existing["api_key"] = ""
 
     data["providers"] = providers
-    eligible_ids = [
-        str(item.get("id"))
-        for item in providers
-        if item.get("enabled", True)
-        and item.get("api_key")
-        and item.get("api_base")
-        and item.get("model")
-    ]
-    if str(data.get("default_provider_id") or "") not in eligible_ids:
-        data["default_provider_id"] = eligible_ids[0] if eligible_ids else None
-        if not eligible_ids:
-            data["auto_fallback_from_mineru"] = False
+    eligible_ids = _eligible_provider_ids(providers)
+    data["default_provider_id"] = eligible_ids[0] if eligible_ids else None
+    if not eligible_ids or not previously_eligible_ids:
+        data["auto_fallback_from_mineru"] = False
     _write_vision_config(Path(path), data)
     return vision_config_summary(Path(path))
 
@@ -236,20 +242,10 @@ def delete_vision_provider(
         if isinstance(item, dict) and str(item.get("id")) != provider_id
     ]
     data["providers"] = providers
-    if str(data.get("default_provider_id") or "") == provider_id:
-        data["default_provider_id"] = next(
-            (
-                str(item.get("id"))
-                for item in providers
-                if item.get("enabled", True)
-                and item.get("api_key")
-                and item.get("api_base")
-                and item.get("model")
-            ),
-            None,
-        )
-        if not data["default_provider_id"]:
-            data["auto_fallback_from_mineru"] = False
+    eligible_ids = _eligible_provider_ids(providers)
+    data["default_provider_id"] = eligible_ids[0] if eligible_ids else None
+    if not eligible_ids:
+        data["auto_fallback_from_mineru"] = False
     _write_vision_config(Path(path), data)
     return vision_config_summary(Path(path))
 
@@ -259,23 +255,14 @@ def save_vision_policy(
     path: Path = DEFAULT_VISION_CONFIG_PATH,
 ) -> Dict[str, object]:
     data = read_vision_config_data(path)
-    provider_id = _validated_provider_id(
-        updates.get("default_provider_id"), allow_empty=True
-    )
-    provider_ids = {
-        str(item.get("id"))
-        for item in data.get("providers", [])
-        if isinstance(item, dict)
-        and item.get("enabled", True)
-        and item.get("api_key")
-        and item.get("api_base")
-        and item.get("model")
-    }
-    if provider_id and provider_id not in provider_ids:
-        raise VisionAPIError("默认备用接口不存在、未启用或尚未配置完整。")
-    auto_fallback = bool(updates.get("auto_fallback_from_mineru"))
+    raw_auto_fallback = updates.get("auto_fallback_from_mineru")
+    if not isinstance(raw_auto_fallback, bool):
+        raise VisionAPIError("自动切换设置必须是布尔值。")
+    auto_fallback = raw_auto_fallback
+    provider_ids = _eligible_provider_ids(data.get("providers"))
+    provider_id = provider_ids[0] if provider_ids else ""
     if auto_fallback and not provider_id:
-        raise VisionAPIError("开启自动切换前，请先选择一个默认备用接口。")
+        raise VisionAPIError("开启自动切换前，请先添加并启用一个解析接口。")
     data["default_provider_id"] = provider_id or None
     data["auto_fallback_from_mineru"] = auto_fallback
     _write_vision_config(Path(path), data)
@@ -287,22 +274,13 @@ def load_vision_provider(
     path: Path = DEFAULT_VISION_CONFIG_PATH,
 ) -> VisionProviderConfig:
     data = read_vision_config_data(path)
-    requested = str(provider_id or data.get("default_provider_id") or "").strip()
+    requested = str(provider_id or "").strip()
     providers = [
         item for item in data.get("providers", []) if isinstance(item, dict)
     ]
     if not requested:
-        requested = next(
-            (
-                str(item.get("id"))
-                for item in providers
-                if item.get("enabled", True)
-                and item.get("api_key")
-                and item.get("api_base")
-                and item.get("model")
-            ),
-            "",
-        )
+        eligible_ids = _eligible_provider_ids(providers)
+        requested = eligible_ids[0] if eligible_ids else ""
     raw = next(
         (item for item in providers if str(item.get("id") or "") == requested),
         None,
@@ -333,10 +311,7 @@ def default_fallback_provider(
     if not data.get("auto_fallback_from_mineru"):
         return None
     try:
-        return load_vision_provider(
-            str(data.get("default_provider_id") or "") or None,
-            path,
-        )
+        return load_vision_provider(None, path)
     except VisionAPIError:
         return None
 

@@ -171,12 +171,39 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
-        self.assertIn('id="pdf-reader-settings"', HTML)
+        self.assertIn(
+            'class="settings-section settings-collapse macos-pdf-settings" id="pdf-reader-settings"',
+            HTML,
+        )
+        self.assertIn('aria-controls="pdf-reader-body"', HTML)
+        self.assertIn(
+            "toggleSettingsCollapse('pdf-reader-settings','pdf-reader-body')",
+            HTML,
+        )
+        self.assertIn('id="pdf-reader-body" style="display:none"', HTML)
+        self.assertIn('id="pdf-reader-current"', HTML)
         self.assertIn('data-pdf-open-choice="native"', HTML)
         self.assertIn('data-pdf-open-choice="system"', HTML)
         self.assertIn("使用 macOS PDFKit", HTML)
         self.assertIn("macOS 预览", HTML)
         self.assertIn("function setPdfOpenMode(mode)", HTML)
+        self.assertIn(
+            "current.textContent = currentPdfOpenMode === 'system' ? 'macOS 预览' : '应用内阅读器'",
+            HTML,
+        )
+        self.assertIn(
+            ".settings-collapse-body > .pdf-open-options:first-child",
+            HTML,
+        )
+        self.assertIn("var preferencesLoadPromise = null;", HTML)
+        self.assertIn("if (preferencesLoadPromise) return preferencesLoadPromise;", HTML)
+        self.assertIn("if (pdfOpenModeSaving) return null;", HTML)
+        self.assertIn("setPdfOpenModeControlsDisabled(true);", HTML)
+        self.assertIn("if (pdfOpenModeSaving || preferencesLoadPromise)", HTML)
+        self.assertIn("function applyPreferencesData(data)", HTML)
+        self.assertIn("applyPreferencesData(data);", HTML)
+        self.assertIn("failedStatus.textContent = '读取失败';", HTML)
+        self.assertIn(".pdf-open-options.is-busy", HTML)
         self.assertIn("pdf_open_mode: mode", HTML)
         self.assertIn(
             'html[data-desktop-shell="macos"] .macos-pdf-settings',

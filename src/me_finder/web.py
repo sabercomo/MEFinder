@@ -457,15 +457,7 @@ def make_handler(
                         and item.get("enabled")
                         and item.get("configured")
                     ]
-                    default_id = str(summary.get("default_provider_id") or "")
-                    fallback = next(
-                        (
-                            item
-                            for item in providers
-                            if str(item.get("id")) == default_id
-                        ),
-                        providers[0] if providers else None,
-                    )
+                    fallback = providers[0] if providers else None
                     auto_fallback = bool(
                         summary.get("auto_fallback_from_mineru")
                         and fallback

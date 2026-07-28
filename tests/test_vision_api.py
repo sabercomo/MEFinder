@@ -18,7 +18,10 @@ from src.me_finder.vision_api import (
     _chat_endpoint,
     _message_text,
     _models_endpoint,
+    default_fallback_provider,
+    delete_vision_provider,
     discover_vision_models,
+    load_vision_provider,
     read_vision_config_data,
     resolve_vision_config_path,
     save_vision_policy,
@@ -97,6 +100,28 @@ class _FakeModelsOpener:
 
 
 class VisionAPIConfigTests(unittest.TestCase):
+    @staticmethod
+    def _save_provider(
+        path: Path,
+        *,
+        name: str,
+        host: str,
+        enabled: bool = True,
+        provider_id: str = "",
+        api_key: str = "secret-key",
+    ) -> dict[str, object]:
+        return save_vision_provider(
+            {
+                "id": provider_id,
+                "name": name,
+                "api_base": f"https://{host}/v1",
+                "model": f"{name}-vision-model",
+                "api_key": api_key,
+                "enabled": enabled,
+            },
+            path,
+        )
+
     def test_provider_secrets_are_saved_but_never_returned(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "vision_api.local.json"
@@ -132,38 +157,182 @@ class VisionAPIConfigTests(unittest.TestCase):
             stored = read_vision_config_data(path)
             self.assertEqual(stored["providers"][0]["api_key"], "secret-key")
 
-    def test_paid_fallback_requires_an_explicit_default_provider(self) -> None:
+    def test_paid_fallback_automatically_uses_the_first_configured_provider(self) -> None:
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "vision_api.local.json"
             with self.assertRaises(VisionAPIError):
                 save_vision_policy(
                     {
-                        "default_provider_id": "",
                         "auto_fallback_from_mineru": True,
                     },
                     path,
                 )
 
-            saved = save_vision_provider(
-                {
-                    "name": "备用接口",
-                    "api_base": "https://example.test/v1",
-                    "model": "vision-model",
-                    "api_key": "secret-key",
-                    "enabled": True,
-                },
+            saved = self._save_provider(
                 path,
+                name="首个备用接口",
+                host="first.example.test",
             )
-            provider_id = saved["providers"][0]["id"]
+            first_provider_id = saved["providers"][0]["id"]
+            saved = self._save_provider(
+                path,
+                name="第二备用接口",
+                host="second.example.test",
+            )
+            second_provider_id = saved["providers"][1]["id"]
             policy = save_vision_policy(
                 {
-                    "default_provider_id": provider_id,
+                    # A stale or older client cannot override the ordered fallback.
+                    "default_provider_id": second_provider_id,
                     "auto_fallback_from_mineru": True,
                 },
                 path,
             )
             self.assertTrue(policy["auto_fallback_from_mineru"])
-            self.assertEqual(policy["default_provider_id"], provider_id)
+            self.assertEqual(policy["default_provider_id"], first_provider_id)
+
+    def test_disabling_first_provider_moves_fallback_to_second_and_reenabling_restores_first(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vision_api.local.json"
+            summary = self._save_provider(
+                path,
+                name="首个接口",
+                host="first.example.test",
+            )
+            first_provider_id = summary["providers"][0]["id"]
+            summary = self._save_provider(
+                path,
+                name="第二接口",
+                host="second.example.test",
+            )
+            second_provider_id = summary["providers"][1]["id"]
+            save_vision_policy({"auto_fallback_from_mineru": True}, path)
+
+            disabled = self._save_provider(
+                path,
+                provider_id=first_provider_id,
+                name="首个接口",
+                host="first.example.test",
+                api_key="",
+                enabled=False,
+            )
+            self.assertTrue(disabled["auto_fallback_from_mineru"])
+            self.assertEqual(disabled["default_provider_id"], second_provider_id)
+
+            reenabled = self._save_provider(
+                path,
+                provider_id=first_provider_id,
+                name="首个接口",
+                host="first.example.test",
+                api_key="",
+                enabled=True,
+            )
+            self.assertTrue(reenabled["auto_fallback_from_mineru"])
+            self.assertEqual(reenabled["default_provider_id"], first_provider_id)
+
+    def test_deleting_first_provider_moves_fallback_to_second_and_keeps_automatic_mode(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vision_api.local.json"
+            summary = self._save_provider(
+                path,
+                name="首个接口",
+                host="first.example.test",
+            )
+            first_provider_id = summary["providers"][0]["id"]
+            summary = self._save_provider(
+                path,
+                name="第二接口",
+                host="second.example.test",
+            )
+            second_provider_id = summary["providers"][1]["id"]
+            save_vision_policy({"auto_fallback_from_mineru": True}, path)
+
+            deleted = delete_vision_provider(first_provider_id, path)
+
+            self.assertTrue(deleted["auto_fallback_from_mineru"])
+            self.assertEqual(deleted["default_provider_id"], second_provider_id)
+
+    def test_last_unavailable_provider_turns_automatic_fallback_off(self) -> None:
+        for operation in ("disable", "delete"):
+            with self.subTest(operation=operation), TemporaryDirectory() as tmp:
+                path = Path(tmp) / "vision_api.local.json"
+                summary = self._save_provider(
+                    path,
+                    name="唯一接口",
+                    host="only.example.test",
+                )
+                provider_id = summary["providers"][0]["id"]
+                save_vision_policy({"auto_fallback_from_mineru": True}, path)
+
+                if operation == "disable":
+                    result = self._save_provider(
+                        path,
+                        provider_id=provider_id,
+                        name="唯一接口",
+                        host="only.example.test",
+                        api_key="",
+                        enabled=False,
+                    )
+                else:
+                    result = delete_vision_provider(provider_id, path)
+
+                self.assertFalse(result["auto_fallback_from_mineru"])
+                self.assertIsNone(result["default_provider_id"])
+                stored = read_vision_config_data(path)
+                self.assertFalse(stored["auto_fallback_from_mineru"])
+
+    def test_legacy_default_pointing_to_second_provider_is_normalized_to_first(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vision_api.local.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "providers": [
+                            {
+                                "id": "provider-first",
+                                "name": "首个接口",
+                                "api_base": "https://first.example.test/v1",
+                                "model": "first-vision-model",
+                                "api_key": "first-secret",
+                                "enabled": True,
+                            },
+                            {
+                                "id": "provider-second",
+                                "name": "第二接口",
+                                "api_base": "https://second.example.test/v1",
+                                "model": "second-vision-model",
+                                "api_key": "second-secret",
+                                "enabled": True,
+                            },
+                        ],
+                        "default_provider_id": "provider-second",
+                        "auto_fallback_from_mineru": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            summary = vision_config_summary(path)
+            runtime_provider = load_vision_provider(None, path)
+            fallback_provider = default_fallback_provider(path)
+
+            self.assertEqual(summary["default_provider_id"], "provider-first")
+            self.assertTrue(summary["auto_fallback_from_mineru"])
+            self.assertEqual(runtime_provider.provider_id, "provider-first")
+            self.assertIsNotNone(fallback_provider)
+            self.assertEqual(fallback_provider.provider_id, "provider-first")
+
+    def test_automatic_fallback_policy_rejects_non_boolean_values(self) -> None:
+        for invalid in (None, 0, 1, "false", "true"):
+            with self.subTest(value=invalid), TemporaryDirectory() as tmp:
+                path = Path(tmp) / "vision_api.local.json"
+                with self.assertRaises(VisionAPIError):
+                    save_vision_policy(
+                        {"auto_fallback_from_mineru": invalid},
+                        path,
+                    )
+                self.assertFalse(path.exists())
 
     def test_desktop_config_override_uses_private_local_path(self) -> None:
         override = Path(

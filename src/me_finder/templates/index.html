@@ -356,6 +356,7 @@
         </div>
       </div>
       <div class="settings-page-content">
+        <!-- Keep every top-level settings section collapsible so new options do not make this page permanently longer. -->
         <section class="settings-section settings-collapse" id="appearance-card">
           <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="appearance-body" onclick="toggleAppearance()">
             <span class="settings-section-title">外观</span>
@@ -366,24 +367,28 @@
             <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
           </div>
         </section>
-        <section class="settings-section macos-pdf-settings" id="pdf-reader-settings">
-          <div class="settings-section-head">
+        <section class="settings-section settings-collapse macos-pdf-settings" id="pdf-reader-settings">
+          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="pdf-reader-body" onclick="toggleSettingsCollapse('pdf-reader-settings','pdf-reader-body')">
             <span class="settings-section-title">PDF 阅读</span>
             <span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span>
-          </div>
-          <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
-            <label class="pdf-open-option selected" data-pdf-open-choice="native">
-              <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
-              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
-              <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small>使用 macOS PDFKit，直接跳到搜索命中的物理页码。</small></span>
-              <span class="pdf-open-option-check" aria-hidden="true"></span>
-            </label>
-            <label class="pdf-open-option" data-pdf-open-choice="system">
-              <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
-              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
-              <span class="pdf-open-option-copy"><strong>macOS 预览</strong><small>在预览.app 中打开；命中页码需要手动翻到。</small></span>
-              <span class="pdf-open-option-check" aria-hidden="true"></span>
-            </label>
+            <span id="pdf-reader-current" class="settings-status">读取中…</span>
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="pdf-reader-body" style="display:none">
+            <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
+              <label class="pdf-open-option selected" data-pdf-open-choice="native">
+                <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
+                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
+                <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small>使用 macOS PDFKit，直接跳到搜索命中的物理页码。</small></span>
+                <span class="pdf-open-option-check" aria-hidden="true"></span>
+              </label>
+              <label class="pdf-open-option" data-pdf-open-choice="system">
+                <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
+                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
+                <span class="pdf-open-option-copy"><strong>macOS 预览</strong><small>在预览.app 中打开；命中页码需要手动翻到。</small></span>
+                <span class="pdf-open-option-check" aria-hidden="true"></span>
+              </label>
+            </div>
           </div>
         </section>
         <section class="settings-section settings-collapse" id="mineru-settings-card">
@@ -507,44 +512,42 @@
               </div>
             </div>
             </div>
-            <div class="vision-fallback-policy">
+            <div class="vision-fallback-toggle">
               <div class="vision-policy-copy">
-                <strong>MinerU 失败后的处理</strong>
-                <small>默认只提示失败，开启后会自动改用默认备用接口重试。</small>
+                <strong>MinerU 失败后自动切换</strong>
+                <small id="vision-fallback-summary">关闭时只提示失败；开启后自动改用首个可用接口，可能产生调用费用。</small>
               </div>
-              <span class="vision-default-select-wrap">
-                <select id="vision-default-provider" class="settings-input vision-default-select" aria-label="默认备用接口"></select>
-                <svg class="vision-default-select-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
-              </span>
               <label class="ui-switch vision-auto-check">
-                <input id="vision-auto-fallback" type="checkbox">
+                <input id="vision-auto-fallback" type="checkbox" aria-describedby="vision-fallback-summary" onchange="setVisionAutoFallback(this.checked)">
                 <span class="ui-switch-track" aria-hidden="true"></span>
-                <span class="ui-switch-text">MinerU 失败时自动切换</span>
+                <span class="ui-switch-text">自动切换</span>
               </label>
-              <button class="action-btn" type="button" onclick="saveVisionPolicy()">保存切换设置</button>
             </div>
           </div>
         </section>
-        <section class="settings-section">
-          <div class="settings-section-head">
+        <section class="settings-section settings-collapse" id="backup-settings-card">
+          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="backup-settings-body" onclick="toggleSettingsCollapse('backup-settings-card','backup-settings-body')">
             <span class="settings-section-title">数据备份</span>
             <span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span>
-          </div>
-          <div class="settings-grid">
-            <span class="settings-label">导出</span>
-            <div class="settings-control">
-              <div class="settings-actions">
-                <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-                <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip。</span>
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="backup-settings-body" style="display:none">
+            <div class="settings-grid">
+              <span class="settings-label">导出</span>
+              <div class="settings-control">
+                <div class="settings-actions">
+                  <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
+                  <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip。</span>
+                </div>
               </div>
-            </div>
-            <label class="settings-label" for="backup-import-path">导入</label>
-            <div class="settings-control">
-              <div class="settings-input-row">
-                <input id="backup-import-path" class="settings-input" type="text" spellcheck="false" placeholder="粘贴备份 zip 的完整路径…">
-                <button class="action-btn settings-toggle" type="button" onclick="importBackup()">导入并恢复</button>
+              <label class="settings-label" for="backup-import-path">导入</label>
+              <div class="settings-control">
+                <div class="settings-input-row">
+                  <input id="backup-import-path" class="settings-input" type="text" spellcheck="false" placeholder="粘贴备份 zip 的完整路径…">
+                  <button class="action-btn settings-toggle" type="button" onclick="importBackup()">导入并恢复</button>
+                </div>
+                <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内。</small>
               </div>
-              <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内。</small>
             </div>
           </div>
         </section>
