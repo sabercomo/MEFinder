@@ -2485,13 +2485,77 @@ let scanDirectories = [];
 function renderScanDirectories() {
   var container = document.getElementById('scan-dir-list');
   if (!container) return;
+  if (!scanDirectories.length) {
+    container.innerHTML = '<div class="scan-dir-empty">还没有添加文献文件夹</div>';
+    return;
+  }
   container.innerHTML = scanDirectories.map(function(dir, index) {
-    return '<span class="scan-dir-chip" title="' + esc(dir) + '">'
+    return '<div class="scan-dir-row" title="' + esc(dir) + '">'
       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
-      + '<span class="scan-dir-chip-path">' + esc(dir) + '</span>'
+      + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
       + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">×</button>'
-      + '</span>';
+      + '</div>';
   }).join('');
+}
+
+// The desktop shells expose a real folder picker; a plain browser session has
+// no way to resolve an absolute path, so it keeps the manual path field.
+function setupScanDirectoryControls() {
+  var pick = document.getElementById('scan-dir-pick');
+  var input = document.getElementById('scan-dir-input');
+  if (!pick || !input) return;
+  if (desktopShell) {
+    input.hidden = true;
+  } else {
+    pick.hidden = true;
+    input.placeholder = '粘贴文件夹路径后回车…';
+  }
+}
+
+function revealScanPathFallback() {
+  var input = document.getElementById('scan-dir-input');
+  if (input) input.hidden = false;
+}
+
+async function chooseScanDirectory() {
+  var button = document.getElementById('scan-dir-pick');
+  if (button && button.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    var resp = await fetch('/api/scan-directories/choose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '选择文件夹失败');
+    if (data.cancelled) return;
+    await addScanDirectoryPath(data.folder);
+  } catch (e) {
+    revealScanPathFallback();
+    showToast('选择文件夹失败：' + e.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function addScanDirectoryPath(value) {
+  var path = (value || '').trim();
+  if (!path) return;
+  if (scanDirectories.indexOf(path) !== -1) {
+    showToast('该文件夹已在列表中');
+    return;
+  }
+  var previous = scanDirectories;
+  scanDirectories = scanDirectories.concat([path]);
+  try {
+    await persistScanDirectories();
+    showToast('已添加文献文件夹');
+  } catch (e) {
+    scanDirectories = previous;
+    renderScanDirectories();
+    throw e;
+  }
 }
 
 async function persistScanDirectories() {
@@ -2510,13 +2574,10 @@ async function addScanDirectory() {
   var input = document.getElementById('scan-dir-input');
   var value = (input.value || '').trim();
   if (!value) return;
-  scanDirectories = scanDirectories.concat([value]);
   try {
-    await persistScanDirectories();
+    await addScanDirectoryPath(value);
     input.value = '';
-    showToast('文献目录已保存');
   } catch (e) {
-    scanDirectories = scanDirectories.slice(0, -1);
     showToast('保存失败：' + e.message);
   }
 }
@@ -3537,7 +3598,9 @@ async function runDirectoryScan() {
   var statusEl = document.getElementById('scan-status');
   var button = document.getElementById('scan-run-btn');
   if (!scanDirectories.length) {
-    statusEl.textContent = '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
+    statusEl.textContent = desktopShell
+      ? '尚未添加文献文件夹：先点击“选择文件夹”。'
+      : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
     return;
   }
   button.disabled = true;
@@ -3975,6 +4038,8 @@ document.addEventListener('click', function(event) {
   });
 })();
 configureDesktopPlatformOptions();
+setupScanDirectoryControls();
+renderScanDirectories();
 loadMeta();
 loadPreferences();
 syncLibraryViewButtons();

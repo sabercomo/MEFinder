@@ -284,6 +284,7 @@ def make_handler(
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
+    native_scan_directory_chooser: NativeDirectoryChooser | None = None,
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
@@ -1578,6 +1579,32 @@ def make_handler(
                     self._send_json({"error": "当前运行方式不支持应用内更新。"}, status=400)
                     return
                 self._send_json(update_service.install(payload.get("confirm_token")))
+                return
+            if parsed.path == "/api/scan-directories/choose":
+                if native_scan_directory_chooser is None:
+                    self._send_json(
+                        {"error": "当前运行方式不支持打开文件夹选择器。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    selected_folder = native_scan_directory_chooser()
+                except Exception as exc:  # noqa: BLE001 - surface any picker failure
+                    self._send_json(
+                        {"error": str(exc) or "打开文件夹选择器失败。"},
+                        status=400,
+                    )
+                    return
+                if not selected_folder:
+                    self._send_json({"ok": True, "cancelled": True})
+                    return
+                folder = Path(str(selected_folder))
+                if not folder.is_dir():
+                    self._send_json({"error": "所选路径不是文件夹。"}, status=400)
+                    return
+                self._send_json(
+                    {"ok": True, "cancelled": False, "folder": str(folder)}
+                )
                 return
             if parsed.path == "/api/data-location/choose":
                 if (
