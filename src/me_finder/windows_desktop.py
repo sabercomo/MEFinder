@@ -14,6 +14,7 @@ the small native pieces needed by that shell separate from the web backend:
 from __future__ import annotations
 
 import ctypes
+import functools
 import logging
 import sys
 import threading
@@ -60,6 +61,24 @@ _TITLEBAR_PALETTES = {
 }
 
 
+@functools.lru_cache(maxsize=None)
+def _library(name: str) -> ctypes.WinDLL:
+    """Load a DLL handle private to this module.
+
+    ``ctypes.windll.<name>`` is a process-wide cache shared with pywebview, and
+    a ctypes function object carries one global ``argtypes``.  Declaring
+    ``argtypes`` on the shared handle therefore changes how *other* callers are
+    validated: pywebview's own ``move()`` passes ``None`` for the width/height
+    it does not use, which is accepted only while ``SetWindowPos`` has no
+    ``argtypes``.  Constraining the shared object made every titlebar drag
+    raise ``ctypes.ArgumentError`` inside pywebview.  Keeping private handles
+    lets this module declare precise signatures without reaching into code it
+    does not own.
+    """
+
+    return ctypes.WinDLL(name)
+
+
 def _hex_to_colorref(value: str) -> int:
     """Convert ``#RRGGBB`` to the BGR COLORREF expected by DWM."""
 
@@ -81,7 +100,7 @@ def _window_handle(window: object) -> int:
 
 
 def _set_dwm_attribute(hwnd: int, attribute: int, value: int) -> int:
-    setter = ctypes.windll.dwmapi.DwmSetWindowAttribute
+    setter = _library("dwmapi").DwmSetWindowAttribute
     setter.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint]
     setter.restype = ctypes.c_long
     payload = ctypes.c_uint(int(value) & 0xFFFFFFFF)
@@ -89,25 +108,25 @@ def _set_dwm_attribute(hwnd: int, attribute: int, value: int) -> int:
 
 
 def _get_native_window_style(hwnd: int) -> int:
-    getter = getattr(ctypes.windll.user32, "GetWindowLongPtrW", None)
+    getter = getattr(_library("user32"), "GetWindowLongPtrW", None)
     if getter is None:
-        getter = ctypes.windll.user32.GetWindowLongW
+        getter = _library("user32").GetWindowLongW
     getter.argtypes = [ctypes.c_void_p, ctypes.c_int]
     getter.restype = ctypes.c_ssize_t
     return int(getter(hwnd, _GWL_STYLE))
 
 
 def _set_native_window_style(hwnd: int, style: int) -> int:
-    setter = getattr(ctypes.windll.user32, "SetWindowLongPtrW", None)
+    setter = getattr(_library("user32"), "SetWindowLongPtrW", None)
     if setter is None:
-        setter = ctypes.windll.user32.SetWindowLongW
+        setter = _library("user32").SetWindowLongW
     setter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
     setter.restype = ctypes.c_ssize_t
     return int(setter(hwnd, _GWL_STYLE, int(style)))
 
 
 def _refresh_native_window_frame(hwnd: int) -> int:
-    refresher = ctypes.windll.user32.SetWindowPos
+    refresher = _library("user32").SetWindowPos
     refresher.argtypes = [
         ctypes.c_void_p,
         ctypes.c_void_p,
@@ -140,7 +159,7 @@ def remove_windows_top_resize_inset(hwnd: int) -> bool:
 
     if hwnd in _top_inset_subclasses:
         return True
-    comctl32 = ctypes.windll.comctl32
+    comctl32 = _library("comctl32")
     comctl32.SetWindowSubclass.argtypes = [
         ctypes.c_void_p,
         _SUBCLASSPROC,
@@ -188,7 +207,7 @@ def prepare_windows_maximized_bounds(window: object) -> bool:
         hwnd = _window_handle(window)
         outer = wintypes.RECT()
         client = wintypes.RECT()
-        user32 = ctypes.windll.user32
+        user32 = _library("user32")
         user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.RECT)]
         user32.GetWindowRect.restype = wintypes.BOOL
         user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.RECT)]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -89,6 +91,30 @@ class _FakeWebview:
         window = _FakeWindow()
         self.created.append((title, kwargs, window))
         return window
+
+
+class WindowsNativeLibraryIsolationTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "ctypes.windll is Windows-only")
+    def test_native_helpers_leave_pywebviews_shared_setwindowpos_callable(self) -> None:
+        """Titlebar dragging breaks if we constrain the shared ctypes handle.
+
+        pywebview moves the frameless window through the process-wide
+        ``ctypes.windll.user32.SetWindowPos``, passing ``None`` for the size it
+        does not use.  When this module declared ``argtypes`` on that same
+        cached function object, every drag raised ``ctypes.ArgumentError``
+        inside pywebview and the window silently refused to move.
+        """
+
+        # Invalid handle: the call is rejected by Windows without side effects,
+        # but it still runs our argtypes declarations.
+        windows_desktop._refresh_native_window_frame(0)
+        windows_desktop._get_native_window_style(0)
+
+        self.assertIsNot(windows_desktop._library("user32"), ctypes.windll.user32)
+        try:
+            ctypes.windll.user32.SetWindowPos(0, None, 0, 0, None, None, 0)
+        except ctypes.ArgumentError as exc:  # pragma: no cover - regression guard
+            self.fail(f"shared SetWindowPos no longer accepts pywebview's call: {exc}")
 
 
 class WindowsTitlebarTests(unittest.TestCase):
