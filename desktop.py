@@ -523,18 +523,26 @@ def main() -> None:
         "update_service": update_service,
     }
 
-    def choose_data_directory() -> str | None:
-        if sys.platform != "darwin" or app_data_root is None:
-            return None
-        initial_directory = app_data_root.parent
-        if not initial_directory.is_dir():
-            initial_directory = Path.home()
+    def choose_folder(initial_directory: Path | None) -> str | None:
+        """Open the platform folder picker. Works on macOS and Windows alike."""
+
+        start = initial_directory
+        if start is None or not start.is_dir():
+            start = Path.home()
         selection = window.create_file_dialog(
             webview.FileDialog.FOLDER,
-            directory=str(initial_directory),
+            directory=str(start),
             allow_multiple=False,
         )
         return str(selection[0]) if selection else None
+
+    def choose_data_directory() -> str | None:
+        if sys.platform != "darwin" or app_data_root is None:
+            return None
+        return choose_folder(app_data_root.parent)
+
+    def choose_scan_directory() -> str | None:
+        return choose_folder(Path.home())
 
     def start_backend(win) -> None:
         try:
@@ -561,6 +569,7 @@ def main() -> None:
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
+                native_scan_directory_chooser=choose_scan_directory,
                 app_data_root=app_data_root,
                 default_app_data_root=default_app_data_root,
             )

@@ -87,6 +87,9 @@ try {
     & $pythonCommand @pythonLauncherArgs -m unittest `
         tests.test_vision_api `
         tests.test_search_controls_and_views `
+        tests.test_batch_directory_import `
+        tests.test_directory_scan `
+        tests.test_import_queue `
         tests.test_portable_index_rebuild `
         tests.test_windows_desktop `
         tests.test_update_service `

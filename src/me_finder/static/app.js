@@ -2485,13 +2485,77 @@ let scanDirectories = [];
 function renderScanDirectories() {
   var container = document.getElementById('scan-dir-list');
   if (!container) return;
+  if (!scanDirectories.length) {
+    container.innerHTML = '<div class="scan-dir-empty">还没有添加文献文件夹</div>';
+    return;
+  }
   container.innerHTML = scanDirectories.map(function(dir, index) {
-    return '<span class="scan-dir-chip" title="' + esc(dir) + '">'
+    return '<div class="scan-dir-row" title="' + esc(dir) + '">'
       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
-      + '<span class="scan-dir-chip-path">' + esc(dir) + '</span>'
+      + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
       + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">×</button>'
-      + '</span>';
+      + '</div>';
   }).join('');
+}
+
+// The desktop shells expose a real folder picker; a plain browser session has
+// no way to resolve an absolute path, so it keeps the manual path field.
+function setupScanDirectoryControls() {
+  var pick = document.getElementById('scan-dir-pick');
+  var input = document.getElementById('scan-dir-input');
+  if (!pick || !input) return;
+  if (desktopShell) {
+    input.hidden = true;
+  } else {
+    pick.hidden = true;
+    input.placeholder = '粘贴文件夹路径后回车…';
+  }
+}
+
+function revealScanPathFallback() {
+  var input = document.getElementById('scan-dir-input');
+  if (input) input.hidden = false;
+}
+
+async function chooseScanDirectory() {
+  var button = document.getElementById('scan-dir-pick');
+  if (button && button.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    var resp = await fetch('/api/scan-directories/choose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: '{}'
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '选择文件夹失败');
+    if (data.cancelled) return;
+    await addScanDirectoryPath(data.folder);
+  } catch (e) {
+    revealScanPathFallback();
+    showToast('选择文件夹失败：' + e.message);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function addScanDirectoryPath(value) {
+  var path = (value || '').trim();
+  if (!path) return;
+  if (scanDirectories.indexOf(path) !== -1) {
+    showToast('该文件夹已在列表中');
+    return;
+  }
+  var previous = scanDirectories;
+  scanDirectories = scanDirectories.concat([path]);
+  try {
+    await persistScanDirectories();
+    showToast('已添加文献文件夹');
+  } catch (e) {
+    scanDirectories = previous;
+    renderScanDirectories();
+    throw e;
+  }
 }
 
 async function persistScanDirectories() {
@@ -2510,13 +2574,10 @@ async function addScanDirectory() {
   var input = document.getElementById('scan-dir-input');
   var value = (input.value || '').trim();
   if (!value) return;
-  scanDirectories = scanDirectories.concat([value]);
   try {
-    await persistScanDirectories();
+    await addScanDirectoryPath(value);
     input.value = '';
-    showToast('文献目录已保存');
   } catch (e) {
-    scanDirectories = scanDirectories.slice(0, -1);
     showToast('保存失败：' + e.message);
   }
 }
@@ -3537,7 +3598,9 @@ async function runDirectoryScan() {
   var statusEl = document.getElementById('scan-status');
   var button = document.getElementById('scan-run-btn');
   if (!scanDirectories.length) {
-    statusEl.textContent = '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
+    statusEl.textContent = desktopShell
+      ? '尚未添加文献文件夹：先点击“选择文件夹”。'
+      : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
     return;
   }
   button.disabled = true;
@@ -3558,7 +3621,8 @@ async function runDirectoryScan() {
 function scanEntryRow(entry, index, checkable, checked) {
   var typeCls = entry.file_type === 'pdf' ? 'pdf' : 'word';
   var note = '';
-  if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
+  if (entry.status === 'processing') note = '已提交，正在导入…';
+  else if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
   else if (entry.needs_ocr === true) note = '需 OCR：导入后将提交 MinerU（消耗配额）';
   else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
   return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
@@ -3575,9 +3639,10 @@ function scanEntryRow(entry, index, checkable, checked) {
 function renderScanResults(data) {
   var statusEl = document.getElementById('scan-status');
   var resultsEl = document.getElementById('scan-results');
-  var groups = {ready: [], ocr: [], unknown: [], imported: [], conflict: []};
+  var groups = {ready: [], ocr: [], unknown: [], processing: [], imported: [], conflict: []};
   scanEntries.forEach(function(entry, index) {
-    if (entry.status === 'imported') groups.imported.push(index);
+    if (entry.status === 'processing') groups.processing.push(index);
+    else if (entry.status === 'imported') groups.imported.push(index);
     else if (entry.status === 'name_conflict') groups.conflict.push(index);
     else if (entry.needs_ocr === true) groups.ocr.push(index);
     else if (entry.file_type === 'pdf' && entry.needs_ocr === null) groups.unknown.push(index);
@@ -3592,11 +3657,12 @@ function renderScanResults(data) {
   section('可直接导入的新文件', groups.ready, true, true);
   section('需 OCR 的新文件（默认不勾选，导入将消耗 MinerU 配额）', groups.ocr, true, false);
   section('未预检测的新文件', groups.unknown, true, false);
+  section('正在导入', groups.processing, false, false);
   section('同名冲突', groups.conflict, false, false);
   section('已导入', groups.imported, false, false);
   resultsEl.innerHTML = pieces.join('');
   var newCount = groups.ready.length + groups.ocr.length + groups.unknown.length;
-  var summary = '发现 ' + scanEntries.length + ' 个文件：新文件 ' + newCount + '，已导入 ' + groups.imported.length + '，同名冲突 ' + groups.conflict.length + '。';
+  var summary = '发现 ' + scanEntries.length + ' 个文件：新文件 ' + newCount + '，正在导入 ' + groups.processing.length + '，已导入 ' + groups.imported.length + '，同名冲突 ' + groups.conflict.length + '。';
   if (data.limit_reached) summary += '（数量超出上限，仅显示前 ' + scanEntries.length + ' 个）';
   (data.errors || []).forEach(function(err) { summary += ' ' + err.directory + '：' + err.error + '。'; });
   statusEl.textContent = summary;
@@ -3613,6 +3679,10 @@ function updateScanImportButton() {
 async function importSelectedScanned() {
   var checks = Array.from(document.querySelectorAll('#scan-results .scan-check:checked'));
   if (!checks.length) return;
+  if (checks.length > 50) {
+    showToast('一次最多批量导入 50 个文件，请取消部分勾选后分批导入');
+    return;
+  }
   var paths = checks.map(function(box) { return scanEntries[Number(box.dataset.index)].path; });
   var button = document.getElementById('scan-import-btn');
   button.disabled = true;
@@ -3656,9 +3726,16 @@ async function importSelectedScanned() {
     });
     renderImportQueue();
     var failed = (data.errors || []);
-    showToast('已开始导入 ' + (data.jobs || []).length + ' 个文件' + (failed.length ? '，' + failed.length + ' 个失败' : ''));
+    var failureNote = failed.length
+      ? '；' + failed.length + ' 个未导入：' + (failed[0].error || '请检查文件')
+      : '';
+    showToast('已开始导入 ' + (data.jobs || []).length + ' 个文件' + failureNote);
     failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });
-    await runDirectoryScan();
+    var submittedPaths = new Set((data.jobs || []).map(function(job) { return job.path; }));
+    scanEntries.forEach(function(entry) {
+      if (submittedPaths.has(entry.path)) entry.status = 'processing';
+    });
+    renderScanResults({errors: [], limit_reached: false});
   } catch (e) {
     showToast('批量导入失败：' + e.message);
   } finally {
@@ -3961,6 +4038,8 @@ document.addEventListener('click', function(event) {
   });
 })();
 configureDesktopPlatformOptions();
+setupScanDirectoryControls();
+renderScanDirectories();
 loadMeta();
 loadPreferences();
 syncLibraryViewButtons();

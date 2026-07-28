@@ -32,7 +32,7 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_portable_index_rebuild
+    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     py -3 -m PyInstaller desktop.spec --clean --noconfirm

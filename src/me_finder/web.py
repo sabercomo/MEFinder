@@ -63,6 +63,7 @@ from .pdf_import_service import (
 )
 from .runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
 from .backup_service import restore_backup, write_backup
+from .import_queue import ImportBatchCompletion, ImportTaskQueue
 from .search import SearchEngine
 
 
@@ -283,6 +284,7 @@ def make_handler(
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
+    native_scan_directory_chooser: NativeDirectoryChooser | None = None,
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
@@ -304,6 +306,7 @@ def make_handler(
     import_jobs: Dict[str, Dict[str, object]] = {}
     import_job_contexts: Dict[str, Dict[str, object]] = {}
     import_jobs_lock = threading.RLock()
+    import_task_queue = ImportTaskQueue(worker_count=2)
     calibration_active_sources: set[str] = set()
 
     def update_import_job(job_id: str, **updates: object) -> None:
@@ -425,7 +428,53 @@ def make_handler(
                     runtime["rebuilding"] = False
                 raise
 
-    def run_import_job(
+    def finalize_import_job(
+        job_id: str,
+        source_file_id: str,
+        is_pdf: bool,
+    ) -> None:
+        metadata_note = ""
+        if is_pdf:
+            update_import_job(
+                job_id,
+                phase="metadata_recognition",
+                message="索引已建立，正在自动识别书目信息…",
+            )
+            try:
+                metadata = detect_bibliographic_metadata(source_file_id)
+                metadata = persist_bibliographic_metadata(source_file_id, metadata)
+                missing = list(
+                    metadata.get("metadata_missing_fields")
+                    or metadata_missing_fields(metadata)
+                )
+                labels = {
+                    "author": "作者",
+                    "title": "书名",
+                    "translator": "译者",
+                    "publisher": "出版社",
+                    "publish_place": "出版地",
+                    "publish_year": "出版年份",
+                }
+                missing_labels = [labels[field] for field in missing if field in labels]
+                metadata_note = "；书目信息已自动填入"
+                if missing_labels:
+                    metadata_note += "，缺少" + "、".join(missing_labels)
+                update_import_job(
+                    job_id,
+                    bibliographic_metadata=metadata,
+                    bibliographic_missing_fields=missing,
+                )
+            except Exception as metadata_exc:
+                metadata_note = "；书目信息自动识别未完成，可在文献库中重试"
+                update_import_job(job_id, bibliographic_error=str(metadata_exc))
+        update_import_job(
+            job_id,
+            status="completed",
+            phase="completed",
+            message="导入完成，已自动更新索引" + metadata_note,
+        )
+
+    def prepare_import_job(
         job_id: str,
         target: Path,
         source_file_id: str,
@@ -433,7 +482,7 @@ def make_handler(
         is_pdf: bool,
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
-    ) -> None:
+    ) -> bool:
         try:
             use_vision = bool(is_pdf and vision_provider_id)
             use_mineru = is_pdf and not use_vision and (
@@ -514,7 +563,7 @@ def make_handler(
                             needs_provider_config=not bool(fallback),
                             original_error=str(mineru_exc),
                         )
-                        return
+                        return False
                     fallback_id = str(fallback.get("id"))
                     fallback_name = str(fallback.get("name") or "其他视觉 API")
                     update_import_job(
@@ -552,7 +601,7 @@ def make_handler(
                             retry_provider_id=fallback_id,
                             retry_provider_name=fallback_name,
                         )
-                        return
+                        return False
             else:
                 update_import_job(
                     job_id,
@@ -560,35 +609,37 @@ def make_handler(
                     message="原生文本，使用快速解析，正在建立索引…",
                     parse_route="native",
                 )
+            return True
+        except Exception as exc:
+            update_import_job(job_id, status="failed", phase="failed", message=str(exc))
+            return False
+
+    def run_import_job(
+        job_id: str,
+        target: Path,
+        source_file_id: str,
+        profile: Dict[str, object],
+        is_pdf: bool,
+        force_mineru: bool = False,
+        vision_provider_id: Optional[str] = None,
+    ) -> None:
+        if not prepare_import_job(
+            job_id,
+            target,
+            source_file_id,
+            profile,
+            is_pdf,
+            force_mineru,
+            vision_provider_id,
+        ):
+            return
+        try:
             rebuild_runtime_index(job_id)
-            metadata_note = ""
-            if is_pdf:
-                update_import_job(job_id, phase="metadata_recognition", message="索引已建立，正在自动识别书目信息…")
-                try:
-                    metadata = detect_bibliographic_metadata(source_file_id)
-                    metadata = persist_bibliographic_metadata(source_file_id, metadata)
-                    missing = list(metadata.get("metadata_missing_fields") or metadata_missing_fields(metadata))
-                    labels = {
-                        "author": "作者",
-                        "title": "书名",
-                        "translator": "译者",
-                        "publisher": "出版社",
-                        "publish_place": "出版地",
-                        "publish_year": "出版年份",
-                    }
-                    missing_labels = [labels[field] for field in missing if field in labels]
-                    metadata_note = "；书目信息已自动填入"
-                    if missing_labels:
-                        metadata_note += "，缺少" + "、".join(missing_labels)
-                    update_import_job(job_id, bibliographic_metadata=metadata, bibliographic_missing_fields=missing)
-                except Exception as metadata_exc:
-                    metadata_note = "；书目信息自动识别未完成，可在文献库中重试"
-                    update_import_job(job_id, bibliographic_error=str(metadata_exc))
-            update_import_job(job_id, status="completed", phase="completed", message="导入完成，已自动更新索引" + metadata_note)
+            finalize_import_job(job_id, source_file_id, is_pdf)
         except Exception as exc:
             update_import_job(job_id, status="failed", phase="failed", message=str(exc))
 
-    def start_import_job(
+    def create_import_job(
         target: Path,
         profile: Dict[str, object],
         source_file_id: str,
@@ -642,20 +693,196 @@ def make_handler(
                 "profile": dict(profile),
                 "is_pdf": is_pdf,
             }
-        threading.Thread(
-            target=run_import_job,
-            args=(
-                job_id,
-                target,
-                source_file_id,
-                profile,
-                is_pdf,
-                force_mineru,
-                vision_provider_id,
-            ),
-            daemon=True,
-        ).start()
         return job_id
+
+    def queue_import_job(
+        job_id: str,
+        target: Path,
+        profile: Dict[str, object],
+        source_file_id: str,
+        is_pdf: bool,
+        force_mineru: bool = False,
+        vision_provider_id: Optional[str] = None,
+    ) -> None:
+        import_task_queue.submit(
+            run_import_job,
+            job_id,
+            target,
+            source_file_id,
+            profile,
+            is_pdf,
+            force_mineru,
+            vision_provider_id,
+        )
+
+    def start_import_job(
+        target: Path,
+        profile: Dict[str, object],
+        source_file_id: str,
+        is_pdf: bool,
+        force_mineru: bool = False,
+        vision_provider_id: Optional[str] = None,
+    ) -> str:
+        job_id = create_import_job(
+            target,
+            profile,
+            source_file_id,
+            is_pdf,
+            force_mineru=force_mineru,
+            vision_provider_id=vision_provider_id,
+        )
+        queue_import_job(
+            job_id,
+            target,
+            profile,
+            source_file_id,
+            is_pdf,
+            force_mineru=force_mineru,
+            vision_provider_id=vision_provider_id,
+        )
+        return job_id
+
+    def start_native_import_batch(
+        items: List[Dict[str, object]],
+    ) -> List[str]:
+        """Index local-text PDFs and Word files together with one rebuild."""
+
+        queued_items: List[Dict[str, object]] = []
+        for item in items:
+            job_id = create_import_job(
+                Path(item["target"]),
+                dict(item["profile"]),
+                str(item["source_file_id"]),
+                bool(item["is_pdf"]),
+            )
+            queued_items.append({**item, "job_id": job_id})
+
+        if not queued_items:
+            return []
+
+        def run_native_batch() -> None:
+            job_ids = [str(item["job_id"]) for item in queued_items]
+            batch_size = len(job_ids)
+            for job_id in job_ids:
+                update_import_job(
+                    job_id,
+                    phase="rebuilding_index",
+                    message=f"正在批量建立索引（共 {batch_size} 个文件）…",
+                    parse_route="native",
+                )
+            try:
+                rebuild_runtime_index(job_ids[0])
+            except Exception as exc:
+                for job_id in job_ids:
+                    update_import_job(
+                        job_id,
+                        status="failed",
+                        phase="failed",
+                        message=f"批量重建索引失败：{exc}",
+                    )
+                return
+            for item in queued_items:
+                finalize_import_job(
+                    str(item["job_id"]),
+                    str(item["source_file_id"]),
+                    bool(item["is_pdf"]),
+                )
+
+        import_task_queue.submit(run_native_batch)
+        return [str(item["job_id"]) for item in queued_items]
+
+    def start_remote_import_batch(
+        items: List[Dict[str, object]],
+    ) -> List[str]:
+        """Parse OCR/VLM files with two workers, then rebuild the index once."""
+
+        queued_items: List[Dict[str, object]] = []
+        for item in items:
+            vision_provider_id = (
+                str(item["vision_provider_id"])
+                if item.get("vision_provider_id")
+                else None
+            )
+            job_id = create_import_job(
+                Path(item["target"]),
+                dict(item["profile"]),
+                str(item["source_file_id"]),
+                bool(item["is_pdf"]),
+                force_mineru=bool(item["force_mineru"]),
+                vision_provider_id=vision_provider_id,
+            )
+            queued_items.append(
+                {
+                    **item,
+                    "job_id": job_id,
+                    "vision_provider_id": vision_provider_id,
+                }
+            )
+
+        if not queued_items:
+            return []
+
+        def finish_remote_batch(successful_items: List[object]) -> None:
+            successful = [
+                dict(item)
+                for item in successful_items
+                if isinstance(item, dict)
+            ]
+            if not successful:
+                return
+            batch_size = len(successful)
+            for item in successful:
+                update_import_job(
+                    str(item["job_id"]),
+                    phase="rebuilding_index",
+                    message=f"解析完成，正在批量更新索引（共 {batch_size} 个文件）…",
+                )
+            representative = str(successful[0]["job_id"])
+            try:
+                rebuild_runtime_index(representative)
+            except Exception as exc:
+                for item in successful:
+                    update_import_job(
+                        str(item["job_id"]),
+                        status="failed",
+                        phase="failed",
+                        message=f"文件已解析，但批量重建索引失败：{exc}",
+                    )
+                return
+            for item in successful:
+                finalize_import_job(
+                    str(item["job_id"]),
+                    str(item["source_file_id"]),
+                    bool(item["is_pdf"]),
+                )
+
+        group = ImportBatchCompletion(len(queued_items), finish_remote_batch)
+
+        def run_remote_item(item: Dict[str, object]) -> None:
+            succeeded = prepare_import_job(
+                str(item["job_id"]),
+                Path(item["target"]),
+                str(item["source_file_id"]),
+                dict(item["profile"]),
+                bool(item["is_pdf"]),
+                bool(item["force_mineru"]),
+                (
+                    str(item["vision_provider_id"])
+                    if item.get("vision_provider_id")
+                    else None
+                ),
+            )
+            if succeeded:
+                update_import_job(
+                    str(item["job_id"]),
+                    phase="waiting_for_batch",
+                    message="解析完成，等待同批文件后统一更新索引…",
+                )
+            group.finish(item, succeeded)
+
+        for item in queued_items:
+            import_task_queue.submit(run_remote_item, item)
+        return [str(item["job_id"]) for item in queued_items]
 
     def backup_app_data_root() -> Path:
         return resolve_preferences_path(root).parent
@@ -1353,6 +1580,32 @@ def make_handler(
                     return
                 self._send_json(update_service.install(payload.get("confirm_token")))
                 return
+            if parsed.path == "/api/scan-directories/choose":
+                if native_scan_directory_chooser is None:
+                    self._send_json(
+                        {"error": "当前运行方式不支持打开文件夹选择器。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    selected_folder = native_scan_directory_chooser()
+                except Exception as exc:  # noqa: BLE001 - surface any picker failure
+                    self._send_json(
+                        {"error": str(exc) or "打开文件夹选择器失败。"},
+                        status=400,
+                    )
+                    return
+                if not selected_folder:
+                    self._send_json({"ok": True, "cancelled": True})
+                    return
+                folder = Path(str(selected_folder))
+                if not folder.is_dir():
+                    self._send_json({"error": "所选路径不是文件夹。"}, status=400)
+                    return
+                self._send_json(
+                    {"ok": True, "cancelled": False, "folder": str(folder)}
+                )
+                return
             if parsed.path == "/api/data-location/choose":
                 if (
                     app_data_root is None
@@ -1601,6 +1854,12 @@ def make_handler(
                 if not isinstance(raw_paths, list) or not raw_paths:
                     self._send_json({"error": "没有选择要导入的文件。"}, status=400)
                     return
+                if len(raw_paths) > 50:
+                    self._send_json(
+                        {"error": "一次最多批量导入 50 个文件，请分批选择。"},
+                        status=400,
+                    )
+                    return
                 pdf_parse_mode = str(payload.get("pdf_parse_mode") or "auto").strip().lower()
                 if pdf_parse_mode not in {"auto", "mineru", "vision"}:
                     self._send_json({"error": "PDF 解析方式无效。"}, status=400)
@@ -1615,9 +1874,9 @@ def make_handler(
                     return
                 preferences = read_preferences(resolve_preferences_path(root))
                 allowed_bases = [Path(item).resolve() for item in preferences.get("scan_directories") or []]
-                jobs: List[Dict[str, object]] = []
+                prepared_items: List[Dict[str, object]] = []
                 import_errors: List[Dict[str, object]] = []
-                for raw in raw_paths[:50]:
+                for raw in raw_paths:
                     try:
                         source_path = Path(str(raw)).resolve()
                         # 只允许导入配置目录内的文件，防止任意路径读取。
@@ -1638,14 +1897,6 @@ def make_handler(
                             profile = {"detected_pdf_type": "docx"}
                             source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
                         force_mineru = is_pdf and pdf_parse_mode == "mineru"
-                        job_id = start_import_job(
-                            target,
-                            profile,
-                            source_file_id,
-                            is_pdf,
-                            force_mineru=force_mineru,
-                            vision_provider_id=vision_provider_id or None,
-                        )
                         parse_route = None
                         if is_pdf:
                             parse_route = (
@@ -1655,19 +1906,51 @@ def make_handler(
                                 if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
                                 else "native"
                             )
-                        jobs.append({
-                            "path": str(raw),
-                            "job_id": job_id,
-                            "file_name": target.name,
-                            "size_bytes": target.stat().st_size,
-                            "source_file_id": source_file_id,
-                            "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
-                            "file_type": "pdf" if is_pdf else "docx",
-                            "parse_route": parse_route,
-                            "provider_id": vision_provider_id or None,
-                        })
+                        prepared_items.append(
+                            {
+                                "target": target,
+                                "profile": profile,
+                                "source_file_id": source_file_id,
+                                "is_pdf": is_pdf,
+                                "force_mineru": force_mineru,
+                                "vision_provider_id": vision_provider_id or None,
+                                "parse_route": parse_route,
+                                "response": {
+                                    "path": str(raw),
+                                    "file_name": target.name,
+                                    "size_bytes": target.stat().st_size,
+                                    "source_file_id": source_file_id,
+                                    "detected_pdf_type": (
+                                        profile.get("detected_pdf_type")
+                                        if is_pdf
+                                        else None
+                                    ),
+                                    "file_type": "pdf" if is_pdf else "docx",
+                                    "parse_route": parse_route,
+                                    "provider_id": vision_provider_id or None,
+                                },
+                            }
+                        )
                     except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
                         import_errors.append({"path": str(raw), "error": str(exc)})
+
+                native_items = [
+                    item
+                    for item in prepared_items
+                    if not item["is_pdf"] or item["parse_route"] == "native"
+                ]
+                remote_items = [
+                    item
+                    for item in prepared_items
+                    if item["is_pdf"] and item["parse_route"] != "native"
+                ]
+                native_job_ids = start_native_import_batch(native_items)
+                for item, job_id in zip(native_items, native_job_ids):
+                    item["response"]["job_id"] = job_id
+                remote_job_ids = start_remote_import_batch(remote_items)
+                for item, job_id in zip(remote_items, remote_job_ids):
+                    item["response"]["job_id"] = job_id
+                jobs = [dict(item["response"]) for item in prepared_items]
                 self._send_json({"ok": True, "jobs": jobs, "errors": import_errors})
                 return
             if parsed.path == "/api/mineru-config":

@@ -2523,13 +2523,19 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   gap: 10px;
 }
 .scan-section-head .import-queue-title { margin-bottom: 0; }
-.scan-section-actions { display: flex; gap: 8px; }
+.scan-section-hint {
+  margin: 6px 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
 .scan-status {
   margin: 10px 0 12px;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
+.scan-status:empty { display: none; }
 .scan-group-title {
   margin: 16px 0 6px;
   color: var(--text-primary);
@@ -2562,50 +2568,80 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 }
 .scan-row-size { flex: 0 0 auto; color: var(--text-tertiary); font-size: 12px; }
 .scan-row-note { flex: 0 1 auto; overflow: hidden; color: var(--warning); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.scan-dir-chips {
+.scan-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 12px 0 4px;
+  margin-bottom: 12px;
 }
-.scan-dir-chip-list { display: contents; }
-.scan-dir-chip {
+.scan-dir-pick {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  max-width: 340px;
-  padding: 6px 8px 6px 11px;
-  border: 1px solid var(--divider);
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
   background: var(--surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.scan-dir-pick svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-secondary); }
+.scan-dir-pick:hover { background: var(--surface-hover); border-color: var(--accent); }
+.scan-dir-pick:hover svg { color: var(--accent); }
+.scan-dir-pick:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.scan-dir-pick:disabled { opacity: 0.55; cursor: default; }
+.scan-dir-pick[hidden] { display: none; }
+.scan-dir-list { display: flex; flex-direction: column; gap: 6px; }
+.scan-dir-empty {
+  padding: 12px 13px;
+  border: 1px dashed var(--divider);
+  border-radius: var(--widget-radius);
+  color: var(--text-tertiary);
   font-size: 12px;
+}
+.scan-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--divider);
+  border-radius: var(--widget-radius);
+  background: var(--surface);
+  font-size: 13px;
   color: var(--text-primary);
 }
-.scan-dir-chip svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--text-tertiary); }
-.scan-dir-chip-path {
+.scan-dir-row svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-tertiary); }
+.scan-dir-row-path {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
 }
 .scan-dir-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: none;
   color: var(--text-tertiary);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
 .scan-dir-remove:hover { color: var(--danger); background: var(--danger-soft); }
 .scan-dir-add {
-  width: 240px;
+  width: 280px;
   height: 32px;
   box-sizing: border-box;
   padding: 0 11px;
@@ -2618,6 +2654,7 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 }
 .scan-dir-add:focus { border-style: solid; border-color: var(--accent); box-shadow: var(--focus-ring); }
 .scan-dir-add::placeholder { color: var(--text-tertiary); }
+.scan-dir-add[hidden] { display: none; }
 .import-item {
   background: var(--surface);
   border: 1px solid var(--divider);
