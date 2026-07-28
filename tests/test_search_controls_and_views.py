@@ -78,6 +78,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
         self.assertIn('"parse_route": parse_route', WEB_SOURCE)
 
+    def test_directory_batch_import_is_bounded_and_groups_native_rebuilds(self) -> None:
+        self.assertIn("ImportTaskQueue(worker_count=2)", WEB_SOURCE)
+        self.assertIn("def start_native_import_batch(", WEB_SOURCE)
+        self.assertIn("def start_remote_import_batch(", WEB_SOURCE)
+        self.assertIn("rebuild_runtime_index(job_ids[0])", WEB_SOURCE)
+        self.assertIn("native_job_ids = start_native_import_batch(native_items)", WEB_SOURCE)
+        self.assertIn("remote_job_ids = start_remote_import_batch(remote_items)", WEB_SOURCE)
+        self.assertNotIn("for raw in raw_paths[:50]", WEB_SOURCE)
+        self.assertIn("一次最多批量导入 50 个文件，请分批选择。", WEB_SOURCE)
+        self.assertIn("if (checks.length > 50)", HTML)
+        self.assertIn("个未导入：", HTML)
+        self.assertIn("if (submittedPaths.has(entry.path)) entry.status = 'processing'", HTML)
+        self.assertNotIn("failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });\n    await runDirectoryScan();", HTML)
+
     def test_optional_vision_api_and_mineru_fallback_are_wired(self) -> None:
         mineru_section = HTML.index('<span class="settings-section-title">MinerU API</span>')
         vision_section = HTML.index('<span class="settings-section-title">其他解析 API</span>')

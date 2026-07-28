@@ -84,11 +84,15 @@ done
 iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
 
 "$MEFINDER_PYTHON" -m unittest \
+  tests.test_batch_directory_import \
   tests.test_data_location \
   tests.test_desktop_portable \
+  tests.test_directory_scan \
+  tests.test_import_queue \
   tests.test_macos_update \
   tests.test_macos_pdf_viewer \
   tests.test_platform_open \
+  tests.test_search_controls_and_views \
   tests.test_theme_system \
   tests.test_portable_index_rebuild
 
