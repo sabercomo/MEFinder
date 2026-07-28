@@ -38,7 +38,8 @@ _SWP_NOACTIVATE = 0x0010
 _SWP_FRAMECHANGED = 0x0020
 _WM_NCCALCSIZE = 0x0083
 
-_SUBCLASSPROC = ctypes.WINFUNCTYPE(
+_CALLBACK_FACTORY = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
+_SUBCLASSPROC = _CALLBACK_FACTORY(
     ctypes.c_ssize_t,
     ctypes.c_void_p,
     ctypes.c_uint,

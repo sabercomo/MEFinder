@@ -435,6 +435,62 @@
             </label>
           </div>
         </section>
+        <section class="settings-section settings-collapse macos-update-settings" id="macos-update-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="macos-update-body" onclick="toggleSettingsSection('macos-update-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">软件更新</span>
+              <span class="settings-section-note">手动检查新的 Mac DMG</span>
+            </span>
+            <span id="macos-update-status" class="settings-status">未检查</span>
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="macos-update-body" hidden>
+            <div class="macos-update-card">
+              <span class="macos-update-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg></span>
+              <div class="macos-update-copy">
+                <strong>当前版本 v__APP_VERSION__</strong>
+                <small id="macos-update-message">只检查 GitHub Releases，不会后台下载或自动替换应用。</small>
+              </div>
+              <div class="macos-update-actions">
+                <button class="action-btn" type="button" id="macos-update-check" onclick="checkMacosUpdate()">检查更新</button>
+                <a class="action-btn primary macos-update-release" id="macos-update-release" href="#" target="_blank" rel="noreferrer" style="display:none">打开 Releases 下载 DMG</a>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="settings-section settings-collapse macos-data-location-settings" id="data-location-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="data-location-body" onclick="toggleSettingsSection('data-location-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">数据位置</span>
+              <span class="settings-section-note">选择索引、语料与本机配置的保存位置</span>
+            </span>
+            <span id="data-location-status" class="settings-status">读取中…</span>
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="data-location-body" hidden>
+            <div class="data-location-card">
+              <span class="data-location-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><path d="M7.5 15.5h9"/></svg></span>
+              <div class="data-location-copy">
+                <strong>当前数据位置</strong>
+                <code id="data-location-current">正在读取…</code>
+                <small>可选择外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive；云盘文件需保持本地可用。</small>
+              </div>
+              <button class="action-btn" type="button" id="data-location-choose" onclick="chooseDataLocation()">选择位置</button>
+            </div>
+            <div class="data-location-pending" id="data-location-pending" style="display:none">
+              <div>
+                <span>迁移到</span>
+                <code id="data-location-target"></code>
+                <small>会复制索引、语料和本机设置。迁移完成后重启应用生效，旧位置的数据会保留。</small>
+              </div>
+              <button class="action-btn primary" type="button" id="data-location-migrate" onclick="migrateDataLocation()">迁移并切换</button>
+            </div>
+            <div class="data-location-warning">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
+              <span>不要让两台电脑同时打开同一份云盘或 NAS 数据库，否则同步中的 SQLite 文件可能冲突。跨设备使用时，请先退出另一端并等待同步完成。</span>
+            </div>
+          </div>
+        </section>
         <section class="settings-section settings-collapse expanded" id="mineru-api-settings">
           <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="true" aria-controls="mineru-api-body" onclick="toggleSettingsSection('mineru-api-settings')">
             <span class="settings-section-heading-copy">

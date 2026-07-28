@@ -160,6 +160,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "appearance-card",
             "pdf-reader-settings",
             "software-update-settings",
+            "macos-update-settings",
+            "data-location-settings",
             "mineru-api-settings",
             "vision-api-settings",
             "backup-settings",
