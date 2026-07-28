@@ -92,16 +92,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/vision-providers"', WEB_SOURCE)
         self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
         self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
+        self.assertIn("fallback = providers[0] if providers else None", WEB_SOURCE)
+        self.assertNotIn(
+            'default_id = str(summary.get("default_provider_id") or "")',
+            WEB_SOURCE,
+        )
 
     def test_api_settings_collapse_and_fallback_uses_one_auto_saving_switch(self) -> None:
-        self.assertIn('id="mineru-settings-card"', HTML)
-        self.assertIn('aria-controls="mineru-settings-body"', HTML)
-        self.assertIn('id="mineru-settings-body" style="display:none"', HTML)
-        self.assertIn('id="vision-settings-card"', HTML)
-        self.assertIn('aria-controls="vision-settings-body"', HTML)
-        self.assertIn('id="vision-settings-body" style="display:none"', HTML)
-        self.assertIn("function toggleSettingsCollapse(cardId, bodyId)", HTML)
-        self.assertIn("setSettingsCollapse('vision-settings-card', 'vision-settings-body', true)", HTML)
+        self.assertIn('id="mineru-api-settings"', HTML)
+        self.assertIn('aria-controls="mineru-api-body"', HTML)
+        self.assertIn("toggleSettingsSection('mineru-api-settings')", HTML)
+        self.assertIn('id="vision-api-settings"', HTML)
+        self.assertIn('aria-controls="vision-api-body"', HTML)
+        self.assertIn("toggleSettingsSection('vision-api-settings')", HTML)
+        self.assertIn("function toggleSettingsSection(sectionId)", HTML)
         self.assertIn('class="vision-fallback-toggle"', HTML)
         self.assertIn('id="vision-fallback-summary"', HTML)
         self.assertIn('onchange="setVisionAutoFallback(this.checked)"', HTML)
@@ -116,8 +120,6 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("default_provider_id", policy_script)
         self.assertIn("toggle.disabled = true", policy_script)
         self.assertIn("toggle.checked = previous", policy_script)
-        self.assertIn("openVisionSettings()", HTML)
-        self.assertIn("head.focus({preventScroll: true})", HTML)
 
     def test_vision_models_can_be_discovered_or_entered_manually(self) -> None:
         self.assertIn('id="vision-model"', HTML)
@@ -130,11 +132,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("manual_entry_allowed", WEB_SOURCE)
 
     def test_backup_export_import_is_wired(self) -> None:
-        self.assertIn('id="backup-settings-card"', HTML)
+        self.assertIn('id="backup-settings"', HTML)
         self.assertIn('aria-controls="backup-settings-body"', HTML)
-        self.assertIn('id="backup-settings-body" style="display:none"', HTML)
         self.assertIn(
-            "toggleSettingsCollapse('backup-settings-card','backup-settings-body')",
+            "toggleSettingsSection('backup-settings')",
             HTML,
         )
         self.assertIn('onclick="exportBackup()"', HTML)
@@ -150,13 +151,23 @@ class SearchControlsAndViewsTests(unittest.TestCase):
     def test_every_top_level_settings_section_is_collapsible(self) -> None:
         settings_start = HTML.index('<div class="settings-page-content">')
         settings_end = HTML.index('</div><!-- /main-area -->', settings_start)
-        section_classes = re.findall(
-            r'<section class="([^"]+)"',
-            HTML[settings_start:settings_end],
+        settings_html = HTML[settings_start:settings_end]
+        sections = re.findall(
+            r'<section class="([^"]+)" id="([^"]+)">',
+            settings_html,
         )
-        self.assertGreaterEqual(len(section_classes), 5)
-        for classes in section_classes:
+        expected_ids = {
+            "appearance-card",
+            "pdf-reader-settings",
+            "software-update-settings",
+            "mineru-api-settings",
+            "vision-api-settings",
+            "backup-settings",
+        }
+        self.assertEqual({section_id for _, section_id in sections}, expected_ids)
+        for classes, section_id in sections:
             self.assertIn("settings-collapse", classes)
+            self.assertIn(f"toggleSettingsSection('{section_id}')", settings_html)
 
     def test_batch_metadata_detection_is_wired(self) -> None:
         self.assertIn('id="batch-metadata-btn"', HTML)

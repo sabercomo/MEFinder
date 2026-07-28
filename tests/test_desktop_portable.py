@@ -14,6 +14,66 @@ from tools.create_portable_zip import create_portable_zip
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_windows_main_window_uses_html_titlebar_and_scoped_drag_region(self) -> None:
+        class Event:
+            def __init__(self) -> None:
+                self.callbacks = []
+
+            def __iadd__(self, callback):
+                self.callbacks.append(callback)
+                return self
+
+        events = types.SimpleNamespace(
+            before_show=Event(),
+            maximized=Event(),
+            restored=Event(),
+            loaded=Event(),
+            moved=Event(),
+            closed=Event(),
+        )
+        window = types.SimpleNamespace(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+
+        with mock.patch.object(desktop.sys, "platform", "win32"):
+            created, controller = desktop.create_main_window(webview, "midnight")
+
+        self.assertIs(created, window)
+        options = webview.create_window.call_args.kwargs
+        self.assertTrue(options["frameless"])
+        self.assertFalse(options["easy_drag"])
+        self.assertTrue(options["shadow"])
+        self.assertTrue(options["resizable"])
+        self.assertIs(options["js_api"], controller)
+        self.assertIs(controller._window, window)
+        self.assertFalse(hasattr(controller, "window"))
+        self.assertIn('data-desktop-shell="win32"', options["html"])
+        self.assertEqual(events.before_show.callbacks, [desktop.configure_windows_main_window])
+
+    def test_macos_main_window_keeps_native_transparent_titlebar(self) -> None:
+        class Event:
+            def __init__(self) -> None:
+                self.callbacks = []
+
+            def __iadd__(self, callback):
+                self.callbacks.append(callback)
+                return self
+
+        events = types.SimpleNamespace(before_show=Event())
+        window = types.SimpleNamespace(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+
+        with mock.patch.object(desktop.sys, "platform", "darwin"):
+            created, controller = desktop.create_main_window(webview, "sage-ivory")
+
+        self.assertIs(created, window)
+        self.assertIsNone(controller)
+        options = webview.create_window.call_args.kwargs
+        self.assertNotIn("frameless", options)
+        self.assertNotIn("js_api", options)
+        self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
+
     def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
 
@@ -192,7 +252,7 @@ class DesktopPortableTests(unittest.TestCase):
         ):
             self.assertEqual(
                 desktop.app_root(),
-                Path("/Applications/MEFinder.app/Contents/Resources"),
+                Path("/Applications/MEFinder.app/Contents/Resources").resolve(),
             )
 
     def test_macos_app_data_uses_application_support(self) -> None:
@@ -212,7 +272,7 @@ class DesktopPortableTests(unittest.TestCase):
             {"ME_FINDER_APP_DATA_ROOT": str(configured)},
             clear=True,
         ):
-            self.assertEqual(desktop.local_app_data_root(), configured)
+            self.assertEqual(desktop.local_app_data_root(), configured.resolve())
 
     def test_frozen_macos_resources_seed_writable_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -251,8 +311,19 @@ class DesktopPortableTests(unittest.TestCase):
             (bundle / desktop.PORTABLE_MARKER).touch()
             with mock.patch.object(desktop.sys, "frozen", True, create=True):
                 self.assertTrue(desktop.is_portable_bundle(bundle))
+                self.assertEqual(desktop.installation_kind(bundle), "portable")
                 self.assertEqual(desktop.prepare_runtime_root(bundle), bundle)
                 self.assertEqual(desktop.webview_storage_path(bundle, True), str(bundle / "webview-data"))
+
+    def test_only_installer_marker_enables_self_update(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            with mock.patch.object(desktop.sys, "frozen", True, create=True):
+                self.assertEqual(desktop.installation_kind(bundle), "standalone")
+                (bundle / desktop.INSTALLED_MARKER).touch()
+                self.assertEqual(desktop.installation_kind(bundle), "installed")
+            with mock.patch.object(desktop.sys, "frozen", False, create=True):
+                self.assertEqual(desktop.installation_kind(bundle), "source")
 
     def test_public_blank_index_opens_as_an_empty_library(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

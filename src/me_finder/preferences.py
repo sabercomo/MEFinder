@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -12,6 +13,7 @@ DEFAULT_THEME = "frost-blue"
 DEFAULT_LIBRARY_VIEW = "list"
 DEFAULT_CALIBRATION_VIEW = "grid"
 DEFAULT_PDF_OPEN_MODE = "native"
+DEFAULT_AUTO_UPDATE = False
 VALID_THEMES = frozenset(
     {
         "frost-blue",
@@ -25,6 +27,7 @@ VALID_THEMES = frozenset(
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
+_PREFERENCES_LOCK = threading.RLock()
 
 
 def resolve_preferences_path(root: Path | None = None) -> Path:
@@ -60,12 +63,16 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     pdf_open_mode = payload.get("pdf_open_mode") if isinstance(payload, dict) else None
     if pdf_open_mode not in VALID_PDF_OPEN_MODES:
         pdf_open_mode = DEFAULT_PDF_OPEN_MODE
+    auto_update = payload.get("auto_update") if isinstance(payload, dict) else None
+    if not isinstance(auto_update, bool):
+        auto_update = DEFAULT_AUTO_UPDATE
     return {
         "theme": theme,
         "library_view": library_view,
         "calibration_view": calibration_view,
         "scan_directories": scan_directories,
         "pdf_open_mode": pdf_open_mode,
+        "auto_update": auto_update,
     }
 
 
@@ -84,6 +91,17 @@ def _normalized_scan_directories(value: Any) -> list[str]:
 
 
 def save_preferences(
+    updates: Mapping[str, Any], path: Path | None = None
+) -> dict[str, Any]:
+    # ThreadingHTTPServer can receive theme/PDF/update-setting writes at the
+    # same time. Serialize the whole read-modify-replace transaction so one
+    # request cannot overwrite another request's newer fields or reuse its
+    # temporary file.
+    with _PREFERENCES_LOCK:
+        return _save_preferences_locked(updates, path)
+
+
+def _save_preferences_locked(
     updates: Mapping[str, Any], path: Path | None = None
 ) -> dict[str, Any]:
     preferences_path = path or resolve_preferences_path()
@@ -113,6 +131,11 @@ def save_preferences(
         if pdf_open_mode not in VALID_PDF_OPEN_MODES:
             raise ValueError("不支持的 PDF 打开方式")
         current["pdf_open_mode"] = str(pdf_open_mode)
+    if "auto_update" in updates:
+        auto_update = updates["auto_update"]
+        if not isinstance(auto_update, bool):
+            raise ValueError("自动更新设置必须为布尔值")
+        current["auto_update"] = auto_update
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")

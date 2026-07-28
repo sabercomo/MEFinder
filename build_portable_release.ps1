@@ -1,24 +1,37 @@
 param(
-    [string]$Version = "0.1.4"
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseRoot = Join-Path $ProjectRoot "release"
-$PackageName = "MEFinder-v$Version-windows-portable"
-$StagePath = Join-Path $ReleaseRoot $PackageName
-$ZipPath = Join-Path $ReleaseRoot "$PackageName.zip"
-$HashPath = "$ZipPath.sha256.txt"
 $DistPath = Join-Path $ProjectRoot "dist\MEFinder"
 
 $releaseFull = [IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
-$stageFull = [IO.Path]::GetFullPath($StagePath)
-if (-not $stageFull.StartsWith($releaseFull + '\', [StringComparison]::OrdinalIgnoreCase)) {
-    throw "Unsafe release staging path: $stageFull"
-}
 
 Push-Location $ProjectRoot
 try {
+    $sourceVersionOutput = py -3 -c "from src.me_finder import __version__; print(__version__)"
+    if ($LASTEXITCODE -ne 0) { throw "Could not read src.me_finder.__version__." }
+    $sourceVersion = ($sourceVersionOutput | Out-String).Trim()
+    if ($Version -and $Version -ne $sourceVersion) {
+        throw "-Version '$Version' does not match src.me_finder.__version__ '$sourceVersion'."
+    }
+    $Version = $sourceVersion
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+        throw "Release version must use numeric major.minor.patch form: $Version"
+    }
+
+    $PackageName = "MEFinder-v$Version-windows-portable"
+    $StagePath = Join-Path $ReleaseRoot $PackageName
+    $ZipPath = Join-Path $ReleaseRoot "$PackageName.zip"
+    $HashPath = "$ZipPath.sha256.txt"
+
+    $stageFull = [IO.Path]::GetFullPath($StagePath)
+    if (-not $stageFull.StartsWith($releaseFull + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe release staging path: $stageFull"
+    }
+
     py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 

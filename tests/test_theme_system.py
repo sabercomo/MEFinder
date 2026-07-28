@@ -10,6 +10,7 @@ from unittest import mock
 
 from desktop import error_html, loading_html
 from src.me_finder.preferences import (
+    DEFAULT_AUTO_UPDATE,
     DEFAULT_CALIBRATION_VIEW,
     DEFAULT_LIBRARY_VIEW,
     DEFAULT_PDF_OPEN_MODE,
@@ -31,6 +32,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "calibration_view": DEFAULT_CALIBRATION_VIEW,
             "scan_directories": [],
             "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
+            "auto_update": DEFAULT_AUTO_UPDATE,
         }
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
@@ -98,6 +100,16 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertEqual(read_preferences(path)["pdf_open_mode"], "system")
             with self.assertRaises(ValueError):
                 save_preferences({"pdf_open_mode": "browser"}, path)
+
+    def test_auto_update_defaults_off_and_requires_a_boolean(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            self.assertFalse(read_preferences(path)["auto_update"])
+            saved = save_preferences({"auto_update": True}, path)
+            self.assertTrue(saved["auto_update"])
+            self.assertTrue(read_preferences(path)["auto_update"])
+            with self.assertRaises(ValueError):
+                save_preferences({"auto_update": "true"}, path)
 
 
 class ThemeMarkupTests(unittest.TestCase):
@@ -172,41 +184,50 @@ class ThemeMarkupTests(unittest.TestCase):
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(
-            'class="settings-section settings-collapse macos-pdf-settings" id="pdf-reader-settings"',
+            'class="settings-section settings-collapse expanded desktop-pdf-settings" id="pdf-reader-settings"',
             HTML,
         )
         self.assertIn('aria-controls="pdf-reader-body"', HTML)
         self.assertIn(
-            "toggleSettingsCollapse('pdf-reader-settings','pdf-reader-body')",
+            "toggleSettingsSection('pdf-reader-settings')",
             HTML,
         )
-        self.assertIn('id="pdf-reader-body" style="display:none"', HTML)
-        self.assertIn('id="pdf-reader-current"', HTML)
+        self.assertIn('id="pdf-reader-body"', HTML)
         self.assertIn('data-pdf-open-choice="native"', HTML)
         self.assertIn('data-pdf-open-choice="system"', HTML)
         self.assertIn("使用 macOS PDFKit", HTML)
         self.assertIn("macOS 预览", HTML)
         self.assertIn("function setPdfOpenMode(mode)", HTML)
-        self.assertIn(
-            "current.textContent = currentPdfOpenMode === 'system' ? 'macOS 预览' : '应用内阅读器'",
-            HTML,
-        )
-        self.assertIn(
-            ".settings-collapse-body > .pdf-open-options:first-child",
-            HTML,
-        )
         self.assertIn("var preferencesLoadPromise = null;", HTML)
         self.assertIn("if (preferencesLoadPromise) return preferencesLoadPromise;", HTML)
         self.assertIn("if (pdfOpenModeSaving) return null;", HTML)
         self.assertIn("setPdfOpenModeControlsDisabled(true);", HTML)
         self.assertIn("if (pdfOpenModeSaving || preferencesLoadPromise)", HTML)
-        self.assertIn("function applyPreferencesData(data)", HTML)
-        self.assertIn("applyPreferencesData(data);", HTML)
+        self.assertIn("function applyPreferencesData(data, requestedThemeRevision)", HTML)
+        self.assertIn("applyPreferencesData(data, requestedThemeRevision);", HTML)
         self.assertIn("failedStatus.textContent = '读取失败';", HTML)
         self.assertIn(".pdf-open-options.is-busy", HTML)
         self.assertIn("pdf_open_mode: mode", HTML)
+        self.assertIn('html[data-desktop-shell="macos"] .desktop-pdf-settings', HTML)
+        self.assertIn('html[data-desktop-shell="win32"] .desktop-pdf-settings', HTML)
+
+    def test_windows_settings_offer_webview2_system_reader_and_updates(self) -> None:
+        for marker in (
+            'id="pdf-reader-settings"',
+            'id="pdf-native-description"',
+            'id="pdf-system-title"',
+            'id="software-update-settings"',
+            'id="auto-update-enabled"',
+            "Edge WebView2",
+            "系统默认 PDF 阅读器",
+            "async function checkForUpdates(automatic)",
+            "auto_update:autoUpdateEnabled",
+            "confirm_token:installToken",
+            "autoInput.disabled = !state.can_self_update",
+        ):
+            self.assertIn(marker, HTML)
         self.assertIn(
-            'html[data-desktop-shell="macos"] .macos-pdf-settings',
+            'html[data-desktop-shell="win32"] .windows-update-settings',
             HTML,
         )
 
@@ -248,13 +269,133 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("var(--app-bg) 100%", rendered)
         self.assertIn("height: calc(100vh - var(--macos-titlebar-height));", rendered)
 
+    def test_windows_desktop_shell_is_marked_before_first_paint(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"ME_FINDER_DESKTOP_SHELL": "win32"},
+            clear=True,
+        ):
+            rendered = render_html("midnight")
+
+        self.assertIn(
+            '<html lang="zh-CN" data-theme="midnight" data-desktop-shell="win32">',
+            rendered,
+        )
+
+    def test_windows_shell_uses_a_theme_driven_html_titlebar(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"ME_FINDER_DESKTOP_SHELL": "win32"},
+            clear=True,
+        ):
+            rendered = render_html("sage-ivory")
+
+        for marker in (
+            'class="windows-titlebar"',
+            'class="windows-titlebar-drag pywebview-drag-region"',
+            'onclick="minimizeWindowsWindow()"',
+            'onclick="toggleWindowsMaximize()"',
+            'onclick="closeWindowsWindow()"',
+            "window.pywebview.api[method]()",
+            "callWindowsWindow('is_maximized').then(setWindowsMaximized)",
+        ):
+            self.assertIn(marker, rendered)
+        self.assertIn(
+            'html[data-desktop-shell="win32"] .windows-titlebar',
+            rendered,
+        )
+        self.assertIn("var(--sidebar-bg) var(--sidebar-width)", rendered)
+        self.assertIn("var(--app-bg) 100%", rendered)
+        self.assertIn(
+            "height: calc(100vh - var(--windows-titlebar-height));",
+            rendered,
+        )
+        self.assertIn("margin-top: var(--windows-titlebar-height);", rendered)
+
+    def test_all_six_top_level_settings_sections_are_collapsible(self) -> None:
+        sections = {
+            "appearance-card": "appearance-body",
+            "pdf-reader-settings": "pdf-reader-body",
+            "software-update-settings": "software-update-body",
+            "mineru-api-settings": "mineru-api-body",
+            "vision-api-settings": "vision-api-body",
+            "backup-settings": "backup-settings-body",
+        }
+        self.assertEqual(HTML.count("onclick=\"toggleSettingsSection('"), len(sections))
+        for section_id, body_id in sections.items():
+            self.assertRegex(
+                HTML,
+                rf'<section class="[^"]*\bsettings-collapse\b[^"]*" id="{section_id}">',
+            )
+            self.assertIn(f'aria-controls="{body_id}"', HTML)
+            self.assertIn(f"toggleSettingsSection('{section_id}')", HTML)
+            self.assertRegex(
+                HTML,
+                rf'class="settings-collapse-body" id="{body_id}"(?: hidden)?>',
+            )
+
+        toggle_start = HTML.index("function toggleSettingsSection(sectionId)")
+        toggle_end = HTML.index("function toggleAppearance()", toggle_start)
+        toggle_block = HTML[toggle_start:toggle_end]
+        self.assertIn("head.setAttribute('aria-expanded', open ? 'true' : 'false')", toggle_block)
+        self.assertIn("body.hidden = !open", toggle_block)
+        self.assertIn("section.classList.toggle('expanded', open)", toggle_block)
+        self.assertIn(".settings-collapse-body[hidden] { display: none; }", HTML)
+
+    def test_update_heading_uses_one_baseline_for_title_and_note(self) -> None:
+        heading_rule = re.search(
+            r"\.settings-section-heading-copy\s*\{([^}]+)\}",
+            HTML,
+            re.S,
+        )
+        self.assertIsNotNone(heading_rule)
+        self.assertIn("align-items: baseline;", heading_rule.group(1))
+
+        update_start = HTML.index('id="software-update-settings"')
+        update_end = HTML.index('id="mineru-api-settings"', update_start)
+        update_markup = HTML[update_start:update_end]
+        self.assertRegex(
+            update_markup,
+            r'<span class="settings-section-heading-copy">\s*'
+            r'<span class="settings-section-title">软件更新</span>\s*'
+            r'<span class="settings-section-note">适用于 Windows 安装版</span>\s*'
+            r'</span>',
+        )
+        self.assertIn('id="update-status-badge"', update_markup)
+
+    def test_theme_switch_is_immediate_serialized_and_ignores_stale_results(self) -> None:
+        self.assertIn("let persistedTheme = currentTheme;", HTML)
+        self.assertIn("let themeRevision = 0;", HTML)
+        self.assertIn("let themeSaveQueue = Promise.resolve();", HTML)
+
+        theme_start = HTML.index("async function setTheme(theme)")
+        theme_end = HTML.index("renderThemeOptions();", theme_start)
+        theme_block = HTML[theme_start:theme_end]
+        revision_at = theme_block.index("var revision = ++themeRevision;")
+        immediate_apply_at = theme_block.index("applyTheme(theme);")
+        request_at = theme_block.index("var request = themeSaveQueue")
+        fetch_at = theme_block.index("fetch('/api/preferences'")
+        self.assertLess(revision_at, immediate_apply_at)
+        self.assertLess(immediate_apply_at, request_at)
+        self.assertLess(request_at, fetch_at)
+        self.assertIn(
+            "themeSaveQueue.catch(function() {}).then(async function()",
+            theme_block,
+        )
+        self.assertIn("themeSaveQueue = request.catch(function() {});", theme_block)
+        self.assertEqual(theme_block.count("if (revision !== themeRevision) return;"), 2)
+        self.assertIn("applyTheme(persistedTheme);", theme_block)
+
     def test_browser_shell_does_not_show_the_macos_titlebar(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             rendered = render_html("midnight")
 
         self.assertIn('<html lang="zh-CN" data-theme="midnight">', rendered)
         self.assertNotIn('data-desktop-shell="macos"', rendered.splitlines()[1])
-        self.assertIn(".macos-titlebar { display: none; }", rendered)
+        self.assertRegex(
+            rendered,
+            r"\.macos-titlebar,\s*\.windows-titlebar\s*\{\s*display:\s*none;\s*\}",
+        )
 
     def test_svg_icons_do_not_have_fixed_color_values(self) -> None:
         icon_color = re.compile(r'<(?:svg|path|circle|rect|line|polyline|polygon)[^>]*(?:stroke|fill)="#[0-9a-f]{3,8}"', re.I)
@@ -354,6 +495,36 @@ class DesktopThemeShellTests(unittest.TestCase):
         }
         for theme, background in expected.items():
             self.assertIn(background, loading_html(theme))
+
+    def test_windows_loading_and_error_pages_include_working_html_titlebars(self) -> None:
+        pages = (
+            loading_html("midnight", "win32"),
+            error_html("测试", "详情", "midnight", "win32"),
+        )
+        for page in pages:
+            self.assertIn(
+                '<html lang="zh-CN" data-desktop-shell="win32">',
+                page,
+            )
+            self.assertIn('<body class="windows-shell">', page)
+            self.assertEqual(page.count('class="windows-titlebar"'), 1)
+            self.assertIn('class="windows-titlebar-drag pywebview-drag-region"', page)
+            self.assertIn('onclick="minimizeWindowsWindow()"', page)
+            self.assertIn('onclick="toggleWindowsMaximize()"', page)
+            self.assertIn('onclick="closeWindowsWindow()"', page)
+            self.assertIn(
+                "body.windows-shell { box-sizing: border-box; padding-top: var(--windows-titlebar-height); }",
+                page,
+            )
+
+    def test_non_windows_bootstrap_pages_keep_their_native_shell_behavior(self) -> None:
+        for shell in (None, "darwin", "linux"):
+            loading = loading_html("midnight", shell)
+            error = error_html("测试", "详情", "midnight", shell)
+            self.assertNotIn('class="windows-titlebar"', loading)
+            self.assertNotIn('class="windows-titlebar"', error)
+            self.assertNotIn('data-desktop-shell="win32"', loading)
+            self.assertNotIn('data-desktop-shell="win32"', error)
 
 
 if __name__ == "__main__":

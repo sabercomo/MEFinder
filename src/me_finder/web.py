@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
+from . import __version__
 from .database import DEFAULT_DATABASE_PATH
 from .auto_page_mapping import has_manual_mapping
 from .bibliographic_metadata import (
@@ -137,6 +138,7 @@ def _normalized_pdf_page(page: object) -> Optional[int]:
 
 
 NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
+NativeThemeSetter = Callable[[str], None]
 
 
 def open_pdf_with_platform(
@@ -153,11 +155,16 @@ def open_pdf_with_platform(
     preferences = read_preferences(preferences_path)
     open_mode = str(preferences.get("pdf_open_mode") or "native")
 
-    if open_mode == "system" and sys.platform == "darwin":
-        open_path_in_macos_preview(target)
+    if open_mode == "system":
+        if sys.platform == "darwin":
+            open_path_in_macos_preview(target)
+            app = "preview"
+        else:
+            open_path_with_default_app(target)
+            app = "system_default"
         return {
             "ok": True,
-            "app": "preview",
+            "app": app,
             "viewer_mode": "system",
             "page_jump": False,
             "file": target.name,
@@ -178,7 +185,13 @@ def open_pdf_with_platform(
                 actual_page = returned_page if returned_page > 0 else page_number
             return {
                 "ok": True,
-                "app": "pdfkit" if sys.platform == "darwin" else "native",
+                "app": (
+                    "pdfkit"
+                    if sys.platform == "darwin"
+                    else "webview2"
+                    if sys.platform == "win32"
+                    else "native"
+                ),
                 "viewer_mode": "native",
                 "page_jump": bool(actual_page),
                 "file": target.name,
@@ -237,6 +250,7 @@ HTML = (
     _load_asset("templates/index.html")
     .replace("/*__APP_CSS__*/", _load_asset("static/app.css"), 1)
     .replace("//__APP_JS__", _load_asset("static/app.js"), 1)
+    .replace("__APP_VERSION__", __version__)
 )
 
 
@@ -245,7 +259,11 @@ def render_html(theme: str) -> str:
 
     marker = '<html lang="zh-CN" data-theme="frost-blue">'
     desktop_shell = os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower()
-    shell_attribute = ' data-desktop-shell="macos"' if desktop_shell == "macos" else ""
+    shell_attribute = (
+        f' data-desktop-shell="{desktop_shell}"'
+        if desktop_shell in {"macos", "win32"}
+        else ""
+    )
     replacement = f'<html lang="zh-CN" data-theme="{theme}"{shell_attribute}>'
     return HTML.replace(marker, replacement, 1)
 
@@ -254,6 +272,8 @@ def make_handler(
     index_path: Path,
     *,
     native_pdf_opener: NativePDFOpener | None = None,
+    native_theme_setter: NativeThemeSetter | None = None,
+    update_service: object | None = None,
 ):
     engine = SearchEngine(index_path)
     root = Path(".").resolve()
@@ -1058,6 +1078,16 @@ def make_handler(
                 preferences_path = resolve_preferences_path(root)
                 self._send_json(read_preferences(preferences_path))
                 return
+            if parsed.path == "/api/update/status":
+                if update_service is None:
+                    self._send_json({
+                        "status": "unsupported",
+                        "can_self_update": False,
+                        "message": "当前运行方式不支持应用内更新。",
+                    })
+                else:
+                    self._send_json(update_service.status())
+                return
             if parsed.path == "/api/sources":
                 with runtime_lock:
                     current_engine = runtime["engine"]
@@ -1247,7 +1277,32 @@ def make_handler(
                 except OSError:
                     self._send_json({"error": "外观设置无法保存，请检查配置目录是否可写。"}, status=500)
                     return
+                if "theme" in payload and native_theme_setter is not None:
+                    try:
+                        native_theme_setter(str(preferences["theme"]))
+                    except Exception:
+                        logging.exception("failed to apply native window theme")
                 self._send_json({"ok": True, **preferences})
+                return
+            if parsed.path == "/api/update/check":
+                if update_service is None:
+                    self._send_json({"error": "当前运行方式不支持应用内更新。"}, status=400)
+                    return
+                self._send_json(update_service.check(
+                    auto_download=payload.get("auto_download") is True
+                ))
+                return
+            if parsed.path == "/api/update/download":
+                if update_service is None:
+                    self._send_json({"error": "当前运行方式不支持应用内更新。"}, status=400)
+                    return
+                self._send_json(update_service.download())
+                return
+            if parsed.path == "/api/update/install":
+                if update_service is None:
+                    self._send_json({"error": "当前运行方式不支持应用内更新。"}, status=400)
+                    return
+                self._send_json(update_service.install(payload.get("confirm_token")))
                 return
             if parsed.path == "/api/open-source":
                 sid = str(payload.get("source_id") or "")

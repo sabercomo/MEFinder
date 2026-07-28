@@ -41,7 +41,48 @@ let visionModelOptions = [];
 let visionModelRequestSerial = 0;
 let preferencesLoaded = false;
 let currentTheme = document.documentElement.dataset.theme || 'frost-blue';
+let persistedTheme = currentTheme;
+let themeRevision = 0;
+let themeSaveQueue = Promise.resolve();
 let currentPdfOpenMode = 'native';
+let autoUpdateEnabled = false;
+let updateAutoStarted = false;
+let updateState = {status: 'idle', can_self_update: false};
+const desktopShell = document.documentElement.dataset.desktopShell || '';
+
+/* ═══ Windows frameless titlebar ═══ */
+function callWindowsWindow(method) {
+  if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api[method] !== 'function') {
+    return Promise.resolve(false);
+  }
+  return window.pywebview.api[method]();
+}
+
+function setWindowsMaximized(maximized) {
+  document.documentElement.classList.toggle('windows-maximized', !!maximized);
+  var button = document.querySelector('.windows-maximize-button');
+  if (!button) return;
+  button.setAttribute('aria-label', maximized ? '还原窗口' : '最大化窗口');
+  button.title = maximized ? '还原' : '最大化';
+}
+
+function minimizeWindowsWindow() {
+  callWindowsWindow('minimize');
+}
+
+function toggleWindowsMaximize() {
+  callWindowsWindow('toggle_maximize').then(setWindowsMaximized);
+}
+
+function closeWindowsWindow() {
+  callWindowsWindow('close');
+}
+
+window.addEventListener('pywebviewready', function() {
+  if (desktopShell === 'win32') {
+    callWindowsWindow('is_maximized').then(setWindowsMaximized);
+  }
+});
 
 /* ═══ Navigation ═══ */
 function navigateTo(page) {
@@ -1948,30 +1989,35 @@ function updateAppearanceSummary() {
   el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(current ? current.name : '');
 }
 
-function setSettingsCollapse(cardId, bodyId, open) {
-  var card = document.getElementById(cardId);
-  var body = document.getElementById(bodyId);
-  var head = card ? card.querySelector('.settings-collapse-head') : null;
-  if (!card || !body) return;
-  body.style.display = open ? 'block' : 'none';
-  card.classList.toggle('expanded', open);
-  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+function setSettingsSection(sectionId, open) {
+  var section = document.getElementById(sectionId);
+  var head = section ? section.querySelector('.settings-collapse-head') : null;
+  var body = head ? document.getElementById(head.getAttribute('aria-controls')) : null;
+  if (!section || !head || !body) return;
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  body.hidden = !open;
+  section.classList.toggle('expanded', open);
 }
 
-function toggleSettingsCollapse(cardId, bodyId) {
-  var body = document.getElementById(bodyId);
-  if (!body) return;
-  setSettingsCollapse(cardId, bodyId, body.style.display === 'none');
+function toggleSettingsSection(sectionId) {
+  var section = document.getElementById(sectionId);
+  var head = section ? section.querySelector('.settings-collapse-head') : null;
+  var body = head ? document.getElementById(head.getAttribute('aria-controls')) : null;
+  if (!section || !head || !body) return;
+  var open = head.getAttribute('aria-expanded') !== 'true';
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  body.hidden = !open;
+  section.classList.toggle('expanded', open);
 }
 
 function toggleAppearance() {
-  toggleSettingsCollapse('appearance-card', 'appearance-body');
+  toggleSettingsSection('appearance-card');
 }
 
 function openVisionSettings() {
   navigateTo('settings');
-  setSettingsCollapse('vision-settings-card', 'vision-settings-body', true);
-  var card = document.getElementById('vision-settings-card');
+  setSettingsSection('vision-api-settings', true);
+  var card = document.getElementById('vision-api-settings');
   if (card) requestAnimationFrame(function() {
     card.scrollIntoView({behavior: 'smooth', block: 'start'});
     var head = card.querySelector('.settings-collapse-head');
@@ -2003,21 +2049,44 @@ function renderPdfOpenMode() {
   var current = document.getElementById('pdf-reader-current');
   if (current) {
     current.className = 'settings-status';
-    current.textContent = currentPdfOpenMode === 'system' ? 'macOS 预览' : '应用内阅读器';
+    var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
+    current.textContent = currentPdfOpenMode === 'system' ? systemName : '应用内阅读器';
   }
 }
 
-function applyPreferencesData(data) {
-  applyTheme(data.theme || 'frost-blue');
+function applyPreferencesData(data, requestedThemeRevision) {
+  var loadedTheme = THEME_IDS.has(data.theme) ? data.theme : 'frost-blue';
+  if (themeRevision === requestedThemeRevision) {
+    persistedTheme = loadedTheme;
+    applyTheme(loadedTheme);
+  }
   if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
   else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
   currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+  autoUpdateEnabled = data.auto_update === true;
+  var autoUpdateInput = document.getElementById('auto-update-enabled');
+  if (autoUpdateInput) autoUpdateInput.checked = autoUpdateEnabled;
   renderPdfOpenMode();
   scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
   renderScanDirectories();
   syncLibraryViewButtons();
   if (libLoaded) renderLibraryList();
   preferencesLoaded = true;
+}
+
+function configureDesktopPlatformOptions() {
+  var nativeDescription = document.getElementById('pdf-native-description');
+  var systemTitle = document.getElementById('pdf-system-title');
+  var systemDescription = document.getElementById('pdf-system-description');
+  if (desktopShell === 'win32') {
+    if (nativeDescription) nativeDescription.textContent = '使用 Microsoft Edge WebView2，在应用内直接跳到搜索命中的物理页码。';
+    if (systemTitle) systemTitle.textContent = 'Windows 默认 PDF 阅读器';
+    if (systemDescription) systemDescription.textContent = '使用系统文件关联打开，例如 Adobe Acrobat DC；命中页码可能需要手动翻到。';
+  } else if (desktopShell === 'macos') {
+    if (nativeDescription) nativeDescription.textContent = '使用 macOS PDFKit，直接跳到搜索命中的物理页码。';
+    if (systemTitle) systemTitle.textContent = 'macOS 预览';
+    if (systemDescription) systemDescription.textContent = '在预览.app 中打开；命中页码需要手动翻到。';
+  }
 }
 
 async function setPdfOpenMode(mode) {
@@ -2039,8 +2108,11 @@ async function setPdfOpenMode(mode) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    applyPreferencesData(data);
-    showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用 macOS 预览打开');
+    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+    preferencesLoaded = true;
+    renderPdfOpenMode();
+    var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
+    showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用' + systemName + '打开');
   } catch (e) {
     currentPdfOpenMode = previousMode;
     renderPdfOpenMode();
@@ -2054,7 +2126,9 @@ async function setPdfOpenMode(mode) {
 async function loadPreferences() {
   if (preferencesLoadPromise) return preferencesLoadPromise;
   if (pdfOpenModeSaving) return null;
+  var requestedThemeRevision = themeRevision;
   renderThemeSelection();
+  renderPdfOpenMode();
   setPdfOpenModeControlsDisabled(true);
   var current = document.getElementById('pdf-reader-current');
   if (current) {
@@ -2066,7 +2140,15 @@ async function loadPreferences() {
       var resp = await fetch('/api/preferences');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
-      applyPreferencesData(data);
+      applyPreferencesData(data, requestedThemeRevision);
+      if (desktopShell === 'win32') {
+        loadUpdateStatus().then(function(state) {
+          if (autoUpdateEnabled && state && state.can_self_update && !updateAutoStarted) {
+            updateAutoStarted = true;
+            checkForUpdates(true);
+          }
+        });
+      }
     } catch (e) {
       var failedStatus = document.getElementById('pdf-reader-current');
       if (failedStatus) {
@@ -2080,6 +2162,152 @@ async function loadPreferences() {
     }
   })();
   return preferencesLoadPromise;
+}
+
+function renderUpdateState(state) {
+  if (!state) return;
+  updateState = state;
+  var current = document.getElementById('update-current-version');
+  var message = document.getElementById('update-message');
+  var badge = document.getElementById('update-status-badge');
+  var check = document.getElementById('update-check-btn');
+  var action = document.getElementById('update-action-btn');
+  var release = document.getElementById('update-release-link');
+  var autoInput = document.getElementById('auto-update-enabled');
+  var autoDescription = document.getElementById('update-auto-description');
+  if (current && state.current_version) current.textContent = 'v' + state.current_version;
+  if (message) message.textContent = state.message || '更新状态未知。';
+  if (badge) {
+    var labels = {
+      idle: '未检查', checking: '检查中', up_to_date: '已是最新', available: '有新版本',
+      downloading: '下载中', ready: '可安装', installing: '安装中', error: '检查失败', unsupported: '不支持'
+    };
+    badge.textContent = labels[state.status] || '更新状态';
+    badge.classList.toggle('ready', ['up_to_date','ready'].indexOf(state.status) >= 0);
+    badge.classList.toggle('warning', state.status === 'available');
+    badge.classList.toggle('error', state.status === 'error');
+  }
+  var busy = ['checking','downloading','installing'].indexOf(state.status) >= 0;
+  if (check) check.disabled = busy;
+  if (action) {
+    var actionable = !!state.can_self_update && (state.status === 'available' || state.status === 'ready');
+    action.style.display = actionable ? '' : 'none';
+    action.disabled = busy;
+    action.textContent = state.status === 'ready' ? '退出并安装' : '下载更新';
+  }
+  if (release) {
+    release.style.display = state.release_url ? '' : 'none';
+    if (state.release_url) release.href = state.release_url;
+  }
+  if (autoInput) {
+    autoInput.disabled = !state.can_self_update;
+    var autoOption = autoInput.closest('.update-auto-option');
+    if (autoOption) autoOption.classList.toggle('is-disabled', !state.can_self_update);
+  }
+  if (autoDescription) {
+    autoDescription.textContent = state.can_self_update
+      ? '仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认。'
+      : '自动更新只在 Windows 安装版中启用；绿色版和源码模式不会覆盖自身。';
+  }
+}
+
+async function loadUpdateStatus() {
+  if (desktopShell !== 'win32') return null;
+  try {
+    var resp = await fetch('/api/update/status');
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    renderUpdateState(data);
+    return data;
+  } catch (e) {
+    renderUpdateState({status:'error', can_self_update:false, message:'读取更新状态失败：' + e.message});
+    return null;
+  }
+}
+
+async function checkForUpdates(automatic) {
+  if (desktopShell !== 'win32') return;
+  renderUpdateState(Object.assign({}, updateState, {status:'checking', message:'正在检查 GitHub Releases…'}));
+  try {
+    var resp = await fetch('/api/update/check', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({auto_download: automatic === true})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '检查失败');
+    renderUpdateState(data);
+    if (!automatic) showToast(data.message || '更新检查完成');
+  } catch (e) {
+    renderUpdateState(Object.assign({}, updateState, {status:'error', message:'检查更新失败：' + e.message}));
+    if (!automatic) showToast('检查更新失败：' + e.message);
+  }
+}
+
+async function runUpdateAction() {
+  if (updateState.status === 'available') {
+    renderUpdateState(Object.assign({}, updateState, {status:'downloading', message:'正在下载并校验更新…'}));
+    try {
+      var downloadResp = await fetch('/api/update/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+      var downloadData = await downloadResp.json();
+      if (!downloadResp.ok || downloadData.error) throw new Error(downloadData.error || '下载失败');
+      renderUpdateState(downloadData);
+      showToast(downloadData.message || '更新已下载');
+    } catch (e) {
+      renderUpdateState(Object.assign({}, updateState, {status:'error', message:'下载更新失败：' + e.message}));
+      showToast('下载更新失败：' + e.message);
+    }
+    return;
+  }
+  if (updateState.status !== 'ready') return;
+  if (!confirm('安装更新会关闭 MEFinder，完成后自动重新打开。现在安装吗？')) return;
+  var installToken = updateState.install_token;
+  if (!installToken) {
+    showToast('安装确认已失效，请重新下载更新');
+    return;
+  }
+  renderUpdateState(Object.assign({}, updateState, {
+    status:'installing', install_token:null, message:'正在重新校验安装包并启动安装程序…'
+  }));
+  try {
+    var installResp = await fetch('/api/update/install', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({confirm_token:installToken})
+    });
+    var installData = await installResp.json();
+    if (!installResp.ok || installData.error) throw new Error(installData.error || '安装失败');
+    renderUpdateState(installData);
+  } catch (e) {
+    renderUpdateState(Object.assign({}, updateState, {status:'error', message:'启动安装程序失败：' + e.message}));
+    showToast('启动安装程序失败：' + e.message);
+  }
+}
+
+async function setAutoUpdate(enabled) {
+  var previous = autoUpdateEnabled;
+  autoUpdateEnabled = enabled === true;
+  try {
+    var resp = await fetch('/api/preferences', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({auto_update:autoUpdateEnabled})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    autoUpdateEnabled = data.auto_update === true;
+    document.getElementById('auto-update-enabled').checked = autoUpdateEnabled;
+    showToast(autoUpdateEnabled ? '已开启自动检查并下载更新' : '已关闭自动更新');
+    if (autoUpdateEnabled) {
+      updateAutoStarted = true;
+      checkForUpdates(true);
+    } else {
+      updateAutoStarted = false;
+    }
+  } catch (e) {
+    autoUpdateEnabled = previous;
+    document.getElementById('auto-update-enabled').checked = previous;
+    showToast('自动更新设置保存失败：' + e.message);
+  }
 }
 
 let scanDirectories = [];
@@ -2148,9 +2376,9 @@ function persistDisplayPreference(key, value) {
 
 async function setTheme(theme) {
   if (!THEME_IDS.has(theme)) return;
-  var previousTheme = currentTheme;
+  var revision = ++themeRevision;
   applyTheme(theme);
-  try {
+  var request = themeSaveQueue.catch(function() {}).then(async function() {
     var resp = await fetch('/api/preferences', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -2158,12 +2386,20 @@ async function setTheme(theme) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    return data;
+  });
+  themeSaveQueue = request.catch(function() {});
+  try {
+    var data = await request;
+    persistedTheme = THEME_IDS.has(data.theme) ? data.theme : theme;
+    if (revision !== themeRevision) return;
     preferencesLoaded = true;
-    applyTheme(data.theme);
+    applyTheme(persistedTheme);
     var selected = THEME_OPTIONS.find(function(option) { return option.id === theme; });
     showToast('已切换到' + (selected ? selected.name : '所选主题'));
   } catch (e) {
-    applyTheme(previousTheme);
+    if (revision !== themeRevision) return;
+    applyTheme(persistedTheme);
     showToast('主题保存失败：' + e.message);
   }
 }
@@ -2870,7 +3106,7 @@ function resetVisionProviderForm() {
 }
 
 function startAddVisionProvider() {
-  setSettingsCollapse('vision-settings-card', 'vision-settings-body', true);
+  setSettingsSection('vision-api-settings', true);
   resetVisionProviderForm();
   var card = document.getElementById('vision-editor-card');
   if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
@@ -3554,6 +3790,7 @@ document.addEventListener('click', function(event) {
     if (!combo || !combo.querySelector('#vision-api-base')) closeVisionBasePop();
   });
 })();
+configureDesktopPlatformOptions();
 loadMeta();
 loadPreferences();
 syncLibraryViewButtons();

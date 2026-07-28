@@ -381,8 +381,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 input, textarea, select { font: inherit; }
 a { color: var(--accent); text-decoration: none; }
 
-/* ── macOS Native Titlebar Integration ────────────────────── */
-.macos-titlebar { display: none; }
+/* ── Desktop Titlebar Integration ──────────────────────────── */
+.macos-titlebar,
+.windows-titlebar { display: none; }
 
 html[data-desktop-shell="macos"] {
   --macos-titlebar-height: 28px;
@@ -423,6 +424,104 @@ html[data-desktop-shell="macos"] .app-shell {
 }
 html[data-desktop-shell="macos"] .sidebar,
 html[data-desktop-shell="macos"] .main-area {
+  height: 100%;
+}
+
+html[data-desktop-shell="win32"] {
+  --windows-titlebar-height: 40px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  height: var(--windows-titlebar-height);
+  color: var(--text-primary);
+  background: linear-gradient(
+    to right,
+    var(--sidebar-bg) 0,
+    var(--sidebar-bg) var(--sidebar-width),
+    var(--app-bg) var(--sidebar-width),
+    var(--app-bg) 100%
+  );
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-drag {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  padding: 0 14px;
+  -webkit-app-region: drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  color: var(--accent);
+  pointer-events: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-icon svg {
+  width: 17px;
+  height: 17px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button:hover {
+  background: var(--surface-hover);
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls .windows-close-button:hover {
+  color: #FFFFFF;
+  background: #C42B1C;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.windows-restore-icon { display: none; }
+html.windows-maximized .windows-maximize-icon { display: none; }
+html.windows-maximized .windows-restore-icon { display: block; }
+html[data-desktop-shell="win32"] .app-shell {
+  height: calc(100vh - var(--windows-titlebar-height));
+  margin-top: var(--windows-titlebar-height);
+}
+html[data-desktop-shell="win32"] .sidebar,
+html[data-desktop-shell="win32"] .main-area {
   height: 100%;
 }
 
@@ -1035,6 +1134,9 @@ html[data-desktop-shell="macos"] .main-area {
   flex-wrap: wrap;
 }
 .action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 36px;
   padding: 0 16px;
   border-radius: 8px;
@@ -1043,6 +1145,8 @@ html[data-desktop-shell="macos"] .main-area {
   border: 1px solid var(--divider);
   background: var(--surface);
   color: var(--text-primary);
+  line-height: 1;
+  white-space: nowrap;
   transition: all var(--transition-fast);
 }
 .action-btn:hover { background: var(--surface-hover); }
@@ -1099,6 +1203,7 @@ html[data-desktop-shell="macos"] .main-area {
   flex: 0 0 auto;
   font-size: 14px;
   font-weight: 650;
+  line-height: 1.5;
   color: var(--text-primary);
 }
 .settings-section-note {
@@ -1107,9 +1212,18 @@ html[data-desktop-shell="macos"] .main-area {
   overflow: hidden;
   color: var(--text-tertiary);
   font-size: 12px;
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.settings-section-heading-copy {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+.settings-section-heading-copy .settings-section-note { flex: 0 1 auto; }
 .settings-collapse-head {
   width: 100%;
   padding: 0;
@@ -1118,8 +1232,19 @@ html[data-desktop-shell="macos"] .main-area {
   text-align: left;
   cursor: pointer;
 }
+.settings-collapse-head-inline {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  width: auto;
+  min-width: 0;
+  min-height: 34px;
+}
 .settings-collapse-head .settings-section-title { flex: 1; }
 .settings-collapse-head-detailed .settings-section-title { flex: 0 0 auto; }
+.settings-collapse-head-inline .settings-section-title { flex: 0 0 auto; }
+.settings-collapse-head .settings-section-heading-copy .settings-section-title { flex: 0 0 auto; }
 .settings-collapse-head:hover .settings-section-title { color: var(--accent); }
 .settings-collapse-row {
   display: flex;
@@ -1160,10 +1285,9 @@ html[data-desktop-shell="macos"] .main-area {
   transition: transform var(--transition-fast);
 }
 .settings-collapse.expanded .settings-collapse-chevron { transform: rotate(180deg); }
-.settings-collapse-body { container-type: inline-size; margin-top: 18px; }
-.settings-collapse-body > .settings-grid:first-child,
-.settings-collapse-body > .vision-provider-layout:first-child,
-.settings-collapse-body > .pdf-open-options:first-child { margin-top: 0; }
+.settings-collapse-body { container-type: inline-size; margin-top: 0; }
+.settings-collapse-body[hidden] { display: none; }
+#appearance-body { margin-top: 18px; }
 .settings-current-theme {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1183,8 +1307,9 @@ html[data-desktop-shell="macos"] .main-area {
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--border-default);
 }
-.macos-pdf-settings { display: none; }
-html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
+.desktop-pdf-settings { display: none; }
+html[data-desktop-shell="macos"] .desktop-pdf-settings,
+html[data-desktop-shell="win32"] .desktop-pdf-settings { display: block; }
 .pdf-open-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1239,9 +1364,63 @@ html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
 }
 .pdf-open-option.selected .pdf-open-option-check { border: 4px solid var(--accent); }
 @media (max-width: 760px) { .pdf-open-options { grid-template-columns: 1fr; } }
+.windows-update-settings { display: none; }
+html[data-desktop-shell="win32"] .windows-update-settings { display: block; }
+.software-update-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-primary);
+}
+.software-update-summary { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.software-update-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--border-subtle);
+}
+.software-update-icon svg { width: 22px; height: 22px; }
+.software-update-copy { min-width: 0; display: grid; gap: 5px; }
+.software-update-copy strong { display: block; color: var(--text-primary); font-size: 13px; font-weight: 650; line-height: 1.4; }
+.software-update-copy small { display: block; color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.software-update-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.update-release-link { text-decoration: none; }
+.update-auto-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.update-auto-option > input { margin: 3px 0 0; accent-color: var(--accent); }
+.update-auto-option.is-disabled { cursor: default; opacity: 0.58; }
+.update-auto-copy { display: grid; gap: 3px; }
+.update-auto-copy strong { font-size: 12px; font-weight: 600; }
+.update-auto-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+@media (max-width: 760px) {
+  .software-update-card { align-items: flex-start; flex-direction: column; }
+  .software-update-actions { width: 100%; }
+}
 .settings-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
   flex-shrink: 0;
+  margin-left: auto;
   font-size: 12px;
+  line-height: 1;
   color: var(--text-secondary);
   background: var(--surface-secondary);
   border-radius: 999px;
@@ -1249,6 +1428,7 @@ html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
 }
 .settings-status.ready { color: var(--success); background: var(--success-soft); }
 .settings-status.warning { color: var(--warning); background: var(--warning-soft); }
+.settings-status.error { color: var(--danger); background: var(--danger-soft); }
 .settings-form { display: grid; gap: 16px; }
 .settings-field { display: grid; gap: 7px; }
 .settings-field label { font-size: 13px; font-weight: 600; color: var(--text-primary); }

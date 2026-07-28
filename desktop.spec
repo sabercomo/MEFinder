@@ -3,6 +3,13 @@
 # 用 build_desktop.cmd 构建；直接构建：py -3 -m PyInstaller desktop.spec --clean --noconfirm
 # UPX 不要开：压缩 WebView2/.NET DLL 会导致加载失败和杀软误报。
 
+from pathlib import Path
+
+from tools.windows_version_info import write_windows_version_info
+
+
+version_info_path = write_windows_version_info(Path('build/windows_version_info.txt'))
+
 a = Analysis(
     ['desktop.py'],
     pathex=[],
@@ -25,6 +32,8 @@ a = Analysis(
         'src.me_finder.pdf_import_service',
         'src.me_finder.vision_api',
         'src.me_finder.preferences',
+        'src.me_finder.windows_desktop',
+        'src.me_finder.update_service',
         'webview',
         'clr_loader',
         'pythonnet',
@@ -57,6 +66,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     icon='assets/app_icon.ico',
+    version=str(version_info_path),
 )
 
 # COLLECT 目录名保持 ASCII，避免构建脚本处理中文路径；exe 名仍是中文。

@@ -23,11 +23,76 @@ import threading
 import traceback
 from pathlib import Path
 
+from src.me_finder import __version__
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
 
 APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = "portable.flag"
+INSTALLED_MARKER = "installed.flag"
 DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
+
+WINDOWS_BOOTSTRAP_TITLEBAR = """
+<div class="windows-titlebar" role="banner" aria-label="窗口标题栏">
+  <div class="windows-titlebar-drag pywebview-drag-region" ondblclick="toggleWindowsMaximize()">
+    <span class="windows-titlebar-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V9h5"/><circle cx="9" cy="13.5" r="2.4"/><path d="m10.8 15.3 2.1 2.1"/></svg>
+    </span>
+    <span class="windows-titlebar-title">文献原句定位器</span>
+  </div>
+  <div class="windows-titlebar-controls">
+    <button type="button" aria-label="最小化窗口" title="最小化" onclick="minimizeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5h8"/></svg></button>
+    <button class="windows-maximize-button" type="button" aria-label="最大化窗口" title="最大化" onclick="toggleWindowsMaximize()"><svg class="windows-maximize-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg><svg class="windows-restore-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3V1.75h6.25V8H9M1.75 4h6.25v6.25H1.75Z"/></svg></button>
+    <button class="windows-close-button" type="button" aria-label="关闭窗口" title="关闭" onclick="closeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5"/></svg></button>
+  </div>
+</div>
+"""
+
+WINDOWS_BOOTSTRAP_CSS = """
+  html[data-desktop-shell="win32"] { --windows-titlebar-height: 40px; }
+  .windows-titlebar {
+    position: fixed; inset: 0 0 auto 0; z-index: 1000;
+    display: flex; align-items: stretch; height: var(--windows-titlebar-height);
+    color: var(--text-primary);
+    background: linear-gradient(to right, var(--sidebar-bg) 0, var(--sidebar-bg) 220px, var(--app-bg) 220px, var(--app-bg) 100%);
+    border-bottom: 1px solid var(--border); user-select: none;
+  }
+  .windows-titlebar-drag {
+    display: flex; flex: 1; align-items: center; min-width: 0; padding: 0 14px;
+  }
+  .windows-titlebar-icon { display: grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; color: var(--accent); pointer-events: none; }
+  .windows-titlebar-icon svg { width: 17px; height: 17px; }
+  .windows-titlebar-title { overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+  .windows-titlebar-controls { display: flex; flex: 0 0 auto; height: 100%; }
+  .windows-titlebar-controls button { display: grid; place-items: center; width: 46px; height: 100%; padding: 0; border: 0; color: var(--text-primary); background: transparent; }
+  .windows-titlebar-controls button:hover { background: color-mix(in srgb, var(--text-primary) 9%, transparent); }
+  .windows-titlebar-controls .windows-close-button:hover { color: #fff; background: #c42b1c; }
+  .windows-titlebar-controls svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+  .windows-restore-icon { display: none; }
+  html.windows-maximized .windows-maximize-icon { display: none; }
+  html.windows-maximized .windows-restore-icon { display: block; }
+  body.windows-shell { box-sizing: border-box; padding-top: var(--windows-titlebar-height); }
+"""
+
+WINDOWS_BOOTSTRAP_SCRIPT = """
+<script>
+  window.setWindowsMaximized = function(maximized) {
+    document.documentElement.classList.toggle('windows-maximized', !!maximized);
+    var button = document.querySelector('.windows-maximize-button');
+    if (button) {
+      button.setAttribute('aria-label', maximized ? '还原窗口' : '最大化窗口');
+      button.title = maximized ? '还原' : '最大化';
+    }
+  };
+  function callWindowsWindow(method) {
+    if (!window.pywebview || !window.pywebview.api || typeof window.pywebview.api[method] !== 'function') return Promise.resolve(false);
+    return window.pywebview.api[method]();
+  }
+  function minimizeWindowsWindow() { callWindowsWindow('minimize'); }
+  function toggleWindowsMaximize() { callWindowsWindow('toggle_maximize').then(window.setWindowsMaximized); }
+  function closeWindowsWindow() { callWindowsWindow('close'); }
+  window.addEventListener('pywebviewready', function() { callWindowsWindow('is_maximized').then(window.setWindowsMaximized); });
+</script>
+"""
 
 LOADING_HTML = """<!doctype html>
 <html lang="zh-CN">
@@ -35,7 +100,7 @@ LOADING_HTML = """<!doctype html>
 <meta charset="utf-8">
 <style>
   :root {{
-    --app-bg: {app_bg}; --text-primary: {text_primary};
+    --app-bg: {app_bg}; --sidebar-bg: {sidebar_bg}; --text-primary: {text_primary};
     --text-secondary: {text_secondary}; --border: {border}; --accent: {accent};
   }}
   html, body { height: 100%; margin: 0; }
@@ -72,7 +137,7 @@ ERROR_HTML = """<!doctype html>
 <style>
   html, body {{ height: 100%; margin: 0; }}
   :root {{
-    --app-bg: {app_bg}; --surface: {surface}; --text-primary: {text_primary};
+    --app-bg: {app_bg}; --sidebar-bg: {sidebar_bg}; --surface: {surface}; --text-primary: {text_primary};
     --text-secondary: {text_secondary}; --border: {border}; --danger: {danger};
   }}
   body {{
@@ -133,6 +198,17 @@ def is_portable_bundle(bundle_root: Path) -> bool:
     return bool(getattr(sys, "frozen", False) and (Path(bundle_root) / PORTABLE_MARKER).is_file())
 
 
+def installation_kind(bundle_root: Path) -> str:
+    if not getattr(sys, "frozen", False):
+        return "source"
+    bundle_root = Path(bundle_root)
+    if is_portable_bundle(bundle_root):
+        return "portable"
+    if (bundle_root / INSTALLED_MARKER).is_file():
+        return "installed"
+    return "standalone"
+
+
 def webview_storage_path(root: Path, portable: bool) -> str | None:
     return str(Path(root) / "webview-data") if portable else None
 
@@ -167,18 +243,19 @@ def prepare_runtime_root(bundle_root: Path) -> Path:
 
 def theme_palette(theme: str) -> dict[str, str]:
     palettes = {
-        "frost-blue": ("#F5F8FC", "#FFFFFF", "#172033", "#667085", "#DDE5EF", "#1677FF"),
-        "sage-ivory": ("#F7F7F1", "#FFFDF8", "#25291F", "#6E7464", "#DEE1D4", "#637A50"),
-        "warm-sand": ("#FBF7F1", "#FFFCF8", "#34251E", "#7C695E", "#E7D9CC", "#B85C2B"),
-        "rose-mist": ("#FDF6F8", "#FFFFFF", "#2C2528", "#71666A", "#EBDCE2", "#C9446A"),
-        "lavender-purple": ("#F9F7FD", "#FFFFFF", "#282532", "#6E697A", "#DED8EB", "#7B5EC7"),
-        "midnight": ("#08111D", "#111C29", "#EEF4FB", "#A8B4C4", "#2A394A", "#2485FF"),
+        "frost-blue": ("#F5F8FC", "#F1F5FA", "#FFFFFF", "#172033", "#667085", "#DDE5EF", "#1677FF"),
+        "sage-ivory": ("#F7F7F1", "#F0F2E8", "#FFFDF8", "#25291F", "#6E7464", "#DEE1D4", "#637A50"),
+        "warm-sand": ("#FBF7F1", "#F6EFE5", "#FFFCF8", "#34251E", "#7C695E", "#E7D9CC", "#B85C2B"),
+        "rose-mist": ("#FDF6F8", "#FAF0F3", "#FFFFFF", "#2C2528", "#71666A", "#EBDCE2", "#C9446A"),
+        "lavender-purple": ("#F9F7FD", "#F3F0F9", "#FFFFFF", "#282532", "#6E697A", "#DED8EB", "#7B5EC7"),
+        "midnight": ("#08111D", "#091522", "#111C29", "#EEF4FB", "#A8B4C4", "#2A394A", "#2485FF"),
     }
-    app_bg, surface, text_primary, text_secondary, border, accent = palettes.get(
+    app_bg, sidebar_bg, surface, text_primary, text_secondary, border, accent = palettes.get(
         theme, palettes[DEFAULT_THEME]
     )
     return {
         "app_bg": app_bg,
+        "sidebar_bg": sidebar_bg,
         "surface": surface,
         "text_primary": text_primary,
         "text_secondary": text_secondary,
@@ -188,17 +265,42 @@ def theme_palette(theme: str) -> dict[str, str]:
     }
 
 
-def loading_html(theme: str = DEFAULT_THEME) -> str:
+def _decorate_bootstrap_html(rendered: str, desktop_shell: str | None) -> str:
+    if str(desktop_shell or "").lower() != "win32":
+        return rendered
+    rendered = rendered.replace(
+        '<html lang="zh-CN">',
+        '<html lang="zh-CN" data-desktop-shell="win32">',
+        1,
+    )
+    rendered = rendered.replace("</style>", WINDOWS_BOOTSTRAP_CSS + "\n</style>", 1)
+    rendered = rendered.replace(
+        "<body>",
+        '<body class="windows-shell">\n' + WINDOWS_BOOTSTRAP_TITLEBAR,
+        1,
+    )
+    return rendered.replace("</body>", WINDOWS_BOOTSTRAP_SCRIPT + "\n</body>", 1)
+
+
+def loading_html(
+    theme: str = DEFAULT_THEME, desktop_shell: str | None = None
+) -> str:
     rendered = LOADING_HTML
     for name, value in theme_palette(theme).items():
         rendered = rendered.replace("{" + name + "}", value)
-    return rendered
+    return _decorate_bootstrap_html(rendered, desktop_shell)
 
 
-def error_html(title: str, detail: str, theme: str = DEFAULT_THEME) -> str:
-    return ERROR_HTML.format(
+def error_html(
+    title: str,
+    detail: str,
+    theme: str = DEFAULT_THEME,
+    desktop_shell: str | None = None,
+) -> str:
+    rendered = ERROR_HTML.format(
         title=html.escape(title), detail=html.escape(detail), **theme_palette(theme)
     )
+    return _decorate_bootstrap_html(rendered, desktop_shell)
 
 
 def configure_macos_titlebar(window) -> None:
@@ -233,6 +335,55 @@ def configure_macos_titlebar(window) -> None:
     except Exception:
         # The themed titlebar is progressive enhancement; never block app startup.
         logging.exception("failed to configure macOS titlebar")
+
+
+def configure_windows_main_window(window) -> None:
+    """Restore native resizing around the HTML-owned Windows titlebar."""
+
+    if sys.platform != "win32":
+        return
+    try:
+        from src.me_finder.windows_desktop import configure_windows_chromeless
+
+        configure_windows_chromeless(window)
+    except Exception:
+        # A frame enhancement must never prevent the actual app from opening.
+        logging.exception("failed to configure frameless Windows resize border")
+
+
+def create_main_window(webview_module, theme: str):
+    """Create the platform shell and return its optional Windows controller."""
+
+    palette = theme_palette(theme)
+    options = {
+        "html": loading_html(theme, sys.platform),
+        "width": 1280,
+        "height": 820,
+        "min_size": (900, 600),
+        "resizable": True,
+        "background_color": palette["app_bg"],
+    }
+    controller = None
+    if sys.platform == "win32":
+        from src.me_finder.windows_desktop import WindowsWindowController
+
+        controller = WindowsWindowController()
+        options.update(
+            {
+                "js_api": controller,
+                "frameless": True,
+                "easy_drag": False,
+                "shadow": True,
+            }
+        )
+
+    window = webview_module.create_window(APP_TITLE, **options)
+    if controller is not None:
+        controller._bind(window)
+        window.events.before_show += configure_windows_main_window
+    elif sys.platform == "darwin":
+        window.events.before_show += configure_macos_titlebar
+    return window, controller
 
 
 def setup_logging(root: Path) -> None:
@@ -278,7 +429,6 @@ def main() -> None:
         os.environ.setdefault("ME_FINDER_PREFERENCES", str(preferences_path))
     os.environ[DESKTOP_SHELL_ENV] = "macos" if sys.platform == "darwin" else sys.platform
     theme = read_preferences(preferences_path)["theme"]
-    palette = theme_palette(theme)
     setup_logging(root)
     logging.info("app root: %s", root)
     if root != bundle_root:
@@ -289,19 +439,41 @@ def main() -> None:
         from src.me_finder.macos_pdf_viewer import MacOSPDFViewer
 
         pdf_viewer = MacOSPDFViewer()
+    elif sys.platform == "win32":
+        from src.me_finder.windows_desktop import WindowsPDFViewer
 
-    window = webview.create_window(
-        APP_TITLE,
-        html=loading_html(theme),
-        width=1280,
-        height=820,
-        min_size=(900, 600),
-        background_color=palette["app_bg"],
-    )
+        pdf_viewer = WindowsPDFViewer(webview, theme)
+
+    window, window_controller = create_main_window(webview, theme)
     if sys.platform == "darwin":
-        window.events.before_show += configure_macos_titlebar
         window.events.closing += pdf_viewer.close
-    state = {"server": None, "pdf_viewer": pdf_viewer}
+    native_theme_setter = None
+    if sys.platform == "win32":
+        def apply_native_theme(selected_theme: str) -> None:
+            pdf_viewer.set_theme(selected_theme)
+
+        native_theme_setter = apply_native_theme
+        window.events.closing += pdf_viewer.close
+
+    update_service = None
+    if sys.platform == "win32":
+        from src.me_finder.update_service import UpdateService
+
+        def close_for_update() -> None:
+            threading.Timer(0.8, window.destroy).start()
+
+        update_service = UpdateService(
+            __version__,
+            local_app_data_root() / "updates",
+            install_kind=installation_kind(bundle_root),
+            on_install_started=close_for_update,
+        )
+
+    state = {
+        "server": None,
+        "pdf_viewer": pdf_viewer,
+        "update_service": update_service,
+    }
 
     def start_backend(win) -> None:
         try:
@@ -314,6 +486,7 @@ def main() -> None:
                     "索引数据库可在项目目录用命令生成：\n"
                     "%s -m src.me_finder build-index" % (index_path, python_launcher()),
                     theme,
+                    sys.platform,
                 ))
                 return
             logging.info("loading index from %s", index_path)
@@ -324,6 +497,8 @@ def main() -> None:
             handler = make_handler(
                 index_path,
                 native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
+                native_theme_setter=native_theme_setter,
+                update_service=update_service,
             )
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             state["server"] = server
@@ -334,7 +509,14 @@ def main() -> None:
             win.load_url(url)
         except Exception:
             logging.exception("backend failed to start")
-            win.load_html(error_html("后台启动失败", traceback.format_exc(), theme))
+            win.load_html(
+                error_html(
+                    "后台启动失败",
+                    traceback.format_exc(),
+                    theme,
+                    sys.platform,
+                )
+            )
 
     webview.start(start_backend, window, storage_path=webview_storage_path(root, portable))
     server = state["server"]

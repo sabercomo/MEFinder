@@ -11,6 +11,19 @@
 <div class="macos-titlebar" aria-hidden="true">
   <span class="macos-titlebar-title">文献原句定位器</span>
 </div>
+<div class="windows-titlebar" role="banner" aria-label="窗口标题栏">
+  <div class="windows-titlebar-drag pywebview-drag-region" ondblclick="toggleWindowsMaximize()">
+    <span class="windows-titlebar-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V9h5"/><circle cx="9" cy="13.5" r="2.4"/><path d="m10.8 15.3 2.1 2.1"/></svg>
+    </span>
+    <span class="windows-titlebar-title">文献原句定位器</span>
+  </div>
+  <div class="windows-titlebar-controls">
+    <button type="button" aria-label="最小化窗口" title="最小化" onclick="minimizeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5h8"/></svg></button>
+    <button class="windows-maximize-button" type="button" aria-label="最大化窗口" title="最大化" onclick="toggleWindowsMaximize()"><svg class="windows-maximize-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg><svg class="windows-restore-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3V1.75h6.25V8H9M1.75 4h6.25v6.25H1.75Z"/></svg></button>
+    <button class="windows-close-button" type="button" aria-label="关闭窗口" title="关闭" onclick="closeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5"/></svg></button>
+  </div>
+</div>
 <div class="app-shell">
 
   <!-- ═══ Sidebar ═══ -->
@@ -42,7 +55,7 @@
         <span>设置</span>
       </button>
     </nav>
-    <div class="sidebar-footer">ME_Finder v0.1.5</div>
+    <div class="sidebar-footer">ME_Finder v__APP_VERSION__</div>
   </aside>
 
   <!-- ═══ Main ═══ -->
@@ -358,47 +371,80 @@
       <div class="settings-page-content">
         <!-- Keep every top-level settings section collapsible so new options do not make this page permanently longer. -->
         <section class="settings-section settings-collapse" id="appearance-card">
-          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="appearance-body" onclick="toggleAppearance()">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="false" aria-controls="appearance-body" onclick="toggleSettingsSection('appearance-card')">
             <span class="settings-section-title">外观</span>
             <span class="settings-current-theme" id="appearance-current"></span>
             <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
           </button>
-          <div class="settings-collapse-body" id="appearance-body" style="display:none">
+          <div class="settings-collapse-body" id="appearance-body" hidden>
             <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
           </div>
         </section>
-        <section class="settings-section settings-collapse macos-pdf-settings" id="pdf-reader-settings">
-          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="pdf-reader-body" onclick="toggleSettingsCollapse('pdf-reader-settings','pdf-reader-body')">
-            <span class="settings-section-title">PDF 阅读</span>
-            <span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span>
-            <span id="pdf-reader-current" class="settings-status">读取中…</span>
+        <section class="settings-section settings-collapse expanded desktop-pdf-settings" id="pdf-reader-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="true" aria-controls="pdf-reader-body" onclick="toggleSettingsSection('pdf-reader-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">PDF 阅读</span>
+              <span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span>
+            </span>
             <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
           </button>
-          <div class="settings-collapse-body" id="pdf-reader-body" style="display:none">
+          <div class="settings-collapse-body" id="pdf-reader-body">
             <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
               <label class="pdf-open-option selected" data-pdf-open-choice="native">
                 <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
                 <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small>使用 macOS PDFKit，直接跳到搜索命中的物理页码。</small></span>
+                <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small id="pdf-native-description">直接跳到搜索命中的 PDF 物理页码。</small></span>
                 <span class="pdf-open-option-check" aria-hidden="true"></span>
               </label>
               <label class="pdf-open-option" data-pdf-open-choice="system">
                 <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
                 <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>macOS 预览</strong><small>在预览.app 中打开；命中页码需要手动翻到。</small></span>
+                <span class="pdf-open-option-copy"><strong id="pdf-system-title">系统默认 PDF 阅读器</strong><small id="pdf-system-description">使用系统默认应用打开；命中页码可能需要手动翻到。</small></span>
                 <span class="pdf-open-option-check" aria-hidden="true"></span>
               </label>
             </div>
           </div>
         </section>
-        <section class="settings-section settings-collapse" id="mineru-settings-card">
-          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="mineru-settings-body" onclick="toggleSettingsCollapse('mineru-settings-card','mineru-settings-body')">
-            <span class="settings-section-title">MinerU API</span>
-            <span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span>
+        <section class="settings-section settings-collapse expanded windows-update-settings" id="software-update-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="true" aria-controls="software-update-body" onclick="toggleSettingsSection('software-update-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">软件更新</span>
+              <span class="settings-section-note">适用于 Windows 安装版</span>
+            </span>
+            <span class="settings-status" id="update-status-badge">未检查</span>
+            <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+          </button>
+          <div class="settings-collapse-body" id="software-update-body">
+            <div class="software-update-card">
+              <div class="software-update-summary">
+                <span class="software-update-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg></span>
+                <div class="software-update-copy">
+                  <strong>当前版本 <span id="update-current-version">v__APP_VERSION__</span></strong>
+                  <small id="update-message">可连接 GitHub Releases 检查新的 Windows 安装版。</small>
+                </div>
+              </div>
+              <div class="software-update-actions">
+                <button class="action-btn" type="button" id="update-check-btn" onclick="checkForUpdates(false)">检查更新</button>
+                <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" onclick="runUpdateAction()">下载更新</button>
+                <a class="action-btn update-release-link" id="update-release-link" href="#" target="_blank" rel="noreferrer" style="display:none">查看发布页</a>
+              </div>
+            </div>
+            <label class="update-auto-option" for="auto-update-enabled">
+              <input id="auto-update-enabled" type="checkbox" onchange="setAutoUpdate(this.checked)">
+              <span class="update-auto-copy"><strong>启动时自动检查并下载更新</strong><small id="update-auto-description">仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认。</small></span>
+            </label>
+          </div>
+        </section>
+        <section class="settings-section settings-collapse expanded" id="mineru-api-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="true" aria-controls="mineru-api-body" onclick="toggleSettingsSection('mineru-api-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">MinerU API</span>
+              <span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span>
+            </span>
             <span id="mineru-config-status" class="settings-status">读取中…</span>
             <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
           </button>
-          <div class="settings-collapse-body" id="mineru-settings-body" style="display:none">
+          <div class="settings-collapse-body" id="mineru-api-body">
             <div class="settings-grid">
             <label class="settings-label" for="mineru-token">Bearer Token</label>
             <div class="settings-control">
@@ -442,17 +488,19 @@
             </div>
           </div>
         </section>
-        <section class="settings-section settings-collapse" id="vision-settings-card">
-          <div class="settings-collapse-row">
-            <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="vision-settings-body" onclick="toggleSettingsCollapse('vision-settings-card','vision-settings-body')">
-              <span class="settings-section-title">其他解析 API</span>
-              <span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span>
+        <section class="settings-section settings-collapse expanded" id="vision-api-settings">
+          <div class="settings-section-head">
+            <button class="settings-collapse-head settings-collapse-head-inline" type="button" aria-expanded="true" aria-controls="vision-api-body" onclick="toggleSettingsSection('vision-api-settings')">
+              <span class="settings-section-heading-copy">
+                <span class="settings-section-title">其他解析 API</span>
+                <span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span>
+              </span>
               <span id="vision-config-status" class="settings-status">读取中…</span>
               <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
             </button>
             <button class="action-btn vision-add-btn" type="button" onclick="startAddVisionProvider()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
           </div>
-          <div class="settings-collapse-body" id="vision-settings-body" style="display:none">
+          <div class="settings-collapse-body" id="vision-api-body">
             <div class="vision-provider-layout">
             <div id="vision-provider-list" class="vision-provider-list"></div>
             <div class="vision-editor-card" id="vision-editor-card">
@@ -525,20 +573,21 @@
             </div>
           </div>
         </section>
-        <section class="settings-section settings-collapse" id="backup-settings-card">
-          <button class="settings-section-head settings-collapse-head settings-collapse-head-detailed" type="button" aria-expanded="false" aria-controls="backup-settings-body" onclick="toggleSettingsCollapse('backup-settings-card','backup-settings-body')">
-            <span class="settings-section-title">数据备份</span>
-            <span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span>
+        <section class="settings-section settings-collapse expanded" id="backup-settings">
+          <button class="settings-section-head settings-collapse-head" type="button" aria-expanded="true" aria-controls="backup-settings-body" onclick="toggleSettingsSection('backup-settings')">
+            <span class="settings-section-heading-copy">
+              <span class="settings-section-title">数据备份</span>
+              <span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span>
+            </span>
             <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
           </button>
-          <div class="settings-collapse-body" id="backup-settings-body" style="display:none">
+          <div class="settings-collapse-body" id="backup-settings-body">
             <div class="settings-grid">
-              <span class="settings-label">导出</span>
-              <div class="settings-control">
-                <div class="settings-actions">
-                  <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-                  <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip。</span>
-                </div>
+            <span class="settings-label">导出</span>
+            <div class="settings-control">
+              <div class="settings-actions">
+                <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
+                <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip。</span>
               </div>
               <label class="settings-label" for="backup-import-path">导入</label>
               <div class="settings-control">
@@ -548,6 +597,7 @@
                 </div>
                 <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内。</small>
               </div>
+            </div>
             </div>
           </div>
         </section>

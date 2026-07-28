@@ -144,28 +144,52 @@ class PlatformOpenTests(unittest.TestCase):
         self.assertTrue(result["page_jump"])
         self.assertEqual(result["viewer_mode"], "adobe")
 
-    def test_windows_ignores_macos_system_preference_and_keeps_adobe_jump(self) -> None:
+    def test_windows_native_reader_uses_webview2_before_adobe_fallback(self) -> None:
         target = Path("C:/Documents/source.pdf")
-        adobe = Path("C:/Program Files/Adobe/Acrobat.exe")
+        opener = mock.Mock(return_value={"page": 12, "page_count": 240})
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch.object(web.sys, "platform", "win32"),
+            mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
+        ):
+            result = web.open_pdf_with_platform(
+                target,
+                "12",
+                preferences_path=Path(temp_dir) / "preferences.json",
+                native_pdf_opener=opener,
+            )
+
+        opener.assert_called_once_with(target, 12)
+        find_adobe.assert_not_called()
+        self.assertEqual(result["app"], "webview2")
+        self.assertEqual(result["viewer_mode"], "native")
+        self.assertTrue(result["page_jump"])
+        self.assertEqual(result["page"], 12)
+        self.assertEqual(result["page_count"], 240)
+
+    def test_windows_system_preference_uses_default_pdf_app_without_page_jump(self) -> None:
+        target = Path("C:/Documents/source.pdf")
         with tempfile.TemporaryDirectory() as temp_dir:
             preferences_path = Path(temp_dir) / "preferences.json"
             save_preferences({"pdf_open_mode": "system"}, preferences_path)
             with (
                 mock.patch.object(web.sys, "platform", "win32"),
-                mock.patch.object(web, "find_adobe_pdf_app", return_value=adobe),
-                mock.patch.object(web.subprocess, "Popen") as popen,
+                mock.patch.object(web, "open_path_with_default_app") as open_default,
+                mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
             ):
                 result = web.open_pdf_with_platform(
                     target,
                     12,
                     preferences_path=preferences_path,
+                    native_pdf_opener=mock.Mock(),
                 )
 
-        popen.assert_called_once_with(
-            [str(adobe), "/A", "page=12", str(target)],
-            close_fds=True,
-        )
-        self.assertTrue(result["page_jump"])
+        open_default.assert_called_once_with(target)
+        find_adobe.assert_not_called()
+        self.assertEqual(result["app"], "system_default")
+        self.assertEqual(result["viewer_mode"], "system")
+        self.assertFalse(result["page_jump"])
+        self.assertEqual(result["page"], 12)
 
 
 if __name__ == "__main__":
