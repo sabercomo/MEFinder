@@ -381,6 +381,51 @@ button { font: inherit; cursor: pointer; border: none; background: none; }
 input, textarea, select { font: inherit; }
 a { color: var(--accent); text-decoration: none; }
 
+/* ── macOS Native Titlebar Integration ────────────────────── */
+.macos-titlebar { display: none; }
+
+html[data-desktop-shell="macos"] {
+  --macos-titlebar-height: 28px;
+}
+html[data-desktop-shell="macos"] .macos-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--macos-titlebar-height);
+  padding: 0 82px;
+  color: var(--text-primary);
+  background: linear-gradient(
+    to right,
+    var(--sidebar-bg) 0,
+    var(--sidebar-bg) var(--sidebar-width),
+    var(--app-bg) var(--sidebar-width),
+    var(--app-bg) 100%
+  );
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+html[data-desktop-shell="macos"] .macos-titlebar-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html[data-desktop-shell="macos"] .app-shell {
+  height: calc(100vh - var(--macos-titlebar-height));
+  margin-top: var(--macos-titlebar-height);
+}
+html[data-desktop-shell="macos"] .sidebar,
+html[data-desktop-shell="macos"] .main-area {
+  height: 100%;
+}
+
 /* ── App Shell ─────────────────────────────────────────────── */
 .app-shell {
   display: flex;
@@ -1123,6 +1168,60 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--border-default);
 }
+.macos-pdf-settings { display: none; }
+html[data-desktop-shell="macos"] .macos-pdf-settings { display: block; }
+.pdf-open-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 860px;
+  margin-top: 14px;
+}
+.pdf-open-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 11px;
+  min-height: 76px;
+  box-sizing: border-box;
+  padding: 13px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.pdf-open-option:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.pdf-open-option:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.pdf-open-option.selected { border-color: var(--accent); background: var(--surface-selected); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pdf-open-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.pdf-open-option-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+}
+.pdf-open-option.selected .pdf-open-option-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.pdf-open-option-icon svg { width: 21px; height: 21px; }
+.pdf-open-option-copy { min-width: 0; display: grid; gap: 5px; }
+.pdf-open-option-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 650; }
+.pdf-open-option-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-style: normal; font-weight: 600; }
+.pdf-open-option-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.pdf-open-option-check {
+  width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-primary);
+}
+.pdf-open-option.selected .pdf-open-option-check { border: 4px solid var(--accent); }
+@media (max-width: 760px) { .pdf-open-options { grid-template-columns: 1fr; } }
 .settings-status {
   flex-shrink: 0;
   font-size: 12px;

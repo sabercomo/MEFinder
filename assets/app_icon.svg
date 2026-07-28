@@ -1,9 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <path d="M62 30h92l40 40v150c0 11-9 20-20 20H62c-11 0-20-9-20-20V50c0-11 9-20 20-20Z" fill="#F8FAFC"/>
-  <path d="M154 30v34c0 4 3 7 7 7h33" fill="#DCE5F0"/>
-  <path d="M154 30v34c0 4 3 7 7 7h33" fill="none" stroke="#B9C7D9" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M73 167h85M73 187h55" fill="none" stroke="#91A2B9" stroke-width="9" stroke-linecap="round"/>
-  <path d="M76 99c0-15 10-24 25-24v17c-7 0-10 4-10 10v8h-15V99Zm46 0c0-15 10-24 25-24v17c-7 0-10 4-10 10v8h-15V99Z" fill="#E76B52"/>
-  <circle cx="171" cy="173" r="30" fill="#17233B" stroke="#F2B84B" stroke-width="9"/>
-  <path d="m193 195 22 22" fill="none" stroke="#F2B84B" stroke-width="11" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="tile" x1="58" y1="28" x2="204" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3F8FF"/>
+      <stop offset="1" stop-color="#C9DCF3"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="84" y1="56" x2="154" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F5F8FC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Match the 206/256 px optical body used by standard macOS Dock icons. -->
+  <rect x="19" y="22" width="218" height="218" rx="51" fill="#17233B" opacity=".04"/>
+  <rect x="22" y="28" width="212" height="206" rx="48" fill="#52647A" opacity=".12"/>
+  <rect x="25" y="25" width="206" height="206" rx="46" fill="url(#tile)"/>
+  <rect x="26.5" y="26.5" width="203" height="203" rx="44.5" fill="none" stroke="#FFFFFF" stroke-width="3" opacity=".65"/>
+
+  <!-- The original quote-document-search mark, simplified for small Dock sizes. -->
+  <path d="M70 44h84l38 38v118c0 10-8 18-18 18H70c-10 0-18-8-18-18V62c0-10 8-18 18-18Z" fill="url(#paper)"/>
+  <path d="M154 44v28c0 6 4 10 10 10h28Z" fill="#DCE6F2"/>
+  <path d="M154 44v28c0 6 4 10 10 10h28" fill="none" stroke="#B8C8DC" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M76 154h72M76 174h48" fill="none" stroke="#91A2B9" stroke-width="8" stroke-linecap="round"/>
+  <path d="M76 101c0-14 9-22 23-22v15c-6 0-9 4-9 9v7H76v-9Zm39 0c0-14 9-22 23-22v15c-6 0-9 4-9 9v7h-14v-9Z" fill="#EC6A52"/>
+  <circle cx="169" cy="170" r="27" fill="#17233B" stroke="#F4B942" stroke-width="8"/>
+  <path d="m188 189 24 24" fill="none" stroke="#F4B942" stroke-width="10" stroke-linecap="round"/>
 </svg>

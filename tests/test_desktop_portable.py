@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import types
 import unittest
 import zipfile
 from pathlib import Path
@@ -13,6 +14,230 @@ from tools.create_portable_zip import create_portable_zip
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
+        build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn('MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"', build_source)
+        self.assertIn(
+            'ln -s /Applications "$MEFINDER_DMG_STAGE/Applications"',
+            build_source,
+        )
+        self.assertIn("hdiutil create", build_source)
+        self.assertIn("hdiutil verify", build_source)
+        self.assertIn(
+            'verify_app_signature "$MEFINDER_DMG_MOUNT/MEFinder.app"',
+            build_source,
+        )
+        self.assertIn(
+            '"$(readlink "$MEFINDER_DMG_MOUNT/Applications")" != "/Applications"',
+            build_source,
+        )
+        self.assertIn(
+            'shasum -a 256 "${MEFINDER_PACKAGE}.dmg" > "${MEFINDER_PACKAGE}.dmg.sha256.txt"',
+            build_source,
+        )
+        self.assertIn(
+            'shasum -a 256 -c "${MEFINDER_PACKAGE}.dmg.sha256.txt"',
+            build_source,
+        )
+
+    def test_macos_release_artifacts_do_not_use_file_provider_dist_copy(self) -> None:
+        build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+
+        zip_command = (
+            'ditto -c -k --keepParent \\\n'
+            '  --norsrc \\\n'
+            '  --noextattr \\\n'
+            '  --noqtn \\\n'
+            '  --noacl \\\n'
+            '  "$MEFINDER_BUILT_APP" \\\n'
+            '  "$MEFINDER_TEMP_ZIP"'
+        )
+        dmg_copy = (
+            'ditto --norsrc --noextattr --noqtn --noacl \\\n'
+            '  "$MEFINDER_BUILT_APP" \\\n'
+            '  "$MEFINDER_DMG_STAGE/MEFinder.app"'
+        )
+        self.assertIn(zip_command, build_source)
+        self.assertIn(dmg_copy, build_source)
+        self.assertIn("ZIP contains AppleDouble metadata", build_source)
+        self.assertNotIn('MEFINDER_APP="dist/MEFinder.app"', build_source)
+        self.assertNotIn('"$MEFINDER_BUILT_APP" "$MEFINDER_APP"', build_source)
+        self.assertIn(
+            "com\\.apple\\.(FinderInfo|ResourceFork):",
+            build_source,
+        )
+
+    def test_macos_release_preserves_configured_developer_id_signature(self) -> None:
+        build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn(
+            'MEFINDER_CODESIGN_IDENTITY="${MEFINDER_CODESIGN_IDENTITY:--}"',
+            build_source,
+        )
+        self.assertIn(
+            'MEFINDER_CODESIGN_ARGS=(--force --deep --sign "$MEFINDER_CODESIGN_IDENTITY")',
+            build_source,
+        )
+        self.assertIn(
+            'MEFINDER_CODESIGN_ARGS+=(--options runtime --timestamp)',
+            build_source,
+        )
+        self.assertIn(
+            'codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$MEFINDER_BUILT_APP"',
+            build_source,
+        )
+        self.assertNotIn(
+            'codesign --force --deep --sign - "$MEFINDER_BUILT_APP"',
+            build_source,
+        )
+
+    def test_macos_icon_uses_rounded_system_scale_and_keeps_transparent_corners(self) -> None:
+        icon_source = Path("assets/app_icon.svg").read_text(encoding="utf-8")
+        build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+
+        self.assertIn('x="25" y="25" width="206" height="206" rx="46"', icon_source)
+        self.assertNotIn("qlmanage -t", build_source)
+        self.assertIn(
+            'sips -s format png -z "$MEFINDER_SIZE" "$MEFINDER_SIZE" "assets/app_icon.svg"',
+            build_source,
+        )
+
+    def test_macos_titlebar_extends_content_without_hiding_traffic_lights(self) -> None:
+        class TitlebarView:
+            def __init__(self) -> None:
+                self.background = None
+
+            def setBackgroundColor_(self, value: object) -> None:
+                self.background = value
+
+        class Subviews:
+            def __init__(self, titlebar: TitlebarView) -> None:
+                self.titlebar = titlebar
+
+            def lastObject(self) -> TitlebarView:
+                return self.titlebar
+
+        class Superview:
+            def __init__(self, titlebar: TitlebarView) -> None:
+                self.titlebar = titlebar
+
+            def subviews(self) -> Subviews:
+                return Subviews(self.titlebar)
+
+        class ContentView:
+            def __init__(self, titlebar: TitlebarView) -> None:
+                self.titlebar = titlebar
+
+            def superview(self) -> Superview:
+                return Superview(self.titlebar)
+
+        class NativeWindow:
+            def __init__(self) -> None:
+                self.style_mask = 4
+                self.transparent = False
+                self.title_visibility = None
+                self.separator_style = None
+                self.titlebar = TitlebarView()
+                self.standard_button_requests = []
+
+            def styleMask(self) -> int:
+                return self.style_mask
+
+            def setStyleMask_(self, value: int) -> None:
+                self.style_mask = value
+
+            def setTitlebarAppearsTransparent_(self, value: bool) -> None:
+                self.transparent = value
+
+            def setTitleVisibility_(self, value: int) -> None:
+                self.title_visibility = value
+
+            def setTitlebarSeparatorStyle_(self, value: int) -> None:
+                self.separator_style = value
+
+            def contentView(self) -> ContentView:
+                return ContentView(self.titlebar)
+
+            def standardWindowButton_(self, button: object) -> None:
+                self.standard_button_requests.append(button)
+
+        native_window = NativeWindow()
+        window = types.SimpleNamespace(native=native_window)
+        appkit = types.SimpleNamespace(
+            NSWindowStyleMaskFullSizeContentView=1 << 15,
+            NSWindowTitleHidden=7,
+            NSTitlebarSeparatorStyleNone=9,
+            NSColor=types.SimpleNamespace(clearColor=lambda: "clear"),
+        )
+        with (
+            mock.patch.object(desktop.sys, "platform", "darwin"),
+            mock.patch.dict(desktop.sys.modules, {"AppKit": appkit}),
+        ):
+            desktop.configure_macos_titlebar(window)
+
+        self.assertEqual(native_window.style_mask, 4 | (1 << 15))
+        self.assertTrue(native_window.transparent)
+        self.assertEqual(native_window.title_visibility, 7)
+        self.assertEqual(native_window.separator_style, 9)
+        self.assertEqual(native_window.titlebar.background, "clear")
+        self.assertEqual(native_window.standard_button_requests, [])
+
+    def test_macos_app_uses_bundle_resources(self) -> None:
+        executable = "/Applications/MEFinder.app/Contents/MacOS/MEFinder"
+        with (
+            mock.patch.object(desktop.sys, "frozen", True, create=True),
+            mock.patch.object(desktop.sys, "platform", "darwin"),
+            mock.patch.object(desktop.sys, "executable", executable),
+        ):
+            self.assertEqual(
+                desktop.app_root(),
+                Path("/Applications/MEFinder.app/Contents/Resources"),
+            )
+
+    def test_macos_app_data_uses_application_support(self) -> None:
+        with (
+            mock.patch.dict(desktop.os.environ, {}, clear=True),
+            mock.patch.object(desktop.sys, "platform", "darwin"),
+        ):
+            self.assertEqual(
+                desktop.local_app_data_root(Path("/Users/example")),
+                Path("/Users/example/Library/Application Support/MEFinder"),
+            )
+
+    def test_app_data_override_supports_isolated_smoke_tests(self) -> None:
+        configured = Path("/private/tmp/mefinder-smoke-data")
+        with mock.patch.dict(
+            desktop.os.environ,
+            {"ME_FINDER_APP_DATA_ROOT": str(configured)},
+            clear=True,
+        ):
+            self.assertEqual(desktop.local_app_data_root(), configured)
+
+    def test_frozen_macos_resources_seed_writable_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            resources = base / "MEFinder.app" / "Contents" / "Resources"
+            runtime_parent = base / "Application Support" / "MEFinder"
+            (resources / "data").mkdir(parents=True)
+            (resources / "config").mkdir()
+            (resources / "data" / "index.sqlite3").write_bytes(b"blank-index")
+            (resources / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+                mock.patch.object(desktop, "local_app_data_root", return_value=runtime_parent),
+            ):
+                runtime = desktop.prepare_runtime_root(resources)
+            self.assertEqual(runtime, runtime_parent / "runtime")
+            self.assertEqual(
+                (runtime / "data" / "index.sqlite3").read_bytes(),
+                b"blank-index",
+            )
+            self.assertTrue((runtime / "config" / "pdf_imports.json").is_file())
+
     def test_optional_vision_credentials_use_local_private_config(self) -> None:
         desktop_source = Path("desktop.py").read_text(encoding="utf-8")
         release_source = Path("build_portable_release.ps1").read_text(encoding="utf-8")

@@ -1,0 +1,9 @@
+pywebview==6.2.1
+PyInstaller==6.21.0
+PyMuPDF==1.26.5
+pyobjc-core==11.1
+pyobjc-framework-Cocoa==11.1
+# Quartz also exposes Apple's native PDFKit classes used by the reader window.
+pyobjc-framework-Quartz==11.1
+pyobjc-framework-WebKit==11.1
+pyobjc-framework-Security==11.1

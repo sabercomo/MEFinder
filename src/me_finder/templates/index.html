@@ -8,6 +8,9 @@
 /*__APP_CSS__*/</style>
 </head>
 <body>
+<div class="macos-titlebar" aria-hidden="true">
+  <span class="macos-titlebar-title">文献原句定位器</span>
+</div>
 <div class="app-shell">
 
   <!-- ═══ Sidebar ═══ -->
@@ -39,7 +42,7 @@
         <span>设置</span>
       </button>
     </nav>
-    <div class="sidebar-footer">ME_Finder v0.1.4</div>
+    <div class="sidebar-footer">ME_Finder v0.1.5</div>
   </aside>
 
   <!-- ═══ Main ═══ -->
@@ -361,6 +364,26 @@
           </button>
           <div class="settings-collapse-body" id="appearance-body" style="display:none">
             <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
+          </div>
+        </section>
+        <section class="settings-section macos-pdf-settings" id="pdf-reader-settings">
+          <div class="settings-section-head">
+            <span class="settings-section-title">PDF 阅读</span>
+            <span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span>
+          </div>
+          <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
+            <label class="pdf-open-option selected" data-pdf-open-choice="native">
+              <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
+              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
+              <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small>使用 macOS PDFKit，直接跳到搜索命中的物理页码。</small></span>
+              <span class="pdf-open-option-check" aria-hidden="true"></span>
+            </label>
+            <label class="pdf-open-option" data-pdf-open-choice="system">
+              <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
+              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
+              <span class="pdf-open-option-copy"><strong>macOS 预览</strong><small>在预览.app 中打开；命中页码需要手动翻到。</small></span>
+              <span class="pdf-open-option-check" aria-hidden="true"></span>
+            </label>
           </div>
         </section>
         <section class="settings-section">

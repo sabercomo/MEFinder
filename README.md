@@ -16,9 +16,31 @@
 
 绿色版的完整使用说明见发布包内的 `README.md`。
 
+## macOS 桌面版
+
+macOS 版本使用 Cocoa/WebKit 原生窗口，当前发布包支持 macOS 14 或更高版本，
+并支持 Apple Silicon 和 Intel 构建。开发构建命令：
+
+```bash
+python3 -m venv .venv-macos
+.venv-macos/bin/python -m pip install -r requirements-macos.txt
+MEFINDER_PYTHON=.venv-macos/bin/python ./build_macos.sh
+```
+
+普通用户推荐下载 `MEFinder-v<版本>-macos-<架构>.dmg`：打开镜像，把
+`MEFinder.app` 拖到旁边的 `Applications`，以后即可从“应用程序”或 Launchpad 启动，
+无需每次回到下载目录。构建流程同时保留 ZIP，并为 DMG 和 ZIP 分别生成 SHA-256。
+
+搜索结果中的 PDF 默认使用应用内的 Apple PDFKit 轻量阅读窗口打开，并精确定位到
+命中的 PDF 物理页。阅读窗口提供上一页、下一页、页码跳转、缩放和适合窗口；如果更喜欢
+系统“预览”，可在“设置 → PDF 阅读”中切换，使用预览时页码需要手动翻到。
+
+应用数据保存在 `~/Library/Application Support/MEFinder/`，替换或升级 `.app`
+不会删除文献、索引和设置。完整构建、签名与发布说明见 `MACOS_BUILD.md`。
+
 ## 安装方式
 
-需要 Windows 和 Python 3。
+源码模式需要 Python 3；Windows 命令示例使用 `py -3`，macOS 使用 `python3`。
 
 Word 检索仍只使用 Python 标准库。PDF 原生文本解析优先使用 PyMuPDF；如果当前环境没有 PyMuPDF，系统会退回到一个只覆盖简单原生文本 PDF 的内置解析器。通过桌面应用的“文献导入”加入扫描、乱码文本层或复杂布局 PDF 时，系统会自动分段提交 MinerU、下载结构化结果并重建 SQLite 索引。
 
@@ -246,7 +268,7 @@ PDF 结束页：324
 
 这表示 PDF 第 48 页对应书内引用第 1 页，PDF 第 49 页对应引用第 2 页。扫描 PDF 中如果存在重复页、插图页或不计页码页，必须在偏移发生处再添加分段，不能用一个固定 offset 覆盖整本书。点击“保存校准配置”后，应用会自动重建 SQLite 索引；完成提示出现后，新页码立即用于搜索结果。
 
-## 桌面版（原生窗口 exe）
+## Windows 桌面版（原生窗口 exe）
 
 桌面版用 pywebview 把同一个 Web UI 包进原生窗口：双击 exe 即用，不占浏览器，窗口关闭后进程自动退出。服务只绑定 `127.0.0.1`，端口由系统自动分配。
 

@@ -11,6 +11,7 @@ from typing import Any, Mapping
 DEFAULT_THEME = "frost-blue"
 DEFAULT_LIBRARY_VIEW = "list"
 DEFAULT_CALIBRATION_VIEW = "grid"
+DEFAULT_PDF_OPEN_MODE = "native"
 VALID_THEMES = frozenset(
     {
         "frost-blue",
@@ -23,6 +24,7 @@ VALID_THEMES = frozenset(
 )
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
+VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
 
 
 def resolve_preferences_path(root: Path | None = None) -> Path:
@@ -33,7 +35,7 @@ def resolve_preferences_path(root: Path | None = None) -> Path:
     return base / "config" / "preferences.json"
 
 
-def read_preferences(path: Path | None = None) -> dict[str, str]:
+def read_preferences(path: Path | None = None) -> dict[str, Any]:
     preferences_path = path or resolve_preferences_path()
     try:
         payload = json.loads(preferences_path.read_text(encoding="utf-8"))
@@ -55,11 +57,15 @@ def read_preferences(path: Path | None = None) -> dict[str, str]:
         )
     raw_directories = payload.get("scan_directories") if isinstance(payload, dict) else None
     scan_directories = _normalized_scan_directories(raw_directories)
+    pdf_open_mode = payload.get("pdf_open_mode") if isinstance(payload, dict) else None
+    if pdf_open_mode not in VALID_PDF_OPEN_MODES:
+        pdf_open_mode = DEFAULT_PDF_OPEN_MODE
     return {
         "theme": theme,
         "library_view": library_view,
         "calibration_view": calibration_view,
         "scan_directories": scan_directories,
+        "pdf_open_mode": pdf_open_mode,
     }
 
 
@@ -79,7 +85,7 @@ def _normalized_scan_directories(value: Any) -> list[str]:
 
 def save_preferences(
     updates: Mapping[str, Any], path: Path | None = None
-) -> dict[str, str]:
+) -> dict[str, Any]:
     preferences_path = path or resolve_preferences_path()
     current = read_preferences(preferences_path)
     if "theme" in updates:
@@ -102,6 +108,11 @@ def save_preferences(
         if not isinstance(directories, list):
             raise ValueError("文献目录必须是路径列表")
         current["scan_directories"] = _normalized_scan_directories(directories)
+    if "pdf_open_mode" in updates:
+        pdf_open_mode = updates["pdf_open_mode"]
+        if pdf_open_mode not in VALID_PDF_OPEN_MODES:
+            raise ValueError("不支持的 PDF 打开方式")
+        current["pdf_open_mode"] = str(pdf_open_mode)
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")
