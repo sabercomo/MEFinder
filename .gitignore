@@ -12,6 +12,7 @@ dist/
 release/
 data/
 test-output/
+.DS_Store
 *.sqlite3-*
 *.db-*
 
