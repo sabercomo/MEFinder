@@ -67,6 +67,14 @@ from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportBatchCompletion, ImportTaskQueue
 from .import_resume import ResumeManifestError, sha256_file
 from .search import SearchEngine
+from .structured_reader import (
+    InvalidPagination,
+    InvalidSourceId,
+    SourceNotFound,
+    StructuredReaderError,
+    UnsupportedSourceType,
+    get_document_window,
+)
 
 
 def find_adobe_pdf_app() -> Optional[Path]:
@@ -316,7 +324,9 @@ def _load_asset(relative: str) -> str:
 HTML = (
     _load_asset("templates/index.html")
     .replace("/*__APP_CSS__*/", _load_asset("static/app.css"), 1)
+    .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
     .replace("//__APP_JS__", _load_asset("static/app.js"), 1)
+    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
     .replace("__APP_VERSION__", __version__)
 )
 
@@ -1756,6 +1766,10 @@ def make_handler(
         )
 
     class Handler(BaseHTTPRequestHandler):
+        _GET_ROUTE_TABLE = {
+            "/api/document/pages": "_get_document_pages",
+        }
+
         def _send(
             self,
             status: int,
@@ -1774,8 +1788,66 @@ def make_handler(
         def _send_json(self, data: object, status: int = 200) -> None:
             self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
+        def _get_document_pages(self, parsed) -> None:
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            source_ids = params.get("source_id", [])
+            starts = params.get("start", ["0"])
+            counts = params.get("count", ["20"])
+            if len(source_ids) != 1 or len(starts) != 1 or len(counts) != 1:
+                self._send_json(
+                    {
+                        "error": (
+                            "source_id 必须提供一次，start 和 count "
+                            "最多各提供一次。"
+                        )
+                    },
+                    status=400,
+                )
+                return
+
+            try:
+                with runtime_lock:
+                    if runtime["rebuilding"]:
+                        result = None
+                    else:
+                        result = get_document_window(
+                            index_path,
+                            source_ids[0],
+                            start=starts[0],
+                            count=counts[0],
+                        )
+            except (
+                InvalidPagination,
+                InvalidSourceId,
+                UnsupportedSourceType,
+            ) as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            except SourceNotFound as exc:
+                self._send_json({"error": str(exc)}, status=404)
+                return
+            except (OSError, sqlite3.Error, StructuredReaderError) as exc:
+                logging.exception("structured reader data request failed")
+                self._send_json(
+                    {"error": "结构化阅读数据读取失败，请稍后重试。"},
+                    status=500,
+                )
+                return
+
+            if result is None:
+                self._send_json(
+                    {"error": "索引正在重建，请稍候再打开结构化阅读。"},
+                    status=503,
+                )
+                return
+            self._send_json(result)
+
         def do_GET(self) -> None:
             parsed = urlparse(self.path)
+            route_method = self._GET_ROUTE_TABLE.get(parsed.path)
+            if route_method is not None:
+                getattr(self, route_method)(parsed)
+                return
             if parsed.path in {"/", "/index.html"}:
                 preferences_path = resolve_preferences_path(root)
                 theme = read_preferences(preferences_path)["theme"]

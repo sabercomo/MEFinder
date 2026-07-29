@@ -113,6 +113,7 @@ class SearchMatchSpanTests(unittest.TestCase):
                     "pdf_page_id": "pdf-test-PAGE-000000",
                     "page_char_start": 42,
                     "page_char_end": 45,
+                    "match_quote": "目标句",
                     "page_text_hash": "hash-page-zero",
                 }
             ],
@@ -154,6 +155,7 @@ class SearchMatchSpanTests(unittest.TestCase):
                     "pdf_page_id": "pdf-test-PAGE-000010",
                     "page_char_start": 100 + left_start,
                     "page_char_end": 100 + left_start + len("左页尾"),
+                    "match_quote": "左页尾",
                 }
             ],
         )
@@ -164,6 +166,7 @@ class SearchMatchSpanTests(unittest.TestCase):
                     "pdf_page_id": "pdf-test-PAGE-000011",
                     "page_char_start": 20,
                     "page_char_end": 20 + len("右页首句"),
+                    "match_quote": "右页首句",
                 }
             ],
         )
@@ -174,13 +177,19 @@ class SearchMatchSpanTests(unittest.TestCase):
                     "pdf_page_id": "pdf-test-PAGE-000010",
                     "page_char_start": 100 + len(left) - 1,
                     "page_char_end": 100 + len(left),
+                    "match_quote": "尾",
                 },
                 {
                     "pdf_page_id": "pdf-test-PAGE-000011",
                     "page_char_start": 20,
                     "page_char_end": 21,
+                    "match_quote": "右",
                 },
             ],
+        )
+        self.assertEqual(
+            [span["match_quote"] for span in both_item["page_match_spans"]],
+            ["尾", "右"],
         )
         self.assertTrue(both_item["precise_highlight_available"])
 
@@ -281,6 +290,7 @@ class SearchMatchSpanTests(unittest.TestCase):
                 "pdf_page_id": "pdf-test-PAGE-000004",
                 "page_char_start": 11,
                 "page_char_end": 13,
+                "match_quote": "😀乙",
             },
         )
 

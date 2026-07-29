@@ -508,6 +508,7 @@ class SearchEngine:
         source_spans = paragraph.get("text_source_spans")
         if not isinstance(source_spans, list):
             return []
+        paragraph_raw = str(paragraph.get("text_raw") or "")
 
         mapped: List[Dict[str, object]] = []
         for span in source_spans:
@@ -543,6 +544,13 @@ class SearchEngine:
                 "pdf_page_id": str(page_id),
                 "page_char_start": mapped_start,
                 "page_char_end": mapped_end,
+                # Keep a page-local recovery quote.  CROSS matches need a
+                # different fragment for each physical page; the paragraph-
+                # level quote can include the unmapped joiner and therefore
+                # cannot occur verbatim on either page.  Slice the original
+                # paragraph text with the same Unicode-codepoint overlap used
+                # for offset mapping, and keep the existing 50-codepoint bound.
+                "match_quote": paragraph_raw[overlap_start:overlap_end][:50],
             }
             if "page_text_hash" in span:
                 # Preserve the producer's value verbatim.  A future reader

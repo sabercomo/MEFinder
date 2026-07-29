@@ -1,0 +1,288 @@
+/* Optional structured-text reader. Native PDFKit/WebView2/system PDF readers
+   remain independent and keep using the user's existing preference. */
+.mef-reader-open {
+  overflow: hidden;
+}
+
+.mef-structured-reader {
+  position: fixed;
+  inset: 0;
+  z-index: 420;
+  display: grid;
+  place-items: stretch;
+  color: var(--text-primary);
+}
+
+.mef-structured-reader[hidden] {
+  display: none;
+}
+
+.mef-reader-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--dialog-backdrop);
+  backdrop-filter: blur(3px);
+  cursor: default;
+}
+
+.mef-reader-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(980px, calc(100vw - 48px));
+  height: min(900px, calc(100vh - 48px));
+  margin: 24px auto;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-popover);
+}
+
+.mef-reader-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 72px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+}
+
+.mef-reader-heading {
+  min-width: 0;
+}
+
+.mef-reader-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .08em;
+}
+
+.mef-reader-title {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mef-reader-current {
+  max-width: 340px;
+  padding: 7px 11px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mef-reader-close {
+  min-width: 64px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mef-reader-close:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.mef-reader-close:focus-visible,
+.mef-reader-viewport:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.mef-reader-alert {
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mef-reader-alert[hidden] {
+  display: none;
+}
+
+.mef-reader-alert[data-kind="warning"] {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.mef-reader-alert[data-kind="error"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.mef-reader-viewport {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-secondary);
+  scrollbar-gutter: stable;
+}
+
+.mef-reader-content {
+  width: min(780px, calc(100% - 36px));
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 22px 0 72px;
+}
+
+.mef-reader-spacer {
+  width: 1px;
+  pointer-events: none;
+}
+
+.mef-reader-boundary {
+  width: 100%;
+  height: 1px;
+  pointer-events: none;
+}
+
+.mef-reader-item {
+  scroll-margin-block: 96px;
+  margin: 0 0 18px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.mef-reader-item.has-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-card);
+}
+
+.mef-reader-item-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+}
+
+.mef-reader-item-label {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mef-reader-item-note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: right;
+}
+
+.mef-reader-item-text {
+  padding: 22px 24px 26px;
+  color: var(--text-primary);
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  font-size: 16px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.mef-reader-item-text.is-empty {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: center;
+}
+
+.mef-reader-highlight {
+  padding: .08em .12em;
+  border-radius: 3px;
+  background: var(--warning-soft);
+  color: inherit;
+  box-shadow: 0 0 0 1px var(--warning-border);
+}
+
+.mef-reader-loading {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 8px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-popover);
+  font-size: 12px;
+}
+
+.mef-reader-loading[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .mef-reader-panel {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .mef-reader-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .mef-reader-current {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    max-width: 100%;
+  }
+
+  .mef-reader-close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .mef-reader-content {
+    width: calc(100% - 24px);
+  }
+
+  .mef-reader-item-text {
+    padding: 18px;
+    font-size: 15px;
+  }
+}

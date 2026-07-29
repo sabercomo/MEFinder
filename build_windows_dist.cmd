@@ -18,6 +18,9 @@ if errorlevel 1 exit /b 1
 "%PYTHON%" -m unittest ^
   tests.test_vision_api ^
   tests.test_search_controls_and_views ^
+  tests.test_structured_reader ^
+  tests.test_structured_reader_frontend ^
+  tests.test_structured_reader_web ^
   tests.test_batch_directory_import ^
   tests.test_calibration_library_ui ^
   tests.test_directory_scan ^
@@ -38,6 +41,8 @@ if errorlevel 1 exit /b 1
 if errorlevel 1 exit /b 1
 
 node --check src\me_finder\static\app.js
+if errorlevel 1 exit /b 1
+node --check src\me_finder\static\reader.js
 if errorlevel 1 exit /b 1
 
 "%PYTHON%" -m PyInstaller desktop.spec --clean --noconfirm

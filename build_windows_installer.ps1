@@ -92,6 +92,9 @@ try {
         tests.test_search_match_spans `
         tests.test_vision_api `
         tests.test_search_controls_and_views `
+        tests.test_structured_reader `
+        tests.test_structured_reader_frontend `
+        tests.test_structured_reader_web `
         tests.test_batch_directory_import `
         tests.test_calibration_library_ui `
         tests.test_directory_scan `
@@ -109,6 +112,14 @@ try {
         tests.test_theme_system `
         tests.test_desktop_portable
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; installer was not built." }
+
+    $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCommand) {
+        & $nodeCommand.Source --check "src\me_finder\static\app.js"
+        if ($LASTEXITCODE -ne 0) { throw "app.js syntax check failed." }
+        & $nodeCommand.Source --check "src\me_finder\static\reader.js"
+        if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
+    }
 
     & $pythonCommand @pythonLauncherArgs -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }

@@ -384,6 +384,7 @@ function showDetail(item) {
     + '</span>'
     + '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">复制原文与出处</button>'
     + (citationIncomplete && item.source_type === 'pdf' ? '<button class="action-btn" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\')">补全书目信息</button>' : '')
+    + (item.source_file_id ? '<button class="action-btn" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
     + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
     + '</div>'
     + '</div>';
@@ -650,6 +651,21 @@ async function openSource(sourceId, page) {
     else showToast('已打开原文');
   } catch(e) {
     showToast(e.message || '打开失败');
+  }
+}
+
+async function openSelectedStructuredReader() {
+  const item = selectedResult();
+  if (!item || !item.source_file_id) return;
+  const reader = window.MEFinderReader;
+  if (!reader || typeof reader.openForSearchResult !== 'function') {
+    showToast('结构化阅读器暂时不可用');
+    return;
+  }
+  try {
+    await reader.openForSearchResult(item);
+  } catch (error) {
+    showToast(error && error.message ? error.message : '结构化文本打开失败');
   }
 }
 

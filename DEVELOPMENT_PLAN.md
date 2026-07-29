@@ -116,15 +116,15 @@
 
 ## v0.2.4 实施清单（结构化阅读器）
 
-- [ ] 后端分页接口 `GET /api/document/pages?source_id=&start=&count=`：按页返回 `text_raw`、锚点、由 `page_source_type` 产生的页码显示状态、`page_text_hash`；Word 文档按 paragraph 分窗返回。
-- [ ] 前端阅读器独立文件（不再塞进 `app.js` 单文件；顺带为 `web.py` 抽路由表）。
-- [ ] DOM 窗口化：视口 ±N 页留在 DOM，其余卸载；900 页文档首版即达标。
-- [ ] IntersectionObserver 判定当前页（不用 scroll 位置计算）。
-- [ ] 每页独立容器 + `id` 锚点；空文本页显示占位。
-- [ ] 搜索结果"查看结构化文本"入口：按 `page_match_spans` 打开对应页并高亮（前端做码点 → UTF-16 转换）；无 spans 时只跳页并提示。
-- [ ] PDFKit / 系统阅读器仍是默认打开方式，结构化阅读器是可选按钮，不强制切换。
-- [ ] Word 阅读器页码标注按 `page_source_type` 区分：DOCX 显示"分节推断，未验证"；旧 DOC 无页锚点（`page_anchors` 为空），只在文献级显示目录范围，不插段落页锚点；均与 PDF 已校准页码视觉区分。
-- [ ] 原生 PDF、MinerU、视觉 API 三种来源共用同一渲染格式。
+- [x] 后端分页接口 `GET /api/document/pages?source_id=&start=&count=`：按页返回 `text_raw`、锚点、由 `page_source_type` 产生的页码显示状态、`page_text_hash`；Word 文档按 paragraph 分窗返回。
+- [x] 前端阅读器独立文件（不再塞进 `app.js` 单文件；顺带为 `web.py` 抽路由表）。
+- [x] DOM 窗口化：视口 ±N 页留在 DOM，其余卸载；900 页文档首版即达标。
+- [x] IntersectionObserver 判定当前页（不用 scroll 位置计算）。
+- [x] 每页独立容器 + `id` 锚点；空文本页显示占位。
+- [x] 搜索结果"查看结构化文本"入口：按 `page_match_spans` 打开对应页并高亮（前端做码点 → UTF-16 转换）；无 spans 时只跳页并提示。
+- [x] PDFKit / 系统阅读器仍是默认打开方式，结构化阅读器是可选按钮，不强制切换。
+- [x] Word 阅读器页码标注按 `page_source_type` 区分：DOCX 显示"分节推断，未验证"；旧 DOC 无页锚点（`page_anchors` 为空），只在文献级显示目录范围，不插段落页锚点；均与 PDF 已校准页码视觉区分。
+- [x] 原生 PDF、MinerU、视觉 API 三种来源共用同一渲染格式。
 
 ## v0.3.0 实施清单（页码条与交互）
 
