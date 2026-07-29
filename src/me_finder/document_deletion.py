@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sqlite3
 import uuid
@@ -38,7 +39,11 @@ class DocumentDeletionService:
         cleanup_warnings: List[str] = []
         try:
             if delete_generated_artifacts:
-                for path in self._owned_generated_paths(document, documents):
+                for path in self._owned_generated_paths(
+                    source_file_id,
+                    document,
+                    documents,
+                ):
                     self._stage(path, staged)
             if delete_internal_copy:
                 source_path = self._source_path(source)
@@ -55,9 +60,16 @@ class DocumentDeletionService:
                 self.database_path,
                 backup_existing=True,
             )
-        except Exception:
-            save_import_config(self.config_path, original_config)
-            self._restore_staged(staged)
+        except Exception as original_error:
+            rollback_errors: List[str] = []
+            try:
+                save_import_config(self.config_path, original_config)
+            except Exception as exc:
+                rollback_errors.append(f"恢复导入配置失败: {exc}")
+            rollback_errors.extend(self._restore_staged(staged))
+            if rollback_errors:
+                details = "；".join(rollback_errors)
+                raise RuntimeError(f"删除失败，且回滚未完全完成：{details}") from original_error
             raise
 
         for original, temporary in staged:
@@ -104,16 +116,19 @@ class DocumentDeletionService:
 
     def _owned_generated_paths(
         self,
+        source_file_id: str,
         document: Optional[Mapping[str, object]],
         documents: Sequence[Mapping[str, object]],
     ) -> List[Path]:
-        if not document:
-            return []
         candidates: List[Path] = []
-        document_id = str(document.get("document_id") or "").strip()
+        document_id = (
+            str(document.get("document_id") or "").strip()
+            if document
+            else ""
+        )
         if document_id:
             candidates.append(self.root / "corpus" / "parsed" / "pdf" / f"{document_id}.json")
-        current_manifest = self._manifest_path(document)
+        current_manifest = self._manifest_path(document) if document else None
         other_manifests = {
             path
             for item in documents
@@ -127,7 +142,95 @@ class DocumentDeletionService:
                 path for path in self._manifest_result_paths([current_manifest]) if path not in shared_results
             )
             candidates.append(current_manifest)
+        for path in self._unattached_checkpoint_paths(source_file_id):
+            resolved = Path(path).resolve()
+            if resolved in other_manifests:
+                continue
+            if any(
+                resolved == shared
+                or resolved in shared.parents
+                or shared in resolved.parents
+                for shared in shared_results
+            ):
+                continue
+            candidates.append(resolved)
         return self._unique_safe_paths(candidates)
+
+    def _unattached_checkpoint_paths(self, source_file_id: str) -> List[Path]:
+        """Collect deterministic B checkpoints even before config attachment."""
+
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", source_file_id):
+            return []
+        processed = self.root / "corpus" / "processed"
+        candidates: List[Path] = [
+            processed
+            / "mineru"
+            / "manifests"
+            / f"segments-{source_file_id}.json",
+            processed
+            / "vision"
+            / "manifests"
+            / f"vision-{source_file_id}.json",
+            processed / "vision" / "results" / source_file_id,
+        ]
+        prefix_specs = (
+            (
+                processed / "mineru" / "manifests",
+                f"segments-{source_file_id}.json.corrupt-",
+            ),
+            (
+                processed / "vision" / "manifests" / "work",
+                f"vision-{source_file_id}-",
+            ),
+            (
+                processed / "vision" / "manifests",
+                f"vision-{source_file_id}.json.corrupt-",
+            ),
+            (
+                processed / "mineru" / "results",
+                f"{source_file_id}-p",
+            ),
+        )
+        for directory, name_prefix in prefix_specs:
+            if not directory.is_dir():
+                continue
+            candidates.extend(
+                child
+                for child in directory.iterdir()
+                if child.name.startswith(name_prefix)
+            )
+
+        for directory in (
+            processed / "mineru" / "tasks",
+            processed / "import_jobs",
+        ):
+            if not directory.is_dir():
+                continue
+            for path in directory.glob("*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                context = (
+                    payload.get("context")
+                    if isinstance(payload, Mapping)
+                    and isinstance(payload.get("context"), Mapping)
+                    else {}
+                )
+                if (
+                    isinstance(payload, Mapping)
+                    and (
+                        str(payload.get("source_file_id") or "")
+                        == source_file_id
+                        or str(context.get("source_file_id") or "")
+                        == source_file_id
+                        or str(payload.get("data_id") or "").startswith(
+                            f"{source_file_id}-p"
+                        )
+                    )
+                ):
+                    candidates.append(path)
+        return candidates
 
     def _manifest_path(self, document: Mapping[str, object]) -> Optional[Path]:
         parser_results = (
@@ -161,6 +264,8 @@ class DocumentDeletionService:
                 values = list(segment.get("result_dirs") or [])
                 if segment.get("result_dir"):
                     values.append(segment.get("result_dir"))
+                if segment.get("state_file"):
+                    values.append(segment.get("state_file"))
                 for value in values:
                     path = Path(str(value))
                     if not path.is_absolute():
@@ -168,6 +273,16 @@ class DocumentDeletionService:
                     path = path.resolve()
                     if self._is_within(path, self.root):
                         paths.add(path)
+            for key in ("work_manifest", "manifest_path"):
+                value = str(data.get(key) or "").strip()
+                if not value:
+                    continue
+                path = Path(value)
+                if not path.is_absolute():
+                    path = self.root / path
+                path = path.resolve()
+                if self._is_within(path, self.root):
+                    paths.add(path)
         return paths
 
     def _unique_safe_paths(self, candidates: Iterable[Path]) -> List[Path]:
@@ -193,10 +308,19 @@ class DocumentDeletionService:
         staged.append((path, temporary))
 
     @staticmethod
-    def _restore_staged(staged: Sequence[Tuple[Path, Path]]) -> None:
+    def _restore_staged(staged: Sequence[Tuple[Path, Path]]) -> List[str]:
+        errors: List[str] = []
         for original, temporary in reversed(staged):
-            if temporary.exists() and not original.exists():
+            try:
+                if not temporary.exists():
+                    continue
+                if original.exists():
+                    errors.append(f"恢复 {original.name} 失败: 目标路径已存在")
+                    continue
                 temporary.replace(original)
+            except Exception as exc:
+                errors.append(f"恢复 {original.name} 失败: {exc}")
+        return errors
 
     @staticmethod
     def _is_within(path: Path, parent: Path) -> bool:

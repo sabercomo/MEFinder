@@ -5,7 +5,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from src.me_finder import document_deletion as document_deletion_module
 from src.me_finder.calibration_library import build_calibration_library, build_library
 from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
@@ -361,6 +363,243 @@ class DocumentDeletionServiceTests(unittest.TestCase):
             )
             self.assertFalse(pdf_path.exists())
             self.assertTrue(result["internal_copy_deleted"])
+
+    def test_removal_cleans_vision_result_and_work_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path, _pdf_path = self._index(root)
+            result_dir = root / "corpus" / "processed" / "vision" / "results" / "task"
+            work_manifest = (
+                root
+                / "corpus"
+                / "processed"
+                / "vision"
+                / "manifests"
+                / "work"
+                / "vision-task.json"
+            )
+            final_manifest = work_manifest.parent.parent / "vision-pdf-consumer.json"
+            result_dir.mkdir(parents=True)
+            work_manifest.parent.mkdir(parents=True)
+            (result_dir / "content_list.json").write_text("[]", encoding="utf-8")
+            work_manifest.write_text('{"status":"completed"}', encoding="utf-8")
+            final_manifest.write_text(
+                json.dumps(
+                    {
+                        "work_manifest": str(work_manifest.relative_to(root)),
+                        "segments": [
+                            {
+                                "result_dir": str(result_dir.relative_to(root)),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = root / "config" / "pdf_imports.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["documents"][0]["parser_results"] = {
+                "manifest": str(final_manifest),
+            }
+            config_path.write_text(
+                json.dumps(config, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            DocumentDeletionService(root, database_path).remove("pdf-consumer")
+
+            self.assertFalse(result_dir.exists())
+            self.assertFalse(work_manifest.exists())
+            self.assertFalse(final_manifest.exists())
+
+    def test_removal_preserves_manifest_and_results_shared_by_another_document(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path, _pdf_path = self._index(root)
+            processed = root / "corpus" / "processed" / "vision"
+            shared_result = processed / "results" / "pdf-consumer" / "shared-task"
+            shared_work = (
+                processed
+                / "manifests"
+                / "work"
+                / "vision-pdf-consumer-shared.json"
+            )
+            shared_manifest = processed / "manifests" / "vision-pdf-consumer.json"
+            shared_result.mkdir(parents=True)
+            shared_work.parent.mkdir(parents=True)
+            (shared_result / "content_list.json").write_text("[]", encoding="utf-8")
+            shared_work.write_text('{"status":"completed"}', encoding="utf-8")
+            shared_manifest.write_text(
+                json.dumps(
+                    {
+                        "work_manifest": str(shared_work.relative_to(root)),
+                        "segments": [
+                            {
+                                "result_dir": str(shared_result.relative_to(root)),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = root / "config" / "pdf_imports.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["documents"][0]["parser_results"] = {
+                "manifest": str(shared_manifest),
+            }
+            config["documents"].append(
+                {
+                    "source_file_id": "pdf-other",
+                    "document_id": "PDF_OTHER",
+                    "file_name": "other.pdf",
+                    "parser_results": {"manifest": str(shared_manifest)},
+                    "page_mapping": {"segments": []},
+                }
+            )
+            config_path.write_text(
+                json.dumps(config, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            DocumentDeletionService(root, database_path).remove("pdf-consumer")
+
+            self.assertTrue(shared_manifest.exists())
+            self.assertTrue(shared_work.exists())
+            self.assertTrue(shared_result.exists())
+            remaining = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [item["source_file_id"] for item in remaining["documents"]],
+                ["pdf-other"],
+            )
+
+    def test_removal_cleans_unattached_interrupted_parser_checkpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path, _pdf_path = self._index(root)
+            processed = root / "corpus" / "processed"
+            mineru_manifest = (
+                processed
+                / "mineru"
+                / "manifests"
+                / "segments-pdf-consumer.json"
+            )
+            mineru_result = (
+                processed
+                / "mineru"
+                / "results"
+                / "pdf-consumer-p001-001"
+            )
+            mineru_state = processed / "mineru" / "tasks" / "batch-one.json"
+            vision_work = (
+                processed
+                / "vision"
+                / "manifests"
+                / "work"
+                / "vision-pdf-consumer-task.json"
+            )
+            vision_result = (
+                processed / "vision" / "results" / "pdf-consumer" / "task-one"
+            )
+            import_job = processed / "import_jobs" / "import-one.json"
+            for path in (
+                mineru_manifest,
+                mineru_state,
+                vision_work,
+                import_job,
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            mineru_result.mkdir(parents=True)
+            vision_result.mkdir(parents=True)
+            mineru_manifest.write_text('{"segments":[]}', encoding="utf-8")
+            mineru_state.write_text(
+                '{"data_id":"pdf-consumer-p001-001"}',
+                encoding="utf-8",
+            )
+            vision_work.write_text('{"status":"failed"}', encoding="utf-8")
+            import_job.write_text(
+                '{"source_file_id":"pdf-consumer","context":{}}',
+                encoding="utf-8",
+            )
+
+            DocumentDeletionService(root, database_path).remove("pdf-consumer")
+
+            for path in (
+                mineru_manifest,
+                mineru_result,
+                mineru_state,
+                vision_work,
+                vision_result.parent,
+                import_job,
+            ):
+                self.assertFalse(path.exists(), str(path))
+
+    def test_failed_config_rollback_still_restores_staged_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path, _pdf_path = self._index(root)
+            parsed_cache = root / "corpus" / "parsed" / "pdf" / "PDF_CONSUMER.json"
+            real_save = document_deletion_module.save_import_config
+            save_calls = 0
+
+            def fail_only_rollback(path: Path, config: dict[str, object]) -> None:
+                nonlocal save_calls
+                save_calls += 1
+                if save_calls == 2:
+                    raise OSError("config restore blocked")
+                real_save(path, config)
+
+            with (
+                patch.object(
+                    document_deletion_module,
+                    "save_import_config",
+                    side_effect=fail_only_rollback,
+                ),
+                patch.object(
+                    document_deletion_module,
+                    "delete_source_from_database",
+                    side_effect=RuntimeError("database delete failed"),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "恢复导入配置失败",
+                ) as raised:
+                    DocumentDeletionService(root, database_path).remove(
+                        "pdf-consumer"
+                    )
+
+            self.assertEqual(save_calls, 2)
+            self.assertTrue(parsed_cache.exists())
+            self.assertIsInstance(raised.exception.__cause__, RuntimeError)
+            self.assertIn("database delete failed", str(raised.exception.__cause__))
+
+    def test_restore_staged_continues_after_one_file_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            first = root / "first.json"
+            second = root / "second.json"
+            first.write_text("first", encoding="utf-8")
+            second.write_text("second", encoding="utf-8")
+            staged: list[tuple[Path, Path]] = []
+            DocumentDeletionService._stage(first, staged)
+            DocumentDeletionService._stage(second, staged)
+            failing_temporary = staged[1][1]
+            real_replace = Path.replace
+
+            def fail_one_replace(path: Path, target: Path) -> Path:
+                if path == failing_temporary:
+                    raise OSError("restore blocked")
+                return real_replace(path, target)
+
+            with patch.object(Path, "replace", new=fail_one_replace):
+                errors = DocumentDeletionService._restore_staged(staged)
+
+            self.assertTrue(first.exists())
+            self.assertFalse(second.exists())
+            self.assertTrue(failing_temporary.exists())
+            self.assertEqual(len(errors), 1)
+            self.assertIn("second.json", errors[0])
+            self.assertIn("restore blocked", errors[0])
 
 
 if __name__ == "__main__":

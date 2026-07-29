@@ -30,6 +30,7 @@ from .mineru_api import (
     download_done_results,
     get_agent_task_status,
     get_batch_status,
+    save_segment_manifest,
     submit_agent_pdf,
     submit_local_pdf,
     submit_local_pdf_segments,
@@ -195,6 +196,7 @@ def main() -> None:
                 config_path=Path(args.config),
                 state_dir=Path(args.state_dir),
                 manifest_dir=Path(args.manifest_dir),
+                result_dir=Path(args.result_dir),
                 data_id_prefix=args.data_id_prefix,
                 segment_size=args.segment_size,
                 start_page=args.start_page,
@@ -328,6 +330,18 @@ def wait_for_mineru_segments(
     timeout_minutes: int,
     download: bool,
 ) -> None:
+    manifest_path_value = str(manifest.get("manifest_path") or "").strip()
+    manifest_path = Path(manifest_path_value) if manifest_path_value else None
+    manifest_prefix = str(manifest.get("data_id_prefix") or "")
+
+    def checkpoint() -> None:
+        if manifest_prefix and manifest_path is not None:
+            save_segment_manifest(
+                manifest_prefix,
+                manifest,
+                manifest_path.parent,
+            )
+
     pending: Dict[str, Dict[str, object]] = {}
     completed = 0
     for segment in manifest.get("segments", []):
@@ -346,6 +360,7 @@ def wait_for_mineru_segments(
             result = get_batch_status(batch_id, config_path=config_path, state_dir=state_dir)
             item = first_extract_result(result)
             state = str(item.get("state") or "unknown")
+            segment["last_state"] = state.lower()
             progress = item.get("extract_progress") or {}
             progress_text = ""
             if isinstance(progress, dict) and progress.get("total_pages"):
@@ -362,14 +377,29 @@ def wait_for_mineru_segments(
                     )
                     for path in paths:
                         print(f"downloaded: {path}")
+                    segment["result_dirs"] = [str(path) for path in paths]
+                    if paths:
+                        segment["result_dir"] = str(paths[0])
                     downloaded.add(batch_id)
+                    segment["status"] = "completed"
+                else:
+                    segment["status"] = "remote_completed"
                 pending.pop(batch_id, None)
             elif state == "failed":
-                print(f"failed: {segment.get('page_ranges')} {item.get('err_msg') or ''}")
+                error = str(item.get("err_msg") or "MinerU 解析失败")
+                segment["status"] = "failed"
+                segment["error"] = error
+                print(f"failed: {segment.get('page_ranges')} {error}")
                 pending.pop(batch_id, None)
+            else:
+                segment["status"] = "processing"
+            checkpoint()
         if pending:
             time.sleep(poll_seconds)
     if pending:
+        for segment in pending.values():
+            segment["last_error"] = "MinerU 解析超时，等待下次继续检查。"
+        checkpoint()
         print("Timed out before all MinerU segments finished.")
         for segment in pending.values():
             print(f"still pending: {segment.get('page_ranges')} batch_id={segment.get('batch_id')}")

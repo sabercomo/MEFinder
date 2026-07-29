@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence
 
+from .import_resume import COMPLETED_UNIT_STATUSES, resume_summary
 from .indexer import build_index
 from .mineru_api import (
     DEFAULT_MINERU_MANIFEST_DIR,
@@ -247,7 +248,11 @@ def attach_mineru_manifest(root: Path, source_file_id: str, manifest_path: Path,
         relative_manifest = relative_manifest.resolve().relative_to(root.resolve())
     except ValueError:
         pass
-    document["mineru"] = {"manifest": relative_manifest.as_posix()}
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8-sig"))
+    document["mineru"] = {
+        "manifest": relative_manifest.as_posix(),
+        "resume": resume_summary(manifest, manifest_path=relative_manifest),
+    }
     document.pop("parser_results", None)
     save_import_config(config_path, data)
 
@@ -282,12 +287,14 @@ def attach_parser_manifest(
         relative_manifest = relative_manifest.resolve().relative_to(root.resolve())
     except ValueError:
         pass
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8-sig"))
     document["parser_results"] = {
         "manifest": relative_manifest.as_posix(),
         "parser": "openai_compatible",
         "provider_id": provider_id,
         "provider_name": provider_name,
         "model": model,
+        "resume": resume_summary(manifest, manifest_path=relative_manifest),
     }
     document.pop("mineru", None)
     save_import_config(config_path, data)
@@ -326,37 +333,113 @@ def parse_pdf_with_mineru(
         config_path=config_path,
         state_dir=state_dir,
         manifest_dir=manifest_dir,
+        result_dir=result_dir,
         data_id_prefix=source_file_id,
     )
     segments = [item for item in manifest.get("segments", []) if isinstance(item, dict)]
-    pending = {str(item["batch_id"]): item for item in segments if item.get("batch_id")}
-    completed = sum(1 for item in segments if item.get("status") == "skipped_existing_result")
+    pending = {
+        str(item["batch_id"]): item
+        for item in segments
+        if item.get("batch_id")
+        and str(item.get("status") or "").lower() not in COMPLETED_UNIT_STATUSES
+    }
+    completed = sum(
+        1
+        for item in segments
+        if str(item.get("status") or "").lower() in COMPLETED_UNIT_STATUSES
+    )
+    save_segment_manifest(str(manifest.get("data_id_prefix") or source_file_id), manifest, manifest_dir)
     if on_progress:
-        on_progress({"phase": "mineru_processing", "completed": completed, "total": len(segments)})
+        on_progress({
+            "phase": "mineru_processing",
+            "completed": completed,
+            "total": len(segments),
+            "total_pages": manifest.get("total_pages"),
+            "completed_pages": manifest.get("completed_pages", []),
+            "failed_pages": manifest.get("failed_pages", []),
+        })
     deadline = time.time() + timeout_minutes * 60
     while pending and time.time() < deadline:
         for batch_id, segment in list(pending.items()):
-            result = get_batch_status(batch_id, config_path=config_path, state_dir=state_dir)
+            try:
+                result = get_batch_status(batch_id, config_path=config_path, state_dir=state_dir)
+            except Exception as exc:
+                segment["last_error"] = str(exc)
+                segment["status"] = (
+                    "failed"
+                    if isinstance(exc, MinerUError)
+                    and exc.retry_with_new_task
+                    else "processing"
+                )
+                if segment["status"] == "failed":
+                    segment["error"] = str(exc)
+                save_segment_manifest(
+                    str(manifest.get("data_id_prefix") or source_file_id),
+                    manifest,
+                    manifest_dir,
+                )
+                raise MinerUError(
+                    str(exc),
+                    retry_with_new_task=bool(
+                        isinstance(exc, MinerUError)
+                        and exc.retry_with_new_task
+                    ),
+                    allow_parser_fallback=False,
+                ) from exc
             item = _first_extract_result(result)
             state = str(item.get("state") or "unknown").lower()
             segment["last_state"] = state
             if state == "done":
-                downloaded = download_done_results(
-                    batch_id,
-                    config_path=config_path,
-                    state_dir=state_dir,
-                    result_dir=result_dir,
+                segment["status"] = "processing"
+                segment["phase"] = "downloading"
+                save_segment_manifest(
+                    str(manifest.get("data_id_prefix") or source_file_id),
+                    manifest,
+                    manifest_dir,
                 )
+                try:
+                    downloaded = download_done_results(
+                        batch_id,
+                        config_path=config_path,
+                        state_dir=state_dir,
+                        result_dir=result_dir,
+                    )
+                except Exception as exc:
+                    segment["status"] = "processing"
+                    segment["phase"] = "download_retry"
+                    segment["last_error"] = str(exc)
+                    save_segment_manifest(
+                        str(manifest.get("data_id_prefix") or source_file_id),
+                        manifest,
+                        manifest_dir,
+                    )
+                    raise MinerUError(
+                        str(exc),
+                        allow_parser_fallback=False,
+                    ) from exc
                 segment["status"] = "completed"
                 segment["result_dirs"] = [str(path) for path in downloaded]
                 if downloaded:
                     segment["result_dir"] = str(downloaded[0])
+                segment.pop("error", None)
+                segment.pop("last_error", None)
+                segment.pop("phase", None)
                 pending.pop(batch_id, None)
                 completed += 1
             elif state == "failed":
                 segment["status"] = "failed"
                 segment["error"] = str(item.get("err_msg") or "MinerU 解析失败")
+                segment.pop("phase", None)
                 pending.pop(batch_id, None)
+            else:
+                segment["status"] = "processing"
+                segment.pop("last_error", None)
+                segment.pop("phase", None)
+            save_segment_manifest(
+                str(manifest.get("data_id_prefix") or source_file_id),
+                manifest,
+                manifest_dir,
+            )
             if on_progress:
                 on_progress({
                     "phase": "mineru_processing",
@@ -364,16 +447,39 @@ def parse_pdf_with_mineru(
                     "total": len(segments),
                     "page_range": segment.get("page_ranges"),
                     "state": state,
+                    "total_pages": manifest.get("total_pages"),
+                    "completed_pages": manifest.get("completed_pages", []),
+                    "failed_pages": manifest.get("failed_pages", []),
                 })
         if pending:
             time.sleep(poll_seconds)
     if pending:
-        raise MinerUError("MinerU 解析超时，仍有分段任务未完成。")
+        for segment in pending.values():
+            segment["last_error"] = "MinerU 解析超时，等待下次继续检查。"
+        save_segment_manifest(
+            str(manifest.get("data_id_prefix") or source_file_id),
+            manifest,
+            manifest_dir,
+        )
+        raise MinerUError(
+            "MinerU 解析超时，仍有分段任务未完成。",
+            allow_parser_fallback=False,
+        )
     if any(item.get("status") == "failed" for item in segments):
+        save_segment_manifest(
+            str(manifest.get("data_id_prefix") or source_file_id),
+            manifest,
+            manifest_dir,
+        )
         raise MinerUError("MinerU 有分段解析失败，请查看导入状态。")
     manifest_path = save_segment_manifest(str(manifest.get("data_id_prefix") or source_file_id), manifest, manifest_dir)
     attach_mineru_manifest(root, source_file_id, manifest_path)
-    return {"manifest_path": str(manifest_path), "segments": len(segments), "status": "completed"}
+    return {
+        "manifest_path": str(manifest_path),
+        "segments": len(segments),
+        "status": "completed",
+        "resume": resume_summary(manifest, manifest_path=manifest_path),
+    }
 
 
 def parse_pdf_with_provider(

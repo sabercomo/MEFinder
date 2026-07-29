@@ -42,7 +42,7 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_pdf_match_anchors tests.test_page_display tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_portable_index_rebuild
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_backup_service tests.test_calibration_library_ui tests.test_pdf_match_anchors tests.test_page_display tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     & $pythonCommand @pythonLauncherArgs -m PyInstaller desktop.spec --clean --noconfirm

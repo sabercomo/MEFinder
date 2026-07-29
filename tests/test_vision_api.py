@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,7 +11,12 @@ from src.me_finder.pdf_import_service import (
     parse_pdf_with_provider,
     register_pdf,
 )
-from src.me_finder.pdf_extractors import load_mineru_segments, mineru_profile
+from src.me_finder.database import build_database
+from src.me_finder.pdf_extractors import (
+    import_run_record,
+    load_mineru_segments,
+    mineru_profile,
+)
 from src.me_finder.vision_api import (
     OpenAICompatibleVisionClient,
     VisionAPIError,
@@ -561,11 +567,37 @@ class VisionAPIParserTests(unittest.TestCase):
                 profile = mineru_profile(pdf, segments)
             self.assertEqual(profile["detected_pdf_type"], "api_structured")
             self.assertEqual(profile["parser_label"], "测试视觉接口")
+            import_run = import_run_record(
+                str(document["source_file_id"]),
+                profile,
+                "2026-07-29T00:00:00+00:00",
+                "success",
+            )
+            self.assertEqual(
+                import_run["import_resume"]["completed_pages"],
+                [1, 2],
+            )
+            database_path = root / "data" / "resume.sqlite3"
+            build_database(
+                {"pdf_import_runs": [import_run]},
+                database_path,
+            )
+            with sqlite3.connect(str(database_path)) as connection:
+                payload_json = connection.execute(
+                    "SELECT payload_json FROM pdf_import_runs"
+                ).fetchone()[0]
+            persisted_run = json.loads(payload_json)
+            self.assertEqual(
+                persisted_run["import_resume"]["completed_pages"],
+                [1, 2],
+            )
             imports = json.loads(
                 (root / "config" / "pdf_imports.json").read_text(encoding="utf-8")
             )
             attached = imports["documents"][0]["parser_results"]
             self.assertEqual(attached["provider_id"], provider_id)
+            self.assertEqual(attached["resume"]["completed_pages"], [1, 2])
+            self.assertEqual(attached["resume"]["failed_pages"], [])
             self.assertNotIn("mineru", imports["documents"][0])
             public_summary = vision_config_summary(
                 root / "config" / "vision_api.local.json"

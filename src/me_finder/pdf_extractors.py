@@ -17,6 +17,7 @@ from .auto_page_mapping import (
     has_manual_mapping,
 )
 from .bibliographic_metadata import METADATA_FIELDS
+from .import_resume import resume_summary
 from .normalization import compact_text, normalize_text, punctuationless_text, split_sentences
 from .page_mapping_service import PageMappingService
 from .pdf_page_mapping import PageMapper, mapped_page_display
@@ -445,7 +446,7 @@ def import_run_record(
     status: str,
     parser: Optional[str] = None,
 ) -> Dict[str, object]:
-    return {
+    record = {
         "run_id": f"PDF-RUN-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{source_file_id}",
         "source_file_id": source_file_id,
         "parser": parser or profile.get("parser") or "none",
@@ -456,6 +457,9 @@ def import_run_record(
         "status": status,
         "notes": profile.get("notes", []),
     }
+    if isinstance(profile.get("import_resume"), dict):
+        record["import_resume"] = dict(profile["import_resume"])
+    return record
 
 
 def write_parsed_pdf_snapshot(
@@ -489,6 +493,11 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
     manifest_path = parser_results.get("manifest")
     if manifest_path:
         manifest = json.loads(Path(str(manifest_path)).read_text(encoding="utf-8-sig"))
+        manifest_resume = (
+            dict(parser_results.get("resume"))
+            if isinstance(parser_results.get("resume"), dict)
+            else resume_summary(manifest, manifest_path=Path(str(manifest_path)))
+        )
         for segment in manifest.get("segments", []):
             if not isinstance(segment, dict):
                 continue
@@ -501,6 +510,7 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item.setdefault("provider_id", manifest.get("provider_id"))
             item.setdefault("provider_name", manifest.get("provider_name"))
             item.setdefault("model", manifest.get("model"))
+            item.setdefault("import_resume", manifest_resume)
             segments.append(item)
     for segment in parser_results.get("segments", []):
         if isinstance(segment, dict):
@@ -539,6 +549,7 @@ def mineru_profile(path: Path, segments: Sequence[Dict[str, object]]) -> Dict[st
         "provider_id": first.get("provider_id"),
         "provider_name": provider_name,
         "model": model or None,
+        "import_resume": first.get("import_resume"),
         "parser_version": "unknown",
         "pdf_page_count": page_count,
         "mineru_segment_count": len(segments),
@@ -580,6 +591,11 @@ def load_mineru_pdf_pages(
             end_1based = int(segment.get("page_end") or segment.get("pdf_page_end_1based") or start_1based)
         else:
             start_1based, end_1based = page_range
+        page_count = end_1based - start_1based + 1
+        try:
+            page_index_offset = int(segment.get("page_index_offset"))
+        except (TypeError, ValueError):
+            page_index_offset = start_1based - 1
         result_dir = Path(str(segment["result_dir"]))
         segment_parser = str(segment.get("parser") or "mineru")
         is_mineru = segment_parser in {"mineru", "precision"}
@@ -596,8 +612,8 @@ def load_mineru_pdf_pages(
         content = json.loads(content_path.read_text(encoding="utf-8-sig"))
         if not isinstance(content, list):
             continue
-        for local_page in range(0, end_1based - start_1based + 1):
-            global_index = start_1based - 1 + local_page
+        for local_page in range(0, page_count):
+            global_index = page_index_offset + local_page
             page_texts.setdefault(global_index, [])
             page_blocks.setdefault(global_index, [])
         for item_index, item in enumerate(content):
@@ -610,9 +626,12 @@ def load_mineru_pdf_pages(
             if local_page_idx is None:
                 continue
             try:
-                global_index = start_1based - 1 + int(local_page_idx)
+                local_page_index = int(local_page_idx)
             except (TypeError, ValueError):
                 continue
+            if local_page_index < 0 or local_page_index >= page_count:
+                continue
+            global_index = page_index_offset + local_page_index
             page_texts.setdefault(global_index, []).append(text)
             page_blocks.setdefault(global_index, []).append(
                 {
@@ -624,7 +643,8 @@ def load_mineru_pdf_pages(
                     "text_level": item.get("text_level"),
                     "bbox": item.get("bbox"),
                     "text": text,
-                    "local_page_idx": int(local_page_idx),
+                    "local_page_idx": local_page_index,
+                    "page_index_offset": page_index_offset,
                     "pdf_page_index": global_index,
                     "result_dir": str(result_dir),
                 }

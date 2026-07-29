@@ -2784,6 +2784,7 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 }
 .import-item-status.error { color: var(--error); }
 .import-item-status.done { color: var(--success); }
+.import-item-status.paused { color: var(--warning); }
 .import-item-retry {
   display: flex;
   align-items: center;

@@ -63,7 +63,9 @@ from .pdf_import_service import (
 )
 from .runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
 from .backup_service import restore_backup, write_backup
+from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportBatchCompletion, ImportTaskQueue
+from .import_resume import ResumeManifestError, sha256_file
 from .search import SearchEngine
 
 
@@ -357,19 +359,75 @@ def make_handler(
         "rebuilding": False,
     }
     runtime_lock = threading.RLock()
-    rebuild_lock = threading.Lock()
+    # Re-entrant because a config mutation may hold the lock while calling the
+    # shared rebuild helper, which acquires the same lock.
+    rebuild_lock = threading.RLock()
     metadata_lock = threading.Lock()
     import_jobs: Dict[str, Dict[str, object]] = {}
     import_job_contexts: Dict[str, Dict[str, object]] = {}
     import_jobs_lock = threading.RLock()
     import_task_queue = ImportTaskQueue(worker_count=2)
+    import_job_journal = ImportJobJournal(root / DEFAULT_IMPORT_JOB_DIR)
+    deleting_import_sources: set[str] = set()
+    pending_import_sources: set[str] = set()
     calibration_active_sources: set[str] = set()
 
+    for saved_job in import_job_journal.load_startup_jobs():
+        saved_context = saved_job.get("context")
+        if not isinstance(saved_context, dict):
+            continue
+        saved_job_id = str(saved_job.get("job_id") or "")
+        target_text = str(saved_context.get("target") or "")
+        if not saved_job_id or not target_text:
+            continue
+        import_jobs[saved_job_id] = {
+            key: value
+            for key, value in saved_job.items()
+            if key not in {"context", "file_hash", "job_log_spec_version"}
+        }
+        import_job_contexts[saved_job_id] = {
+            "target": Path(target_text),
+            "source_file_id": str(saved_context.get("source_file_id") or ""),
+            "profile": dict(saved_context.get("profile") or {}),
+            "is_pdf": bool(saved_context.get("is_pdf")),
+            "force_mineru": bool(saved_context.get("force_mineru")),
+            "vision_provider_id": saved_context.get("provider_id"),
+            "file_hash": str(saved_job.get("file_hash") or ""),
+        }
+
     def update_import_job(job_id: str, **updates: object) -> None:
+        persisted_updates = dict(updates)
+        progress = updates.get("progress")
+        if isinstance(progress, dict):
+            resume = progress.get("resume")
+            for field in (
+                "total_pages",
+                "completed_pages",
+                "failed_pages",
+            ):
+                if field in progress:
+                    persisted_updates[field] = progress[field]
+                elif isinstance(resume, dict) and field in resume:
+                    persisted_updates[field] = resume[field]
+        status = str(updates.get("status") or "")
+        if "can_resume" not in updates:
+            if status == "completed":
+                persisted_updates["can_resume"] = False
+            elif status == "failed":
+                persisted_updates["can_resume"] = True
+            elif status == "processing":
+                persisted_updates["can_resume"] = False
         with import_jobs_lock:
             job = import_jobs.get(job_id)
             if job is not None:
-                job.update(updates)
+                job.update(persisted_updates)
+        try:
+            import_job_journal.update_job(job_id, **persisted_updates)
+            if status == "completed":
+                import_job_journal.delete_job(job_id)
+        except (KeyError, OSError, ValueError, ResumeManifestError):
+            # Non-import background jobs do not have a durable journal entry.
+            pass
 
     def progress_import_job(job_id: str, update: Dict[str, object]) -> None:
         phase = str(update.get("phase") or "")
@@ -385,6 +443,65 @@ def make_handler(
         elif phase == "rebuilding_index":
             message = "正在重建本地 SQLite 索引…"
         update_import_job(job_id, phase=phase, message=message, progress=update)
+
+    def switch_import_job_route(
+        job_id: str,
+        *,
+        parse_route: str,
+        force_mineru: bool,
+        vision_provider_id: Optional[str],
+        provider_name: Optional[str],
+    ) -> None:
+        """Atomically persist the paid-parser route, then mirror it in memory."""
+
+        import_job_journal.switch_parser_route(
+            job_id,
+            parse_route=parse_route,
+            force_mineru=bool(force_mineru),
+            provider_id=vision_provider_id,
+            provider_name=provider_name,
+        )
+        with import_jobs_lock:
+            context = import_job_contexts.get(job_id)
+            job = import_jobs.get(job_id)
+            if context is None or job is None:
+                raise MinerUError("导入任务的恢复信息不存在。")
+            context["force_mineru"] = bool(force_mineru)
+            context["vision_provider_id"] = vision_provider_id
+            job["parse_route"] = parse_route
+            job["provider_id"] = vision_provider_id
+            job["provider_name"] = provider_name
+
+    def validated_import_target(
+        job_id: str,
+        context: Dict[str, object],
+    ) -> Path:
+        """Reject a missing or replaced source before any paid parser is queued."""
+
+        target = Path(context["target"])
+        record = import_job_journal.get_job(job_id)
+        expected_hash = str(
+            context.get("file_hash")
+            or (record or {}).get("file_hash")
+            or ""
+        )
+        if not target.is_file():
+            message = "待恢复的原始文件已不存在。"
+        elif not expected_hash:
+            message = "待恢复任务缺少文件校验信息，不能安全继续。"
+        elif sha256_file(target) != expected_hash:
+            message = "原始文件内容已经变化，旧断点不会继续使用。"
+        else:
+            context["file_hash"] = expected_hash
+            return target
+        update_import_job(
+            job_id,
+            status="failed",
+            phase="failed",
+            can_resume=False,
+            message=message,
+        )
+        raise MinerUError(message)
 
     def reload_runtime_index() -> None:
         with runtime_lock:
@@ -581,6 +698,23 @@ def make_handler(
                         on_progress=lambda update: progress_import_job(job_id, update),
                     )
                 except Exception as mineru_exc:
+                    if (
+                        isinstance(mineru_exc, MinerUError)
+                        and not mineru_exc.allow_parser_fallback
+                    ):
+                        update_import_job(
+                            job_id,
+                            status="failed",
+                            phase="failed",
+                            can_resume=True,
+                            message=(
+                                f"MinerU 任务暂时中断：{mineru_exc}。"
+                                "断点已保存，可稍后继续；不会自动改用其他付费接口。"
+                            ),
+                            mineru_interrupted=True,
+                            original_error=str(mineru_exc),
+                        )
+                        return False
                     config_path = resolve_vision_config_path(root)
                     try:
                         summary = vision_config_summary(config_path)
@@ -626,6 +760,13 @@ def make_handler(
                         return False
                     fallback_id = str(fallback.get("id"))
                     fallback_name = str(fallback.get("name") or "其他视觉 API")
+                    switch_import_job_route(
+                        job_id,
+                        parse_route="vision",
+                        force_mineru=False,
+                        vision_provider_id=fallback_id,
+                        provider_name=fallback_name,
+                    )
                     update_import_job(
                         job_id,
                         phase="vision_processing",
@@ -706,6 +847,7 @@ def make_handler(
         is_pdf: bool,
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
+        consume_reservation: bool = False,
     ) -> str:
         job_id = f"import-{uuid.uuid4().hex[:12]}"
         parse_route = None
@@ -734,12 +876,32 @@ def make_handler(
                 else "native"
             )
         with import_jobs_lock:
-            import_jobs[job_id] = {
+            if source_file_id in deleting_import_sources:
+                raise MinerUError("该文献正在删除，不能开始解析。")
+            if (
+                source_file_id in pending_import_sources
+                and not consume_reservation
+            ):
+                raise MinerUError("同一文献正在准备导入。")
+            already_running = next(
+                (
+                    other
+                    for other in import_jobs.values()
+                    if other.get("source_file_id") == source_file_id
+                    and other.get("status") == "processing"
+                ),
+                None,
+            )
+            if already_running:
+                raise MinerUError("同一文献已有解析任务正在运行。")
+            job = {
                 "job_id": job_id,
                 "status": "processing",
+                "can_resume": False,
                 "phase": "stored",
                 "message": "文件已保存，准备处理…",
                 "file_name": target.name,
+                "size_bytes": target.stat().st_size,
                 "source_file_id": source_file_id,
                 "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
                 "parse_route": parse_route,
@@ -747,13 +909,79 @@ def make_handler(
                 "provider_id": vision_provider_id,
                 "provider_name": provider_name,
             }
-            import_job_contexts[job_id] = {
+            context = {
                 "target": Path(target),
                 "source_file_id": source_file_id,
                 "profile": dict(profile),
                 "is_pdf": is_pdf,
+                "force_mineru": bool(force_mineru),
+                "vision_provider_id": vision_provider_id,
             }
+            import_jobs[job_id] = job
+            import_job_contexts[job_id] = context
+        try:
+            record = import_job_journal.save_job(
+                job,
+                target=target,
+                source_file_id=source_file_id,
+                profile=profile,
+                is_pdf=is_pdf,
+                force_mineru=force_mineru,
+                provider_id=vision_provider_id,
+                total_pages=int(profile.get("pdf_page_count") or 0),
+            )
+        except Exception:
+            with import_jobs_lock:
+                import_jobs.pop(job_id, None)
+                import_job_contexts.pop(job_id, None)
+            raise
+        with import_jobs_lock:
+            context["file_hash"] = str(record.get("file_hash") or "")
         return job_id
+
+    def _reserve_import_source_locked(source_file_id: str) -> None:
+        """Reserve one source while its config row is registered."""
+
+        if source_file_id in deleting_import_sources:
+            raise MinerUError("该文献正在删除，不能开始解析。")
+        if source_file_id in pending_import_sources:
+            raise MinerUError("同一文献正在准备导入。")
+        if any(
+            job.get("source_file_id") == source_file_id
+            and job.get("status") == "processing"
+            for job in import_jobs.values()
+        ):
+            raise MinerUError("同一文献已有解析任务正在运行。")
+        pending_import_sources.add(source_file_id)
+
+    def register_pdf_for_import(target: Path) -> Tuple[Dict[str, object], str]:
+        """Atomically reserve a PDF identity and register its config row."""
+
+        predicted_source_id = f"pdf-import-{sha256_file(target)[:16]}"
+        with rebuild_lock, import_jobs_lock:
+            _reserve_import_source_locked(predicted_source_id)
+            try:
+                document = register_pdf(root, target)
+                source_file_id = str(document["source_file_id"])
+                if source_file_id != predicted_source_id:
+                    _reserve_import_source_locked(source_file_id)
+                    pending_import_sources.discard(predicted_source_id)
+            except Exception:
+                pending_import_sources.discard(predicted_source_id)
+                raise
+        return document, source_file_id
+
+    def release_import_reservation(source_file_id: str) -> None:
+        with import_jobs_lock:
+            pending_import_sources.discard(str(source_file_id or ""))
+
+    def release_item_reservations(items: List[Dict[str, object]]) -> None:
+        with import_jobs_lock:
+            for item in items:
+                if item.get("source_reserved"):
+                    pending_import_sources.discard(
+                        str(item.get("source_file_id") or "")
+                    )
 
     def queue_import_job(
         job_id: str,
@@ -782,6 +1010,7 @@ def make_handler(
         is_pdf: bool,
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
+        consume_reservation: bool = False,
     ) -> str:
         job_id = create_import_job(
             target,
@@ -790,17 +1019,123 @@ def make_handler(
             is_pdf,
             force_mineru=force_mineru,
             vision_provider_id=vision_provider_id,
+            consume_reservation=consume_reservation,
+        )
+        try:
+            queue_import_job(
+                job_id,
+                target,
+                profile,
+                source_file_id,
+                is_pdf,
+                force_mineru=force_mineru,
+                vision_provider_id=vision_provider_id,
+            )
+        except Exception:
+            try:
+                import_job_journal.delete_job(job_id)
+            except OSError:
+                logging.warning(
+                    "failed to remove unqueued import journal %s", job_id
+                )
+            with import_jobs_lock:
+                import_jobs.pop(job_id, None)
+                import_job_contexts.pop(job_id, None)
+            raise
+        return job_id
+
+    def resumable_import_jobs() -> List[Dict[str, object]]:
+        with import_jobs_lock:
+            result: List[Dict[str, object]] = []
+            for job_id, job in import_jobs.items():
+                if str(job.get("status") or "") not in {"paused", "failed"}:
+                    continue
+                context = import_job_contexts.get(job_id) or {}
+                public_job = dict(job)
+                public_job["file_type"] = (
+                    "pdf" if context.get("is_pdf") else "docx"
+                )
+                result.append(public_job)
+            return sorted(
+                result,
+                key=lambda item: str(item.get("last_updated") or ""),
+                reverse=True,
+            )
+
+    def resume_import_job(job_id: str) -> Dict[str, object]:
+        with import_jobs_lock:
+            job = import_jobs.get(job_id)
+            context = import_job_contexts.get(job_id)
+            if not job or not context:
+                raise MinerUError("待继续的导入任务不存在。")
+            if (
+                str(job.get("status") or "") not in {"paused", "failed"}
+                or not job.get("can_resume")
+            ):
+                raise MinerUError("该导入任务当前不能继续。")
+            source_file_id = str(context.get("source_file_id") or "")
+            if source_file_id in deleting_import_sources:
+                raise MinerUError("该文献正在删除，不能继续解析。")
+            if source_file_id in pending_import_sources:
+                raise MinerUError("同一文献正在准备导入。")
+            already_running = next(
+                (
+                    other
+                    for other_id, other in import_jobs.items()
+                    if other_id != job_id
+                    and other.get("source_file_id") == source_file_id
+                    and other.get("status") == "processing"
+                ),
+                None,
+            )
+            if already_running:
+                raise MinerUError("同一文献已有解析任务正在运行。")
+            target = validated_import_target(job_id, context)
+            job.update(
+                {
+                    "status": "processing",
+                    "phase": "stored",
+                    "can_resume": False,
+                    "message": "正在从上次断点继续…",
+                }
+            )
+            restored = dict(job)
+        import_job_journal.update_job(
+            job_id,
+            status="processing",
+            phase="stored",
+            can_resume=False,
+            message="正在从上次断点继续…",
         )
         queue_import_job(
             job_id,
             target,
-            profile,
-            source_file_id,
-            is_pdf,
-            force_mineru=force_mineru,
-            vision_provider_id=vision_provider_id,
+            dict(context.get("profile") or {}),
+            str(context.get("source_file_id") or ""),
+            bool(context.get("is_pdf")),
+            force_mineru=bool(context.get("force_mineru")),
+            vision_provider_id=(
+                str(context["vision_provider_id"])
+                if context.get("vision_provider_id")
+                else None
+            ),
         )
-        return job_id
+        return restored
+
+    def dismiss_import_job(job_id: str) -> None:
+        """Forget a paused/failed task after the user explicitly dismisses it."""
+
+        with import_jobs_lock:
+            job = import_jobs.get(job_id)
+            if job is None:
+                # A completed task may already have removed its journal.
+                import_job_journal.delete_job(job_id)
+                return
+            if str(job.get("status") or "") == "processing":
+                raise MinerUError("正在运行的导入任务不能移除。")
+            import_job_journal.delete_job(job_id)
+            import_jobs.pop(job_id, None)
+            import_job_contexts.pop(job_id, None)
 
     def start_native_import_batch(
         items: List[Dict[str, object]],
@@ -808,14 +1143,37 @@ def make_handler(
         """Index local-text PDFs and Word files together with one rebuild."""
 
         queued_items: List[Dict[str, object]] = []
-        for item in items:
-            job_id = create_import_job(
-                Path(item["target"]),
-                dict(item["profile"]),
-                str(item["source_file_id"]),
-                bool(item["is_pdf"]),
-            )
-            queued_items.append({**item, "job_id": job_id})
+        try:
+            for item in items:
+                try:
+                    job_id = create_import_job(
+                        Path(item["target"]),
+                        dict(item["profile"]),
+                        str(item["source_file_id"]),
+                        bool(item["is_pdf"]),
+                        consume_reservation=bool(
+                            item.get("source_reserved")
+                        ),
+                    )
+                finally:
+                    if item.get("source_reserved"):
+                        release_import_reservation(str(item["source_file_id"]))
+                queued_items.append({**item, "job_id": job_id})
+        except Exception:
+            release_item_reservations(items)
+            for queued in queued_items:
+                queued_job_id = str(queued["job_id"])
+                try:
+                    import_job_journal.delete_job(queued_job_id)
+                except OSError:
+                    logging.warning(
+                        "failed to remove unqueued batch journal %s",
+                        queued_job_id,
+                    )
+                with import_jobs_lock:
+                    import_jobs.pop(queued_job_id, None)
+                    import_job_contexts.pop(queued_job_id, None)
+            raise
 
         if not queued_items:
             return []
@@ -857,27 +1215,50 @@ def make_handler(
         """Parse OCR/VLM files with two workers, then rebuild the index once."""
 
         queued_items: List[Dict[str, object]] = []
-        for item in items:
-            vision_provider_id = (
-                str(item["vision_provider_id"])
-                if item.get("vision_provider_id")
-                else None
-            )
-            job_id = create_import_job(
-                Path(item["target"]),
-                dict(item["profile"]),
-                str(item["source_file_id"]),
-                bool(item["is_pdf"]),
-                force_mineru=bool(item["force_mineru"]),
-                vision_provider_id=vision_provider_id,
-            )
-            queued_items.append(
-                {
-                    **item,
-                    "job_id": job_id,
-                    "vision_provider_id": vision_provider_id,
-                }
-            )
+        try:
+            for item in items:
+                vision_provider_id = (
+                    str(item["vision_provider_id"])
+                    if item.get("vision_provider_id")
+                    else None
+                )
+                try:
+                    job_id = create_import_job(
+                        Path(item["target"]),
+                        dict(item["profile"]),
+                        str(item["source_file_id"]),
+                        bool(item["is_pdf"]),
+                        force_mineru=bool(item["force_mineru"]),
+                        vision_provider_id=vision_provider_id,
+                        consume_reservation=bool(
+                            item.get("source_reserved")
+                        ),
+                    )
+                finally:
+                    if item.get("source_reserved"):
+                        release_import_reservation(str(item["source_file_id"]))
+                queued_items.append(
+                    {
+                        **item,
+                        "job_id": job_id,
+                        "vision_provider_id": vision_provider_id,
+                    }
+                )
+        except Exception:
+            release_item_reservations(items)
+            for queued in queued_items:
+                queued_job_id = str(queued["job_id"])
+                try:
+                    import_job_journal.delete_job(queued_job_id)
+                except OSError:
+                    logging.warning(
+                        "failed to remove unqueued batch journal %s",
+                        queued_job_id,
+                    )
+                with import_jobs_lock:
+                    import_jobs.pop(queued_job_id, None)
+                    import_job_contexts.pop(queued_job_id, None)
+            raise
 
         if not queued_items:
             return []
@@ -1053,6 +1434,61 @@ def make_handler(
         save_import_config(config_path, config)
         return len(manual_segments)
 
+    def apply_manual_page_mapping(
+        source_id: str,
+        segments: List[Dict[str, object]],
+    ) -> None:
+        """Persist manual mapping and rebuild as one deletion-safe mutation."""
+
+        with rebuild_lock:
+            config_path = root / "config" / "pdf_imports.json"
+            if not config_path.exists():
+                raise MinerUError("PDF 导入配置不存在。")
+            config = json.loads(config_path.read_text("utf-8"))
+            document = next(
+                (
+                    item
+                    for item in config.get("documents", [])
+                    if item.get("source_file_id") == source_id
+                ),
+                None,
+            )
+            if not document:
+                raise MinerUError("PDF 配置中找不到该文献。")
+            document.setdefault("page_mapping", {})
+            document["page_mapping"]["segments"] = segments
+            document["page_mapping"]["validated_by"] = "manual_ui"
+            document["page_mapping"]["mapping_origin"] = "manual"
+            document["page_mapping"]["mapping_status"] = "manual_mapped"
+            document["page_mapping"]["updated_at"] = datetime.now(
+                timezone.utc
+            ).isoformat()
+            save_import_config(config_path, config)
+            job_id = f"calibration-{uuid.uuid4().hex[:12]}"
+            with import_jobs_lock:
+                import_jobs[job_id] = {
+                    "job_id": job_id,
+                    "status": "processing",
+                    "phase": "rebuilding_index",
+                    "message": "正在应用页码校准并重建索引…",
+                }
+            try:
+                rebuild_runtime_index(job_id)
+                update_import_job(
+                    job_id,
+                    status="completed",
+                    phase="completed",
+                    message="页码校准已生效",
+                )
+            except Exception as exc:
+                update_import_job(
+                    job_id,
+                    status="failed",
+                    phase="failed",
+                    message=str(exc),
+                )
+                raise
+
     def source_path_from_id(source_id: str) -> Path:
         with runtime_lock:
             record = runtime["source_files"].get(source_id)
@@ -1216,7 +1652,7 @@ def make_handler(
         )
 
     def persist_bibliographic_metadata(source_id: str, payload: Dict[str, object]) -> Dict[str, object]:
-        with metadata_lock:
+        with metadata_lock, rebuild_lock:
             config_path, config, document = configured_document(source_id)
             original_config = copy.deepcopy(config)
             metadata = canonical_metadata(payload)
@@ -1469,6 +1905,9 @@ def make_handler(
                     job = dict(import_jobs.get(str(job_id), {})) if job_id else {}
                 self._send_json(job or {"error": "导入任务不存在。"}, status=200 if job else 404)
                 return
+            if parsed.path == "/api/import-resumable":
+                self._send_json({"jobs": resumable_import_jobs()})
+                return
             if parsed.path == "/api/calibration":
                 config_path = root / "config" / "pdf_imports.json"
                 if not config_path.exists():
@@ -1516,6 +1955,7 @@ def make_handler(
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path == "/api/import":
+                reserved_source_id = ""
                 filename = unquote(self.headers.get("X-File-Name", ""))
                 suffix = Path(filename).suffix.lower()
                 if suffix not in {".pdf", ".docx"}:
@@ -1537,8 +1977,8 @@ def make_handler(
                     is_pdf = suffix == ".pdf"
                     if is_pdf:
                         profile = detect_imported_pdf(target)
-                        document = register_pdf(root, target)
-                        source_file_id = str(document["source_file_id"])
+                        document, source_file_id = register_pdf_for_import(target)
+                        reserved_source_id = source_file_id
                     else:
                         profile = {"detected_pdf_type": "docx"}
                         source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
@@ -1550,7 +1990,11 @@ def make_handler(
                         is_pdf,
                         force_mineru=force_mineru,
                         vision_provider_id=vision_provider_id or None,
+                        consume_reservation=bool(reserved_source_id),
                     )
+                    if reserved_source_id:
+                        release_import_reservation(reserved_source_id)
+                        reserved_source_id = ""
                     parse_route = None
                     if is_pdf:
                         parse_route = (
@@ -1573,6 +2017,9 @@ def make_handler(
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
                     self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
+                finally:
+                    if reserved_source_id:
+                        release_import_reservation(reserved_source_id)
                 return
             length = int(self.headers.get("Content-Length", "0"))
             try:
@@ -1803,7 +2250,8 @@ def make_handler(
                     return
                 with import_jobs_lock:
                     previous_job = import_jobs.get(previous_job_id)
-                    context = import_job_contexts.get(previous_job_id)
+                    saved_context = import_job_contexts.get(previous_job_id)
+                    context = dict(saved_context) if saved_context else None
                 if not previous_job or not context:
                     self._send_json({"error": "原导入任务不存在。"}, status=404)
                     return
@@ -1813,9 +2261,10 @@ def make_handler(
                         status=400,
                     )
                     return
-                target = Path(context["target"])
-                if not target.is_file():
-                    self._send_json({"error": "待重试的 PDF 已不存在。"}, status=404)
+                try:
+                    target = validated_import_target(previous_job_id, context)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
                     return
                 try:
                     summary = vision_config_summary(resolve_vision_config_path(root))
@@ -1839,7 +2288,8 @@ def make_handler(
                         bool(context["is_pdf"]),
                         vision_provider_id=provider_id,
                     )
-                except VisionAPIError as exc:
+                    dismiss_import_job(previous_job_id)
+                except (MinerUError, VisionAPIError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
                 self._send_json(
@@ -1851,6 +2301,38 @@ def make_handler(
                         "parse_route": "vision",
                     }
                 )
+                return
+            if parsed.path == "/api/import-resume":
+                job_id = str(payload.get("job_id") or "").strip()
+                if not job_id:
+                    self._send_json({"error": "缺少待继续的导入任务。"}, status=400)
+                    return
+                try:
+                    resumed = resume_import_job(job_id)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "job_id": job_id,
+                        "parse_route": resumed.get("parse_route"),
+                        "provider_id": resumed.get("provider_id"),
+                        "provider_name": resumed.get("provider_name"),
+                    }
+                )
+                return
+            if parsed.path == "/api/import-resume-dismiss":
+                job_id = str(payload.get("job_id") or "").strip()
+                if not job_id:
+                    self._send_json({"error": "缺少待移除的导入任务。"}, status=400)
+                    return
+                try:
+                    dismiss_import_job(job_id)
+                except (MinerUError, ValueError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json({"ok": True, "job_id": job_id})
                 return
             if parsed.path == "/api/bibliographic-metadata/batch-detect":
                 with import_jobs_lock:
@@ -1935,8 +2417,10 @@ def make_handler(
                 preferences = read_preferences(resolve_preferences_path(root))
                 allowed_bases = [Path(item).resolve() for item in preferences.get("scan_directories") or []]
                 prepared_items: List[Dict[str, object]] = []
+                prepared_source_ids: set[str] = set()
                 import_errors: List[Dict[str, object]] = []
                 for raw in raw_paths:
+                    item_reserved_source_id = ""
                     try:
                         source_path = Path(str(raw)).resolve()
                         # 只允许导入配置目录内的文件，防止任意路径读取。
@@ -1951,11 +2435,29 @@ def make_handler(
                         is_pdf = target.suffix.lower() == ".pdf"
                         if is_pdf:
                             profile = detect_imported_pdf(target)
-                            document = register_pdf(root, target)
-                            source_file_id = str(document["source_file_id"])
+                            predicted_source_id = (
+                                f"pdf-import-{sha256_file(target)[:16]}"
+                            )
+                            if predicted_source_id in prepared_source_ids:
+                                raise MinerUError(
+                                    "同一批次中已有内容相同的文献。"
+                                )
+                            document, source_file_id = register_pdf_for_import(
+                                target
+                            )
+                            item_reserved_source_id = source_file_id
                         else:
                             profile = {"detected_pdf_type": "docx"}
                             source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+                        if source_file_id in prepared_source_ids:
+                            raise MinerUError("同一批次中已有内容相同的文献。")
+                        with import_jobs_lock:
+                            if any(
+                                job.get("source_file_id") == source_file_id
+                                and job.get("status") == "processing"
+                                for job in import_jobs.values()
+                            ):
+                                raise MinerUError("同一文献已有解析任务正在运行。")
                         force_mineru = is_pdf and pdf_parse_mode == "mineru"
                         parse_route = None
                         if is_pdf:
@@ -1971,6 +2473,7 @@ def make_handler(
                                 "target": target,
                                 "profile": profile,
                                 "source_file_id": source_file_id,
+                                "source_reserved": is_pdf,
                                 "is_pdf": is_pdf,
                                 "force_mineru": force_mineru,
                                 "vision_provider_id": vision_provider_id or None,
@@ -1991,25 +2494,37 @@ def make_handler(
                                 },
                             }
                         )
+                        prepared_source_ids.add(source_file_id)
+                        item_reserved_source_id = ""
                     except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+                        if item_reserved_source_id:
+                            release_import_reservation(item_reserved_source_id)
                         import_errors.append({"path": str(raw), "error": str(exc)})
+                    except Exception:
+                        if item_reserved_source_id:
+                            release_import_reservation(item_reserved_source_id)
+                        release_item_reservations(prepared_items)
+                        raise
 
-                native_items = [
-                    item
-                    for item in prepared_items
-                    if not item["is_pdf"] or item["parse_route"] == "native"
-                ]
-                remote_items = [
-                    item
-                    for item in prepared_items
-                    if item["is_pdf"] and item["parse_route"] != "native"
-                ]
-                native_job_ids = start_native_import_batch(native_items)
-                for item, job_id in zip(native_items, native_job_ids):
-                    item["response"]["job_id"] = job_id
-                remote_job_ids = start_remote_import_batch(remote_items)
-                for item, job_id in zip(remote_items, remote_job_ids):
-                    item["response"]["job_id"] = job_id
+                try:
+                    native_items = [
+                        item
+                        for item in prepared_items
+                        if not item["is_pdf"] or item["parse_route"] == "native"
+                    ]
+                    remote_items = [
+                        item
+                        for item in prepared_items
+                        if item["is_pdf"] and item["parse_route"] != "native"
+                    ]
+                    native_job_ids = start_native_import_batch(native_items)
+                    for item, job_id in zip(native_items, native_job_ids):
+                        item["response"]["job_id"] = job_id
+                    remote_job_ids = start_remote_import_batch(remote_items)
+                    for item, job_id in zip(remote_items, remote_job_ids):
+                        item["response"]["job_id"] = job_id
+                finally:
+                    release_item_reservations(prepared_items)
                 jobs = [dict(item["response"]) for item in prepared_items]
                 self._send_json({"ok": True, "jobs": jobs, "errors": import_errors})
                 return
@@ -2094,38 +2609,17 @@ def make_handler(
                 self._send_json(result)
                 return
             if parsed.path == "/api/calibration":
-                sid = payload.get("source_id")
+                sid = str(payload.get("source_id") or "")
                 segments = payload.get("segments", [])
-                config_path = root / "config" / "pdf_imports.json"
-                if not config_path.exists() or not sid:
-                    self._send_json({"error": "invalid request"})
+                if not sid or not isinstance(segments, list):
+                    self._send_json({"error": "invalid request"}, status=400)
                     return
-                config = json.loads(config_path.read_text("utf-8"))
-                doc = next((d for d in config.get("documents", []) if d.get("source_file_id") == sid), None)
-                if not doc:
-                    self._send_json({"error": "document not found"})
-                    return
-                if "page_mapping" not in doc:
-                    doc["page_mapping"] = {}
-                doc["page_mapping"]["segments"] = segments
-                doc["page_mapping"]["validated_by"] = "manual_ui"
-                doc["page_mapping"]["mapping_origin"] = "manual"
-                doc["page_mapping"]["mapping_status"] = "manual_mapped"
-                doc["page_mapping"]["updated_at"] = datetime.now(timezone.utc).isoformat()
-                save_import_config(config_path, config)
-                job_id = f"calibration-{uuid.uuid4().hex[:12]}"
-                with import_jobs_lock:
-                    import_jobs[job_id] = {
-                        "job_id": job_id,
-                        "status": "processing",
-                        "phase": "rebuilding_index",
-                        "message": "正在应用页码校准并重建索引…",
-                    }
                 try:
-                    rebuild_runtime_index(job_id)
-                    update_import_job(job_id, status="completed", phase="completed", message="页码校准已生效")
+                    apply_manual_page_mapping(sid, segments)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
                 except Exception as exc:
-                    update_import_job(job_id, status="failed", phase="failed", message=str(exc))
                     self._send_json({"error": f"校准已保存，但索引重建失败：{exc}"}, status=500)
                     return
                 self._send_json({"ok": True, "rebuilt": True})
@@ -2136,9 +2630,10 @@ def make_handler(
                     self._send_json({"error": "invalid request"}, status=400)
                     return
                 try:
-                    with runtime_lock:
-                        calibration_active_sources.add(sid)
-                    result = detect_auto_page_mapping(sid)
+                    with rebuild_lock:
+                        with runtime_lock:
+                            calibration_active_sources.add(sid)
+                        result = detect_auto_page_mapping(sid)
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -2155,39 +2650,145 @@ def make_handler(
                 if not sid:
                     self._send_json({"error": "invalid request"}, status=400)
                     return
-                with runtime_lock:
-                    runtime["rebuilding"] = True
-                    old_engine = runtime["engine"]
-                    if hasattr(old_engine, "close"):
-                        old_engine.close()
-                try:
-                    result = DocumentDeletionService(root, index_path).remove(
-                        sid,
-                        delete_generated_artifacts=bool(payload.get("delete_generated_artifacts", True)),
-                        delete_internal_copy=bool(payload.get("delete_internal_copy", False)),
+                with import_jobs_lock:
+                    if sid in deleting_import_sources:
+                        self._send_json(
+                            {"error": "该文献正在删除，请勿重复操作。"},
+                            status=409,
+                        )
+                        return
+                    if sid in pending_import_sources:
+                        self._send_json(
+                            {"error": "该文献正在准备导入，请稍后再删除。"},
+                            status=409,
+                        )
+                        return
+                    running_import = next(
+                        (
+                            job
+                            for job in import_jobs.values()
+                            if job.get("source_file_id") == sid
+                            and job.get("status") == "processing"
+                        ),
+                        None,
                     )
-                    with runtime_lock:
-                        runtime["engine"] = SearchEngine(index_path)
-                        runtime["source_files"] = {
-                            str(item.get("source_file_id")): item
-                            for item in runtime["engine"].index.get("source_files", [])
-                            if item.get("source_file_id")
+                    if running_import is not None:
+                        self._send_json(
+                            {"error": "该文献仍在解析中，请等待任务结束后再删除。"},
+                            status=409,
+                        )
+                        return
+                    deleting_import_sources.add(sid)
+                    stale_job_ids = [
+                        job_id
+                        for job_id, job in import_jobs.items()
+                        if job.get("source_file_id") == sid
+                    ]
+                result: Dict[str, object] = {}
+                removal_committed = False
+                removal_error: Optional[Exception] = None
+                removal_error_status = 400
+                journal_cleanup_warnings: List[str] = []
+                try:
+                    with rebuild_lock:
+                        try:
+                            with runtime_lock:
+                                runtime["rebuilding"] = True
+                                old_engine = runtime["engine"]
+                                if hasattr(old_engine, "close"):
+                                    old_engine.close()
+                            result = DocumentDeletionService(
+                                root, index_path
+                            ).remove(
+                                sid,
+                                delete_generated_artifacts=bool(
+                                    payload.get(
+                                        "delete_generated_artifacts", True
+                                    )
+                                ),
+                                delete_internal_copy=bool(
+                                    payload.get("delete_internal_copy", False)
+                                ),
+                            )
+                            removal_committed = True
+                        except (
+                            ValueError,
+                            OSError,
+                            sqlite3.Error,
+                            json.JSONDecodeError,
+                        ) as exc:
+                            removal_error = exc
+                        except Exception as exc:
+                            logging.exception("failed to remove document")
+                            removal_error = exc
+                            removal_error_status = 500
+                        finally:
+                            try:
+                                with runtime_lock:
+                                    runtime["engine"] = SearchEngine(index_path)
+                                    runtime["source_files"] = {
+                                        str(item.get("source_file_id")): item
+                                        for item in runtime[
+                                            "engine"
+                                        ].index.get("source_files", [])
+                                        if item.get("source_file_id")
+                                    }
+                                    runtime["index_metadata"] = runtime[
+                                        "engine"
+                                    ].index.get("metadata", {})
+                                    runtime["rebuilding"] = False
+                            except Exception as exc:
+                                logging.exception(
+                                    "document removed but search index reload failed"
+                                )
+                                with runtime_lock:
+                                    runtime["rebuilding"] = False
+                                if removal_error is None:
+                                    removal_error = RuntimeError(
+                                        "文献已删除，但索引重新载入失败；请重启应用。"
+                                    )
+                                    removal_error_status = 500
+
+                    if removal_committed:
+                        for stale_job_id in stale_job_ids:
+                            try:
+                                import_job_journal.delete_job(stale_job_id)
+                            except (OSError, ValueError) as exc:
+                                logging.warning(
+                                    "failed to remove stale import journal %s: %s",
+                                    stale_job_id,
+                                    exc,
+                                )
+                                journal_cleanup_warnings.append(
+                                    f"{stale_job_id}: {exc}"
+                                )
+                        with import_jobs_lock:
+                            for stale_job_id in stale_job_ids:
+                                import_jobs.pop(stale_job_id, None)
+                                import_job_contexts.pop(stale_job_id, None)
+                        if journal_cleanup_warnings:
+                            result.setdefault("cleanup_warnings", [])
+                            result["cleanup_warnings"] = [
+                                *list(result.get("cleanup_warnings") or []),
+                                *journal_cleanup_warnings,
+                            ]
+
+                    if removal_error is not None:
+                        self._send_json(
+                            {"error": str(removal_error) or "删除文献失败。"},
+                            status=removal_error_status,
+                        )
+                        return
+                    self._send_json(
+                        {
+                            "ok": True,
+                            "result": result,
+                            "event": "library_changed",
                         }
-                        runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                        runtime["rebuilding"] = False
-                except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
-                    with runtime_lock:
-                        runtime["engine"] = SearchEngine(index_path)
-                        runtime["source_files"] = {
-                            str(item.get("source_file_id")): item
-                            for item in runtime["engine"].index.get("source_files", [])
-                            if item.get("source_file_id")
-                        }
-                        runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                        runtime["rebuilding"] = False
-                    self._send_json({"error": str(exc)}, status=400)
-                    return
-                self._send_json({"ok": True, "result": result, "event": "library_changed"})
+                    )
+                finally:
+                    with import_jobs_lock:
+                        deleting_import_sources.discard(sid)
                 return
             if parsed.path == "/api/bibliographic-metadata/detect":
                 sid = str(payload.get("source_id") or "")
@@ -2231,12 +2832,13 @@ def make_handler(
                     self._send_json({"error": "invalid request"}, status=400)
                     return
                 try:
-                    updated = apply_live_auto_mapping(
-                        sid,
-                        segments,
-                        auto_mapping,
-                        bool(payload.get("replace_manual")),
-                    )
+                    with rebuild_lock:
+                        updated = apply_live_auto_mapping(
+                            sid,
+                            segments,
+                            auto_mapping,
+                            bool(payload.get("replace_manual")),
+                        )
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=409)
                     return
@@ -2252,16 +2854,22 @@ def make_handler(
                     return
                 job_id = f"auto-map-{uuid.uuid4().hex[:12]}"
                 try:
-                    segment_count = accept_auto_page_mapping(sid)
-                    with import_jobs_lock:
-                        import_jobs[job_id] = {
-                            "job_id": job_id,
-                            "status": "processing",
-                            "phase": "rebuilding_index",
-                            "message": "正在接受自动页码映射并重建索引…",
-                        }
-                    rebuild_runtime_index(job_id)
-                    update_import_job(job_id, status="completed", phase="completed", message="自动页码映射已接受")
+                    with rebuild_lock:
+                        segment_count = accept_auto_page_mapping(sid)
+                        with import_jobs_lock:
+                            import_jobs[job_id] = {
+                                "job_id": job_id,
+                                "status": "processing",
+                                "phase": "rebuilding_index",
+                                "message": "正在接受自动页码映射并重建索引…",
+                            }
+                        rebuild_runtime_index(job_id)
+                        update_import_job(
+                            job_id,
+                            status="completed",
+                            phase="completed",
+                            message="自动页码映射已接受",
+                        )
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return

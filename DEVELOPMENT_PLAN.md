@@ -106,13 +106,13 @@
 
 ## v0.2.3-B 实施清单（并行，独立提交与测试组）
 
-- [ ] 导入任务清单持久化：`{file_hash, total_pages, completed_pages, failed_pages, last_updated}`，衔接现有 `import_queue.py` 与 `pdf_import_runs` 表。
-- [ ] MinerU 分段续跑：按分段保存检查点；注意 MinerU `page_idx` 从每分段内部 0 开始，叠加分段起始页 offset（已知陷阱）。
-- [ ] 视觉 API 逐页检查点：失败页记录原因，续跑只重试失败页。
-- [ ] 中断恢复：进程重启后从清单续跑，不整本重解析。
-- [ ] 跨页合并保守规则不变：无法判断时保留两段。
-- [ ] 不自动上传用户文献；"导出本地 Markdown"留作以后可选功能。
-- [ ] 测试组独立命名（如 `test_import_resume*`），与 A 组互不依赖。
+- [x] 导入任务清单持久化：`{file_hash, total_pages, completed_pages, failed_pages, last_updated}`，衔接现有 `import_queue.py` 与 `pdf_import_runs` 表。
+- [x] MinerU 分段续跑：按分段保存检查点；注意 MinerU `page_idx` 从每分段内部 0 开始，叠加分段起始页 offset（已知陷阱）。
+- [x] 视觉 API 逐页检查点：失败页记录原因，续跑只重试失败页。
+- [x] 中断恢复：进程重启后从清单恢复为“已暂停、可继续”，由用户确认后入队，不整本重解析。
+- [x] 跨页合并保守规则不变：无法判断时保留两段。
+- [x] 不自动上传用户文献；"导出本地 Markdown"留作以后可选功能。
+- [x] 测试组独立命名（`test_import_resume_*`），与 A 组互不依赖，并加入 Mac/Windows 发布门槛。
 
 ## v0.2.4 实施清单（结构化阅读器）
 

@@ -19,6 +19,18 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from .import_resume import (
+    COMPLETED_UNIT_STATUSES,
+    ResumeManifestError,
+    atomic_write_json,
+    load_json_object,
+    manifest_matches,
+    options_fingerprint,
+    quarantine_corrupt_manifest,
+    refresh_manifest_progress,
+    sha256_file,
+)
+
 
 DEFAULT_MINERU_CONFIG_PATH = Path("config/mineru_api.local.json")
 DEFAULT_MINERU_STATE_DIR = Path("corpus/processed/mineru/tasks")
@@ -44,7 +56,16 @@ def resolve_mineru_config_path(root: Optional[Path] = None) -> Path:
 
 
 class MinerUError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        retry_with_new_task: bool = False,
+        allow_parser_fallback: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.retry_with_new_task = bool(retry_with_new_task)
+        self.allow_parser_fallback = bool(allow_parser_fallback)
 
 
 @dataclass
@@ -249,7 +270,14 @@ class MinerUClient:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")
-            raise MinerUError(f"MinerU HTTP {exc.code}: {detail}") from exc
+            raise MinerUError(
+                f"MinerU HTTP {exc.code}: {detail}",
+                retry_with_new_task=bool(
+                    method == "GET"
+                    and "/extract-results/batch/" in endpoint
+                    and exc.code in {404, 410}
+                ),
+            ) from exc
         except urllib.error.URLError as exc:
             raise MinerUError(f"MinerU network error: {exc.reason}") from exc
         try:
@@ -257,7 +285,28 @@ class MinerUClient:
         except json.JSONDecodeError as exc:
             raise MinerUError(f"MinerU returned non-JSON response: {raw[:200]}") from exc
         if data.get("code") != 0:
-            raise MinerUError(f"MinerU error {data.get('code')}: {data.get('msg')}")
+            message = str(data.get("msg") or "")
+            normalized = message.casefold()
+            batch_missing = bool(
+                method == "GET"
+                and "/extract-results/batch/" in endpoint
+                and any(
+                    marker in normalized
+                    for marker in (
+                        "batch not found",
+                        "batch does not exist",
+                        "invalid batch",
+                        "task not found",
+                        "批次不存在",
+                        "任务不存在",
+                        "任务已过期",
+                    )
+                )
+            )
+            raise MinerUError(
+                f"MinerU error {data.get('code')}: {message}",
+                retry_with_new_task=batch_missing,
+            )
         return data
 
 
@@ -349,6 +398,8 @@ def submit_local_pdf(
     is_ocr: bool = True,
     enable_table: bool = True,
     enable_formula: bool = True,
+    file_hash: Optional[str] = None,
+    parse_options_fingerprint: Optional[str] = None,
 ) -> Dict[str, object]:
     pdf_path = Path(pdf_path)
     if not pdf_path.exists():
@@ -388,6 +439,10 @@ def submit_local_pdf(
         "upload_status": upload_status,
         "submitted_at": int(time.time()),
     }
+    if file_hash:
+        state["file_hash"] = str(file_hash)
+    if parse_options_fingerprint:
+        state["parse_options_fingerprint"] = str(parse_options_fingerprint)
     save_state(batch_id, state, Path(state_dir))
     return state
 
@@ -398,6 +453,7 @@ def submit_local_pdf_segments(
     config_path: Path = DEFAULT_MINERU_CONFIG_PATH,
     state_dir: Path = DEFAULT_MINERU_STATE_DIR,
     manifest_dir: Path = DEFAULT_MINERU_MANIFEST_DIR,
+    result_dir: Path = DEFAULT_MINERU_RESULT_DIR,
     data_id_prefix: Optional[str] = None,
     segment_size: int = 200,
     start_page: int = 1,
@@ -419,10 +475,69 @@ def submit_local_pdf_segments(
         raise MinerUError(f"Invalid page span {start_page}-{end_page}; PDF has {total_pages} pages.")
     prefix = safe_data_id(data_id_prefix or pdf_path.stem)
     width = max(3, len(str(total_pages)))
+    parse_options = {
+        "api_base": str(
+            read_mineru_config_data(config_path).get("api_base")
+            or DEFAULT_MINERU_API_BASE
+        ).rstrip("/"),
+        "segment_size": segment_size,
+        "requested_page_start": start_page,
+        "requested_page_end": end_page,
+        "model_version": model_version,
+        "language": language,
+        "is_ocr": is_ocr,
+        "enable_table": enable_table,
+        "enable_formula": enable_formula,
+    }
+    file_hash = sha256_file(pdf_path)
+    parse_options_fingerprint = options_fingerprint(parse_options)
+    existing_manifest = load_segment_manifest(prefix, Path(manifest_dir), quarantine_corrupt=True)
+    try:
+        exact_resume = bool(
+            existing_manifest
+            and manifest_matches(
+                existing_manifest,
+                file_hash=file_hash,
+                parser="mineru",
+                parse_options_fingerprint=parse_options_fingerprint,
+            )
+        )
+    except (TypeError, ValueError):
+        exact_resume = False
+    old_segments: Dict[Tuple[str, int, int], Dict[str, object]] = {}
+    if exact_resume:
+        for item in (existing_manifest or {}).get("segments") or []:
+            if not isinstance(item, dict):
+                continue
+            identity = _mineru_segment_identity(item)
+            if identity is not None:
+                old_segments[identity] = item
+    planned_segments: List[Dict[str, object]] = []
+    for segment_start, segment_end in build_page_segments(start_page, end_page, segment_size):
+        data_id = f"{prefix}-p{segment_start:0{width}d}-{segment_end:0{width}d}"
+        identity = (data_id, segment_start, segment_end)
+        previous = old_segments.get(identity)
+        segment_state = dict(previous) if previous is not None else {}
+        segment_state.update(
+            {
+                "data_id": data_id,
+                "page_ranges": f"{segment_start}-{segment_end}",
+                "page_start": segment_start,
+                "page_end": segment_end,
+                "page_index_offset": segment_start - 1,
+            }
+        )
+        if previous is None:
+            segment_state.update({"status": "pending", "attempts": 0})
+        planned_segments.append(segment_state)
     manifest: Dict[str, object] = {
         "api": "precision",
+        "parser": "mineru",
         "pdf_path": str(pdf_path),
         "file_name": pdf_path.name,
+        "file_hash": file_hash,
+        "parse_options": parse_options,
+        "parse_options_fingerprint": parse_options_fingerprint,
         "data_id_prefix": prefix,
         "total_pages": total_pages,
         "segment_size": segment_size,
@@ -433,44 +548,186 @@ def submit_local_pdf_segments(
         "is_ocr": is_ocr,
         "enable_table": enable_table,
         "enable_formula": enable_formula,
-        "submitted_at": int(time.time()),
-        "segments": [],
+        "submitted_at": (
+            existing_manifest.get("submitted_at")
+            if exact_resume and existing_manifest
+            else int(time.time())
+        ),
+        "resume_count": (
+            _coerce_int(existing_manifest.get("resume_count"), 0) + 1
+            if exact_resume and existing_manifest
+            else 0
+        ),
+        # Preserve every exact-match checkpoint before doing any network work.
+        # Updating one segment in place must never erase later batch/result IDs
+        # when the process is interrupted midway through a resumed import.
+        "segments": planned_segments,
     }
-    for segment_start, segment_end in build_page_segments(start_page, end_page, segment_size):
-        data_id = f"{prefix}-p{segment_start:0{width}d}-{segment_end:0{width}d}"
-        result_dir = Path(DEFAULT_MINERU_RESULT_DIR) / data_id
-        if result_dir.exists():
-            segment_state = {
-                "data_id": data_id,
-                "page_ranges": f"{segment_start}-{segment_end}",
-                "status": "skipped_existing_result",
-                "result_dir": str(result_dir),
-            }
+    save_segment_manifest(prefix, manifest, Path(manifest_dir))
+    result_root = Path(result_dir)
+    for segment_state in planned_segments:
+        data_id = str(segment_state["data_id"])
+        page_ranges = str(segment_state["page_ranges"])
+        segment_start = _coerce_int(segment_state.get("page_start"))
+        segment_end = _coerce_int(segment_state.get("page_end"))
+        page_index_offset = segment_start - 1
+        canonical_result_dir = Path(result_dir) / data_id
+        identity = (data_id, segment_start, segment_end)
+        previous = old_segments.get(identity) if exact_resume else None
+        if (
+            exact_resume
+            and isinstance(previous, dict)
+            and not previous.get("batch_id")
+            and str(previous.get("status") or "").lower()
+            in {"pending", "submitting", "processing"}
+        ):
+            recovered_state = _matching_segment_state(
+                Path(state_dir),
+                data_id=data_id,
+                file_hash=file_hash,
+                parse_options_fingerprint=parse_options_fingerprint,
+            )
+            if recovered_state is not None:
+                previous = dict(previous)
+                previous.update(
+                    {
+                        "batch_id": recovered_state["batch_id"],
+                        "state_file": str(
+                            state_path(
+                                str(recovered_state["batch_id"]),
+                                Path(state_dir),
+                            )
+                        ),
+                        "status": "submitted",
+                    }
+                )
+                old_segments[identity] = previous
+                segment_state.update(previous)
+        previous_result_dir = (
+            Path(str(previous.get("result_dir")))
+            if isinstance(previous, dict) and previous.get("result_dir")
+            else None
+        )
+        previous_status = str((previous or {}).get("status") or "").lower()
+        can_resume_batch = bool(
+            exact_resume
+            and isinstance(previous, dict)
+            and previous.get("batch_id")
+            and previous_status != "failed"
+        )
+        active_batch = bool(
+            can_resume_batch
+            and previous_status not in COMPLETED_UNIT_STATUSES
+        )
+        reusable_result_dir = (
+            next(
+                (
+                    candidate
+                    for candidate in (canonical_result_dir, previous_result_dir)
+                    if candidate is not None
+                    and _path_is_within(candidate, result_root)
+                    and _valid_mineru_result_identity(
+                        candidate,
+                        file_hash=file_hash,
+                        parse_options_fingerprint=parse_options_fingerprint,
+                        data_id=data_id,
+                        batch_id=str((previous or {}).get("batch_id") or ""),
+                    )
+                ),
+                None,
+            )
+            if exact_resume
+            else None
+        )
+        resume_existing_batch = active_batch or (
+            reusable_result_dir is None and can_resume_batch
+        )
+        if resume_existing_batch:
+            segment_state.update(
+                {
+                    "data_id": data_id,
+                    "page_ranges": page_ranges,
+                    "page_start": segment_start,
+                    "page_end": segment_end,
+                    "page_index_offset": page_index_offset,
+                    "status": (
+                        "processing"
+                        if previous_status in COMPLETED_UNIT_STATUSES
+                        else str(previous.get("status") or "submitted")
+                    ),
+                    "resumed_existing_batch": True,
+                    "attempts": max(1, _coerce_int(previous.get("attempts"), 1)),
+                }
+            )
+        elif reusable_result_dir is not None:
+            segment_state.update(
+                {
+                    "status": "skipped_existing_result",
+                    "result_dir": str(reusable_result_dir),
+                    "attempts": max(1, _coerce_int((previous or {}).get("attempts"), 1)),
+                }
+            )
+            segment_state.pop("error", None)
+            segment_state.pop("last_error", None)
+            segment_state.pop("resumed_existing_batch", None)
         else:
+            segment_state.update(
+                {
+                    "status": "submitting",
+                    "attempts": max(0, _coerce_int((previous or {}).get("attempts"), 0)) + 1,
+                }
+            )
+            for stale_key in (
+                "batch_id",
+                "state_file",
+                "result_dir",
+                "resumed_existing_batch",
+                "error",
+                "last_error",
+            ):
+                segment_state.pop(stale_key, None)
+        save_segment_manifest(prefix, manifest, Path(manifest_dir))
+        if segment_state.get("status") != "submitting":
+            continue
+        try:
             state = submit_local_pdf(
                 pdf_path,
                 config_path=config_path,
                 state_dir=state_dir,
                 data_id=data_id,
-                page_ranges=f"{segment_start}-{segment_end}",
+                page_ranges=page_ranges,
                 model_version=model_version,
                 language=language,
                 is_ocr=is_ocr,
                 enable_table=enable_table,
                 enable_formula=enable_formula,
+                file_hash=file_hash,
+                parse_options_fingerprint=parse_options_fingerprint,
             )
-            segment_state = {
-                "data_id": data_id,
-                "page_ranges": f"{segment_start}-{segment_end}",
+        except Exception as exc:
+            segment_state["status"] = "failed"
+            segment_state["error"] = str(exc)
+            save_segment_manifest(prefix, manifest, Path(manifest_dir))
+            raise MinerUError(
+                str(exc),
+                retry_with_new_task=bool(
+                    isinstance(exc, MinerUError)
+                    and exc.retry_with_new_task
+                ),
+                allow_parser_fallback=False,
+            ) from exc
+        segment_state.update(
+            {
                 "status": "submitted",
                 "batch_id": state["batch_id"],
-                "state_file": str(Path(state_dir) / f"{state['batch_id']}.json"),
+                "state_file": str(
+                    state_path(str(state["batch_id"]), Path(state_dir))
+                ),
             }
-        cast_segments = manifest["segments"]
-        if isinstance(cast_segments, list):
-            cast_segments.append(segment_state)
+        )
+        segment_state.pop("error", None)
+        save_segment_manifest(prefix, manifest, Path(manifest_dir))
     manifest_path = save_segment_manifest(prefix, manifest, Path(manifest_dir))
-    manifest["manifest_path"] = str(manifest_path)
     return manifest
 
 
@@ -502,6 +759,7 @@ def download_done_results(
     extract_results = data.get("extract_result") or []
     if isinstance(extract_results, dict):
         extract_results = [extract_results]
+    state = load_state(batch_id, Path(state_dir))
     downloaded: List[Path] = []
     for item in extract_results:
         if item.get("state") != "done" or not item.get("full_zip_url"):
@@ -511,10 +769,21 @@ def download_done_results(
         zip_path = out_dir / "mineru_result.zip"
         client.download_url(str(item["full_zip_url"]), zip_path)
         extract_zip(zip_path, out_dir)
+        if not valid_mineru_result_dir(out_dir):
+            raise MinerUError(f"MinerU result is missing a valid content_list.json: {out_dir}")
+        atomic_write_json(
+            out_dir / ".mefinder-result-complete.json",
+            {
+                "batch_id": batch_id,
+                "data_id": label,
+                "file_hash": state.get("file_hash"),
+                "parse_options_fingerprint": state.get("parse_options_fingerprint"),
+                "completed_at": int(time.time()),
+            },
+        )
         downloaded.append(out_dir)
     if not downloaded:
         raise MinerUError("No completed MinerU result is available for download yet.")
-    state = load_state(batch_id, Path(state_dir))
     state["downloaded_result_dirs"] = [str(p) for p in downloaded]
     save_state(batch_id, state, Path(state_dir))
     return downloaded
@@ -747,23 +1016,184 @@ def agent_state_key(task_id: str) -> str:
     return f"agent-{safe_data_id(task_id)}"
 
 
+def _coerce_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _mineru_segment_identity(
+    segment: Dict[str, object],
+) -> Optional[Tuple[str, int, int]]:
+    """Return the stable identity used when merging one segment checkpoint."""
+
+    data_id = str(segment.get("data_id") or "").strip()
+    start = _coerce_int(segment.get("page_start"), -1)
+    end = _coerce_int(segment.get("page_end"), -1)
+    if start < 1 or end < start:
+        match = re.fullmatch(
+            r"(\d+)\s*-\s*(\d+)",
+            str(segment.get("page_ranges") or "").strip(),
+        )
+        if match:
+            start, end = int(match.group(1)), int(match.group(2))
+    if not data_id or start < 1 or end < start:
+        return None
+    return data_id, start, end
+
+
+def _path_is_within(candidate: Path, root: Path) -> bool:
+    """Reject result paths (including symlinks) that escape the result root."""
+
+    try:
+        resolved_candidate = Path(candidate).resolve()
+        resolved_root = Path(root).resolve()
+    except (OSError, RuntimeError):
+        return False
+    return (
+        resolved_candidate == resolved_root
+        or resolved_root in resolved_candidate.parents
+    )
+
+
+def _matching_segment_state(
+    state_dir: Path,
+    *,
+    data_id: str,
+    file_hash: str,
+    parse_options_fingerprint: str,
+) -> Optional[Dict[str, object]]:
+    """Recover a paid batch saved just before its manifest update was interrupted."""
+
+    matches: List[Dict[str, object]] = []
+    try:
+        paths = list(Path(state_dir).glob("*.json"))
+    except OSError:
+        return None
+    for path in paths:
+        try:
+            state = load_json_object(path)
+        except ResumeManifestError:
+            continue
+        if not state or not state.get("batch_id"):
+            continue
+        if (
+            str(state.get("data_id") or "") != data_id
+            or str(state.get("file_hash") or "") != file_hash
+            or str(state.get("parse_options_fingerprint") or "")
+            != parse_options_fingerprint
+        ):
+            continue
+        matches.append(state)
+    if not matches:
+        return None
+    return max(matches, key=lambda item: _coerce_int(item.get("submitted_at"), 0))
+
+
+def segment_manifest_path(prefix: str, manifest_dir: Path) -> Path:
+    return Path(manifest_dir) / f"segments-{safe_data_id(prefix)}.json"
+
+
+def load_segment_manifest(
+    prefix: str,
+    manifest_dir: Path,
+    *,
+    quarantine_corrupt: bool = False,
+) -> Optional[Dict[str, object]]:
+    path = segment_manifest_path(prefix, manifest_dir)
+    try:
+        manifest = load_json_object(path)
+        if manifest is None:
+            return None
+        raw_segments = manifest.get("segments")
+        if raw_segments is not None and (
+            not isinstance(raw_segments, list)
+            or any(not isinstance(item, dict) for item in raw_segments)
+        ):
+            raise ResumeManifestError(f"断点清单的 segments 结构损坏：{path}")
+        return manifest
+    except ResumeManifestError:
+        if not quarantine_corrupt:
+            raise
+        quarantine_corrupt_manifest(path)
+        return None
+
+
+def _valid_mineru_result_identity(
+    result_dir: Path,
+    *,
+    file_hash: str,
+    parse_options_fingerprint: str,
+    data_id: str,
+    batch_id: str = "",
+) -> bool:
+    """Trust a downloaded result only when its completion marker matches."""
+
+    if not valid_mineru_result_dir(result_dir):
+        return False
+    try:
+        marker = load_json_object(Path(result_dir) / ".mefinder-result-complete.json")
+    except ResumeManifestError:
+        return False
+    if not marker:
+        return False
+    if (
+        str(marker.get("file_hash") or "") != file_hash
+        or str(marker.get("parse_options_fingerprint") or "")
+        != parse_options_fingerprint
+        or str(marker.get("data_id") or "") != data_id
+    ):
+        return False
+    return not batch_id or str(marker.get("batch_id") or "") == batch_id
+
+
+def valid_mineru_result_dir(result_dir: Path) -> bool:
+    """A bare/partially downloaded directory is not a reusable result."""
+
+    result_dir = Path(result_dir)
+    if not result_dir.is_dir():
+        return False
+    candidates = sorted(result_dir.glob("*_content_list.json"))
+    direct = result_dir / "content_list.json"
+    if direct.is_file():
+        candidates.append(direct)
+    for candidate in candidates:
+        try:
+            content = json.loads(candidate.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(content, list):
+            return True
+    return False
+
+
 def save_segment_manifest(prefix: str, manifest: Dict[str, object], manifest_dir: Path) -> Path:
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-    path = manifest_dir / f"segments-{safe_data_id(prefix)}.json"
-    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    path = segment_manifest_path(prefix, manifest_dir)
+    manifest["manifest_path"] = str(path)
+    refresh_manifest_progress(manifest)
+    atomic_write_json(path, manifest)
     return path
 
 
 def save_state(batch_id: str, state: Dict[str, object], state_dir: Path) -> None:
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / f"{batch_id}.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(state_path(batch_id, state_dir), state)
 
 
 def load_state(batch_id: str, state_dir: Path) -> Dict[str, object]:
-    path = state_dir / f"{batch_id}.json"
+    path = state_path(batch_id, state_dir)
     if not path.exists():
         return {"batch_id": batch_id}
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def state_path(task_id: str, state_dir: Path) -> Path:
+    """Return a contained state path for a server-supplied task identifier."""
+
+    value = str(task_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}", value):
+        raise MinerUError("MinerU returned an unsafe task identifier.")
+    return Path(state_dir) / f"{value}.json"
 
 
 def extract_zip(zip_path: Path, output_dir: Path) -> None:

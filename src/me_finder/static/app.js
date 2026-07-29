@@ -3965,9 +3965,17 @@ function renderImportQueue() {
         + '<span class="import-step-label">' + label + '</span>'
         + '</div>';
     }).join('');
-    var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : '';
+    var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : q.status === 'paused' ? ' paused' : '';
     var retryHTML = '';
-    if (q.status === 'error' && q.canRetryVision) {
+    if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
+      retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
+        + q.id + '\')">从断点继续</button>';
+      if (q.status === 'error' && q.canRetryVision) {
+        retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
+          + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>';
+      }
+      retryHTML += '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">解析设置</button></div>';
+    } else if (q.status === 'error' && q.canRetryVision) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
         + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>'
         + '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">切换设置</button></div>';
@@ -3989,8 +3997,23 @@ function renderImportQueue() {
   }).join('');
 }
 
-function removeImport(id) {
-  importQueue = importQueue.filter(function(q) { return q.id !== id; });
+async function removeImport(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (q && q.jobId && (q.status === 'paused' || q.status === 'error')) {
+    try {
+      var resp = await fetch('/api/import-resume-dismiss', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({job_id: q.jobId})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
+    } catch (e) {
+      showToast('移除导入任务失败：' + e.message);
+      return;
+    }
+  }
+  importQueue = importQueue.filter(function(item) { return item.id !== id; });
   renderImportQueue();
 }
 
@@ -4065,10 +4088,15 @@ function pollImportJob(id) {
       } else if (data.status === 'failed') {
         q.status = 'error';
         q.message = data.message || '导入失败';
+        q.canResume = !!data.can_resume;
         q.canRetryVision = !!data.can_retry_with_provider;
         q.retryProviderId = data.retry_provider_id || q.providerId || null;
         q.retryProviderName = data.retry_provider_name || q.providerName || null;
         q.needsProviderConfig = !!data.needs_provider_config;
+      } else if (data.status === 'paused') {
+        q.status = 'paused';
+        q.canResume = !!data.can_resume;
+        q.message = data.message || '上次导入已暂停，可从断点继续';
       }
       renderImportQueue();
       if (q.status === 'processing') setTimeout(function() { pollImportJob(id); }, 2500);
@@ -4078,6 +4106,65 @@ function pollImportJob(id) {
       q.message = err.message || '读取导入状态失败';
       renderImportQueue();
     });
+}
+
+async function loadResumableImports() {
+  try {
+    var resp = await fetch('/api/import-resumable');
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '读取恢复任务失败');
+    (data.jobs || []).forEach(function(job) {
+      if (importQueue.some(function(item) { return item.jobId === job.job_id; })) return;
+      var isPaused = job.status === 'paused';
+      importQueue.push({
+        id: 'resume-' + job.job_id,
+        jobId: job.job_id,
+        name: job.file_name || '未命名文献',
+        size: Number(job.size_bytes || 0),
+        type: job.file_type === 'pdf' ? 'pdf' : 'docx',
+        status: isPaused ? 'paused' : 'error',
+        step: job.file_type === 'pdf' ? 2 : 1,
+        route: job.parse_route || null,
+        providerId: job.provider_id || null,
+        providerName: job.provider_name || null,
+        detectedType: job.detected_pdf_type || null,
+        message: job.message || (isPaused ? '上次导入已暂停，可从断点继续' : '上次导入未完成'),
+        canResume: !!job.can_resume,
+        canRetryVision: !!job.can_retry_with_provider,
+        retryProviderId: job.retry_provider_id || job.provider_id || null,
+        retryProviderName: job.retry_provider_name || job.provider_name || null,
+        needsProviderConfig: !!job.needs_provider_config,
+        fromJournal: true
+      });
+    });
+    renderImportQueue();
+  } catch (e) {
+    console.warn('load resumable imports failed:', e);
+  }
+}
+
+async function resumeImport(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (!q || !q.jobId || !q.canResume) return;
+  var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+  if (q.type === 'pdf' && q.route !== 'native'
+      && !confirm('将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用。继续吗？')) return;
+  try {
+    var resp = await fetch('/api/import-resume', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: q.jobId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '继续任务失败');
+    q.status = 'processing';
+    q.canResume = false;
+    q.message = '正在从上次断点继续…';
+    renderImportQueue();
+    pollImportJob(q.id);
+  } catch (e) {
+    showToast('继续导入失败：' + e.message);
+  }
 }
 
 async function retryImportWithVision(id) {
@@ -4182,6 +4269,7 @@ setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
+loadResumableImports();
 syncLibraryViewButtons();
 renderSearchDocumentOptions();
 ensureSearchDocuments().then(function() { renderSearchDocumentOptions(); updateSearchDocumentLabel(); });
