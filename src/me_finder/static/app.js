@@ -2493,7 +2493,7 @@ function renderScanDirectories() {
     return '<div class="scan-dir-row" title="' + esc(dir) + '">'
       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
       + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
-      + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">×</button>'
+      + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">移除</button>'
       + '</div>';
   }).join('');
 }
@@ -3612,6 +3612,8 @@ async function runDirectoryScan() {
     scanEntries = data.entries || [];
     renderScanResults(data);
   } catch (e) {
+    document.getElementById('scan-results-head').style.display = 'none';
+    document.getElementById('scan-results').innerHTML = '';
     statusEl.textContent = '扫描失败：' + e.message;
   } finally {
     button.disabled = false;
@@ -3662,10 +3664,17 @@ function renderScanResults(data) {
   section('已导入', groups.imported, false, false);
   resultsEl.innerHTML = pieces.join('');
   var newCount = groups.ready.length + groups.ocr.length + groups.unknown.length;
-  var summary = '发现 ' + scanEntries.length + ' 个文件：新文件 ' + newCount + '，正在导入 ' + groups.processing.length + '，已导入 ' + groups.imported.length + '，同名冲突 ' + groups.conflict.length + '。';
-  if (data.limit_reached) summary += '（数量超出上限，仅显示前 ' + scanEntries.length + ' 个）';
-  (data.errors || []).forEach(function(err) { summary += ' ' + err.directory + '：' + err.error + '。'; });
-  statusEl.textContent = summary;
+  var parts = ['新文件 ' + newCount];
+  if (groups.processing.length) parts.push('正在导入 ' + groups.processing.length);
+  if (groups.imported.length) parts.push('已导入 ' + groups.imported.length);
+  if (groups.conflict.length) parts.push('冲突 ' + groups.conflict.length);
+  document.getElementById('scan-results-summary').textContent = parts.join(' · ');
+  document.getElementById('scan-results-head').style.display = 'flex';
+  // Only warnings stay in the status line; the counts live in the results head.
+  var warnings = [];
+  if (data.limit_reached) warnings.push('数量超出上限，仅显示前 ' + scanEntries.length + ' 个。');
+  (data.errors || []).forEach(function(err) { warnings.push(err.directory + '：' + err.error + '。'); });
+  statusEl.textContent = warnings.join(' ');
   updateScanImportButton();
 }
 
@@ -3673,7 +3682,7 @@ function updateScanImportButton() {
   var button = document.getElementById('scan-import-btn');
   var checked = document.querySelectorAll('#scan-results .scan-check:checked').length;
   button.style.display = checked ? 'inline-flex' : 'none';
-  button.textContent = '导入所选（' + checked + '）';
+  button.textContent = '导入所选 (' + checked + ')';
 }
 
 async function importSelectedScanned() {

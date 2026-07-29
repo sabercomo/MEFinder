@@ -339,19 +339,24 @@
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>
+            <div class="scan-section-actions">
+              <input id="scan-dir-input" class="scan-dir-add" type="text" spellcheck="false" placeholder="或粘贴文件夹路径后回车…" onkeydown="if(event.key==='Enter')addScanDirectory()">
+              <button class="scan-dir-pick" type="button" id="scan-dir-pick" onclick="chooseScanDirectory()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v6M9 14h6"/></svg>
+                选择文件夹
+              </button>
+              <button class="action-btn" type="button" id="scan-run-btn" onclick="runDirectoryScan()">开始扫描</button>
+            </div>
           </div>
           <div class="scan-section-hint">选择存放文献的文件夹，扫描后勾选要导入的文件。原始文件永远不会被移动或删除；导入时会复制到应用语料目录。</div>
-          <div class="scan-toolbar">
-            <button class="scan-dir-pick" type="button" id="scan-dir-pick" onclick="chooseScanDirectory()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v6M9 14h6"/></svg>
-              选择文件夹
-            </button>
-            <input id="scan-dir-input" class="scan-dir-add" type="text" spellcheck="false" placeholder="或粘贴文件夹路径后回车…" onkeydown="if(event.key==='Enter')addScanDirectory()">
-            <button class="action-btn" type="button" id="scan-run-btn" onclick="runDirectoryScan()">扫描目录</button>
-            <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" onclick="importSelectedScanned()">导入所选</button>
-          </div>
+          <div class="scan-subhead">已添加目录</div>
           <div class="scan-dir-list" id="scan-dir-list"></div>
           <div id="scan-status" class="scan-status"></div>
+          <div class="scan-results-head" id="scan-results-head" style="display:none">
+            <span class="scan-subhead">扫描结果</span>
+            <span class="scan-results-summary" id="scan-results-summary"></span>
+            <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" onclick="importSelectedScanned()">导入所选</button>
+          </div>
           <div id="scan-results"></div>
         </div>
         <div class="import-queue" id="import-queue" style="display:none">
