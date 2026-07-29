@@ -195,8 +195,20 @@ def detect_pdf_bibliographic_metadata(
         if text:
             texts.append((page_idx, text))
 
-    detected, detected_evidence, detected_confidence, conflicts = _extract_from_front_matter(texts)
-    filename_values, filename_evidence, filename_confidence = _extract_explicit_filename_metadata(Path(path).stem)
+    # 期刊单篇与专著的版式完全不同：专著的版权页/CIP 规则用在期刊首页上只会
+    # 把院系、基金项目当成出版社。两条抽取链路互斥。
+    is_journal = any(
+        page_idx < 2 and looks_like_journal_article(text) for page_idx, text in texts
+    )
+    if is_journal:
+        detected, detected_evidence, detected_confidence = _extract_journal_article(
+            texts, Path(path).stem
+        )
+        conflicts = []
+        filename_values, filename_evidence, filename_confidence = {}, {}, {}
+    else:
+        detected, detected_evidence, detected_confidence, conflicts = _extract_from_front_matter(texts)
+        filename_values, filename_evidence, filename_confidence = _extract_explicit_filename_metadata(Path(path).stem)
     for field, value in filename_values.items():
         if not detected.get(field) or filename_confidence[field] > detected_confidence.get(field, 0.0):
             detected[field] = value
@@ -266,7 +278,9 @@ def detect_pdf_bibliographic_metadata(
         }
         confidence["publish_place"] = 0.62
 
-    if result.get("translator"):
+    if is_journal:
+        result["document_type"] = "journal_article"
+    elif result.get("translator"):
         result["document_type"] = "translated_book"
     else:
         result.setdefault("document_type", "book")
@@ -839,6 +853,135 @@ def _extract_from_front_matter(
             detected["title"] = repaired
             evidence["title"]["rule"] = "english_catalog_title_with_title_page_casing"
     return detected, evidence, confidence, conflicts
+
+
+# GB/T 中文期刊首页的固定标记。专著的内容提要同样会出现「摘要」「关键词」，
+# 版权页也可能印中图分类号，因此书刊判定必须先看专著独有的版权信息。
+_JOURNAL_MARKERS = ("中图分类号", "文献标识码", "文献标志码")
+_JOURNAL_WEAK_MARKERS = ("摘要", "关键词", "DOI:", "doi:")
+_BOOK_ONLY_MARKERS = ("图书在版编目", "ISBN", "出版发行", "版次", "定价")
+
+# 例：文章编号 0439-8041(2020)09-0015-13
+#     ISSN 0439-8041、2020 年、第 09 期、起始页 15、共 13 页 → 15-27。
+_ARTICLE_NUMBER_RE = re.compile(
+    r"文章编\s*号\s*[:：]?\s*"
+    r"(?P<issn>[0-9]{4}\s*-\s*[0-9]{3}[0-9Xx])"
+    r"\s*\(\s*(?P<year>\d{4})\s*\)\s*"
+    r"(?P<issue>\d{1,3})\s*-\s*"
+    r"(?P<start>\d{1,5})\s*-\s*"
+    r"(?P<length>\d{1,4})"
+)
+# 期刊版式常见的卷期行：「第 52 卷第 9 期」「2020 年第 9 期」。
+_VOLUME_ISSUE_RE = re.compile(r"第\s*(?P<volume>\d{1,3})\s*卷\s*第\s*(?P<issue>\d{1,3})\s*期")
+_YEAR_ISSUE_RE = re.compile(r"(?P<year>\d{4})\s*年\s*第\s*(?P<issue>\d{1,3})\s*期")
+# 「作者张双利，复旦大学哲学学院教授（上海 200433）。」
+_AUTHOR_STATEMENT_RE = re.compile(r"^作\s*者\s*[:：]?\s*(?P<author>[^，,。（(]{2,20})")
+
+
+def looks_like_journal_article(text: str) -> bool:
+    """Report whether a page carries the GB/T markers of a journal article."""
+
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = re.sub(r"\s+", "", normalized)
+    # 文章编号是期刊独有的 GB/T 编码，可直接判定。
+    if _ARTICLE_NUMBER_RE.search(compact):
+        return True
+    # 版权页信息只属于专著；出现即排除期刊，避免内容提要里的“摘要/关键词”误导。
+    if any(marker.casefold() in compact.casefold() for marker in _BOOK_ONLY_MARKERS):
+        return False
+    if any(marker in compact for marker in _JOURNAL_MARKERS):
+        return True
+    return sum(1 for marker in _JOURNAL_WEAK_MARKERS if marker in compact) >= 2
+
+
+def _extract_journal_article(
+    texts: Sequence[Tuple[int, str]],
+    file_stem: str,
+) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
+    """Read the fields a Chinese journal offprint actually encodes.
+
+    ``文章编号`` is a registered GB/T code rather than a guess: it carries the
+    year, issue and the article's own page span.  The journal name and volume
+    are deliberately *not* inferred -- CNKI offprints usually print neither,
+    and inventing them would be exactly the kind of fabricated citation this
+    project refuses to produce.  They stay missing so the user is prompted.
+    """
+
+    values: Dict[str, str] = {}
+    evidence: Dict[str, object] = {}
+    confidence: Dict[str, float] = {}
+
+    def record(field: str, value: str, page_idx: Optional[int], source: str, score: float, text: str) -> None:
+        if field in values or not is_valid_bibliographic_value(value):
+            return
+        values[field] = value
+        evidence[field] = {"source": source, "source_page": page_idx, "evidence_text": text}
+        confidence[field] = score
+
+    first_page = next((item for item in texts if item[0] == 0), None)
+
+    for page_idx, raw_text in texts:
+        normalized = unicodedata.normalize("NFKC", raw_text)
+        compact = re.sub(r"[ \t]+", "", normalized)
+
+        match = _ARTICLE_NUMBER_RE.search(compact)
+        if match:
+            year = match.group("year")
+            issue = str(int(match.group("issue")))
+            start = int(match.group("start"))
+            length = int(match.group("length"))
+            record("publish_year", year, page_idx, "article_number", 0.97, match.group(0))
+            record("issue", issue, page_idx, "article_number", 0.97, match.group(0))
+            if start > 0 and length > 0:
+                record(
+                    "page_range",
+                    f"{start}-{start + length - 1}",
+                    page_idx,
+                    "article_number",
+                    0.95,
+                    match.group(0),
+                )
+
+        volume_match = _VOLUME_ISSUE_RE.search(compact)
+        if volume_match:
+            record("volume", str(int(volume_match.group("volume"))), page_idx, "masthead", 0.9, volume_match.group(0))
+            record("issue", str(int(volume_match.group("issue"))), page_idx, "masthead", 0.9, volume_match.group(0))
+        year_match = _YEAR_ISSUE_RE.search(compact)
+        if year_match:
+            record("publish_year", year_match.group("year"), page_idx, "masthead", 0.88, year_match.group(0))
+            record("issue", str(int(year_match.group("issue"))), page_idx, "masthead", 0.88, year_match.group(0))
+
+    # 篇名与作者：期刊首页顶部依次是篇名、作者，随后才是摘要。
+    if first_page is not None:
+        lines = [
+            re.sub(r"\s+", " ", line).strip()
+            for line in unicodedata.normalize("NFKC", first_page[1]).splitlines()
+            if line.strip()
+        ]
+        for line in lines[:12]:
+            statement = _AUTHOR_STATEMENT_RE.match(line)
+            if statement:
+                record("author", _clean_person(statement.group("author")), 0, "author_statement", 0.93, line)
+                break
+        heading: List[str] = []
+        for line in lines:
+            if re.match(r"^(摘\s*要|关\s*键\s*词|中图分类号|文献标[识志]码|文章编\s*号|作\s*者)", line):
+                break
+            heading.append(line)
+        if heading:
+            record("title", heading[0], 0, "journal_title_line", 0.9, heading[0])
+            if len(heading) > 1 and _is_plausible_person_name(heading[1]):
+                record("author", _clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1])
+
+    # CNKI 导出件的文件名是「篇名_作者」，可为版面抽取提供独立佐证。
+    stem_match = re.match(r"^(?P<title>.+?)_(?P<author>[^_]{2,20})$", file_stem.strip())
+    if stem_match:
+        record("title", stem_match.group("title").strip(), None, "file_name", 0.75, file_stem)
+        candidate = stem_match.group("author").strip()
+        if _is_plausible_person_name(candidate):
+            record("author", _clean_person(candidate), None, "file_name", 0.75, file_stem)
+
+    return values, evidence, confidence
 
 
 def _is_bibliographic_page(page_idx: int, text: str) -> bool:

@@ -10,6 +10,22 @@ from src.me_finder import web
 
 
 class PlatformOpenTests(unittest.TestCase):
+    @staticmethod
+    def _fake_winreg(prog_id: str) -> mock.Mock:
+        class FakeKey:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+        winreg = mock.Mock()
+        winreg.HKEY_CURRENT_USER = "HKCU"
+        winreg.HKEY_CLASSES_ROOT = "HKCR"
+        winreg.OpenKey.return_value = FakeKey()
+        winreg.QueryValueEx.return_value = (prog_id, None)
+        return winreg
+
     def test_macos_uses_open_command(self) -> None:
         target = Path("/Users/example/Documents/source.pdf")
         with (
@@ -40,6 +56,32 @@ class PlatformOpenTests(unittest.TestCase):
     def test_adobe_probe_is_windows_only(self) -> None:
         with mock.patch.object(web.sys, "platform", "darwin"):
             self.assertIsNone(web.find_adobe_pdf_app())
+            self.assertIsNone(web.find_default_adobe_pdf_app())
+
+    def test_default_adobe_probe_accepts_adobe_file_association(self) -> None:
+        adobe = Path("C:/Program Files/Adobe/Acrobat.exe")
+        winreg = self._fake_winreg("AcroExch.Document.DC")
+        with (
+            mock.patch.dict("sys.modules", {"winreg": winreg}),
+            mock.patch.object(web.sys, "platform", "win32"),
+            mock.patch.object(web, "find_adobe_pdf_app", return_value=adobe) as find_adobe,
+        ):
+            result = web.find_default_adobe_pdf_app()
+
+        self.assertEqual(result, adobe)
+        find_adobe.assert_called_once_with()
+
+    def test_default_adobe_probe_does_not_override_wps_file_association(self) -> None:
+        winreg = self._fake_winreg("WPSPDF.AssocFile.PDF")
+        with (
+            mock.patch.dict("sys.modules", {"winreg": winreg}),
+            mock.patch.object(web.sys, "platform", "win32"),
+            mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
+        ):
+            result = web.find_default_adobe_pdf_app()
+
+        self.assertIsNone(result)
+        find_adobe.assert_not_called()
 
     def test_macos_native_reader_receives_one_based_physical_page(self) -> None:
         target = Path("/Users/example/Documents/中文 文献.pdf")
@@ -128,7 +170,7 @@ class PlatformOpenTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as temp_dir,
             mock.patch.object(web.sys, "platform", "win32"),
-            mock.patch.object(web, "find_adobe_pdf_app", return_value=adobe),
+            mock.patch.object(web, "find_default_adobe_pdf_app", return_value=adobe),
             mock.patch.object(web.subprocess, "Popen") as popen,
         ):
             result = web.open_pdf_with_platform(
@@ -150,7 +192,7 @@ class PlatformOpenTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as temp_dir,
             mock.patch.object(web.sys, "platform", "win32"),
-            mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
+            mock.patch.object(web, "find_default_adobe_pdf_app") as find_adobe,
         ):
             result = web.open_pdf_with_platform(
                 target,
@@ -167,7 +209,67 @@ class PlatformOpenTests(unittest.TestCase):
         self.assertEqual(result["page"], 12)
         self.assertEqual(result["page_count"], 240)
 
-    def test_windows_system_preference_uses_default_pdf_app_without_page_jump(self) -> None:
+    def test_windows_system_preference_uses_adobe_page_jump_when_available(self) -> None:
+        target = Path("C:/Documents/source.pdf")
+        adobe = Path("C:/Program Files/Adobe/Acrobat.exe")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            preferences_path = Path(temp_dir) / "preferences.json"
+            save_preferences({"pdf_open_mode": "system"}, preferences_path)
+            with (
+                mock.patch.object(web.sys, "platform", "win32"),
+                mock.patch.object(web, "open_path_with_default_app") as open_default,
+                mock.patch.object(web, "find_default_adobe_pdf_app", return_value=adobe),
+                mock.patch.object(web.subprocess, "Popen") as popen,
+            ):
+                result = web.open_pdf_with_platform(
+                    target,
+                    12,
+                    preferences_path=preferences_path,
+                    native_pdf_opener=mock.Mock(),
+                )
+
+        popen.assert_called_once_with(
+            [str(adobe), "/A", "page=12", str(target)],
+            close_fds=True,
+        )
+        open_default.assert_not_called()
+        self.assertEqual(result["app"], str(adobe))
+        self.assertEqual(result["viewer_mode"], "adobe")
+        self.assertTrue(result["page_jump"])
+        self.assertEqual(result["page"], 12)
+
+    def test_windows_system_preference_falls_back_when_adobe_cannot_launch(self) -> None:
+        target = Path("C:/Documents/source.pdf")
+        adobe = Path("C:/Program Files/Adobe/Acrobat.exe")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            preferences_path = Path(temp_dir) / "preferences.json"
+            save_preferences({"pdf_open_mode": "system"}, preferences_path)
+            with (
+                mock.patch.object(web.sys, "platform", "win32"),
+                mock.patch.object(web, "open_path_with_default_app") as open_default,
+                mock.patch.object(web, "find_default_adobe_pdf_app", return_value=adobe),
+                mock.patch.object(
+                    web.subprocess,
+                    "Popen",
+                    side_effect=PermissionError("blocked by policy"),
+                ),
+            ):
+                with self.assertLogs(level="ERROR") as logs:
+                    result = web.open_pdf_with_platform(
+                        target,
+                        12,
+                        preferences_path=preferences_path,
+                        native_pdf_opener=mock.Mock(),
+                    )
+
+        # A blocked Adobe launch must not stop the PDF from opening at all.
+        self.assertTrue(any("Adobe page jump failed" in line for line in logs.output))
+        open_default.assert_called_once_with(target)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["app"], "system_default")
+        self.assertFalse(result["page_jump"])
+
+    def test_windows_system_preference_falls_back_without_adobe(self) -> None:
         target = Path("C:/Documents/source.pdf")
         with tempfile.TemporaryDirectory() as temp_dir:
             preferences_path = Path(temp_dir) / "preferences.json"
@@ -175,7 +277,7 @@ class PlatformOpenTests(unittest.TestCase):
             with (
                 mock.patch.object(web.sys, "platform", "win32"),
                 mock.patch.object(web, "open_path_with_default_app") as open_default,
-                mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
+                mock.patch.object(web, "find_default_adobe_pdf_app", return_value=None),
             ):
                 result = web.open_pdf_with_platform(
                     target,
@@ -185,7 +287,6 @@ class PlatformOpenTests(unittest.TestCase):
                 )
 
         open_default.assert_called_once_with(target)
-        find_adobe.assert_not_called()
         self.assertEqual(result["app"], "system_default")
         self.assertEqual(result["viewer_mode"], "system")
         self.assertFalse(result["page_jump"])

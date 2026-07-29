@@ -118,6 +118,40 @@ def _adobe_paths_from_registry() -> List[Path]:
     return paths
 
 
+def find_default_adobe_pdf_app() -> Optional[Path]:
+    """Return Adobe only when Windows currently associates PDF files with it."""
+
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg  # type: ignore
+    except Exception:
+        return None
+
+    association_keys = [
+        (
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.pdf\UserChoice",
+            "ProgId",
+        ),
+        (winreg.HKEY_CLASSES_ROOT, r".pdf", ""),
+    ]
+    prog_id = ""
+    for hive, key_name, value_name in association_keys:
+        try:
+            with winreg.OpenKey(hive, key_name) as key:
+                prog_id = str(winreg.QueryValueEx(key, value_name)[0]).strip()
+        except OSError:
+            continue
+        if prog_id:
+            break
+
+    normalized = prog_id.casefold()
+    if not any(marker in normalized for marker in ("acroexch", "acrobat", "acrord")):
+        return None
+    return find_adobe_pdf_app()
+
+
 def open_path_with_default_app(target: Path) -> None:
     """Open a local file with the platform's default application."""
 
@@ -145,6 +179,36 @@ def _normalized_pdf_page(page: object) -> Optional[int]:
     return page_number if page_number is not None and page_number > 0 else None
 
 
+def open_pdf_in_adobe(target: Path, page_number: Optional[int]) -> Optional[Dict[str, object]]:
+    """Use Adobe page jumping only when Adobe is the Windows PDF default."""
+
+    if sys.platform != "win32" or page_number is None:
+        return None
+    adobe = find_default_adobe_pdf_app()
+    if adobe is None:
+        return None
+    target = Path(target)
+    try:
+        subprocess.Popen(
+            [str(adobe), "/A", f"page={page_number}", str(target)],
+            close_fds=True,
+        )
+    except Exception:
+        # Page jumping is a convenience: a broken Adobe install, an antivirus
+        # block or a group policy must never stop the PDF from opening at all.
+        # Returning None lets the caller use the user's default reader.
+        logging.exception("Adobe page jump failed; falling back to the default PDF app")
+        return None
+    return {
+        "ok": True,
+        "app": str(adobe),
+        "viewer_mode": "adobe",
+        "page_jump": True,
+        "file": target.name,
+        "page": page_number,
+    }
+
+
 NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
 NativeThemeSetter = Callable[[str], None]
 NativeDirectoryChooser = Callable[[], Optional[str]]
@@ -169,6 +233,9 @@ def open_pdf_with_platform(
             open_path_in_macos_preview(target)
             app = "preview"
         else:
+            adobe_result = open_pdf_in_adobe(target, page_number)
+            if adobe_result is not None:
+                return adobe_result
             open_path_with_default_app(target)
             app = "system_default"
         return {
@@ -215,21 +282,10 @@ def open_pdf_with_platform(
             native_error = exc
             logging.exception("native PDF reader failed; falling back to an external app")
 
-    # Adobe is only required for the Windows page-jump feature (its /A page=N
-    # switch); machines without Adobe still fall back to the default PDF app.
-    if sys.platform == "win32" and page_number:
-        adobe = find_adobe_pdf_app()
-        if adobe is not None:
-            args = [str(adobe), "/A", f"page={page_number}", str(target)]
-            subprocess.Popen(args, close_fds=True)
-            return {
-                "ok": True,
-                "app": str(adobe),
-                "viewer_mode": "adobe",
-                "page_jump": True,
-                "file": target.name,
-                "page": page_number,
-            }
+    # Native reader failures still retain Adobe's page-jump behavior.
+    adobe_result = open_pdf_in_adobe(target, page_number)
+    if adobe_result is not None:
+        return adobe_result
 
     if native_error is not None and sys.platform == "darwin":
         open_path_in_macos_preview(target)
@@ -454,6 +510,10 @@ def make_handler(
                     "publisher": "出版社",
                     "publish_place": "出版地",
                     "publish_year": "出版年份",
+                    "journal_name": "出版刊物",
+                    "volume": "卷次",
+                    "issue": "期号",
+                    "page_range": "页码",
                 }
                 missing_labels = [labels[field] for field in missing if field in labels]
                 metadata_note = "；书目信息已自动填入"
@@ -2239,6 +2299,22 @@ def make_handler(
         def log_message(self, format: str, *args) -> None:
             return
 
+    def close_runtime() -> None:
+        """Release the SQLite handle this handler holds open.
+
+        The desktop app keeps its index open until the process exits, but a
+        caller that outlives one handler -- notably a test using a temporary
+        directory -- must be able to let go of the file.  Windows refuses to
+        delete a database that still has an open connection.
+        """
+
+        with runtime_lock:
+            current = runtime.get("engine")
+            runtime["engine"] = None
+        if current is not None:
+            current.close()
+
+    Handler.close_runtime = staticmethod(close_runtime)
     return Handler
 
 

@@ -79,6 +79,7 @@ class ScanDirectoryPickerTests(unittest.TestCase):
             self._chooser = chooser
             self._temp = TemporaryDirectory()
             self._server = None
+            self._handler = None
             self._previous_cwd = Path.cwd()
 
         def __enter__(self):
@@ -92,6 +93,7 @@ class ScanDirectoryPickerTests(unittest.TestCase):
                 native_scan_directory_chooser=self._chooser,
             )
             handler.log_message = lambda *_args: None
+            self._handler = handler
             self._server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             threading.Thread(target=self._server.serve_forever, daemon=True).start()
             return f"http://127.0.0.1:{self._server.server_port}", root
@@ -100,6 +102,10 @@ class ScanDirectoryPickerTests(unittest.TestCase):
             if self._server is not None:
                 self._server.shutdown()
                 self._server.server_close()
+            if self._handler is not None:
+                # Windows cannot remove the temporary directory while the
+                # index database still has an open connection.
+                self._handler.close_runtime()
             os.chdir(self._previous_cwd)
             self._temp.cleanup()
 

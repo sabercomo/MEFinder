@@ -2251,7 +2251,7 @@ function configureDesktopPlatformOptions() {
   if (desktopShell === 'win32') {
     if (nativeDescription) nativeDescription.textContent = '使用 Microsoft Edge WebView2，在应用内直接跳到搜索命中的物理页码。';
     if (systemTitle) systemTitle.textContent = 'Windows 默认 PDF 阅读器';
-    if (systemDescription) systemDescription.textContent = '使用系统文件关联打开，例如 Adobe Acrobat DC；命中页码可能需要手动翻到。';
+    if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开。';
   } else if (desktopShell === 'macos') {
     if (nativeDescription) nativeDescription.textContent = '使用 macOS PDFKit，直接跳到搜索命中的物理页码。';
     if (systemTitle) systemTitle.textContent = 'macOS 预览';
