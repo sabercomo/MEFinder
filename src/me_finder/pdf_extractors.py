@@ -332,6 +332,7 @@ def extract_pdf_source(
                 "page_mapping_method": mapping.method,
                 "page_mapping_confidence": mapping.confidence,
                 "text_raw": page.raw_text,
+                "page_text_hash": pdf_page_text_hash(page.raw_text),
                 "normalized_text": normalize_pdf_text(page.raw_text),
                 "text_source": "native_text",
                 "blocks": page.blocks,
@@ -647,6 +648,7 @@ def load_mineru_pdf_pages(
                 "page_mapping_method": mapping.method,
                 "page_mapping_confidence": mapping.confidence,
                 "text_raw": raw_text,
+                "page_text_hash": pdf_page_text_hash(raw_text),
                 "normalized_text": normalize_pdf_text(raw_text),
                 "text_source": parser_name,
                 "blocks": page_blocks.get(pdf_page_index, []),
@@ -836,9 +838,21 @@ def make_pdf_paragraphs(
 ) -> List[Dict[str, object]]:
     paragraphs: List[Dict[str, object]] = []
     for page in pages:
-        text = str(page.get("text_raw") or "").strip()
+        page_text = str(page.get("text_raw") or "")
+        page_start, page_end = stripped_text_bounds(page_text)
+        text = page_text[page_start:page_end]
         if not text:
             continue
+        text_source_spans = [
+            make_text_source_span(
+                paragraph_text=text,
+                paragraph_char_start=0,
+                page=page,
+                page_text=page_text,
+                page_char_start=page_start,
+                page_char_end=page_end,
+            )
+        ]
         paragraph = base_pdf_paragraph(
             source_file_id,
             document_id,
@@ -854,17 +868,45 @@ def make_pdf_paragraphs(
             paragraph_index=int(page["pdf_page_index"]) * 2,
             paragraph_id=f"{source_file_id}-P{int(page['pdf_page_index']):06d}",
             is_cross_page=False,
+            text_source_spans=text_source_spans,
         )
         paragraphs.append(paragraph)
     for left, right in zip(pages, pages[1:]):
-        left_text = str(left.get("text_raw") or "").strip()
-        right_text = str(right.get("text_raw") or "").strip()
-        if not left_text or not right_text:
+        left_page_text = str(left.get("text_raw") or "")
+        right_page_text = str(right.get("text_raw") or "")
+        left_body_start, left_body_end = stripped_text_bounds(left_page_text)
+        right_body_text, right_body_start, right_body_end = strip_pdf_page_header_for_cross(
+            right_page_text
+        )
+        if left_body_start == left_body_end or not right_body_text:
             continue
-        cross_right = strip_pdf_page_header_for_cross(right_text)
-        cross_text = f"{left_text[-CROSS_PAGE_TAIL_CHARS:]}\n{cross_right[:CROSS_PAGE_HEAD_CHARS]}"
+        left_slice_start = max(left_body_start, left_body_end - CROSS_PAGE_TAIL_CHARS)
+        left_slice_end = left_body_end
+        right_slice_start = right_body_start
+        right_slice_end = min(right_body_end, right_body_start + CROSS_PAGE_HEAD_CHARS)
+        left_slice = left_page_text[left_slice_start:left_slice_end]
+        right_slice = right_page_text[right_slice_start:right_slice_end]
+        cross_text = f"{left_slice}\n{right_slice}"
         if len(punctuationless_text(cross_text)) < 80:
             continue
+        text_source_spans = [
+            make_text_source_span(
+                paragraph_text=cross_text,
+                paragraph_char_start=0,
+                page=left,
+                page_text=left_page_text,
+                page_char_start=left_slice_start,
+                page_char_end=left_slice_end,
+            ),
+            make_text_source_span(
+                paragraph_text=cross_text,
+                paragraph_char_start=len(left_slice) + 1,
+                page=right,
+                page_text=right_page_text,
+                page_char_start=right_slice_start,
+                page_char_end=right_slice_end,
+            ),
+        ]
         paragraph = base_pdf_paragraph(
             source_file_id,
             document_id,
@@ -880,9 +922,56 @@ def make_pdf_paragraphs(
             paragraph_index=int(left["pdf_page_index"]) * 2 + 1,
             paragraph_id=f"{source_file_id}-CROSS-{int(left['pdf_page_index']):06d}-{int(right['pdf_page_index']):06d}",
             is_cross_page=True,
+            text_source_spans=text_source_spans,
         )
         paragraphs.append(paragraph)
     return paragraphs
+
+
+def stripped_text_bounds(text: str) -> Tuple[int, int]:
+    """Return the half-open bounds used by ``str.strip()`` without rebuilding text."""
+
+    value = text or ""
+    without_leading = value.lstrip()
+    if not without_leading:
+        return len(value), len(value)
+    start = len(value) - len(without_leading)
+    end = len(value.rstrip())
+    return start, max(start, end)
+
+
+def make_text_source_span(
+    *,
+    paragraph_text: str,
+    paragraph_char_start: int,
+    page: Mapping[str, object],
+    page_text: str,
+    page_char_start: int,
+    page_char_end: int,
+) -> Dict[str, object]:
+    """Build and validate one Unicode-codepoint source interval."""
+
+    length = page_char_end - page_char_start
+    paragraph_char_end = paragraph_char_start + length
+    if (
+        paragraph_char_start < 0
+        or page_char_start < 0
+        or length <= 0
+        or paragraph_char_end > len(paragraph_text)
+        or page_char_end > len(page_text)
+        or paragraph_text[paragraph_char_start:paragraph_char_end]
+        != page_text[page_char_start:page_char_end]
+    ):
+        raise PDFExtractionError("PDF paragraph text_source_spans invariant failed")
+    return {
+        "paragraph_char_start": paragraph_char_start,
+        "paragraph_char_end": paragraph_char_end,
+        "offset_unit": "unicode_codepoint",
+        "pdf_page_id": str(page["pdf_page_id"]),
+        "page_text_hash": str(page.get("page_text_hash") or pdf_page_text_hash(page_text)),
+        "page_char_start": page_char_start,
+        "page_char_end": page_char_end,
+    }
 
 
 def base_pdf_paragraph(
@@ -900,6 +989,7 @@ def base_pdf_paragraph(
     paragraph_index: int,
     paragraph_id: str,
     is_cross_page: bool,
+    text_source_spans: Sequence[Mapping[str, object]],
 ) -> Dict[str, object]:
     start_citation = start_page.get("citation_page")
     end_citation = end_page.get("citation_page")
@@ -982,6 +1072,7 @@ def base_pdf_paragraph(
         "mapping_evidence": mapping_evidence,
         "segment_id": segment_id,
         "is_cross_page": is_cross_page,
+        "text_source_spans": [dict(span) for span in text_source_spans],
         "text_source": "native_text",
         "block_index": None,
         "bbox": None,
@@ -1007,15 +1098,31 @@ def normalize_pdf_text(text: str) -> str:
     return normalize_text(text)
 
 
-def strip_pdf_page_header_for_cross(text: str) -> str:
-    """Remove likely page numbers/running heads from the next-page side."""
+def pdf_page_text_hash(text: str) -> str:
+    """Return the stable short hash used to validate page-local deep links."""
 
-    lines = (text or "").splitlines()
-    drop = 0
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
+
+
+def strip_pdf_page_header_for_cross(text: str) -> Tuple[str, int, int]:
+    """Return a header-free continuous slice and its bounds in the original page.
+
+    ``splitlines(keepends=True)`` is used only to locate the first retained
+    character.  The returned text is sliced directly from ``text`` so CRLF and
+    Unicode line separators remain byte-for-byte/character-for-character intact.
+    """
+
+    page_text = text or ""
+    body_start, body_end = stripped_text_bounds(page_text)
+    if body_start == body_end:
+        return "", body_end, body_end
+
+    lines = page_text[body_start:body_end].splitlines(keepends=True)
+    retained_start = body_start
     for line in lines[:8]:
         value = line.strip()
         if not value:
-            drop += 1
+            retained_start += len(line)
             continue
         compact = re.sub(r"\s+", "", value)
         alpha = [ch for ch in compact if ch.isalpha()]
@@ -1025,13 +1132,15 @@ def strip_pdf_page_header_for_cross(text: str) -> str:
             else 0.0
         )
         if re.fullmatch(r"\d{1,4}|[ivxlcdmIVXLCDM]{1,8}", compact):
-            drop += 1
+            retained_start += len(line)
             continue
         if len(compact) <= 40 and alpha and uppercase_ratio >= 0.75:
-            drop += 1
+            retained_start += len(line)
             continue
         break
-    return "\n".join(lines[drop:]).strip()
+    while retained_start < body_end and page_text[retained_start].isspace():
+        retained_start += 1
+    return page_text[retained_start:body_end], retained_start, body_end
 
 
 def estimate_garbled_ratio(text: str) -> float:

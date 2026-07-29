@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from . import __version__
-from .database import DEFAULT_DATABASE_PATH, build_database, load_database_index
+from .database import ANCHOR_SPEC_VERSION, DEFAULT_DATABASE_PATH, build_database, load_database_index
 from .extractors import (
     extract_source,
     is_marx_engels_volume_name,
@@ -100,6 +100,10 @@ def build_index(
             "app": "ME_Finder",
             "version": __version__,
             "schema_version": 2,
+            # Version of the paragraph-to-source anchor contract.  Consumers
+            # still inspect each paragraph because an index may contain a mix
+            # of records imported before and after this specification.
+            "anchor_spec_version": ANCHOR_SPEC_VERSION,
             "built_at": datetime.now(timezone.utc).isoformat(),
             "corpus_dir": str(corpus_dir).replace("\\", "/"),
             "corpus_dirs": {

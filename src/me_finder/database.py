@@ -20,6 +20,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
 DATABASE_SCHEMA_VERSION = 1
+ANCHOR_SPEC_VERSION = 1
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -178,6 +179,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         connection.executescript(SCHEMA)
         metadata = dict(index.get("metadata") or {})
         metadata["database_schema_version"] = DATABASE_SCHEMA_VERSION
+        metadata.setdefault("anchor_spec_version", ANCHOR_SPEC_VERSION)
         metadata["database_built_at"] = datetime.now(timezone.utc).isoformat()
         connection.executemany(
             "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
@@ -532,6 +534,7 @@ def replace_source_in_database(
             "eligible_paragraph_count": connection.execute(
                 "SELECT COUNT(*) FROM paragraphs WHERE eligible_for_search = 1"
             ).fetchone()[0],
+            "anchor_spec_version": ANCHOR_SPEC_VERSION,
         }
         connection.executemany(
             "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",

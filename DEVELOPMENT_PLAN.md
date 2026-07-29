@@ -58,11 +58,11 @@
 
 数据层：
 
-- [ ] 改造 `strip_pdf_page_header_for_cross` 为"返回原文偏移"而非"返回重组文本"，CROSS 文本从原页 `text_raw` 直接切片，保证不变式成立。
-- [ ] `make_pdf_paragraphs` / `base_pdf_paragraph`：为普通页与 CROSS 段落写入 `text_source_spans`（区间格式见下），存入 paragraph payload。
-- [ ] 每个 `pdf_pages` 记录保存 `page_text_hash`（`text_raw` UTF-8 编码后 sha256 前 16 位十六进制）。
-- [ ] `metadata` 写入 `anchor_spec_version = 1`。
-- [ ] 旧索引兼容：读取路径对缺失字段返回 None，不报错、不静默补假值。
+- [x] 改造 `strip_pdf_page_header_for_cross` 为"返回原文偏移"而非"返回重组文本"，CROSS 文本从原页 `text_raw` 直接切片，保证不变式成立。
+- [x] `make_pdf_paragraphs` / `base_pdf_paragraph`：为普通页与 CROSS 段落写入 `text_source_spans`（区间格式见下），存入 paragraph payload。
+- [x] 每个 `pdf_pages` 记录保存 `page_text_hash`（`text_raw` UTF-8 编码后 sha256 前 16 位十六进制）。
+- [x] `metadata` 写入 `anchor_spec_version = 1`。
+- [x] 旧索引兼容：读取路径对缺失字段返回 None，不报错、不静默补假值。
 
 ```json
 {
@@ -70,7 +70,9 @@
     {
       "paragraph_char_start": 0,
       "paragraph_char_end": 900,
+      "offset_unit": "unicode_codepoint",
       "pdf_page_id": "pdf-xxxxxxxxxxxx-PAGE-000010",
+      "page_text_hash": "67fd3a8e2b41c590",
       "page_char_start": 1350,
       "page_char_end": 2250
     }
@@ -80,26 +82,27 @@
 
 搜索接口（`search.py` `_format_result`）新增字段：
 
-- [ ] `match_start` / `match_end`：命中区间，相对 paragraph `text_raw` 的码点偏移（现有 `start`/`end` 已在 `search.py:387` 处按 `text_raw` 长度钳制，直接暴露）。
-- [ ] `match_offset_unit`: 固定 `"unicode_codepoint"`。
-- [ ] `page_match_spans`：命中区间与 `text_source_spans` 逐段求交的结果，每段 `{pdf_page_id, page_char_start, page_char_end}`；CROSS 命中跨两页时返回两段。求交公式：`overlap = [max(match_start, s.paragraph_char_start), min(match_end, s.paragraph_char_end))`，非空时映射页内偏移 `page_char_start + (overlap_start - s.paragraph_char_start)`。
-- [ ] 无 spans 的旧数据：`page_match_spans` 为空数组，另给 `precise_highlight_available: false`。
+- [x] `match_start` / `match_end`：命中区间，相对 paragraph `text_raw` 的码点偏移（现有 `start`/`end` 已在 `search.py:387` 处按 `text_raw` 长度钳制，直接暴露）。
+- [x] `match_offset_unit`: 固定 `"unicode_codepoint"`。
+- [x] `match_quote`：命中原句最多 50 个 Unicode 码点，供页文本 hash 改变时在原物理页内重新定位。
+- [x] `page_match_spans`：命中区间与 `text_source_spans` 逐段求交的结果，每段 `{pdf_page_id, page_text_hash, page_char_start, page_char_end}`；CROSS 命中跨两页时返回两段。求交公式：`overlap = [max(match_start, s.paragraph_char_start), min(match_end, s.paragraph_char_end))`，非空时映射页内偏移 `page_char_start + (overlap_start - s.paragraph_char_start)`。
+- [x] 无 spans 的旧数据：`page_match_spans` 为空数组，另给 `precise_highlight_available: false`。
 
 页码显示：
 
-- [ ] 实现按 `page_source_type` 映射的统一 helper（含 DOCX 分节推断、旧 DOC 目录范围、无来源三种 Word 状态），替换搜索结果与后续阅读器的分散拼串。
-- [ ] 引文入口继续调用 `build_citation_formats`，不改 `citations.py` 的未校准拒绝行为。
+- [x] 实现按 `page_source_type` 映射的统一 helper（含 DOCX 分节推断、旧 DOC 目录范围、无来源三种 Word 状态），替换搜索结果与后续阅读器的分散拼串。
+- [x] 引文入口继续调用 `build_citation_formats`，不改 `citations.py` 的未校准拒绝行为。
 
 测试（全部显式加入 Mac/Windows 发布门槛）：
 
-- [ ] **不变式属性测试**：对生成的全部 spans 逐条断言 `paragraph_text[p_start:p_end] == page_text[page_start:page_end]`，样本须覆盖 CRLF、` ` 等 `splitlines()` 会识别的分行符。
-- [ ] CROSS 命中 → 两页 `page_match_spans` 正确（含右页删行偏移）。
-- [ ] 空白页：paragraph 跳过但 `pdf_pages` 有记录。
-- [ ] 同页重复原句：命中区间与 spans 求交唯一确定。
-- [ ] emoji / 增补平面字符：码点偏移正确（防 UTF-16 混用）。
-- [ ] native → MinerU 重解析：`pdf_page_id` 不变、`page_text_hash` 变化被检出。
-- [ ] 旧索引（无 spans）：降级为只跳页，`precise_highlight_available = false`。
-- [ ] 页码显示按 `page_source_type` 逐态断言（含 PDF 三态与 Word 三态）。
+- [x] **不变式属性测试**：对生成的全部 spans 逐条断言 `paragraph_text[p_start:p_end] == page_text[page_start:page_end]`，样本须覆盖 CRLF、` ` 等 `splitlines()` 会识别的分行符。
+- [x] CROSS 命中 → 两页 `page_match_spans` 正确（含右页删行偏移）。
+- [x] 空白页：paragraph 跳过但 `pdf_pages` 有记录。
+- [x] 同页重复原句：命中区间与 spans 求交唯一确定。
+- [x] emoji / 增补平面字符：码点偏移正确（防 UTF-16 混用）。
+- [x] native → MinerU 重解析：`pdf_page_id` 不变、`page_text_hash` 变化被检出。
+- [x] 旧索引（无 spans）：降级为只跳页，`precise_highlight_available = false`。
+- [x] 页码显示按 `page_source_type` 逐态断言（含 PDF 三态与 Word 三态）。
 
 ## v0.2.3-B 实施清单（并行，独立提交与测试组）
 

@@ -21,6 +21,7 @@ from .normalization import (
     punctuationless_text,
     trim_for_display,
 )
+from .page_display import build_page_display
 
 
 SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
@@ -401,15 +402,23 @@ class SearchEngine:
         end: int,
     ) -> Dict[str, object]:
         raw = str(paragraph.get("text_raw") or "")
+        # Search offsets are Python string offsets, i.e. Unicode code points.
+        # Keep that contract explicit because JavaScript string offsets use
+        # UTF-16 code units and must be converted by the reader UI.
+        start = max(0, min(start, len(raw)))
+        end = max(start, min(end, len(raw)))
         matched = raw[start:end] if end > start else trim_for_display(raw, 80)
+        match_quote = raw[start:end][:50] if end > start else ""
         source_type = str(paragraph.get("source_type") or "word")
-        page = paragraph.get("page_display") or "页码未验证"
-        page_note = page_source_note(str(paragraph.get("page_source_type") or "unknown"))
+        page_match_spans = self._page_match_spans(paragraph, source_type, start, end, len(raw))
+        page_display = build_page_display(paragraph)
+        page = page_display.display
+        page_note = page_display.note
         if source_type == "pdf":
             copy_text = f"{paragraph.get('document_title') or paragraph.get('work_title') or 'PDF 文献'}，{page}：{raw}"
             volume_display = str(paragraph.get("volume_display") or paragraph.get("document_title") or "PDF 文献")
         elif self._is_marx_engels_volume(paragraph):
-            copy_text = f"《马克思恩格斯文集》第{paragraph.get('volume_number')}卷，{paragraph.get('work_title') or '未识别文献'}，第{page}页：{raw}"
+            copy_text = f"《马克思恩格斯文集》第{paragraph.get('volume_number')}卷，{paragraph.get('work_title') or '未识别文献'}，{page}：{raw}"
             volume_display = f"《马克思恩格斯文集》第{paragraph.get('volume_number')}卷"
         else:
             volume_display = str(
@@ -433,7 +442,7 @@ class SearchEngine:
             "source_type": source_type,
             "source_file_id": paragraph.get("source_file_id"),
             "page": page,
-            "page_source_type": paragraph.get("page_source_type"),
+            "page_source_type": page_display.page_source_type,
             "page_note": page_note,
             "page_confidence": paragraph.get("page_confidence"),
             "open_source_url": paragraph.get("open_source_url"),
@@ -459,6 +468,12 @@ class SearchEngine:
             "segment_id": paragraph.get("segment_id"),
             "is_cross_page": paragraph.get("is_cross_page", False),
             "matched_text": matched,
+            "match_quote": match_quote,
+            "match_start": start,
+            "match_end": end,
+            "match_offset_unit": "unicode_codepoint",
+            "page_match_spans": page_match_spans,
+            "precise_highlight_available": bool(page_match_spans),
             "paragraph_text": raw,
             "highlighted_html": highlight_html(raw, start, end),
             "context_before": self._context(paragraph, before=True),
@@ -470,6 +485,72 @@ class SearchEngine:
             "copy_text": copy_text,
             "citation_formats": citation_formats,
         }
+
+    @staticmethod
+    def _page_match_spans(
+        paragraph: Dict[str, object],
+        source_type: str,
+        match_start: int,
+        match_end: int,
+        paragraph_length: int,
+    ) -> List[Dict[str, object]]:
+        """Map a paragraph match onto the exact source-page text ranges.
+
+        ``text_source_spans`` belongs only to the PDF anchor contract.  Word
+        records may have paragraph/page metadata, but they must never claim
+        exact PDF-page highlighting.  Gaps between spans (notably the newline
+        joining the two halves of a CROSS paragraph) intentionally have no
+        page mapping.
+        """
+
+        if source_type != "pdf" or match_end <= match_start:
+            return []
+        source_spans = paragraph.get("text_source_spans")
+        if not isinstance(source_spans, list):
+            return []
+
+        mapped: List[Dict[str, object]] = []
+        for span in source_spans:
+            if not isinstance(span, dict):
+                continue
+            offset_unit = span.get("offset_unit")
+            if offset_unit not in (None, "unicode_codepoint"):
+                continue
+            page_id = span.get("pdf_page_id")
+            paragraph_start = span.get("paragraph_char_start")
+            paragraph_end = span.get("paragraph_char_end")
+            page_start = span.get("page_char_start")
+            page_end = span.get("page_char_end")
+            if not page_id or not all(
+                isinstance(value, int) and not isinstance(value, bool)
+                for value in (paragraph_start, paragraph_end, page_start, page_end)
+            ):
+                continue
+            if not (
+                0 <= paragraph_start <= paragraph_end <= paragraph_length
+                and 0 <= page_start <= page_end
+                and paragraph_end - paragraph_start == page_end - page_start
+            ):
+                continue
+
+            overlap_start = max(match_start, paragraph_start)
+            overlap_end = min(match_end, paragraph_end)
+            if overlap_start >= overlap_end:
+                continue
+            mapped_start = page_start + (overlap_start - paragraph_start)
+            mapped_end = page_start + (overlap_end - paragraph_start)
+            mapped_span: Dict[str, object] = {
+                "pdf_page_id": str(page_id),
+                "page_char_start": mapped_start,
+                "page_char_end": mapped_end,
+            }
+            if "page_text_hash" in span:
+                # Preserve the producer's value verbatim.  A future reader
+                # compares it with the current page hash before trusting the
+                # saved offsets and falls back to searching ``match_quote``.
+                mapped_span["page_text_hash"] = span.get("page_text_hash")
+            mapped.append(mapped_span)
+        return mapped
 
     def _citation_metadata(self, paragraph: Dict[str, object], source_type: str) -> Dict[str, object]:
         metadata: Dict[str, object] = {}
@@ -727,24 +808,6 @@ def best_window_ratio(query_plain: str, plain: str) -> Tuple[float, int, int]:
         if ratio > best[0]:
             best = (ratio, tail_start, len(plain) - 1)
     return best
-
-
-def page_source_note(source_type: str) -> str:
-    notes = {
-        "section_break_inferred": "分节推断页码，尚未人工验证",
-        "section_break_verified": "分节页码，已验证",
-        "word_rendered_page": "排版引擎页码",
-        "printed_page_marker": "印刷页码锚点",
-        "toc_range_bound": "目录页码范围，非段落级精确页码",
-        "manual_segment": "PDF 页码来自人工分段映射",
-        "fixed_offset": "PDF 页码来自固定偏移映射",
-        "manual_page": "PDF 页码来自人工逐页校准",
-        "pdf_page_label": "PDF Page Label，需抽样验证",
-        "uncalibrated": "PDF 引用页码尚未校准",
-        "mixed": "PDF 跨页命中涉及不同页码来源",
-        "unknown": "页码未验证",
-    }
-    return notes.get(source_type, "页码来源未说明")
 
 
 def highlight_html(text: str, start: int, end: int) -> str:

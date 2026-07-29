@@ -85,6 +85,10 @@ try {
     $compiler = Find-InnoCompiler -ExplicitPath $ISCCPath
 
     & $pythonCommand @pythonLauncherArgs -m unittest `
+        tests.test_anchor_metadata `
+        tests.test_pdf_match_anchors `
+        tests.test_page_display `
+        tests.test_search_match_spans `
         tests.test_vision_api `
         tests.test_search_controls_and_views `
         tests.test_batch_directory_import `
