@@ -542,7 +542,9 @@ def main() -> None:
         return choose_folder(app_data_root.parent)
 
     def choose_scan_directory() -> str | None:
-        return choose_folder(Path.home())
+        # Never start at the home folder: picking it is one click away there,
+        # and scanning it would walk the user's whole personal library.
+        return choose_folder(Path.home() / "Documents")
 
     def start_backend(win) -> None:
         try:

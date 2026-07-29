@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sqlite3
 import time
@@ -32,6 +33,59 @@ from .vision_api import (
 ProgressCallback = Callable[[Dict[str, object]], None]
 
 
+# Directory bundles that hold a user's media library rather than documents.
+# Descending into them makes macOS raise a TCC prompt ("照片"/"Apple Music")
+# for data this app has no use for, so the scan never opens them.
+SKIPPED_DIRECTORY_SUFFIXES = frozenset({
+    ".photoslibrary",
+    ".photolibrary",
+    ".migratedphotolibrary",
+    ".musiclibrary",
+    ".tvlibrary",
+    ".imovielibrary",
+    ".theater",
+    ".fcpbundle",
+    ".aplibrary",
+    ".migratedaplibrary",
+    ".logicx",
+    ".band",
+    ".app",
+    ".bundle",
+    ".framework",
+    ".pkg",
+    ".sparsebundle",
+})
+
+
+def _is_skipped_directory(path: Path, home: Path) -> bool:
+    """Skip dot-directories, media library bundles and the user's Library."""
+
+    name = path.name
+    if name.startswith("."):
+        return True
+    if path.suffix.lower() in SKIPPED_DIRECTORY_SUFFIXES:
+        return True
+    return name == "Library" and path.parent == home
+
+
+def _walk_documents(base: Path) -> List[Path]:
+    """Yield candidate files under ``base`` without entering skipped bundles."""
+
+    home = Path.home()
+    found: List[Path] = []
+    for current_dir, dir_names, file_names in os.walk(base, topdown=True):
+        current = Path(current_dir)
+        # Pruning in place stops os.walk from ever reading these directories.
+        dir_names[:] = sorted(
+            name
+            for name in dir_names
+            if not _is_skipped_directory(current / name, home)
+        )
+        for file_name in sorted(file_names):
+            found.append(current / file_name)
+    return found
+
+
 def scan_directories_for_documents(
     directories: Sequence[str],
     imported_names: Mapping[str, int],
@@ -57,7 +111,7 @@ def scan_directories_for_documents(
             errors.append({"directory": str(directory), "error": "目录不存在或不可访问"})
             continue
         try:
-            paths = sorted(base.rglob("*"))
+            paths = _walk_documents(base)
         except OSError as exc:
             errors.append({"directory": str(directory), "error": str(exc)})
             continue
