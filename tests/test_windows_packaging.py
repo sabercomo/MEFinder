@@ -23,6 +23,8 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("from src.me_finder import __version__", self.portable_script)
         self.assertNotIn('[string]$Version = "0.1.', self.build_script)
         self.assertNotIn('[string]$Version = "0.1.', self.portable_script)
+        self.assertIn('[string]$PythonExe = ""', self.portable_script)
+        self.assertIn("& $pythonCommand @pythonLauncherArgs -m PyInstaller", self.portable_script)
 
     def test_installer_program_files_are_separate_from_user_data(self) -> None:
         self.assertIn(r"DefaultDirName={localappdata}\Programs\MEFinder", self.inno_script)

@@ -247,8 +247,10 @@ def installation_kind(bundle_root: Path) -> str:
     return "standalone"
 
 
-def webview_storage_path(root: Path, portable: bool) -> str | None:
-    return str(Path(root) / "webview-data") if portable else None
+def webview_storage_path(root: Path, portable: bool) -> str:
+    # Keep WebView2 cookies/cache with the selected application data root.
+    # Otherwise WebView2 may silently fall back to a profile under LOCALAPPDATA.
+    return str(Path(root) / "webview-data")
 
 
 def prepare_runtime_root(bundle_root: Path) -> Path:

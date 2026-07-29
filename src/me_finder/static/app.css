@@ -2576,6 +2576,21 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   margin-bottom: 6px;
   min-width: 0;
 }
+.scan-row.is-drag-target {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+#scan-results.is-drag-selecting,
+#scan-results.is-drag-selecting .scan-row { cursor: crosshair; user-select: none; }
+.scan-selection-marquee {
+  position: fixed;
+  z-index: 9999;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent-soft);
+  opacity: 0.72;
+  pointer-events: none;
+}
 .scan-row.is-imported { opacity: 0.55; }
 .scan-check { flex: 0 0 auto; accent-color: var(--accent); width: 15px; height: 15px; }
 .scan-check-placeholder { flex: 0 0 15px; }

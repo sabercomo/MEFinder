@@ -364,6 +364,13 @@ class DesktopPortableTests(unittest.TestCase):
                 self.assertEqual(desktop.prepare_runtime_root(bundle), bundle)
                 self.assertEqual(desktop.webview_storage_path(bundle, True), str(bundle / "webview-data"))
 
+    def test_installed_webview_storage_follows_selected_data_root(self) -> None:
+        selected_root = Path("G:/MEFinderData/runtime")
+        self.assertEqual(
+            desktop.webview_storage_path(selected_root, False),
+            str(selected_root / "webview-data"),
+        )
+
     def test_only_installer_marker_enables_self_update(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)

@@ -1,5 +1,6 @@
 param(
-    [string]$Version = ""
+    [string]$Version = "",
+    [string]$PythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,7 +12,16 @@ $releaseFull = [IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
 
 Push-Location $ProjectRoot
 try {
-    $sourceVersionOutput = py -3 -c "from src.me_finder import __version__; print(__version__)"
+    if ($PythonExe) {
+        $pythonCommand = $PythonExe
+        $pythonLauncherArgs = @()
+    }
+    else {
+        $pythonCommand = "py"
+        $pythonLauncherArgs = @("-3")
+    }
+
+    $sourceVersionOutput = & $pythonCommand @pythonLauncherArgs -c "from src.me_finder import __version__; print(__version__)"
     if ($LASTEXITCODE -ne 0) { throw "Could not read src.me_finder.__version__." }
     $sourceVersion = ($sourceVersionOutput | Out-String).Trim()
     if ($Version -and $Version -ne $sourceVersion) {
@@ -32,10 +42,10 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    py -3 -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_portable_index_rebuild
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_vision_api tests.test_search_controls_and_views tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
-    py -3 -m PyInstaller desktop.spec --clean --noconfirm
+    & $pythonCommand @pythonLauncherArgs -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
     New-Item -ItemType Directory -Force -Path $ReleaseRoot | Out-Null
@@ -57,7 +67,7 @@ try {
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $StagePath "config\pdf_imports.json")
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $StagePath "config\mineru_api.local.example.json")
     Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
-    py -3 -m tools.create_empty_index (Join-Path $StagePath "data\index.sqlite3")
+    & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index (Join-Path $StagePath "data\index.sqlite3")
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
 
     $forbiddenNames = @(
@@ -81,7 +91,7 @@ try {
         throw "Blank index is unexpectedly large: $($blankIndex.Length) bytes"
     }
 
-    py -3 -m tools.create_portable_zip $StagePath $ZipPath
+    & $pythonCommand @pythonLauncherArgs -m tools.create_portable_zip $StagePath $ZipPath
     if ($LASTEXITCODE -ne 0) { throw "Portable ZIP creation failed." }
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
     Set-Content -LiteralPath $HashPath -Encoding Ascii -Value "$hash  $PackageName.zip"

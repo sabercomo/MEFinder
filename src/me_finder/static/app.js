@@ -3592,7 +3592,10 @@ function pollBatchMetadata(jobId, button) {
     });
 }
 
+const SCAN_IMPORT_BATCH_LIMIT = 50;
 let scanEntries = [];
+let scanDragSelection = null;
+let suppressScanSelectionClick = false;
 
 async function runDirectoryScan() {
   var statusEl = document.getElementById('scan-status');
@@ -3625,11 +3628,11 @@ function scanEntryRow(entry, index, checkable, checked) {
   var note = '';
   if (entry.status === 'processing') note = '已提交，正在导入…';
   else if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
-  else if (entry.needs_ocr === true) note = '需 OCR：导入后将提交 MinerU（消耗配额）';
+  else if (entry.needs_ocr === true) note = '需 OCR';
   else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
   return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
     + (checkable
-      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="updateScanImportButton()">'
+      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
       : '<span class="scan-check-placeholder"></span>')
     + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
     + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
@@ -3651,17 +3654,21 @@ function renderScanResults(data) {
     else groups.ready.push(index);
   });
   var pieces = [];
-  function section(title, indexes, checkable, checked) {
+  var autoSelectable = groups.ready.concat(groups.ocr);
+  var autoSelected = new Set(autoSelectable.slice(0, SCAN_IMPORT_BATCH_LIMIT));
+  function section(title, indexes, checkable, checkedIndexes) {
     if (!indexes.length) return;
     pieces.push('<div class="scan-group-title">' + title + '（' + indexes.length + '）</div>');
-    pieces.push(indexes.map(function(i) { return scanEntryRow(scanEntries[i], i, checkable, checked); }).join(''));
+    pieces.push(indexes.map(function(i) {
+      return scanEntryRow(scanEntries[i], i, checkable, !!checkedIndexes && checkedIndexes.has(i));
+    }).join(''));
   }
-  section('可直接导入的新文件', groups.ready, true, true);
-  section('需 OCR 的新文件（默认不勾选，导入将消耗 MinerU 配额）', groups.ocr, true, false);
-  section('未预检测的新文件', groups.unknown, true, false);
-  section('正在导入', groups.processing, false, false);
-  section('同名冲突', groups.conflict, false, false);
-  section('已导入', groups.imported, false, false);
+  section('可直接导入的新文件', groups.ready, true, autoSelected);
+  section('需 OCR 的新文件', groups.ocr, true, autoSelected);
+  section('未预检测的新文件', groups.unknown, true, null);
+  section('正在导入', groups.processing, false, null);
+  section('同名冲突', groups.conflict, false, null);
+  section('已导入', groups.imported, false, null);
   resultsEl.innerHTML = pieces.join('');
   var newCount = groups.ready.length + groups.ocr.length + groups.unknown.length;
   var parts = ['新文件 ' + newCount];
@@ -3672,10 +3679,129 @@ function renderScanResults(data) {
   document.getElementById('scan-results-head').style.display = 'flex';
   // Only warnings stay in the status line; the counts live in the results head.
   var warnings = [];
+  var deferredNew = Math.max(0, autoSelectable.length - SCAN_IMPORT_BATCH_LIMIT);
+  if (deferredNew) {
+    warnings.push('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个，已自动勾选前 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；提交后会自动勾选剩余 ' + deferredNew + ' 个。');
+  }
   if (data.limit_reached) warnings.push('数量超出上限，仅显示前 ' + scanEntries.length + ' 个。');
   (data.errors || []).forEach(function(err) { warnings.push(err.directory + '：' + err.error + '。'); });
   statusEl.textContent = warnings.join(' ');
   updateScanImportButton();
+}
+
+function handleScanCheckChange(input) {
+  var checked = document.querySelectorAll('#scan-results .scan-check:checked').length;
+  if (input.checked && checked > SCAN_IMPORT_BATCH_LIMIT) {
+    input.checked = false;
+    showToast('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；请先提交当前批次，剩余文件会保留到下一批');
+  }
+  updateScanImportButton();
+}
+
+function setupScanResultDragSelection() {
+  var results = document.getElementById('scan-results');
+  if (!results || results.dataset.dragSelectionReady === '1') return;
+  results.dataset.dragSelectionReady = '1';
+
+  results.addEventListener('pointerdown', function(event) {
+    if (event.button !== 0 || scanDragSelection) return;
+    var row = event.target.closest('.scan-row');
+    var input = row && row.querySelector('.scan-check');
+    if (!input) return;
+    var inputs = Array.from(results.querySelectorAll('.scan-check'));
+    scanDragSelection = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      targetChecked: !input.checked,
+      initial: new Map(inputs.map(function(item) { return [item, item.checked]; })),
+      started: false,
+      marquee: null,
+      limitShown: false
+    };
+  });
+
+  results.addEventListener('click', function(event) {
+    if (!suppressScanSelectionClick) return;
+    suppressScanSelectionClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  document.addEventListener('pointermove', function(event) {
+    var state = scanDragSelection;
+    if (!state || event.pointerId !== state.pointerId) return;
+    var distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+    if (!state.started && distance < 6) return;
+    if (!state.started) {
+      state.started = true;
+      state.marquee = document.createElement('div');
+      state.marquee.className = 'scan-selection-marquee';
+      document.body.appendChild(state.marquee);
+      results.classList.add('is-drag-selecting');
+      try { results.setPointerCapture(event.pointerId); } catch (e) {}
+      var selection = window.getSelection && window.getSelection();
+      if (selection) selection.removeAllRanges();
+    }
+    event.preventDefault();
+
+    var left = Math.min(state.startX, event.clientX);
+    var top = Math.min(state.startY, event.clientY);
+    var right = Math.max(state.startX, event.clientX);
+    var bottom = Math.max(state.startY, event.clientY);
+    state.marquee.style.left = left + 'px';
+    state.marquee.style.top = top + 'px';
+    state.marquee.style.width = (right - left) + 'px';
+    state.marquee.style.height = (bottom - top) + 'px';
+
+    var hitInputs = [];
+    results.querySelectorAll('.scan-row').forEach(function(item) {
+      var box = item.querySelector('.scan-check');
+      var rect = item.getBoundingClientRect();
+      var hit = !!box && rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom;
+      item.classList.toggle('is-drag-target', hit);
+      if (hit) hitInputs.push(box);
+    });
+
+    state.initial.forEach(function(wasChecked, item) { item.checked = wasChecked; });
+    var checkedCount = Array.from(state.initial.values()).filter(Boolean).length;
+    var blockedByLimit = false;
+    hitInputs.forEach(function(item) {
+      if (!state.targetChecked) {
+        item.checked = false;
+      } else if (!item.checked && checkedCount < SCAN_IMPORT_BATCH_LIMIT) {
+        item.checked = true;
+        checkedCount += 1;
+      } else if (!item.checked) {
+        blockedByLimit = true;
+      }
+    });
+    if (blockedByLimit && !state.limitShown) {
+      state.limitShown = true;
+      showToast('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；请先提交当前批次，剩余文件会保留到下一批');
+    }
+    updateScanImportButton();
+  }, {passive: false});
+
+  function finishScanDragSelection(event) {
+    var state = scanDragSelection;
+    if (!state || event.pointerId !== state.pointerId) return;
+    scanDragSelection = null;
+    results.classList.remove('is-drag-selecting');
+    results.querySelectorAll('.scan-row.is-drag-target').forEach(function(item) {
+      item.classList.remove('is-drag-target');
+    });
+    if (state.marquee) state.marquee.remove();
+    try { results.releasePointerCapture(event.pointerId); } catch (e) {}
+    if (state.started) {
+      suppressScanSelectionClick = true;
+      setTimeout(function() { suppressScanSelectionClick = false; }, 0);
+    }
+    updateScanImportButton();
+  }
+
+  document.addEventListener('pointerup', finishScanDragSelection);
+  document.addEventListener('pointercancel', finishScanDragSelection);
 }
 
 function updateScanImportButton() {
@@ -3688,8 +3814,8 @@ function updateScanImportButton() {
 async function importSelectedScanned() {
   var checks = Array.from(document.querySelectorAll('#scan-results .scan-check:checked'));
   if (!checks.length) return;
-  if (checks.length > 50) {
-    showToast('一次最多批量导入 50 个文件，请取消部分勾选后分批导入');
+  if (checks.length > SCAN_IMPORT_BATCH_LIMIT) {
+    showToast('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个文件');
     return;
   }
   var paths = checks.map(function(box) { return scanEntries[Number(box.dataset.index)].path; });
@@ -3738,13 +3864,17 @@ async function importSelectedScanned() {
     var failureNote = failed.length
       ? '；' + failed.length + ' 个未导入：' + (failed[0].error || '请检查文件')
       : '';
-    showToast('已开始导入 ' + (data.jobs || []).length + ' 个文件' + failureNote);
     failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });
     var submittedPaths = new Set((data.jobs || []).map(function(job) { return job.path; }));
     scanEntries.forEach(function(entry) {
       if (submittedPaths.has(entry.path)) entry.status = 'processing';
     });
     renderScanResults({errors: [], limit_reached: false});
+    var nextBatchCount = document.querySelectorAll('#scan-results .scan-check:checked').length;
+    var nextBatchNote = nextBatchCount
+      ? '；下一批 ' + nextBatchCount + ' 个已自动勾选，可继续导入'
+      : '';
+    showToast('已开始导入 ' + (data.jobs || []).length + ' 个文件' + failureNote + nextBatchNote);
   } catch (e) {
     showToast('批量导入失败：' + e.message);
   } finally {
@@ -4048,6 +4178,7 @@ document.addEventListener('click', function(event) {
 })();
 configureDesktopPlatformOptions();
 setupScanDirectoryControls();
+setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
