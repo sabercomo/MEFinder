@@ -31,6 +31,20 @@ class SQLiteSearchTests(unittest.TestCase):
         self.assertGreater(pdf["total"], 0)
         self.assertEqual(pdf["results"][0]["source_type"], "pdf")
 
+    def test_typeset_soft_hyphens_do_not_block_a_cleanly_typed_quote(self) -> None:
+        # 排版 PDF 会在断词处留下软连字符（U+00AD），导出还常夹带零宽空格。
+        # 这些字符的 Unicode 类别是 Cf，既非标点也非空白，曾经原样留在索引里，
+        # 使读者手打的干净引文永远匹配不上原句。
+        typeset = "­These ­things, as they say, are every­one's own busi­ness"
+        typed = "These things as they say are everyone's own business"
+        self.assertEqual(punctuationless_text(typed), punctuationless_text(typeset))
+        self.assertNotIn("­", normalize_text(typeset))
+        for invisible in ("​", "⁠", "﻿"):
+            self.assertEqual(
+                punctuationless_text(f"原{invisible}句"),
+                punctuationless_text("原句"),
+            )
+
     def test_database_has_searchable_paragraphs_and_catalog(self) -> None:
         connection = sqlite3.connect(str(DEFAULT_DATABASE_PATH))
         try:
