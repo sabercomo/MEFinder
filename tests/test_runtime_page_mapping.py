@@ -88,6 +88,14 @@ class RuntimePageMappingTests(unittest.TestCase):
             stored_source = json.loads(connection.execute("SELECT payload_json FROM source_files").fetchone()[0])
             connection.close()
             self.assertEqual([page["citation_page"] for page in pages], ["1", "2"])
+            self.assertEqual(
+                {page["segment_id"] for page in pages},
+                {"MAPSEG-000010-000020"},
+            )
+            self.assertEqual(
+                stored_paragraph["segment_id"],
+                "MAPSEG-000010-000020",
+            )
             self.assertEqual(stored_paragraph["citation_page_start"], "1")
             self.assertEqual(stored_paragraph["citation_page_end"], "2")
             self.assertEqual(stored_paragraph["page_mapping_method"], "native_pdf_edge_sequence")
@@ -128,6 +136,7 @@ class RuntimePageMappingTests(unittest.TestCase):
             ]
         )
         self.assertEqual(cleaned[0]["method"], "native_pdf_edge_sequence")
+        self.assertEqual(cleaned[0]["segment_id"], "MAPSEG-000035-000040")
 
     def test_calibration_ui_has_dry_run_and_explicit_apply_controls(self) -> None:
         self.assertIn("自动检测页码", HTML)

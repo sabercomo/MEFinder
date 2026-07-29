@@ -8,6 +8,7 @@
    */
   var DEFAULTS = {
     endpoint: '/api/document/pages',
+    citationEndpoint: '/api/document/citation',
     batchSize: 20,
     radiusBatches: 1,
     estimatedItemHeight: 360
@@ -15,6 +16,7 @@
 
   var config = {
     endpoint: DEFAULTS.endpoint,
+    citationEndpoint: DEFAULTS.citationEndpoint,
     batchSize: DEFAULTS.batchSize,
     radiusBatches: DEFAULTS.radiusBatches,
     estimatedItemHeight: DEFAULTS.estimatedItemHeight,
@@ -28,6 +30,7 @@
     source: null,
     title: '',
     total: 0,
+    lastPosition: null,
     windowStart: 0,
     windowEnd: 0,
     hasPrevious: false,
@@ -38,6 +41,7 @@
     currentAnchorId: '',
     items: new Map(),
     highlights: new Map(),
+    resolvedHighlights: new Map(),
     targetAnchorId: '',
     preciseHighlight: true,
     matchQuote: '',
@@ -48,6 +52,18 @@
     pageObserver: null,
     boundaryObserver: null,
     visibleRatios: new Map(),
+    citationRange: null,
+    selectionDragging: false,
+    citationMenuOpen: false,
+    citationLoading: false,
+    citationRequestSerial: 0,
+    lastSession: null,
+    lastDeepLink: '',
+    lastHistoryAnchor: '',
+    deepLinkTimer: null,
+    pendingDeepLink: null,
+    scrollBoundaryTimer: null,
+    originalUrl: '',
     restoreFocus: null,
     onCurrentChange: null,
     elements: null
@@ -131,7 +147,7 @@
   }
 
   function inferIndexFromAnchor(anchorId) {
-    var match = /-PAGE-(\d+)$/.exec(String(anchorId || ''));
+    var match = /(?:-PAGE-|-P)(\d+)$/.exec(String(anchorId || ''));
     return match ? Number(match[1]) : null;
   }
 
@@ -159,6 +175,13 @@
       }
     }
     return Math.max(0, inferIndexFromAnchor(options.anchorId || options.anchor_id) || 0);
+  }
+
+  function backendPageDisplay(item) {
+    var display = item && typeof item.page_display === 'string'
+      ? item.page_display.trim()
+      : '';
+    return display || '页码信息不可用';
   }
 
   function notify(message) {
@@ -223,9 +246,15 @@
     heading.appendChild(eyebrow);
     heading.appendChild(title);
 
-    var current = document.createElement('div');
+    var current = createButton(
+      '正在载入…',
+      'mef-reader-current',
+      'toggle-citation'
+    );
     current.className = 'mef-reader-current';
     current.setAttribute('aria-live', 'polite');
+    current.setAttribute('aria-haspopup', 'true');
+    current.setAttribute('aria-expanded', 'false');
     current.textContent = '正在载入…';
 
     var close = createButton('关闭', 'mef-reader-close', 'close');
@@ -234,6 +263,35 @@
     header.appendChild(heading);
     header.appendChild(current);
     header.appendChild(close);
+
+    var citationBar = document.createElement('div');
+    citationBar.className = 'mef-reader-citation-bar';
+    citationBar.hidden = true;
+
+    var citationContext = document.createElement('span');
+    citationContext.className = 'mef-reader-citation-context';
+    citationContext.textContent = '选择引文格式';
+
+    var copyFootnote = createButton(
+      '复制中文脚注',
+      'mef-reader-citation-action',
+      'copy-footnote'
+    );
+    var copyGbt = createButton(
+      '复制 GB/T 7714',
+      'mef-reader-citation-action',
+      'copy-gbt7714'
+    );
+    var clearSelection = createButton(
+      '清除选区',
+      'mef-reader-citation-clear',
+      'clear-selection'
+    );
+    clearSelection.hidden = true;
+    citationBar.appendChild(citationContext);
+    citationBar.appendChild(copyFootnote);
+    citationBar.appendChild(copyGbt);
+    citationBar.appendChild(clearSelection);
 
     var alert = document.createElement('div');
     alert.className = 'mef-reader-alert';
@@ -257,6 +315,7 @@
     loading.hidden = true;
 
     panel.appendChild(header);
+    panel.appendChild(citationBar);
     panel.appendChild(alert);
     panel.appendChild(viewport);
     panel.appendChild(loading);
@@ -269,6 +328,18 @@
         ? event.target.dataset.readerAction
         : '';
       if (action === 'close') closeReader();
+      if (action === 'toggle-citation') toggleCitationMenu();
+      if (action === 'copy-footnote') copyCachedCitation('chinese');
+      if (action === 'copy-gbt7714') copyCachedCitation('gb');
+      if (action === 'clear-selection') clearCitationRange();
+    });
+    viewport.addEventListener('mousedown', function () {
+      state.selectionDragging = true;
+    });
+    viewport.addEventListener('keyup', scheduleSelectionCapture);
+    viewport.addEventListener('keydown', handleReaderNavigationKey);
+    viewport.addEventListener('scroll', scheduleScrollBoundaryCheck, {
+      passive: true
     });
 
     state.elements = {
@@ -276,6 +347,11 @@
       panel: panel,
       title: title,
       current: current,
+      citationBar: citationBar,
+      citationContext: citationContext,
+      copyFootnote: copyFootnote,
+      copyGbt: copyGbt,
+      clearSelection: clearSelection,
       alert: alert,
       viewport: viewport,
       content: content,
@@ -283,6 +359,546 @@
       close: close
     };
     return state.elements;
+  }
+
+  function citationTargetRange() {
+    if (state.citationRange) return state.citationRange;
+    var item = state.items.get(state.currentIndex);
+    if (!item) return null;
+    return {
+      startIndex: state.currentIndex,
+      endIndex: state.currentIndex,
+      startAnchorId: itemAnchor(item, state.currentIndex),
+      endAnchorId: itemAnchor(item, state.currentIndex),
+      startOffset: 0,
+      endOffset: codePointLength(item.text_raw || ''),
+      startDisplay: backendPageDisplay(item),
+      endDisplay: backendPageDisplay(item),
+      selectedText: '',
+      citationPayload: {
+        page_range: {verified: item.page_verified === true},
+        citation_formats: item.citation_formats || {}
+      }
+    };
+  }
+
+  function citationCanCopy(target) {
+    var payload = target && target.citationPayload;
+    var formats = payload && payload.citation_formats;
+    var pageRange = payload && payload.page_range;
+    return Boolean(
+      formats &&
+      formats.can_copy === true &&
+      (!pageRange || pageRange.verified === true)
+    );
+  }
+
+  function citationStyleCanCopy(target, style) {
+    var payload = target && target.citationPayload;
+    var formats = payload && payload.citation_formats;
+    var pageRange = payload && payload.page_range;
+    return Boolean(
+      formats &&
+      formats.can_copy === true &&
+      formats[style + '_status'] === 'complete' &&
+      (!pageRange || pageRange.verified === true)
+    );
+  }
+
+  function updateCitationControls() {
+    if (!state.elements) return;
+    var target = citationTargetRange();
+    state.elements.current.disabled = !state.items.has(state.currentIndex);
+    state.elements.current.setAttribute(
+      'aria-expanded',
+      state.citationMenuOpen ? 'true' : 'false'
+    );
+    state.elements.citationBar.hidden = !state.citationMenuOpen;
+    var canCopy = citationCanCopy(target);
+    state.elements.copyFootnote.disabled = state.citationLoading ||
+      !citationStyleCanCopy(target, 'chinese');
+    state.elements.copyGbt.disabled = state.citationLoading ||
+      !citationStyleCanCopy(target, 'gb');
+    state.elements.clearSelection.hidden = !state.citationRange;
+    if (!target) {
+      state.elements.citationContext.textContent = '当前没有可引用的页码';
+      return;
+    }
+    var context = state.citationRange
+      ? '已选择：' + target.startDisplay + (
+        target.endIndex === target.startIndex
+          ? ''
+          : ' → ' + target.endDisplay
+      )
+      : '当前页：' + target.startDisplay;
+    if (state.citationLoading) context += '（正在生成引文…）';
+    else if (!canCopy) context += '（页码未验证，暂不可复制）';
+    state.elements.citationContext.textContent = context;
+  }
+
+  function toggleCitationMenu() {
+    if (!state.open || !state.items.has(state.currentIndex)) return;
+    state.citationMenuOpen = !state.citationMenuOpen;
+    updateCitationControls();
+  }
+
+  function clearCitationRange() {
+    state.citationRequestSerial += 1;
+    state.citationRange = null;
+    state.selectionDragging = false;
+    state.citationLoading = false;
+    var selection = typeof global.getSelection === 'function'
+      ? global.getSelection()
+      : null;
+    if (selection && typeof selection.removeAllRanges === 'function') {
+      selection.removeAllRanges();
+    }
+    updateCitationControls();
+  }
+
+  function elementForRangeNode(node) {
+    if (!node) return null;
+    return node.nodeType === 1 ? node : node.parentElement;
+  }
+
+  function textOffsetWithin(container, node, offset) {
+    if (!container || !node || typeof document.createTreeWalker !== 'function') {
+      return null;
+    }
+    var element = elementForRangeNode(node);
+    if (!element || !(element === container || container.contains(element))) {
+      return null;
+    }
+    var walker = document.createTreeWalker(
+      container,
+      global.NodeFilter ? global.NodeFilter.SHOW_TEXT : 4
+    );
+    var utf16Total = 0;
+    var textNode = walker.nextNode();
+    while (textNode) {
+      if (textNode === node) {
+        return utf16Total + clampInteger(
+          offset,
+          0,
+          0,
+          String(textNode.nodeValue || '').length
+        );
+      }
+      utf16Total += String(textNode.nodeValue || '').length;
+      textNode = walker.nextNode();
+    }
+    if (typeof document.createRange !== 'function') return null;
+    // Element-node boundaries are uncommon but valid; Range supplies their
+    // DOM boundary while all ordinary text/mark boundaries use TreeWalker.
+    try {
+      var prefix = document.createRange();
+      prefix.selectNodeContents(container);
+      prefix.setEnd(node, offset);
+      return prefix.toString().length;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function captureMountedSelection() {
+    if (!state.open || typeof global.getSelection !== 'function') return null;
+    var selection = global.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return null;
+    var range = selection.getRangeAt(0);
+    var startElement = elementForRangeNode(range.startContainer);
+    var endElement = elementForRangeNode(range.endContainer);
+    var startBody = startElement && startElement.closest
+      ? startElement.closest('.mef-reader-item-text')
+      : null;
+    var endBody = endElement && endElement.closest
+      ? endElement.closest('.mef-reader-item-text')
+      : null;
+    if (
+      !startBody ||
+      !endBody ||
+      !state.elements.content.contains(startBody) ||
+      !state.elements.content.contains(endBody)
+    ) {
+      return null;
+    }
+    var startArticle = startBody.closest('.mef-reader-item');
+    var endArticle = endBody.closest('.mef-reader-item');
+    if (!startArticle || !endArticle) return null;
+
+    var startIndex = Number(startArticle.dataset.readerIndex);
+    var endIndex = Number(endArticle.dataset.readerIndex);
+    if (!Number.isFinite(startIndex) || !Number.isFinite(endIndex)) return null;
+    var startItem = state.items.get(startIndex);
+    var endItem = state.items.get(endIndex);
+    if (!startItem || !endItem) return null;
+
+    var startUtf16 = textOffsetWithin(
+      startBody,
+      range.startContainer,
+      range.startOffset
+    );
+    var endUtf16 = textOffsetWithin(
+      endBody,
+      range.endContainer,
+      range.endOffset
+    );
+    if (startUtf16 === null || endUtf16 === null) return null;
+    var selectedText = selection.toString();
+    if (!selectedText) return null;
+
+    return {
+      startIndex: startIndex,
+      endIndex: endIndex,
+      startOffset: utf16ToCodePointIndex(startItem.text_raw || '', startUtf16),
+      endOffset: utf16ToCodePointIndex(endItem.text_raw || '', endUtf16),
+      startAnchorId: itemAnchor(startItem, startIndex),
+      endAnchorId: itemAnchor(endItem, endIndex),
+      startDisplay: backendPageDisplay(startItem),
+      endDisplay: backendPageDisplay(endItem),
+      selectedText: selectedText
+    };
+  }
+
+  function scheduleSelectionCapture() {
+    global.setTimeout(function () {
+      var captured = captureMountedSelection();
+      state.selectionDragging = false;
+      if (!captured) {
+        var selection = typeof global.getSelection === 'function'
+          ? global.getSelection()
+          : null;
+        if (selection && !selection.isCollapsed) {
+          state.citationRequestSerial += 1;
+          state.citationRange = null;
+          state.citationLoading = false;
+          updateCitationControls();
+          var warning = '选区端点必须都在当前已载入的文本窗口内，请缩小选区后重试。';
+          setAlert(warning, 'warning');
+          notify(warning);
+        }
+        return;
+      }
+      state.citationRange = captured;
+      state.citationMenuOpen = true;
+      updateCitationControls();
+      prefetchCitationRange(captured);
+    }, 0);
+  }
+
+  function selectionBlocksWindowShift() {
+    if (state.selectionDragging) return true;
+    var selection = typeof global.getSelection === 'function'
+      ? global.getSelection()
+      : null;
+    return Boolean(selection && !selection.isCollapsed);
+  }
+
+  async function writeClipboard(text) {
+    var value = String(text || '');
+    if (!value) throw new Error('后端没有返回可复制的引文');
+    if (
+      global.navigator &&
+      global.navigator.clipboard &&
+      typeof global.navigator.clipboard.writeText === 'function'
+    ) {
+      try {
+        await global.navigator.clipboard.writeText(value);
+        return;
+      } catch (_clipboardError) {
+        // Continue to the local textarea fallback below.
+      }
+    }
+    var textarea = document.createElement('textarea');
+    textarea.className = 'mef-reader-clipboard-fallback';
+    textarea.value = value;
+    textarea.setAttribute('readonly', 'readonly');
+    document.body.appendChild(textarea);
+    textarea.select();
+    var copied = false;
+    try {
+      copied = typeof document.execCommand === 'function' &&
+        document.execCommand('copy');
+    } finally {
+      textarea.remove();
+    }
+    if (!copied) throw new Error('无法写入剪贴板，请检查系统剪贴板权限');
+  }
+
+  async function prefetchCitationRange(target) {
+    var serial = state.citationRequestSerial + 1;
+    state.citationRequestSerial = serial;
+    state.citationLoading = true;
+    updateCitationControls();
+    try {
+      var response = await fetchFunction()(config.citationEndpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          source_id: state.sourceId,
+          start_anchor_id: target.startAnchorId,
+          end_anchor_id: target.endAnchorId
+        })
+      });
+      var payload = await response.json();
+      if (!response.ok || payload.error) {
+        throw new Error(payload.error || '引文生成失败');
+      }
+      if (
+        serial !== state.citationRequestSerial ||
+        state.citationRange !== target
+      ) {
+        return false;
+      }
+      target.citationPayload = payload;
+      if (!citationCanCopy(target)) {
+        setAlert(
+          (payload.page_range && payload.page_range.note) ||
+          '所选页码尚未验证，暂不能复制带页码引文。',
+          'warning'
+        );
+      }
+      return true;
+    } catch (error) {
+      if (serial !== state.citationRequestSerial) return false;
+      var message = error && error.message
+        ? error.message
+        : '引文生成失败';
+      setAlert(message, 'error');
+      notify(message);
+      return false;
+    } finally {
+      if (serial === state.citationRequestSerial) {
+        state.citationLoading = false;
+        updateCitationControls();
+      }
+    }
+  }
+
+  function copyCachedCitation(style) {
+    var target = citationTargetRange();
+    if (!citationStyleCanCopy(target, style)) {
+      var warning = state.citationLoading
+        ? '所选页码范围的引文仍在生成，请稍候。'
+        : (
+          citationCanCopy(target)
+            ? '当前引文缺少该格式所需的书目信息，暂不能复制。'
+            : '当前页码尚未验证，暂不能复制带页码引文。'
+        );
+      setAlert(warning, 'warning');
+      notify(warning);
+      return Promise.resolve(false);
+    }
+    var formats = target.citationPayload.citation_formats || {};
+    var citation = String(formats[style] || '');
+    return writeClipboard(citation).then(function () {
+      notify(style === 'gb' ? 'GB/T 7714 引文已复制' : '中文脚注已复制');
+      return true;
+    }).catch(function (error) {
+      var message = error && error.message
+        ? error.message
+        : '引文复制失败';
+      setAlert(message, 'error');
+      notify(message);
+      return false;
+    });
+  }
+
+  function truncateCodePoints(value, maximum) {
+    return Array.from(String(value || '')).slice(0, maximum).join('');
+  }
+
+  function parseDeepLinkOffset(value, quote) {
+    var match = /^(\d+)(?:-(\d+))?$/.exec(String(value || ''));
+    if (!match) return null;
+    var start = clampInteger(match[1], 0, 0, Number.MAX_SAFE_INTEGER);
+    var end = match[2] == null
+      ? start + codePointLength(quote)
+      : clampInteger(match[2], start, start, Number.MAX_SAFE_INTEGER);
+    return end > start ? {start: start, end: end} : null;
+  }
+
+  function parseReaderDeepLink(locationValue) {
+    var locationObject = locationValue || global.location;
+    if (!locationObject) return null;
+    var pathname = String(locationObject.pathname || '');
+    if (pathname !== '/reader' && pathname !== '/reader/') return null;
+    var search = String(locationObject.search || '');
+    if (search.length > 1024) return null;
+    var params = new URLSearchParams(search);
+    var unknownParameter = false;
+    params.forEach(function (_value, key) {
+      if (!['source', 'page', 'off', 'h', 'q'].includes(key)) {
+        unknownParameter = true;
+      }
+    });
+    if (
+      unknownParameter ||
+      params.getAll('source').length !== 1 ||
+      params.getAll('page').length !== 1 ||
+      params.getAll('off').length > 1 ||
+      params.getAll('h').length > 1 ||
+      params.getAll('q').length > 1
+    ) {
+      return null;
+    }
+    var sourceId = String(params.get('source') || '');
+    var anchorId = String(params.get('page') || '');
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(sourceId) ||
+      anchorId.length > 256 ||
+      !/^[A-Za-z0-9._:-]+$/.test(anchorId)
+    ) {
+      return null;
+    }
+    var targetIndex = inferIndexFromAnchor(anchorId);
+    if (targetIndex === null) return null;
+    var hashValue = String(params.get('h') || '');
+    if (hashValue && !/^[0-9a-f]{16}$/i.test(hashValue)) return null;
+    var pageTextHash = hashValue;
+    var rawQuote = String(params.get('q') || '');
+    if (codePointLength(rawQuote) > 50) return null;
+    var matchQuote = rawQuote;
+    var offsetValue = String(params.get('off') || '');
+    if (offsetValue.length > 64) return null;
+    var offset = parseDeepLinkOffset(offsetValue, matchQuote);
+    if (offsetValue && !offset) return null;
+    if (!offsetValue && (hashValue || matchQuote)) return null;
+    var spans = offset ? [{
+      anchor_id: anchorId,
+      page_char_start: offset.start,
+      page_char_end: offset.end,
+      page_text_hash: pageTextHash,
+      match_quote: matchQuote
+    }] : [];
+    return {
+      sourceId: sourceId,
+      targetIndex: targetIndex,
+      anchorId: anchorId,
+      paragraphId: /-P\d+$/.test(anchorId) ? anchorId : '',
+      pageMatchSpans: spans,
+      matchOffsetUnit: 'unicode_codepoint',
+      matchQuote: matchQuote,
+      // A page-only link did not request highlighting.  Leave capability
+      // unspecified so it is not mistaken for a legacy index that failed to
+      // provide precise match anchors.
+      preciseHighlightAvailable: spans.length ? true : undefined,
+      fromDeepLink: true
+    };
+  }
+
+  function deepLinkRange(anchorId) {
+    var resolved = state.resolvedHighlights.get(anchorId) || [];
+    if (resolved.length) return {range: resolved[0], resolved: true};
+    var original = state.highlights.get(anchorId) || [];
+    return original.length ? {range: original[0], resolved: false} : null;
+  }
+
+  function updateReaderDeepLink(item, index, anchorId) {
+    if (
+      !state.open ||
+      !global.history ||
+      typeof global.history.replaceState !== 'function' ||
+      state.lastHistoryAnchor === anchorId
+    ) {
+      return;
+    }
+    var params = new URLSearchParams();
+    params.set('source', state.sourceId);
+    params.set('page', anchorId);
+    var linkRange = deepLinkRange(anchorId);
+    var quote = '';
+    var pageTextHash = '';
+    var spans = [];
+    if (linkRange) {
+      var range = linkRange.range;
+      var start = clampInteger(range.start, 0, 0, Number.MAX_SAFE_INTEGER);
+      var end = clampInteger(range.end, start, start, Number.MAX_SAFE_INTEGER);
+      if (end > start) {
+        params.set('off', start + '-' + end);
+        quote = truncateCodePoints(range.matchQuote || state.matchQuote, 50);
+        pageTextHash = linkRange.resolved
+          ? String(item.page_text_hash || '')
+          : String(range.pageTextHash || '');
+        spans.push({
+          anchor_id: anchorId,
+          page_char_start: start,
+          page_char_end: end,
+          page_text_hash: pageTextHash,
+          match_quote: quote
+        });
+      }
+    }
+    if (/^[0-9a-f]{16}$/i.test(pageTextHash)) params.set('h', pageTextHash);
+    if (quote) params.set('q', quote);
+    var url = '/reader?' + params.toString();
+    if (url.length > 1024) return;
+    global.history.replaceState(
+      {meFinderReader: true, sourceId: state.sourceId, anchorId: anchorId},
+      '',
+      url
+    );
+    state.lastHistoryAnchor = anchorId;
+    state.lastDeepLink = url;
+    state.lastSession = {
+      sourceId: state.sourceId,
+      title: state.title,
+      targetIndex: index,
+      anchorId: anchorId,
+      pageMatchSpans: spans,
+      matchOffsetUnit: 'unicode_codepoint',
+      matchQuote: quote,
+      preciseHighlightAvailable: spans.length > 0,
+      fromDeepLink: true
+    };
+  }
+
+  function scheduleReaderDeepLink(item, index, anchorId) {
+    state.pendingDeepLink = {
+      item: item,
+      index: index,
+      anchorId: anchorId
+    };
+    if (state.deepLinkTimer !== null) {
+      global.clearTimeout(state.deepLinkTimer);
+    }
+    state.deepLinkTimer = global.setTimeout(function () {
+      state.deepLinkTimer = null;
+      var pending = state.pendingDeepLink;
+      state.pendingDeepLink = null;
+      if (!pending || !state.open || state.currentAnchorId !== pending.anchorId) {
+        return;
+      }
+      updateReaderDeepLink(pending.item, pending.index, pending.anchorId);
+    }, 80);
+  }
+
+  function flushPendingReaderDeepLink() {
+    if (state.deepLinkTimer !== null) {
+      global.clearTimeout(state.deepLinkTimer);
+      state.deepLinkTimer = null;
+    }
+    var pending = state.pendingDeepLink;
+    state.pendingDeepLink = null;
+    if (pending && state.open && state.currentAnchorId === pending.anchorId) {
+      updateReaderDeepLink(pending.item, pending.index, pending.anchorId);
+    }
+  }
+
+  function ordinaryUrlBeforeReader() {
+    if (!global.location) return '/';
+    var pathname = String(global.location.pathname || '/');
+    if (pathname === '/reader' || pathname === '/reader/') return '/';
+    return pathname + String(global.location.search || '') +
+      String(global.location.hash || '');
+  }
+
+  function restoreReaderLocation() {
+    var options = parseReaderDeepLink(global.location) || state.lastSession;
+    if (!options) return Promise.resolve(false);
+    return openReader(Object.assign({}, options, {restoringSession: true}));
   }
 
   function disconnectObservers() {
@@ -297,7 +913,19 @@
     var bestIndex = null;
     var bestRatio = -1;
     state.visibleRatios.forEach(function (ratio, index) {
-      if (ratio > bestRatio || (ratio === bestRatio && index < bestIndex)) {
+      var closerToCurrent = bestIndex === null ||
+        Math.abs(index - state.currentIndex) <
+          Math.abs(bestIndex - state.currentIndex);
+      var stableOrder = bestIndex === null ||
+        (
+          Math.abs(index - state.currentIndex) ===
+            Math.abs(bestIndex - state.currentIndex) &&
+          index < bestIndex
+        );
+      if (
+        ratio > bestRatio ||
+        (ratio === bestRatio && (closerToCurrent || stableOrder))
+      ) {
         bestRatio = ratio;
         bestIndex = index;
       }
@@ -310,26 +938,19 @@
     var item = state.items.get(index);
     if (!item) return;
     var anchorId = itemAnchor(item, index);
+    var currentChanged = state.currentAnchorId !== anchorId;
     state.currentIndex = index;
     state.currentAnchorId = anchorId;
-    var documentOnlyPage = item.item_type === 'word_paragraph' &&
-      (item.page_source_type === 'toc_range_bound' ||
-       item.page_source_type === 'unknown');
-    var pageLabel = documentOnlyPage
-      ? (item.document_page_range ||
-         '段落 ' + (index + 1))
-      : (item.page_display || item.page_note || '');
-    if (!pageLabel) {
-      pageLabel = item.item_type === 'word_paragraph'
-        ? '段落 ' + (index + 1)
-        : 'PDF 第 ' + (index + 1) + ' 页';
-    }
+    var pageLabel = backendPageDisplay(item);
     state.elements.current.textContent = pageLabel;
+    state.elements.current.title = '点击复制此页或当前选区的引文';
+    updateCitationControls();
+    if (currentChanged) scheduleReaderDeepLink(item, index, anchorId);
     if (typeof state.onCurrentChange === 'function') {
       state.onCurrentChange({
         sourceId: state.sourceId,
         index: index,
-        anchorId: item.anchor_id || null,
+        anchorId: anchorId,
         item: item,
         pageDisplay: pageLabel
       });
@@ -353,7 +974,7 @@
   }
 
   function shiftWindow(direction) {
-    if (state.loading || !state.open) return;
+    if (state.loading || !state.open || selectionBlocksWindowShift()) return;
     var batchSize = config.batchSize;
     if (direction < 0 && state.previousStart === null) return;
     if (direction > 0 && (!state.hasMore || state.nextStart === null)) return;
@@ -388,6 +1009,55 @@
       rootMargin: '220px 0px',
       threshold: 0
     });
+  }
+
+  function handleReaderNavigationKey(event) {
+    if (
+      !state.open ||
+      state.loading ||
+      selectionBlocksWindowShift() ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      goTo({targetIndex: 0});
+    } else if (event.key === 'End' && state.lastPosition !== null) {
+      event.preventDefault();
+      goTo({targetIndex: state.lastPosition});
+    }
+  }
+
+  function scheduleScrollBoundaryCheck() {
+    if (state.scrollBoundaryTimer !== null) return;
+    state.scrollBoundaryTimer = global.setTimeout(function () {
+      state.scrollBoundaryTimer = null;
+      if (
+        !state.open ||
+        state.loading ||
+        !state.elements ||
+        selectionBlocksWindowShift()
+      ) {
+        return;
+      }
+      var viewport = state.elements.viewport;
+      var threshold = Math.max(
+        48,
+        Math.min(config.estimatedItemHeight, viewport.clientHeight / 2)
+      );
+      if (
+        viewport.scrollTop + viewport.clientHeight >=
+        viewport.scrollHeight - threshold
+      ) {
+        shiftWindow(1);
+      } else if (viewport.scrollTop <= threshold) {
+        shiftWindow(-1);
+      }
+    }, 40);
   }
 
   function appendHighlightedText(container, text, ranges) {
@@ -438,6 +1108,29 @@
     }
   }
 
+  function nearestQuoteRange(text, quote, savedCodePointStart) {
+    if (!quote) return null;
+    var best = null;
+    var fromUtf16 = 0;
+    while (fromUtf16 <= text.length) {
+      var foundUtf16 = text.indexOf(quote, fromUtf16);
+      if (foundUtf16 < 0) break;
+      var foundStart = utf16ToCodePointIndex(text, foundUtf16);
+      var distance = Math.abs(foundStart - savedCodePointStart);
+      if (!best || distance < best.distance) {
+        best = {
+          start: foundStart,
+          end: foundStart + codePointLength(quote),
+          distance: distance,
+          recoveredByQuote: true,
+          matchQuote: quote
+        };
+      }
+      fromUtf16 = foundUtf16 + 1;
+    }
+    return best;
+  }
+
   function highlightRangesForItem(item, anchorId) {
     if (!state.preciseHighlight) return [];
     var ranges = state.highlights.get(anchorId) || [];
@@ -455,24 +1148,15 @@
      * unrelated range.
      */
     var text = typeof item.text_raw === 'string' ? item.text_raw : '';
-    var quotes = ranges
-      .map(function (range) { return range.matchQuote; })
-      .filter(function (quote, index, allQuotes) {
-        return quote && allQuotes.indexOf(quote) === index;
-      });
-    if (state.matchQuote && quotes.indexOf(state.matchQuote) < 0) {
-      quotes.push(state.matchQuote);
-    }
     var recovered = [];
-    quotes.forEach(function (quote) {
-      var quoteUtf16Start = text.indexOf(quote);
-      if (quoteUtf16Start < 0) return;
-      var quoteStart = utf16ToCodePointIndex(text, quoteUtf16Start);
-      recovered.push({
-        start: quoteStart,
-        end: quoteStart + codePointLength(quote),
-        recoveredByQuote: true
+    ranges.forEach(function (range) {
+      var quote = range.matchQuote || state.matchQuote;
+      var nearest = nearestQuoteRange(text, quote, range.start);
+      if (!nearest) return;
+      var duplicate = recovered.some(function (existing) {
+        return existing.start === nearest.start && existing.end === nearest.end;
       });
+      if (!duplicate) recovered.push(nearest);
     });
     if (recovered.length) {
       state.hashRecoveryNotice = '文本内容已变化，已在同一页按原句重新定位。';
@@ -504,11 +1188,14 @@
       item.page_source_type === 'section_break_inferred' &&
       !item.anchor_id;
     var showItemPageLabel = !documentOnlyPage && !inferredPageContinuation;
-    label.textContent = (showItemPageLabel && item.page_display) || (
-      item.item_type === 'word_paragraph'
-        ? '段落 ' + (absoluteIndex + 1)
-        : 'PDF 第 ' + (absoluteIndex + 1) + ' 页'
-    );
+    label.textContent = documentOnlyPage
+      ? (item.document_page_range || item.page_display ||
+         '页码尚未解析')
+      : ((showItemPageLabel && item.page_display) || (
+        item.item_type === 'word_paragraph'
+          ? '段落 ' + (absoluteIndex + 1)
+          : 'PDF 第 ' + (absoluteIndex + 1) + ' 页，引用页码尚未校准'
+      ));
     meta.appendChild(label);
 
     if (
@@ -532,6 +1219,7 @@
         : '本页无文本层';
     } else {
       var ranges = highlightRangesForItem(item, anchorId);
+      state.resolvedHighlights.set(anchorId, ranges);
       appendHighlightedText(body, text, ranges);
       if (ranges.length) article.classList.add('has-highlight');
     }
@@ -544,6 +1232,7 @@
   function renderWindow(scrollAnchorId) {
     var elements = ensureDom();
     disconnectObservers();
+    state.resolvedHighlights.clear();
 
     /*
      * Exactly two spacers represent every unloaded item.  We never create a
@@ -633,6 +1322,13 @@
     return [];
   }
 
+  function responseContainsAnchor(items, responseStart, anchorId) {
+    return items.some(function (item, offset) {
+      var position = itemPosition(item, responseStart + offset);
+      return itemAnchor(item, position) === anchorId;
+    });
+  }
+
   function fetchFunction() {
     var candidate = config.fetch || global.fetch;
     if (typeof candidate !== 'function') {
@@ -711,12 +1407,27 @@
 
       var items = responseItems(payload);
       var responseStart = clampInteger(payload.start, start, 0, Number.MAX_SAFE_INTEGER);
+      if (
+        mode === 'replace' &&
+        scrollAnchorId &&
+        !responseContainsAnchor(items, responseStart, scrollAnchorId)
+      ) {
+        throw new Error('链接锚点不属于该文献或已失效');
+      }
       state.total = clampInteger(
         payload.total,
         responseStart + items.length,
         0,
         Number.MAX_SAFE_INTEGER
       );
+      state.lastPosition = (
+        payload.last_position != null &&
+        payload.last_position !== '' &&
+        typeof payload.last_position !== 'boolean' &&
+        Number.isFinite(Number(payload.last_position))
+      )
+        ? Math.max(0, Math.floor(Number(payload.last_position)))
+        : null;
       state.source = payload.source || state.source;
       if (!state.title && state.source) {
         state.title = state.source.display_title ||
@@ -796,6 +1507,7 @@
 
   function prepareHighlights(options) {
     state.highlights.clear();
+    state.resolvedHighlights.clear();
     state.matchQuote = String(options.matchQuote || options.match_quote || '');
     state.hashRecoveryNotice = '';
     var spans = options.pageMatchSpans || options.page_match_spans || [];
@@ -851,6 +1563,9 @@
   function configure(options) {
     options = options || {};
     if (options.endpoint) config.endpoint = String(options.endpoint);
+    if (options.citationEndpoint) {
+      config.citationEndpoint = String(options.citationEndpoint);
+    }
     if (typeof options.fetch === 'function') config.fetch = options.fetch;
     if (typeof options.notify === 'function') config.notify = options.notify;
     if (options.notify === null) config.notify = null;
@@ -873,13 +1588,18 @@
   }
 
   async function openReader(options) {
-    options = options || {};
+    options = options || parseReaderDeepLink(global.location) || state.lastSession || {};
     var sourceId = String(options.sourceId || options.source_id || '');
     if (!sourceId) throw new Error('缺少文献标识，无法打开结构化文本');
     ensureDom();
 
     if (options.config) configure(options.config);
-    if (!state.open) state.restoreFocus = document.activeElement;
+    if (!state.open) {
+      state.restoreFocus = document.activeElement;
+      state.originalUrl = options.restoringSession
+        ? (state.originalUrl || '/')
+        : ordinaryUrlBeforeReader();
+    }
     state.open = true;
     state.sourceId = sourceId;
     state.source = null;
@@ -897,21 +1617,38 @@
       : null;
     state.items.clear();
     state.total = 0;
+    state.lastPosition = null;
     state.windowStart = 0;
     state.windowEnd = 0;
     state.hasPrevious = false;
     state.hasMore = false;
     state.previousStart = null;
     state.nextStart = null;
+    state.currentAnchorId = '';
+    state.lastHistoryAnchor = '';
+    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
+    if (state.scrollBoundaryTimer !== null) {
+      global.clearTimeout(state.scrollBoundaryTimer);
+    }
+    state.deepLinkTimer = null;
+    state.pendingDeepLink = null;
+    state.scrollBoundaryTimer = null;
+    state.citationRequestSerial += 1;
+    state.citationRange = null;
+    state.selectionDragging = false;
+    state.citationMenuOpen = false;
+    state.citationLoading = false;
     state.currentIndex = resolveTargetIndex(options);
     prepareHighlights(options);
 
     state.elements.title.textContent = state.title || '文献阅读';
     state.elements.current.textContent = '正在载入…';
+    state.elements.current.disabled = true;
     state.elements.root.hidden = false;
     state.elements.root.setAttribute('aria-hidden', 'false');
     document.body.classList.add('mef-reader-open');
     setAlert('', 'info');
+    updateCitationControls();
 
     if (!state.preciseHighlight && (
       options.preciseHighlightAvailable === false ||
@@ -988,16 +1725,44 @@
 
   function closeReader() {
     if (!state.elements || !state.open) return;
+    flushPendingReaderDeepLink();
     state.open = false;
     state.requestSerial += 1;
+    state.citationRequestSerial += 1;
     if (state.abortController) state.abortController.abort();
+    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
+    if (state.scrollBoundaryTimer !== null) {
+      global.clearTimeout(state.scrollBoundaryTimer);
+    }
+    state.deepLinkTimer = null;
+    state.pendingDeepLink = null;
+    state.scrollBoundaryTimer = null;
     disconnectObservers();
     state.items.clear();
     state.highlights.clear();
+    state.resolvedHighlights.clear();
+    state.citationRange = null;
+    state.selectionDragging = false;
+    state.citationMenuOpen = false;
     state.elements.content.replaceChildren();
     state.elements.root.hidden = true;
     state.elements.root.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('mef-reader-open');
+    if (
+      global.history &&
+      typeof global.history.replaceState === 'function' &&
+      global.location &&
+      (
+        global.location.pathname === '/reader' ||
+        global.location.pathname === '/reader/'
+      )
+    ) {
+      global.history.replaceState(
+        {meFinderReader: false},
+        '',
+        state.originalUrl || '/'
+      );
+    }
     if (state.restoreFocus && typeof state.restoreFocus.focus === 'function') {
       state.restoreFocus.focus();
     }
@@ -1015,6 +1780,7 @@
       open: state.open,
       sourceId: state.sourceId,
       total: state.total,
+      lastPosition: state.lastPosition,
       windowStart: state.windowStart,
       windowEnd: state.windowEnd,
       hasPrevious: state.hasPrevious,
@@ -1023,12 +1789,30 @@
       nextStart: state.nextStart,
       mountedItemCount: state.items.size,
       currentIndex: state.currentIndex,
-      currentAnchorId: state.currentAnchorId
+      currentAnchorId: state.currentAnchorId,
+      citationRange: state.citationRange ? {
+        startIndex: state.citationRange.startIndex,
+        endIndex: state.citationRange.endIndex,
+        startOffset: state.citationRange.startOffset,
+        endOffset: state.citationRange.endOffset
+      } : null,
+      lastDeepLink: state.lastDeepLink
     };
   }
 
   document.addEventListener('keydown', function (event) {
     if (state.open && event.key === 'Escape') closeReader();
+  });
+  document.addEventListener('mouseup', function () {
+    if (state.open && state.selectionDragging) scheduleSelectionCapture();
+  });
+  global.addEventListener('popstate', function () {
+    var deepLink = parseReaderDeepLink(global.location);
+    if (deepLink && !state.open) {
+      restoreReaderLocation();
+    } else if (!deepLink && state.open) {
+      closeReader();
+    }
   });
 
   global.MEFinderReader = Object.freeze({
@@ -1036,10 +1820,23 @@
     openForSearchResult: openForSearchResult,
     close: closeReader,
     goTo: goTo,
+    restore: restoreReaderLocation,
+    copyCitation: copyCachedCitation,
     configure: configure,
     destroy: destroy,
     isOpen: function () { return state.open; },
     getState: getState,
     codePointToUtf16Index: codePointToUtf16Index
   });
+
+  function restoreInitialDeepLink() {
+    if (!state.open && parseReaderDeepLink(global.location)) {
+      restoreReaderLocation();
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', restoreInitialDeepLink, {once: true});
+  } else {
+    global.setTimeout(restoreInitialDeepLink, 0);
+  }
 }(window));

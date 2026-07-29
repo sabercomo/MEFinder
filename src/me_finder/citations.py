@@ -84,6 +84,8 @@ def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
 
 
 def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    if page.get("uncalibrated"):
+        return "该文献页码尚未校准，不能生成 GB/T 引文。"
     doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return _finish_gb(_marx_engels_volume_gb(meta, page))
@@ -135,14 +137,20 @@ def _page_info(hit_page: object) -> Dict[str, object]:
         display = ""
         uncalibrated = False
 
+    if uncalibrated:
+        warning = display or "页码未验证"
+        return {
+            "raw": warning,
+            "chinese": warning,
+            "gb": warning,
+            "uncalibrated": True,
+        }
     if start:
         label = _page_range(start, end)
         chinese_label = _chinese_page_label(start, end)
         gb_label = _page_range(start, end, separator="-")
         return {"raw": label, "chinese": chinese_label, "gb": gb_label, "uncalibrated": False}
     if display:
-        if uncalibrated:
-            return {"raw": display, "chinese": display, "gb": display, "uncalibrated": True}
         return {"raw": display, "chinese": _display_page_chinese(display), "gb": display, "uncalibrated": False}
     return {"raw": "", "chinese": "页码未验证", "gb": "页码未验证", "uncalibrated": True}
 

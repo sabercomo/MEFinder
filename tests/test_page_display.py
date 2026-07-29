@@ -2,6 +2,7 @@ import unittest
 
 from src.me_finder.page_display import (
     build_page_display,
+    page_is_verified,
     page_source_note,
 )
 
@@ -201,6 +202,47 @@ class PageDisplayTests(unittest.TestCase):
     def test_standard_note_has_a_safe_unknown_fallback(self) -> None:
         self.assertEqual(page_source_note("section_break_inferred"), "分节推断页码，尚未人工验证")
         self.assertEqual(page_source_note("future_mapping"), "页码来源未说明")
+
+    def test_shared_verification_capability_rejects_inferred_and_physical_pages(
+        self,
+    ) -> None:
+        self.assertTrue(
+            page_is_verified(
+                {
+                    "source_type": "pdf",
+                    "page_source_type": "manual_segment",
+                    "citation_page": "38",
+                }
+            )
+        )
+        self.assertTrue(
+            page_is_verified(
+                {
+                    "source_type": "word",
+                    "page_source_type": "section_break_verified",
+                    "original_page_start": "38",
+                }
+            )
+        )
+        for fields in (
+            {
+                "source_type": "pdf",
+                "page_source_type": "uncalibrated",
+                "pdf_page_index": 37,
+            },
+            {
+                "source_type": "word",
+                "page_source_type": "section_break_inferred",
+                "original_page_start": "38",
+            },
+            {
+                "source_type": "word",
+                "page_source_type": "toc_range_bound",
+                "page_display": "38-45",
+            },
+        ):
+            with self.subTest(fields=fields):
+                self.assertFalse(page_is_verified(fields))
 
 if __name__ == "__main__":
     unittest.main()

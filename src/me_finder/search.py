@@ -21,7 +21,7 @@ from .normalization import (
     punctuationless_text,
     trim_for_display,
 )
-from .page_display import build_page_display
+from .page_display import build_page_display, resolve_citation_page
 
 
 SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
@@ -635,24 +635,20 @@ class SearchEngine:
 
     @staticmethod
     def _hit_page(paragraph: Dict[str, object], source_type: str, page_display: object) -> Dict[str, object]:
-        if source_type == "pdf":
-            start = paragraph.get("citation_page_start")
-            end = paragraph.get("citation_page_end")
-            if start:
-                return {"start": start, "end": end}
+        resolved = resolve_citation_page(paragraph)
+        if resolved.verified and resolved.start:
             return {
-                "display": page_display or "引用页码尚未校准",
-                "uncalibrated": True,
-            }
-        start = paragraph.get("original_page_start")
-        if start:
-            return {
-                "start": start,
-                "end": paragraph.get("original_page_end"),
+                "start": resolved.start,
+                "end": resolved.end,
                 "display": page_display,
             }
         return {
-            "display": page_display or "页码未验证",
+            "display": page_display
+            or (
+                "引用页码尚未校准"
+                if source_type == "pdf"
+                else "页码未验证"
+            ),
             "uncalibrated": True,
         }
 

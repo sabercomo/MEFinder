@@ -1,7 +1,9 @@
-"""Consistent, conservative page labels for search and reader UIs.
+"""Consistent, conservative page labels and citation-page capabilities.
 
-The formatter is intentionally presentation-only.  Whether a citation may be
-generated remains the responsibility of :mod:`me_finder.citations`.
+Presentation wording and the machine-readable verification decision live
+together here so search results and the structured reader cannot silently
+disagree about whether a page number is safe to cite.  Final citation
+formatting remains the responsibility of :mod:`me_finder.citations`.
 """
 
 from __future__ import annotations
@@ -17,6 +19,16 @@ class PageDisplayResult:
 
     display: str
     note: str
+    page_source_type: str
+
+
+@dataclass(frozen=True)
+class CitationPageResolution:
+    """Machine-readable citation-page capability for one record."""
+
+    verified: bool
+    start: Optional[str]
+    end: Optional[str]
     page_source_type: str
 
 
@@ -150,6 +162,64 @@ def page_source_note(page_source_type: object) -> str:
 
     source_type = str(page_source_type or "unknown").strip() or "unknown"
     return _SOURCE_NOTES.get(source_type, "页码来源未说明")
+
+
+def page_is_verified(fields: Mapping[str, object]) -> bool:
+    """Return whether the record has a citation-safe page number.
+
+    This shared capability check keeps search results and reader citations
+    from treating physical PDF indexes, inferred DOCX sections, or legacy DOC
+    table-of-contents ranges as verified citation pages.
+    """
+
+    return resolve_citation_page(fields).verified
+
+
+def resolve_citation_page(fields: Mapping[str, object]) -> CitationPageResolution:
+    """Resolve only citation-safe page labels, never physical PDF positions."""
+
+    source_type = _page_source_type(fields)
+    document_type = str(fields.get("source_type") or "").strip().lower()
+    if _is_explicitly_unverified(fields):
+        return CitationPageResolution(False, None, None, source_type)
+
+    if source_type in _VERIFIED_WORD_SOURCE_TYPES:
+        start = _first_value(fields, ("original_page_start",))
+        end = _first_value(fields, ("original_page_end",))
+        if start is None:
+            legacy = _clean_value(fields.get("page_display"))
+            start = _strip_page_wrapping(legacy) if legacy else None
+        return CitationPageResolution(
+            start is not None,
+            start,
+            end or start,
+            source_type,
+        )
+
+    if document_type == "pdf" or _has_pdf_location(fields):
+        start = _first_value(
+            fields,
+            ("citation_page_start", "citation_page", "original_page_start"),
+        )
+        end = _first_value(
+            fields,
+            ("citation_page_end", "original_page_end"),
+        )
+        verified = bool(
+            start
+            and (
+                source_type in _VERIFIED_PDF_SOURCE_TYPES
+                or source_type == "pdf_page_label"
+            )
+        )
+        return CitationPageResolution(
+            verified,
+            start if verified else None,
+            (end or start) if verified else None,
+            source_type,
+        )
+
+    return CitationPageResolution(False, None, None, source_type)
 
 
 def _page_source_type(fields: Mapping[str, object]) -> str:

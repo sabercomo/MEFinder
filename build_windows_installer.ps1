@@ -87,8 +87,10 @@ try {
     & $pythonCommand @pythonLauncherArgs -m unittest `
         tests.test_anchor_metadata `
         tests.test_backup_service `
+        tests.test_citations `
         tests.test_pdf_match_anchors `
         tests.test_page_display `
+        tests.test_runtime_page_mapping `
         tests.test_search_match_spans `
         tests.test_vision_api `
         tests.test_search_controls_and_views `

@@ -34,7 +34,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   width: min(980px, calc(100vw - 48px));
   height: min(900px, calc(100vh - 48px));
   margin: 24px auto;
@@ -81,6 +81,7 @@
 }
 
 .mef-reader-current {
+  appearance: none;
   max-width: 340px;
   padding: 7px 11px;
   overflow: hidden;
@@ -91,6 +92,17 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.mef-reader-current:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.mef-reader-current:disabled {
+  cursor: default;
+  opacity: .7;
 }
 
 .mef-reader-close {
@@ -109,6 +121,60 @@
 .mef-reader-close:hover {
   border-color: var(--border-strong);
   background: var(--surface-hover);
+}
+
+.mef-reader-citation-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+}
+
+.mef-reader-citation-bar[hidden] {
+  display: none;
+}
+
+.mef-reader-citation-context {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mef-reader-citation-action,
+.mef-reader-citation-clear {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mef-reader-citation-action:hover:not(:disabled),
+.mef-reader-citation-clear:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.mef-reader-citation-action:disabled,
+.mef-reader-citation-clear:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
+.mef-reader-citation-clear {
+  color: var(--text-secondary);
 }
 
 .mef-reader-close:focus-visible,
@@ -251,6 +317,16 @@
   display: none;
 }
 
+.mef-reader-clipboard-fallback {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (max-width: 720px) {
   .mef-reader-panel {
     width: 100%;
@@ -270,6 +346,15 @@
     grid-row: 2;
     justify-self: start;
     max-width: 100%;
+  }
+
+  .mef-reader-citation-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mef-reader-citation-context {
+    flex-basis: 100%;
   }
 
   .mef-reader-close {

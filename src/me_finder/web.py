@@ -68,11 +68,14 @@ from .import_queue import ImportBatchCompletion, ImportTaskQueue
 from .import_resume import ResumeManifestError, sha256_file
 from .search import SearchEngine
 from .structured_reader import (
+    CitationPositionNotFound,
+    InvalidCitationRange,
     InvalidPagination,
     InvalidSourceId,
     SourceNotFound,
     StructuredReaderError,
     UnsupportedSourceType,
+    get_document_citation,
     get_document_window,
 )
 
@@ -1848,7 +1851,7 @@ def make_handler(
             if route_method is not None:
                 getattr(self, route_method)(parsed)
                 return
-            if parsed.path in {"/", "/index.html"}:
+            if parsed.path in {"/", "/index.html", "/reader", "/reader/"}:
                 preferences_path = resolve_preferences_path(root)
                 theme = read_preferences(preferences_path)["theme"]
                 body = render_html(theme).encode("utf-8")
@@ -2016,7 +2019,7 @@ def make_handler(
             if parsed.path.startswith("/source/"):
                 self._send_source(parsed.path, send_body=False)
                 return
-            if parsed.path in {"/", "/index.html"}:
+            if parsed.path in {"/", "/index.html", "/reader", "/reader/"}:
                 preferences_path = resolve_preferences_path(root)
                 theme = read_preferences(preferences_path)["theme"]
                 content_length = len(render_html(theme).encode("utf-8"))
@@ -2093,11 +2096,82 @@ def make_handler(
                     if reserved_source_id:
                         release_import_reservation(reserved_source_id)
                 return
-            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except (TypeError, ValueError):
+                self._send_json({"error": "Content-Length 无效。"}, status=400)
+                return
+            if length < 0:
+                self._send_json({"error": "Content-Length 无效。"}, status=400)
+                return
+            if parsed.path == "/api/document/citation" and length > 16 * 1024:
+                self._send_json({"error": "引文请求内容过大。"}, status=413)
+                return
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send_json({"error": "请求格式无效。"}, status=400)
+                return
+            if parsed.path == "/api/document/citation":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "引文请求必须是 JSON 对象。"}, status=400)
+                    return
+                allowed_fields = {
+                    "source_id",
+                    "start_anchor_id",
+                    "end_anchor_id",
+                }
+                unexpected_fields = sorted(set(payload) - allowed_fields)
+                if unexpected_fields:
+                    self._send_json({"error": "引文请求包含不支持的字段。"}, status=400)
+                    return
+                if set(payload) != allowed_fields:
+                    self._send_json(
+                        {
+                            "error": (
+                                "source_id、start_anchor_id 和 end_anchor_id "
+                                "必须各提供一次。"
+                            )
+                        },
+                        status=400,
+                    )
+                    return
+                try:
+                    with runtime_lock:
+                        if runtime["rebuilding"]:
+                            citation_result = None
+                        else:
+                            citation_result = get_document_citation(
+                                index_path,
+                                payload["source_id"],
+                                start_anchor_id=payload["start_anchor_id"],
+                                end_anchor_id=payload["end_anchor_id"],
+                            )
+                except (
+                    InvalidCitationRange,
+                    InvalidPagination,
+                    InvalidSourceId,
+                    UnsupportedSourceType,
+                ) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except (CitationPositionNotFound, SourceNotFound) as exc:
+                    self._send_json({"error": str(exc)}, status=404)
+                    return
+                except (OSError, sqlite3.Error, StructuredReaderError):
+                    logging.exception("structured reader citation request failed")
+                    self._send_json(
+                        {"error": "结构化阅读引文生成失败，请稍后重试。"},
+                        status=500,
+                    )
+                    return
+                if citation_result is None:
+                    self._send_json(
+                        {"error": "索引正在重建，请稍候再生成引文。"},
+                        status=503,
+                    )
+                    return
+                self._send_json(citation_result)
                 return
             if parsed.path == "/api/search":
                 requested_limit = payload.get("limit", 10)

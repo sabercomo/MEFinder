@@ -11,6 +11,7 @@ class PageMappingResult:
     citation_page: Optional[str]
     method: str
     confidence: float
+    segment_id: Optional[str] = None
 
 
 ROMAN_VALUES = [
@@ -98,11 +99,13 @@ class PageMapper:
                 end = start
             if not (start <= pdf_page_index <= end):
                 continue
+            segment_id = mapping_segment_id(segment, start=start, end=end)
             if segment.get("citation") is None and "citation" in segment:
                 return PageMappingResult(
                     None,
                     str(segment.get("method") or "uncalibrated"),
                     float(segment.get("confidence") or 0.0),
+                    segment_id,
                 )
             citation_start = segment.get("citation_page_start", segment.get("citation_start"))
             if citation_start is None:
@@ -110,16 +113,51 @@ class PageMapper:
                     None,
                     str(segment.get("method") or "uncalibrated"),
                     float(segment.get("confidence") or 0.0),
+                    segment_id,
                 )
             offset = pdf_page_index - start
             return PageMappingResult(
                 _increment_label(str(citation_start), offset, str(segment.get("number_style") or "arabic")),
                 str(segment.get("method") or "manual_segment"),
                 float(segment.get("confidence") or 0.9),
+                segment_id,
             )
         if self.use_page_labels and pdf_page_label:
-            return PageMappingResult(str(pdf_page_label), "pdf_page_label", 0.75)
+            return PageMappingResult(
+                str(pdf_page_label),
+                "pdf_page_label",
+                0.75,
+                "PDF-PAGE-LABELS",
+            )
         return PageMappingResult(None, "uncalibrated", 0.0)
+
+
+def mapping_segment_id(
+    segment: Dict[str, object],
+    *,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+) -> str:
+    """Return a stable ID for one persisted mapping interval."""
+
+    explicit = str(segment.get("segment_id") or "").strip()
+    if explicit:
+        return explicit
+    resolved_start = (
+        start
+        if start is not None
+        else _segment_int(segment, "pdf_page_start", "pdf_start")
+    )
+    resolved_end = (
+        end
+        if end is not None
+        else _segment_int(segment, "pdf_page_end", "pdf_end")
+    )
+    if resolved_start is None:
+        resolved_start = 0
+    if resolved_end is None:
+        resolved_end = resolved_start
+    return f"MAPSEG-{resolved_start:06d}-{resolved_end:06d}"
 
 
 def _segment_int(segment: Dict[str, object], primary: str, fallback: str) -> Optional[int]:

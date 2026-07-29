@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .pdf_page_mapping import PageMapper, mapped_page_display
+from .pdf_page_mapping import (
+    PageMapper,
+    mapped_page_display,
+    mapping_segment_id,
+)
 
 
 def normalize_auto_segments(segments: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
@@ -36,7 +40,7 @@ def normalize_auto_segments(segments: Sequence[Dict[str, object]]) -> List[Dict[
                 "confidence": confidence,
                 "confidence_level": str(item.get("confidence_level") or _confidence_level(confidence)),
                 "page_scope": item.get("page_scope"),
-                "segment_id": item.get("segment_id"),
+                "segment_id": mapping_segment_id(item, start=start, end=end),
                 "mapping_evidence": item.get("mapping_evidence") or item.get("evidence"),
                 "label": item.get("label") or "自动检测页码",
             }
@@ -184,7 +188,7 @@ def _apply_page_mapping(
     page["page_scope"] = segment.get("page_scope") if segment else None
     page["mapping_confidence_level"] = segment.get("confidence_level") if segment else None
     page["mapping_evidence"] = segment.get("mapping_evidence") if segment else None
-    page["segment_id"] = segment.get("segment_id") if segment else None
+    page["segment_id"] = result.segment_id
 
 
 def _apply_paragraph_mapping(

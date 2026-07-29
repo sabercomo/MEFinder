@@ -53,7 +53,11 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertGreaterEqual(READER_JS.count("new global.IntersectionObserver"), 2)
         self.assertIn("entry.intersectionRatio", READER_JS)
         self.assertIn("updateCurrentFromObserver()", READER_JS)
+        self.assertIn("Math.abs(index - state.currentIndex)", READER_JS)
+        self.assertIn("Math.abs(bestIndex - state.currentIndex)", READER_JS)
         self.assertIn("dataset.readerBoundary", READER_JS)
+        self.assertIn("function scheduleScrollBoundaryCheck()", READER_JS)
+        self.assertIn("viewport.scrollTop + viewport.clientHeight", READER_JS)
         self.assertNotIn("offsetTop", READER_JS)
         self.assertNotIn("getBoundingClientRect", READER_JS)
         self.assertNotIn("scroll-behavior: smooth", READER_CSS)
@@ -64,6 +68,139 @@ class StructuredReaderFrontendTests(unittest.TestCase):
             render_body.index("target.scrollIntoView"),
             render_body.index("state.boundaryObserver = createBoundaryObserver()"),
         )
+
+    def test_home_and_end_jump_to_document_boundaries_without_blank_spacers(
+        self,
+    ) -> None:
+        self.assertIn("function handleReaderNavigationKey(event)", READER_JS)
+        self.assertIn("event.key === 'Home'", READER_JS)
+        self.assertIn("goTo({targetIndex: 0})", READER_JS)
+        self.assertIn("event.key === 'End'", READER_JS)
+        self.assertIn("state.lastPosition !== null", READER_JS)
+        self.assertIn("goTo({targetIndex: state.lastPosition})", READER_JS)
+        self.assertNotIn("goTo({targetIndex: state.total - 1})", READER_JS)
+
+    def test_deep_link_anchor_must_belong_to_the_loaded_source(self) -> None:
+        self.assertIn("function responseContainsAnchor(", READER_JS)
+        self.assertIn(
+            "!responseContainsAnchor(items, responseStart, scrollAnchorId)",
+            READER_JS,
+        )
+        self.assertIn("链接锚点不属于该文献或已失效", READER_JS)
+        validation = READER_JS.index(
+            "!responseContainsAnchor(items, responseStart, scrollAnchorId)"
+        )
+        mutation = READER_JS.index("state.total = clampInteger(", validation)
+        self.assertLess(validation, mutation)
+
+    def test_current_page_button_uses_backend_page_display_verbatim(self) -> None:
+        self.assertIn("function backendPageDisplay(item)", READER_JS)
+        self.assertIn("item.page_display.trim()", READER_JS)
+        self.assertIn("var pageLabel = backendPageDisplay(item)", READER_JS)
+        self.assertIn("state.elements.current.textContent = pageLabel", READER_JS)
+        self.assertIn("dataset.readerAction = action", READER_JS)
+        self.assertIn("'toggle-citation'", READER_JS)
+        self.assertNotIn(
+            "state.elements.current.textContent = 'PDF 第 '",
+            READER_JS,
+        )
+
+    def test_page_citations_are_requested_from_backend_not_formatted_in_js(self) -> None:
+        self.assertIn("citationEndpoint: '/api/document/citation'", READER_JS)
+        self.assertIn("async function prefetchCitationRange(target)", READER_JS)
+        self.assertIn("function copyCachedCitation(style)", READER_JS)
+        self.assertIn("method: 'POST'", READER_JS)
+        self.assertIn("'Content-Type': 'application/json'", READER_JS)
+        for field in ("source_id:", "start_anchor_id:", "end_anchor_id:"):
+            self.assertIn(field, READER_JS)
+        request_start = READER_JS.index("async function prefetchCitationRange(target)")
+        request_end = READER_JS.index("function copyCachedCitation(style)", request_start)
+        request_body = READER_JS[request_start:request_end]
+        self.assertNotIn("start_index:", request_body)
+        self.assertNotIn("end_index:", request_body)
+        self.assertNotIn("format:", request_body)
+        self.assertIn("target.citationPayload = payload", request_body)
+        self.assertIn("target.citationPayload.citation_formats", READER_JS)
+        self.assertIn("formats[style]", READER_JS)
+        self.assertIn("'chinese'", READER_JS)
+        self.assertIn("'gb'", READER_JS)
+        self.assertNotIn("function formatCitation", READER_JS)
+
+    def test_clipboard_failure_has_a_local_fallback_and_clear_error(self) -> None:
+        self.assertIn("global.navigator.clipboard.writeText", READER_JS)
+        self.assertIn("document.createElement('textarea')", READER_JS)
+        self.assertIn("document.execCommand('copy')", READER_JS)
+        self.assertIn("无法写入剪贴板", READER_JS)
+        self.assertIn(".mef-reader-clipboard-fallback", READER_CSS)
+
+    def test_cross_item_selection_records_mounted_codepoint_boundaries(self) -> None:
+        self.assertIn("function captureMountedSelection()", READER_JS)
+        self.assertIn("selection.getRangeAt(0)", READER_JS)
+        self.assertIn("document.createTreeWalker(", READER_JS)
+        self.assertIn("NodeFilter.SHOW_TEXT", READER_JS)
+        self.assertIn("closest('.mef-reader-item-text')", READER_JS)
+        self.assertIn("state.elements.content.contains(startBody)", READER_JS)
+        self.assertIn("state.elements.content.contains(endBody)", READER_JS)
+        self.assertIn("utf16ToCodePointIndex(startItem.text_raw", READER_JS)
+        self.assertIn("utf16ToCodePointIndex(endItem.text_raw", READER_JS)
+        self.assertIn("startIndex: startIndex", READER_JS)
+        self.assertIn("endIndex: endIndex", READER_JS)
+        self.assertIn("state.citationRange = captured", READER_JS)
+        self.assertIn("selectionBlocksWindowShift()", READER_JS)
+        self.assertIn("选区端点必须都在当前已载入", READER_JS)
+        self.assertIn(
+            "if (state.open && state.selectionDragging) scheduleSelectionCapture()",
+            READER_JS,
+        )
+        self.assertIn("state.citationRange = null", READER_JS)
+        self.assertNotIn("load all pages for selection", READER_JS)
+
+    def test_deep_link_uses_stable_anchors_and_validated_recovery_fields(self) -> None:
+        self.assertIn("function parseReaderDeepLink(locationValue)", READER_JS)
+        self.assertIn("pathname !== '/reader'", READER_JS)
+        self.assertIn("var anchorId = String(params.get('page')", READER_JS)
+        # Persisted Word anchors such as MEWJ-01-P000001 intentionally do not
+        # share the source-01 prefix; source/anchor ownership is verified by
+        # the backend rather than guessed from the string prefix.
+        self.assertNotIn("anchorId.indexOf(sourceId + '-')", READER_JS)
+        self.assertIn("(?:-PAGE-|-P)(\\d+)$", READER_JS)
+        self.assertIn("/^[0-9a-f]{16}$/i", READER_JS)
+        self.assertIn("codePointLength(rawQuote) > 50", READER_JS)
+        self.assertIn("if (hashValue && !/^[0-9a-f]{16}$/i", READER_JS)
+        self.assertIn("if (offsetValue && !offset)", READER_JS)
+        self.assertIn("unknownParameter", READER_JS)
+        self.assertIn(
+            "preciseHighlightAvailable: spans.length ? true : undefined",
+            READER_JS,
+        )
+        self.assertIn("params.getAll('source').length !== 1", READER_JS)
+        self.assertIn("search.length > 1024", READER_JS)
+        self.assertIn("page_text_hash: pageTextHash", READER_JS)
+        self.assertIn("match_quote: matchQuote", READER_JS)
+        self.assertIn("params.set('page', anchorId)", READER_JS)
+        self.assertNotIn("params.set('page', String(index))", READER_JS)
+
+    def test_each_citation_format_has_its_own_copy_gate(self) -> None:
+        self.assertIn("function citationStyleCanCopy(target, style)", READER_JS)
+        self.assertIn("formats[style + '_status'] === 'complete'", READER_JS)
+        self.assertIn(
+            "!citationStyleCanCopy(target, 'chinese')",
+            READER_JS,
+        )
+        self.assertIn("!citationStyleCanCopy(target, 'gb')", READER_JS)
+        self.assertIn("state.citationLoading = false;", READER_JS)
+
+    def test_deep_link_history_updates_only_when_current_anchor_changes(self) -> None:
+        self.assertIn("state.lastHistoryAnchor === anchorId", READER_JS)
+        self.assertIn("function scheduleReaderDeepLink(item, index, anchorId)", READER_JS)
+        self.assertIn("state.deepLinkTimer = global.setTimeout", READER_JS)
+        self.assertIn("global.history.replaceState(", READER_JS)
+        self.assertIn("state.lastHistoryAnchor = anchorId", READER_JS)
+        self.assertIn("state.lastSession = {", READER_JS)
+        self.assertIn("function restoreReaderLocation()", READER_JS)
+        self.assertIn("parseReaderDeepLink(global.location) || state.lastSession", READER_JS)
+        self.assertIn("restore: restoreReaderLocation", READER_JS)
+        self.assertIn("state.originalUrl || '/'", READER_JS)
 
     def test_each_item_has_an_independent_safe_dom_anchor(self) -> None:
         self.assertIn("article.id = 'mef-reader-anchor-'", READER_JS)
@@ -103,14 +240,33 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("span.page_text_hash", READER_JS)
         self.assertIn("item.page_text_hash", READER_JS)
         self.assertIn("matchQuote: String(span.match_quote", READER_JS)
-        self.assertIn("text.indexOf(quote)", READER_JS)
+        self.assertIn("text.indexOf(quote, fromUtf16)", READER_JS)
         self.assertIn("utf16ToCodePointIndex", READER_JS)
+
+    def test_hash_recovery_chooses_quote_nearest_the_saved_offset(self) -> None:
+        self.assertIn(
+            "function nearestQuoteRange(text, quote, savedCodePointStart)",
+            READER_JS,
+        )
+        self.assertIn("text.indexOf(quote, fromUtf16)", READER_JS)
+        self.assertIn("Math.abs(foundStart - savedCodePointStart)", READER_JS)
+        self.assertIn("nearestQuoteRange(text, quote, range.start)", READER_JS)
 
     def test_cross_page_results_keep_every_page_span(self) -> None:
         self.assertIn("spans.forEach(function (span)", READER_JS)
         self.assertIn("state.highlights.get(anchorId).push", READER_JS)
         self.assertIn("pageMatchSpans: spans", READER_JS)
         self.assertNotIn("pageMatchSpans: [firstSpan]", READER_JS)
+
+    def test_single_page_citation_is_prefetched_and_selection_caches_range(self) -> None:
+        self.assertIn("citation_formats: item.citation_formats || {}", READER_JS)
+        self.assertIn("page_range: {verified: item.page_verified === true}", READER_JS)
+        self.assertIn("prefetchCitationRange(captured)", READER_JS)
+        copy_start = READER_JS.index("function copyCachedCitation(style)")
+        copy_end = READER_JS.index("function truncateCodePoints(", copy_start)
+        self.assertNotIn("fetchFunction()", READER_JS[copy_start:copy_end])
+        self.assertIn("writeClipboard(citation)", READER_JS[copy_start:copy_end])
+        self.assertIn("formats.can_copy === true", READER_JS)
 
     def test_word_results_jump_to_and_highlight_the_matching_paragraph(self) -> None:
         self.assertIn("(sourceType === 'word' ? item.paragraph_id : '')", READER_JS)

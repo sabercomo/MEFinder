@@ -20,6 +20,130 @@ from src.me_finder.normalization import compact_text, normalize_text, punctuatio
 from src.me_finder.search import SearchEngine
 
 
+def _build_search_citation_fixture(database_path: Path) -> None:
+    """Create the two search records used by citation integration tests.
+
+    These tests used to depend on a developer's local ``data/index.json``.
+    Keeping the fixture self-contained makes the release gate deterministic
+    on a clean checkout and prevents personal corpus data from affecting the
+    expected citation.
+    """
+
+    pdf_text = "许多例子都可以说明经验主义在整个世界中的作用"
+    word_text = "宗教是人民的鸦片。"
+    index = {
+        "metadata": {"eligible_paragraph_count": 2},
+        "source_files": [
+            {
+                "source_file_id": "pdf-citation-fixture",
+                "source_type": "pdf",
+                "file_name": "批判理论.pdf",
+                "relative_path": "批判理论.pdf",
+                "bibliographic_metadata": {
+                    "document_type": "translated_book",
+                    "title": "批判理论",
+                    "author": "马克斯·霍克海默",
+                    "country": "德",
+                    "translator": "李小兵等",
+                    "publish_place": "重庆",
+                    "publisher": "重庆出版社",
+                    "publish_year": "1990",
+                },
+            },
+            {
+                "source_file_id": "source-01",
+                "source_type": "word",
+                "file_name": "马克思恩格斯文集第1卷.docx",
+                "relative_path": "马克思恩格斯文集第1卷.docx",
+                "volume_number": 1,
+            },
+        ],
+        "volumes": [
+            {
+                "volume_id": "PDF-CITATION",
+                "source_file_id": "pdf-citation-fixture",
+                "source_type": "pdf",
+                "display_title": "批判理论",
+            },
+            {
+                "volume_id": "MEWJ-01",
+                "source_file_id": "source-01",
+                "source_type": "word",
+                "display_title": "《马克思恩格斯文集》第1卷",
+                "volume_number": 1,
+            },
+        ],
+        "works": [
+            {
+                "work_id": "PDF-CITATION-W0001",
+                "volume_id": "PDF-CITATION",
+                "source_file_id": "pdf-citation-fixture",
+                "source_type": "pdf",
+                "work_order": 1,
+                "title": "批判理论",
+            },
+            {
+                "work_id": "MEWJ-01-W0001",
+                "volume_id": "MEWJ-01",
+                "source_file_id": "source-01",
+                "source_type": "word",
+                "work_order": 1,
+                "title": "《黑格尔法哲学批判》导言",
+                "author_label": "卡·马克思",
+            },
+        ],
+        "paragraphs": [
+            {
+                "paragraph_id": "pdf-citation-fixture-P000000",
+                "volume_id": "PDF-CITATION",
+                "work_id": "PDF-CITATION-W0001",
+                "source_file_id": "pdf-citation-fixture",
+                "source_type": "pdf",
+                "volume_number": None,
+                "paragraph_index": 0,
+                "eligible_for_search": True,
+                "text_raw": pdf_text,
+                "normalized_text": normalize_text(pdf_text),
+                "compact_text": compact_text(pdf_text),
+                "plain_text": punctuationless_text(pdf_text),
+                "document_title": "批判理论",
+                "work_title": "批判理论",
+                "volume_display": "批判理论",
+                "page_display": "147",
+                "page_source_type": "manual_segment",
+                "citation_page_start": "147",
+                "citation_page_end": "147",
+                "pdf_page_start_index": 146,
+                "pdf_page_end_index": 146,
+            },
+            {
+                # The source and paragraph prefixes intentionally differ:
+                # this is the persisted shape of the bundled Word corpus.
+                "paragraph_id": "MEWJ-01-P000001",
+                "volume_id": "MEWJ-01",
+                "work_id": "MEWJ-01-W0001",
+                "source_file_id": "source-01",
+                "source_type": "word",
+                "volume_number": 1,
+                "paragraph_index": 1,
+                "eligible_for_search": True,
+                "text_raw": word_text,
+                "normalized_text": normalize_text(word_text),
+                "compact_text": compact_text(word_text),
+                "plain_text": punctuationless_text(word_text),
+                "document_title": "马克思恩格斯文集",
+                "work_title": "《黑格尔法哲学批判》导言",
+                "author_label": "卡·马克思",
+                "page_display": "4",
+                "page_source_type": "section_break_inferred",
+                "original_page_start": "4",
+                "original_page_end": "4",
+            },
+        ],
+    }
+    build_database(index, database_path)
+
+
 class CitationFormatTests(unittest.TestCase):
     def test_bibliographic_missing_fields_exclude_isbn_and_survive_canonicalization(self) -> None:
         metadata = {
@@ -861,42 +985,101 @@ class CitationFormatTests(unittest.TestCase):
             format_citation(metadata, "117", "gb"),
             "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,117.",
         )
+        uncalibrated = {
+            "display": "PDF 第 117 页，引用页码尚未校准",
+            "uncalibrated": True,
+        }
+        self.assertEqual(
+            format_citation(metadata, uncalibrated, "gb"),
+            "该文献页码尚未校准，不能生成 GB/T 引文。",
+        )
+
+    def test_word_hit_page_only_accepts_verified_page_source_types(self) -> None:
+        unverified_cases = (
+            "section_break_inferred",
+            "toc_range_bound",
+            "unknown",
+        )
+        for source_type in unverified_cases:
+            with self.subTest(page_source_type=source_type):
+                hit = SearchEngine._hit_page(
+                    {
+                        "source_type": "word",
+                        "page_source_type": source_type,
+                        "original_page_start": "38",
+                        "page_display": "38",
+                    },
+                    "word",
+                    "第 38 页（未验证）",
+                )
+                self.assertTrue(hit["uncalibrated"])
+                self.assertNotIn("start", hit)
+
+        verified = SearchEngine._hit_page(
+            {
+                "source_type": "word",
+                "page_source_type": "section_break_verified",
+                "original_page_start": "38",
+                "original_page_end": "39",
+            },
+            "word",
+            "第 38–39 页",
+        )
+        self.assertEqual(verified["start"], "38")
+        self.assertEqual(verified["end"], "39")
 
     def test_search_results_include_copyable_citation_formats(self) -> None:
-        engine = SearchEngine()
-        try:
-            result = engine.search("许多例子都可以说明经验主义在整个世界中的作用", source_type="pdf", limit=3)
-            self.assertGreater(result["total"], 0)
-            item = result["results"][0]
-            self.assertIn("citation_formats", item)
-            self.assertIn("chinese", item["citation_formats"])
-            self.assertIn("gb", item["citation_formats"])
-            self.assertIn("第147页", item["citation_formats"]["chinese"])
-            self.assertEqual(item["citation_formats"]["gb_status"], "complete")
-            self.assertEqual(
-                item["citation_formats"]["gb"],
-                "[德]马克斯·霍克海默. 批判理论[M]. 李小兵等, 译. 重庆: 重庆出版社, 1990: 147.",
-            )
-        finally:
-            engine.close()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "index.sqlite3"
+            _build_search_citation_fixture(database_path)
+            engine = SearchEngine(database_path)
+            try:
+                result = engine.search(
+                    "许多例子都可以说明经验主义在整个世界中的作用",
+                    source_type="pdf",
+                    limit=3,
+                )
+            finally:
+                engine.close()
+        self.assertGreater(result["total"], 0)
+        item = result["results"][0]
+        self.assertIn("citation_formats", item)
+        self.assertIn("chinese", item["citation_formats"])
+        self.assertIn("gb", item["citation_formats"])
+        self.assertIn("第147页", item["citation_formats"]["chinese"])
+        self.assertEqual(item["citation_formats"]["gb_status"], "complete")
+        self.assertEqual(
+            item["citation_formats"]["gb"],
+            "[德]马克斯·霍克海默. 批判理论[M]. 李小兵等, 译. 重庆: 重庆出版社, 1990: 147.",
+        )
 
     def test_word_search_uses_collection_volume_citation(self) -> None:
-        engine = SearchEngine()
-        try:
-            result = engine.search("宗教是人民的鸦片。", source_type="word", limit=1)
-            self.assertGreater(result["total"], 0)
-            item = result["results"][0]
-            self.assertEqual(
-                item["citation_formats"]["chinese"],
-                "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第4页。",
-            )
-            self.assertEqual(
-                item["citation_formats"]["gb"],
-                "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,4.",
-            )
-            self.assertNotIn("黑格尔法哲学批判", item["citation_formats"]["chinese"])
-        finally:
-            engine.close()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "index.sqlite3"
+            _build_search_citation_fixture(database_path)
+            engine = SearchEngine(database_path)
+            try:
+                result = engine.search(
+                    "宗教是人民的鸦片。",
+                    source_type="word",
+                    limit=1,
+                )
+            finally:
+                engine.close()
+        self.assertGreater(result["total"], 0)
+        item = result["results"][0]
+        self.assertEqual(
+            item["citation_formats"]["chinese"],
+            "该文献页码尚未校准，不能生成可靠脚注。",
+        )
+        self.assertEqual(
+            item["citation_formats"]["gb"],
+            "该文献页码尚未校准，不能生成 GB/T 引文。",
+        )
+        self.assertIn(
+            "citation_page",
+            item["citation_formats"]["chinese_missing_fields"],
+        )
 
 
 if __name__ == "__main__":
