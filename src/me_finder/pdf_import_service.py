@@ -91,20 +91,26 @@ def scan_directories_for_documents(
     imported_names: Mapping[str, int],
     *,
     max_entries: int = 500,
-    detect_limit: int = 60,
+    detect_limit: int = 500,
+    detect_time_budget: float = 8.0,
 ) -> Dict[str, object]:
     """List PDF/DOCX files under the configured literature directories.
 
     ``imported_names`` maps already-imported file names to size in bytes.
-    Detection of the PDF text-layer type only runs for new files and only
-    while the new-file count stays within ``detect_limit`` (opening every
-    PDF in a huge folder would make scanning crawl).
+    Detection of the PDF text-layer type only runs for new files, and stops
+    once ``detect_time_budget`` seconds have been spent probing (opening
+    every PDF in a huge folder would make scanning crawl).  A wall-clock
+    budget is used rather than a plain file count because probing costs the
+    same for a 2 MB article as for a 70 MB scan: a fixed count either cuts
+    off ordinary libraries early or lets a huge one stall the scan.
+    Undetected files are still listed, just without a text-layer verdict.
     """
 
     entries: List[Dict[str, object]] = []
     errors: List[Dict[str, object]] = []
     limit_reached = False
     detected_count = 0
+    detect_deadline = time.monotonic() + max(0.0, detect_time_budget)
     for directory in directories:
         base = Path(str(directory))
         if not base.is_dir():
@@ -146,7 +152,7 @@ def scan_directories_for_documents(
                 "status": status,
             }
             if suffix == ".pdf" and status == "new":
-                if detected_count < detect_limit:
+                if detected_count < detect_limit and time.monotonic() < detect_deadline:
                     detected_count += 1
                     try:
                         profile = detect_pdf_type(path)

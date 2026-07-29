@@ -561,6 +561,83 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(detected["isbn"], "978-7-208-19833-3")
         self.assertEqual(detected["metadata_status"], "complete")
 
+    def test_journal_offprint_decodes_its_article_number(self) -> None:
+        # 真实场景（学术月刊 2020 年第 9 期，知网导出件）：刊名与卷号根本没有
+        # 印在版面上，但文章编号按 GB/T 编码了年、期、起始页与篇幅。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "重思马克思的市民社会理论\n"
+                    "张双利\n"
+                    "摘    要    “黑格尔−马克思问题”是我们理解马克思的市民社会理论的关键线索。\n"
+                    "关键词    市民社会 现代国家\n"
+                    "作者张双利，复旦大学哲学学院教授（上海 200433）。\n"
+                    "中图分类号 A1\n"
+                    "文献标识码 A\n"
+                    "文章编号 0439-8041(2020)09-0015-13\n"
+                    "引 言\n"
+                    "近十多年来，中国学界对马克思市民社会理论的研究兴趣日益浓厚。\n"
+                    "15"
+                ),
+            },
+            {"pdf_page_index": 1, "text_raw": "正文继续。\n16"},
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("重思马克思的市民社会理论_张双利.pdf"), pages
+        )
+
+        self.assertEqual(detected["document_type"], "journal_article")
+        self.assertEqual(detected["title"], "重思马克思的市民社会理论")
+        self.assertEqual(detected["author"], "张双利")
+        self.assertEqual(detected["publish_year"], "2020")
+        self.assertEqual(detected["issue"], "9")
+        # 起始页 15 加篇幅 13 页 → 止页 27。
+        self.assertEqual(detected["page_range"], "15-27")
+        # 版面上没有刊名和卷号，必须留空待补，不得臆造。
+        self.assertIsNone(detected["journal_name"])
+        self.assertIsNone(detected["volume"])
+        self.assertEqual(detected["metadata_missing_fields"], ["journal_name"])
+        # 期刊不应被追问出版社/出版地。
+        self.assertIsNone(detected["publisher"])
+        self.assertIsNone(detected["publish_place"])
+
+    def test_journal_offprint_renders_the_expected_gb_citation(self) -> None:
+        metadata = {
+            "document_type": "journal_article",
+            "author": "张双利",
+            "title": "重思马克思的市民社会理论",
+            "journal_name": "学术月刊",
+            "volume": "52",
+            "issue": "9",
+            "page_range": "15-27",
+            "publish_year": "2020",
+        }
+        self.assertEqual(
+            format_citation(metadata, 20, "gb"),
+            "张双利. 重思马克思的市民社会理论[J]. 学术月刊, 2020, 52(9): 15-27.",
+        )
+
+    def test_book_front_matter_is_not_mistaken_for_a_journal(self) -> None:
+        # 专著的内容提要同样含“摘要”“关键词”字样，不能因此走期刊链路。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "消费社会\n"
+                    "内容摘要：本书讨论消费社会的结构。\n"
+                    "关键词：消费 符号\n"
+                    "图书在版编目(CIP)数据\n"
+                    "消费社会/（法）让·鲍德里亚著；刘成富译. 一 南京：\n"
+                    "南京大学出版社，2014. ISBN 978-7-305-04227-9\n"
+                ),
+            }
+        ]
+        detected = detect_pdf_bibliographic_metadata(Path("消费社会.pdf"), pages)
+
+        self.assertEqual(detected["document_type"], "translated_book")
+        self.assertEqual(detected["publisher"], "南京大学出版社")
+
     def test_series_list_does_not_supply_this_books_translator(self) -> None:
         pages = [
             {

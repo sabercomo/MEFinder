@@ -3,7 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from src.me_finder import pdf_import_service
 from src.me_finder.pdf_import_service import (
     copy_local_document,
     scan_directories_for_documents,
@@ -36,6 +38,49 @@ class DirectoryScanTests(unittest.TestCase):
         self.assertEqual(by_name["同名不同容.pdf"]["status"], "name_conflict")
         self.assertFalse(result["errors"])
         self.assertFalse(result["limit_reached"])
+
+    def test_detection_stops_on_a_time_budget_but_still_lists_every_file(self) -> None:
+        # 预检测按墙钟预算收口：预算耗尽后剩余文件仍要出现在结果里，
+        # 只是没有文本层判定，不能被悄悄丢掉。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            for index in range(6):
+                (base / f"第{index}篇.pdf").write_bytes(b"%PDF-1.4 payload")
+
+            probed: list[str] = []
+
+            def slow_probe(path):
+                probed.append(Path(path).name)
+                # 每个文件都比预算贵，因此只有第一个能被检测到。
+                clock["now"] += 5.0
+                return {"detected_pdf_type": "native_text"}
+
+            clock = {"now": 0.0}
+            with (
+                mock.patch.object(pdf_import_service, "detect_pdf_type", slow_probe),
+                mock.patch.object(
+                    pdf_import_service.time,
+                    "monotonic",
+                    lambda: clock["now"],
+                ),
+            ):
+                result = scan_directories_for_documents(
+                    [str(base)],
+                    {},
+                    detect_time_budget=4.0,
+                )
+
+        self.assertEqual(len(result["entries"]), 6)
+        self.assertEqual(len(probed), 1)
+        detected = [
+            entry for entry in result["entries"] if entry.get("needs_ocr") is not None
+        ]
+        self.assertEqual(len(detected), 1)
+        undetected = [
+            entry for entry in result["entries"] if entry.get("needs_ocr") is None
+        ]
+        self.assertEqual(len(undetected), 5)
+        self.assertTrue(all(entry["status"] == "new" for entry in undetected))
 
     def test_missing_directory_is_reported_not_fatal(self) -> None:
         result = scan_directories_for_documents(["Z:\\不存在的目录\\xyz"], {})

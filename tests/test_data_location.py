@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -19,9 +20,15 @@ from src.me_finder.data_location import (
 def _create_current_data_root(root: Path) -> None:
     database = root / "runtime" / "data" / "index.sqlite3"
     database.parent.mkdir(parents=True)
-    with sqlite3.connect(database) as connection:
+    # sqlite3 的上下文管理器只提交事务，并不关闭连接；Windows 无法删除仍被
+    # 打开的数据库文件，因此这里必须显式关闭。
+    connection = sqlite3.connect(database)
+    try:
         connection.execute("CREATE TABLE sample (value TEXT NOT NULL)")
         connection.execute("INSERT INTO sample VALUES ('原句')")
+        connection.commit()
+    finally:
+        connection.close()
     config = root / "runtime" / "config"
     config.mkdir(parents=True)
     (config / "pdf_imports.json").write_text(
@@ -69,14 +76,12 @@ class DataLocationTests(unittest.TestCase):
             self.assertEqual(read_macos_data_root(home), default)
 
     def test_selected_parent_gets_a_mefinder_child(self) -> None:
-        self.assertEqual(
-            proposed_data_root("/Volumes/PortableSSD"),
-            Path("/Volumes/PortableSSD/MEFinder"),
-        )
-        self.assertEqual(
-            proposed_data_root("/Volumes/PortableSSD/MEFinder"),
-            Path("/Volumes/PortableSSD/MEFinder"),
-        )
+        # 「绝对路径」的写法依平台而异：Windows 要有盘符，POSIX 用挂载点。
+        # 写死 /Volumes/... 会让这条规则在 Windows 上被误判为相对路径。
+        parent = Path("C:/PortableSSD") if os.name == "nt" else Path("/Volumes/PortableSSD")
+        expected = parent / "MEFinder"
+        self.assertEqual(proposed_data_root(parent), expected)
+        self.assertEqual(proposed_data_root(expected), expected)
         with self.assertRaisesRegex(DataLocationError, "完整"):
             proposed_data_root("OneDrive")
 
@@ -112,7 +117,8 @@ class DataLocationTests(unittest.TestCase):
                 (target / "preferences.json").read_text(encoding="utf-8"),
                 '{"theme": "midnight"}\n',
             )
-            with sqlite3.connect(target / "runtime/data/index.sqlite3") as connection:
+            connection = sqlite3.connect(target / "runtime/data/index.sqlite3")
+            try:
                 self.assertEqual(
                     connection.execute("SELECT value FROM sample").fetchone()[0],
                     "原句",
@@ -121,6 +127,8 @@ class DataLocationTests(unittest.TestCase):
                     connection.execute("PRAGMA integrity_check").fetchone()[0],
                     "ok",
                 )
+            finally:
+                connection.close()
             self.assertFalse((target / "runtime/data/index.sqlite3-wal").exists())
             self.assertFalse((target / "runtime/data/index.sqlite3-shm").exists())
             self.assertEqual(

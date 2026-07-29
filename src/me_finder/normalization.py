@@ -60,10 +60,29 @@ PUNCT_TRANSLATION = str.maketrans(
 SENTENCE_ENDINGS = set("。！？!?；;")
 
 
+def is_invisible_format(ch: str) -> bool:
+    """Report characters that carry no visible text but survive NFKC.
+
+    Typeset PDFs are full of them: a hyphenated book leaves a SOFT HYPHEN
+    (U+00AD) inside almost every other word, and exports add zero-width
+    spaces, word joiners and byte-order marks.  Unicode classifies these as
+    ``Cf`` (format), which is neither punctuation nor whitespace, so they
+    used to survive every normalization mode and silently prevented a
+    reader's cleanly typed quote from ever matching the indexed sentence.
+    """
+
+    return bool(ch) and unicodedata.category(ch) == "Cf"
+
+
+def strip_invisible_format(text: str) -> str:
+    return "".join(ch for ch in (text or "") if not is_invisible_format(ch))
+
+
 def normalize_text(text: str) -> str:
     """Normalize text for direct search while keeping punctuation visible."""
 
     normalized = unicodedata.normalize("NFKC", text or "")
+    normalized = strip_invisible_format(normalized)
     normalized = normalized.translate(QUOTE_TRANSLATION).translate(PUNCT_TRANSLATION)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return normalized.lower()
@@ -103,6 +122,7 @@ def normalize_with_map(text: str, mode: str) -> Tuple[str, List[int]]:
     mapping: List[int] = []
     for source_index, original in enumerate(text or ""):
         chunk = unicodedata.normalize("NFKC", original)
+        chunk = strip_invisible_format(chunk)
         chunk = chunk.translate(QUOTE_TRANSLATION).translate(PUNCT_TRANSLATION)
         for ch in chunk.lower():
             if mode in {"compact", "plain"} and ch.isspace():

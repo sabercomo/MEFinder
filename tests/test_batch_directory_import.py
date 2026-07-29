@@ -99,6 +99,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     if server is not None:
                         server.shutdown()
                         server.server_close()
+                    handler.close_runtime()
                     os.chdir(previous_cwd)
 
     def test_more_than_fifty_paths_is_rejected_instead_of_truncated(self) -> None:
@@ -128,6 +129,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 if server is not None:
                     server.shutdown()
                     server.server_close()
+                handler.close_runtime()
                 os.chdir(previous_cwd)
 
     @staticmethod
