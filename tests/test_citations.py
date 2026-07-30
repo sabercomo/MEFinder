@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.me_finder.citations import build_citation_formats, format_citation
 from src.me_finder.bibliographic_metadata import (
@@ -12,6 +13,8 @@ from src.me_finder.bibliographic_metadata import (
     invalid_metadata_fields,
     is_valid_bibliographic_value,
     manual_metadata,
+    marx_engels_collection_metadata,
+    marx_engels_first_edition_metadata,
     metadata_missing_fields,
     update_metadata_in_database,
 )
@@ -226,6 +229,125 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(
             detected["title"],
             "现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读",
+        )
+
+    def test_pdf_file_label_and_artifact_author_do_not_replace_catalog_title(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "马恩全集第50卷.pdf"
+            path.write_bytes(b"pdf")
+            with patch(
+                "src.me_finder.bibliographic_metadata._embedded_pdf_metadata",
+                return_value={"title": "K93.pdf", "author": "kdc"},
+            ):
+                detected = detect_pdf_bibliographic_metadata(
+                    path,
+                    [],
+                    {
+                        "title": "K93.pdf",
+                        "author": "kdc",
+                        "metadata_source": "automatic_recognition",
+                    },
+                )
+
+        self.assertEqual(detected["title"], "马恩全集第50卷")
+        self.assertEqual(detected["author"], "马克思、恩格斯")
+        self.assertEqual(detected["publisher"], "人民出版社")
+        self.assertEqual(detected["publish_place"], "北京")
+        self.assertEqual(detected["publish_year"], "1985")
+        self.assertEqual(detected["volume"], "50")
+        self.assertEqual(detected["metadata_evidence"]["title"]["source"], "collection_rule")
+
+    def test_marx_engels_chinese_first_edition_volume_year_table(self) -> None:
+        expected = {
+            1: "1956", 2: "1957", 3: "1960", 4: "1958", 5: "1958",
+            6: "1961", 7: "1959", 8: "1961", 9: "1961", 10: "1962",
+            11: "1962", 12: "1962", 13: "1962", 14: "1964", 15: "1963",
+            16: "1964", 17: "1963", 18: "1964", 19: "1963", 20: "1971",
+            21: "1965", 22: "1965", 23: "1972", 24: "1972", 25: "1974",
+            27: "1972", 28: "1973", 29: "1972", 30: "1975", 31: "1972",
+            32: "1975", 33: "1973", 34: "1972", 35: "1971", 36: "1974",
+            37: "1971", 38: "1972", 39: "1974", 40: "1982", 41: "1982",
+            42: "1979", 43: "1982", 44: "1982", 45: "1985", 47: "1979",
+            48: "1985", 49: "1982", 50: "1985",
+        }
+        for volume, year in expected.items():
+            with self.subTest(volume=volume):
+                metadata = marx_engels_first_edition_metadata(f"马恩全集第{volume:02d}卷.pdf")
+                self.assertEqual(metadata["publish_year"], year)
+                self.assertEqual(metadata["publisher"], "人民出版社")
+                self.assertEqual(metadata["publish_place"], "北京")
+                self.assertEqual(metadata["author"], "马克思、恩格斯")
+
+        part_cases = {
+            "马恩全集第26卷（一）.pdf": ("1972", "26卷第一册"),
+            "马恩全集第26卷（二）.pdf": ("1973", "26卷第二册"),
+            "马恩全集第26卷（三）.pdf": ("1974", "26卷第三册"),
+            "马恩全集第26卷（中）.pdf": ("1973", "26卷第二册"),
+            "马恩全集第46卷（上）.pdf": ("1979", "46卷上册"),
+            "马恩全集第46卷（下）.pdf": ("1980", "46卷下册"),
+        }
+        for file_name, (year, volume_label) in part_cases.items():
+            with self.subTest(file_name=file_name):
+                metadata = marx_engels_first_edition_metadata(file_name)
+                self.assertEqual(metadata["publish_year"], year)
+                self.assertEqual(metadata["volume"], volume_label)
+        self.assertEqual(
+            marx_engels_first_edition_metadata("马恩全集第14卷（上）.pdf")["volume"],
+            "14",
+        )
+        self.assertEqual(
+            marx_engels_first_edition_metadata("马恩全集第01卷（下）.pdf")["publish_year"],
+            "1956",
+        )
+        self.assertEqual(marx_engels_first_edition_metadata("马恩全集第50卷（三）.pdf"), {})
+
+    def test_marx_engels_chinese_second_edition_from_me2_file_names(self) -> None:
+        # 用户提供的第二版逐卷出版年份。第二版仍在出版，表中没有的卷不给年份。
+        expected = {
+            1: "1995", 2: "2005", 3: "2002", 10: "1998", 11: "1995",
+            12: "1998", 13: "1998", 14: "2013", 16: "2007", 19: "2006",
+            21: "2003", 25: "2001", 26: "2014", 28: "2018", 29: "2021",
+            30: "1995", 31: "1998", 32: "1998", 33: "2004", 34: "2008",
+            35: "2013", 36: "2015", 37: "2019", 38: "2019", 42: "2016",
+            43: "2016", 44: "2001", 45: "2003", 46: "2003", 47: "2004",
+            48: "2007", 49: "2016", 50: "2022",
+        }
+        for volume, year in expected.items():
+            for file_name in (f"me2-{volume}.pdf", f"me2-{volume:02d}.pdf", f"ME2_{volume}.pdf"):
+                with self.subTest(file_name=file_name):
+                    metadata, rule = marx_engels_collection_metadata(file_name)
+                    self.assertEqual(rule, "marx_engels_chinese_second_edition")
+                    self.assertEqual(metadata["publish_year"], year)
+                    self.assertEqual(metadata["publisher"], "人民出版社")
+                    self.assertEqual(metadata["publish_place"], "北京")
+                    self.assertEqual(metadata["author"], "马克思、恩格斯")
+                    self.assertEqual(metadata["volume"], str(volume))
+        # 书名用中文数字，与卷端页一致。
+        self.assertEqual(
+            marx_engels_collection_metadata("me2-31.pdf")[0]["title"],
+            "马克思恩格斯全集第三十一卷",
+        )
+        self.assertEqual(
+            marx_engels_collection_metadata("me2-1.pdf")[0]["title"],
+            "马克思恩格斯全集第一卷",
+        )
+
+    def test_second_edition_never_invents_a_year_for_unpublished_volumes(self) -> None:
+        # 第二版尚未出版的卷（如第 4、20、27 卷）：给书目框架，但绝不编造年份。
+        for volume in (4, 5, 20, 27, 40, 41):
+            with self.subTest(volume=volume):
+                metadata, rule = marx_engels_collection_metadata(f"me2-{volume}.pdf")
+                self.assertEqual(rule, "marx_engels_chinese_second_edition")
+                self.assertNotIn("publish_year", metadata)
+                self.assertEqual(metadata["author"], "马克思、恩格斯")
+        # 越界卷号与不相关文件名都不匹配第二版规则。
+        self.assertEqual(marx_engels_collection_metadata("me2-51.pdf"), ({}, ""))
+        self.assertEqual(marx_engels_collection_metadata("me2-0.pdf"), ({}, ""))
+        self.assertEqual(marx_engels_collection_metadata("随便一本书.pdf"), ({}, ""))
+        # 第一版文件名仍优先命中第一版规则。
+        self.assertEqual(
+            marx_engels_collection_metadata("马恩全集第07卷.pdf")[1],
+            "marx_engels_chinese_first_edition",
         )
 
     def test_slash_inside_title_is_not_a_responsibility_separator(self) -> None:
@@ -992,6 +1114,16 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(
             format_citation(metadata, uncalibrated, "gb"),
             "该文献页码尚未校准，不能生成 GB/T 引文。",
+        )
+
+        first_edition = marx_engels_first_edition_metadata("马恩全集第26卷（一）.pdf")
+        self.assertEqual(
+            format_citation(first_edition, "1", "chinese"),
+            "《马克思恩格斯全集》第26卷第一册，北京：人民出版社，1972年，第1页。",
+        )
+        self.assertEqual(
+            format_citation(first_edition, "1", "gb"),
+            "马克思恩格斯全集:第26卷第一册[M].北京:人民出版社,1972,1.",
         )
 
     def test_word_hit_page_only_accepts_verified_page_source_types(self) -> None:

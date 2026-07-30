@@ -164,6 +164,38 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(result["volumes"][0]["volume_id"], "vol-1")
         self.assertEqual(len(result["works"]), 2)
 
+    def test_chinese_file_name_prevents_foreign_misclassification(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            raw = root / "corpus" / "raw_pdf"
+            raw.mkdir(parents=True)
+            path = raw / "马恩全集第50卷.pdf"
+            path.write_bytes(b"pdf")
+            result = build_library(
+                root,
+                [
+                    {
+                        "source_file_id": "marx-50",
+                        "source_type": "pdf",
+                        "file_name": path.name,
+                        "relative_path": f"corpus/raw_pdf/{path.name}",
+                        "pdf_profile": {"pdf_page_count": 10},
+                    }
+                ],
+                [],
+                [],
+                [
+                    {
+                        "source_file_id": "marx-50",
+                        "title": "K93.pdf",
+                        "author": "kdc",
+                        "page_mapping": {"segments": []},
+                    }
+                ],
+            )
+
+        self.assertEqual(result["items"][0]["language"], "chinese")
+
     def test_merged_library_keeps_pinyin_sort_and_safe_remove_copy(self) -> None:
         self.assertNotIn("cal-doc-select", HTML)
         self.assertNotIn("请选择 PDF 文献", HTML)
@@ -179,7 +211,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
         self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('failed','检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
+        self.assertIn("statusStatButton('failed','页码自动检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
+        self.assertNotIn("statusStatButton('failed','检测失败'", HTML)
         self.assertIn("libStatusFilter = requested === libStatusFilter ? 'all' : requested", HTML)
         self.assertIn("if (libStatusFilter === 'pdf_all')", HTML)
         self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
@@ -239,6 +272,65 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         drawer_rule = HTML.split('.drawer-actions {', 1)[1].split('}', 1)[0]
         self.assertIn('flex-wrap: wrap;', drawer_rule)
         self.assertIn('.drawer-actions .action-btn { flex: 0 0 auto; white-space: nowrap; }', HTML)
+
+    def test_library_header_and_controls_reflow_in_narrow_windows(self) -> None:
+        controls_rule = HTML.split('.library-controls-row {', 1)[1].split('}', 1)[0]
+        filters_rule = HTML.split('.library-filter-controls {', 1)[1].split('}', 1)[0]
+        toolbar_rule = HTML.split('.library-toolbar-right {', 1)[1].split('}', 1)[0]
+        self.assertIn('flex-direction: column;', controls_rule)
+        self.assertIn('align-items: stretch;', controls_rule)
+        self.assertIn('width: 100%;', filters_rule)
+        self.assertIn('width: 100%;', toolbar_rule)
+        self.assertIn('@media (max-width: 1100px)', HTML)
+        self.assertIn('#page-library .page-header-row { flex-wrap: wrap; }', HTML)
+        self.assertIn('#page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }', HTML)
+
+    def test_library_supports_click_and_drag_multi_selection_for_pdf_removal(self) -> None:
+        for element_id in (
+            'id="library-delete-mode-btn"',
+            'id="library-selection-actions"',
+            'id="library-selection-count"',
+            'id="library-remove-selected-btn"',
+        ):
+            self.assertIn(element_id, HTML)
+        self.assertIn('function toggleLibraryDeleteSelection(sourceId, force)', HTML)
+        self.assertIn('function toggleSelectVisibleLibraryDocuments()', HTML)
+        self.assertIn('function setupLibraryDragSelection()', HTML)
+        self.assertIn("state.marquee.className = 'library-selection-marquee'", HTML)
+        self.assertIn(".library-entry[data-delete-selectable=\"1\"]", HTML)
+        self.assertIn("setupLibraryDragSelection();", HTML)
+        self.assertIn('function openRemoveSelectedDocumentsModal()', HTML)
+        self.assertIn("fetch('/api/documents/remove-batch'", HTML)
+        self.assertIn('Word 文献由本地语料目录管理，目前只能在这里移除 PDF 文献', HTML)
+
+    def test_drag_selection_reaches_documents_below_the_fold(self) -> None:
+        """框选一次只能选一屏，是因为锚点和命中判定都用视口坐标、且不自动滚动。"""
+
+        # 锚点与命中框都换算到滚动容器的内容坐标，滚出屏幕的行才留得住。
+        self.assertIn("function dragSelectionAnchor(scroller, event)", HTML)
+        self.assertIn("anchorX: event.clientX - viewport.left + scroller.scrollLeft,", HTML)
+        self.assertIn("anchorY: event.clientY - viewport.top + scroller.scrollTop", HTML)
+        self.assertIn("function dragSelectionHits(element, box, scroller)", HTML)
+        self.assertIn("var top = rect.top - box.viewport.top + scroller.scrollTop;", HTML)
+        # 指针压在上下边缘时持续滚动。
+        self.assertIn("function runDragSelectionAutoScroll(state, apply)", HTML)
+        self.assertIn("function stopDragSelectionAutoScroll(state)", HTML)
+        self.assertIn("const DRAG_SELECT_EDGE_ZONE = 56;", HTML)
+        self.assertIn("const DRAG_SELECT_MAX_SCROLL_SPEED = 26;", HTML)
+        self.assertIn("state.pointerY < viewport.top + DRAG_SELECT_EDGE_ZONE", HTML)
+        self.assertIn("state.pointerY > viewport.bottom - DRAG_SELECT_EDGE_ZONE", HTML)
+        self.assertIn("if (state.autoScrollFrame) cancelAnimationFrame(state.autoScrollFrame);", HTML)
+        # 文献库列表接到共用实现上。
+        self.assertIn("function libraryScrollContainer()", HTML)
+        self.assertIn("function updateLibraryDragSelection()", HTML)
+        self.assertIn("runDragSelectionAutoScroll(state, updateLibraryDragSelection);", HTML)
+        self.assertIn("stopDragSelectionAutoScroll(state);", HTML)
+        # 旧的视口坐标命中判定不能留下。
+        self.assertNotIn(
+            "var hit = rect.right >= left && rect.left <= right "
+            "&& rect.bottom >= top && rect.top <= bottom;",
+            HTML,
+        )
 
 
 class DocumentDeletionServiceTests(unittest.TestCase):
@@ -556,7 +648,7 @@ class DocumentDeletionServiceTests(unittest.TestCase):
                 ),
                 patch.object(
                     document_deletion_module,
-                    "delete_source_from_database",
+                    "delete_sources_from_database",
                     side_effect=RuntimeError("database delete failed"),
                 ),
             ):

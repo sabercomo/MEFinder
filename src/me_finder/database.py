@@ -306,12 +306,43 @@ def _deduplicate_keyed_rows(
     return [canonical_by_key[key] for key in ordered_keys], merged_count
 
 
+# 每份快照都是整个索引的完整副本。真实语料下单份就有 3.5GB，不设上限时
+# 一次批量删除就能在数据目录里堆出几百 GB。
+DATABASE_BACKUP_RETENTION = 3
+
+
+def _prune_database_backups(
+    backup_dir: Path, db_path: Path, keep: int = DATABASE_BACKUP_RETENTION
+) -> List[Path]:
+    """Drop all but the newest ``keep`` snapshots of ``db_path``."""
+
+    if keep < 0:
+        return []
+    snapshots = sorted(
+        (
+            path
+            for path in backup_dir.glob(f"{db_path.stem}-*{db_path.suffix}")
+            if path.is_file()
+        ),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    removed: List[Path] = []
+    for path in snapshots[: max(0, len(snapshots) - keep)]:
+        try:
+            path.unlink()
+            removed.append(path)
+        except OSError:
+            continue
+    return removed
+
+
 def _backup_database(db_path: Path) -> Path:
     backup_dir = db_path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     backup_path = backup_dir / f"{db_path.stem}-{stamp}{db_path.suffix}"
     shutil.copy2(db_path, backup_path)
+    _prune_database_backups(backup_dir, db_path)
     return backup_path
 
 
@@ -810,74 +841,92 @@ def replace_source_in_database(
     }
 
 
-def delete_source_from_database(
-    source_file_id: str,
+def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> Dict[str, int]:
+    """Delete one source's rows on an open transaction and report the counts."""
+
+    source = connection.execute(
+        "SELECT source_type FROM source_files WHERE source_file_id = ?", (source_file_id,)
+    ).fetchone()
+    if source is None:
+        raise ValueError("文献不存在。")
+    if str(source[0]) != "pdf":
+        raise ValueError("当前移除服务仅允许处理 PDF 文献。")
+    volume_ids = [
+        str(row[0])
+        for row in connection.execute(
+            "SELECT volume_id FROM volumes WHERE source_file_id = ?", (source_file_id,)
+        ).fetchall()
+    ]
+    work_ids: List[str] = []
+    if volume_ids:
+        placeholders = ",".join("?" for _ in volume_ids)
+        work_ids = [
+            str(row[0])
+            for row in connection.execute(
+                f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", volume_ids
+            ).fetchall()
+        ]
+    counts: Dict[str, int] = {}
+    counts["paragraphs"] = connection.execute(
+        "SELECT COUNT(*) FROM paragraphs WHERE source_file_id = ?", (source_file_id,)
+    ).fetchone()[0]
+    counts["pdf_pages"] = connection.execute(
+        "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?", (source_file_id,)
+    ).fetchone()[0]
+    counts["page_anchors"] = connection.execute(
+        "SELECT COUNT(*) FROM page_anchors WHERE paragraph_id IN "
+        "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
+        (source_file_id,),
+    ).fetchone()[0]
+    connection.execute(
+        "DELETE FROM page_anchors WHERE paragraph_id IN "
+        "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
+        (source_file_id,),
+    )
+    if volume_ids:
+        placeholders = ",".join("?" for _ in volume_ids)
+        connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", volume_ids)
+    if work_ids:
+        placeholders = ",".join("?" for _ in work_ids)
+        connection.execute(f"DELETE FROM toc_entries WHERE work_id IN ({placeholders})", work_ids)
+        connection.execute(f"DELETE FROM works WHERE work_id IN ({placeholders})", work_ids)
+    connection.execute("DELETE FROM paragraphs WHERE source_file_id = ?", (source_file_id,))
+    for table in ("pdf_pages", "pdf_page_mappings", "pdf_import_runs", "audit_issues"):
+        connection.execute(f"DELETE FROM {table} WHERE source_file_id = ?", (source_file_id,))
+    connection.execute("DELETE FROM volumes WHERE source_file_id = ?", (source_file_id,))
+    connection.execute("DELETE FROM source_files WHERE source_file_id = ?", (source_file_id,))
+    return counts
+
+
+def delete_sources_from_database(
+    source_file_ids: Sequence[str],
     db_path: Path = DEFAULT_DATABASE_PATH,
     *,
     backup_existing: bool = True,
 ) -> Dict[str, object]:
-    """Delete one source and all source-owned search rows in one transaction."""
+    """Delete several sources and their search rows in one transaction.
 
-    source_file_id = str(source_file_id or "").strip()
-    if not source_file_id:
+    One snapshot covers the whole batch. Backing up per document turned a
+    61-document removal into 61 full copies of a multi-GB index — roughly
+    200 GB of disk writes for what is otherwise a millisecond-scale delete.
+    """
+
+    ids: List[str] = []
+    for value in source_file_ids:
+        text = str(value or "").strip()
+        if text and text not in ids:
+            ids.append(text)
+    if not ids:
         raise ValueError("source_file_id is required")
     db_path = Path(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
     connection = sqlite3.connect(str(db_path))
-    counts: Dict[str, int] = {}
+    deleted: Dict[str, Dict[str, int]] = {}
     try:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
-        source = connection.execute(
-            "SELECT source_type FROM source_files WHERE source_file_id = ?", (source_file_id,)
-        ).fetchone()
-        if source is None:
-            raise ValueError("文献不存在。")
-        if str(source[0]) != "pdf":
-            raise ValueError("当前移除服务仅允许处理 PDF 文献。")
-        volume_ids = [
-            str(row[0])
-            for row in connection.execute(
-                "SELECT volume_id FROM volumes WHERE source_file_id = ?", (source_file_id,)
-            ).fetchall()
-        ]
-        work_ids: List[str] = []
-        if volume_ids:
-            placeholders = ",".join("?" for _ in volume_ids)
-            work_ids = [
-                str(row[0])
-                for row in connection.execute(
-                    f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", volume_ids
-                ).fetchall()
-            ]
-        counts["paragraphs"] = connection.execute(
-            "SELECT COUNT(*) FROM paragraphs WHERE source_file_id = ?", (source_file_id,)
-        ).fetchone()[0]
-        counts["pdf_pages"] = connection.execute(
-            "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?", (source_file_id,)
-        ).fetchone()[0]
-        counts["page_anchors"] = connection.execute(
-            "SELECT COUNT(*) FROM page_anchors WHERE paragraph_id IN "
-            "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
-            (source_file_id,),
-        ).fetchone()[0]
-        connection.execute(
-            "DELETE FROM page_anchors WHERE paragraph_id IN "
-            "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
-            (source_file_id,),
-        )
-        if volume_ids:
-            placeholders = ",".join("?" for _ in volume_ids)
-            connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", volume_ids)
-        if work_ids:
-            placeholders = ",".join("?" for _ in work_ids)
-            connection.execute(f"DELETE FROM toc_entries WHERE work_id IN ({placeholders})", work_ids)
-            connection.execute(f"DELETE FROM works WHERE work_id IN ({placeholders})", work_ids)
-        connection.execute("DELETE FROM paragraphs WHERE source_file_id = ?", (source_file_id,))
-        for table in ("pdf_pages", "pdf_page_mappings", "pdf_import_runs", "audit_issues"):
-            connection.execute(f"DELETE FROM {table} WHERE source_file_id = ?", (source_file_id,))
-        connection.execute("DELETE FROM volumes WHERE source_file_id = ?", (source_file_id,))
-        connection.execute("DELETE FROM source_files WHERE source_file_id = ?", (source_file_id,))
+        for source_file_id in ids:
+            deleted[source_file_id] = _delete_one_source(connection, source_file_id)
         totals = {
             "source_count": connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0],
             "paragraph_count": connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0],
@@ -896,10 +945,34 @@ def delete_source_from_database(
     finally:
         connection.close()
     return {
-        "source_file_id": source_file_id,
-        "deleted": counts,
+        "source_file_ids": ids,
+        "deleted": deleted,
         "backup_path": str(backup_path) if backup_path else None,
         **totals,
+    }
+
+
+def delete_source_from_database(
+    source_file_id: str,
+    db_path: Path = DEFAULT_DATABASE_PATH,
+    *,
+    backup_existing: bool = True,
+) -> Dict[str, object]:
+    """Delete one source and all source-owned search rows in one transaction."""
+
+    source_file_id = str(source_file_id or "").strip()
+    if not source_file_id:
+        raise ValueError("source_file_id is required")
+    result = delete_sources_from_database(
+        [source_file_id], db_path, backup_existing=backup_existing
+    )
+    return {
+        "source_file_id": source_file_id,
+        "deleted": result["deleted"][source_file_id],
+        "backup_path": result["backup_path"],
+        "source_count": result["source_count"],
+        "paragraph_count": result["paragraph_count"],
+        "eligible_paragraph_count": result["eligible_paragraph_count"],
     }
 
 

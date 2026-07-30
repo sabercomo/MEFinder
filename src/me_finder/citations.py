@@ -157,6 +157,8 @@ def _page_info(hit_page: object) -> Dict[str, object]:
 
 def _document_type(meta: CitationMetadata) -> str:
     raw = _first(meta, "document_type", "citation_type", "publication_type", "type").lower()
+    if _is_marx_engels_collection(meta):
+        return "marx_engels_collection"
     aliases = {
         "journal": "journal_article",
         "article": "journal_article",
@@ -175,8 +177,6 @@ def _document_type(meta: CitationMetadata) -> str:
     }
     if raw in aliases:
         return aliases[raw]
-    if _is_marx_engels_collection(meta):
-        return "marx_engels_collection"
     if _first(meta, "journal_name", "journal_title", "journal", "periodical"):
         return "journal_article"
     if _first(meta, "container_title", "collection_title", "book_title") and _title(meta) != _book_title(meta):
@@ -230,7 +230,14 @@ def _marx_engels_collection_title(meta: CitationMetadata) -> str:
 
 def _marx_engels_volume(meta: CitationMetadata) -> str:
     volume = _first(meta, "volume_number", "volume")
-    return f"第{volume}卷" if volume else ""
+    if not volume:
+        return ""
+    text = str(volume).strip()
+    if text.startswith("第"):
+        return text
+    if "卷" in text:
+        return f"第{text}"
+    return f"第{text}卷"
 
 
 def _marx_engels_volume_title_chinese(meta: CitationMetadata) -> str:
@@ -339,7 +346,7 @@ def _publisher_year_chinese(meta: CitationMetadata) -> str:
 
 
 def _publication_chinese(meta: CitationMetadata) -> str:
-    place = _first(meta, "publication_place", "place", "city", "publisher_place")
+    place = _first(meta, "publish_place", "publication_place", "place", "city", "publisher_place")
     publisher = _first(meta, "publisher", "press")
     year = _year(meta)
     publication = ""
@@ -357,7 +364,7 @@ def _publication_chinese(meta: CitationMetadata) -> str:
 
 
 def _publication_gb_no_space(meta: CitationMetadata) -> str:
-    place = _first(meta, "publication_place", "place", "city", "publisher_place")
+    place = _first(meta, "publish_place", "publication_place", "place", "city", "publisher_place")
     publisher = _first(meta, "publisher", "press")
     year = _year(meta)
     if place and publisher and year:

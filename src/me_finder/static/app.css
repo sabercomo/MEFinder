@@ -2064,9 +2064,9 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 }
 .library-controls-row {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
-  flex-wrap: wrap;
   margin-top: 30px;
   padding-bottom: 14px;
 }
@@ -2074,9 +2074,11 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 0 0 auto;
+  width: 100%;
+  flex-wrap: wrap;
+  min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: visible;
   scrollbar-width: none;
 }
 .library-filter-controls::-webkit-scrollbar { display: none; }
@@ -2087,9 +2089,29 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-left: auto;
+  width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
 }
+.library-delete-mode-btn.active {
+  color: var(--danger);
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+.library-selection-actions {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.library-selection-actions.is-visible { display: inline-flex; }
+.library-selection-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.library-toolbar-right.is-delete-mode #batch-metadata-btn { display: none; }
 .library-sort-controls { display: flex; align-items: center; gap: 8px; }
 .library-sort-label { font-size: 12px; color: var(--text-tertiary); }
 .library-sort-controls .app-select-trigger { height: 36px; color: var(--text-secondary); font-size: 13px; }
@@ -2118,6 +2140,39 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
+}
+.library-delete-check {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  margin: 0;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+.library-delete-check:disabled { cursor: not-allowed; opacity: .38; }
+.library-row.delete-selected {
+  background: var(--danger-soft);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.library-row.is-drag-target,
+.library-card.is-drag-target {
+  outline: 2px solid var(--danger);
+  outline-offset: -2px;
+  background: var(--danger-soft);
+}
+#library-list.is-drag-selecting,
+#library-list.is-drag-selecting .library-entry {
+  cursor: crosshair;
+  user-select: none;
+}
+.library-selection-marquee {
+  position: fixed;
+  z-index: 9999;
+  border: 1px solid var(--danger);
+  border-radius: 3px;
+  background: var(--danger-soft);
+  opacity: .72;
+  pointer-events: none;
 }
 .library-row-title {
   flex: 1;
@@ -2175,6 +2230,7 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 }
 .library-card:hover { transform: translateY(-1px); border-color: var(--border-strong); box-shadow: var(--shadow-card-hover); }
 .library-card.selected { border-color: var(--accent); background: var(--surface-selected); box-shadow: var(--focus-ring); }
+.library-card.delete-selected { border-color: var(--danger); background: var(--danger-soft); box-shadow: 0 0 0 1px var(--danger-border); }
 .library-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .library-card-badges { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .library-card-status { overflow: hidden; color: var(--text-tertiary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2188,9 +2244,22 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 .library-view-grid > .empty-state { grid-column: 1 / -1; }
 @media (max-width: 1220px) { .library-list-container.library-view-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }}
 @media (max-width: 780px) { .library-list-container.library-view-grid { grid-template-columns: 1fr; padding: 14px; }}
-@media (max-width: 900px) {
-  .library-controls-row { align-items: flex-start; flex-wrap: wrap; }
-  .library-toolbar-right { width: 100%; justify-content: space-between; }}
+@media (max-width: 1100px) {
+  #page-library .page-header-row { flex-wrap: wrap; }
+  #page-library .page-header-row > :first-child { flex: 1 1 220px; min-width: 200px; }
+  #page-library .page-header-meta { flex: 1 1 560px; min-width: 0; }
+  #page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }
+  .library-toolbar-right { justify-content: flex-end; }
+}
+@media (max-width: 720px) {
+  #page-library .page-header { padding: 20px 18px 0; }
+  #page-library .page-header-row { flex-direction: column; }
+  #page-library .page-header-row > :first-child,
+  #page-library .page-header-meta { flex-basis: auto; width: 100%; min-width: 0; }
+  .library-controls-row { margin-top: 20px; }
+  .library-toolbar-right { justify-content: flex-start; }
+  .library-sort-controls { flex-wrap: wrap; }
+}
 
 /* ── Library drawer ───────────────────────────────────────── */
 .library-drawer {
@@ -2515,6 +2584,15 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   color: var(--text-primary);
   margin-bottom: 10px;
 }
+.import-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.import-queue-head .import-queue-title { margin-bottom: 0; }
+.import-queue-resume-all { flex: 0 0 auto; }
 .scan-section { margin-top: 24px; }
 .scan-section-head {
   display: flex;
@@ -3047,23 +3125,69 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* ── Toast notification ────────────────────────────────────── */
-.toast {
+/* ── Toasts ────────────────────────────────────────────────── */
+.toast-stack {
   position: fixed;
-  bottom: 24px;
+  bottom: 26px;
   left: 50%;
-  transform: translateX(-50%) translateY(60px);
-  padding: 10px 20px;
-  border-radius: 10px;
-  background: var(--tooltip-bg);
-  color: var(--tooltip-text);
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0;
-  transition: all 200ms ease;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 48px));
+  /* 提示不该挡住下面的列表；整层都不接收指针事件。 */
   pointer-events: none;
-  z-index: 100;
+  /* 高于对话框，弹窗打开时的提示也要看得见。 */
+  z-index: 400;
 }
-.toast.show {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+  padding: 11px 16px 11px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+  animation: toast-in 220ms cubic-bezier(.2, .8, .3, 1) both;
+}
+.toast.is-leaving { animation: toast-out 180ms ease forwards; }
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+}
+.toast-icon svg { width: 13px; height: 13px; }
+.toast-text {
+  min-width: 0;
+  word-break: break-word;
+}
+.toast--success { border-color: var(--success-border); }
+.toast--success .toast-icon { background: var(--success-soft); color: var(--success-icon); }
+.toast--danger { border-color: var(--danger-border); }
+.toast--danger .toast-icon { background: var(--danger-soft); color: var(--danger-icon); }
+.toast--warning { border-color: var(--warning-border); }
+.toast--warning .toast-icon { background: var(--warning-soft); color: var(--warning-icon); }
+.toast--info .toast-icon { background: var(--info-soft); color: var(--info-icon); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.is-leaving { animation-duration: 1ms; }
 }

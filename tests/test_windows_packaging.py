@@ -7,6 +7,9 @@ from pathlib import Path
 class WindowsPackagingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.dev_build_script = Path("build_windows_dist.cmd").read_text(
+            encoding="utf-8-sig"
+        )
         cls.build_script = Path("build_windows_installer.ps1").read_text(
             encoding="utf-8-sig"
         )
@@ -61,6 +64,15 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("src.me_finder.update_service", self.spec)
         self.assertIn("write_windows_version_info", self.spec)
         self.assertIn("version=str(version_info_path)", self.spec)
+
+    def test_windows_builds_gate_anchor_compatibility(self) -> None:
+        for script in (
+            self.dev_build_script,
+            self.build_script,
+            self.portable_script,
+        ):
+            self.assertIn("tests.test_anchor_metadata", script)
+            self.assertIn("tests.test_pdf_match_anchors", script)
 
 
 if __name__ == "__main__":

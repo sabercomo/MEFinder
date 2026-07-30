@@ -13,14 +13,37 @@ from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_valu
 _CJK_RE = re.compile(r"[㐀-鿿]")
 
 
-def _item_language(title: object, author: object) -> str:
-    """中文文献（含中译本）与外文文献两类：书名含汉字即中文，否则看作者。"""
+def _item_language(title: object, author: object, file_name: object = None) -> str:
+    """中文文献（含中译本）与外文文献两类。
+
+    文件名是最后一道只读兜底：即使自动书目识别暂时给出了错误的拉丁字母
+    标题，也不能把一个明确以中文命名的本地文献整批归进外文。
+    """
 
     if _CJK_RE.search(str(title or "")):
         return "chinese"
     if _CJK_RE.search(str(author or "")):
         return "chinese"
+    if _CJK_RE.search(Path(str(file_name or "")).stem):
+        return "chinese"
     return "foreign"
+
+
+# 文献列表只需要书名、作者、分类和状态。映射区间、识别证据和 PDF 剖面
+# 在真实语料上占 `/api/library` 负载的四分之三以上，却只有详情抽屉会读，
+# 因此摘要投影把它们整组去掉，改由 `build_library_detail` 按需返回。
+SUMMARY_DROPPED_ITEM_FIELDS = frozenset(
+    {
+        "pdf_profile",
+        "segments",
+        "mapping_evidence",
+        "metadata_evidence",
+        "metadata_conflicts",
+        "exception_pages",
+        "failure_reasons",
+    }
+)
+SUMMARY_DROPPED_METADATA_FIELDS = frozenset({"metadata_evidence", "metadata_conflicts"})
 
 
 STATUS_LABELS = {
@@ -97,7 +120,9 @@ def build_library(
             item["modified_at"] = source.get("last_modified") or source.get("imported_at")
             source_path = _source_path(root, source)
             item["source_exists"] = bool(source_path and source_path.exists())
-        item["language"] = _item_language(item.get("title"), item.get("author"))
+        item["language"] = _item_language(
+            item.get("title"), item.get("author"), item.get("file_name")
+        )
         bibliographic = item.get("bibliographic_metadata") if isinstance(item.get("bibliographic_metadata"), Mapping) else {}
         item["document_type"] = (
             item.get("document_type")
@@ -111,6 +136,78 @@ def build_library(
         "volumes": list(volumes),
         "works": list(works),
     }
+
+
+def summarize_library(payload: Mapping[str, object]) -> Dict[str, object]:
+    """Return the list-only projection of :func:`build_library`.
+
+    Keeps every field the library list, filters, sorting and search scope
+    read; drops the per-document evidence and the works table, which only
+    the detail drawer needs.
+    """
+
+    items: List[Dict[str, object]] = []
+    for item in payload.get("items", []) or []:
+        if not isinstance(item, Mapping):
+            continue
+        light = {
+            key: value
+            for key, value in item.items()
+            if key not in SUMMARY_DROPPED_ITEM_FIELDS
+        }
+        metadata = item.get("bibliographic_metadata")
+        if isinstance(metadata, Mapping):
+            light["bibliographic_metadata"] = {
+                key: value
+                for key, value in metadata.items()
+                if key not in SUMMARY_DROPPED_METADATA_FIELDS
+            }
+        items.append(light)
+    return {
+        "view": "summary",
+        "items": items,
+        "stats": payload.get("stats") or {},
+        "volumes": list(payload.get("volumes") or []),
+    }
+
+
+def build_library_detail(
+    payload: Mapping[str, object], source_file_id: str
+) -> Optional[Dict[str, object]]:
+    """Return the full record, volume and works for one source, or ``None``."""
+
+    source_id = str(source_file_id or "").strip()
+    if not source_id:
+        return None
+    item = next(
+        (
+            entry
+            for entry in payload.get("items", []) or []
+            if isinstance(entry, Mapping)
+            and str(entry.get("source_file_id") or "") == source_id
+        ),
+        None,
+    )
+    if item is None:
+        return None
+    volume = next(
+        (
+            entry
+            for entry in payload.get("volumes", []) or []
+            if isinstance(entry, Mapping)
+            and str(entry.get("source_file_id") or "") == source_id
+        ),
+        None,
+    )
+    volume_id = str(volume.get("volume_id") or "") if volume else ""
+    works = [
+        entry
+        for entry in (payload.get("works", []) or [])
+        if isinstance(entry, Mapping)
+        and volume_id
+        and str(entry.get("volume_id") or "") == volume_id
+    ]
+    return {"item": dict(item), "volume": dict(volume) if volume else None, "works": works}
 
 
 def build_calibration_library(

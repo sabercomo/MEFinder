@@ -16,10 +16,12 @@ if not exist "%PYTHON%" (
 if errorlevel 1 exit /b 1
 
 "%PYTHON%" -m unittest ^
+  tests.test_anchor_metadata ^
   tests.test_vision_api ^
   tests.test_citations ^
   tests.test_database_resilience ^
   tests.test_pdf_import_config ^
+  tests.test_pdf_match_anchors ^
   tests.test_page_display ^
   tests.test_runtime_page_mapping ^
   tests.test_search_match_spans ^
@@ -29,6 +31,9 @@ if errorlevel 1 exit /b 1
   tests.test_structured_reader_web ^
   tests.test_batch_directory_import ^
   tests.test_calibration_library_ui ^
+  tests.test_library_startup_performance ^
+  tests.test_batch_document_removal ^
+  tests.test_toast_presentation ^
   tests.test_directory_scan ^
   tests.test_import_queue ^
   tests.test_import_resume_mineru ^

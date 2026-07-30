@@ -15,6 +15,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from src.me_finder import database as database_module
 from src.me_finder.database import build_database
 from src.me_finder.database import replace_source_in_database as real_replace_source
 from src.me_finder.pdf_import_service import rebuild_local_index
@@ -182,6 +183,70 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     finally:
                         connection.close()
                     self.assertEqual(indexed_count, 2)
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_pdf_batch_snapshots_the_index_once_not_once_per_file(self) -> None:
+        """索引快照是整份复制；真实语料下每份 3.5GB，按文件数复制会拖垮批量导入。"""
+
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            paths = []
+            for number in range(4):
+                path = source_dir / f"批量导入{number}.pdf"
+                write_native_pdf(path, f"batch-backup-{number}")
+                paths.append(str(path))
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={"detected_pdf_type": "native_text", "pdf_page_count": 1},
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ), patch(
+                "src.me_finder.database._backup_database",
+                wraps=database_module._backup_database,
+            ) as backup:
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(target=server.serve_forever, daemon=True).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": paths},
+                    )
+                    job_ids = [str(job["job_id"]) for job in response["jobs"]]
+                    statuses = self._wait_for_jobs(base_url, job_ids)
+                    self.assertEqual(
+                        [status["status"] for status in statuses],
+                        ["completed"] * len(paths),
+                        [status.get("message") for status in statuses],
+                    )
+                    self.assertEqual(backup.call_count, 1)
                 finally:
                     if server is not None:
                         server.shutdown()

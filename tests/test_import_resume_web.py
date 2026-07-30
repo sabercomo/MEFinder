@@ -26,6 +26,7 @@ from src.me_finder.web import make_handler
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
 APP_SOURCE = Path("src/me_finder/static/app.js").read_text(encoding="utf-8")
+TEMPLATE_SOURCE = Path("src/me_finder/templates/index.html").read_text(encoding="utf-8")
 
 
 def fake_pdf_extraction(
@@ -118,9 +119,26 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn('str(job.get("status") or "") not in {"paused", "failed"}', resume_block)
         self.assertIn("queue_import_job(", resume_block)
         self.assertIn("function loadResumableImports()", APP_SOURCE)
-        self.assertIn("function resumeImport(id)", APP_SOURCE)
+        self.assertIn("function resumeImport(id, options)", APP_SOURCE)
         self.assertIn("可能产生费用", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume'", APP_SOURCE)
+
+    def test_resume_all_button_continues_every_pending_import_serially(self) -> None:
+        # 多个中断任务时，一个「全部继续导入」按钮代替逐个点击。
+        self.assertIn('id="import-resume-all-btn"', TEMPLATE_SOURCE)
+        self.assertIn("全部继续导入", TEMPLATE_SOURCE)
+        self.assertIn("function resumeAllImports()", APP_SOURCE)
+        self.assertIn("function resumableImportQueue()", APP_SOURCE)
+        self.assertIn("function syncResumeAllButton()", APP_SOURCE)
+        # 串行发起，一次汇总确认，逐个不再各弹一次。
+        self.assertIn(
+            "await resumeImport(pending[index].id, {silent: true, skipConfirm: true});",
+            APP_SOURCE,
+        )
+        # 只有多于一个可继续任务时才显示批量按钮。
+        self.assertIn("button.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
+        # 文案改成自然中文，不再是「从断点继续」翻译腔。
+        self.assertNotIn("从断点继续", APP_SOURCE)
 
     def test_resume_revalidates_identity_and_prevents_duplicate_workers(self) -> None:
         resume_start = WEB_SOURCE.index("def resume_import_job(")

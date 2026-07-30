@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from .database import delete_source_from_database
+from .database import delete_sources_from_database
 from .pdf_import_service import load_import_config, save_import_config
 
 
@@ -30,33 +30,112 @@ class DocumentDeletionService:
         delete_internal_copy: bool = False,
     ) -> Dict[str, object]:
         source_file_id = str(source_file_id or "").strip()
-        source = self._source_record(source_file_id)
+        batch = self.remove_many(
+            [source_file_id],
+            delete_generated_artifacts=delete_generated_artifacts,
+            internal_copy_ids=[source_file_id] if delete_internal_copy else [],
+        )
+        failure = next(
+            (item for item in batch["failures"] if item["source_id"] == source_file_id),
+            None,
+        )
+        if failure is not None:
+            raise ValueError(failure["error"])
+        return {
+            "source_file_id": source_file_id,
+            "deleted": batch["deleted"][source_file_id],
+            "backup_path": batch["backup_path"],
+            "source_count": batch["source_count"],
+            "paragraph_count": batch["paragraph_count"],
+            "eligible_paragraph_count": batch["eligible_paragraph_count"],
+            "removed_from_config": source_file_id in batch["removed_from_config"],
+            "original_pdf_preserved": not delete_internal_copy,
+            "internal_copy_deleted": delete_internal_copy,
+            "generated_artifacts_requested": delete_generated_artifacts,
+            "staged_artifact_count": batch["staged_artifact_count"],
+            "cleanup_warnings": batch["cleanup_warnings"],
+        }
+
+    def remove_many(
+        self,
+        source_file_ids: Sequence[str],
+        *,
+        delete_generated_artifacts: bool = True,
+        internal_copy_ids: Optional[Iterable[str]] = None,
+    ) -> Dict[str, object]:
+        """Remove several PDFs with one config write and one database snapshot.
+
+        Documents that fail validation are reported in ``failures`` and left
+        untouched; the rest still go through as a single transaction.
+        """
+
+        requested: List[str] = []
+        for value in source_file_ids:
+            text = str(value or "").strip()
+            if text and text not in requested:
+                requested.append(text)
+        internal_requested = {
+            str(value or "").strip() for value in (internal_copy_ids or [])
+        }
+
         config = load_import_config(self.config_path)
         documents = [item for item in config.get("documents", []) if isinstance(item, dict)]
-        document = next((item for item in documents if item.get("source_file_id") == source_file_id), None)
+        document_by_id = {
+            str(item.get("source_file_id") or ""): item for item in documents
+        }
+
+        # 校验先做完再动手：批量删除不能因为其中一份不合格就整批回滚。
+        targets: List[str] = []
+        failures: List[Dict[str, str]] = []
+        internal_paths: Dict[str, Path] = {}
+        for source_file_id in requested:
+            try:
+                source = self._source_record(source_file_id)
+                if source_file_id in internal_requested:
+                    source_path = self._source_path(source)
+                    if source_path is None or not self._is_within(
+                        source_path, self.root / "corpus" / "raw_pdf"
+                    ):
+                        raise ValueError("只允许删除应用 corpus/raw_pdf 内保存的 PDF 副本。")
+                    internal_paths[source_file_id] = source_path
+            except ValueError as exc:
+                failures.append({"source_id": source_file_id, "error": str(exc)})
+                continue
+            targets.append(source_file_id)
+
+        if not targets:
+            raise ValueError(
+                failures[0]["error"] if failures else "没有可移除的文献。"
+            )
+
+        removing = set(targets)
+        survivors = [
+            item
+            for item in documents
+            if str(item.get("source_file_id") or "") not in removing
+        ]
         original_config = json.loads(json.dumps(config, ensure_ascii=False))
         staged: List[Tuple[Path, Path]] = []
         cleanup_warnings: List[str] = []
         try:
             if delete_generated_artifacts:
-                for path in self._owned_generated_paths(
-                    source_file_id,
-                    document,
-                    documents,
-                ):
-                    self._stage(path, staged)
-            if delete_internal_copy:
-                source_path = self._source_path(source)
-                if source_path is None or not self._is_within(source_path, self.root / "corpus" / "raw_pdf"):
-                    raise ValueError("只允许删除应用 corpus/raw_pdf 内保存的 PDF 副本。")
-                self._stage(source_path, staged)
+                for source_file_id in targets:
+                    document = document_by_id.get(source_file_id)
+                    # 只有仍被保留文献引用的产物才受保护；批内共享的可以一起清掉。
+                    visible = survivors if document is None else [*survivors, document]
+                    for path in self._owned_generated_paths(
+                        source_file_id, document, visible
+                    ):
+                        self._stage(path, staged)
+            for source_file_id in targets:
+                source_path = internal_paths.get(source_file_id)
+                if source_path is not None:
+                    self._stage(source_path, staged)
 
-            config["documents"] = [
-                item for item in documents if item.get("source_file_id") != source_file_id
-            ]
+            config["documents"] = survivors
             save_import_config(self.config_path, config)
-            database_result = delete_source_from_database(
-                source_file_id,
+            database_result = delete_sources_from_database(
+                targets,
                 self.database_path,
                 backup_existing=True,
             )
@@ -82,9 +161,14 @@ class DocumentDeletionService:
                 cleanup_warnings.append(f"{original.name}: {exc}")
         return {
             **database_result,
-            "removed_from_config": document is not None,
-            "original_pdf_preserved": not delete_internal_copy,
-            "internal_copy_deleted": delete_internal_copy,
+            "removed_source_ids": targets,
+            "failures": failures,
+            "removed_from_config": [
+                source_file_id
+                for source_file_id in targets
+                if source_file_id in document_by_id
+            ],
+            "internal_copies_deleted": sorted(internal_paths),
             "generated_artifacts_requested": delete_generated_artifacts,
             "staged_artifact_count": len(staged),
             "cleanup_warnings": cleanup_warnings,

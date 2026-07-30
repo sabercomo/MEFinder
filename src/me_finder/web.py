@@ -49,7 +49,12 @@ from .vision_api import (
     vision_config_summary,
 )
 from .preferences import read_preferences, resolve_preferences_path, save_preferences
-from .calibration_library import build_calibration_library, build_library
+from .calibration_library import (
+    build_calibration_library,
+    build_library,
+    build_library_detail,
+    summarize_library,
+)
 from .document_deletion import DocumentDeletionService
 from .pdf_extractors import extract_pdf_source
 from .pdf_import_service import (
@@ -2262,9 +2267,24 @@ def make_handler(
                 return
             if parsed.path == "/api/library":
                 try:
-                    self._send_json(library_data())
+                    requested_view = (parse_qs(parsed.query).get("view") or [""])[0]
+                    payload = library_data()
+                    if requested_view == "summary":
+                        payload = summarize_library(payload)
+                    self._send_json(payload)
                 except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                     self._send_json({"error": f"文献库加载失败：{exc}"}, status=500)
+                return
+            if parsed.path == "/api/library/document":
+                try:
+                    source_id = (parse_qs(parsed.query).get("source_id") or [""])[0]
+                    detail = build_library_detail(library_data(), source_id)
+                    if detail is None:
+                        self._send_json({"error": "文献不存在或已被移除。"}, status=404)
+                    else:
+                        self._send_json(detail)
+                except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                    self._send_json({"error": f"文献详情加载失败：{exc}"}, status=500)
                 return
             if parsed.path == "/api/scan-directories":
                 try:
@@ -3113,7 +3133,7 @@ def make_handler(
                     self._send_json({"error": str(exc)}, status=400)
                     return
                 except Exception as exc:
-                    self._send_json({"error": f"自动检测失败：{exc}"}, status=500)
+                    self._send_json({"error": f"页码自动检测失败：{exc}"}, status=500)
                     return
                 finally:
                     with runtime_lock:
@@ -3264,6 +3284,163 @@ def make_handler(
                 finally:
                     with import_jobs_lock:
                         deleting_import_sources.discard(sid)
+                return
+            if parsed.path == "/api/documents/remove-batch":
+                # 逐份删除会为每份文献整份复制索引；真实语料下 61 份就是 200GB 写入。
+                raw_ids = payload.get("source_ids")
+                if not isinstance(raw_ids, list) or not raw_ids:
+                    self._send_json({"error": "invalid request"}, status=400)
+                    return
+                requested: List[str] = []
+                for value in raw_ids:
+                    text = str(value or "").strip()
+                    if text and text not in requested:
+                        requested.append(text)
+                internal_ids = {
+                    str(value or "").strip()
+                    for value in (payload.get("internal_copy_source_ids") or [])
+                }
+                batch_failures: List[Dict[str, str]] = []
+                accepted: List[str] = []
+                with import_jobs_lock:
+                    for candidate in requested:
+                        if candidate in deleting_import_sources:
+                            batch_failures.append(
+                                {"source_id": candidate, "error": "该文献正在删除，请勿重复操作。"}
+                            )
+                            continue
+                        if candidate in pending_import_sources:
+                            batch_failures.append(
+                                {"source_id": candidate, "error": "该文献正在准备导入，请稍后再删除。"}
+                            )
+                            continue
+                        if any(
+                            job.get("source_file_id") == candidate
+                            and job.get("status") == "processing"
+                            for job in import_jobs.values()
+                        ):
+                            batch_failures.append(
+                                {"source_id": candidate, "error": "该文献仍在解析中，请等待任务结束后再删除。"}
+                            )
+                            continue
+                        accepted.append(candidate)
+                        deleting_import_sources.add(candidate)
+                    accepted_set = set(accepted)
+                    stale_job_ids = [
+                        job_id
+                        for job_id, job in import_jobs.items()
+                        if job.get("source_file_id") in accepted_set
+                    ]
+                if not accepted:
+                    self._send_json(
+                        {
+                            "error": batch_failures[0]["error"] if batch_failures else "没有可移除的文献。",
+                            "failures": batch_failures,
+                        },
+                        status=409,
+                    )
+                    return
+                result = {}
+                removal_committed = False
+                removal_error: Optional[Exception] = None
+                removal_error_status = 400
+                journal_cleanup_warnings = []
+                try:
+                    with rebuild_lock:
+                        try:
+                            with runtime_lock:
+                                runtime["rebuilding"] = True
+                                old_engine = runtime["engine"]
+                                if hasattr(old_engine, "close"):
+                                    old_engine.close()
+                            result = DocumentDeletionService(root, index_path).remove_many(
+                                accepted,
+                                delete_generated_artifacts=bool(
+                                    payload.get("delete_generated_artifacts", True)
+                                ),
+                                internal_copy_ids=[
+                                    candidate
+                                    for candidate in accepted
+                                    if candidate in internal_ids
+                                ],
+                            )
+                            removal_committed = True
+                        except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                            removal_error = exc
+                        except Exception as exc:
+                            logging.exception("failed to remove documents")
+                            removal_error = exc
+                            removal_error_status = 500
+                        finally:
+                            try:
+                                with runtime_lock:
+                                    runtime["engine"] = SearchEngine(index_path)
+                                    runtime["source_files"] = {
+                                        str(item.get("source_file_id")): item
+                                        for item in runtime["engine"].index.get("source_files", [])
+                                        if item.get("source_file_id")
+                                    }
+                                    runtime["index_metadata"] = runtime["engine"].index.get(
+                                        "metadata", {}
+                                    )
+                                    runtime["rebuilding"] = False
+                            except Exception:
+                                logging.exception(
+                                    "documents removed but search index reload failed"
+                                )
+                                with runtime_lock:
+                                    runtime["rebuilding"] = False
+                                if removal_error is None:
+                                    removal_error = RuntimeError(
+                                        "文献已删除，但索引重新载入失败；请重启应用。"
+                                    )
+                                    removal_error_status = 500
+
+                    if removal_committed:
+                        removed_ids = set(result.get("removed_source_ids") or [])
+                        committed_job_ids = [
+                            job_id
+                            for job_id in stale_job_ids
+                            if str(import_jobs.get(job_id, {}).get("source_file_id") or "")
+                            in removed_ids
+                        ]
+                        for stale_job_id in committed_job_ids:
+                            try:
+                                import_job_journal.delete_job(stale_job_id)
+                            except (OSError, ValueError) as exc:
+                                logging.warning(
+                                    "failed to remove stale import journal %s: %s",
+                                    stale_job_id,
+                                    exc,
+                                )
+                                journal_cleanup_warnings.append(f"{stale_job_id}: {exc}")
+                        with import_jobs_lock:
+                            for stale_job_id in committed_job_ids:
+                                import_jobs.pop(stale_job_id, None)
+                                import_job_contexts.pop(stale_job_id, None)
+                        if journal_cleanup_warnings:
+                            result["cleanup_warnings"] = [
+                                *list(result.get("cleanup_warnings") or []),
+                                *journal_cleanup_warnings,
+                            ]
+
+                    if removal_error is not None:
+                        self._send_json(
+                            {"error": str(removal_error) or "删除文献失败。", "failures": batch_failures},
+                            status=removal_error_status,
+                        )
+                        return
+                    result["failures"] = [
+                        *batch_failures,
+                        *list(result.get("failures") or []),
+                    ]
+                    self._send_json(
+                        {"ok": True, "result": result, "event": "library_changed"}
+                    )
+                finally:
+                    with import_jobs_lock:
+                        for candidate in accepted:
+                            deleting_import_sources.discard(candidate)
                 return
             if parsed.path == "/api/bibliographic-metadata/detect":
                 sid = str(payload.get("source_id") or "")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from src.me_finder.database import (
@@ -35,11 +36,14 @@ class AnchorMetadataTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "index.sqlite3"
             build_database({"metadata": {}}, database_path)
-            with sqlite3.connect(str(database_path)) as connection:
-                connection.execute(
-                    "DELETE FROM metadata WHERE key = 'anchor_spec_version'"
-                )
-                connection.commit()
+            # sqlite3.Connection.__exit__ commits or rolls back, but it does
+            # not close the file handle.  Keep the explicit closing wrapper so
+            # Windows can remove the temporary database after this test.
+            with closing(sqlite3.connect(str(database_path))) as connection:
+                with connection:
+                    connection.execute(
+                        "DELETE FROM metadata WHERE key = 'anchor_spec_version'"
+                    )
 
             replace_source_in_database(
                 {

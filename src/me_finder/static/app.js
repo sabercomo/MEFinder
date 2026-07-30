@@ -12,17 +12,32 @@ let searchDocumentId = '';
 let searchSourceFiles = [];
 let searchVolumes = [];
 let searchDocumentsLoaded = false;
+// 文献库摘要在搜索下拉与文献库页之间共用一份：两处并发打开时只发一次请求。
+let libraryCatalog = null;
+let libraryCatalogPromise = null;
 
 let libSources = [];
 let libVolumes = [];
+let libVolumeBySource = new Map();
 let libWorks = [];
 let libStats = null;
 let libLoaded = false;
+let libDetailLoaded = {};
+let libDetailPending = {};
+let libFilterTimer = null;
+let libraryRenderToken = 0;
+const LIBRARY_RENDER_BATCH = 50;
+const DRAG_SELECT_EDGE_ZONE = 56;
+const DRAG_SELECT_MAX_SCROLL_SPEED = 26;
 let libTypeFilter = 'all';
 let libLangFilter = 'all';
 let libDocTypeFilter = 'all';
 let libStatusFilter = 'all';
 let libSelectedId = null;
+let libDeleteMode = false;
+let libDeleteSelection = new Set();
+let libraryDragSelection = null;
+let suppressLibrarySelectionClick = false;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';
 let libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at';
 let libSortDirection = localStorage.getItem('meFinderLibrarySortDirection') === 'asc' ? 'asc' : 'desc';
@@ -33,7 +48,9 @@ let calSelectedSourceId = null;
 let calAutoResult = null;
 let calTransientStatus = {};
 let removeDocumentTarget = null;
+let removeDocumentTargets = [];
 let removeSecondStage = false;
+let removeRequestController = null;
 let mineruConfigLoaded = false;
 let visionConfigLoaded = false;
 let visionConfig = {providers: [], default_provider_id: null, auto_fallback_from_mineru: false};
@@ -174,16 +191,56 @@ function setSearchLimit(event, limit) {
   rerunSearchAfterFilterChange();
 }
 
+/* ═══ Shared library catalog ═══ */
+function invalidateLibraryCatalog() {
+  libraryCatalog = null;
+  libraryCatalogPromise = null;
+  libLoaded = false;
+  searchDocumentsLoaded = false;
+  libDetailLoaded = {};
+  libDetailPending = {};
+  libWorks = [];
+}
+
+// 摘要投影不含映射证据、PDF 剖面与收录作品，详情由 ensureLibraryDetail 按需补齐。
+function fetchLibraryCatalog(force) {
+  if (force) invalidateLibraryCatalog();
+  if (libraryCatalog) return Promise.resolve(libraryCatalog);
+  if (libraryCatalogPromise) return libraryCatalogPromise;
+  libraryCatalogPromise = fetch('/api/library?view=summary').then(function(response) {
+    return response.json().then(function(data) {
+      if (!response.ok || data.error) throw new Error(data.error || '文献库加载失败');
+      libraryCatalog = data;
+      return data;
+    });
+  }).catch(function(error) {
+    libraryCatalogPromise = null;
+    throw error;
+  });
+  return libraryCatalogPromise;
+}
+
+function buildVolumeIndex(volumes) {
+  var index = new Map();
+  (volumes || []).forEach(function(volume) {
+    if (volume && volume.source_file_id) index.set(volume.source_file_id, volume);
+  });
+  return index;
+}
+
+function volumeForSource(sourceId) {
+  return libVolumeBySource.get(sourceId) || null;
+}
+
 async function ensureSearchDocuments(force) {
   if (searchDocumentsLoaded && !force) return;
   var options = document.getElementById('document-options');
   if (options) options.innerHTML = '<div class="document-options-empty">正在读取文献库…</div>';
   try {
-    var response = await fetch('/api/library');
-    var data = await response.json();
-    if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+    var data = await fetchLibraryCatalog(force);
     searchSourceFiles = data.items || [];
     searchVolumes = data.volumes || [];
+    libVolumeBySource = buildVolumeIndex(searchVolumes);
     searchDocumentsLoaded = true;
   } catch (error) {
     searchDocumentsLoaded = false;
@@ -192,7 +249,7 @@ async function ensureSearchDocuments(force) {
 }
 
 function searchDocumentView(source) {
-  var volume = searchVolumes.find(function(item) { return item.source_file_id === source.source_file_id; });
+  var volume = volumeForSource(source.source_file_id);
   var bib = source.bibliographic || source.bibliographic_metadata || {};
   var title = source.title || bib.title || (volume && volume.display_title) || source.display_title || source.file_name || source.source_file_id;
   var author = source.author || bib.author || '';
@@ -468,7 +525,7 @@ function mappingMethodLabel(m) {
   return labels[m] || m || '';
 }
 function mappingStatusLabel(status) {
-  const labels = {manual_mapped:'人工映射',auto_mapped_high:'自动映射 · 高可信',auto_mapped_medium:'自动映射 · 待确认',needs_review:'待确认',unmapped:'未映射',auto_mapping_failed:'自动检测失败',source_missing:'原文件缺失'};
+  const labels = {manual_mapped:'人工映射',auto_mapped_high:'自动映射 · 高可信',auto_mapped_medium:'自动映射 · 待确认',needs_review:'待确认',unmapped:'未映射',auto_mapping_failed:'页码自动检测失败',source_missing:'原文件缺失'};
   return labels[status] || status || '未映射';
 }
 function mappingConfidenceLabel(level, score) {
@@ -630,7 +687,7 @@ function copySelectedOriginalAndCitation() {
 }
 
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => showToast('复制失败'));
+  navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => showToast('复制失败', 'danger'));
 }
 
 async function openSource(sourceId, page) {
@@ -643,14 +700,14 @@ async function openSource(sourceId, page) {
     });
     const data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '打开失败');
-    if (data.fallback && data.page) showToast('内置阅读器暂时不可用，已改用预览；请手动翻到 PDF 第 ' + data.page + ' 页');
-    else if (data.page_adjusted) showToast('请求页超出当前 PDF 范围，已定位到第 ' + data.page + ' 页' + (data.page_count ? '（共 ' + data.page_count + ' 页）' : ''));
-    else if (data.page && data.page_jump) showToast('已打开原文并跳转到 PDF 第 ' + data.page + ' 页');
-    else if (data.page && data.app === 'preview') showToast('已用 macOS 预览打开，请手动翻到 PDF 第 ' + data.page + ' 页');
-    else if (data.page) showToast('已用系统默认阅读器打开，请手动翻到 PDF 第 ' + data.page + ' 页');
-    else showToast('已打开原文');
+    if (data.fallback && data.page) showToast('内置阅读器暂时不可用，已改用预览；请手动翻到 PDF 第 ' + data.page + ' 页', 'warning');
+    else if (data.page_adjusted) showToast('请求页超出当前 PDF 范围，已定位到第 ' + data.page + ' 页' + (data.page_count ? '（共 ' + data.page_count + ' 页）' : ''), 'warning');
+    else if (data.page && data.page_jump) showToast('已打开原文并跳转到 PDF 第 ' + data.page + ' 页', 'success');
+    else if (data.page && data.app === 'preview') showToast('已用 macOS 预览打开，请手动翻到 PDF 第 ' + data.page + ' 页', 'warning');
+    else if (data.page) showToast('已用系统默认阅读器打开，请手动翻到 PDF 第 ' + data.page + ' 页', 'warning');
+    else showToast('已打开原文', 'success');
   } catch(e) {
-    showToast(e.message || '打开失败');
+    showToast(e.message || '打开失败', 'danger');
   }
 }
 
@@ -659,34 +716,78 @@ async function openSelectedStructuredReader() {
   if (!item || !item.source_file_id) return;
   const reader = window.MEFinderReader;
   if (!reader || typeof reader.openForSearchResult !== 'function') {
-    showToast('结构化阅读器暂时不可用');
+    showToast('结构化阅读器暂时不可用', 'warning');
     return;
   }
   try {
     await reader.openForSearchResult(item);
   } catch (error) {
-    showToast(error && error.message ? error.message : '结构化文本打开失败');
+    showToast(error && error.message ? error.message : '结构化文本打开失败', 'danger');
   }
 }
 
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 1800);
+/* ═══ Toasts ═══ */
+const TOAST_TONES = ['success', 'danger', 'warning', 'info'];
+const TOAST_STACK_LIMIT = 3;
+const TOAST_ICONS = {
+  success: '<circle cx="9" cy="9" r="7.2"/><path d="m5.8 9.2 2.2 2.2 4.2-4.4"/>',
+  danger: '<circle cx="9" cy="9" r="7.2"/><path d="M9 5.4v4.4"/><path d="M9 12.4h.01"/>',
+  warning: '<path d="M9 2.4 1.6 15.4h14.8Z"/><path d="M9 7v3.6"/><path d="M9 12.9h.01"/>',
+  info: '<circle cx="9" cy="9" r="7.2"/><path d="M9 8.4v4.2"/><path d="M9 5.6h.01"/>'
+};
+
+function toastDuration(text) {
+  // 原来固定 1800ms，像「已停止等待。移除是一个整体事务…」这种长提示根本读不完。
+  return Math.min(6500, Math.max(2400, 1100 + text.length * 110));
+}
+
+function dismissToast(item, immediate) {
+  if (!item || item.dataset.dismissing === '1') return;
+  clearTimeout(Number(item.dataset.timer));
+  if (immediate) {
+    item.remove();
+    return;
+  }
+  item.dataset.dismissing = '1';
+  item.classList.add('is-leaving');
+  setTimeout(function() { item.remove(); }, 200);
+}
+
+function showToast(message, tone) {
+  var stack = document.getElementById('toast-stack');
+  var text = String(message == null ? '' : message).trim();
+  if (!stack || !text) return null;
+  var variant = TOAST_TONES.indexOf(tone) >= 0 ? tone : 'info';
+  // 连续提示互相叠放，而不是后一条把前一条顶掉。
+  while (stack.children.length >= TOAST_STACK_LIMIT) {
+    dismissToast(stack.firstElementChild, true);
+  }
+  var item = document.createElement('div');
+  item.className = 'toast toast--' + variant;
+  item.innerHTML = '<span class="toast-icon"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + TOAST_ICONS[variant] + '</svg></span><span class="toast-text"></span>';
+  item.querySelector('.toast-text').textContent = text;
+  stack.appendChild(item);
+  item.dataset.timer = String(setTimeout(function() { dismissToast(item); }, toastDuration(text)));
+  return item;
 }
 
 /* ═══ Library ═══ */
-async function loadLibrary() {
+function applyLibraryCatalog(data) {
+  libSources = data.items || [];
+  libVolumes = data.volumes || [];
+  libVolumeBySource = buildVolumeIndex(libVolumes);
+  libStats = data.stats || null;
+  libLoaded = true;
+  // 搜索下拉与文献库共用同一份摘要，避免两处各拉一次。
+  searchSourceFiles = libSources;
+  searchVolumes = libVolumes;
+  searchDocumentsLoaded = true;
+}
+
+async function loadLibrary(force) {
   try {
-    const resp = await fetch('/api/library');
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    libSources = data.items || [];
-    libVolumes = data.volumes || [];
-    libWorks = data.works || [];
-    libStats = data.stats || null;
-    libLoaded = true;
+    applyLibraryCatalog(await fetchLibraryCatalog(force));
     renderLibraryStats();
     syncLibraryViewButtons();
     syncLibrarySortControls();
@@ -694,6 +795,43 @@ async function loadLibrary() {
   } catch(e) {
     document.getElementById('library-list').innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">' + esc(e.message || '文献库加载失败') + '</div></div>';
   }
+}
+
+// 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。
+function ensureLibraryDetail(sourceId) {
+  if (!sourceId || libDetailLoaded[sourceId]) return Promise.resolve();
+  if (libDetailPending[sourceId]) return libDetailPending[sourceId];
+  var request = fetch('/api/library/document?source_id=' + encodeURIComponent(sourceId)).then(function(response) {
+    return response.json().then(function(data) {
+      if (!response.ok || data.error) throw new Error(data.error || '文献详情读取失败');
+      applyLibraryDetail(sourceId, data);
+    });
+  }).then(function() {
+    delete libDetailPending[sourceId];
+  }, function(error) {
+    delete libDetailPending[sourceId];
+    throw error;
+  });
+  libDetailPending[sourceId] = request;
+  return request;
+}
+
+function applyLibraryDetail(sourceId, data) {
+  var detail = data.item || {};
+  // libSources 与 searchSourceFiles 指向同一个数组，就地替换让两处同时拿到完整记录。
+  var index = libSources.findIndex(function(item) { return item.source_file_id === sourceId; });
+  if (index >= 0) libSources[index] = Object.assign({}, libSources[index], detail);
+  if (data.volume && data.volume.source_file_id) {
+    var volumeIndex = libVolumes.findIndex(function(item) { return item.source_file_id === sourceId; });
+    if (volumeIndex >= 0) libVolumes[volumeIndex] = data.volume;
+    else libVolumes.push(data.volume);
+    libVolumeBySource.set(sourceId, data.volume);
+  }
+  var volumeId = data.volume ? data.volume.volume_id : null;
+  if (volumeId) {
+    libWorks = libWorks.filter(function(work) { return work.volume_id !== volumeId; }).concat(data.works || []);
+  }
+  libDetailLoaded[sourceId] = true;
 }
 
 function renderLibraryStats() {
@@ -710,7 +848,7 @@ function renderLibraryStats() {
     + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('pending','待校准',current.pending,'neutral','clock',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('review','待确认',current.review,'warning','notice',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('failed','检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter');
+    + statusStatButton('failed','页码自动检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter');
 }
 
 function applyLibStatusFilter(status) {
@@ -760,7 +898,12 @@ function setLibDocTypeFilter(btn) {
 }
 
 function filterLibrary() {
-  renderLibraryList();
+  // 输入法与连续输入下，91 份以上的列表每敲一个字重排一次会明显发涩。
+  if (libFilterTimer) clearTimeout(libFilterTimer);
+  libFilterTimer = setTimeout(function() {
+    libFilterTimer = null;
+    renderLibraryList();
+  }, 160);
 }
 
 function setLibraryView(mode) {
@@ -872,10 +1015,102 @@ function getFilteredSources() {
   return sources;
 }
 
+function isLibraryDeleteSelectable(source) {
+  return !!source && source.source_type === 'pdf';
+}
+
+function updateLibraryDeleteControls() {
+  var modeButton = document.getElementById('library-delete-mode-btn');
+  var actions = document.getElementById('library-selection-actions');
+  var count = document.getElementById('library-selection-count');
+  var removeButton = document.getElementById('library-remove-selected-btn');
+  var selectVisibleButton = document.getElementById('library-select-visible-btn');
+  var toolbar = document.querySelector('#page-library .library-toolbar-right');
+  var selectedCount = libDeleteSelection.size;
+  if (modeButton) {
+    modeButton.classList.toggle('active', libDeleteMode);
+    modeButton.setAttribute('aria-pressed', libDeleteMode ? 'true' : 'false');
+    modeButton.textContent = libDeleteMode ? '取消选择' : '选择删除';
+  }
+  if (actions) actions.classList.toggle('is-visible', libDeleteMode);
+  if (toolbar) toolbar.classList.toggle('is-delete-mode', libDeleteMode);
+  if (count) count.textContent = '已选 ' + selectedCount;
+  if (removeButton) removeButton.disabled = selectedCount === 0;
+  if (selectVisibleButton) {
+    var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
+    var allSelected = selectable.length > 0 && selectable.every(function(item) {
+      return libDeleteSelection.has(item.source_file_id);
+    });
+    selectVisibleButton.textContent = allSelected ? '取消全选' : '全选当前';
+    selectVisibleButton.disabled = selectable.length === 0;
+  }
+}
+
+function syncLibraryDeleteSelectionUI() {
+  document.querySelectorAll('#library-list .library-entry').forEach(function(entry) {
+    var selected = libDeleteSelection.has(entry.dataset.id);
+    entry.classList.toggle('delete-selected', selected);
+    entry.setAttribute('aria-selected', selected ? 'true' : 'false');
+    var input = entry.querySelector('.library-delete-check');
+    if (input) input.checked = selected;
+  });
+  updateLibraryDeleteControls();
+}
+
+function toggleLibraryDeleteMode(force) {
+  libDeleteMode = typeof force === 'boolean' ? force : !libDeleteMode;
+  libDeleteSelection.clear();
+  if (libDeleteMode) closeLibDrawer();
+  renderLibraryList();
+  updateLibraryDeleteControls();
+}
+
+function toggleLibraryDeleteSelection(sourceId, force) {
+  var source = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  if (!isLibraryDeleteSelectable(source)) {
+    showToast('Word 文献由本地语料目录管理，目前只能在这里移除 PDF 文献', 'warning');
+    return;
+  }
+  var selected = typeof force === 'boolean' ? force : !libDeleteSelection.has(sourceId);
+  if (selected) libDeleteSelection.add(sourceId);
+  else libDeleteSelection.delete(sourceId);
+  syncLibraryDeleteSelectionUI();
+}
+
+function toggleSelectVisibleLibraryDocuments() {
+  var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
+  var allSelected = selectable.length > 0 && selectable.every(function(item) {
+    return libDeleteSelection.has(item.source_file_id);
+  });
+  selectable.forEach(function(item) {
+    if (allSelected) libDeleteSelection.delete(item.source_file_id);
+    else libDeleteSelection.add(item.source_file_id);
+  });
+  syncLibraryDeleteSelectionUI();
+}
+
+function handleLibraryEntryClick(event, sourceId) {
+  if (suppressLibrarySelectionClick) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (libDeleteMode) {
+    toggleLibraryDeleteSelection(sourceId);
+    return;
+  }
+  selectLibDoc(sourceId);
+}
+
 function renderLibraryList() {
   const sources = getFilteredSources();
   const listEl = document.getElementById('library-list');
   listEl.className = 'library-list-container library-view-' + libViewMode;
+  libDeleteSelection.forEach(function(sourceId) {
+    if (!libSources.some(function(source) { return source.source_file_id === sourceId; })) {
+      libDeleteSelection.delete(sourceId);
+    }
+  });
   const allCount = libSources.length;
   const wordCount = libSources.filter(s => s.source_type === 'word').length;
   const pdfCount = libSources.filter(s => s.source_type === 'pdf').length;
@@ -902,63 +1137,106 @@ function renderLibraryList() {
     btn.textContent = label + ' (' + count + ')';
   });
 
+  libraryRenderToken += 1;
   if (sources.length === 0) {
     listEl.innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">未找到匹配文献</div></div>';
+    updateLibraryDeleteControls();
     return;
   }
-  listEl.innerHTML = sources.map(function(src) {
-    var vol = libVolumes.find(function(v) { return v.source_file_id === src.source_file_id; });
-    var isPdf = src.source_type === 'pdf';
-    var title = src.title || (src.file_name || src.source_file_id);
-    var author = src.author || '作者信息待完善';
-    var bib = sourceBibliographicMetadata(src);
-    var missingMetadataText = isPdf ? bibliographicMissingText(bib) : '';
-    var size = formatFileSize(src.size_bytes);
-    var isSelected = src.source_file_id === libSelectedId;
-    var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
-    var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
-    var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
-    var statusGroup = isPdf ? calibrationStatusGroup(itemStatus) : '';
-    var statusChip = isPdf
-      ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(itemStatus)) + '</span>'
-      : '';
-    var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : '';
-    var countMeta = isPdf
-      ? (src.page_count ? src.page_count + ' 页' : '页数未知')
-      : ((src.works_count || 1) + ' 篇');
-    if (libViewMode === 'grid') {
-      var imported = formatCalDate(src.imported_at || src.last_modified);
-      var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
-      return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + '" data-id="' + esc(src.source_file_id) + '" onclick="selectLibDoc(\'' + esc(src.source_file_id) + '\')">'
-        + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div></div>'
-        + '<div class="library-card-title">' + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
-        + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
-        + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
-        + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
-        + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
-    }
-    return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + '" data-id="' + esc(src.source_file_id) + '" onclick="selectLibDoc(\'' + esc(src.source_file_id) + '\')">'
-      + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
-      + '<span class="library-row-title">' + esc(title) + '</span>'
-      + '<span class="library-row-info">'
-      + statusChip
-      + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '')
-      + '<span class="works-count">' + esc(countMeta) + '</span>'
-      + (missingMetadataText ? '<span class="library-row-missing" title="' + esc(missingMetadataText) + '">' + esc(missingMetadataText) + '</span>' : '')
-      + '<span>' + size + '</span>'
-      + '</span>'
-      + '</div>';
-  }).join('');
+  // 首批同步渲染，其余按帧追加，避免大文献库一次性构建整张列表阻塞首屏。
+  listEl.innerHTML = sources.slice(0, LIBRARY_RENDER_BATCH).map(libraryEntryHTML).join('');
+  syncLibraryDeleteSelectionUI();
+  if (sources.length > LIBRARY_RENDER_BATCH) {
+    appendLibraryEntries(sources, LIBRARY_RENDER_BATCH, libraryRenderToken);
+  }
 }
 
-function selectLibDoc(sourceId) {
+function scheduleLibraryChunk(callback) {
+  // 窗口最小化或隐藏时不会触发 requestAnimationFrame，剩余批次要靠定时器补齐，
+  // 否则再显示出来就只剩首批 50 条。
+  if (document.hidden || typeof requestAnimationFrame !== 'function') setTimeout(callback, 0);
+  else requestAnimationFrame(callback);
+}
+
+function appendLibraryEntries(sources, start, token) {
+  scheduleLibraryChunk(function() {
+    if (token !== libraryRenderToken) return;
+    var listEl = document.getElementById('library-list');
+    if (!listEl) return;
+    var end = Math.min(start + LIBRARY_RENDER_BATCH, sources.length);
+    listEl.insertAdjacentHTML('beforeend', sources.slice(start, end).map(libraryEntryHTML).join(''));
+    syncLibraryDeleteSelectionUI();
+    if (end < sources.length) appendLibraryEntries(sources, end, token);
+  });
+}
+
+function libraryEntryHTML(src) {
+  var vol = volumeForSource(src.source_file_id);
+  var isPdf = src.source_type === 'pdf';
+  var title = src.title || (src.file_name || src.source_file_id);
+  var author = src.author || '作者信息待完善';
+  var bib = sourceBibliographicMetadata(src);
+  var missingMetadataText = isPdf ? bibliographicMissingText(bib) : '';
+  var size = formatFileSize(src.size_bytes);
+  var isSelected = src.source_file_id === libSelectedId;
+  var isDeleteSelectable = isLibraryDeleteSelectable(src);
+  var isDeleteSelected = libDeleteSelection.has(src.source_file_id);
+  var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
+  var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
+  var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
+  var statusGroup = isPdf ? calibrationStatusGroup(itemStatus) : '';
+  var statusChip = isPdf
+    ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(itemStatus)) + '</span>'
+    : '';
+  var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : '';
+  var countMeta = isPdf
+    ? (src.page_count ? src.page_count + ' 页' : '页数未知')
+    : ((src.works_count || 1) + ' 篇');
+  var selectionControl = libDeleteMode
+    ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + (isDeleteSelectable ? '' : 'disabled title="Word 文献由本地语料目录管理" ') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
+    : '';
+  if (libViewMode === 'grid') {
+    var imported = formatCalDate(src.imported_at || src.last_modified);
+    var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
+    return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+      + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div>' + selectionControl + '</div>'
+      + '<div class="library-card-title">' + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
+      + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
+      + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
+      + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
+      + '<div class="library-card-footer"><span class="library-card-action">' + (libDeleteMode ? (isDeleteSelectable ? '点击选择' : '不可删除') : '查看详情') + '</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
+  }
+  return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+    + selectionControl
+    + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
+    + '<span class="library-row-title">' + esc(title) + '</span>'
+    + '<span class="library-row-info">'
+    + statusChip
+    + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '')
+    + '<span class="works-count">' + esc(countMeta) + '</span>'
+    + (missingMetadataText ? '<span class="library-row-missing" title="' + esc(missingMetadataText) + '">' + esc(missingMetadataText) + '</span>' : '')
+    + '<span>' + size + '</span>'
+    + '</span>'
+    + '</div>';
+}
+
+async function selectLibDoc(sourceId) {
   libSelectedId = sourceId;
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) {
     row.classList.toggle('selected', row.dataset.id === sourceId);
   });
+  if (!libSources.some(function(s) { return s.source_file_id === sourceId; })) return;
+  try {
+    await ensureLibraryDetail(sourceId);
+  } catch (error) {
+    showToast(error && error.message ? error.message : '文献详情读取失败', 'danger');
+    return;
+  }
+  // 详情是异步补齐的，期间用户可能已经关掉抽屉或换了一份文献。
+  if (libSelectedId !== sourceId) return;
   var src = libSources.find(function(s) { return s.source_file_id === sourceId; });
   if (!src) return;
-  var vol = libVolumes.find(function(v) { return v.source_file_id === sourceId; });
+  var vol = volumeForSource(sourceId);
   var works = vol ? libWorks.filter(function(w) { return w.volume_id === vol.volume_id; }) : [];
   var title = vol ? vol.display_title : (src.file_name || sourceId);
   var corpusTitle = vol ? (vol.corpus_title || '') : '';
@@ -1253,7 +1531,7 @@ async function detectBibliographicMetadata(sourceId, force) {
       selectLibDoc(sourceId);
     }
     showToast(data.metadata.metadata_source === 'manual' && !force ? '人工元数据已保护，未覆盖' : '识别结果已载入，请检查后保存');
-  } catch(e) { showToast('识别失败：' + e.message); }
+  } catch(e) { showToast('识别失败：' + e.message, 'danger'); }
 }
 
 async function saveBibliographicMetadata(sourceId) {
@@ -1261,12 +1539,11 @@ async function saveBibliographicMetadata(sourceId) {
     var resp = await fetch('/api/bibliographic-metadata/save', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,metadata:collectBibliographicForm()})});
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '保存失败');
-    showToast('书目信息已保存并立即生效');
+    showToast('书目信息已保存并立即生效', 'success');
     delete bibEditorTypeOverride[sourceId];
-    libLoaded = false;
-    await loadLibrary();
-    selectLibDoc(sourceId);
-  } catch(e) { showToast('保存失败：' + e.message); }
+    await loadLibrary(true);
+    await selectLibDoc(sourceId);
+  } catch(e) { showToast('保存失败：' + e.message, 'danger'); }
 }
 
 function showBibliographicEvidence(sourceId) {
@@ -1283,7 +1560,7 @@ function showBibliographicEvidence(sourceId) {
 async function openMetadataForSource(sourceId) {
   navigateTo('library');
   if (!libLoaded) await loadLibrary();
-  selectLibDoc(sourceId);
+  await selectLibDoc(sourceId);
 }
 
 function closeLibDrawer() {
@@ -1323,7 +1600,7 @@ async function submitMineruReparse(sourceId) {
     if (libSelectedId === sourceId) selectLibDoc(sourceId);
     pollMineruReparse(sourceId, data.job_id);
   } catch(e) {
-    showToast('提交 MinerU 解析失败：' + e.message);
+    showToast('提交 MinerU 解析失败：' + e.message, 'danger');
   }
 }
 
@@ -1333,7 +1610,7 @@ function pollMineruReparse(sourceId, jobId) {
     .then(function(data) {
       if (data.status === 'completed') {
         delete calTransientStatus[sourceId];
-        showToast('MinerU 解析完成，索引已更新');
+        showToast('MinerU 解析完成，索引已更新', 'success');
         refreshCalibrationSource(sourceId).then(function() {
           if (libSelectedId === sourceId) selectLibDoc(sourceId);
         }).catch(function() {});
@@ -1343,7 +1620,7 @@ function pollMineruReparse(sourceId, jobId) {
         delete calTransientStatus[sourceId];
         updateLibraryEntry(sourceId);
         if (libSelectedId === sourceId) selectLibDoc(sourceId);
-        showToast('MinerU 解析失败：' + (data.message || data.error || '未知错误'));
+        showToast('MinerU 解析失败：' + (data.message || data.error || '未知错误'), 'danger');
         return;
       }
       setTimeout(function() { pollMineruReparse(sourceId, jobId); }, 4000);
@@ -1364,13 +1641,12 @@ async function acceptAutoMapping(sourceId) {
     });
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '接受失败');
-    showToast('自动映射已接受为人工映射');
-    libLoaded = false;
+    showToast('自动映射已接受为人工映射', 'success');
     await loadMeta();
-    await loadLibrary();
-    selectLibDoc(sourceId);
+    await loadLibrary(true);
+    await selectLibDoc(sourceId);
   } catch(e) {
-    showToast('接受失败：' + e.message);
+    showToast('接受失败：' + e.message, 'danger');
   }
 }
 
@@ -1388,7 +1664,7 @@ function showAutoMappingExceptions(sourceId) {
 async function openCalibrationForSource(sourceId) {
   navigateTo('library');
   if (!libLoaded) await loadLibrary();
-  selectLibDoc(sourceId);
+  await selectLibDoc(sourceId);
   await toggleDrawerCalibration(true);
   var host = document.getElementById('library-drawer-calibration');
   if (host) host.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -1422,14 +1698,14 @@ function formatFileSize(bytes) {
 
 /* ═══ Calibration ═══ */
 async function refreshCalibrationSource(sourceId) {
-  var resp = await fetch('/api/library');
-  var data = await resp.json();
-  if (!resp.ok || data.error) throw new Error(data.error || '刷新文献状态失败');
-  libSources = data.items || [];
-  libVolumes = data.volumes || [];
-  libWorks = data.works || [];
-  libStats = data.stats || null;
-  libLoaded = true;
+  var data;
+  try {
+    data = await fetchLibraryCatalog(true);
+  } catch (error) {
+    throw new Error(error && error.message ? error.message : '刷新文献状态失败');
+  }
+  applyLibraryCatalog(data);
+  await ensureLibraryDetail(sourceId);
   updateLibraryEntry(sourceId);
   if (calSelectedSourceId === sourceId) await loadCalibrationDoc(sourceId);
 }
@@ -1493,7 +1769,7 @@ function statusSemanticVariant(group) {
 }
 
 function calibrationStatusLabel(status) {
-  var labels = {manual_mapped:'已校准',auto_mapped_high:'已校准',needs_review:'待确认',unmapped:'待校准',auto_mapping_failed:'检测失败',mapping:'正在检测',source_missing:'原文件缺失'};
+  var labels = {manual_mapped:'已校准',auto_mapped_high:'已校准',needs_review:'待确认',unmapped:'待校准',auto_mapping_failed:'页码自动检测失败',mapping:'正在检测页码',source_missing:'原文件缺失'};
   return labels[status] || '待校准';
 }
 
@@ -1532,7 +1808,7 @@ async function loadCalibrationDoc(sourceId) {
     renderCalSegments();
     updateCalPreview();
   } catch(e) {
-    showToast('加载校准数据失败');
+    showToast('加载校准数据失败', 'danger');
   }
 }
 
@@ -1556,7 +1832,7 @@ async function runAutoDetection(sourceId) {
       body: JSON.stringify({source_id:sourceId, dry_run:true})
     });
     var data = await resp.json();
-    if (!resp.ok || !data.ok) throw new Error(data.error || '检测失败');
+    if (!resp.ok || !data.ok) throw new Error(data.error || '页码自动检测失败');
     calAutoResult = data.result;
     renderAutoDetectionResult(calAutoResult);
     var current = libSources.find(function(item) { return item.source_file_id === sourceId; });
@@ -1565,7 +1841,7 @@ async function runAutoDetection(sourceId) {
   } catch(e) {
     calAutoResult = null;
     calTransientStatus[sourceId] = 'auto_mapping_failed';
-    panel.innerHTML = '<div class="auto-detect-title">自动检测失败</div><div class="auto-detect-note">' + esc(e.message) + '</div>';
+    panel.innerHTML = '<div class="auto-detect-title">页码自动检测失败</div><div class="auto-detect-note">' + esc(e.message) + '</div>';
   } finally {
     if (button) button.disabled = false;
     updateLibraryEntry(sourceId);
@@ -1629,13 +1905,12 @@ async function applyAutoDetection() {
     });
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '应用失败');
-    showToast('自动页码映射已生效');
+    showToast('自动页码映射已生效', 'success');
     delete calTransientStatus[sourceId];
-    libLoaded = false;
     await loadMeta();
     await refreshCalibrationSource(sourceId);
   } catch(e) {
-    showToast('应用失败：' + e.message);
+    showToast('应用失败：' + e.message, 'danger');
   }
 }
 
@@ -1836,18 +2111,17 @@ async function saveCalibration() {
     var data = await resp.json();
     if (data.ok) {
       hint.textContent = '校准已生效';
-      showToast('校准已保存，索引已更新');
+      showToast('校准已保存，索引已更新', 'success');
       await loadMeta();
       delete calTransientStatus[sourceId];
-      libLoaded = false;
       await refreshCalibrationSource(sourceId);
     } else {
       hint.textContent = '保存失败';
-      showToast('保存失败：' + (data.error || '未知错误'));
+      showToast('保存失败：' + (data.error || '未知错误'), 'danger');
     }
   } catch(e) {
     hint.textContent = '保存失败';
-    showToast('保存失败：' + e.message);
+    showToast('保存失败：' + e.message, 'danger');
   }
 }
 
@@ -1879,63 +2153,167 @@ function openRemoveDocumentModal(sourceId) {
   var targetId = calSelectedSourceId || libSelectedId;
   var item = libSources.find(function(value) { return value.source_file_id === targetId; });
   if (!item) return;
-  removeDocumentTarget = item;
+  openRemoveDocumentsModal([item]);
+}
+
+function openRemoveSelectedDocumentsModal() {
+  var items = libSources.filter(function(item) {
+    return libDeleteSelection.has(item.source_file_id) && isLibraryDeleteSelectable(item);
+  });
+  if (!items.length) {
+    showToast('请先选择要删除的 PDF 文献', 'warning');
+    return;
+  }
+  openRemoveDocumentsModal(items);
+}
+
+function openRemoveDocumentsModal(items) {
+  removeDocumentTargets = (items || []).filter(isLibraryDeleteSelectable);
+  if (!removeDocumentTargets.length) return;
+  removeDocumentTarget = removeDocumentTargets[0];
   removeSecondStage = false;
-  document.getElementById('remove-modal-title').textContent = '从文献库移除《' + item.title + '》？';
-  document.getElementById('remove-modal-copy').textContent = '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件。';
+  var count = removeDocumentTargets.length;
+  document.getElementById('remove-modal-title').textContent = count === 1
+    ? '从文献库移除《' + (removeDocumentTarget.title || removeDocumentTarget.file_name || '所选文献') + '》？'
+    : '从文献库移除所选 ' + count + ' 篇文献？';
+  document.getElementById('remove-modal-copy').textContent = count === 1
+    ? '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件。'
+    : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留原 PDF 文件。';
   document.getElementById('remove-generated').checked = true;
   document.getElementById('remove-internal-copy').checked = false;
-  document.getElementById('remove-internal-option').style.display = item.can_delete_internal_copy ? 'flex' : 'none';
+  var internalCount = removeDocumentTargets.filter(function(item) { return item.can_delete_internal_copy; }).length;
+  document.getElementById('remove-internal-option').style.display = internalCount ? 'flex' : 'none';
   document.getElementById('remove-modal-warning').classList.remove('show');
-  document.getElementById('confirm-remove-btn').textContent = '从文献库移除';
+  document.getElementById('confirm-remove-btn').textContent = count === 1 ? '从文献库移除' : '移除所选 ' + count + ' 篇';
   document.getElementById('confirm-remove-btn').disabled = false;
   document.getElementById('remove-document-modal').classList.add('open');
 }
 
 function closeRemoveDocumentModal() {
+  // 取消必须真的中止请求：关掉弹窗但让删除继续跑，是之前最容易误解的地方。
+  if (removeRequestController) {
+    removeRequestController.abort();
+    removeRequestController = null;
+  }
   document.getElementById('remove-document-modal').classList.remove('open');
   removeDocumentTarget = null;
+  removeDocumentTargets = [];
   removeSecondStage = false;
 }
 
 function removeModalBackdropClick(event) {
-  if (event.target.id === 'remove-document-modal') closeRemoveDocumentModal();
+  if (event.target.id !== 'remove-document-modal') return;
+  // 移除进行中时不让误触背景关掉对话框——那会连带中止请求。
+  if (removeRequestController) return;
+  closeRemoveDocumentModal();
 }
 
 async function confirmRemoveDocument() {
-  if (!removeDocumentTarget) return;
-  var deleteInternal = document.getElementById('remove-internal-copy').checked && removeDocumentTarget.can_delete_internal_copy;
-  if (deleteInternal && !removeSecondStage) {
+  var targets = removeDocumentTargets.length ? removeDocumentTargets.slice() : (removeDocumentTarget ? [removeDocumentTarget] : []);
+  if (!targets.length) return;
+  var deleteInternalRequested = document.getElementById('remove-internal-copy').checked;
+  if (deleteInternalRequested && !removeSecondStage) {
     removeSecondStage = true;
     document.getElementById('remove-modal-warning').classList.add('show');
-    document.getElementById('confirm-remove-btn').textContent = '确认移除并删除副本';
+    document.getElementById('confirm-remove-btn').textContent = targets.length === 1 ? '确认移除并删除副本' : '确认移除并删除内部副本';
     return;
   }
   var button = document.getElementById('confirm-remove-btn');
   button.disabled = true;
-  button.textContent = '正在移除…';
-  var sourceId = removeDocumentTarget.source_file_id;
+  button.textContent = targets.length === 1 ? '正在移除…' : '正在移除 ' + targets.length + ' 篇…';
+  var removedIds = [];
+  var failures = [];
+  var deleteGenerated = document.getElementById('remove-generated').checked;
+  var sourceIds = targets.map(function(item) { return item.source_file_id; });
+  // 一次请求一个事务：逐份删除会为每份文献整份复制索引数据库。
+  removeRequestController = typeof AbortController === 'function' ? new AbortController() : null;
   try {
-    var resp = await fetch('/api/documents/remove', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,delete_generated_artifacts:document.getElementById('remove-generated').checked,delete_internal_copy:deleteInternal})});
+    var resp = await fetch('/api/documents/remove-batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      signal: removeRequestController ? removeRequestController.signal : undefined,
+      body: JSON.stringify({
+        source_ids: sourceIds,
+        delete_generated_artifacts: deleteGenerated,
+        internal_copy_source_ids: deleteInternalRequested
+          ? targets.filter(function(item) { return item.can_delete_internal_copy; }).map(function(item) { return item.source_file_id; })
+          : []
+      })
+    });
     var data = await resp.json();
-    if (!resp.ok || !data.ok) throw new Error(data.error || '移除失败');
-    delete calTransientStatus[sourceId];
+    if (!resp.ok || !data.ok) {
+      (data.failures || []).forEach(function(item) {
+        failures.push({source_id: item.source_id, message: item.error || '移除失败'});
+      });
+      throw new Error(data.error || '移除失败');
+    }
+    var result = data.result || {};
+    var reported = {};
+    (result.failures || []).forEach(function(item) {
+      reported[item.source_id] = true;
+      failures.push({source_id: item.source_id, message: item.error || '移除失败'});
+    });
+    (result.removed_source_ids || []).forEach(function(sourceId) {
+      removedIds.push(sourceId);
+      delete calTransientStatus[sourceId];
+      libDeleteSelection.delete(sourceId);
+    });
+    sourceIds.forEach(function(sourceId) {
+      if (removedIds.indexOf(sourceId) < 0 && !reported[sourceId]) {
+        failures.push({source_id: sourceId, message: '服务端未确认移除'});
+      }
+    });
+  } catch(e) {
+    if (e && e.name === 'AbortError') {
+      // 服务端的批量移除是一个整体事务，中止只是不再等待结果。
+      removeRequestController = null;
+      button.disabled = false;
+      button.textContent = targets.length === 1 ? '从文献库移除' : '移除所选 ' + targets.length + ' 篇';
+      await loadLibrary(true);
+      showToast('已停止等待。移除是一个整体事务，服务端可能已经完成，文献库已刷新', 'warning');
+      return;
+    }
+    if (!failures.length) {
+      sourceIds.forEach(function(sourceId) {
+        failures.push({source_id: sourceId, message: e.message || '移除失败'});
+      });
+    }
+  }
+  removeRequestController = null;
+
+  if (removedIds.length) {
+    var removedSet = new Set(removedIds);
     closeRemoveDocumentModal();
     closeLibDrawer();
-    searchDocumentsLoaded = false;
-    if (searchDocumentId === sourceId) searchDocumentId = '';
-    await ensureSearchDocuments(true);
-    updateSearchDocumentLabel();
+    if (removedSet.has(searchDocumentId)) searchDocumentId = '';
     await loadMeta();
-    await loadLibrary();
-    window.dispatchEvent(new CustomEvent('library_changed', {detail:{source_id:sourceId}}));
+    // 一次强制刷新同时喂给文献库与搜索下拉。
+    await loadLibrary(true);
+    updateSearchDocumentLabel();
+    window.dispatchEvent(new CustomEvent('library_changed', {detail:{source_ids:removedIds}}));
     var query = document.getElementById('query').value.trim();
-    if (query && searchResults.some(function(item) { return item.source_file_id === sourceId; })) await runSearch();
-    showToast(deleteInternal ? '文献及应用内 PDF 副本已移除' : '文献已移除，PDF 文件已保留');
-  } catch(e) {
+    if (query && searchResults.some(function(item) { return removedSet.has(item.source_file_id); })) await runSearch();
+  }
+
+  if (failures.length) {
+    libDeleteMode = true;
+    failures.forEach(function(item) { libDeleteSelection.add(item.source_id); });
+    renderLibraryList();
+    if (!removedIds.length) {
+      button.disabled = false;
+      button.textContent = targets.length === 1 ? '从文献库移除' : '重试删除所选';
+    }
+    showToast((removedIds.length ? '已移除 ' + removedIds.length + ' 篇；' : '') + failures.length + ' 篇移除失败：' + failures[0].message, 'danger');
+  } else {
+    libDeleteMode = false;
+    libDeleteSelection.clear();
+    renderLibraryList();
+    showToast(deleteInternalRequested ? '所选文献及可删除的应用内 PDF 副本已移除' : (removedIds.length > 1 ? '已移除 ' + removedIds.length + ' 篇文献，原 PDF 文件已保留' : '文献已移除，PDF 文件已保留'), 'success');
+  }
+
+  if (!removedIds.length && !failures.length) {
     button.disabled = false;
-    button.textContent = deleteInternal ? '确认移除并删除副本' : '从文献库移除';
-    showToast('移除失败：' + e.message);
+    button.textContent = '从文献库移除';
   }
 }
 
@@ -2594,7 +2972,7 @@ async function addScanDirectory() {
     await addScanDirectoryPath(value);
     input.value = '';
   } catch (e) {
-    showToast('保存失败：' + e.message);
+    showToast('保存失败：' + e.message, 'danger');
   }
 }
 
@@ -2723,8 +3101,7 @@ function pollBackupRestore(jobId) {
     .then(function(data) {
       if (data.status === 'completed') {
         showToast(data.message || '备份已恢复');
-        libLoaded = false;
-        searchDocumentsLoaded = false;
+        invalidateLibraryCatalog();
         loadMeta();
         return;
       }
@@ -3591,8 +3968,7 @@ function pollBatchMetadata(jobId, button) {
       if (data.status === 'completed') {
         if (button) { button.disabled = false; button.textContent = '补全书目'; }
         showToast(data.message || '批量识别完成');
-        libLoaded = false;
-        loadLibrary();
+        loadLibrary(true);
         return;
       }
       if (data.status === 'failed' || data.error) {
@@ -3714,6 +4090,233 @@ function handleScanCheckChange(input) {
   updateScanImportButton();
 }
 
+/* ═══ Drag selection geometry ═══
+   框选一次只能选一屏，是因为锚点和命中判定都用视口坐标、拖到边缘又不滚动。
+   下面这组函数把两者都换算到滚动容器的内容坐标系，并提供边缘自动滚动，
+   文献库列表和扫描结果共用同一套实现。 */
+function dragSelectionAnchor(scroller, event) {
+  var viewport = scroller.getBoundingClientRect();
+  return {
+    anchorX: event.clientX - viewport.left + scroller.scrollLeft,
+    anchorY: event.clientY - viewport.top + scroller.scrollTop
+  };
+}
+
+function dragSelectionBox(state) {
+  var scroller = state.scroller;
+  var viewport = scroller.getBoundingClientRect();
+  var pointerX = state.pointerX - viewport.left + scroller.scrollLeft;
+  var pointerY = state.pointerY - viewport.top + scroller.scrollTop;
+  return {
+    viewport: viewport,
+    left: Math.min(state.anchorX, pointerX),
+    right: Math.max(state.anchorX, pointerX),
+    top: Math.min(state.anchorY, pointerY),
+    bottom: Math.max(state.anchorY, pointerY)
+  };
+}
+
+// 选框裁到滚动容器可视区，免得画到工具栏和侧边栏上。
+function paintDragSelectionMarquee(state, box) {
+  var scroller = state.scroller;
+  var viewport = box.viewport;
+  var left = Math.max(box.left - scroller.scrollLeft + viewport.left, viewport.left);
+  var right = Math.min(box.right - scroller.scrollLeft + viewport.left, viewport.right);
+  var top = Math.max(box.top - scroller.scrollTop + viewport.top, viewport.top);
+  var bottom = Math.min(box.bottom - scroller.scrollTop + viewport.top, viewport.bottom);
+  state.marquee.style.left = left + 'px';
+  state.marquee.style.top = top + 'px';
+  state.marquee.style.width = Math.max(0, right - left) + 'px';
+  state.marquee.style.height = Math.max(0, bottom - top) + 'px';
+}
+
+function dragSelectionHits(element, box, scroller) {
+  var rect = element.getBoundingClientRect();
+  var left = rect.left - box.viewport.left + scroller.scrollLeft;
+  var top = rect.top - box.viewport.top + scroller.scrollTop;
+  return left + rect.width >= box.left && left <= box.right
+    && top + rect.height >= box.top && top <= box.bottom;
+}
+
+function dragSelectionEdgeSpeed(depth) {
+  return Math.min(DRAG_SELECT_MAX_SCROLL_SPEED, Math.max(4, Math.round(depth / 2)));
+}
+
+// 指针压在容器上下边缘时持续滚动，否则一屏之外的条目根本够不着。
+function runDragSelectionAutoScroll(state, apply) {
+  if (!state.started || state.autoScrollFrame) return;
+  function step() {
+    if (!state.active || !state.started) {
+      state.autoScrollFrame = null;
+      return;
+    }
+    var scroller = state.scroller;
+    var viewport = scroller.getBoundingClientRect();
+    var delta = 0;
+    if (state.pointerY < viewport.top + DRAG_SELECT_EDGE_ZONE) {
+      delta = -dragSelectionEdgeSpeed(viewport.top + DRAG_SELECT_EDGE_ZONE - state.pointerY);
+    } else if (state.pointerY > viewport.bottom - DRAG_SELECT_EDGE_ZONE) {
+      delta = dragSelectionEdgeSpeed(state.pointerY - (viewport.bottom - DRAG_SELECT_EDGE_ZONE));
+    }
+    if (!delta) {
+      state.autoScrollFrame = null;
+      return;
+    }
+    var before = scroller.scrollTop;
+    scroller.scrollTop = before + delta;
+    if (scroller.scrollTop !== before) apply();
+    state.autoScrollFrame = requestAnimationFrame(step);
+  }
+  state.autoScrollFrame = requestAnimationFrame(step);
+}
+
+function stopDragSelectionAutoScroll(state) {
+  state.active = false;
+  if (state.autoScrollFrame) cancelAnimationFrame(state.autoScrollFrame);
+  state.autoScrollFrame = null;
+}
+
+function libraryScrollContainer() {
+  return document.querySelector('#page-library .library-list-scroll');
+}
+
+function updateLibraryDragSelection() {
+  var state = libraryDragSelection;
+  if (!state || !state.started) return;
+  var box = dragSelectionBox(state);
+  paintDragSelectionMarquee(state, box);
+
+  var hitIds = [];
+  document.querySelectorAll('#library-list .library-entry[data-delete-selectable="1"]').forEach(function(entry) {
+    var hit = dragSelectionHits(entry, box, state.scroller);
+    entry.classList.toggle('is-drag-target', hit);
+    if (hit) hitIds.push(entry.dataset.id);
+  });
+
+  libDeleteSelection = new Set(state.initial);
+  hitIds.forEach(function(sourceId) {
+    if (state.targetSelected) libDeleteSelection.add(sourceId);
+    else libDeleteSelection.delete(sourceId);
+  });
+  syncLibraryDeleteSelectionUI();
+}
+
+function setupLibraryDragSelection() {
+  var list = document.getElementById('library-list');
+  if (!list || list.dataset.dragSelectionReady === '1') return;
+  list.dataset.dragSelectionReady = '1';
+
+  list.addEventListener('pointerdown', function(event) {
+    if (!libDeleteMode || event.button !== 0 || libraryDragSelection) return;
+    var entry = event.target.closest('.library-entry[data-delete-selectable="1"]');
+    if (!entry || !list.contains(entry)) return;
+    var scroller = libraryScrollContainer();
+    if (!scroller) return;
+    libraryDragSelection = Object.assign({
+      pointerId: event.pointerId,
+      scroller: scroller,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      startX: event.clientX,
+      startY: event.clientY,
+      targetSelected: !libDeleteSelection.has(entry.dataset.id),
+      initial: new Set(libDeleteSelection),
+      active: true,
+      started: false,
+      marquee: null,
+      autoScrollFrame: null
+    }, dragSelectionAnchor(scroller, event));
+  });
+
+  list.addEventListener('click', function(event) {
+    if (!suppressLibrarySelectionClick) return;
+    suppressLibrarySelectionClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  document.addEventListener('pointermove', function(event) {
+    var state = libraryDragSelection;
+    if (!state || event.pointerId !== state.pointerId) return;
+    state.pointerX = event.clientX;
+    state.pointerY = event.clientY;
+    var distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+    if (!state.started && distance < 6) return;
+    if (!state.started) {
+      state.started = true;
+      state.marquee = document.createElement('div');
+      state.marquee.className = 'library-selection-marquee';
+      document.body.appendChild(state.marquee);
+      list.classList.add('is-drag-selecting');
+      try { list.setPointerCapture(event.pointerId); } catch (e) {}
+      var selection = window.getSelection && window.getSelection();
+      if (selection) selection.removeAllRanges();
+    }
+    event.preventDefault();
+    updateLibraryDragSelection();
+    runDragSelectionAutoScroll(state, updateLibraryDragSelection);
+  }, {passive:false});
+
+  function finishLibraryDragSelection(event) {
+    var state = libraryDragSelection;
+    if (!state || event.pointerId !== state.pointerId) return;
+    stopDragSelectionAutoScroll(state);
+    libraryDragSelection = null;
+    list.classList.remove('is-drag-selecting');
+    list.querySelectorAll('.library-entry.is-drag-target').forEach(function(entry) {
+      entry.classList.remove('is-drag-target');
+    });
+    if (state.marquee) state.marquee.remove();
+    try { list.releasePointerCapture(event.pointerId); } catch (e) {}
+    if (state.started) {
+      suppressLibrarySelectionClick = true;
+      setTimeout(function() { suppressLibrarySelectionClick = false; }, 0);
+    }
+    syncLibraryDeleteSelectionUI();
+  }
+
+  document.addEventListener('pointerup', finishLibraryDragSelection);
+  document.addEventListener('pointercancel', finishLibraryDragSelection);
+}
+
+function scanScrollContainer() {
+  return document.querySelector('#page-import .import-content');
+}
+
+function updateScanDragSelection() {
+  var state = scanDragSelection;
+  if (!state || !state.started) return;
+  var box = dragSelectionBox(state);
+  paintDragSelectionMarquee(state, box);
+
+  var hitInputs = [];
+  document.querySelectorAll('#scan-results .scan-row').forEach(function(item) {
+    var input = item.querySelector('.scan-check');
+    var hit = !!input && dragSelectionHits(item, box, state.scroller);
+    item.classList.toggle('is-drag-target', hit);
+    if (hit) hitInputs.push(input);
+  });
+
+  state.initial.forEach(function(wasChecked, item) { item.checked = wasChecked; });
+  var checkedCount = Array.from(state.initial.values()).filter(Boolean).length;
+  var blockedByLimit = false;
+  hitInputs.forEach(function(item) {
+    if (!state.targetChecked) {
+      item.checked = false;
+    } else if (!item.checked && checkedCount < SCAN_IMPORT_BATCH_LIMIT) {
+      item.checked = true;
+      checkedCount += 1;
+    } else if (!item.checked) {
+      blockedByLimit = true;
+    }
+  });
+  if (blockedByLimit && !state.limitShown) {
+    state.limitShown = true;
+    showToast('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；请先提交当前批次，剩余文件会保留到下一批');
+  }
+  updateScanImportButton();
+}
+
 function setupScanResultDragSelection() {
   var results = document.getElementById('scan-results');
   if (!results || results.dataset.dragSelectionReady === '1') return;
@@ -3724,17 +4327,24 @@ function setupScanResultDragSelection() {
     var row = event.target.closest('.scan-row');
     var input = row && row.querySelector('.scan-check');
     if (!input) return;
+    var scroller = scanScrollContainer();
+    if (!scroller) return;
     var inputs = Array.from(results.querySelectorAll('.scan-check'));
-    scanDragSelection = {
+    scanDragSelection = Object.assign({
       pointerId: event.pointerId,
+      scroller: scroller,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
       targetChecked: !input.checked,
       initial: new Map(inputs.map(function(item) { return [item, item.checked]; })),
+      active: true,
       started: false,
       marquee: null,
+      autoScrollFrame: null,
       limitShown: false
-    };
+    }, dragSelectionAnchor(scroller, event));
   });
 
   results.addEventListener('click', function(event) {
@@ -3747,6 +4357,8 @@ function setupScanResultDragSelection() {
   document.addEventListener('pointermove', function(event) {
     var state = scanDragSelection;
     if (!state || event.pointerId !== state.pointerId) return;
+    state.pointerX = event.clientX;
+    state.pointerY = event.clientY;
     var distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
     if (!state.started && distance < 6) return;
     if (!state.started) {
@@ -3760,48 +4372,14 @@ function setupScanResultDragSelection() {
       if (selection) selection.removeAllRanges();
     }
     event.preventDefault();
-
-    var left = Math.min(state.startX, event.clientX);
-    var top = Math.min(state.startY, event.clientY);
-    var right = Math.max(state.startX, event.clientX);
-    var bottom = Math.max(state.startY, event.clientY);
-    state.marquee.style.left = left + 'px';
-    state.marquee.style.top = top + 'px';
-    state.marquee.style.width = (right - left) + 'px';
-    state.marquee.style.height = (bottom - top) + 'px';
-
-    var hitInputs = [];
-    results.querySelectorAll('.scan-row').forEach(function(item) {
-      var box = item.querySelector('.scan-check');
-      var rect = item.getBoundingClientRect();
-      var hit = !!box && rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom;
-      item.classList.toggle('is-drag-target', hit);
-      if (hit) hitInputs.push(box);
-    });
-
-    state.initial.forEach(function(wasChecked, item) { item.checked = wasChecked; });
-    var checkedCount = Array.from(state.initial.values()).filter(Boolean).length;
-    var blockedByLimit = false;
-    hitInputs.forEach(function(item) {
-      if (!state.targetChecked) {
-        item.checked = false;
-      } else if (!item.checked && checkedCount < SCAN_IMPORT_BATCH_LIMIT) {
-        item.checked = true;
-        checkedCount += 1;
-      } else if (!item.checked) {
-        blockedByLimit = true;
-      }
-    });
-    if (blockedByLimit && !state.limitShown) {
-      state.limitShown = true;
-      showToast('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；请先提交当前批次，剩余文件会保留到下一批');
-    }
-    updateScanImportButton();
+    updateScanDragSelection();
+    runDragSelectionAutoScroll(state, updateScanDragSelection);
   }, {passive: false});
 
   function finishScanDragSelection(event) {
     var state = scanDragSelection;
     if (!state || event.pointerId !== state.pointerId) return;
+    stopDragSelectionAutoScroll(state);
     scanDragSelection = null;
     results.classList.remove('is-drag-selecting');
     results.querySelectorAll('.scan-row.is-drag-target').forEach(function(item) {
@@ -3985,7 +4563,7 @@ function renderImportQueue() {
     var retryHTML = '';
     if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
-        + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '从断点继续') + '</button>';
+        + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
       if (q.status === 'error' && q.canRetryVision) {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
           + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>';
@@ -4011,6 +4589,41 @@ function renderImportQueue() {
       + retryHTML
       + '</div>';
   }).join('');
+  syncResumeAllButton();
+}
+
+// 队列里可继续的任务多于一个时，才值得给一个「全部继续导入」的批量入口。
+function resumableImportQueue() {
+  return importQueue.filter(function(item) {
+    return item.jobId && item.canResume
+      && (item.status === 'paused' || item.status === 'error');
+  });
+}
+
+function syncResumeAllButton() {
+  var button = document.getElementById('import-resume-all-btn');
+  if (!button) return;
+  var count = resumableImportQueue().length;
+  button.style.display = count > 1 ? 'inline-flex' : 'none';
+  button.textContent = '全部继续导入（' + count + '）';
+}
+
+async function resumeAllImports() {
+  var pending = resumableImportQueue();
+  if (!pending.length) return;
+  var button = document.getElementById('import-resume-all-btn');
+  // 只要有一个联网解析任务，就用一次汇总确认代替逐个弹窗。
+  var hasPaidRoute = pending.some(function(item) {
+    return item.failureStage !== 'index' && item.type === 'pdf' && item.route !== 'native';
+  });
+  if (hasPaidRoute && !confirm('将从上次断点继续 ' + pending.length + ' 个任务，其中包含需要联网解析的文献，未完成部分可能产生费用。继续吗？')) return;
+  if (button) { button.disabled = true; button.textContent = '正在继续…'; }
+  for (var index = 0; index < pending.length; index += 1) {
+    // 串行发起，避免同时唤起多个解析任务把本地或额度打满。
+    await resumeImport(pending[index].id, {silent: true, skipConfirm: true});
+  }
+  if (button) button.disabled = false;
+  syncResumeAllButton();
 }
 
 async function removeImport(id) {
@@ -4098,8 +4711,7 @@ function pollImportJob(id) {
       if (data.status === 'completed') {
         q.status = 'done';
         q.message = data.message || '导入完成，已自动更新索引';
-        libLoaded = false;
-        searchDocumentsLoaded = false;
+        invalidateLibraryCatalog();
         ensureSearchDocuments(true).then(updateSearchDocumentLabel);
       } else if (data.status === 'failed') {
         q.status = 'error';
@@ -4113,7 +4725,7 @@ function pollImportJob(id) {
       } else if (data.status === 'paused') {
         q.status = 'paused';
         q.canResume = !!data.can_resume;
-        q.message = data.message || '上次导入已暂停，可从断点继续';
+        q.message = data.message || '上次导入已暂停，可继续导入';
       }
       renderImportQueue();
       if (q.status === 'processing') setTimeout(function() { pollImportJob(id); }, 2500);
@@ -4145,7 +4757,7 @@ async function loadResumableImports() {
         providerId: job.provider_id || null,
         providerName: job.provider_name || null,
         detectedType: job.detected_pdf_type || null,
-        message: job.message || (isPaused ? '上次导入已暂停，可从断点继续' : '上次导入未完成'),
+        message: job.message || (isPaused ? '上次导入已暂停，可继续导入' : '上次导入未完成'),
         failureStage: job.failure_stage || null,
         canResume: !!job.can_resume,
         canRetryVision: !!job.can_retry_with_provider,
@@ -4161,11 +4773,12 @@ async function loadResumableImports() {
   }
 }
 
-async function resumeImport(id) {
+async function resumeImport(id, options) {
+  options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || !q.canResume) return;
   var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
-  if (q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
+  if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
       && !confirm('将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用。继续吗？')) return;
   try {
     var resp = await fetch('/api/import-resume', {
@@ -4179,11 +4792,11 @@ async function resumeImport(id) {
     q.canResume = false;
     q.message = q.failureStage === 'index'
       ? '正在重新建立索引，不会再次调用解析 API…'
-      : '正在从上次断点继续…';
+      : '正在继续导入…';
     renderImportQueue();
     pollImportJob(q.id);
   } catch (e) {
-    showToast('继续导入失败：' + e.message);
+    showToast((options.silent ? esc(q.name) + '：' : '') + '继续导入失败：' + e.message);
   }
 }
 
@@ -4285,14 +4898,16 @@ document.addEventListener('click', function(event) {
 })();
 configureDesktopPlatformOptions();
 setupScanDirectoryControls();
+setupLibraryDragSelection();
 setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
 loadResumableImports();
 syncLibraryViewButtons();
+// 文献库只在用户展开文献下拉或进入文献库页时才读取：启动时不预取整库。
 renderSearchDocumentOptions();
-ensureSearchDocuments().then(function() { renderSearchDocumentOptions(); updateSearchDocumentLabel(); });
+updateSearchDocumentLabel();
 initDropZone();
 const requestedInitialPage = new URLSearchParams(window.location.search).get('page');
 const initialPage = requestedInitialPage === 'calibration' ? 'library' : requestedInitialPage;

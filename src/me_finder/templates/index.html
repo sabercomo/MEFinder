@@ -201,6 +201,12 @@
           </div>
           <div class="library-toolbar-right">
             <button class="action-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
+            <button class="action-btn library-delete-mode-btn" type="button" id="library-delete-mode-btn" aria-pressed="false" onclick="toggleLibraryDeleteMode()">选择删除</button>
+            <div class="library-selection-actions" id="library-selection-actions" aria-live="polite">
+              <span class="library-selection-count" id="library-selection-count">已选 0</span>
+              <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
+              <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
+            </div>
             <div class="view-switch" role="group" aria-label="文献库显示方式">
               <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
               <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
@@ -362,7 +368,10 @@
           <div id="scan-results"></div>
         </div>
         <div class="import-queue" id="import-queue" style="display:none">
-          <div class="import-queue-title">导入队列</div>
+          <div class="import-queue-head">
+            <div class="import-queue-title">导入队列</div>
+            <button class="action-btn primary import-queue-resume-all" type="button" id="import-resume-all-btn" style="display:none" onclick="resumeAllImports()">全部继续导入</button>
+          </div>
           <div id="import-items"></div>
         </div>
       </div>
@@ -673,7 +682,7 @@
   </div><!-- /main-area -->
 </div><!-- /app-shell -->
 
-<div id="toast" class="toast"></div>
+<div id="toast-stack" class="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">
   <div class="remove-modal" role="dialog" aria-modal="true" aria-labelledby="remove-modal-title">
     <div class="remove-modal-title" id="remove-modal-title">从文献库移除？</div>

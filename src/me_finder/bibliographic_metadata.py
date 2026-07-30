@@ -55,6 +55,37 @@ PUBLISHER_ALIASES = {
     "CHINA CITIC PRESS": "中信出版社",
     "SDX Joint Publishing Company": "生活·读书·新知三联书店",
 }
+MARX_ENGELS_FIRST_EDITION_YEARS = {
+    1: "1956", 2: "1957", 3: "1960", 4: "1958", 5: "1958",
+    6: "1961", 7: "1959", 8: "1961", 9: "1961", 10: "1962",
+    11: "1962", 12: "1962", 13: "1962", 14: "1964", 15: "1963",
+    16: "1964", 17: "1963", 18: "1964", 19: "1963", 20: "1971",
+    21: "1965", 22: "1965", 23: "1972", 24: "1972", 25: "1974",
+    27: "1972", 28: "1973", 29: "1972", 30: "1975", 31: "1972",
+    32: "1975", 33: "1973", 34: "1972", 35: "1971", 36: "1974",
+    37: "1971", 38: "1972", 39: "1974", 40: "1982", 41: "1982",
+    42: "1979", 43: "1982", 44: "1982", 45: "1985", 47: "1979",
+    48: "1985", 49: "1982", 50: "1985",
+}
+MARX_ENGELS_FIRST_EDITION_PART_YEARS = {
+    (26, "一"): "1972",
+    (26, "二"): "1973",
+    (26, "三"): "1974",
+    (46, "上"): "1979",
+    (46, "下"): "1980",
+}
+# 《马克思恩格斯全集》中文第二版逐卷出版年份，由用户提供。
+# 第二版仍在陆续出版，表中没有的卷次一律不给年份，不做任何推断。
+MARX_ENGELS_SECOND_EDITION_YEARS = {
+    1: "1995", 2: "2005", 3: "2002", 10: "1998", 11: "1995",
+    12: "1998", 13: "1998", 14: "2013", 16: "2007", 19: "2006",
+    21: "2003", 25: "2001", 26: "2014", 28: "2018", 29: "2021",
+    30: "1995", 31: "1998", 32: "1998", 33: "2004", 34: "2008",
+    35: "2013", 36: "2015", 37: "2019", 38: "2019", 42: "2016",
+    43: "2016", 44: "2001", 45: "2003", 46: "2003", 47: "2004",
+    48: "2007", 49: "2016", 50: "2022",
+}
+_CHINESE_DIGITS = "零一二三四五六七八九"
 MIN_AUTO_CONFIDENCE = {
     "title": 0.9,
     "author": 0.88,
@@ -113,6 +144,133 @@ def invalid_metadata_fields(metadata: Mapping[str, object]) -> List[str]:
     ]
 
 
+def marx_engels_first_edition_metadata(file_name: object) -> Dict[str, str]:
+    """Return trusted catalog defaults for Chinese first-edition全集 scans."""
+
+    stem = Path(str(file_name or "")).stem.strip()
+    normalized = unicodedata.normalize("NFKC", stem)
+    match = re.fullmatch(
+        r"\s*《?\s*(?:马克思恩格斯|马恩)全集\s*》?\s*"
+        r"第\s*0*(?P<volume>\d{1,2})\s*卷"
+        r"(?:\s*\(?\s*(?P<part>上|中|下|一|二|三|1|2|3|上册|中册|下册|第一册|第二册|第三册)\s*\)?)?\s*",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return {}
+    volume = int(match.group("volume"))
+    if not 1 <= volume <= 50:
+        return {}
+    part_aliases = {
+        "1": "一", "2": "二", "3": "三",
+        "第一册": "一", "第二册": "二", "第三册": "三",
+        "上册": "上", "中": "二", "中册": "二", "下册": "下",
+    }
+    part = part_aliases.get(str(match.group("part") or ""), str(match.group("part") or ""))
+    allowed_parts = {
+        1: {"上", "下"},
+        14: {"上", "下"},
+        25: {"上", "下"},
+        26: {"一", "二", "三"},
+        28: {"上", "下"},
+        30: {"上", "下"},
+        31: {"上", "下"},
+        39: {"上", "下"},
+        46: {"上", "下"},
+    }
+    if part and part not in allowed_parts.get(volume, set()):
+        return {}
+    year = MARX_ENGELS_FIRST_EDITION_PART_YEARS.get(
+        (volume, part), MARX_ENGELS_FIRST_EDITION_YEARS.get(volume)
+    )
+    if not year:
+        return {}
+    part_labels = {"一": "第一册", "二": "第二册", "三": "第三册", "上": "上册", "下": "下册"}
+    volume_label = (
+        f"{volume}卷{part_labels[part]}"
+        if part and volume in {26, 46}
+        else str(volume)
+    )
+    return {
+        "title": stem,
+        "author": "马克思、恩格斯",
+        "publisher": "人民出版社",
+        "publish_place": "北京",
+        "publish_year": year,
+        "volume": volume_label,
+        "document_type": "book",
+    }
+
+
+def _chinese_volume_numeral(volume: int) -> str:
+    """Render 1–50 the way the volume title pages do (三十一, not 31)."""
+
+    if volume < 10:
+        return _CHINESE_DIGITS[volume]
+    tens, ones = divmod(volume, 10)
+    prefix = "十" if tens == 1 else f"{_CHINESE_DIGITS[tens]}十"
+    return prefix + (_CHINESE_DIGITS[ones] if ones else "")
+
+
+def marx_engels_second_edition_metadata(file_name: object) -> Dict[str, str]:
+    """Return catalog defaults for Chinese second-edition全集 scans.
+
+    The user's second-edition scans are named ``me2-<volume>``; that naming is
+    a deterministic signal, unlike the OCR title which lands on some volumes
+    and not others. Volumes the second edition has not published yet carry no
+    year here — the card must show the year as missing rather than borrow one.
+    """
+
+    stem = Path(str(file_name or "")).stem.strip()
+    normalized = unicodedata.normalize("NFKC", stem)
+    match = re.fullmatch(
+        r"\s*me2\s*[-_ ]\s*0*(?P<volume>\d{1,2})\s*",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return {}
+    volume = int(match.group("volume"))
+    if not 1 <= volume <= 50:
+        return {}
+    defaults = {
+        "title": f"马克思恩格斯全集第{_chinese_volume_numeral(volume)}卷",
+        "author": "马克思、恩格斯",
+        "publisher": "人民出版社",
+        "publish_place": "北京",
+        "volume": str(volume),
+        "document_type": "book",
+    }
+    year = MARX_ENGELS_SECOND_EDITION_YEARS.get(volume)
+    if year:
+        defaults["publish_year"] = year
+    return defaults
+
+
+def marx_engels_collection_metadata(file_name: object) -> Tuple[Dict[str, str], str]:
+    """Return ``(defaults, rule)`` for whichever全集 edition the name matches."""
+
+    defaults = marx_engels_first_edition_metadata(file_name)
+    if defaults:
+        return defaults, "marx_engels_chinese_first_edition"
+    defaults = marx_engels_second_edition_metadata(file_name)
+    if defaults:
+        return defaults, "marx_engels_chinese_second_edition"
+    return {}, ""
+
+
+def _looks_like_pdf_file_label(value: object) -> bool:
+    """Return true for an embedded PDF title that is only a file name.
+
+    Scanner-produced books often carry an internal title such as ``K93.pdf``
+    even after the actual file has been renamed to a useful catalog title.
+    Such a value is provenance, not bibliographic metadata.
+    """
+
+    text = str(value or "").strip()
+    return bool(text and Path(text).name == text and Path(text).suffix.casefold() == ".pdf")
+
+
 def detect_pdf_bibliographic_metadata(
     path: Path,
     pages: Sequence[Mapping[str, object]],
@@ -124,6 +282,7 @@ def detect_pdf_bibliographic_metadata(
 ) -> Dict[str, object]:
     """Detect front-matter metadata while preserving user-maintained values."""
 
+    path = Path(path)
     existing = dict(existing or {})
     if existing.get("metadata_source") == "manual" and not force:
         return _canonical_metadata(existing)
@@ -132,21 +291,69 @@ def detect_pdf_bibliographic_metadata(
     confidence: Dict[str, object] = {}
     rejected_evidence: Dict[str, object] = {}
 
+    collection_defaults, collection_rule = marx_engels_collection_metadata(path.name)
+    for field, value in collection_defaults.items():
+        if field == "document_type":
+            result[field] = value
+            continue
+        result[field] = value
+        evidence[field] = {
+            "source": "collection_rule",
+            "source_page": None,
+            "evidence_text": path.name,
+            "rule": collection_rule,
+            "confidence": 1.0,
+        }
+        confidence[field] = 1.0
+
+    if _looks_like_pdf_file_label(result.get("title")):
+        rejected_evidence["title"] = {
+            "source": "existing_metadata",
+            "evidence_text": result.get("title"),
+            "reason": "pdf_file_name_is_not_a_title",
+        }
+        fallback_title = path.stem.strip()
+        result["title"] = fallback_title if is_valid_bibliographic_value(fallback_title) else None
+        if result.get("title"):
+            evidence["title"] = {
+                "source": "file_name",
+                "source_page": None,
+                "evidence_text": path.name,
+                "rule": "reject_embedded_pdf_file_name",
+                "confidence": 0.99,
+            }
+            confidence["title"] = 0.99
+
     # Import configuration and old automatic results may contain a lossy PDF
     # metadata name such as "乔纳森?克拉里".  Do not let that block a clean
     # title-page or copyright-page candidate.
     for field in ("author", "translator"):
-        if _has_suspicious_person_punctuation(result.get(field)):
+        person_value = result.get(field)
+        if person_value and (
+            _has_suspicious_person_punctuation(person_value)
+            or not _is_plausible_person_name(str(person_value))
+        ):
             rejected_evidence[field] = {
                 "source": "existing_metadata",
-                "evidence_text": result.get(field),
-                "reason": "suspicious_person_punctuation",
+                "evidence_text": person_value,
+                "reason": (
+                    "suspicious_person_punctuation"
+                    if _has_suspicious_person_punctuation(person_value)
+                    else "artifact_person_name"
+                ),
             }
             result[field] = None
 
-    embedded = _embedded_pdf_metadata(Path(path))
+    embedded = _embedded_pdf_metadata(path)
     for field in ("title", "author"):
         embedded_value = embedded.get(field)
+        if field == "title" and _looks_like_pdf_file_label(embedded_value):
+            rejected_evidence[field] = {
+                "source": "pdf_metadata",
+                "evidence_text": embedded_value,
+                "reason": "pdf_file_name_is_not_a_title",
+            }
+            continue
         if field == "author" and _has_suspicious_person_punctuation(embedded_value):
             rejected_evidence[field] = {
                 "source": "pdf_metadata",
@@ -165,8 +372,8 @@ def detect_pdf_bibliographic_metadata(
             field == "title"
             and embedded_value
             and result.get(field)
-            and Path(path).exists()
-            and str(result.get(field)).strip() == Path(path).stem.strip()
+            and path.exists()
+            and str(result.get(field)).strip() == path.stem.strip()
         )
         if (not result.get(field) or replace_filename_title) and embedded_value:
             result[field] = embedded_value
@@ -244,14 +451,18 @@ def detect_pdf_bibliographic_metadata(
             and _compact_value_key(str(result.get(field))) == _compact_value_key(str(value))
         )
         should_replace = (
-            force
+            (force and current_source != "collection_rule")
             or not is_valid_bibliographic_value(result.get(field))
             or current_source == "pdf_metadata"
             or (field in {"author", "translator"} and _has_suspicious_person_punctuation(result.get(field)))
             # 既有值没有经过人工确认（manual 已在入口提前返回）：来自导入配置
             # 或旧的自动识别。版权页/CIP 级别的高置信度检测应当覆盖它们，
             # 否则错误的初始配置永远无法被自动识别纠正。
-            or (not same_value_modulo_case and detected_confidence.get(field, 0.0) >= 0.95)
+            or (
+                not same_value_modulo_case
+                and current_source not in {"file_name", "file_name_repair", "collection_rule"}
+                and detected_confidence.get(field, 0.0) >= 0.95
+            )
         )
         if (value == result.get(field) or same_value_modulo_case) and not current_evidence:
             evidence[field] = detected_evidence[field]
@@ -1140,7 +1351,7 @@ def _reconcile_fused_people(ocr_value: str, filename_parts: Sequence[str]) -> Op
 _ARTIFACT_AUTHOR_NAMES = {
     "cnki", "中国知网", "知网", "superstar", "超星", "adobe", "acrobat",
     "microsoft", "word", "wps", "office", "unknown", "admin", "administrator",
-    "user", "pdf", "epub", "z-library", "zlibrary",
+    "user", "pdf", "epub", "z-library", "zlibrary", "kdc",
 }
 
 

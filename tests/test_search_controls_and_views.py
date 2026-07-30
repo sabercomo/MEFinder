@@ -110,6 +110,18 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("下一批 ' + nextBatchCount + ' 个已自动勾选", HTML)
         self.assertIn("个未导入：", HTML)
         self.assertIn("if (submittedPaths.has(entry.path)) entry.status = 'processing'", HTML)
+        # 扫描结果的拖动框选与文献库共用同一套内容坐标/边缘滚动实现，
+        # 否则一次同样只能选中屏幕里放得下的那几行。
+        self.assertIn("function scanScrollContainer()", HTML)
+        self.assertIn("function updateScanDragSelection()", HTML)
+        self.assertIn("}, dragSelectionAnchor(scroller, event));", HTML)
+        self.assertIn("runDragSelectionAutoScroll(state, updateScanDragSelection);", HTML)
+        self.assertIn("dragSelectionHits(item, box, state.scroller)", HTML)
+        self.assertNotIn(
+            "var hit = !!box && rect.right >= left && rect.left <= right "
+            "&& rect.bottom >= top && rect.top <= bottom;",
+            HTML,
+        )
         self.assertNotIn("failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });\n    await runDirectoryScan();", HTML)
 
     def test_optional_vision_api_and_mineru_fallback_are_wired(self) -> None:
@@ -253,7 +265,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="document-filter-query"', HTML)
         self.assertIn('function renderSearchDocumentOptions()', HTML)
         self.assertIn('function selectSearchDocument(event, sourceId)', HTML)
-        self.assertIn("var response = await fetch('/api/library')", HTML)
+        self.assertIn("fetch('/api/library?view=summary')", HTML)
         self.assertIn("searchSourceFiles = data.items || []", HTML)
         self.assertNotIn("fetch('/api/sources')", HTML)
         self.assertIn("var bib = source.bibliographic || source.bibliographic_metadata || {}", HTML)

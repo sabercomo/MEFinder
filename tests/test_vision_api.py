@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import unittest
+from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -582,7 +583,9 @@ class VisionAPIParserTests(unittest.TestCase):
                 {"pdf_import_runs": [import_run]},
                 database_path,
             )
-            with sqlite3.connect(str(database_path)) as connection:
+            # sqlite3's context manager does not close the underlying handle;
+            # explicitly close it so Windows can clean up TemporaryDirectory.
+            with closing(sqlite3.connect(str(database_path))) as connection:
                 payload_json = connection.execute(
                     "SELECT payload_json FROM pdf_import_runs"
                 ).fetchone()[0]
