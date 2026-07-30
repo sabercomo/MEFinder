@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
 import sqlite3
+import threading
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Sequence
 
@@ -32,6 +35,11 @@ from .vision_api import (
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
+
+# PDF imports can finish on multiple worker threads.  Keep each config
+# read-modify-write transaction together; a re-entrant lock lets the public
+# helpers call ``load_import_config``/``save_import_config`` while holding it.
+_IMPORT_CONFIG_LOCK = threading.RLock()
 
 
 # Directory bundles that hold a user's media library rather than documents.
@@ -191,22 +199,284 @@ def copy_local_document(root: Path, source_path: Path) -> Path:
     return target
 
 
+def _is_blank_config_value(value: object) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _merge_missing_config_values(
+    target: Dict[str, object],
+    incoming: Mapping[str, object],
+) -> None:
+    """Fill metadata gaps without replacing an existing user's choices."""
+
+    for key, value in incoming.items():
+        if key in {
+            "source_file_id",
+            "document_id",
+            "file_name",
+            "enabled",
+            "mineru",
+            "parser_results",
+        }:
+            continue
+        current = target.get(key)
+        if isinstance(current, dict) and isinstance(value, Mapping):
+            _merge_missing_config_values(current, value)
+        elif key not in target or _is_blank_config_value(current):
+            target[key] = copy.deepcopy(value)
+
+
+def _configured_pdf_path(config_path: Path, document: Mapping[str, object]) -> Optional[Path]:
+    file_name = str(document.get("file_name") or "").strip()
+    if not file_name:
+        return None
+    candidate = Path(file_name)
+    if candidate.is_absolute():
+        return candidate
+    # The supported layout is <root>/config/pdf_imports.json.  Inferring the
+    # corpus here lets an old duplicate whose first file disappeared fall back
+    # to another still-existing copy without deleting either path.
+    return config_path.parent.parent / "corpus" / "raw_pdf" / candidate
+
+
+def _manifest_path(
+    config_path: Path,
+    parser_result: Mapping[str, object],
+) -> Optional[Path]:
+    resume = parser_result.get("resume")
+    resume_path = resume.get("manifest_path") if isinstance(resume, Mapping) else None
+    raw_path = parser_result.get("manifest") or resume_path
+    if not raw_path:
+        return None
+    candidate = Path(str(raw_path))
+    if candidate.is_absolute():
+        return candidate
+    return config_path.parent.parent / candidate
+
+
+def _progress_count(
+    primary: Mapping[str, object],
+    fallback: Mapping[str, object],
+    count_key: str,
+    pages_key: str,
+) -> int:
+    raw_count = primary.get(count_key)
+    if raw_count is None or raw_count == "":
+        raw_count = fallback.get(count_key)
+    try:
+        explicit_count = int(raw_count or 0)
+    except (TypeError, ValueError):
+        explicit_count = 0
+    raw_pages = primary.get(pages_key)
+    if raw_pages is None:
+        raw_pages = fallback.get(pages_key)
+    page_count = len(raw_pages) if isinstance(raw_pages, list) else 0
+    return max(0, explicit_count, page_count)
+
+
+def _progress_timestamp(
+    primary: Mapping[str, object],
+    fallback: Mapping[str, object],
+) -> float:
+    value = next(
+        (
+            item
+            for item in (
+                primary.get("last_updated"),
+                primary.get("updated_at"),
+                primary.get("completed_at"),
+                fallback.get("last_updated"),
+                fallback.get("updated_at"),
+                fallback.get("completed_at"),
+            )
+            if item is not None and item != ""
+        ),
+        None,
+    )
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str):
+        return 0.0
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _parser_result_score(
+    config_path: Path,
+    parser_result: Mapping[str, object],
+) -> tuple:
+    """Rank legacy parser results by whether they can actually be resumed/read."""
+
+    resume = parser_result.get("resume")
+    fallback = resume if isinstance(resume, Mapping) else {}
+    manifest_path = _manifest_path(config_path, parser_result)
+    manifest: Mapping[str, object] = {}
+    manifest_usable = False
+    if manifest_path is not None and manifest_path.is_file():
+        try:
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict):
+            manifest = loaded
+            manifest_usable = True
+
+    completed = _progress_count(
+        manifest,
+        fallback,
+        "completed_page_count",
+        "completed_pages",
+    )
+    failed = _progress_count(
+        manifest,
+        fallback,
+        "failed_page_count",
+        "failed_pages",
+    )
+    status = str(manifest.get("status") or fallback.get("status") or "").lower()
+    status_rank = {
+        "completed": 3,
+        "reused_completed": 3,
+        "processing": 2,
+        "pending": 1,
+        "failed": 0,
+    }.get(status, 0)
+    try:
+        total = max(
+            0,
+            int(manifest.get("total_pages") or fallback.get("total_pages") or 0),
+        )
+    except (TypeError, ValueError):
+        total = 0
+    completion_ratio = completed / total if total else 0.0
+    return (
+        int(manifest_usable),
+        completed,
+        -failed,
+        status_rank,
+        completion_ratio,
+        _progress_timestamp(manifest, fallback),
+    )
+
+
+def _select_best_parser_result(
+    canonical: Dict[str, object],
+    duplicate: Mapping[str, object],
+    config_path: Path,
+) -> None:
+    candidates = []
+    for document in (canonical, duplicate):
+        for key in ("mineru", "parser_results"):
+            value = document.get(key)
+            if isinstance(value, Mapping) and value:
+                candidates.append(
+                    (
+                        _parser_result_score(config_path, value),
+                        key,
+                        value,
+                    )
+                )
+    canonical.pop("mineru", None)
+    canonical.pop("parser_results", None)
+    if not candidates:
+        return
+    # ``max`` keeps the first candidate on a complete tie, preserving the
+    # canonical record while allowing a demonstrably better retry to replace it.
+    _, selected_key, selected_value = max(candidates, key=lambda item: item[0])
+    canonical[selected_key] = copy.deepcopy(selected_value)
+
+
+def _merge_duplicate_document(
+    canonical: Dict[str, object],
+    duplicate: Mapping[str, object],
+    config_path: Path,
+) -> None:
+    canonical_path = _configured_pdf_path(config_path, canonical)
+    duplicate_path = _configured_pdf_path(config_path, duplicate)
+    if (
+        (canonical_path is None or not canonical_path.is_file())
+        and duplicate_path is not None
+        and duplicate_path.is_file()
+    ):
+        canonical["file_name"] = duplicate.get("file_name")
+    canonical["enabled"] = bool(canonical.get("enabled", True)) or bool(
+        duplicate.get("enabled", True)
+    )
+    _select_best_parser_result(canonical, duplicate, config_path)
+    _merge_missing_config_values(canonical, duplicate)
+
+
+def _normalize_import_config(
+    path: Path,
+    data: Dict[str, object],
+) -> Dict[str, object]:
+    """Return a copy with legacy duplicate content IDs collapsed.
+
+    Old releases could register the same PDF again after renaming its copied
+    file.  Both records then shared a content-derived ``source_file_id`` and
+    made SQLite reject the full rebuild.  Keep the first usable record as the
+    canonical one and merge missing metadata from later records.  No PDF file
+    is removed by this repair.
+    """
+
+    normalized = copy.deepcopy(data)
+    raw_documents = normalized.get("documents")
+    if not isinstance(raw_documents, list):
+        normalized["documents"] = []
+        return normalized
+
+    documents: List[Dict[str, object]] = []
+    by_source_id: Dict[str, Dict[str, object]] = {}
+    for raw_document in raw_documents:
+        if not isinstance(raw_document, dict):
+            continue
+        source_file_id = str(raw_document.get("source_file_id") or "").strip()
+        if source_file_id:
+            raw_document["source_file_id"] = source_file_id
+            canonical = by_source_id.get(source_file_id)
+            if canonical is not None:
+                _merge_duplicate_document(canonical, raw_document, path)
+                continue
+            by_source_id[source_file_id] = raw_document
+        documents.append(raw_document)
+    normalized["documents"] = documents
+    return normalized
+
+
 def load_import_config(path: Path) -> Dict[str, object]:
-    if not path.exists():
-        return {"documents": []}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise MinerUError("PDF 导入配置必须是 JSON 对象。")
-    if not isinstance(data.get("documents"), list):
-        data["documents"] = []
-    return data
+    path = Path(path)
+    with _IMPORT_CONFIG_LOCK:
+        if not path.exists():
+            return {"documents": []}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise MinerUError("PDF 导入配置必须是 JSON 对象。")
+        return _normalize_import_config(path, data)
 
 
 def save_import_config(path: Path, data: Dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(f".{path.name}.tmp")
-    temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temp_path.replace(path)
+    """Atomically save a normalized config without sharing a temp filename."""
+
+    path = Path(path)
+    with _IMPORT_CONFIG_LOCK:
+        normalized = _normalize_import_config(path, data)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            with temp_path.open("w", encoding="utf-8") as stream:
+                stream.write(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            temp_path.replace(path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
 
 
 def register_pdf(root: Path, pdf_path: Path, config_path: Optional[Path] = None) -> Dict[str, object]:
@@ -215,46 +485,86 @@ def register_pdf(root: Path, pdf_path: Path, config_path: Optional[Path] = None)
     root = Path(root)
     pdf_path = Path(pdf_path)
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
-    data = load_import_config(config_path)
-    documents = data["documents"]
-    existing = next((item for item in documents if item.get("file_name") == pdf_path.name), None)
-    if existing is None:
-        source_file_id = f"pdf-import-{file_sha256(pdf_path)[:16]}"
-        existing = {
-            "enabled": True,
-            "source_file_id": source_file_id,
-            "document_id": source_file_id.upper().replace("-", "_"),
-            "file_name": pdf_path.name,
-            "title": pdf_path.stem,
-            "author": None,
-            "page_mapping": {"validated_by": None, "segments": []},
-        }
-        documents.append(existing)
-    else:
-        existing["enabled"] = True
-    save_import_config(config_path, data)
-    return existing
+    source_file_id = f"pdf-import-{file_sha256(pdf_path)[:16]}"
+    with _IMPORT_CONFIG_LOCK:
+        data = load_import_config(config_path)
+        documents = data["documents"]
+        existing = next(
+            (
+                item
+                for item in documents
+                if item.get("source_file_id") == source_file_id
+            ),
+            None,
+        )
+        if existing is not None:
+            configured_path = _configured_pdf_path(config_path, existing)
+            if configured_path is None or not configured_path.is_file():
+                existing["file_name"] = pdf_path.name
+            existing["enabled"] = True
+            save_import_config(config_path, data)
+            return existing
+
+        existing = next(
+            (item for item in documents if item.get("file_name") == pdf_path.name),
+            None,
+        )
+        if existing is None:
+            existing = {
+                "enabled": True,
+                "source_file_id": source_file_id,
+                "document_id": source_file_id.upper().replace("-", "_"),
+                "file_name": pdf_path.name,
+                "title": pdf_path.stem,
+                "author": None,
+                "page_mapping": {"validated_by": None, "segments": []},
+            }
+            documents.append(existing)
+        else:
+            old_source_file_id = str(existing.get("source_file_id") or "")
+            existing["enabled"] = True
+            existing["source_file_id"] = source_file_id
+            existing["document_id"] = source_file_id.upper().replace("-", "_")
+            if old_source_file_id and old_source_file_id != source_file_id:
+                # The file at this exact configured path was replaced.  Parser
+                # output and page calibration belong to the old bytes.
+                existing.pop("mineru", None)
+                existing.pop("parser_results", None)
+                existing["page_mapping"] = {
+                    "validated_by": None,
+                    "segments": [],
+                }
+        save_import_config(config_path, data)
+        return existing
 
 
 def attach_mineru_manifest(root: Path, source_file_id: str, manifest_path: Path, config_path: Optional[Path] = None) -> None:
     root = Path(root)
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
-    data = load_import_config(config_path)
-    document = next((item for item in data["documents"] if item.get("source_file_id") == source_file_id), None)
-    if document is None:
-        raise MinerUError(f"PDF config not found: {source_file_id}")
     relative_manifest = Path(manifest_path)
     try:
         relative_manifest = relative_manifest.resolve().relative_to(root.resolve())
     except ValueError:
         pass
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8-sig"))
-    document["mineru"] = {
-        "manifest": relative_manifest.as_posix(),
-        "resume": resume_summary(manifest, manifest_path=relative_manifest),
-    }
-    document.pop("parser_results", None)
-    save_import_config(config_path, data)
+    with _IMPORT_CONFIG_LOCK:
+        data = load_import_config(config_path)
+        document = next(
+            (
+                item
+                for item in data["documents"]
+                if item.get("source_file_id") == source_file_id
+            ),
+            None,
+        )
+        if document is None:
+            raise MinerUError(f"PDF config not found: {source_file_id}")
+        document["mineru"] = {
+            "manifest": relative_manifest.as_posix(),
+            "resume": resume_summary(manifest, manifest_path=relative_manifest),
+        }
+        document.pop("parser_results", None)
+        save_import_config(config_path, data)
 
 
 def attach_parser_manifest(
@@ -271,33 +581,34 @@ def attach_parser_manifest(
 
     root = Path(root)
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
-    data = load_import_config(config_path)
-    document = next(
-        (
-            item
-            for item in data["documents"]
-            if item.get("source_file_id") == source_file_id
-        ),
-        None,
-    )
-    if document is None:
-        raise VisionAPIError(f"PDF config not found: {source_file_id}")
     relative_manifest = Path(manifest_path)
     try:
         relative_manifest = relative_manifest.resolve().relative_to(root.resolve())
     except ValueError:
         pass
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8-sig"))
-    document["parser_results"] = {
-        "manifest": relative_manifest.as_posix(),
-        "parser": "openai_compatible",
-        "provider_id": provider_id,
-        "provider_name": provider_name,
-        "model": model,
-        "resume": resume_summary(manifest, manifest_path=relative_manifest),
-    }
-    document.pop("mineru", None)
-    save_import_config(config_path, data)
+    with _IMPORT_CONFIG_LOCK:
+        data = load_import_config(config_path)
+        document = next(
+            (
+                item
+                for item in data["documents"]
+                if item.get("source_file_id") == source_file_id
+            ),
+            None,
+        )
+        if document is None:
+            raise VisionAPIError(f"PDF config not found: {source_file_id}")
+        document["parser_results"] = {
+            "manifest": relative_manifest.as_posix(),
+            "parser": "openai_compatible",
+            "provider_id": provider_id,
+            "provider_name": provider_name,
+            "model": model,
+            "resume": resume_summary(manifest, manifest_path=relative_manifest),
+        }
+        document.pop("mineru", None)
+        save_import_config(config_path, data)
 
 
 def _first_extract_result(result: Dict[str, object]) -> Dict[str, object]:
@@ -545,13 +856,20 @@ def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = No
         corpus_dir.mkdir(parents=True, exist_ok=True)
     if on_progress:
         on_progress({"phase": "rebuilding_index"})
+    # Persist the in-memory compatibility repair before the indexer reads this
+    # file directly.  This prevents legacy duplicate content IDs from reaching
+    # SQLite's source_files primary key.
+    pdf_config_path = root / "config" / "pdf_imports.json"
+    with _IMPORT_CONFIG_LOCK:
+        import_config = load_import_config(pdf_config_path)
+        save_import_config(pdf_config_path, import_config)
     return build_index(
         corpus_dir=corpus_dir,
         index_path=root / "data" / "index.json",
         database_path=root / "data" / "index.sqlite3",
         include_pdf=True,
         pdf_corpus_dir=root / "corpus" / "raw_pdf",
-        pdf_config_path=root / "config" / "pdf_imports.json",
+        pdf_config_path=pdf_config_path,
         parsed_pdf_dir=root / "corpus" / "parsed" / "pdf",
         backup_existing=True,
         root=root,

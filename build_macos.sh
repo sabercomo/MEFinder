@@ -90,6 +90,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_calibration_library_ui \
   tests.test_citations \
   tests.test_data_location \
+  tests.test_database_resilience \
   tests.test_desktop_portable \
   tests.test_directory_scan \
   tests.test_import_queue \
@@ -101,6 +102,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_macos_pdf_viewer \
   tests.test_platform_open \
   tests.test_pdf_match_anchors \
+  tests.test_pdf_import_config \
   tests.test_page_display \
   tests.test_runtime_page_mapping \
   tests.test_scan_directory_picker \

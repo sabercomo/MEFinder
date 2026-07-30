@@ -88,6 +88,8 @@ try {
         tests.test_anchor_metadata `
         tests.test_backup_service `
         tests.test_citations `
+        tests.test_database_resilience `
+        tests.test_pdf_import_config `
         tests.test_pdf_match_anchors `
         tests.test_page_display `
         tests.test_runtime_page_mapping `

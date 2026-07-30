@@ -16,8 +16,10 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from src.me_finder.database import build_database
+from src.me_finder.database import replace_source_in_database as real_replace_source
 from src.me_finder.pdf_import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
+from src.me_finder.search import SearchEngine as RealSearchEngine
 from src.me_finder.web import make_handler
 
 
@@ -32,6 +34,91 @@ def write_test_docx(path: Path, body: str) -> None:
     )
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("word/document.xml", document_xml)
+
+
+def write_native_pdf(path: Path, marker: str) -> None:
+    path.write_bytes(
+        (
+            "%PDF-1.4\n"
+            f"% {marker} native PDF batch import regression fixture\n"
+            "1 0 obj << /Type /Catalog >> endobj\n"
+            "trailer << /Root 1 0 R >>\n"
+            "%%EOF\n"
+        ).encode("utf-8")
+    )
+
+
+def fake_native_extraction(
+    path: Path,
+    root: Path,
+    config: dict[str, object],
+    parsed_dir: Path | None = None,
+) -> dict[str, list[dict[str, object]]]:
+    del root, parsed_dir
+    if path.name == "broken-native.pdf":
+        raise ValueError("damaged PDF text layer")
+    source_id = str(config["source_file_id"])
+    document_id = str(config["document_id"])
+    text = f"{path.stem} searchable native PDF text"
+    return {
+        "source_files": [
+            {
+                "source_file_id": source_id,
+                "source_type": "pdf",
+                "document_id": document_id,
+                "file_name": path.name,
+                "relative_path": f"corpus/raw_pdf/{path.name}",
+            }
+        ],
+        "volumes": [
+            {
+                "volume_id": document_id,
+                "source_file_id": source_id,
+                "source_type": "pdf",
+                "display_title": path.stem,
+            }
+        ],
+        "works": [
+            {
+                "work_id": f"{document_id}-W0001",
+                "volume_id": document_id,
+                "source_type": "pdf",
+                "title": path.stem,
+            }
+        ],
+        "toc_entries": [],
+        "paragraphs": [
+            {
+                "paragraph_id": f"{source_id}-P000001",
+                "volume_id": document_id,
+                "work_id": f"{document_id}-W0001",
+                "source_file_id": source_id,
+                "source_type": "pdf",
+                "paragraph_index": 0,
+                "volume_number": None,
+                "volume_display": path.stem,
+                "work_title": path.stem,
+                "document_title": path.stem,
+                "eligible_for_search": True,
+                "text_raw": text,
+                "normalized_text": text,
+                "compact_text": text.replace(" ", ""),
+                "plain_text": text.replace(" ", ""),
+            }
+        ],
+        "page_anchors": [],
+        "pdf_pages": [
+            {
+                "pdf_page_id": f"{source_id}-PAGE-000000",
+                "source_file_id": source_id,
+                "pdf_page_index": 0,
+                "text_raw": text,
+            }
+        ],
+        "pdf_page_mappings": [],
+        "pdf_import_runs": [],
+        "audit_issues": [],
+    }
 
 
 class BatchDirectoryImportTests(unittest.TestCase):
@@ -132,6 +219,690 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 handler.close_runtime()
                 os.chdir(previous_cwd)
 
+    def test_native_pdf_failure_does_not_hide_or_fail_the_other_pdf(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            good = source_dir / "good-native.pdf"
+            bad = source_dir / "broken-native.pdf"
+            write_native_pdf(good, "GOOD")
+            bad.write_bytes(b"%PDF-1.4\nthis file is deliberately truncated")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "native_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ), patch(
+                "src.me_finder.web.rebuild_local_index",
+                wraps=rebuild_local_index,
+            ) as rebuild:
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(good), str(bad)]},
+                    )
+                    self.assertEqual(response["errors"], [])
+                    self.assertEqual(len(response["jobs"]), 2)
+                    statuses = self._wait_for_jobs(
+                        base_url,
+                        [str(job["job_id"]) for job in response["jobs"]],
+                    )
+                    by_name = {
+                        str(status["file_name"]): status for status in statuses
+                    }
+                    self.assertEqual(
+                        by_name["good-native.pdf"]["status"],
+                        "completed",
+                    )
+                    self.assertEqual(
+                        by_name["broken-native.pdf"]["status"],
+                        "failed",
+                    )
+                    self.assertEqual(
+                        by_name["broken-native.pdf"]["phase"],
+                        "index_failed",
+                    )
+                    self.assertEqual(
+                        by_name["broken-native.pdf"]["failure_stage"],
+                        "index",
+                    )
+                    self.assertIn(
+                        "未能进入索引",
+                        str(by_name["broken-native.pdf"]["message"]),
+                    )
+                    # A PDF-only batch is updated one document at a time, so
+                    # one malformed file cannot invalidate the whole library.
+                    self.assertEqual(rebuild.call_count, 0)
+
+                    connection = sqlite3.connect(root / "data" / "index.sqlite3")
+                    try:
+                        indexed_names = {
+                            row[0]
+                            for row in connection.execute(
+                                "SELECT file_name FROM source_files "
+                                "WHERE source_type = 'pdf'"
+                            )
+                        }
+                    finally:
+                        connection.close()
+                    self.assertEqual(indexed_names, {"good-native.pdf"})
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_native_pdf_is_not_failed_by_a_word_batch_rebuild_error(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            paper = source_dir / "independent.pdf"
+            document = source_dir / "word-document.docx"
+            write_native_pdf(paper, "INDEPENDENT-PDF")
+            write_test_docx(document, "Word batch fixture")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "native_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ), patch(
+                "src.me_finder.web.rebuild_local_index",
+                side_effect=RuntimeError("Word index rebuild failed"),
+            ) as rebuild:
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(paper), str(document)]},
+                    )
+                    statuses = self._wait_for_jobs(
+                        base_url,
+                        [str(job["job_id"]) for job in response["jobs"]],
+                    )
+                    by_name = {
+                        str(status["file_name"]): status for status in statuses
+                    }
+                    self.assertEqual(
+                        by_name[paper.name]["status"],
+                        "completed",
+                    )
+                    self.assertEqual(
+                        by_name[document.name]["phase"],
+                        "index_failed",
+                    )
+                    self.assertEqual(rebuild.call_count, 1)
+
+                    connection = sqlite3.connect(
+                        root / "data" / "index.sqlite3"
+                    )
+                    try:
+                        indexed_pdf = connection.execute(
+                            "SELECT COUNT(*) FROM source_files "
+                            "WHERE source_type = 'pdf'"
+                        ).fetchone()[0]
+                    finally:
+                        connection.close()
+                    self.assertEqual(indexed_pdf, 1)
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_same_pdf_reimport_is_idempotent_across_different_names(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            first = source_dir / "first-name.pdf"
+            second = source_dir / "renamed-copy.pdf"
+            write_native_pdf(first, "SAME-CONTENT")
+            second.write_bytes(first.read_bytes())
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "native_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    first_response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(first)]},
+                    )
+                    first_status = self._wait_for_jobs(
+                        base_url,
+                        [str(first_response["jobs"][0]["job_id"])],
+                    )[0]
+                    self.assertEqual(first_status["status"], "completed")
+
+                    second_response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(second)]},
+                    )
+                    self.assertEqual(second_response["errors"], [])
+                    second_status = self._wait_for_jobs(
+                        base_url,
+                        [str(second_response["jobs"][0]["job_id"])],
+                    )[0]
+                    self.assertEqual(second_status["status"], "completed")
+
+                    config = json.loads(
+                        (root / "config" / "pdf_imports.json").read_text("utf-8")
+                    )
+                    source_ids = [
+                        str(item.get("source_file_id"))
+                        for item in config.get("documents", [])
+                    ]
+                    self.assertEqual(len(source_ids), 1)
+                    self.assertEqual(len(set(source_ids)), 1)
+                    connection = sqlite3.connect(root / "data" / "index.sqlite3")
+                    try:
+                        indexed_count = connection.execute(
+                            "SELECT COUNT(*) FROM source_files "
+                            "WHERE source_type = 'pdf'"
+                        ).fetchone()[0]
+                    finally:
+                        connection.close()
+                    self.assertEqual(indexed_count, 1)
+                    self.assertEqual(
+                        len(list((root / "corpus" / "raw_pdf").glob("*.pdf"))),
+                        1,
+                    )
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_parsed_remote_pdfs_are_committed_independently(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            good = source_dir / "cnki-good.pdf"
+            bad = source_dir / "broken-native.pdf"
+            write_native_pdf(good, "CNKI-GOOD")
+            write_native_pdf(bad, "CNKI-BAD")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "broken_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.parse_pdf_with_mineru",
+                return_value=None,
+            ) as parse, patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ), patch(
+                "src.me_finder.web.rebuild_local_index",
+                wraps=rebuild_local_index,
+            ) as rebuild:
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(good), str(bad)]},
+                    )
+                    statuses = self._wait_for_jobs(
+                        base_url,
+                        [str(job["job_id"]) for job in response["jobs"]],
+                    )
+                    by_name = {
+                        str(status["file_name"]): status for status in statuses
+                    }
+                    self.assertEqual(by_name["cnki-good.pdf"]["status"], "completed")
+                    self.assertEqual(by_name["broken-native.pdf"]["status"], "failed")
+                    self.assertEqual(
+                        by_name["broken-native.pdf"]["phase"],
+                        "index_failed",
+                    )
+                    self.assertIn(
+                        "文件已解析，但索引更新失败",
+                        str(by_name["broken-native.pdf"]["message"]),
+                    )
+                    self.assertEqual(parse.call_count, 2)
+                    self.assertEqual(rebuild.call_count, 0)
+
+                    connection = sqlite3.connect(root / "data" / "index.sqlite3")
+                    try:
+                        indexed_names = {
+                            row[0]
+                            for row in connection.execute(
+                                "SELECT file_name FROM source_files "
+                                "WHERE source_type = 'pdf'"
+                            )
+                        }
+                    finally:
+                        connection.close()
+                    self.assertEqual(indexed_names, {"cnki-good.pdf"})
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_remote_pdf_is_indexed_while_another_parser_is_still_blocked(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            ready = source_dir / "first-ready.pdf"
+            blocked = source_dir / "second-blocked.pdf"
+            write_native_pdf(ready, "READY")
+            write_native_pdf(blocked, "BLOCKED")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            blocked_started = threading.Event()
+            release_blocked = threading.Event()
+
+            def parse_one_at_a_time(
+                _root: Path,
+                path: Path,
+                _source_file_id: str,
+                **_kwargs,
+            ) -> None:
+                if path.name != blocked.name:
+                    return
+                blocked_started.set()
+                if not release_blocked.wait(5):
+                    raise TimeoutError("test did not release the blocked parser")
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "broken_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.parse_pdf_with_mineru",
+                side_effect=parse_one_at_a_time,
+            ) as parse, patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(ready), str(blocked)]},
+                    )
+                    jobs_by_name = {
+                        str(job["file_name"]): str(job["job_id"])
+                        for job in response["jobs"]
+                    }
+                    self.assertTrue(
+                        blocked_started.wait(2),
+                        "second parser never reached its blocking point",
+                    )
+
+                    ready_status = self._wait_for_job_status(
+                        base_url,
+                        jobs_by_name[ready.name],
+                        {"completed"},
+                    )
+                    self.assertEqual(ready_status["status"], "completed")
+                    blocked_status = self._job_status(
+                        base_url,
+                        jobs_by_name[blocked.name],
+                    )
+                    self.assertEqual(blocked_status["status"], "processing")
+
+                    connection = sqlite3.connect(
+                        root / "data" / "index.sqlite3"
+                    )
+                    try:
+                        indexed_names = {
+                            row[0]
+                            for row in connection.execute(
+                                "SELECT file_name FROM source_files "
+                                "WHERE source_type = 'pdf'"
+                            )
+                        }
+                    finally:
+                        connection.close()
+                    self.assertEqual(indexed_names, {ready.name})
+
+                    release_blocked.set()
+                    final_statuses = self._wait_for_jobs(
+                        base_url,
+                        list(jobs_by_name.values()),
+                    )
+                    self.assertEqual(
+                        {status["status"] for status in final_statuses},
+                        {"completed"},
+                    )
+                    self.assertEqual(parse.call_count, 2)
+                finally:
+                    release_blocked.set()
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_unique_constraint_retry_only_rebuilds_index(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            paper = source_dir / "cnki-journal.pdf"
+            write_native_pdf(paper, "CNKI-RETRY")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            replace_calls = 0
+
+            def flaky_replace(*args, **kwargs):
+                nonlocal replace_calls
+                replace_calls += 1
+                if replace_calls == 1:
+                    raise sqlite3.IntegrityError(
+                        "UNIQUE constraint failed: source_files.source_file_id"
+                    )
+                return real_replace_source(*args, **kwargs)
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "broken_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.parse_pdf_with_mineru",
+                return_value=None,
+            ) as parse, patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ), patch(
+                "src.me_finder.web.replace_source_in_database",
+                side_effect=flaky_replace,
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(paper)]},
+                    )
+                    job_id = str(response["jobs"][0]["job_id"])
+                    failed = self._wait_for_jobs(base_url, [job_id])[0]
+                    self.assertEqual(failed["phase"], "index_failed")
+                    self.assertIn(
+                        "UNIQUE constraint failed",
+                        str(failed["message"]),
+                    )
+                    self.assertEqual(parse.call_count, 1)
+
+                    resumed = self._post_json(
+                        base_url + "/api/import-resume",
+                        {"job_id": job_id},
+                    )
+                    self.assertTrue(resumed["ok"])
+                    completed = self._wait_for_jobs(base_url, [job_id])[0]
+                    self.assertEqual(completed["status"], "completed")
+                    self.assertEqual(parse.call_count, 1)
+                    self.assertEqual(replace_calls, 2)
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_transient_runtime_reopen_failure_is_retried_after_pdf_write(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            paper = source_dir / "reopen-retry.pdf"
+            write_native_pdf(paper, "REOPEN-RETRY")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            reopen_calls = 0
+
+            def transient_reopen(index_path: Path) -> RealSearchEngine:
+                nonlocal reopen_calls
+                reopen_calls += 1
+                if reopen_calls == 1:
+                    raise sqlite3.OperationalError(
+                        "database is temporarily busy"
+                    )
+                return RealSearchEngine(index_path)
+
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "native_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = f"http://127.0.0.1:{server.server_port}"
+
+                    with patch(
+                        "src.me_finder.web.SearchEngine",
+                        side_effect=transient_reopen,
+                    ):
+                        response = self._post_json(
+                            base_url + "/api/import-local",
+                            {"paths": [str(paper)]},
+                        )
+                        completed = self._wait_for_jobs(
+                            base_url,
+                            [str(response["jobs"][0]["job_id"])],
+                        )[0]
+
+                    self.assertEqual(completed["status"], "completed")
+                    self.assertGreaterEqual(reopen_calls, 2)
+                    search = self._post_json(
+                        base_url + "/api/search",
+                        {"query": "reopen-retry searchable"},
+                    )
+                    self.assertGreaterEqual(int(search["total"]), 1)
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
     @staticmethod
     def _post_json(url: str, payload: dict[str, object]) -> dict[str, object]:
         body = json.dumps(payload).encode("utf-8")
@@ -143,6 +914,34 @@ class BatchDirectoryImportTests(unittest.TestCase):
         )
         with urlopen(request, timeout=5) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    @staticmethod
+    def _job_status(
+        base_url: str,
+        job_id: str,
+    ) -> dict[str, object]:
+        with urlopen(
+            base_url + "/api/import-status?job_id=" + job_id,
+            timeout=5,
+        ) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    @classmethod
+    def _wait_for_job_status(
+        cls,
+        base_url: str,
+        job_id: str,
+        statuses: set[str],
+    ) -> dict[str, object]:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status = cls._job_status(base_url, job_id)
+            if status.get("status") in statuses:
+                return status
+            time.sleep(0.02)
+        raise AssertionError(
+            f"import job {job_id} did not reach one of {sorted(statuses)}"
+        )
 
     @staticmethod
     def _wait_for_jobs(

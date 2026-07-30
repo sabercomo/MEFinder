@@ -78,12 +78,21 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
         self.assertIn('"parse_route": parse_route', WEB_SOURCE)
 
-    def test_directory_batch_import_is_bounded_and_groups_native_rebuilds(self) -> None:
+    def test_directory_batch_import_is_bounded_and_isolates_pdf_index_writes(self) -> None:
         self.assertIn("ImportTaskQueue(worker_count=2)", WEB_SOURCE)
         self.assertIn("def start_native_import_batch(", WEB_SOURCE)
         self.assertIn("def start_remote_import_batch(", WEB_SOURCE)
-        self.assertIn("rebuild_runtime_index(job_ids[0])", WEB_SOURCE)
-        self.assertIn("native_job_ids = start_native_import_batch(native_items)", WEB_SOURCE)
+        self.assertIn("def index_registered_pdf(", WEB_SOURCE)
+        self.assertIn("replace_source_in_database(", WEB_SOURCE)
+        self.assertIn("fail_import_at_index(job_id, exc, parsed=True)", WEB_SOURCE)
+        self.assertIn(
+            "native_pdf_job_ids = start_native_import_batch(",
+            WEB_SOURCE,
+        )
+        self.assertIn(
+            "word_job_ids = start_native_import_batch(word_items)",
+            WEB_SOURCE,
+        )
         self.assertIn("remote_job_ids = start_remote_import_batch(remote_items)", WEB_SOURCE)
         self.assertNotIn("for raw in raw_paths[:50]", WEB_SOURCE)
         self.assertIn("一次最多批量导入 50 个文件，请分批选择。", WEB_SOURCE)

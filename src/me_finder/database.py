@@ -7,6 +7,7 @@ the full paragraph corpus is not loaded from one large JSON document.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -21,6 +22,9 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
 DATABASE_SCHEMA_VERSION = 1
 ANCHOR_SPEC_VERSION = 1
+DATABASE_REPLACE_ATTEMPTS = 15
+DATABASE_REPLACE_INITIAL_DELAY_SECONDS = 0.1
+DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -152,6 +156,156 @@ def _float_or_none(value: object) -> Optional[float]:
         return None
 
 
+class IndexIdentityConflictError(ValueError):
+    """Raised when one persisted index identity points at different content."""
+
+
+def _is_empty(value: object) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _merge_missing_fields(
+    canonical: Dict[str, object], duplicate: Dict[str, object]
+) -> Dict[str, object]:
+    """Keep the first record stable while filling fields it did not have."""
+
+    merged = dict(canonical)
+    for key, value in duplicate.items():
+        if _is_empty(merged.get(key)) and not _is_empty(value):
+            merged[key] = value
+    return merged
+
+
+def _identity_conflict(
+    table_name: str,
+    identity: object,
+    field: str,
+    first: object,
+    second: object,
+) -> IndexIdentityConflictError:
+    return IndexIdentityConflictError(
+        "索引身份冲突："
+        f"{table_name} 的 {identity!r} 在字段 {field!r} 上对应不同内容"
+        f"（{first!r} != {second!r}）。请移除重复或损坏的导入记录后重试。"
+    )
+
+
+def _verify_source_identity(
+    canonical: Dict[str, object], duplicate: Dict[str, object], source_file_id: str
+) -> None:
+    """Verify that duplicate source IDs really describe the same file.
+
+    Content hashes are authoritative. Older records without a hash may only be
+    merged when they still point at the same file and do not disagree on size.
+    This lets retry-created copies of one PDF coalesce without hiding a genuine
+    source ID collision.
+    """
+
+    first_type = str(canonical.get("source_type") or "").strip()
+    second_type = str(duplicate.get("source_type") or "").strip()
+    if first_type and second_type and first_type != second_type:
+        raise _identity_conflict(
+            "source_files", source_file_id, "source_type", first_type, second_type
+        )
+
+    first_hash = str(canonical.get("sha256") or "").strip().lower()
+    second_hash = str(duplicate.get("sha256") or "").strip().lower()
+    if first_hash and second_hash:
+        if first_hash != second_hash:
+            raise _identity_conflict(
+                "source_files", source_file_id, "sha256", first_hash, second_hash
+            )
+        return
+
+    if canonical == duplicate:
+        return
+
+    first_size = _int_or_none(canonical.get("size_bytes"))
+    second_size = _int_or_none(duplicate.get("size_bytes"))
+    if first_size is not None and second_size is not None and first_size != second_size:
+        raise _identity_conflict(
+            "source_files", source_file_id, "size_bytes", first_size, second_size
+        )
+
+    same_relative_path = bool(
+        canonical.get("relative_path")
+        and canonical.get("relative_path") == duplicate.get("relative_path")
+    )
+    same_file_name = bool(
+        canonical.get("file_name")
+        and canonical.get("file_name") == duplicate.get("file_name")
+    )
+    if not (same_relative_path or same_file_name):
+        raise IndexIdentityConflictError(
+            "索引身份冲突："
+            f"source_files 的 {source_file_id!r} 存在缺少 SHA-256 且文件位置不同的记录，"
+            "无法确认它们是否为同一内容。"
+        )
+
+
+def _deduplicate_source_files(
+    rows: Sequence[Dict[str, object]],
+) -> Tuple[List[Dict[str, object]], int]:
+    """Coalesce retry-created copies by stable source ID.
+
+    The first record is canonical because import configuration order preserves
+    the original file before retry-created ``(imported-...)`` copies. Later
+    records only fill missing metadata.
+    """
+
+    canonical_by_id: Dict[str, Dict[str, object]] = {}
+    ordered_ids: List[str] = []
+    merged_count = 0
+    for row in rows:
+        source_file_id = str(row.get("source_file_id") or "").strip()
+        if not source_file_id:
+            continue
+        canonical = canonical_by_id.get(source_file_id)
+        if canonical is None:
+            canonical_by_id[source_file_id] = dict(row)
+            ordered_ids.append(source_file_id)
+            continue
+        _verify_source_identity(canonical, row, source_file_id)
+        canonical_by_id[source_file_id] = _merge_missing_fields(canonical, row)
+        merged_count += 1
+    return [canonical_by_id[source_id] for source_id in ordered_ids], merged_count
+
+
+def _deduplicate_keyed_rows(
+    rows: Sequence[Dict[str, object]],
+    *,
+    table_name: str,
+    key_fields: Sequence[str],
+    content_identity_fields: Sequence[str] = (),
+) -> Tuple[List[Dict[str, object]], int]:
+    """Deduplicate rows that would otherwise collide on a database identity."""
+
+    canonical_by_key: Dict[Tuple[object, ...], Dict[str, object]] = {}
+    ordered_keys: List[Tuple[object, ...]] = []
+    merged_count = 0
+    for row in rows:
+        key = tuple(row.get(field) for field in key_fields)
+        if any(value is None or value == "" for value in key):
+            # Preserve legacy incomplete rows; their existing insert filters or
+            # nullable table columns decide whether they are stored.
+            ordered_keys.append((object(),))
+            canonical_by_key[ordered_keys[-1]] = dict(row)
+            continue
+        canonical = canonical_by_key.get(key)
+        if canonical is None:
+            canonical_by_key[key] = dict(row)
+            ordered_keys.append(key)
+            continue
+        for field in content_identity_fields:
+            first = canonical.get(field)
+            second = row.get(field)
+            if not _is_empty(first) and not _is_empty(second) and first != second:
+                raise _identity_conflict(table_name, key, field, first, second)
+        canonical_by_key[key] = _merge_missing_fields(canonical, row)
+        merged_count += 1
+    return [canonical_by_key[key] for key in ordered_keys], merged_count
+
+
 def _backup_database(db_path: Path) -> Path:
     backup_dir = db_path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -169,6 +323,71 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     if backup_existing and db_path.exists():
         _backup_database(db_path)
 
+    raw_source_files = [
+        item for item in index.get("source_files", []) if isinstance(item, dict)
+    ]
+    source_files, duplicate_source_count = _deduplicate_source_files(
+        raw_source_files
+    )
+    volumes, duplicate_volume_count = _deduplicate_keyed_rows(
+        [item for item in index.get("volumes", []) if isinstance(item, dict)],
+        table_name="volumes",
+        key_fields=("volume_id",),
+        content_identity_fields=("source_file_id", "source_type"),
+    )
+    works, duplicate_work_count = _deduplicate_keyed_rows(
+        [item for item in index.get("works", []) if isinstance(item, dict)],
+        table_name="works",
+        key_fields=("work_id",),
+        content_identity_fields=("volume_id", "source_file_id", "source_type"),
+    )
+    paragraphs, duplicate_paragraph_count = _deduplicate_keyed_rows(
+        [item for item in index.get("paragraphs", []) if isinstance(item, dict)],
+        table_name="paragraphs",
+        key_fields=("paragraph_id",),
+        content_identity_fields=(
+            "source_file_id",
+            "source_type",
+            "text_raw",
+            "pdf_page_start_index",
+            "pdf_page_end_index",
+        ),
+    )
+    page_anchors, duplicate_anchor_count = _deduplicate_keyed_rows(
+        [item for item in index.get("page_anchors", []) if isinstance(item, dict)],
+        table_name="page_anchors",
+        key_fields=("page_anchor_id",),
+        content_identity_fields=("source_file_id", "start_paragraph_id"),
+    )
+    pdf_pages, duplicate_pdf_page_count = _deduplicate_keyed_rows(
+        [item for item in index.get("pdf_pages", []) if isinstance(item, dict)],
+        table_name="pdf_pages",
+        key_fields=("source_file_id", "pdf_page_index"),
+        content_identity_fields=("page_text_hash", "text_raw"),
+    )
+    pdf_page_mappings, duplicate_mapping_count = _deduplicate_keyed_rows(
+        [
+            item
+            for item in index.get("pdf_page_mappings", [])
+            if isinstance(item, dict)
+        ],
+        table_name="pdf_page_mappings",
+        key_fields=("mapping_id",),
+        content_identity_fields=("source_file_id",),
+    )
+    deduplicated_rows = {
+        "source_files": duplicate_source_count,
+        "volumes": duplicate_volume_count,
+        "works": duplicate_work_count,
+        "paragraphs": duplicate_paragraph_count,
+        "page_anchors": duplicate_anchor_count,
+        "pdf_pages": duplicate_pdf_page_count,
+        "pdf_page_mappings": duplicate_mapping_count,
+    }
+    deduplicated_rows = {
+        table: count for table, count in deduplicated_rows.items() if count
+    }
+
     temp_path = db_path.with_name(
         f".{db_path.name}.{os.getpid()}-{threading.get_ident()}.tmp"
     )
@@ -181,12 +400,21 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         metadata["database_schema_version"] = DATABASE_SCHEMA_VERSION
         metadata.setdefault("anchor_spec_version", ANCHOR_SPEC_VERSION)
         metadata["database_built_at"] = datetime.now(timezone.utc).isoformat()
+        metadata["source_count"] = len(source_files)
+        metadata["paragraph_count"] = len(paragraphs)
+        metadata["eligible_paragraph_count"] = sum(
+            1 for item in paragraphs if item.get("eligible_for_search")
+        )
+        if deduplicated_rows:
+            metadata["database_deduplication"] = {
+                "strategy": "first_record_wins_and_fills_missing_fields",
+                "merged_rows": deduplicated_rows,
+            }
         connection.executemany(
             "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
             [(str(key), _json(value)) for key, value in metadata.items()],
         )
 
-        source_files = [item for item in index.get("source_files", []) if isinstance(item, dict)]
         connection.executemany(
             """
             INSERT INTO source_files(
@@ -207,7 +435,6 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             ],
         )
 
-        volumes = [item for item in index.get("volumes", []) if isinstance(item, dict)]
         connection.executemany(
             """
             INSERT INTO volumes(volume_id, source_file_id, source_type, volume_number, display_title, payload_json)
@@ -227,7 +454,6 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             ],
         )
 
-        works = [item for item in index.get("works", []) if isinstance(item, dict)]
         connection.executemany(
             """
             INSERT OR REPLACE INTO works(work_id, volume_id, source_type, work_order, title, payload_json)
@@ -253,7 +479,6 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             [(item.get("volume_id"), item.get("work_id"), item.get("title"), _json(item)) for item in toc_entries],
         )
 
-        paragraphs = [item for item in index.get("paragraphs", []) if isinstance(item, dict)]
         paragraph_rows = []
         for item in paragraphs:
             paragraph_id = str(item.get("paragraph_id") or "")
@@ -302,7 +527,18 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             ("pdf_import_runs", ("source_file_id", "status")),
             ("audit_issues", ("source_file_id", "issue_type")),
         ):
-            rows = [item for item in index.get(table_name, []) if isinstance(item, dict)]
+            if table_name == "page_anchors":
+                rows = page_anchors
+            elif table_name == "pdf_pages":
+                rows = pdf_pages
+            elif table_name == "pdf_page_mappings":
+                rows = pdf_page_mappings
+            else:
+                rows = [
+                    item
+                    for item in index.get(table_name, [])
+                    if isinstance(item, dict)
+                ]
             columns = ", ".join(key_fields) + ", payload_json"
             placeholders = ", ".join("?" for _ in key_fields) + ", ?"
             sql = f"INSERT INTO {table_name}({columns}) VALUES ({placeholders})"
@@ -326,20 +562,39 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         "source_count": len(source_files),
         "paragraph_count": len(paragraphs),
         "eligible_paragraph_count": sum(1 for item in paragraphs if item.get("eligible_for_search")),
+        "deduplicated_rows": deduplicated_rows,
     }
 
 
-def _replace_database_file(temp_path: Path, db_path: Path, attempts: int = 7) -> None:
-    """Replace a live SQLite file after short-lived Windows locks clear."""
+def _is_retryable_replace_error(exc: OSError) -> bool:
+    return (
+        isinstance(exc, PermissionError)
+        or getattr(exc, "winerror", None) in {5, 32, 33}
+        or getattr(exc, "errno", None)
+        in {errno.EACCES, errno.EBUSY, errno.EPERM, errno.ETXTBSY}
+    )
 
+
+def _replace_database_file(
+    temp_path: Path,
+    db_path: Path,
+    attempts: int = DATABASE_REPLACE_ATTEMPTS,
+) -> None:
+    """Replace a live SQLite file after short-lived Windows/cloud locks clear."""
+
+    attempts = max(1, int(attempts))
     for attempt in range(attempts):
         try:
             temp_path.replace(db_path)
             return
-        except PermissionError:
-            if attempt + 1 >= attempts:
+        except OSError as exc:
+            if not _is_retryable_replace_error(exc) or attempt + 1 >= attempts:
                 raise
-            time.sleep(0.08 * (attempt + 1))
+            delay = min(
+                DATABASE_REPLACE_INITIAL_DELAY_SECONDS * (2**attempt),
+                DATABASE_REPLACE_MAX_DELAY_SECONDS,
+            )
+            time.sleep(delay)
 
 
 def _load_payload_rows(connection: sqlite3.Connection, table: str, order_by: str = "rowid") -> List[Dict[str, object]]:
