@@ -12,6 +12,8 @@ $releaseFull = [IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
 
 Push-Location $ProjectRoot
 try {
+    $env:NO_PROXY = (@($env:NO_PROXY, "127.0.0.1", "localhost") -join ",").Trim(",")
+
     if ($PythonExe) {
         $pythonCommand = $PythonExe
         $pythonLauncherArgs = @()
@@ -42,7 +44,7 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_citations tests.test_database_resilience tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_citations tests.test_database_resilience tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -75,8 +77,13 @@ try {
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $StagePath "config\pdf_imports.json")
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $StagePath "config\mineru_api.local.example.json")
     Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
-    & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index (Join-Path $StagePath "data\index.sqlite3")
+    $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
+    & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
+    & $pythonCommand @pythonLauncherArgs -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute(""SELECT 1 FROM sqlite_master WHERE name = 'paragraphs_fts'"").fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" $blankIndexPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
+    }
 
     $forbiddenNames = @(
         "mineru_api.local.json",
@@ -94,7 +101,7 @@ try {
         throw "Release contains private or generated data:`n$paths"
     }
 
-    $blankIndex = Get-Item -LiteralPath (Join-Path $StagePath "data\index.sqlite3")
+    $blankIndex = Get-Item -LiteralPath $blankIndexPath
     if ($blankIndex.Length -gt 1MB) {
         throw "Blank index is unexpectedly large: $($blankIndex.Length) bytes"
     }

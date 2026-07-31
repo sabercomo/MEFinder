@@ -74,6 +74,16 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertIn("tests.test_anchor_metadata", script)
             self.assertIn("tests.test_pdf_match_anchors", script)
 
+    def test_windows_builds_gate_fts5_and_keep_loopback_local(self) -> None:
+        for script in (
+            self.dev_build_script,
+            self.build_script,
+            self.portable_script,
+        ):
+            self.assertIn("tests.test_fts_search_scalability", script)
+            self.assertIn("paragraphs_fts", script)
+            self.assertIn("NO_PROXY", script)
+
 
 if __name__ == "__main__":
     unittest.main()

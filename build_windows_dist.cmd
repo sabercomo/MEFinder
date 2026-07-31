@@ -6,6 +6,11 @@ set "PYTHON=%CD%\.venv-windows\Scripts\python.exe"
 set "DIST=%CD%\dist\MEFinder"
 set "LOCAL_DATA=%CD%\dist\MEFinderData"
 set "DATA_ROOT_MARKER=%DIST%\data_root.txt"
+if defined NO_PROXY (
+  set "NO_PROXY=%NO_PROXY%,127.0.0.1,localhost"
+) else (
+  set "NO_PROXY=127.0.0.1,localhost"
+)
 
 if not exist "%PYTHON%" (
   echo Windows build environment is missing: %PYTHON%
@@ -22,6 +27,7 @@ if errorlevel 1 exit /b 1
   tests.test_vision_api ^
   tests.test_citations ^
   tests.test_database_resilience ^
+  tests.test_fts_search_scalability ^
   tests.test_large_index_resilience ^
   tests.test_pdf_import_config ^
   tests.test_import_config_concurrency ^
@@ -76,6 +82,11 @@ copy /y "config\pdf_imports.empty.json" "%DIST%\config\pdf_imports.json" >nul
 copy /y "config\mineru_api.local.example.json" "%DIST%\config\mineru_api.local.example.json" >nul
 "%PYTHON%" -m tools.create_empty_index "%DIST%\data\index.sqlite3"
 if errorlevel 1 exit /b 1
+"%PYTHON%" -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute(\"SELECT 1 FROM sqlite_master WHERE name = 'paragraphs_fts'\").fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" "%DIST%\data\index.sqlite3"
+if errorlevel 1 (
+  echo Build failed: this Python/SQLite runtime has no FTS5 trigram support.
+  exit /b 1
+)
 
 if not exist "%LOCAL_DATA%" mkdir "%LOCAL_DATA%"
 "%PYTHON%" -c "import os; from pathlib import Path; Path(os.environ['DATA_ROOT_MARKER']).write_text(os.environ['LOCAL_DATA'], encoding='utf-8')"

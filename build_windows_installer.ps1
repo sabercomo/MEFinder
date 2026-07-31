@@ -42,6 +42,8 @@ function Find-InnoCompiler {
 
 Push-Location $ProjectRoot
 try {
+    $env:NO_PROXY = (@($env:NO_PROXY, "127.0.0.1", "localhost") -join ",").Trim(",")
+
     if ($PythonExe) {
         $pythonCommand = $PythonExe
         $pythonLauncherArgs = @()
@@ -91,6 +93,7 @@ try {
         tests.test_batch_document_removal `
         tests.test_citations `
         tests.test_database_resilience `
+        tests.test_fts_search_scalability `
         tests.test_large_index_resilience `
         tests.test_library_startup_performance `
         tests.test_pdf_import_config `
@@ -143,8 +146,13 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $DistPath "config") | Out-Null
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $DistPath "config\pdf_imports.json") -Force
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $DistPath "config\mineru_api.local.example.json") -Force
-    & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index (Join-Path $DistPath "data\index.sqlite3")
+    $blankIndexPath = Join-Path $DistPath "data\index.sqlite3"
+    & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
+    & $pythonCommand @pythonLauncherArgs -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute(""SELECT 1 FROM sqlite_master WHERE name = 'paragraphs_fts'"").fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" $blankIndexPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
+    }
 
     $forbiddenNames = @(
         "mineru_api.local.json",
@@ -172,7 +180,7 @@ try {
     if (@($imports.documents).Count -ne 0) {
         throw "Installer pdf_imports.json is not empty."
     }
-    $blankIndex = Get-Item -LiteralPath (Join-Path $DistPath "data\index.sqlite3")
+    $blankIndex = Get-Item -LiteralPath $blankIndexPath
     if ($blankIndex.Length -gt 1MB) {
         throw "Blank index is unexpectedly large: $($blankIndex.Length) bytes"
     }
