@@ -168,12 +168,41 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         prepare_start = WEB_SOURCE.index("def prepare_import_job(")
         prepare_end = WEB_SOURCE.index("def run_import_job(", prepare_start)
         prepare_block = WEB_SOURCE[prepare_start:prepare_end]
-        guard = prepare_block.index("not mineru_exc.allow_parser_fallback")
+        guard = prepare_block.index("not isinstance(mineru_exc, MinerUError)")
         fallback_lookup = prepare_block.index("vision_config_summary(")
         self.assertLess(guard, fallback_lookup)
         guarded_block = prepare_block[guard:fallback_lookup]
+        self.assertIn("not mineru_exc.allow_parser_fallback", guarded_block)
         self.assertIn("return False", guarded_block)
         self.assertIn("不会自动改用其他付费接口", guarded_block)
+
+    def test_paid_retry_endpoint_revalidates_mineru_failure_server_side(
+        self,
+    ) -> None:
+        retry_start = WEB_SOURCE.index(
+            'if parsed.path == "/api/import-retry":'
+        )
+        retry_end = WEB_SOURCE.index(
+            'if parsed.path == "/api/import-resume":',
+            retry_start,
+        )
+        retry_block = WEB_SOURCE[retry_start:retry_end]
+        self.assertIn(
+            "is_provider_retry_eligible(previous_job, context)",
+            retry_block,
+        )
+        eligibility_start = WEB_SOURCE.index(
+            "def is_provider_retry_eligible("
+        )
+        eligibility_end = WEB_SOURCE.index(
+            "def public_import_job(",
+            eligibility_start,
+        )
+        eligibility = WEB_SOURCE[eligibility_start:eligibility_end]
+        self.assertIn('str(job.get("failure_stage") or "") != "index"', eligibility)
+        self.assertIn("not job.get(\"mineru_interrupted\")", eligibility)
+        self.assertIn('bool(context.get("is_pdf"))', eligibility)
+        self.assertIn('job.get("mineru_failed")', eligibility)
 
     def test_document_removal_blocks_running_parser_and_clears_old_jobs(self) -> None:
         removal_start = WEB_SOURCE.index(
@@ -206,10 +235,11 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         reserve = helper_block.index(
             "_reserve_import_source_locked(predicted_source_id)"
         )
-        register = helper_block.index("register_pdf(root, target)")
+        register = helper_block.index("document = register_pdf(")
         self.assertLess(reserve, register)
         self.assertIn("pending_import_sources.discard", helper_block)
-        self.assertIn("register_pdf_for_import(target)", WEB_SOURCE)
+        self.assertIn("register_pdf_for_import(", WEB_SOURCE)
+        self.assertIn("original_file_name=source_path.name", WEB_SOURCE)
         self.assertIn(
             "consume_reservation=bool(reserved_source_id)",
             WEB_SOURCE,
@@ -360,7 +390,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                     handler.close_runtime()
                 os.chdir(previous_cwd)
 
-    def test_queue_failure_releases_pending_reservation(self) -> None:
+    def test_queue_failure_is_preserved_as_a_resumable_task(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "runtime"
             previous_cwd = Path.cwd()
@@ -387,9 +417,57 @@ class SinglePDFReservationTests(unittest.TestCase):
                     base_url = (
                         f"http://127.0.0.1:{server.server_port}"
                     )
-                    with self.assertRaises(HTTPError) as upload_error:
-                        self._upload(base_url)
-                    self.assertEqual(upload_error.exception.code, 500)
+                    with self._upload(base_url) as response:
+                        uploaded = json.loads(
+                            response.read().decode("utf-8")
+                        )
+                    self.assertTrue(uploaded["ok"])
+                    job_id = str(uploaded["job_id"])
+                    status = self._job_status(base_url, job_id)
+                    self.assertEqual(status["status"], "failed")
+                    self.assertEqual(status["phase"], "queue_failed")
+                    self.assertEqual(status["failure_stage"], "queue")
+                    self.assertTrue(status["can_resume"])
+
+                    with self._open(
+                        Request(base_url + "/api/import-resumable")
+                    ) as response:
+                        resumable = json.loads(
+                            response.read().decode("utf-8")
+                        )
+                    self.assertIn(
+                        job_id,
+                        {
+                            str(item["job_id"])
+                            for item in resumable["jobs"]
+                        },
+                    )
+                    journal = (
+                        root
+                        / "corpus"
+                        / "processed"
+                        / "import_jobs"
+                        / f"{job_id}.json"
+                    )
+                    self.assertTrue(journal.is_file())
+                    config = json.loads(
+                        (
+                            root / "config" / "pdf_imports.json"
+                        ).read_text(encoding="utf-8")
+                    )
+                    document = next(
+                        item
+                        for item in config["documents"]
+                        if item["source_file_id"] == source_id
+                    )
+                    self.assertTrue(
+                        (
+                            root
+                            / "corpus"
+                            / "raw_pdf"
+                            / str(document["file_name"])
+                        ).is_file()
+                    )
 
                     with self.assertRaises(HTTPError) as remove_error:
                         self._remove(base_url, source_id)

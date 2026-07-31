@@ -521,38 +521,19 @@
           </button>
           <div class="settings-collapse-body" id="mineru-api-body">
             <div class="settings-grid">
-            <label class="settings-label" for="mineru-token">Bearer Token</label>
+            <label class="settings-label" for="mineru-token">API Token</label>
             <div class="settings-control">
               <div class="settings-input-row">
-                <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="输入 MinerU API Token">
+                <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 MinerU API Token">
                 <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
               </div>
-              <small>在 MinerU 的 API 管理页面创建或复制。留空表示保留当前已保存的 Token。</small>
+              <small>可粘贴原始 Token，或完整的 <code>Authorization: Bearer &lt;Token&gt;</code>；留空表示保留当前已保存的 Token。</small>
             </div>
             <label class="settings-label" for="mineru-api-base">API 地址</label>
             <div class="settings-control settings-control-inline">
               <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
               <label class="settings-inline-label" for="mineru-expires-at">Token 到期日期</label>
               <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
-            </div>
-            <span class="settings-label"></span>
-            <div class="settings-control">
-              <details class="settings-advanced">
-                <summary><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 4 4-4 4"/></svg><span>高级：Access Key ID / Secret Access Key（可选）</span></summary>
-                <div class="settings-advanced-body">
-                  <div class="settings-field">
-                    <label for="mineru-access-key-id">Access Key ID</label>
-                    <input id="mineru-access-key-id" class="settings-input" type="text" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Access Key ID，再填写">
-                  </div>
-                  <div class="settings-field">
-                    <label for="mineru-secret-access-key">Secret Access Key</label>
-                    <div class="settings-input-row">
-                      <input id="mineru-secret-access-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="如果 API 页面提供了 Secret Access Key，再填写">
-                      <button id="mineru-secret-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-secret-access-key','mineru-secret-toggle')">显示</button>
-                    </div>
-                  </div>
-                </div>
-              </details>
             </div>
             <span class="settings-label"></span>
             <div class="settings-control settings-actions">

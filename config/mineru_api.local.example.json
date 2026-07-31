@@ -1,8 +1,6 @@
 {
-  "access_key_id": "PASTE_NEW_ACCESS_KEY_ID_HERE",
-  "secret_access_key": "PASTE_NEW_SECRET_ACCESS_KEY_HERE",
-  "token": "PASTE_BEARER_TOKEN_HERE_IF_AVAILABLE",
+  "token": "PASTE_MINERU_API_TOKEN_HERE",
   "api_base": "",
   "expires_at": "",
-  "note": "Copy this file to mineru_api.local.json, then fill in your own credentials."
+  "note": "Copy this file to mineru_api.local.json, then fill in your own API Token."
 }

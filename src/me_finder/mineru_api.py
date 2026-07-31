@@ -61,7 +61,7 @@ class MinerUError(RuntimeError):
         message: str,
         *,
         retry_with_new_task: bool = False,
-        allow_parser_fallback: bool = True,
+        allow_parser_fallback: bool = False,
     ) -> None:
         super().__init__(message)
         self.retry_with_new_task = bool(retry_with_new_task)
@@ -80,6 +80,52 @@ def _usable_secret(value: object) -> bool:
     return bool(text) and not text.startswith("PASTE_")
 
 
+def _normalize_bearer_token(value: object) -> str:
+    """Accept a raw token or a copied Authorization header value.
+
+    MinerU's API console exposes a Token, while its documentation shows that
+    token inside ``Authorization: Bearer ...``.  Users commonly paste either
+    form into the settings field; storing ``Bearer ...`` verbatim would make
+    the client send ``Bearer Bearer ...`` and receive HTTP 401.
+    """
+
+    if not isinstance(value, str):
+        return ""
+    token = value.strip()
+    authorization = re.match(r"(?is)^authorization\s*:\s*(.*)$", token)
+    if authorization:
+        token = authorization.group(1).strip()
+    bearer = re.match(r"(?is)^bearer\s+(.+)$", token)
+    if bearer:
+        token = bearer.group(1).strip()
+    return token
+
+
+def _validated_token(value: object) -> str:
+    token = _normalize_bearer_token(value)
+    if (
+        not token
+        or token.casefold() == "bearer"
+        or token.startswith("PASTE_")
+        or len(token) > 2048
+        or any(character.isspace() for character in token)
+    ):
+        return ""
+    return token
+
+
+def _usable_token(value: object) -> bool:
+    return bool(_validated_token(value))
+
+
+def _configured_token(data: Dict[str, object]) -> str:
+    for field in ("token", "api_token", "bearer_token"):
+        token = _validated_token(data.get(field))
+        if token:
+            return token
+    return ""
+
+
 def read_mineru_config_data(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> Dict[str, object]:
     """Read the local MinerU config without exposing it to the web UI."""
 
@@ -96,16 +142,21 @@ def mineru_config_summary(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> Dict[str, 
     """Return only safe-to-display status information for the local config."""
 
     data = read_mineru_config_data(path)
-    token = data.get("token") or data.get("api_token") or data.get("bearer_token")
+    token = _configured_token(data)
     secret = data.get("secret_access_key")
-    configured = _usable_secret(token) or _usable_secret(secret)
+    configured = _usable_token(token)
     expires_at = str(data.get("expires_at") or "").strip()
     expiry = _expiry_summary(expires_at)
     return {
         "configured": configured,
-        "has_token": _usable_secret(token),
+        "has_token": _usable_token(token),
         "has_access_key_id": _usable_secret(data.get("access_key_id")),
         "has_secret_access_key": _usable_secret(secret),
+        "has_legacy_access_keys": bool(
+            _usable_secret(data.get("access_key_id"))
+            or _usable_secret(secret)
+        ),
+        "token_required": not configured,
         "api_base": str(data.get("api_base") or DEFAULT_MINERU_API_BASE).rstrip("/"),
         "expires_at": expires_at,
         **expiry,
@@ -156,7 +207,25 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
     if not isinstance(updates, dict):
         raise MinerUError("MinerU config update must be a JSON object.")
     data = read_mineru_config_data(path)
-    for field in ("token", "access_key_id", "secret_access_key"):
+    token_update = updates.get("token")
+    if "token" in updates and (
+        not isinstance(token_update, str) or token_update.strip()
+    ):
+        if not isinstance(token_update, str):
+            raise MinerUError("MinerU Token 格式无效。")
+        value = _normalize_bearer_token(token_update)
+        if not value or value.casefold() == "bearer" or value.startswith("PASTE_"):
+            raise MinerUError("请填写 MinerU API 管理页面创建的 Token。")
+        if any(character.isspace() for character in value):
+            raise MinerUError("MinerU Token 中不能包含空格或换行。")
+        if len(value) > 2048:
+            raise MinerUError("token is too long.")
+        data["token"] = value
+
+    # Preserve legacy fields so upgrades never destroy a user's local data, but
+    # do not treat AK/SK as MinerU API authentication.  The current v4 API uses
+    # only the Token from MinerU's API management page.
+    for field in ("access_key_id", "secret_access_key"):
         if field in updates and str(updates.get(field) or "").strip():
             value = str(updates[field]).strip()
             if len(value) > 2048:
@@ -183,6 +252,10 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_name(f".{path.name}.tmp")
     temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    try:
+        temp_path.chmod(0o600)
+    except OSError:
+        pass
     temp_path.replace(path)
     return mineru_config_summary(path)
 
@@ -190,31 +263,52 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
 def load_mineru_config(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> MinerUConfig:
     path = Path(path)
     if not path.exists():
-        raise MinerUError(f"MinerU config not found: {path}")
-    data = json.loads(path.read_text(encoding="utf-8-sig"))
-    token = (
-        data.get("token")
-        or data.get("api_token")
-        or data.get("bearer_token")
-        or data.get("secret_access_key")
-        or ""
-    )
-    if not token or "PASTE_" in str(token):
         raise MinerUError(
-            "MinerU token is empty. Fill config/mineru_api.local.json first. "
-            "If the API page gives a separate Token, add it as a \"token\" field."
+            f"MinerU config not found: {path}",
+            allow_parser_fallback=True,
+        )
+    data = read_mineru_config_data(path)
+    token = _configured_token(data)
+    if not token:
+        raise MinerUError(
+            "尚未配置有效的 MinerU Token。请在“设置 → MinerU API”中粘贴 "
+            "API 管理页面创建的 Token；Access Key ID / Secret Access Key "
+            "不能替代该 Token。",
+            allow_parser_fallback=True,
         )
     api_base = str(data.get("api_base") or DEFAULT_MINERU_API_BASE).rstrip("/")
-    return MinerUConfig(token=str(token).strip(), api_base=api_base, use_env_proxy=bool(data.get("use_env_proxy")))
+    return MinerUConfig(token=token, api_base=api_base, use_env_proxy=bool(data.get("use_env_proxy")))
+
+
+def _url_origin(url: str) -> Tuple[str, str, Optional[int]]:
+    parsed = urlparse(url)
+    scheme = parsed.scheme.casefold()
+    default_port = 443 if scheme == "https" else 80 if scheme == "http" else None
+    return scheme, (parsed.hostname or "").casefold(), parsed.port or default_port
+
+
+class _SafeAuthorizationRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Never forward an Authorization header to a different origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and _url_origin(req.full_url) != _url_origin(newurl):
+            redirected.remove_header("Authorization")
+        return redirected
 
 
 class MinerUClient:
     def __init__(self, config: MinerUConfig) -> None:
         self.config = config
         if config.use_env_proxy:
-            self.opener = urllib.request.build_opener()
+            self.opener = urllib.request.build_opener(
+                _SafeAuthorizationRedirectHandler()
+            )
         else:
-            self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            self.opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({}),
+                _SafeAuthorizationRedirectHandler(),
+            )
 
     def apply_upload_urls(
         self,
@@ -240,7 +334,19 @@ class MinerUClient:
             with self.opener.open(request, timeout=180) as response:
                 return int(response.status)
         except urllib.error.HTTPError as exc:
-            raise MinerUError(f"Upload failed: HTTP {exc.code}") from exc
+            raise MinerUError(
+                f"Upload failed: HTTP {exc.code}",
+                allow_parser_fallback=exc.code in {
+                    400,
+                    401,
+                    403,
+                    404,
+                    405,
+                    413,
+                    415,
+                    422,
+                },
+            ) from exc
 
     def batch_status(self, batch_id: str) -> Dict[str, object]:
         return self._json_request("GET", f"/api/v4/extract-results/batch/{batch_id}", None)
@@ -270,16 +376,57 @@ class MinerUClient:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")
+            allow_parser_fallback = exc.code in {
+                400,
+                401,
+                403,
+                404,
+                405,
+                413,
+                415,
+                422,
+            }
+            if exc.code == 401:
+                message_code = ""
+                try:
+                    error_data = json.loads(detail)
+                    if isinstance(error_data, dict):
+                        message_code = str(
+                            error_data.get("msgCode")
+                            or error_data.get("code")
+                            or ""
+                        ).strip()
+                except json.JSONDecodeError:
+                    pass
+                if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", message_code):
+                    message_code = ""
+                message = (
+                    "MinerU 鉴权失败（HTTP 401"
+                    + (f"，错误码 {message_code}" if message_code else "")
+                    + "）：Token 无效或已过期。请在“设置 → MinerU API”中"
+                    "粘贴 API 管理页面创建的 Token；Access Key ID / "
+                    "Secret Access Key 不能替代 Token。"
+                )
+            elif exc.code == 403:
+                message = (
+                    "MinerU 拒绝访问（HTTP 403）：请检查 Token 权限、状态和额度。"
+                )
+            else:
+                message = f"MinerU 请求失败（HTTP {exc.code}）。"
             raise MinerUError(
-                f"MinerU HTTP {exc.code}: {detail}",
+                message,
                 retry_with_new_task=bool(
                     method == "GET"
                     and "/extract-results/batch/" in endpoint
                     and exc.code in {404, 410}
                 ),
+                allow_parser_fallback=allow_parser_fallback,
             ) from exc
         except urllib.error.URLError as exc:
-            raise MinerUError(f"MinerU network error: {exc.reason}") from exc
+            raise MinerUError(
+                f"MinerU network error: {exc.reason}",
+                allow_parser_fallback=False,
+            ) from exc
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -306,6 +453,7 @@ class MinerUClient:
             raise MinerUError(
                 f"MinerU error {data.get('code')}: {message}",
                 retry_with_new_task=batch_missing,
+                allow_parser_fallback=True,
             )
         return data
 
@@ -424,7 +572,10 @@ def submit_local_pdf(
     batch_id = str(data["batch_id"])
     urls = data.get("file_urls") or []
     if not urls:
-        raise MinerUError("MinerU did not return an upload URL.")
+        raise MinerUError(
+            "MinerU did not return an upload URL.",
+            allow_parser_fallback=True,
+        )
     upload_url = extract_upload_url(urls[0])
     upload_status = client.upload_file(upload_url, pdf_path)
     state = {
@@ -565,7 +716,7 @@ def submit_local_pdf_segments(
     }
     save_segment_manifest(prefix, manifest, Path(manifest_dir))
     result_root = Path(result_dir)
-    for segment_state in planned_segments:
+    for segment_index, segment_state in enumerate(planned_segments):
         data_id = str(segment_state["data_id"])
         page_ranges = str(segment_state["page_ranges"])
         segment_start = _coerce_int(segment_state.get("page_start"))
@@ -705,6 +856,21 @@ def submit_local_pdf_segments(
                 parse_options_fingerprint=parse_options_fingerprint,
             )
         except Exception as exc:
+            has_mineru_checkpoint = any(
+                isinstance(item, dict)
+                and bool(
+                    (
+                        str(item.get("batch_id") or "").strip()
+                        and str(item.get("status") or "").lower() != "failed"
+                    )
+                    or (
+                        str(item.get("result_dir") or "").strip()
+                        and str(item.get("status") or "").lower()
+                        in COMPLETED_UNIT_STATUSES
+                    )
+                )
+                for item in planned_segments[: segment_index + 1]
+            )
             segment_state["status"] = "failed"
             segment_state["error"] = str(exc)
             save_segment_manifest(prefix, manifest, Path(manifest_dir))
@@ -714,7 +880,11 @@ def submit_local_pdf_segments(
                     isinstance(exc, MinerUError)
                     and exc.retry_with_new_task
                 ),
-                allow_parser_fallback=False,
+                allow_parser_fallback=bool(
+                    isinstance(exc, MinerUError)
+                    and exc.allow_parser_fallback
+                    and not has_mineru_checkpoint
+                ),
             ) from exc
         segment_state.update(
             {

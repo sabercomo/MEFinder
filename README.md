@@ -117,16 +117,16 @@ corpus/parsed/pdf/
 
 如果 PDF 被识别为扫描版、乱码文本层或复杂布局，可以先用 MinerU API 处理少量页码，下载结构化结果后再导入项目。
 
-在桌面应用的“设置 → MinerU API”中填写 Bearer Token；高级用户也可以填写
-Access Key ID / Secret Access Key。配置会保存到本机私有文件：
+在桌面应用的“设置 → MinerU API”中填写 API Token。可以粘贴原始 Token，
+也可以粘贴完整的 `Authorization: Bearer <token>`。配置会保存到本机私有文件：
 
 ```text
 config/mineru_api.local.json
 ```
 
-这个文件已被 `.gitignore` 排除，不要发给别人。MinerU 官方接口使用
-`Authorization: Bearer <token>`；如果页面只提供 Access Key ID / Secret Access
-Key，可以先留空 Token 试运行，若返回 Token 错误，再回到 MinerU API 管理页创建或查看 Token。
+这个文件已被 `.gitignore` 排除，不要发给别人。MinerU 当前精准解析 API 使用
+`Authorization: Bearer <token>`，必须在 MinerU API 管理页创建或复制 Token；
+Access Key ID / Secret Access Key 不能替代该 Token。
 
 建议先提交小范围页码，不要直接跑整本书：
 
@@ -216,7 +216,7 @@ http://127.0.0.1:8765/
 
 ## 在应用内填写 MinerU API
 
-桌面应用左侧进入“设置”，在“MinerU API”区域填写 Bearer Token；如果 MinerU 页面同时提供 Access Key ID 和 Secret Access Key，也可以一并填写。填写 Token 到期日期后，设置页会显示到期提醒。
+桌面应用左侧进入“设置”，在“MinerU API”区域填写 API Token。可以直接粘贴原始 Token，也可以粘贴完整的 `Authorization: Bearer <token>`；Access Key ID / Secret Access Key 不能用于当前精准解析 API。填写 Token 到期日期后，设置页会显示到期提醒。
 
 点击“保存 API 配置”后，桌面版凭据只写入当前 Windows 用户的本地数据目录：
 
@@ -224,7 +224,7 @@ http://127.0.0.1:8765/
 %LOCALAPPDATA%\MEFinder\mineru_api.local.json
 ```
 
-已经保存的密钥不会回显在页面中。更新三个月后的 Token 时，只需填写新的 Token，其他密钥字段留空即可，旧字段会保留。程序升级或重新打包不会清除这个文件。源码/命令行模式仍使用项目中的 `config/mineru_api.local.json`。
+已经保存的 Token 不会回显在页面中。更新 Token 时只需填写新的 Token；程序升级或重新打包不会清除这个文件。源码/命令行模式仍使用项目中的 `config/mineru_api.local.json`。
 
 ## 配置其他视觉解析 API
 

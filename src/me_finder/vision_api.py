@@ -190,6 +190,10 @@ def _write_vision_config(path: Path, data: Mapping[str, object]) -> None:
         json.dumps(dict(data), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    try:
+        temporary.chmod(0o600)
+    except OSError:
+        pass
     temporary.replace(path)
 
 

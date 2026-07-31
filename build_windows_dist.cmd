@@ -17,10 +17,15 @@ if errorlevel 1 exit /b 1
 
 "%PYTHON%" -m unittest ^
   tests.test_anchor_metadata ^
+  tests.test_api_fallback_recovery ^
+  tests.test_mineru_config ^
   tests.test_vision_api ^
   tests.test_citations ^
   tests.test_database_resilience ^
+  tests.test_large_index_resilience ^
   tests.test_pdf_import_config ^
+  tests.test_import_config_concurrency ^
+  tests.test_long_filename_import ^
   tests.test_pdf_match_anchors ^
   tests.test_page_display ^
   tests.test_runtime_page_mapping ^

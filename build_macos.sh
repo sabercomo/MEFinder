@@ -85,7 +85,9 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
 
 "$MEFINDER_PYTHON" -m unittest \
   tests.test_anchor_metadata \
+  tests.test_api_fallback_recovery \
   tests.test_backup_service \
+  tests.test_batch_document_removal \
   tests.test_batch_directory_import \
   tests.test_calibration_library_ui \
   tests.test_citations \
@@ -93,13 +95,18 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_database_resilience \
   tests.test_desktop_portable \
   tests.test_directory_scan \
+  tests.test_import_config_concurrency \
   tests.test_import_queue \
   tests.test_import_resume_mineru \
   tests.test_import_resume_queue \
   tests.test_import_resume_vision \
   tests.test_import_resume_web \
+  tests.test_mineru_config \
   tests.test_macos_update \
   tests.test_macos_pdf_viewer \
+  tests.test_large_index_resilience \
+  tests.test_library_startup_performance \
+  tests.test_long_filename_import \
   tests.test_platform_open \
   tests.test_pdf_match_anchors \
   tests.test_pdf_import_config \
@@ -113,6 +120,8 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_structured_reader_frontend \
   tests.test_structured_reader_web \
   tests.test_theme_system \
+  tests.test_toast_presentation \
+  tests.test_vision_api \
   tests.test_portable_index_rebuild
 
 if command -v node >/dev/null 2>&1; then

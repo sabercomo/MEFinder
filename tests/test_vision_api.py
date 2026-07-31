@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import sqlite3
 import unittest
 from contextlib import closing
@@ -148,6 +150,11 @@ class VisionAPIConfigTests(unittest.TestCase):
             self.assertTrue(provider["has_api_key"])
             self.assertNotIn("api_key", provider)
             self.assertNotIn("secret-key", json.dumps(summary, ensure_ascii=False))
+            if os.name != "nt":
+                self.assertEqual(
+                    stat.S_IMODE(path.stat().st_mode),
+                    0o600,
+                )
 
             provider_id = provider["id"]
             save_vision_provider(

@@ -3044,8 +3044,6 @@ async function loadMineruConfig() {
     document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
     document.getElementById('mineru-expires-at').value = data.expires_at || '';
     document.getElementById('mineru-token').value = '';
-    document.getElementById('mineru-access-key-id').value = '';
-    document.getElementById('mineru-secret-access-key').value = '';
     if (data.configured) {
       var expiryStatus = data.expiry_status || 'ok';
       var variant = (expiryStatus === 'expired' || expiryStatus === 'invalid') ? 'warning'
@@ -3054,7 +3052,9 @@ async function loadMineruConfig() {
       status.textContent = '已配置' + (data.expiry_label ? ' · ' + data.expiry_label : '');
     } else {
       status.className = 'settings-status warning';
-      status.textContent = '尚未配置 Token';
+      status.textContent = data.has_legacy_access_keys
+        ? '旧 AK/SK 无法鉴权，请填写 API Token'
+        : '尚未配置 API Token';
     }
     mineruConfigLoaded = true;
   } catch (e) {
@@ -3127,8 +3127,6 @@ async function saveMineruConfig() {
   var hint = document.getElementById('mineru-save-hint');
   var payload = {
     token: document.getElementById('mineru-token').value.trim(),
-    access_key_id: document.getElementById('mineru-access-key-id').value.trim(),
-    secret_access_key: document.getElementById('mineru-secret-access-key').value.trim(),
     api_base: document.getElementById('mineru-api-base').value.trim(),
     expires_at: document.getElementById('mineru-expires-at').value
   };
@@ -3141,6 +3139,13 @@ async function saveMineruConfig() {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    if (!data.configured) {
+      hint.textContent = '尚未填写有效 Token';
+      showToast('请粘贴 MinerU API 管理页面创建的 Token');
+      mineruConfigLoaded = false;
+      await loadMineruConfig();
+      return;
+    }
     hint.textContent = '已保存到本机';
     showToast('MinerU API 配置已保存');
     mineruConfigLoaded = false;
@@ -3638,6 +3643,7 @@ function renderVisionProviders() {
     }
   }
   syncImportVisionProviders();
+  renderImportQueue();
 }
 
 async function loadVisionProviders() {
@@ -3920,6 +3926,17 @@ async function setVisionAutoFallback(enabled) {
 
 /* ═══ Import ═══ */
 let importQueue = [];
+
+function visionRetryProviderFor(q) {
+  if (!q || q.status !== 'error') return null;
+  if (q.failureStage === 'index' || q.mineruInterrupted) return null;
+  if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed) return null;
+  var providers = configuredVisionProviders();
+  var preferredId = q.retryProviderId || '';
+  return providers.find(function(provider) {
+    return provider.id === preferredId;
+  }) || providers[0] || null;
+}
 
 function initDropZone() {
   var zone = document.getElementById('drop-zone');
@@ -4548,6 +4565,7 @@ function renderImportQueue() {
   queueEl.style.display = 'block';
   itemsEl.innerHTML = importQueue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : 'word';
+    var retryProvider = visionRetryProviderFor(q);
     var steps = importStepsFor(q);
     var stepsHTML = steps.map(function(label, i) {
       var cls = '';
@@ -4564,16 +4582,17 @@ function renderImportQueue() {
     if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
         + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
-      if (q.status === 'error' && q.canRetryVision) {
+      if (q.status === 'error' && retryProvider) {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
-          + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>';
+          + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
       }
       retryHTML += '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">解析设置</button></div>';
-    } else if (q.status === 'error' && q.canRetryVision) {
+    } else if (q.status === 'error' && retryProvider) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
-        + q.id + '\')">改用 ' + esc(q.retryProviderName || '其他解析 API') + '</button>'
+        + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
         + '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">切换设置</button></div>';
-    } else if (q.status === 'error' && q.needsProviderConfig) {
+    } else if (q.status === 'error'
+        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed)) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="navigateTo(\'settings\')">配置其他解析 API</button></div>';
     }
     return '<div class="import-item" data-id="' + q.id + '">'
@@ -4698,6 +4717,8 @@ function pollImportJob(id) {
       if (data.parse_route) q.route = data.parse_route;
       if (data.provider_id) q.providerId = data.provider_id;
       if (data.provider_name) q.providerName = data.provider_name;
+      q.mineruFailed = !!data.mineru_failed;
+      q.mineruInterrupted = !!data.mineru_interrupted;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
       else if (data.phase === 'vision_processing') q.route = 'vision';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
@@ -4764,6 +4785,8 @@ async function loadResumableImports() {
         retryProviderId: job.retry_provider_id || job.provider_id || null,
         retryProviderName: job.retry_provider_name || job.provider_name || null,
         needsProviderConfig: !!job.needs_provider_config,
+        mineruFailed: !!job.mineru_failed,
+        mineruInterrupted: !!job.mineru_interrupted,
         fromJournal: true
       });
     });
@@ -4803,14 +4826,14 @@ async function resumeImport(id, options) {
 async function retryImportWithVision(id) {
   var q = importQueue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId) return;
-  var providerId = q.retryProviderId || visionConfig.default_provider_id || selectedVisionProviderId();
-  if (!providerId) {
+  var provider = visionRetryProviderFor(q);
+  if (!provider) {
     openVisionSettings();
     showToast('请先配置一个其他解析 API');
     return;
   }
-  var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
-  var providerName = (provider && provider.name) || q.retryProviderName || '其他解析 API';
+  var providerId = provider.id;
+  var providerName = provider.name || '其他解析 API';
   if (!confirm('将改用“' + providerName + '”重新解析这份 PDF，可能产生费用。继续吗？')) return;
   try {
     var resp = await fetch('/api/import-retry', {

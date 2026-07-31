@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from src.me_finder import database as database_module
 from src.me_finder.database import build_database
 from src.me_finder.database import replace_source_in_database as real_replace_source
+from src.me_finder.mineru_api import MinerUError
 from src.me_finder.pdf_import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
 from src.me_finder.search import SearchEngine as RealSearchEngine
@@ -123,6 +124,123 @@ def fake_native_extraction(
 
 
 class BatchDirectoryImportTests(unittest.TestCase):
+    def test_failed_pdf_detection_removes_the_unreferenced_copy(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            paper = source_dir / "detection-fails.pdf"
+            write_native_pdf(paper, "FAIL-DETECTION")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                side_effect=MinerUError("PDF detection failed"),
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    response = self._post_json(
+                        f"http://127.0.0.1:{server.server_port}/api/import-local",
+                        {"paths": [str(paper)]},
+                    )
+                    self.assertEqual(response["jobs"], [])
+                    self.assertEqual(len(response["errors"]), 1)
+                    raw_pdf = root / "corpus" / "raw_pdf"
+                    self.assertEqual(list(raw_pdf.glob("*.pdf")), [])
+                    self.assertEqual(list(raw_pdf.glob(".mefinder-*")), [])
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_failed_docx_job_journal_removes_the_unreferenced_upload(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source = Path(temp_dir) / "orphan.docx"
+            write_test_docx(source, "journal failure fixture")
+            payload = source.read_bytes()
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            try:
+                os.chdir(root)
+                handler = make_handler(root / "data" / "index.sqlite3")
+                handler.log_message = lambda *_args: None
+                server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                threading.Thread(
+                    target=server.serve_forever,
+                    daemon=True,
+                ).start()
+                request = Request(
+                    f"http://127.0.0.1:{server.server_port}/api/import",
+                    data=payload,
+                    headers={
+                        "Content-Type": (
+                            "application/vnd.openxmlformats-officedocument."
+                            "wordprocessingml.document"
+                        ),
+                        "Content-Length": str(len(payload)),
+                        "X-File-Name": source.name,
+                    },
+                    method="POST",
+                )
+                with patch(
+                    "src.me_finder.web.ImportJobJournal.save_job",
+                    side_effect=OSError("journal unavailable"),
+                ):
+                    with self.assertRaises(HTTPError) as caught:
+                        urlopen(request, timeout=5)
+                self.assertEqual(caught.exception.code, 400)
+                raw_docx = root / "corpus" / "raw_docx"
+                deadline = time.monotonic() + 2
+                while (
+                    list(raw_docx.glob("*.docx"))
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.01)
+                self.assertEqual(list(raw_docx.glob("*.docx")), [])
+                self.assertEqual(list(raw_docx.glob(".mefinder-*")), [])
+            finally:
+                if server is not None:
+                    server.shutdown()
+                    server.server_close()
+                if handler is not None:
+                    handler.close_runtime()
+                os.chdir(previous_cwd)
+
     def test_two_local_documents_share_one_index_rebuild(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "app"
@@ -190,8 +308,8 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     handler.close_runtime()
                     os.chdir(previous_cwd)
 
-    def test_pdf_batch_snapshots_the_index_once_not_once_per_file(self) -> None:
-        """索引快照是整份复制；真实语料下每份 3.5GB，按文件数复制会拖垮批量导入。"""
+    def test_pdf_batch_uses_atomic_transactions_without_copying_the_index(self) -> None:
+        """单篇事务可自行回滚，不能再为 3.5GB 索引制作整库导入快照。"""
 
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "app"
@@ -246,12 +364,140 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         ["completed"] * len(paths),
                         [status.get("message") for status in statuses],
                     )
-                    self.assertEqual(backup.call_count, 1)
+                    self.assertEqual(backup.call_count, 0)
                 finally:
                     if server is not None:
                         server.shutdown()
                         server.server_close()
                     handler.close_runtime()
+                    os.chdir(previous_cwd)
+
+    def test_batch_queue_failure_keeps_native_and_remote_jobs_resumable(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source_dir = Path(temp_dir) / "library"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            source_dir.mkdir()
+            native = source_dir / "native.pdf"
+            remote = source_dir / "remote.pdf"
+            write_native_pdf(native, "NATIVE-QUEUE")
+            write_native_pdf(remote, "REMOTE-QUEUE")
+            build_database(
+                {"metadata": {}},
+                root / "data" / "index.sqlite3",
+            )
+            (root / "config" / "pdf_imports.json").write_text(
+                '{"documents": []}',
+                encoding="utf-8",
+            )
+            save_preferences(
+                {"scan_directories": [str(source_dir)]},
+                root / "config" / "preferences.json",
+            )
+
+            def detected(path: Path) -> dict[str, object]:
+                return {
+                    "detected_pdf_type": (
+                        "native_text"
+                        if Path(path).name == native.name
+                        else "scanned"
+                    ),
+                    "pdf_page_count": 1,
+                }
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with (
+                patch(
+                    "src.me_finder.web.detect_imported_pdf",
+                    side_effect=detected,
+                ),
+                patch(
+                    "src.me_finder.import_queue.ImportTaskQueue.submit",
+                    side_effect=RuntimeError("queue unavailable"),
+                ),
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(
+                        root / "data" / "index.sqlite3"
+                    )
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(
+                        ("127.0.0.1", 0),
+                        handler,
+                    )
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    base_url = (
+                        f"http://127.0.0.1:{server.server_port}"
+                    )
+
+                    response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(native), str(remote)]},
+                    )
+                    self.assertEqual(response["errors"], [])
+                    self.assertEqual(len(response["jobs"]), 2)
+                    statuses = [
+                        self._job_status(
+                            base_url,
+                            str(item["job_id"]),
+                        )
+                        for item in response["jobs"]
+                    ]
+                    self.assertEqual(
+                        [item["status"] for item in statuses],
+                        ["failed", "failed"],
+                    )
+                    self.assertEqual(
+                        [item["failure_stage"] for item in statuses],
+                        ["queue", "queue"],
+                    )
+                    self.assertTrue(
+                        all(item["can_resume"] for item in statuses)
+                    )
+                    self.assertEqual(
+                        len(
+                            list(
+                                (
+                                    root / "corpus" / "raw_pdf"
+                                ).glob("*.pdf")
+                            )
+                        ),
+                        2,
+                    )
+                    config = json.loads(
+                        (
+                            root / "config" / "pdf_imports.json"
+                        ).read_text(encoding="utf-8")
+                    )
+                    self.assertEqual(len(config["documents"]), 2)
+                    self.assertEqual(
+                        len(
+                            list(
+                                (
+                                    root
+                                    / "corpus"
+                                    / "processed"
+                                    / "import_jobs"
+                                ).glob("*.json")
+                            )
+                        ),
+                        2,
+                    )
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
                     os.chdir(previous_cwd)
 
     def test_more_than_fifty_paths_is_rejected_instead_of_truncated(self) -> None:

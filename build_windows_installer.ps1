@@ -86,10 +86,16 @@ try {
 
     & $pythonCommand @pythonLauncherArgs -m unittest `
         tests.test_anchor_metadata `
+        tests.test_api_fallback_recovery `
         tests.test_backup_service `
+        tests.test_batch_document_removal `
         tests.test_citations `
         tests.test_database_resilience `
+        tests.test_large_index_resilience `
+        tests.test_library_startup_performance `
         tests.test_pdf_import_config `
+        tests.test_import_config_concurrency `
+        tests.test_long_filename_import `
         tests.test_pdf_match_anchors `
         tests.test_page_display `
         tests.test_runtime_page_mapping `
@@ -107,6 +113,7 @@ try {
         tests.test_import_resume_queue `
         tests.test_import_resume_vision `
         tests.test_import_resume_web `
+        tests.test_mineru_config `
         tests.test_portable_index_rebuild `
         tests.test_windows_desktop `
         tests.test_update_service `

@@ -10,8 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from .database import delete_sources_from_database
-from .pdf_import_service import load_import_config, save_import_config
+from .database import backup_database, delete_sources_from_database
+from .pdf_import_service import locked_import_config, save_import_config
 
 
 class DocumentDeletionService:
@@ -63,6 +63,22 @@ class DocumentDeletionService:
         delete_generated_artifacts: bool = True,
         internal_copy_ids: Optional[Iterable[str]] = None,
     ) -> Dict[str, object]:
+        with locked_import_config(self.config_path) as config:
+            return self._remove_many_locked(
+                source_file_ids,
+                delete_generated_artifacts=delete_generated_artifacts,
+                internal_copy_ids=internal_copy_ids,
+                config=config,
+            )
+
+    def _remove_many_locked(
+        self,
+        source_file_ids: Sequence[str],
+        *,
+        delete_generated_artifacts: bool,
+        internal_copy_ids: Optional[Iterable[str]],
+        config: Dict[str, object],
+    ) -> Dict[str, object]:
         """Remove several PDFs with one config write and one database snapshot.
 
         Documents that fail validation are reported in ``failures`` and left
@@ -78,7 +94,6 @@ class DocumentDeletionService:
             str(value or "").strip() for value in (internal_copy_ids or [])
         }
 
-        config = load_import_config(self.config_path)
         documents = [item for item in config.get("documents", []) if isinstance(item, dict)]
         document_by_id = {
             str(item.get("source_file_id") or ""): item for item in documents
@@ -117,6 +132,10 @@ class DocumentDeletionService:
         original_config = json.loads(json.dumps(config, ensure_ascii=False))
         staged: List[Tuple[Path, Path]] = []
         cleanup_warnings: List[str] = []
+        # Finish the potentially multi-GB snapshot before hiding any artifact
+        # or changing the config.  A process exit during the copy therefore
+        # leaves the live library completely untouched.
+        backup_path = backup_database(self.database_path)
         try:
             if delete_generated_artifacts:
                 for source_file_id in targets:
@@ -137,8 +156,9 @@ class DocumentDeletionService:
             database_result = delete_sources_from_database(
                 targets,
                 self.database_path,
-                backup_existing=True,
+                backup_existing=False,
             )
+            database_result["backup_path"] = str(backup_path)
         except Exception as original_error:
             rollback_errors: List[str] = []
             try:
@@ -387,7 +407,9 @@ class DocumentDeletionService:
         path = Path(path)
         if not path.exists():
             return
-        temporary = path.with_name(f".{path.name}.removing-{uuid.uuid4().hex}")
+        # Do not append the full source basename: a valid near-MAX_PATH file
+        # would otherwise become too long exactly when the user deletes it.
+        temporary = path.with_name(f".mefinder-removing-{uuid.uuid4().hex}.tmp")
         path.replace(temporary)
         staged.append((path, temporary))
 

@@ -14,6 +14,7 @@ import shutil
 import sqlite3
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
@@ -309,6 +310,8 @@ def _deduplicate_keyed_rows(
 # 每份快照都是整个索引的完整副本。真实语料下单份就有 3.5GB，不设上限时
 # 一次批量删除就能在数据目录里堆出几百 GB。
 DATABASE_BACKUP_RETENTION = 3
+DATABASE_BACKUP_FREE_SPACE_MARGIN = 64 * 1024 * 1024
+DATABASE_REBUILD_ESTIMATE_FLOOR = 16 * 1024 * 1024
 
 
 def _prune_database_backups(
@@ -336,14 +339,149 @@ def _prune_database_backups(
     return removed
 
 
-def _backup_database(db_path: Path) -> Path:
+def _backup_database(
+    db_path: Path,
+    *,
+    additional_required_bytes: int = 0,
+) -> Path:
     backup_dir = db_path.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    required_bytes = (
+        db_path.stat().st_size
+        + max(0, int(additional_required_bytes))
+        + DATABASE_BACKUP_FREE_SPACE_MARGIN
+    )
+    snapshots = sorted(
+        (
+            path
+            for path in backup_dir.glob(f"{db_path.stem}-*{db_path.suffix}")
+            if path.is_file()
+        ),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
+    free_bytes = shutil.disk_usage(backup_dir).free
+
+    # Old releases never pruned snapshots.  Work out whether deleting older
+    # snapshots can make enough room *before* removing any of them, and always
+    # retain the newest known-good backup until its replacement is complete.
+    pre_copy_keep = max(1, DATABASE_BACKUP_RETENTION - 1)
+    delete_count = max(0, len(snapshots) - pre_copy_keep)
+    planned_removals = list(snapshots[:delete_count])
+    remaining = list(snapshots[delete_count:])
+
+    def reclaimable_bytes(path: Path) -> int:
+        stat = path.stat()
+        blocks = int(getattr(stat, "st_blocks", 0) or 0)
+        return blocks * 512 if blocks else int(stat.st_size)
+
+    projected_free = free_bytes + sum(
+        reclaimable_bytes(path) for path in planned_removals
+    )
+    for candidate in remaining[:-1]:
+        if projected_free >= required_bytes:
+            break
+        planned_removals.append(candidate)
+        projected_free += reclaimable_bytes(candidate)
+    if projected_free < required_bytes:
+        free_gib = free_bytes / (1024**3)
+        needed_gib = required_bytes / (1024**3)
+        raise OSError(
+            errno.ENOSPC,
+            "磁盘空间不足，无法创建索引安全备份："
+            f"至少需要约 {needed_gib:.2f} GiB，当前可用约 {free_gib:.2f} GiB。"
+            "为避免丢失现有恢复点，本次没有删除旧备份。"
+            "请清理数据目录的 backups 文件夹或释放磁盘空间后重试。",
+        )
+    for snapshot in planned_removals:
+        snapshot.unlink()
+    free_bytes = shutil.disk_usage(backup_dir).free
+    if free_bytes < required_bytes:
+        needed_gib = required_bytes / (1024**3)
+        free_gib = free_bytes / (1024**3)
+        raise OSError(
+            errno.ENOSPC,
+            "磁盘空间不足，无法创建索引安全备份："
+            f"至少需要约 {needed_gib:.2f} GiB，当前可用约 {free_gib:.2f} GiB。"
+            "已保留最近一次可用备份。"
+            "请清理数据目录的 backups 文件夹或释放磁盘空间后重试。",
+        )
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     backup_path = backup_dir / f"{db_path.stem}-{stamp}{db_path.suffix}"
-    shutil.copy2(db_path, backup_path)
+    temp_path = backup_dir / f".{backup_path.name}.{uuid.uuid4().hex}.tmp"
+    try:
+        shutil.copy2(db_path, temp_path)
+        # A successful copy call is not enough to call a multi-GB snapshot
+        # durable.  Flush the temporary file before its atomic rename so a
+        # power loss cannot expose a partially persisted file as a backup.
+        # Windows maps fsync to FlushFileBuffers, which requires a handle
+        # opened with write access even though no more bytes are changed.
+        with temp_path.open("rb+") as stream:
+            os.fsync(stream.fileno())
+        temp_path.replace(backup_path)
+    except OSError as exc:
+        temp_path.unlink(missing_ok=True)
+        if getattr(exc, "errno", None) == errno.ENOSPC:
+            free_gib = shutil.disk_usage(backup_dir).free / (1024**3)
+            needed_gib = required_bytes / (1024**3)
+            raise OSError(
+                errno.ENOSPC,
+                "磁盘空间不足，索引安全备份未完成："
+                f"需要约 {needed_gib:.2f} GiB，当前可用约 {free_gib:.2f} GiB。"
+                "最近一次可用备份仍已保留。",
+            ) from exc
+        raise
     _prune_database_backups(backup_dir, db_path)
     return backup_path
+
+
+def backup_database(db_path: Path = DEFAULT_DATABASE_PATH) -> Path:
+    """Create one durable, retention-managed snapshot of the index."""
+
+    return _backup_database(Path(db_path))
+
+
+def _estimate_database_build_size(index: Dict[str, object]) -> int:
+    """Conservatively estimate a fresh normalized DB without one huge encode."""
+
+    estimated = 0
+    metadata = index.get("metadata")
+    if isinstance(metadata, dict):
+        estimated += len(_json(metadata).encode("utf-8"))
+    for table_name in (
+        "source_files",
+        "volumes",
+        "works",
+        "toc_entries",
+        "paragraphs",
+        "page_anchors",
+        "pdf_pages",
+        "pdf_page_mappings",
+        "pdf_import_runs",
+        "audit_issues",
+    ):
+        rows = index.get(table_name)
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            estimated += len(_json(row).encode("utf-8")) + 256
+            if table_name == "paragraphs":
+                # Paragraph text is stored in payload_json and again in
+                # searchable/indexed columns.
+                estimated += sum(
+                    len(str(row.get(field) or "").encode("utf-8"))
+                    for field in (
+                        "text_raw",
+                        "normalized_text",
+                        "compact_text",
+                        "plain_text",
+                    )
+                )
+    return max(
+        DATABASE_REBUILD_ESTIMATE_FLOOR,
+        int(estimated * 1.15),
+    )
 
 
 def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PATH, backup_existing: bool = False) -> Dict[str, object]:
@@ -352,7 +490,16 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if backup_existing and db_path.exists():
-        _backup_database(db_path)
+        # A full rebuild needs both the snapshot and a new database-sized temp
+        # file on the same volume.  Reserve that second copy up front so a
+        # 1.4GB library fails safely before doing multi-GB work.
+        _backup_database(
+            db_path,
+            additional_required_bytes=max(
+                db_path.stat().st_size,
+                _estimate_database_build_size(index),
+            ),
+        )
 
     raw_source_files = [
         item for item in index.get("source_files", []) if isinstance(item, dict)
@@ -578,13 +725,34 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
                 connection.executemany(sql, values)
 
         connection.commit()
-        connection.execute("VACUUM")
+        # This database was created from an empty temp file, so VACUUM cannot
+        # reclaim meaningful fragmentation.  It only creates another
+        # database-sized temporary copy, which made large rebuilds require
+        # several extra GiB of free disk space.
         connection.close()
         _replace_database_file(temp_path, db_path)
-    except Exception:
+    except Exception as exc:
         connection.close()
         if temp_path.exists():
             temp_path.unlink()
+        disk_full = bool(
+            getattr(exc, "errno", None) == errno.ENOSPC
+            or getattr(exc, "sqlite_errorcode", None)
+            == getattr(sqlite3, "SQLITE_FULL", 13)
+            or (
+                isinstance(exc, sqlite3.OperationalError)
+                and "disk" in str(exc).casefold()
+                and "full" in str(exc).casefold()
+            )
+        )
+        if disk_full:
+            free_gib = shutil.disk_usage(db_path.parent).free / (1024**3)
+            raise OSError(
+                errno.ENOSPC,
+                "磁盘空间不足，无法完成索引重建。"
+                f"当前可用约 {free_gib:.2f} GiB；现有索引未被替换，"
+                "已创建的安全备份仍保留。请释放空间后重试。",
+            ) from exc
         raise
 
     return {

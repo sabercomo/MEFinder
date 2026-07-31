@@ -58,7 +58,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertNotIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
-        self.assertIn("start_import_job(target, profile, sid, True, force_mineru=True)", WEB_SOURCE)
+        self.assertIn("force_mineru=True,", WEB_SOURCE)
+        self.assertIn(
+            'display_file_name=str(record.get("file_name") or "")',
+            WEB_SOURCE,
+        )
         self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
@@ -133,6 +137,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="vision-auto-fallback"', HTML)
         self.assertIn("function loadVisionProviders()", HTML)
         self.assertIn("function retryImportWithVision(id)", HTML)
+        self.assertIn("function visionRetryProviderFor(q)", HTML)
+        self.assertIn("var provider = visionRetryProviderFor(q);", HTML)
+        self.assertIn("q.mineruFailed = !!data.mineru_failed;", HTML)
+        self.assertIn("mineruFailed: !!job.mineru_failed", HTML)
+        render_start = HTML.index("function renderVisionProviders()")
+        render_end = HTML.index("async function loadVisionProviders()", render_start)
+        self.assertIn("renderImportQueue();", HTML[render_start:render_end])
         self.assertIn("fetch('/api/import-retry'", HTML)
         self.assertIn('"X-Vision-Provider-ID"', WEB_SOURCE)
         self.assertIn('"/api/vision-providers"', WEB_SOURCE)
@@ -143,6 +154,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             'default_id = str(summary.get("default_provider_id") or "")',
             WEB_SOURCE,
         )
+
+    def test_mineru_settings_require_api_token_instead_of_legacy_access_keys(self) -> None:
+        self.assertIn('id="mineru-token"', HTML)
+        self.assertNotIn('id="mineru-access-key-id"', HTML)
+        self.assertNotIn('id="mineru-secret-access-key"', HTML)
+        self.assertIn("data.has_legacy_access_keys", HTML)
+        self.assertNotIn("access_key_id: document.getElementById", HTML)
+        self.assertNotIn("secret_access_key: document.getElementById", HTML)
 
     def test_api_settings_collapse_and_fallback_uses_one_auto_saving_switch(self) -> None:
         self.assertIn('id="mineru-api-settings"', HTML)

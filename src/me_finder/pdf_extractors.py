@@ -151,9 +151,20 @@ def extract_pdf_source(
     document_id = str(config.get("document_id") or source_file_id)
     title = str(config.get("title") or path.stem)
     author = config.get("author")
+    original_file_name = Path(
+        str(config.get("original_file_name") or path.name)
+    ).name or path.name
     structured_segments = load_mineru_segments(config)
     profile = mineru_profile(path, structured_segments) if structured_segments else detect_pdf_type(path)
-    source_file = source_file_record(path, root, source_file_id, document_id, title, profile)
+    source_file = source_file_record(
+        path,
+        root,
+        source_file_id,
+        document_id,
+        title,
+        profile,
+        original_file_name=original_file_name,
+    )
     bibliographic = config.get("bibliographic_metadata") or config
     if isinstance(bibliographic, dict):
         _attach_bibliographic_metadata(source_file, bibliographic)
@@ -210,7 +221,7 @@ def extract_pdf_source(
                     {
                         "severity": "warning",
                         "issue_type": "pdf_auto_page_mapping_needs_review",
-                        "message": f"{path.name}: 自动页码映射置信度不足，未自动应用。",
+                        "message": f"{original_file_name}: 自动页码映射置信度不足，未自动应用。",
                         "source_file_id": source_file_id,
                     }
                 )
@@ -223,7 +234,15 @@ def extract_pdf_source(
         )
         profile["mapping_failure_reasons"] = auto_mapping.get("failure_reasons", [])
         source_file["pdf_profile"] = profile
-        paragraphs = make_pdf_paragraphs(source_file_id, document_id, title, author, path.name, pages, work["work_id"])
+        paragraphs = make_pdf_paragraphs(
+            source_file_id,
+            document_id,
+            title,
+            author,
+            original_file_name,
+            pages,
+            work["work_id"],
+        )
         for paragraph in paragraphs:
             paragraph["text_source"] = str(profile.get("parser") or "mineru")
         applied_segments = ((profile.get("auto_page_mapping") or {}).get("applied_segments") or [])
@@ -277,7 +296,7 @@ def extract_pdf_source(
             {
                 "severity": "warning",
                 "issue_type": "pdf_needs_mineru",
-                "message": f"{path.name} 分类为 {profile['detected_pdf_type']}，本轮不自动 OCR，需 MinerU 或人工处理。",
+                "message": f"{original_file_name} 分类为 {profile['detected_pdf_type']}，本轮不自动 OCR，需 MinerU 或人工处理。",
                 "source_file_id": source_file_id,
             }
         )
@@ -368,7 +387,15 @@ def extract_pdf_source(
     )
     profile["mapping_failure_reasons"] = auto_mapping.get("failure_reasons", [])
     source_file["pdf_profile"] = profile
-    paragraphs = make_pdf_paragraphs(source_file_id, document_id, title, author, path.name, pages, work["work_id"])
+    paragraphs = make_pdf_paragraphs(
+        source_file_id,
+        document_id,
+        title,
+        author,
+        original_file_name,
+        pages,
+        work["work_id"],
+    )
     applied_segments = ((profile.get("auto_page_mapping") or {}).get("applied_segments") or [])
     pdf_page_mapping = {
         "mapping_id": f"MAP-{source_file_id}",
@@ -420,8 +447,11 @@ def source_file_record(
     document_id: str,
     title: str,
     profile: Dict[str, object],
+    *,
+    original_file_name: Optional[str] = None,
 ) -> Dict[str, object]:
-    return {
+    display_file_name = Path(str(original_file_name or path.name)).name or path.name
+    record = {
         "source_file_id": source_file_id,
         "source_type": "pdf",
         "document_id": document_id,
@@ -430,7 +460,7 @@ def source_file_record(
         "volume_number": None,
         "file_format": "pdf",
         "container_format": "pdf",
-        "file_name": path.name,
+        "file_name": display_file_name,
         "display_title": title,
         "size_bytes": path.stat().st_size,
         "sha256": file_sha256(path),
@@ -438,6 +468,9 @@ def source_file_record(
         "open_source_url": f"/source/{source_file_id}",
         "pdf_profile": profile,
     }
+    if display_file_name != path.name:
+        record["stored_file_name"] = path.name
+    return record
 
 
 def import_run_record(
