@@ -302,6 +302,7 @@ def scan_directories_for_documents(
     errors: List[Dict[str, object]] = []
     limit_reached = False
     detected_count = 0
+    seen_paths: set[str] = set()
     detect_deadline = time.monotonic() + max(0.0, detect_time_budget)
     for directory in directories:
         base = Path(str(directory))
@@ -314,9 +315,6 @@ def scan_directories_for_documents(
             errors.append({"directory": str(directory), "error": str(exc)})
             continue
         for path in paths:
-            if len(entries) >= max_entries:
-                limit_reached = True
-                break
             suffix = path.suffix.lower()
             if suffix not in {".pdf", ".docx"}:
                 continue
@@ -326,8 +324,15 @@ def scan_directories_for_documents(
                 if not path.is_file():
                     continue
                 size = path.stat().st_size
+                path_identity = os.path.normcase(str(path.resolve()))
             except OSError:
                 continue
+            if path_identity in seen_paths:
+                continue
+            if len(entries) >= max_entries:
+                limit_reached = True
+                break
+            seen_paths.add(path_identity)
             imported_size = imported_names.get(path.name)
             if imported_size is None:
                 status = "new"

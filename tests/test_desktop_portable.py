@@ -74,6 +74,15 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertNotIn("js_api", options)
         self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
 
+    def test_scan_directory_picker_enables_native_multiple_selection(self) -> None:
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+
+        self.assertIn("def choose_scan_directories()", desktop_source)
+        self.assertIn(
+            "choose_folders(Path.home() / \"Documents\", allow_multiple=True)",
+            desktop_source,
+        )
+
     def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
 

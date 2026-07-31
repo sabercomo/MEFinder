@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import __version__
@@ -243,6 +243,7 @@ def open_pdf_in_adobe(target: Path, page_number: Optional[int]) -> Optional[Dict
 NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
 NativeThemeSetter = Callable[[str], None]
 NativeDirectoryChooser = Callable[[], Optional[str]]
+NativeScanDirectoryChooser = Callable[[], Optional[Union[str, Sequence[str]]]]
 
 
 def open_pdf_with_platform(
@@ -373,7 +374,7 @@ def make_handler(
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
-    native_scan_directory_chooser: NativeDirectoryChooser | None = None,
+    native_scan_directory_chooser: NativeScanDirectoryChooser | None = None,
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
@@ -2843,22 +2844,45 @@ def make_handler(
                     )
                     return
                 try:
-                    selected_folder = native_scan_directory_chooser()
+                    selected_folders = native_scan_directory_chooser()
                 except Exception as exc:  # noqa: BLE001 - surface any picker failure
                     self._send_json(
                         {"error": str(exc) or "打开文件夹选择器失败。"},
                         status=400,
                     )
                     return
-                if not selected_folder:
+                if not selected_folders:
                     self._send_json({"ok": True, "cancelled": True})
                     return
-                folder = Path(str(selected_folder))
-                if not folder.is_dir():
-                    self._send_json({"error": "所选路径不是文件夹。"}, status=400)
+                if isinstance(selected_folders, (str, Path)):
+                    candidates = [selected_folders]
+                else:
+                    candidates = list(selected_folders)
+                folders: List[str] = []
+                seen_folders: set[str] = set()
+                for selected_folder in candidates:
+                    folder = Path(str(selected_folder))
+                    if not folder.is_dir():
+                        self._send_json(
+                            {"error": "所选路径不是文件夹。"},
+                            status=400,
+                        )
+                        return
+                    normalized = str(folder)
+                    if normalized in seen_folders:
+                        continue
+                    seen_folders.add(normalized)
+                    folders.append(normalized)
+                if not folders:
+                    self._send_json({"ok": True, "cancelled": True})
                     return
                 self._send_json(
-                    {"ok": True, "cancelled": False, "folder": str(folder)}
+                    {
+                        "ok": True,
+                        "cancelled": False,
+                        "folder": folders[0],
+                        "folders": folders,
+                    }
                 )
                 return
             if parsed.path == "/api/data-location/choose":

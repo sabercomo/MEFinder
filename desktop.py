@@ -525,7 +525,11 @@ def main() -> None:
         "update_service": update_service,
     }
 
-    def choose_folder(initial_directory: Path | None) -> str | None:
+    def choose_folders(
+        initial_directory: Path | None,
+        *,
+        allow_multiple: bool = False,
+    ) -> list[str]:
         """Open the platform folder picker. Works on macOS and Windows alike."""
 
         start = initial_directory
@@ -534,19 +538,24 @@ def main() -> None:
         selection = window.create_file_dialog(
             webview.FileDialog.FOLDER,
             directory=str(start),
-            allow_multiple=False,
+            allow_multiple=allow_multiple,
         )
-        return str(selection[0]) if selection else None
+        if not selection:
+            return []
+        if isinstance(selection, (str, Path)):
+            selection = [selection]
+        return [str(folder) for folder in selection]
 
     def choose_data_directory() -> str | None:
         if sys.platform != "darwin" or app_data_root is None:
             return None
-        return choose_folder(app_data_root.parent)
+        selection = choose_folders(app_data_root.parent)
+        return selection[0] if selection else None
 
-    def choose_scan_directory() -> str | None:
+    def choose_scan_directories() -> list[str]:
         # Never start at the home folder: picking it is one click away there,
         # and scanning it would walk the user's whole personal library.
-        return choose_folder(Path.home() / "Documents")
+        return choose_folders(Path.home() / "Documents", allow_multiple=True)
 
     def start_backend(win) -> None:
         try:
@@ -573,7 +582,7 @@ def main() -> None:
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
-                native_scan_directory_chooser=choose_scan_directory,
+                native_scan_directory_chooser=choose_scan_directories,
                 app_data_root=app_data_root,
                 default_app_data_root=default_app_data_root,
             )

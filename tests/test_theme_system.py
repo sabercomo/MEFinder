@@ -317,7 +317,10 @@ class ThemeMarkupTests(unittest.TestCase):
             '<html lang="zh-CN" data-theme="midnight" data-desktop-shell="macos">',
             rendered,
         )
-        self.assertIn('class="macos-titlebar"', rendered)
+        self.assertIn(
+            'class="macos-titlebar pywebview-drag-region"',
+            rendered,
+        )
         self.assertIn('class="macos-titlebar-title">文献原句定位器</span>', rendered)
         self.assertIn('html[data-desktop-shell="macos"] .macos-titlebar', rendered)
         self.assertIn("var(--sidebar-bg) var(--sidebar-width)", rendered)

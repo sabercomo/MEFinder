@@ -30,6 +30,38 @@ class ScanDirectoryPickerTests(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertFalse(response["cancelled"])
         self.assertEqual(response["folder"], str(picked["folder"]))
+        self.assertEqual(response["folders"], [str(picked["folder"])])
+
+    def test_multiple_chosen_folders_are_returned_to_the_page(self) -> None:
+        picked = {}
+
+        with self._server(lambda: picked["folders"]) as (base_url, root):
+            picked["folders"] = [root / "马克思", root / "恩格斯"]
+            for folder in picked["folders"]:
+                folder.mkdir()
+            response = self._post_json(
+                base_url + "/api/scan-directories/choose", {}
+            )
+
+        expected = [str(folder) for folder in picked["folders"]]
+        self.assertTrue(response["ok"])
+        self.assertFalse(response["cancelled"])
+        self.assertEqual(response["folders"], expected)
+        self.assertEqual(response["folder"], expected[0])
+
+    def test_invalid_folder_in_multiple_selection_rejects_the_batch(self) -> None:
+        picked = {}
+
+        with self._server(lambda: picked["folders"]) as (base_url, root):
+            valid = root / "有效目录"
+            valid.mkdir()
+            picked["folders"] = [valid, root / "不存在"]
+            with self.assertRaises(HTTPError) as caught:
+                self._post_json(base_url + "/api/scan-directories/choose", {})
+            payload = json.loads(caught.exception.read().decode("utf-8"))
+
+        self.assertEqual(caught.exception.code, 400)
+        self.assertIn("文件夹", payload["error"])
 
     def test_cancelled_picker_is_not_an_error(self) -> None:
         with self._server(lambda: None) as (base_url, _root):

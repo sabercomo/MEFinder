@@ -3062,7 +3062,8 @@ async function chooseScanDirectory() {
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '选择文件夹失败');
     if (data.cancelled) return;
-    await addScanDirectoryPath(data.folder);
+    var folders = Array.isArray(data.folders) ? data.folders : [data.folder];
+    await addScanDirectoryPaths(folders);
   } catch (e) {
     revealScanPathFallback();
     showToast('选择文件夹失败：' + e.message);
@@ -3071,23 +3072,43 @@ async function chooseScanDirectory() {
   }
 }
 
-async function addScanDirectoryPath(value) {
-  var path = (value || '').trim();
-  if (!path) return;
-  if (scanDirectories.indexOf(path) !== -1) {
+async function addScanDirectoryPaths(values) {
+  var candidates = Array.isArray(values) ? values : [values];
+  var added = [];
+  candidates.forEach(function(value) {
+    var path = String(value || '').trim();
+    if (!path || scanDirectories.indexOf(path) !== -1 || added.indexOf(path) !== -1) return;
+    added.push(path);
+  });
+  if (!added.length) {
     showToast('该文件夹已在列表中');
     return;
   }
-  var previous = scanDirectories;
-  scanDirectories = scanDirectories.concat([path]);
+  var previous = scanDirectories.slice();
+  scanDirectories = scanDirectories.concat(added);
   try {
     await persistScanDirectories();
-    showToast('已添加文献文件夹');
+    var savedCount = scanDirectories.filter(function(path) {
+      return previous.indexOf(path) === -1;
+    }).length;
+    var omittedCount = added.length - savedCount;
+    if (omittedCount > 0) {
+      var message = savedCount > 0
+        ? '已添加 ' + savedCount + ' 个；另 ' + omittedCount + ' 个超过目录数量上限，未保存'
+        : '目录数量已达上限，本次选择未保存';
+      showToast(message, 'danger');
+    } else {
+      showToast(savedCount === 1 ? '已添加文献文件夹' : '已添加 ' + savedCount + ' 个文献文件夹');
+    }
   } catch (e) {
     scanDirectories = previous;
     renderScanDirectories();
     throw e;
   }
+}
+
+async function addScanDirectoryPath(value) {
+  await addScanDirectoryPaths([value]);
 }
 
 async function persistScanDirectories() {

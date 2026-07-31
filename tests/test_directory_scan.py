@@ -97,6 +97,25 @@ class DirectoryScanTests(unittest.TestCase):
         self.assertEqual(len(result["entries"]), 4)
         self.assertTrue(result["limit_reached"])
 
+    def test_overlapping_roots_list_each_document_only_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            nested = base / "子目录"
+            nested.mkdir()
+            (base / "根目录文献.docx").write_bytes(b"root")
+            (nested / "子目录文献.pdf").write_bytes(b"%PDF-1.4 nested")
+
+            result = scan_directories_for_documents(
+                [str(base), str(nested)],
+                {},
+                detect_limit=0,
+            )
+
+        self.assertEqual(
+            [entry["name"] for entry in result["entries"]],
+            ["根目录文献.docx", "子目录文献.pdf"],
+        )
+
     def test_copy_local_document_preserves_original_and_dedupes_names(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "app"
