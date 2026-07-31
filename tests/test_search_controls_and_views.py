@@ -50,7 +50,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_library_filter_groups_stay_together_before_toolbar(self) -> None:
         filters_start = HTML.index('class="library-filter-controls"')
-        toolbar_start = HTML.index('class="library-toolbar-right"', filters_start)
+        toolbar_start = HTML.index('class="view-switch"', filters_start)
         filters = HTML[filters_start:toolbar_start]
         self.assertLess(filters.index('id="lib-type-control"'), filters.index('id="lib-lang-control"'))
         self.assertLess(filters.index('id="lib-lang-control"'), filters.index('id="lib-doctype-control"'))

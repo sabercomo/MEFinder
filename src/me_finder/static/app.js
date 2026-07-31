@@ -34,7 +34,6 @@ let libLangFilter = 'all';
 let libDocTypeFilter = 'all';
 let libStatusFilter = 'all';
 let libSelectedId = null;
-let libDeleteMode = false;
 let libDeleteSelection = new Set();
 let libraryDragSelection = null;
 let suppressLibrarySelectionClick = false;
@@ -121,6 +120,29 @@ function navigateTo(page) {
     if (!dataLocationLoaded) loadDataLocation();
   }
 }
+
+function toggleSidebar(force) {
+  var collapsed = typeof force === 'boolean'
+    ? force
+    : !document.documentElement.classList.contains('sidebar-collapsed');
+  document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
+  var btn = document.querySelector('.sidebar-collapse-btn');
+  if (btn) {
+    var label = collapsed ? '展开侧边栏' : '收起侧边栏';
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+  }
+  try { localStorage.setItem('meFinderSidebarCollapsed', collapsed ? '1' : '0'); } catch (_) {}
+}
+(function syncSidebarToggle() {
+  var collapsed = document.documentElement.classList.contains('sidebar-collapsed');
+  var btn = document.querySelector('.sidebar-collapse-btn');
+  if (btn) {
+    var label = collapsed ? '展开侧边栏' : '收起侧边栏';
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+  }
+})();
 
 /* ═══ Mode segmented control ═══ */
 function setMode(btn) {
@@ -1020,21 +1042,17 @@ function isLibraryDeleteSelectable(source) {
 }
 
 function updateLibraryDeleteControls() {
-  var modeButton = document.getElementById('library-delete-mode-btn');
-  var actions = document.getElementById('library-selection-actions');
+  var bar = document.getElementById('library-selection-bar');
+  var page = document.getElementById('page-library');
   var count = document.getElementById('library-selection-count');
   var removeButton = document.getElementById('library-remove-selected-btn');
   var selectVisibleButton = document.getElementById('library-select-visible-btn');
-  var toolbar = document.querySelector('#page-library .library-toolbar-right');
   var selectedCount = libDeleteSelection.size;
-  if (modeButton) {
-    modeButton.classList.toggle('active', libDeleteMode);
-    modeButton.setAttribute('aria-pressed', libDeleteMode ? 'true' : 'false');
-    modeButton.textContent = libDeleteMode ? '取消选择' : '选择删除';
-  }
-  if (actions) actions.classList.toggle('is-visible', libDeleteMode);
-  if (toolbar) toolbar.classList.toggle('is-delete-mode', libDeleteMode);
-  if (count) count.textContent = '已选 ' + selectedCount;
+  var active = selectedCount > 0;
+  // Selection alone drives the contextual action bar: no persistent mode toggle.
+  if (page) page.classList.toggle('library-selecting', active);
+  if (bar) bar.hidden = !active;
+  if (count) count.textContent = '已选 ' + selectedCount + ' 项';
   if (removeButton) removeButton.disabled = selectedCount === 0;
   if (selectVisibleButton) {
     var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
@@ -1057,12 +1075,10 @@ function syncLibraryDeleteSelectionUI() {
   updateLibraryDeleteControls();
 }
 
-function toggleLibraryDeleteMode(force) {
-  libDeleteMode = typeof force === 'boolean' ? force : !libDeleteMode;
+function clearLibrarySelection() {
+  if (libDeleteSelection.size === 0) return;
   libDeleteSelection.clear();
-  if (libDeleteMode) closeLibDrawer();
-  renderLibraryList();
-  updateLibraryDeleteControls();
+  syncLibraryDeleteSelectionUI();
 }
 
 function toggleLibraryDeleteSelection(sourceId, force) {
@@ -1095,10 +1111,8 @@ function handleLibraryEntryClick(event, sourceId) {
     event.stopPropagation();
     return;
   }
-  if (libDeleteMode) {
-    toggleLibraryDeleteSelection(sourceId);
-    return;
-  }
+  // Clicking the row/card body always opens details; the checkbox is the only
+  // thing that toggles selection, so browsing never accidentally selects.
   selectLibDoc(sourceId);
 }
 
@@ -1125,7 +1139,7 @@ function renderLibraryList() {
   document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(btn) {
     var lang = btn.dataset.lang;
     var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
-    var label = lang === 'all' ? '全部语言' : lang === 'chinese' ? '中文文献' : '外文文献';
+    var label = lang === 'all' ? '全部语言' : lang === 'chinese' ? '中文' : '外文';
     btn.textContent = label + ' (' + count + ')';
   });
   const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
@@ -1192,8 +1206,10 @@ function libraryEntryHTML(src) {
   var countMeta = isPdf
     ? (src.page_count ? src.page_count + ' 页' : '页数未知')
     : ((src.works_count || 1) + ' 篇');
-  var selectionControl = libDeleteMode
-    ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + (isDeleteSelectable ? '' : 'disabled title="Word 文献由本地语料目录管理" ') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
+  // Deletable (PDF) entries always carry a checkbox; CSS reveals it on hover or
+  // while a selection is active. Word entries stay uncheckable (corpus-managed).
+  var selectionControl = isDeleteSelectable
+    ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
     : '';
   if (libViewMode === 'grid') {
     var imported = formatCalDate(src.imported_at || src.last_modified);
@@ -1204,7 +1220,7 @@ function libraryEntryHTML(src) {
       + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
       + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
       + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
-      + '<div class="library-card-footer"><span class="library-card-action">' + (libDeleteMode ? (isDeleteSelectable ? '点击选择' : '不可删除') : '查看详情') + '</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
+      + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
   }
   return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
     + selectionControl
@@ -2296,7 +2312,7 @@ async function confirmRemoveDocument() {
   }
 
   if (failures.length) {
-    libDeleteMode = true;
+    // Keep the failed items selected so the action bar stays up for a retry.
     failures.forEach(function(item) { libDeleteSelection.add(item.source_id); });
     renderLibraryList();
     if (!removedIds.length) {
@@ -2305,7 +2321,6 @@ async function confirmRemoveDocument() {
     }
     showToast((removedIds.length ? '已移除 ' + removedIds.length + ' 篇；' : '') + failures.length + ' 篇移除失败：' + failures[0].message, 'danger');
   } else {
-    libDeleteMode = false;
     libDeleteSelection.clear();
     renderLibraryList();
     showToast(deleteInternalRequested ? '所选文献及可删除的应用内 PDF 副本已移除' : (removedIds.length > 1 ? '已移除 ' + removedIds.length + ' 篇文献，原 PDF 文件已保留' : '文献已移除，PDF 文件已保留'), 'success');
@@ -3153,6 +3168,31 @@ async function saveMineruConfig() {
   } catch (e) {
     hint.textContent = '保存失败';
     showToast('保存 MinerU 配置失败：' + e.message);
+  }
+}
+
+async function testMineruConnection() {
+  var hint = document.getElementById('mineru-save-hint');
+  var btn = document.getElementById('mineru-test-btn');
+  var token = document.getElementById('mineru-token').value.trim();
+  if (token) {
+    showToast('测试使用已保存的 Token，请先点“保存 API 配置”再测试。');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  if (hint) hint.textContent = '正在测试连接…';
+  showToast('正在测试 MinerU 连接…');
+  try {
+    var resp = await fetch('/api/mineru-config/test', {method: 'POST'});
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
+    if (hint) hint.textContent = '连接正常 · ' + data.latency_ms + ' ms';
+    showToast('MinerU 连接成功 · ' + data.latency_ms + ' ms');
+  } catch (e) {
+    if (hint) hint.textContent = '连接失败';
+    showToast('MinerU 连接失败：' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -4224,7 +4264,9 @@ function setupLibraryDragSelection() {
   list.dataset.dragSelectionReady = '1';
 
   list.addEventListener('pointerdown', function(event) {
-    if (!libDeleteMode || event.button !== 0 || libraryDragSelection) return;
+    // Drag-marquee extends an existing selection; start it with a checkbox
+    // click so ordinary browsing (click to open a doc) is never hijacked.
+    if (libDeleteSelection.size === 0 || event.button !== 0 || libraryDragSelection) return;
     var entry = event.target.closest('.library-entry[data-delete-selectable="1"]');
     if (!entry || !list.contains(entry)) return;
     var scroller = libraryScrollContainer();

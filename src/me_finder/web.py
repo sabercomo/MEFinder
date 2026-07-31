@@ -36,7 +36,13 @@ from .bibliographic_metadata import (
     metadata_missing_fields,
     update_metadata_in_database,
 )
-from .mineru_api import MinerUError, mineru_config_summary, resolve_mineru_config_path, save_mineru_config
+from .mineru_api import (
+    MinerUError,
+    mineru_config_summary,
+    resolve_mineru_config_path,
+    save_mineru_config,
+    test_mineru_connection,
+)
 from .macos_update import check_macos_update
 from .vision_api import (
     VisionAPIError,
@@ -3332,6 +3338,21 @@ def make_handler(
                     self._send_json({"error": "本机配置文件无法保存，请检查应用目录是否可写。"}, status=500)
                     return
                 self._send_json({"ok": True, **summary})
+                return
+            if parsed.path == "/api/mineru-config/test":
+                config_path = resolve_mineru_config_path(root)
+                try:
+                    result = test_mineru_connection(config_path)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except (OSError, ValueError):
+                    self._send_json(
+                        {"error": "无法读取本机 MinerU 配置，请检查配置目录。"},
+                        status=500,
+                    )
+                    return
+                self._send_json(result)
                 return
             if parsed.path == "/api/vision-providers":
                 config_path = resolve_vision_config_path(root)

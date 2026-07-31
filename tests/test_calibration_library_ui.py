@@ -268,6 +268,25 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertNotIn("navigateTo('calibration')", HTML)
         self.assertIn("navigateTo('library');\n  if (!libLoaded) await loadLibrary();", HTML)
 
+    def test_sidebar_can_collapse_to_an_icon_rail_and_persists(self) -> None:
+        # Toggle control, handler, and persisted state.
+        self.assertIn('class="sidebar-collapse-btn"', HTML)
+        self.assertIn('onclick="toggleSidebar()"', HTML)
+        self.assertIn('function toggleSidebar(force)', HTML)
+        self.assertIn("localStorage.setItem('meFinderSidebarCollapsed'", HTML)
+        # Early head script applies the class before paint to avoid a flash.
+        self.assertIn(
+            "localStorage.getItem('meFinderSidebarCollapsed') === '1'",
+            HTML,
+        )
+        # Collapsed width is driven through the shared variable so the desktop
+        # titlebar gradient (which reads --sidebar-width) stays in sync.
+        self.assertIn('html.sidebar-collapsed { --sidebar-width: 64px; }', HTML)
+        self.assertIn(
+            '.sidebar-collapsed .sidebar-item > span:not(.sidebar-icon) { display: none; }',
+            HTML,
+        )
+
     def test_library_drawer_actions_wrap_without_compressing_labels(self) -> None:
         drawer_rule = HTML.split('.drawer-actions {', 1)[1].split('}', 1)[0]
         self.assertIn('flex-wrap: wrap;', drawer_rule)
@@ -275,24 +294,31 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
 
     def test_library_header_and_controls_reflow_in_narrow_windows(self) -> None:
         controls_rule = HTML.split('.library-controls-row {', 1)[1].split('}', 1)[0]
+        line_rule = HTML.split('.library-controls-line {', 1)[1].split('}', 1)[0]
         filters_rule = HTML.split('.library-filter-controls {', 1)[1].split('}', 1)[0]
-        toolbar_rule = HTML.split('.library-toolbar-right {', 1)[1].split('}', 1)[0]
         self.assertIn('flex-direction: column;', controls_rule)
         self.assertIn('align-items: stretch;', controls_rule)
-        self.assertIn('width: 100%;', filters_rule)
-        self.assertIn('width: 100%;', toolbar_rule)
+        # Each line spreads its left/right groups to opposite edges and wraps.
+        self.assertIn('justify-content: space-between;', line_rule)
+        self.assertIn('flex-wrap: wrap;', line_rule)
+        self.assertIn('width: 100%;', line_rule)
+        # Filters grow and wrap internally so the view switch stays pinned right.
+        self.assertIn('flex: 1 1 auto;', filters_rule)
         self.assertIn('@media (max-width: 1100px)', HTML)
         self.assertIn('#page-library .page-header-row { flex-wrap: wrap; }', HTML)
         self.assertIn('#page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }', HTML)
 
     def test_library_supports_click_and_drag_multi_selection_for_pdf_removal(self) -> None:
         for element_id in (
-            'id="library-delete-mode-btn"',
-            'id="library-selection-actions"',
+            'id="library-selection-bar"',
             'id="library-selection-count"',
             'id="library-remove-selected-btn"',
+            'id="library-select-visible-btn"',
         ):
             self.assertIn(element_id, HTML)
+        # No persistent mode toggle: the action bar appears once items are picked.
+        self.assertNotIn('id="library-delete-mode-btn"', HTML)
+        self.assertIn('function clearLibrarySelection()', HTML)
         self.assertIn('function toggleLibraryDeleteSelection(sourceId, force)', HTML)
         self.assertIn('function toggleSelectVisibleLibraryDocuments()', HTML)
         self.assertIn('function setupLibraryDragSelection()', HTML)

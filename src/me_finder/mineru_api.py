@@ -534,6 +534,43 @@ class MinerUAgentClient:
         return data
 
 
+def test_mineru_connection(
+    config_path: Path = DEFAULT_MINERU_CONFIG_PATH,
+) -> Dict[str, object]:
+    """Verify MinerU network reachability and Token validity.
+
+    Reserving an upload URL is the lightest authenticated MinerU call: it
+    returns a batch id and a pre-signed upload URL but performs no OCR and
+    costs nothing (MinerU 精析 is free, and we never upload the placeholder).
+    A bad Token surfaces as the same clear HTTP 401 message the importer uses.
+    """
+    summary = mineru_config_summary(Path(config_path))
+    if not summary.get("configured"):
+        raise MinerUError(
+            "尚未配置有效的 MinerU Token。请先在上方填写 Token 并点“保存 API "
+            "配置”，然后再测试连接。",
+            allow_parser_fallback=True,
+        )
+    config = load_mineru_config(config_path)
+    client = MinerUClient(config)
+    started = time.perf_counter()
+    response = client.apply_upload_urls(
+        [{"name": "mefinder-connection-test.pdf", "is_ocr": True}]
+    )
+    latency_ms = int(round((time.perf_counter() - started) * 1000))
+    data = response.get("data") or {}
+    if not (data.get("file_urls") or []):
+        raise MinerUError(
+            "MinerU 未返回上传地址，无法确认连接。请稍后重试或检查 API 地址。",
+            allow_parser_fallback=True,
+        )
+    return {
+        "ok": True,
+        "latency_ms": latency_ms,
+        "api_base": config.api_base,
+    }
+
+
 def submit_local_pdf(
     pdf_path: Path,
     *,

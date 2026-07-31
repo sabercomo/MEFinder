@@ -22,7 +22,22 @@ from src.me_finder.mineru_api import (
     resolve_mineru_config_path,
     save_mineru_config,
     submit_local_pdf_segments,
+    test_mineru_connection,
 )
+
+
+class _FakeResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
 
 
 class MinerUConfigTests(unittest.TestCase):
@@ -220,6 +235,59 @@ class MinerUConfigTests(unittest.TestCase):
                     )
 
             self.assertTrue(caught.exception.allow_parser_fallback)
+
+    def test_connection_test_confirms_token_without_uploading(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mineru.json"
+            save_mineru_config({"token": "valid-token"}, path)
+            success = json.dumps(
+                {
+                    "code": 0,
+                    "data": {
+                        "batch_id": "batch-1",
+                        "file_urls": ["https://upload.example/put"],
+                    },
+                }
+            ).encode("utf-8")
+            captured: dict = {}
+
+            def fake_open(request, timeout=0):
+                captured["url"] = request.full_url
+                captured["method"] = request.get_method()
+                return _FakeResponse(success)
+
+            with patch(
+                "src.me_finder.mineru_api.MinerUClient.upload_file"
+            ) as upload, patch(
+                "urllib.request.OpenerDirector.open", side_effect=fake_open
+            ):
+                result = test_mineru_connection(path)
+
+            self.assertTrue(result["ok"])
+            self.assertIn("latency_ms", result)
+            self.assertIn("/api/v4/file-urls/batch", captured["url"])
+            self.assertEqual(captured["method"], "POST")
+            upload.assert_not_called()
+
+    def test_connection_test_surfaces_safe_401(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mineru.json"
+            save_mineru_config({"token": "expired-token"}, path)
+            response_error = HTTPError(
+                "https://mineru.net/api/v4/file-urls/batch",
+                401,
+                "Unauthorized",
+                None,
+                BytesIO(b'{"msgCode":"A0202","msg":"auth failed"}'),
+            )
+            with patch(
+                "urllib.request.OpenerDirector.open", side_effect=response_error
+            ):
+                with self.assertRaises(MinerUError) as caught:
+                    test_mineru_connection(path)
+            message = str(caught.exception)
+            self.assertIn("401", message)
+            self.assertNotIn("msgCode", message)
 
     def test_invalid_api_address_is_rejected(self) -> None:
         with TemporaryDirectory() as tmp:

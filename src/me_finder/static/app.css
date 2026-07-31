@@ -56,7 +56,7 @@
   --accent-light: var(--accent-soft);
   --error: var(--danger);
   --sidebar-active: var(--surface-selected);
-  --sidebar-width: 220px;
+  --sidebar-width: 180px;
   --card-radius: 16px;
   --widget-radius: 10px;
   --input-radius: 12px;
@@ -545,14 +545,38 @@ html[data-desktop-shell="win32"] .main-area {
   user-select: none;
   -webkit-app-region: drag;
 }
-.sidebar-brand {
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 10px 18px;
-  font-size: 15px;
+}
+.sidebar-brand {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   -webkit-app-region: no-drag;
 }
+.sidebar-collapse-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--widget-radius);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-app-region: no-drag;
+}
+.sidebar-collapse-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sidebar-collapse-icon { transition: transform var(--transition-fast); }
 .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .sidebar-item {
   display: flex;
@@ -604,8 +628,22 @@ html[data-desktop-shell="win32"] .main-area {
   color: var(--text-tertiary);
   border-top: 1px solid var(--divider);
   margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
   -webkit-app-region: no-drag;
 }
+.sidebar { transition: width var(--transition-fast), min-width var(--transition-fast); }
+
+/* Collapsed rail: icons only. Width is driven through the shared
+   --sidebar-width variable so the desktop titlebar gradient stays in sync. */
+html.sidebar-collapsed { --sidebar-width: 64px; }
+.sidebar-collapsed .sidebar { padding-left: 10px; padding-right: 10px; }
+.sidebar-collapsed .sidebar-head { justify-content: center; }
+.sidebar-collapsed .sidebar-brand { display: none; }
+.sidebar-collapsed .sidebar-collapse-icon { transform: rotate(180deg); }
+.sidebar-collapsed .sidebar-item { justify-content: center; padding: 0; gap: 0; }
+.sidebar-collapsed .sidebar-item > span:not(.sidebar-icon) { display: none; }
+.sidebar-collapsed .sidebar-footer { display: none; }
 
 /* ── Main Area ─────────────────────────────────────────────── */
 .main-area {
@@ -2070,48 +2108,67 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   margin-top: 30px;
   padding-bottom: 14px;
 }
+/* Each line spreads its left group and right group to opposite edges so the
+   two rows share the same left/right margins and read as one tidy grid. */
+.library-controls-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
 .library-filter-controls {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
   flex-wrap: wrap;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 100%;
-  overflow: visible;
-  scrollbar-width: none;
 }
-.library-filter-controls::-webkit-scrollbar { display: none; }
 .library-filter-controls .segmented-control { flex: 0 0 auto; margin-top: 0; }
-.library-controls-row .view-switch { flex: 0 0 auto; }
-.library-toolbar-right {
+.library-controls-line .view-switch { flex: 0 0 auto; }
+/* Toolbar stacks two rows: filters + 补全书目 (pinned right), then view + sort. */
+#library-toolbar-line { display: flex; flex-direction: column; gap: 12px; }
+.library-controls-line-tools { justify-content: flex-start; }
+.library-metadata-btn { flex: 0 0 auto; }
+/* Contextual action bar (Gmail/Drive pattern): while any document is selected
+   it replaces the toolbar row, so selection needs no persistent mode button. */
+#page-library.library-selecting #library-toolbar-line { display: none; }
+.library-selection-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 10px;
   width: 100%;
-  min-width: 0;
-  flex-wrap: wrap;
+  min-height: 44px;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--widget-radius);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
 }
-.library-delete-mode-btn.active {
-  color: var(--danger);
-  border-color: var(--danger-border);
-  background: var(--danger-soft);
-}
-.library-selection-actions {
-  display: none;
+.library-selection-bar[hidden] { display: none; }
+.library-selection-spacer { flex: 1; }
+.library-selection-cancel {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.library-selection-actions.is-visible { display: inline-flex; }
-.library-selection-count {
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: var(--widget-radius);
   color: var(--text-secondary);
-  font-size: 12px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.library-selection-cancel:hover { background: var(--surface-hover); color: var(--text-primary); }
+.library-selection-cancel svg { width: 16px; height: 16px; }
+.library-selection-count {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.library-toolbar-right.is-delete-mode #batch-metadata-btn { display: none; }
 .library-sort-controls { display: flex; align-items: center; gap: 8px; }
 .library-sort-label { font-size: 12px; color: var(--text-tertiary); }
 .library-sort-controls .app-select-trigger { height: 36px; color: var(--text-secondary); font-size: 13px; }
@@ -2148,7 +2205,16 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   margin: 0;
   accent-color: var(--danger);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
 }
+/* Reveal on hover, once checked, or whenever a selection is in progress —
+   so selection starts with a single click and needs no mode toggle. */
+.library-entry:hover .library-delete-check,
+.library-entry.delete-selected .library-delete-check,
+.library-delete-check:focus-visible,
+#page-library.library-selecting .library-delete-check { opacity: 1; pointer-events: auto; }
 .library-delete-check:disabled { cursor: not-allowed; opacity: .38; }
 .library-row.delete-selected {
   background: var(--danger-soft);
@@ -2249,7 +2315,6 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   #page-library .page-header-row > :first-child { flex: 1 1 220px; min-width: 200px; }
   #page-library .page-header-meta { flex: 1 1 560px; min-width: 0; }
   #page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }
-  .library-toolbar-right { justify-content: flex-end; }
 }
 @media (max-width: 720px) {
   #page-library .page-header { padding: 20px 18px 0; }
@@ -2257,7 +2322,6 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   #page-library .page-header-row > :first-child,
   #page-library .page-header-meta { flex-basis: auto; width: 100%; min-width: 0; }
   .library-controls-row { margin-top: 20px; }
-  .library-toolbar-right { justify-content: flex-start; }
   .library-sort-controls { flex-wrap: wrap; }
 }
 
