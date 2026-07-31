@@ -149,7 +149,7 @@ try {
     $blankIndexPath = Join-Path $DistPath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
-    & $pythonCommand @pythonLauncherArgs -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute(""SELECT 1 FROM sqlite_master WHERE name = 'paragraphs_fts'"").fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" $blankIndexPath
+    & $pythonCommand @pythonLauncherArgs -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute('SELECT 1 FROM sqlite_master WHERE name = ?', ('paragraphs_fts',)).fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" $blankIndexPath
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
     }
