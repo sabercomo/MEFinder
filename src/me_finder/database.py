@@ -21,14 +21,16 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 1
+DATABASE_SCHEMA_VERSION = 2
 ANCHOR_SPEC_VERSION = 1
+PARAGRAPH_FTS_VERSION = 1
 DATABASE_REPLACE_ATTEMPTS = 15
 DATABASE_REPLACE_INITIAL_DELAY_SECONDS = 0.1
 DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
+PRAGMA user_version = 2;
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
@@ -133,6 +135,377 @@ CREATE INDEX idx_paragraphs_volume_position ON paragraphs(volume_id, paragraph_i
 CREATE INDEX idx_paragraphs_source_position ON paragraphs(source_file_id, paragraph_index);
 CREATE INDEX idx_pdf_pages_source_page ON pdf_pages(source_file_id, pdf_page_index);
 """
+
+
+# These four large strings already have authoritative typed columns.  Keeping
+# them in payload_json as well made every paragraph carry two complete copies
+# of all searchable text representations.  New/rebuilt databases store a
+# sparse payload; paragraph_from_database_row transparently hydrates both old
+# full payloads and new sparse ones.
+PARAGRAPH_PAYLOAD_OMITTED_FIELDS = frozenset(
+    {"text_raw", "normalized_text", "compact_text", "plain_text", "sentences"}
+)
+
+PARAGRAPH_TYPED_COLUMNS = (
+    "paragraph_id",
+    "volume_id",
+    "work_id",
+    "source_file_id",
+    "source_type",
+    "paragraph_index",
+    "eligible_for_search",
+    "text_raw",
+    "normalized_text",
+    "compact_text",
+    "plain_text",
+    "page_display",
+    "page_source_type",
+    "page_confidence",
+    "citation_page_start",
+    "citation_page_end",
+    "pdf_page_start_index",
+    "pdf_page_end_index",
+    "pdf_page_start_label",
+    "pdf_page_end_label",
+)
+
+PARAGRAPH_SELECT_COLUMNS = ", ".join(
+    f"p.{column} AS {column}" for column in PARAGRAPH_TYPED_COLUMNS
+) + ", p.payload_json AS payload_json"
+
+_FTS_INSTALL_LOCK = threading.Lock()
+
+
+def paragraph_payload_for_storage(paragraph: Dict[str, object]) -> Dict[str, object]:
+    """Return the non-duplicated JSON portion of one paragraph record."""
+
+    return {
+        key: value
+        for key, value in paragraph.items()
+        if key not in PARAGRAPH_PAYLOAD_OMITTED_FIELDS
+    }
+
+
+def paragraph_from_database_row(row: sqlite3.Row) -> Dict[str, object]:
+    """Hydrate one canonical paragraph from a sparse or legacy database row."""
+
+    raw_payload = row["payload_json"]
+    try:
+        payload = json.loads(raw_payload) if raw_payload else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    available = set(row.keys())
+    for column in PARAGRAPH_TYPED_COLUMNS:
+        if column not in available:
+            continue
+        value = row[column]
+        # A few pre-v1/import-recovery databases populated optional values in
+        # JSON but left the newer typed columns NULL. Preserve that legacy
+        # value; all current writers update both representations together.
+        if value is None and payload.get(column) not in (None, ""):
+            continue
+        if column == "eligible_for_search":
+            value = bool(value)
+        payload[column] = value
+    return payload
+
+
+def _fts_objects_present(connection: sqlite3.Connection) -> bool:
+    names = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE name IN "
+            "('paragraphs_fts', 'paragraphs_fts_ai', 'paragraphs_fts_ad', 'paragraphs_fts_au')"
+        )
+    }
+    return names == {
+        "paragraphs_fts",
+        "paragraphs_fts_ai",
+        "paragraphs_fts_ad",
+        "paragraphs_fts_au",
+    }
+
+
+def database_has_fts5_search_index(connection: sqlite3.Connection) -> bool:
+    """Return whether the versioned trigram FTS index is ready for queries."""
+
+    if not _fts_objects_present(connection):
+        return False
+    row = connection.execute(
+        "SELECT value_json FROM metadata WHERE key = 'paragraph_fts_version'"
+    ).fetchone()
+    if row is None:
+        return False
+    try:
+        return int(json.loads(row[0])) == PARAGRAPH_FTS_VERSION
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _database_uses_sparse_paragraph_payload(connection: sqlite3.Connection) -> bool:
+    row = connection.execute(
+        "SELECT value_json FROM metadata WHERE key = 'paragraph_payload_storage'"
+    ).fetchone()
+    if row is None:
+        return False
+    try:
+        return json.loads(row[0]) == "sparse_text_v1"
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _install_fts5_search_index(
+    connection: sqlite3.Connection,
+    *,
+    rebuild: bool,
+) -> bool:
+    """Install the external-content trigram index on an open write connection.
+
+    ``detail=none`` and ``columnsize=0`` keep the index materially smaller than
+    another stored copy of paragraph text.  Search code submits a bounded set
+    of trigram terms and verifies every candidate against the canonical typed
+    columns, so positional detail is unnecessary.
+    """
+
+    connection.execute("SAVEPOINT install_paragraphs_fts")
+    try:
+        statements = (
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS paragraphs_fts USING fts5(
+                plain_text,
+                content='paragraphs',
+                content_rowid='rowid',
+                tokenize='trigram',
+                detail='none',
+                columnsize=0
+            )
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_ai
+            AFTER INSERT ON paragraphs BEGIN
+                INSERT INTO paragraphs_fts(rowid, plain_text)
+                VALUES (new.rowid, new.plain_text);
+            END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_ad
+            AFTER DELETE ON paragraphs BEGIN
+                INSERT INTO paragraphs_fts(paragraphs_fts, rowid, plain_text)
+                VALUES ('delete', old.rowid, old.plain_text);
+            END
+            """,
+            """
+            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_au
+            AFTER UPDATE OF plain_text ON paragraphs BEGIN
+                INSERT INTO paragraphs_fts(paragraphs_fts, rowid, plain_text)
+                VALUES ('delete', old.rowid, old.plain_text);
+                INSERT INTO paragraphs_fts(rowid, plain_text)
+                VALUES (new.rowid, new.plain_text);
+            END
+            """,
+        )
+        for statement in statements:
+            connection.execute(statement)
+        if rebuild:
+            connection.execute(
+                "INSERT INTO paragraphs_fts(paragraphs_fts) VALUES ('rebuild')"
+            )
+        connection.execute(
+            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
+            ("paragraph_fts_version", _json(PARAGRAPH_FTS_VERSION)),
+        )
+        connection.execute(
+            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
+            ("database_schema_version", _json(DATABASE_SCHEMA_VERSION)),
+        )
+        connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
+        connection.execute("RELEASE SAVEPOINT install_paragraphs_fts")
+        return True
+    except sqlite3.OperationalError:
+        # Some distributor-provided SQLite builds omit FTS5 or the trigram
+        # tokenizer.  The caller keeps the legacy scan path available.
+        connection.execute("ROLLBACK TO SAVEPOINT install_paragraphs_fts")
+        connection.execute("RELEASE SAVEPOINT install_paragraphs_fts")
+        return False
+
+
+def ensure_database_search_index(db_path: Path) -> bool:
+    """Upgrade paragraph storage and create FTS once, with scan fallback."""
+
+    db_path = Path(db_path)
+    with _FTS_INSTALL_LOCK:
+        connection = sqlite3.connect(str(db_path))
+        try:
+            connection.execute("PRAGMA busy_timeout = 30000")
+            fts_ready = database_has_fts5_search_index(connection)
+            sparse_payload = _database_uses_sparse_paragraph_payload(connection)
+            user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if fts_ready and sparse_payload:
+                return True
+        finally:
+            connection.close()
+
+        if not sparse_payload and user_version <= DATABASE_SCHEMA_VERSION:
+            try:
+                if optimize_database_storage(db_path):
+                    return True
+            except (OSError, sqlite3.Error, ValueError):
+                # The old file is still authoritative until the final rename.
+                # Insufficient space, an active Windows file handle, or an
+                # unavailable tokenizer therefore degrades to the additive
+                # migration below (or ultimately to the legacy scan path).
+                pass
+
+        if fts_ready:
+            return True
+
+        connection = sqlite3.connect(str(db_path))
+        try:
+            connection.execute("PRAGMA busy_timeout = 30000")
+            connection.execute("BEGIN IMMEDIATE")
+            installed = _install_fts5_search_index(connection, rebuild=True)
+            if installed:
+                connection.commit()
+            else:
+                connection.rollback()
+            return installed
+        except sqlite3.Error:
+            connection.rollback()
+            return False
+        finally:
+            connection.close()
+
+
+def optimize_database_storage(db_path: Path) -> bool:
+    """Stream one legacy database into a sparse, validated replacement.
+
+    The source file is never updated in place.  A complete temporary database
+    is built on the same volume, checked, fsynced, and only then swapped in;
+    the old file becomes a normal retained backup.  This is what actually
+    reclaims duplicated payload bytes without an UPDATE+VACUUM space spike.
+    """
+
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return False
+    for suffix in ("-wal", "-shm", "-journal"):
+        if db_path.with_name(db_path.name + suffix).exists():
+            return False
+    required_free = db_path.stat().st_size + DATABASE_BACKUP_FREE_SPACE_MARGIN
+    if shutil.disk_usage(db_path.parent).free < required_free:
+        return False
+
+    temp_path = db_path.with_name(
+        f".{db_path.name}.optimize-{os.getpid()}-{threading.get_ident()}.tmp"
+    )
+    temp_path.unlink(missing_ok=True)
+    connection = sqlite3.connect(str(temp_path))
+    try:
+        connection.executescript(SCHEMA)
+        connection.execute("ATTACH DATABASE ? AS legacy", (str(db_path),))
+        connection.execute("BEGIN IMMEDIATE")
+        table_names = (
+            "metadata",
+            "source_files",
+            "volumes",
+            "works",
+            "toc_entries",
+            "paragraphs",
+            "page_anchors",
+            "pdf_pages",
+            "pdf_page_mappings",
+            "pdf_import_runs",
+            "audit_issues",
+        )
+        for table_name in table_names:
+            destination_columns = [
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA main.table_info({table_name})"
+                )
+            ]
+            source_columns = {
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA legacy.table_info({table_name})"
+                )
+            }
+            common_columns = [
+                column for column in destination_columns if column in source_columns
+            ]
+            if not common_columns:
+                continue
+            select_expressions = list(common_columns)
+            if table_name == "paragraphs" and "payload_json" in common_columns:
+                payload_index = common_columns.index("payload_json")
+                json_paths = ", ".join(
+                    repr(f"$.{field}")
+                    for field in sorted(PARAGRAPH_PAYLOAD_OMITTED_FIELDS)
+                )
+                select_expressions[payload_index] = (
+                    "CASE WHEN json_valid(payload_json) "
+                    f"THEN json_remove(payload_json, {json_paths}) "
+                    "ELSE payload_json END"
+                )
+            columns_sql = ", ".join(common_columns)
+            select_sql = ", ".join(select_expressions)
+            connection.execute(
+                f"INSERT INTO main.{table_name}({columns_sql}) "
+                f"SELECT {select_sql} FROM legacy.{table_name}"
+            )
+
+        connection.execute(
+            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
+            ("paragraph_payload_storage", _json("sparse_text_v1")),
+        )
+        if not _install_fts5_search_index(connection, rebuild=True):
+            raise sqlite3.OperationalError("FTS5 trigram tokenizer is unavailable")
+        source_count = connection.execute(
+            "SELECT COUNT(*) FROM legacy.paragraphs"
+        ).fetchone()[0]
+        target_count = connection.execute(
+            "SELECT COUNT(*) FROM main.paragraphs"
+        ).fetchone()[0]
+        if source_count != target_count:
+            raise ValueError("Paragraph count changed during database optimization.")
+        connection.execute(
+            "INSERT INTO paragraphs_fts(paragraphs_fts, rank) "
+            "VALUES ('integrity-check', 1)"
+        )
+        integrity = connection.execute("PRAGMA main.integrity_check").fetchone()[0]
+        if str(integrity).lower() != "ok":
+            raise ValueError(f"Optimized database integrity check failed: {integrity}")
+        connection.commit()
+        connection.execute("DETACH DATABASE legacy")
+        connection.close()
+        with temp_path.open("rb+") as stream:
+            os.fsync(stream.fileno())
+
+        backup_dir = db_path.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+        backup_path = backup_dir / f"{db_path.stem}-{stamp}{db_path.suffix}"
+        _replace_database_file(db_path, backup_path)
+        try:
+            _replace_database_file(temp_path, db_path)
+        except OSError:
+            _replace_database_file(backup_path, db_path)
+            raise
+        _prune_database_backups(backup_dir, db_path)
+        return True
+    except Exception:
+        try:
+            connection.rollback()
+        except sqlite3.Error:
+            pass
+        try:
+            connection.close()
+        except sqlite3.Error:
+            pass
+        temp_path.unlink(missing_ok=True)
+        raise
 
 
 def _json(value: object) -> str:
@@ -465,11 +838,15 @@ def _estimate_database_build_size(index: Dict[str, object]) -> int:
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            estimated += len(_json(row).encode("utf-8")) + 256
+            stored_payload = (
+                paragraph_payload_for_storage(row)
+                if table_name == "paragraphs"
+                else row
+            )
+            estimated += len(_json(stored_payload).encode("utf-8")) + 256
             if table_name == "paragraphs":
-                # Paragraph text is stored in payload_json and again in
-                # searchable/indexed columns.
-                estimated += sum(
+                # Four typed search columns plus the compact trigram index.
+                typed_text_bytes = sum(
                     len(str(row.get(field) or "").encode("utf-8"))
                     for field in (
                         "text_raw",
@@ -478,6 +855,10 @@ def _estimate_database_build_size(index: Dict[str, object]) -> int:
                         "plain_text",
                     )
                 )
+                plain_bytes = len(
+                    str(row.get("plain_text") or "").encode("utf-8")
+                )
+                estimated += typed_text_bytes + (plain_bytes * 2)
     return max(
         DATABASE_REBUILD_ESTIMATE_FLOOR,
         int(estimated * 1.15),
@@ -572,10 +953,12 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     if temp_path.exists():
         temp_path.unlink()
     connection = sqlite3.connect(str(temp_path))
+    fts_installed = False
     try:
         connection.executescript(SCHEMA)
         metadata = dict(index.get("metadata") or {})
         metadata["database_schema_version"] = DATABASE_SCHEMA_VERSION
+        metadata["paragraph_payload_storage"] = "sparse_text_v1"
         metadata.setdefault("anchor_spec_version", ANCHOR_SPEC_VERSION)
         metadata["database_built_at"] = datetime.now(timezone.utc).isoformat()
         metadata["source_count"] = len(source_files)
@@ -684,7 +1067,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
                     _int_or_none(item.get("pdf_page_end_index")),
                     item.get("pdf_page_start_label"),
                     item.get("pdf_page_end_label"),
-                    _json(item),
+                    _json(paragraph_payload_for_storage(item)),
                 )
             )
         connection.executemany(
@@ -724,6 +1107,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             if values:
                 connection.executemany(sql, values)
 
+        fts_installed = _install_fts5_search_index(connection, rebuild=True)
         connection.commit()
         # This database was created from an empty temp file, so VACUUM cannot
         # reclaim meaningful fragmentation.  It only creates another
@@ -762,6 +1146,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         "paragraph_count": len(paragraphs),
         "eligible_paragraph_count": sum(1 for item in paragraphs if item.get("eligible_for_search")),
         "deduplicated_rows": deduplicated_rows,
+        "fts5_search_index": fts_installed,
     }
 
 
@@ -959,7 +1344,7 @@ def replace_source_in_database(
                     _int_or_none(item.get("pdf_page_end_index")),
                     item.get("pdf_page_start_label"),
                     item.get("pdf_page_end_label"),
-                    _json(item),
+                    _json(paragraph_payload_for_storage(item)),
                 )
                 for item in paragraphs
                 if item.get("paragraph_id")

@@ -85,7 +85,7 @@ py -3 -m src.me_finder build-index
 data/index.sqlite3   # 应用和默认搜索使用
 ```
 
-SQLite 数据库保存来源、卷次、文献、段落、页码映射和检索字段。如需额外生成便于迁移的 JSON 副本，可添加 `--export-json`；桌面应用不会加载该 JSON 文件。
+SQLite 数据库保存来源、卷次、文献、段落、页码映射和检索字段，并使用 FTS5 trigram 全文索引加速中文子串检索。如需额外生成便于迁移的 JSON 副本，可添加 `--export-json`；桌面应用不会加载该 JSON 文件。旧版大型数据库会在升级后的首次检索时一次性完成稀疏化与全文索引迁移，迁移完成前原文件始终保留，成功后旧库进入 `data/backups/`。
 
 ```powershell
 py -3 -m src.me_finder build-index --export-json

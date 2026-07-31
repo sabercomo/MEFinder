@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+from .database import (
+    PARAGRAPH_SELECT_COLUMNS,
+    paragraph_from_database_row,
+    paragraph_payload_for_storage,
+)
 from .pdf_page_mapping import (
     PageMapper,
     mapped_page_display,
@@ -66,6 +71,7 @@ def apply_mapping_to_database(
     _backup_database(database_path)
     mapper = PageMapper(cleaned)
     connection = sqlite3.connect(str(database_path))
+    connection.row_factory = sqlite3.Row
     page_updates = 0
     paragraph_updates = 0
     try:
@@ -84,11 +90,12 @@ def apply_mapping_to_database(
             page_updates += 1
 
         paragraph_rows = connection.execute(
-            "SELECT paragraph_id, payload_json FROM paragraphs WHERE source_file_id = ?",
+            f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE p.source_file_id = ?",
             (source_file_id,),
         ).fetchall()
-        for paragraph_id, payload_json in paragraph_rows:
-            paragraph = json.loads(payload_json)
+        for row in paragraph_rows:
+            paragraph = paragraph_from_database_row(row)
+            paragraph_id = str(row["paragraph_id"])
             start_idx = int(paragraph.get("pdf_page_start_index") or 0)
             end_idx = int(paragraph.get("pdf_page_end_index") or start_idx)
             start_page = pages_by_index.get(start_idx, {})
@@ -107,7 +114,7 @@ def apply_mapping_to_database(
                     paragraph.get("page_confidence"),
                     paragraph.get("citation_page_start"),
                     paragraph.get("citation_page_end"),
-                    _json(paragraph),
+                    _json(paragraph_payload_for_storage(paragraph)),
                     paragraph_id,
                 ),
             )

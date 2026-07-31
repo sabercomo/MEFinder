@@ -344,7 +344,11 @@ async function runSearch() {
     });
     const data = await resp.json();
     searchResults = data.results || [];
-    statusEl.textContent = '找到 ' + data.total + ' 条候选，显示 ' + searchResults.length + ' 条';
+    if (data.total_is_exact === false || data.has_more) {
+      statusEl.textContent = '显示前 ' + searchResults.length + ' 条匹配结果，还有更多';
+    } else {
+      statusEl.textContent = '找到 ' + data.total + ' 条候选，显示 ' + searchResults.length + ' 条';
+    }
 
     if (searchResults.length === 0) {
       listEl.innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">未找到匹配结果</div><div class="empty-state-hint">尝试更短的引文或切换为模糊检索</div></div>';

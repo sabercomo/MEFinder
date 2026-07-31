@@ -30,6 +30,11 @@ if [[ "$MEFINDER_CODESIGN_IDENTITY" != "-" ]]; then
   MEFINDER_CODESIGN_ARGS+=(--options runtime --timestamp)
 fi
 
+# macOS network proxy settings are inherited by urllib during tests.  Local
+# HTTP regression servers must never be routed through a user's proxy.
+export NO_PROXY="${NO_PROXY:+${NO_PROXY},}127.0.0.1,localhost"
+export no_proxy="${no_proxy:+${no_proxy},}127.0.0.1,localhost"
+
 cleanup() {
   if [[ "$MEFINDER_DMG_ATTACHED" == "1" ]]; then
     hdiutil detach "$MEFINDER_DMG_MOUNT" >/dev/null 2>&1 || true
@@ -67,6 +72,22 @@ rm -rf "$MEFINDER_STAGE"
 mkdir -p "$MEFINDER_STAGE/data" "$MEFINDER_STAGE/config"
 
 "$MEFINDER_PYTHON" -m tools.create_empty_index "$MEFINDER_STAGE/data/index.sqlite3"
+"$MEFINDER_PYTHON" - "$MEFINDER_STAGE/data/index.sqlite3" <<'PY'
+import sqlite3
+import sys
+
+connection = sqlite3.connect(sys.argv[1])
+try:
+    table = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE name = 'paragraphs_fts'"
+    ).fetchone()
+    if table is None:
+        raise SystemExit(
+            "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
+        )
+finally:
+    connection.close()
+PY
 cp "config/pdf_imports.empty.json" "$MEFINDER_STAGE/config/pdf_imports.json"
 cp "config/mineru_api.local.example.json" "$MEFINDER_STAGE/config/mineru_api.local.example.json"
 
@@ -95,6 +116,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_database_resilience \
   tests.test_desktop_portable \
   tests.test_directory_scan \
+  tests.test_fts_search_scalability \
   tests.test_import_config_concurrency \
   tests.test_import_queue \
   tests.test_import_resume_mineru \

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .database import paragraph_payload_for_storage
 
 METADATA_FIELDS = (
     "title", "author", "country", "translator", "publisher", "publish_place",
@@ -619,7 +620,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
             paragraph["author_label"] = author
             connection.execute(
                 "UPDATE paragraphs SET payload_json = ? WHERE paragraph_id = ?",
-                (_json(paragraph), paragraph_id),
+                (_json(paragraph_payload_for_storage(paragraph)), paragraph_id),
             )
             counts["paragraphs"] += 1
         connection.commit()

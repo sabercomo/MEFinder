@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import difflib
 import html
-import json
 import re
 import sqlite3
+import threading
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .citations import build_citation_formats
-from .database import DEFAULT_DATABASE_PATH, load_database_index, open_database
+from .database import (
+    DEFAULT_DATABASE_PATH,
+    PARAGRAPH_SELECT_COLUMNS,
+    database_has_fts5_search_index,
+    ensure_database_search_index,
+    load_database_index,
+    open_database,
+    paragraph_from_database_row,
+)
 from .indexer import DEFAULT_INDEX_PATH, load_index
 from .normalization import (
     compact_text,
@@ -25,6 +33,9 @@ from .page_display import build_page_display, resolve_citation_page
 
 
 SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
+MAX_FTS_QUERY_TRIGRAMS = 48
+SQL_CANDIDATE_FLOOR = 64
+SQL_CANDIDATE_MULTIPLIER = 8
 
 
 class SearchEngine:
@@ -40,8 +51,12 @@ class SearchEngine:
             raise FileNotFoundError(f"Index not found: {self.index_path}")
         self.backend = "sqlite" if self.index_path.suffix.lower() in {".sqlite", ".sqlite3", ".db"} else "json"
         self.db: Optional[sqlite3.Connection] = None
+        self._db_init_lock = threading.RLock()
+        self._fts_install_attempted = False
+        self._fts_ready = False
         if self.backend == "sqlite":
             self.db = open_database(self.index_path)
+            self._fts_ready = database_has_fts5_search_index(self.db)
             self.index = load_database_index(self.index_path)
             self._init_catalog_maps()
             self.paragraphs = []
@@ -122,14 +137,17 @@ class SearchEngine:
         if mode in {"auto", "fuzzy"} and (mode != "auto" or not candidates):
             self._fuzzy_pass(q_plain, candidates, source_type, source_file_id)
         ranked = sorted(candidates.values(), key=self._rank_key)
-        merged = self._merge_results(ranked)
+        merged = self._merge_candidate_specs(ranked)
+        selected = merged if normalized_limit is None else merged[:normalized_limit]
         return {
             "query": query,
             "mode": mode,
             "source_type": source_type,
             "source_file_id": source_file_id,
             "total": len(merged),
-            "results": merged if normalized_limit is None else merged[:normalized_limit],
+            "total_is_exact": True,
+            "has_more": normalized_limit is not None and len(merged) > normalized_limit,
+            "results": [self._format_candidate(item) for item in selected],
             "return_all": return_all,
             "index_metadata": self.index.get("metadata", {}),
         }
@@ -146,23 +164,66 @@ class SearchEngine:
         q_compact = compact_text(query)
         q_plain = punctuationless_text(query)
         candidates: Dict[str, Dict[str, object]] = {}
+        candidate_budget = (
+            None
+            if limit is None
+            else max(SQL_CANDIDATE_FLOOR, limit * SQL_CANDIDATE_MULTIPLIER)
+        )
+        truncated = False
         if mode in {"auto", "exact"}:
-            self._sql_exact_pass(query, q_norm, candidates, source_type, source_file_id)
+            truncated = self._sql_exact_pass(
+                query,
+                q_norm,
+                q_plain,
+                candidates,
+                source_type,
+                source_file_id,
+                candidate_budget,
+            )
         if mode in {"auto", "compact"} and (mode != "auto" or not candidates):
-            self._sql_mapped_substring_pass(q_compact, "compact_text", "space_insensitive", 0.96, candidates, source_type, source_file_id)
+            truncated = self._sql_mapped_substring_pass(
+                q_compact,
+                q_plain,
+                "compact_text",
+                "space_insensitive",
+                0.96,
+                candidates,
+                source_type,
+                source_file_id,
+                candidate_budget,
+            )
         if mode in {"auto", "punctuation"} and (mode != "auto" or not candidates):
-            self._sql_mapped_substring_pass(q_plain, "plain_text", "punctuation_insensitive", 0.92, candidates, source_type, source_file_id)
+            truncated = self._sql_mapped_substring_pass(
+                q_plain,
+                q_plain,
+                "plain_text",
+                "punctuation_insensitive",
+                0.92,
+                candidates,
+                source_type,
+                source_file_id,
+                candidate_budget,
+            )
         if mode in {"auto", "fuzzy"} and (mode != "auto" or not candidates):
-            self._sql_fuzzy_pass(q_plain, candidates, source_type, source_file_id)
+            truncated = self._sql_fuzzy_pass(
+                q_plain,
+                candidates,
+                source_type,
+                source_file_id,
+                candidate_budget,
+            )
         ranked = sorted(candidates.values(), key=self._rank_key)
-        merged = self._merge_results(ranked)
+        merged = self._merge_candidate_specs(ranked)
+        selected = merged if limit is None else merged[:limit]
         return {
             "query": query,
             "mode": mode,
             "source_type": source_type,
             "source_file_id": source_file_id,
             "total": len(merged),
-            "results": merged if limit is None else merged[:limit],
+            "total_is_exact": not truncated,
+            "has_more": truncated or (limit is not None and len(merged) > limit),
+            "results": [self._format_candidate(item) for item in selected],
             "return_all": limit is None,
             "index_metadata": self.index.get("metadata", {}),
         }
@@ -184,26 +245,93 @@ class SearchEngine:
             args.append(source_file_id)
         return (" AND " + " AND ".join(clauses), args) if clauses else ("", args)
 
+    def _ensure_fts_ready(self) -> bool:
+        if self.backend != "sqlite":
+            return False
+        if self._fts_ready:
+            return True
+        with self._db_init_lock:
+            if self._fts_ready:
+                return True
+            if self._fts_install_attempted:
+                return False
+            self._fts_install_attempted = True
+            if self.db is not None:
+                self.db.close()
+                self.db = None
+            self._fts_ready = ensure_database_search_index(self.index_path)
+            self.db = open_database(self.index_path)
+            return self._fts_ready
+
+    def _fts_match_expression(self, text: str, operator: str) -> Optional[str]:
+        """Build a bounded trigram query for the detail-free FTS table."""
+
+        if len(text) < 3 or operator not in {"AND", "OR"}:
+            return None
+        if not self._ensure_fts_ready():
+            return None
+        grams = list(dict.fromkeys(text[index : index + 3] for index in range(len(text) - 2)))
+        if len(grams) > MAX_FTS_QUERY_TRIGRAMS:
+            last = len(grams) - 1
+            positions = {
+                round(index * last / (MAX_FTS_QUERY_TRIGRAMS - 1))
+                for index in range(MAX_FTS_QUERY_TRIGRAMS)
+            }
+            grams = [grams[index] for index in sorted(positions)]
+        quoted = ['"' + gram.replace('"', '""') + '"' for gram in grams]
+        return f" {operator} ".join(quoted)
+
+    @staticmethod
+    def _limit_sql(sql: str, candidate_budget: Optional[int]) -> str:
+        if candidate_budget is None:
+            return sql
+        return sql + f" LIMIT {max(1, int(candidate_budget)) + 1}"
+
     def _sql_exact_pass(
         self,
         query: str,
         q_norm: str,
+        q_plain: str,
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
-    ) -> None:
+        candidate_budget: Optional[int],
+    ) -> bool:
         if self.db is None:
-            return
-        source_clause, source_args = self._sql_source_filter(source_type, source_file_id)
-        sql = (
-            "SELECT payload_json, text_raw, normalized_text FROM paragraphs "
-            "WHERE eligible_for_search = 1"
-            + source_clause
-            + " AND (instr(text_raw, ?) > 0 OR instr(normalized_text, ?) > 0)"
+            return False
+        fts_query = self._fts_match_expression(q_plain, "AND")
+        source_clause, source_args = self._sql_source_filter(
+            source_type, source_file_id, "p"
         )
-        args = source_args + [query, q_norm]
+        if fts_query:
+            sql = (
+                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
+                "FROM paragraphs_fts JOIN paragraphs p "
+                "ON p.rowid = paragraphs_fts.rowid "
+                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
+                + source_clause
+                + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
+                "ORDER BY p.rowid"
+            )
+            args: List[object] = [fts_query, *source_args, query, q_norm]
+        else:
+            sql = (
+                f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
+                "WHERE p.eligible_for_search = 1"
+                + source_clause
+                + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
+                "ORDER BY p.rowid"
+            )
+            args = [*source_args, query, q_norm]
+        processed = 0
+        truncated = False
+        sql = self._limit_sql(sql, candidate_budget)
         for row in self.db.execute(sql, args):
-            paragraph = json.loads(row["payload_json"])
+            if candidate_budget is not None and processed >= candidate_budget:
+                truncated = True
+                break
+            processed += 1
+            paragraph = paragraph_from_database_row(row)
             raw = str(row["text_raw"] or "")
             raw_pos = raw.find(query)
             if raw_pos >= 0:
@@ -214,28 +342,53 @@ class SearchEngine:
             if norm_pos >= 0:
                 span = self._mapped_span(raw, q_norm, "normalized")
                 self._add_candidate(paragraph, "normalized_exact", 0.985, span[0], span[1], candidates)
+        return truncated
 
     def _sql_mapped_substring_pass(
         self,
         query: str,
+        q_plain: str,
         column: str,
         match_type: str,
         score: float,
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
-    ) -> None:
+        candidate_budget: Optional[int],
+    ) -> bool:
         if self.db is None or not query or column not in {"compact_text", "plain_text"}:
-            return
-        source_clause, source_args = self._sql_source_filter(source_type, source_file_id)
-        sql = (
-            f"SELECT payload_json, text_raw, {column} FROM paragraphs "
-            "WHERE eligible_for_search = 1"
-            + source_clause
-            + f" AND instr({column}, ?) > 0"
+            return False
+        fts_query = self._fts_match_expression(q_plain, "AND")
+        source_clause, source_args = self._sql_source_filter(
+            source_type, source_file_id, "p"
         )
-        for row in self.db.execute(sql, source_args + [query]):
-            paragraph = json.loads(row["payload_json"])
+        if fts_query:
+            sql = (
+                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
+                "FROM paragraphs_fts JOIN paragraphs p "
+                "ON p.rowid = paragraphs_fts.rowid "
+                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
+                + source_clause
+                + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
+            )
+            args: List[object] = [fts_query, *source_args, query]
+        else:
+            sql = (
+                f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
+                "WHERE p.eligible_for_search = 1"
+                + source_clause
+                + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
+            )
+            args = [*source_args, query]
+        processed = 0
+        truncated = False
+        sql = self._limit_sql(sql, candidate_budget)
+        for row in self.db.execute(sql, args):
+            if candidate_budget is not None and processed >= candidate_budget:
+                truncated = True
+                break
+            processed += 1
+            paragraph = paragraph_from_database_row(row)
             haystack = str(row[column] or "")
             pos = haystack.find(query)
             if pos < 0:
@@ -246,6 +399,7 @@ class SearchEngine:
                 continue
             end_pos = min(pos + len(query) - 1, len(mapping) - 1)
             self._add_candidate(paragraph, match_type, score, mapping[pos], mapping[end_pos] + 1, candidates)
+        return truncated
 
     def _sql_fuzzy_pass(
         self,
@@ -253,12 +407,56 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
-    ) -> None:
+        candidate_budget: Optional[int],
+    ) -> bool:
         if self.db is None or not q_plain:
-            return
+            return False
         source_clause, source_args = self._sql_source_filter(source_type, source_file_id, "p")
+        fts_query = self._fts_match_expression(q_plain, "OR")
+        if fts_query:
+            rows = self.db.execute(
+                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
+                "FROM paragraphs_fts JOIN paragraphs p "
+                "ON p.rowid = paragraphs_fts.rowid "
+                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
+                + source_clause
+                + " ORDER BY bm25(paragraphs_fts) LIMIT 701",
+                [fts_query, *source_args],
+            )
+            processed = 0
+            truncated = False
+            for row in rows:
+                if processed >= 700:
+                    truncated = True
+                    break
+                processed += 1
+                paragraph = paragraph_from_database_row(row)
+                plain = str(paragraph.get("plain_text") or "")
+                ratio, start, end = best_window_ratio(q_plain, plain)
+                if ratio < 0.58:
+                    continue
+                raw = str(paragraph.get("text_raw") or "")
+                _, mapping = normalize_with_map(raw, "plain")
+                if not mapping:
+                    continue
+                start = max(0, min(start, len(mapping) - 1))
+                end = max(start, min(end, len(mapping) - 1))
+                score = min(0.9, max(0.58, ratio))
+                self._add_candidate(
+                    paragraph,
+                    "ngram_fuzzy",
+                    score,
+                    mapping[start],
+                    mapping[end] + 1,
+                    candidates,
+                )
+                if candidate_budget is not None and len(candidates) >= candidate_budget:
+                    truncated = True
+                    break
+            return truncated
+
         rows = self.db.execute(
-            "SELECT p.paragraph_id, p.payload_json, p.plain_text FROM paragraphs p "
+            f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
             "WHERE p.eligible_for_search = 1" + source_clause,
             source_args,
         )
@@ -268,7 +466,13 @@ class SearchEngine:
             plain = str(row["plain_text"] or "")
             overlap = len(query_grams.intersection(self._ngrams_set(plain)))
             if overlap:
-                ranked.append((overlap, str(row["paragraph_id"]), json.loads(row["payload_json"])))
+                ranked.append(
+                    (
+                        overlap,
+                        str(row["paragraph_id"]),
+                        paragraph_from_database_row(row),
+                    )
+                )
         ranked.sort(key=lambda item: item[0], reverse=True)
         for _, _, paragraph in ranked[:700]:
             plain = str(paragraph.get("plain_text") or "")
@@ -283,6 +487,7 @@ class SearchEngine:
             end = max(start, min(end, len(mapping) - 1))
             score = min(0.9, max(0.58, ratio))
             self._add_candidate(paragraph, "ngram_fuzzy", score, mapping[start], mapping[end] + 1, candidates)
+        return len(ranked) > 700
 
     @staticmethod
     def _ngrams_set(text: str, n: int = 2) -> set[str]:
@@ -390,8 +595,26 @@ class SearchEngine:
         existing = candidates.get(paragraph_id)
         if existing is not None and float(existing["match_score"]) >= score:
             return
-        result = self._format_result(paragraph, match_type, score, start, end)
-        candidates[paragraph_id] = result
+        candidates[paragraph_id] = {
+            "paragraph_id": paragraph_id,
+            "paragraph": paragraph,
+            "match_type": match_type,
+            "match_score": float(score),
+            "match_start": start,
+            "match_end": end,
+        }
+
+    def _format_candidate(self, candidate: Dict[str, object]) -> Dict[str, object]:
+        paragraph = candidate.get("paragraph")
+        if not isinstance(paragraph, dict):
+            raise ValueError("Invalid search candidate payload.")
+        return self._format_result(
+            paragraph,
+            str(candidate.get("match_type") or "exact"),
+            float(candidate.get("match_score") or 0.0),
+            int(candidate.get("match_start") or 0),
+            int(candidate.get("match_end") or 0),
+        )
 
     def _format_result(
         self,
@@ -709,6 +932,65 @@ class SearchEngine:
             return [text] if text else []
         return [text[i : i + n] for i in range(len(text) - n + 1)]
 
+    def _merge_candidate_specs(
+        self, ranked: Sequence[Dict[str, object]]
+    ) -> List[Dict[str, object]]:
+        """Deduplicate lightweight candidates before expensive formatting."""
+
+        merged: List[Dict[str, object]] = []
+        seen = set()
+        for item in ranked:
+            paragraph = item.get("paragraph")
+            if not isinstance(paragraph, dict):
+                continue
+            if paragraph.get("is_cross_page") and self._cross_candidate_duplicate(
+                item, ranked
+            ):
+                continue
+            key = (
+                paragraph.get("volume_id"),
+                paragraph.get("work_id"),
+                punctuationless_text(str(paragraph.get("text_raw") or ""))[:180],
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+        return merged
+
+    @staticmethod
+    def _cross_candidate_duplicate(
+        cross_item: Dict[str, object], ranked: Sequence[Dict[str, object]]
+    ) -> bool:
+        cross = cross_item.get("paragraph")
+        if not isinstance(cross, dict):
+            return False
+        raw = str(cross.get("text_raw") or "")
+        start = int(cross_item.get("match_start") or 0)
+        end = int(cross_item.get("match_end") or 0)
+        matched = punctuationless_text(raw[start:end])
+        if not matched:
+            return False
+        start_page = cross.get("pdf_page_start_index")
+        end_page = cross.get("pdf_page_end_index")
+        for item in ranked:
+            if item is cross_item:
+                continue
+            paragraph = item.get("paragraph")
+            if not isinstance(paragraph, dict) or paragraph.get("is_cross_page"):
+                continue
+            if paragraph.get("source_file_id") != cross.get("source_file_id"):
+                continue
+            page = paragraph.get("pdf_page_start_index")
+            if page is None or start_page is None or end_page is None:
+                continue
+            if not (int(start_page) <= int(page) <= int(end_page)):
+                continue
+            page_text = punctuationless_text(str(paragraph.get("text_raw") or ""))
+            if matched in page_text:
+                return True
+        return False
+
     def _merge_results(self, ranked: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
         merged: List[Dict[str, object]] = []
         seen = set()
@@ -763,25 +1045,27 @@ class SearchEngine:
         return not source_file_id or str(paragraph.get("source_file_id") or "") == source_file_id
 
     def _rank_key(self, item: Dict[str, object]) -> Tuple[float, int, int, str, int, str, int]:
-        volume_number = item.get("volume_number")
+        nested = item.get("paragraph")
+        record = nested if isinstance(nested, dict) else item
+        volume_number = record.get("volume_number")
         try:
             volume_sort = int(volume_number) if volume_number is not None else 9999
         except (TypeError, ValueError):
             volume_sort = 9999
-        paragraph_index = item.get("paragraph_index")
+        paragraph_index = record.get("paragraph_index")
         try:
             paragraph_sort = int(paragraph_index) if paragraph_index is not None else 0
         except (TypeError, ValueError):
             paragraph_sort = 0
-        uncalibrated_sort = 1 if item.get("source_type") == "pdf" and not item.get("citation_page_start") else 0
-        cross_sort = 1 if item.get("is_cross_page") else 0
+        uncalibrated_sort = 1 if record.get("source_type") == "pdf" and not record.get("citation_page_start") else 0
+        cross_sort = 1 if record.get("is_cross_page") else 0
         return (
             -float(item["match_score"]),
             uncalibrated_sort,
             cross_sort,
-            str(item.get("source_type") or "word"),
+            str(record.get("source_type") or "word"),
             volume_sort,
-            str(item.get("original_file_name") or ""),
+            str(record.get("original_file_name") or ""),
             paragraph_sort,
         )
 
