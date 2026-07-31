@@ -1,4 +1,4 @@
-"""The toast used to be a black pill that clobbered itself and vanished too fast."""
+"""Transient messages and confirmations use theme-aware in-app surfaces."""
 
 from __future__ import annotations
 
@@ -42,6 +42,24 @@ class ToastPresentationTests(unittest.TestCase):
 
     def test_accidental_backdrop_click_cannot_abort_a_running_removal(self) -> None:
         self.assertIn("if (removeRequestController) return;", HTML)
+
+    def test_confirmations_do_not_use_the_windows_webview_black_system_dialog(self) -> None:
+        self.assertIn('id="app-dialog-backdrop"', HTML)
+        self.assertIn('id="app-dialog-title"', HTML)
+        self.assertIn('id="app-dialog-message"', HTML)
+        self.assertIn("function showAppConfirm(message, options)", HTML)
+        self.assertIn("function showAppAlert(message, options)", HTML)
+        self.assertNotRegex(HTML, r"\b(?:window\.)?(?:confirm|alert|prompt)\s*\(")
+
+    def test_app_dialog_uses_theme_tokens_and_safe_text_content(self) -> None:
+        self.assertIn("background: var(--dialog-bg);", HTML)
+        self.assertIn("box-shadow: var(--shadow-popover);", HTML)
+        self.assertIn("messageElement.textContent = String(message || '');", HTML)
+        self.assertIn("backdrop.setAttribute('aria-hidden', 'false');", HTML)
+        self.assertIn("if (event.key === 'Escape'", HTML)
+
+    def test_bibliographic_overwrite_uses_the_in_app_confirmation(self) -> None:
+        self.assertIn("{title:'覆盖人工书目信息？', confirmText:'确认覆盖', tone:'warning'}", HTML)
 
 
 if __name__ == "__main__":

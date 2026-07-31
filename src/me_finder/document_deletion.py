@@ -1,4 +1,4 @@
-"""Transactional removal of one PDF from the local literature library."""
+"""Transactional removal of PDF and Word sources from the local library."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .pdf_import_service import locked_import_config, save_import_config
 
 
 class DocumentDeletionService:
-    """Remove source-owned records while keeping the original PDF by default."""
+    """Remove source-owned records and only managed in-app source copies."""
 
     def __init__(self, root: Path, database_path: Path) -> None:
         self.root = Path(root).resolve()
@@ -41,16 +41,21 @@ class DocumentDeletionService:
         )
         if failure is not None:
             raise ValueError(failure["error"])
+        source_type = str(batch.get("source_types", {}).get(source_file_id) or "")
+        internal_copy_deleted = source_file_id in set(
+            batch.get("internal_copies_deleted") or []
+        )
         return {
             "source_file_id": source_file_id,
+            "source_type": source_type,
             "deleted": batch["deleted"][source_file_id],
             "backup_path": batch["backup_path"],
             "source_count": batch["source_count"],
             "paragraph_count": batch["paragraph_count"],
             "eligible_paragraph_count": batch["eligible_paragraph_count"],
             "removed_from_config": source_file_id in batch["removed_from_config"],
-            "original_pdf_preserved": not delete_internal_copy,
-            "internal_copy_deleted": delete_internal_copy,
+            "original_pdf_preserved": source_type == "pdf" and not delete_internal_copy,
+            "internal_copy_deleted": internal_copy_deleted,
             "generated_artifacts_requested": delete_generated_artifacts,
             "staged_artifact_count": batch["staged_artifact_count"],
             "cleanup_warnings": batch["cleanup_warnings"],
@@ -79,10 +84,15 @@ class DocumentDeletionService:
         internal_copy_ids: Optional[Iterable[str]],
         config: Dict[str, object],
     ) -> Dict[str, object]:
-        """Remove several PDFs with one config write and one database snapshot.
+        """Remove several PDF/Word sources with one database snapshot.
 
         Documents that fail validation are reported in ``failures`` and left
-        untouched; the rest still go through as a single transaction.
+        untouched; the rest still go through as a single transaction.  PDF
+        corpus copies remain optional because removing their config entry keeps
+        them out of later rebuilds.  Word files are discovered directly from
+        ``corpus/raw_docx``, so their managed copy must be removed as part of
+        the same recoverable transaction or the next rebuild would re-import
+        them.  Files outside the managed corpus are never touched.
         """
 
         requested: List[str] = []
@@ -103,16 +113,36 @@ class DocumentDeletionService:
         targets: List[str] = []
         failures: List[Dict[str, str]] = []
         internal_paths: Dict[str, Path] = {}
+        source_types: Dict[str, str] = {}
         for source_file_id in requested:
             try:
                 source = self._source_record(source_file_id)
-                if source_file_id in internal_requested:
-                    source_path = self._source_path(source)
-                    if source_path is None or not self._is_within(
-                        source_path, self.root / "corpus" / "raw_pdf"
+                source_type = str(source.get("source_type") or "")
+                source_types[source_file_id] = source_type
+                source_path = self._source_path(source)
+                if source_type == "word" and source_path is not None:
+                    if (
+                        not self._is_within(
+                            source_path, self.root / "corpus" / "raw_docx"
+                        )
+                        or source_path.suffix.lower() not in {".doc", ".docx"}
+                    ):
+                        raise ValueError(
+                            "只允许删除应用 corpus/raw_docx 内保存的 Word 语料副本。"
+                        )
+                    if source_path.exists():
+                        internal_paths[source_file_id] = source_path
+                elif source_type == "pdf" and source_file_id in internal_requested:
+                    if (
+                        source_path is None
+                        or not self._is_within(
+                            source_path, self.root / "corpus" / "raw_pdf"
+                        )
+                        or source_path.suffix.lower() != ".pdf"
                     ):
                         raise ValueError("只允许删除应用 corpus/raw_pdf 内保存的 PDF 副本。")
-                    internal_paths[source_file_id] = source_path
+                    if source_path.exists():
+                        internal_paths[source_file_id] = source_path
             except ValueError as exc:
                 failures.append({"source_id": source_file_id, "error": str(exc)})
                 continue
@@ -139,6 +169,8 @@ class DocumentDeletionService:
         try:
             if delete_generated_artifacts:
                 for source_file_id in targets:
+                    if source_types.get(source_file_id) != "pdf":
+                        continue
                     document = document_by_id.get(source_file_id)
                     # 只有仍被保留文献引用的产物才受保护；批内共享的可以一起清掉。
                     visible = survivors if document is None else [*survivors, document]
@@ -183,6 +215,10 @@ class DocumentDeletionService:
             **database_result,
             "removed_source_ids": targets,
             "failures": failures,
+            "source_types": {
+                source_file_id: source_types[source_file_id]
+                for source_file_id in targets
+            },
             "removed_from_config": [
                 source_file_id
                 for source_file_id in targets
@@ -205,9 +241,14 @@ class DocumentDeletionService:
             connection.close()
         if row is None:
             raise ValueError("文献不存在。")
-        if str(row[0]) != "pdf":
-            raise ValueError("当前只能从页码校准库移除 PDF 文献。")
-        return json.loads(row[1])
+        source_type = str(row[0] or "")
+        if source_type not in {"pdf", "word"}:
+            raise ValueError("当前只支持移除 PDF 或 Word 文献。")
+        payload = json.loads(row[1])
+        if not isinstance(payload, dict):
+            raise ValueError("文献索引记录损坏，无法安全移除。")
+        payload["source_type"] = source_type
+        return payload
 
     def _source_path(self, source: Mapping[str, object]) -> Optional[Path]:
         relative = str(source.get("relative_path") or "").strip()

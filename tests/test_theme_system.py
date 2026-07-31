@@ -273,6 +273,32 @@ class ThemeMarkupTests(unittest.TestCase):
         ):
             self.assertIn(f"var({token})", preview_css)
 
+    def test_rose_and_lavender_cards_use_neutral_primary_surfaces(self) -> None:
+        expected_surfaces = {
+            "rose-mist": "#FFFFFF",
+            "lavender-purple": "#FFFFFF",
+        }
+        for theme, expected in expected_surfaces.items():
+            block = re.search(
+                rf'[^{{}}]*html\[data-theme="{re.escape(theme)}"\][^{{}}]*\{{([^}}]+)\}}',
+                HTML,
+            )
+            self.assertIsNotNone(block, theme)
+            surface = re.search(
+                r"--surface-primary:\s*([^;]+);", block.group(1)
+            ).group(1).strip()
+            self.assertEqual(surface, expected)
+        self.assertIn(".library-card {", HTML)
+        self.assertIn("background: var(--surface-primary);", HTML)
+
+    def test_settings_sidebar_uses_a_gear_icon(self) -> None:
+        self.assertIn('class="sidebar-settings-gear"', HTML)
+        self.assertIn('<circle cx="12" cy="12" r="3"/>', HTML)
+        self.assertNotIn(
+            'M10 1v3M10 16v3M1 10h3M16 10h3M3.5 3.5l2 2',
+            HTML,
+        )
+
     def test_initial_html_is_server_rendered_for_selected_theme(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             for theme in self.THEMES:

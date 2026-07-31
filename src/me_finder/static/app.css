@@ -3168,6 +3168,28 @@ html[data-desktop-shell="macos"] .macos-data-location-settings { display: block;
   color: var(--text-tertiary);
   font-size: 14px;
 }
+/* ── Theme-aware dialogs ───────────────────────────────────── */
+.app-dialog-backdrop { position: fixed; inset: 0; z-index: 350; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.app-dialog-backdrop.open { display: grid; }
+.app-dialog {
+  width: min(460px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: var(--dialog-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-popover);
+}
+.app-dialog-heading { display: flex; align-items: center; gap: 11px; }
+.app-dialog-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 9px; background: var(--info-soft); color: var(--info-icon); font-size: 16px; font-weight: 750; }
+.app-dialog[data-tone="warning"] .app-dialog-icon { background: var(--warning-soft); color: var(--warning-icon); }
+.app-dialog[data-tone="danger"] .app-dialog-icon { background: var(--danger-soft); color: var(--danger-icon); }
+.app-dialog-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.app-dialog-message { margin-top: 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-dialog-actions { margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px; }
+.app-dialog[data-tone="danger"] #app-dialog-confirm { color: var(--danger); border-color: var(--danger); background: var(--surface); }
+.app-dialog[data-tone="danger"] #app-dialog-confirm:hover { background: var(--danger-soft); }
+
 .remove-modal-backdrop { position: fixed; inset: 0; z-index: 300; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(2px); }
 .remove-modal-backdrop.open { display: grid; }
 .remove-modal { width: min(470px, 100%); padding: 22px; border-radius: 14px; background: var(--dialog-bg); border: 1px solid var(--border-default); box-shadow: var(--shadow-popover); }

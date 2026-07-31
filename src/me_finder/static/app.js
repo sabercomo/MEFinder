@@ -50,6 +50,8 @@ let removeDocumentTarget = null;
 let removeDocumentTargets = [];
 let removeSecondStage = false;
 let removeRequestController = null;
+let appDialogResolve = null;
+let appDialogPreviousFocus = null;
 let mineruConfigLoaded = false;
 let visionConfigLoaded = false;
 let visionConfig = {providers: [], default_provider_id: null, auto_fallback_from_mineru: false};
@@ -99,6 +101,74 @@ function closeWindowsWindow() {
 window.addEventListener('pywebviewready', function() {
   if (desktopShell === 'win32') {
     callWindowsWindow('is_maximized').then(setWindowsMaximized);
+  }
+});
+
+/* ═══ Theme-aware confirmation / information dialog ═══ */
+function openAppDialog(message, options) {
+  options = options || {};
+  var backdrop = document.getElementById('app-dialog-backdrop');
+  var dialog = document.getElementById('app-dialog');
+  var title = document.getElementById('app-dialog-title');
+  var messageElement = document.getElementById('app-dialog-message');
+  var cancelButton = document.getElementById('app-dialog-cancel');
+  var confirmButton = document.getElementById('app-dialog-confirm');
+  if (!backdrop || !dialog || !title || !messageElement || !cancelButton || !confirmButton) {
+    return Promise.resolve(false);
+  }
+  if (appDialogResolve) {
+    var previousResolve = appDialogResolve;
+    appDialogResolve = null;
+    previousResolve(false);
+  }
+  var showCancel = options.showCancel !== false;
+  var tone = ['info', 'warning', 'danger'].indexOf(options.tone) >= 0 ? options.tone : 'info';
+  dialog.dataset.tone = tone;
+  title.textContent = options.title || (showCancel ? '请确认' : '提示');
+  messageElement.textContent = String(message || '');
+  cancelButton.hidden = !showCancel;
+  cancelButton.textContent = options.cancelText || '取消';
+  confirmButton.textContent = options.confirmText || (showCancel ? '确定' : '知道了');
+  confirmButton.className = 'action-btn ' + (tone === 'danger' ? '' : 'primary');
+  appDialogPreviousFocus = document.activeElement;
+  backdrop.classList.add('open');
+  backdrop.setAttribute('aria-hidden', 'false');
+  return new Promise(function(resolve) {
+    appDialogResolve = resolve;
+    setTimeout(function() { confirmButton.focus(); }, 0);
+  });
+}
+
+function showAppConfirm(message, options) {
+  return openAppDialog(message, Object.assign({showCancel: true}, options || {}));
+}
+
+function showAppAlert(message, options) {
+  return openAppDialog(message, Object.assign({showCancel: false}, options || {}));
+}
+
+function settleAppDialog(accepted) {
+  var backdrop = document.getElementById('app-dialog-backdrop');
+  if (!backdrop || !backdrop.classList.contains('open')) return;
+  backdrop.classList.remove('open');
+  backdrop.setAttribute('aria-hidden', 'true');
+  var resolve = appDialogResolve;
+  appDialogResolve = null;
+  var previousFocus = appDialogPreviousFocus;
+  appDialogPreviousFocus = null;
+  if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+  if (resolve) resolve(!!accepted);
+}
+
+function appDialogBackdropClick(event) {
+  if (event.target && event.target.id === 'app-dialog-backdrop') settleAppDialog(false);
+}
+
+document.addEventListener('keydown', function(event) {
+  var backdrop = document.getElementById('app-dialog-backdrop');
+  if (event.key === 'Escape' && backdrop && backdrop.classList.contains('open')) {
+    event.preventDefault();
+    settleAppDialog(false);
   }
 });
 
@@ -1042,7 +1112,7 @@ function getFilteredSources() {
 }
 
 function isLibraryDeleteSelectable(source) {
-  return !!source && source.source_type === 'pdf';
+  return !!source && (source.source_type === 'pdf' || source.source_type === 'word');
 }
 
 function updateLibraryDeleteControls() {
@@ -1088,7 +1158,7 @@ function clearLibrarySelection() {
 function toggleLibraryDeleteSelection(sourceId, force) {
   var source = libSources.find(function(item) { return item.source_file_id === sourceId; });
   if (!isLibraryDeleteSelectable(source)) {
-    showToast('Word 文献由本地语料目录管理，目前只能在这里移除 PDF 文献', 'warning');
+    showToast('当前来源类型暂不支持从文献库移除', 'warning');
     return;
   }
   var selected = typeof force === 'boolean' ? force : !libDeleteSelection.has(sourceId);
@@ -1210,8 +1280,9 @@ function libraryEntryHTML(src) {
   var countMeta = isPdf
     ? (src.page_count ? src.page_count + ' 页' : '页数未知')
     : ((src.works_count || 1) + ' 篇');
-  // Deletable (PDF) entries always carry a checkbox; CSS reveals it on hover or
-  // while a selection is active. Word entries stay uncheckable (corpus-managed).
+  // PDF and Word entries both carry a checkbox; CSS reveals it on hover or
+  // while a selection is active. Word removal also clears the managed corpus
+  // copy so a later full rebuild cannot silently add it back.
   var selectionControl = isDeleteSelectable
     ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
     : '';
@@ -1538,7 +1609,10 @@ function collectBibliographicForm() {
 }
 
 async function detectBibliographicMetadata(sourceId, force) {
-  if (force && !confirm('确认用自动识别结果覆盖当前表单中的人工书目信息吗？')) return;
+  if (force && !await showAppConfirm(
+    '自动识别结果将覆盖当前表单中的人工书目信息。',
+    {title:'覆盖人工书目信息？', confirmText:'确认覆盖', tone:'warning'}
+  )) return;
   try {
     showToast('正在识别封面、书名页、CIP 与版权页…');
     var resp = await fetch('/api/bibliographic-metadata/detect', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,force:!!force})});
@@ -1574,7 +1648,7 @@ function showBibliographicEvidence(sourceId) {
     var item = evidence[field] || {};
     return (labels[field] || field) + '：' + (item.evidence_text || '无文本依据') + (item.source_page ? '（PDF 第 ' + item.source_page + ' 页）' : '') + (item.source === 'inferred_from_publisher' ? '（由出版社推断）' : '');
   });
-  alert(lines.length ? lines.join('\n') : '暂无自动识别依据。');
+  showAppAlert(lines.length ? lines.join('\n') : '暂无自动识别依据。', {title:'自动识别依据'});
 }
 
 async function openMetadataForSource(sourceId) {
@@ -1605,7 +1679,10 @@ function toggleDrawerSection(event, sectionId) {
 }
 
 async function submitMineruReparse(sourceId) {
-  if (!window.confirm('将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入，是否继续？')) return;
+  if (!await showAppConfirm(
+    '将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入。',
+    {title:'重新解析 PDF？', confirmText:'上传并重新解析', tone:'warning'}
+  )) return;
   try {
     var resp = await fetch('/api/mineru-reparse', {
       method: 'POST',
@@ -1678,7 +1755,10 @@ function showAutoMappingExceptions(sourceId) {
     showToast('没有异常页面');
     return;
   }
-  alert('异常页面（PDF 物理页）：\\n' + pages.slice(0, 80).map(function(p) { return Number(p) + 1; }).join(', ') + (pages.length > 80 ? '\\n…' : ''));
+  showAppAlert(
+    '异常页面（PDF 物理页）：\\n' + pages.slice(0, 80).map(function(p) { return Number(p) + 1; }).join(', ') + (pages.length > 80 ? '\\n…' : ''),
+    {title:'页码检测异常'}
+  );
 }
 
 async function openCalibrationForSource(sourceId) {
@@ -1914,7 +1994,10 @@ async function applyAutoDetection() {
   if (!segments.length) return;
   var replaceManual = false;
   if (calAutoResult.manual_mapping_present) {
-    replaceManual = confirm('当前文献已有人工映射。确认用本次自动检测结果替换吗？');
+    replaceManual = await showAppConfirm(
+      '当前文献已有人工映射。本次自动检测结果会替换已有映射。',
+      {title:'替换人工页码映射？', confirmText:'确认替换', tone:'warning'}
+    );
     if (!replaceManual) return;
   }
   try {
@@ -2181,7 +2264,7 @@ function openRemoveSelectedDocumentsModal() {
     return libDeleteSelection.has(item.source_file_id) && isLibraryDeleteSelectable(item);
   });
   if (!items.length) {
-    showToast('请先选择要删除的 PDF 文献', 'warning');
+    showToast('请先选择要删除的文献', 'warning');
     return;
   }
   openRemoveDocumentsModal(items);
@@ -2193,16 +2276,34 @@ function openRemoveDocumentsModal(items) {
   removeDocumentTarget = removeDocumentTargets[0];
   removeSecondStage = false;
   var count = removeDocumentTargets.length;
+  var pdfCount = removeDocumentTargets.filter(function(item) { return item.source_type === 'pdf'; }).length;
+  var wordCount = removeDocumentTargets.filter(function(item) { return item.source_type === 'word'; }).length;
   document.getElementById('remove-modal-title').textContent = count === 1
     ? '从文献库移除《' + (removeDocumentTarget.title || removeDocumentTarget.file_name || '所选文献') + '》？'
     : '从文献库移除所选 ' + count + ' 篇文献？';
-  document.getElementById('remove-modal-copy').textContent = count === 1
-    ? '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件。'
-    : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留原 PDF 文件。';
+  var removalCopy;
+  if (wordCount && pdfCount) {
+    removalCopy = '移除后，所选文献将从文献库和搜索结果中消失。Word 文献的应用内语料副本会一并删除，外部原文件不受影响；PDF 文件默认保留。';
+  } else if (wordCount) {
+    removalCopy = count === 1
+      ? '移除后，该文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响。'
+      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响。';
+  } else {
+    removalCopy = count === 1
+      ? '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件。'
+      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留原 PDF 文件。';
+  }
+  document.getElementById('remove-modal-copy').textContent = removalCopy;
   document.getElementById('remove-generated').checked = true;
+  document.getElementById('remove-generated-option').style.display = pdfCount ? 'flex' : 'none';
   document.getElementById('remove-internal-copy').checked = false;
-  var internalCount = removeDocumentTargets.filter(function(item) { return item.can_delete_internal_copy; }).length;
+  var internalCount = removeDocumentTargets.filter(function(item) {
+    return item.source_type === 'pdf' && item.can_delete_internal_copy;
+  }).length;
   document.getElementById('remove-internal-option').style.display = internalCount ? 'flex' : 'none';
+  document.getElementById('remove-modal-warning').textContent = wordCount
+    ? '删除应用内 Word 语料副本后无法恢复，外部原文件不会删除。请再次确认此操作。'
+    : '删除应用内 PDF 副本后无法恢复。请再次确认此操作。';
   document.getElementById('remove-modal-warning').classList.remove('show');
   document.getElementById('confirm-remove-btn').textContent = count === 1 ? '从文献库移除' : '移除所选 ' + count + ' 篇';
   document.getElementById('confirm-remove-btn').disabled = false;
@@ -2232,10 +2333,11 @@ async function confirmRemoveDocument() {
   var targets = removeDocumentTargets.length ? removeDocumentTargets.slice() : (removeDocumentTarget ? [removeDocumentTarget] : []);
   if (!targets.length) return;
   var deleteInternalRequested = document.getElementById('remove-internal-copy').checked;
-  if (deleteInternalRequested && !removeSecondStage) {
+  var hasWordTargets = targets.some(function(item) { return item.source_type === 'word'; });
+  if ((deleteInternalRequested || hasWordTargets) && !removeSecondStage) {
     removeSecondStage = true;
     document.getElementById('remove-modal-warning').classList.add('show');
-    document.getElementById('confirm-remove-btn').textContent = targets.length === 1 ? '确认移除并删除副本' : '确认移除并删除内部副本';
+    document.getElementById('confirm-remove-btn').textContent = targets.length === 1 ? '确认移除并删除副本' : '确认移除并删除应用内副本';
     return;
   }
   var button = document.getElementById('confirm-remove-btn');
@@ -2243,7 +2345,8 @@ async function confirmRemoveDocument() {
   button.textContent = targets.length === 1 ? '正在移除…' : '正在移除 ' + targets.length + ' 篇…';
   var removedIds = [];
   var failures = [];
-  var deleteGenerated = document.getElementById('remove-generated').checked;
+  var deleteGenerated = document.getElementById('remove-generated').checked
+    && targets.some(function(item) { return item.source_type === 'pdf'; });
   var sourceIds = targets.map(function(item) { return item.source_file_id; });
   // 一次请求一个事务：逐份删除会为每份文献整份复制索引数据库。
   removeRequestController = typeof AbortController === 'function' ? new AbortController() : null;
@@ -2327,7 +2430,19 @@ async function confirmRemoveDocument() {
   } else {
     libDeleteSelection.clear();
     renderLibraryList();
-    showToast(deleteInternalRequested ? '所选文献及可删除的应用内 PDF 副本已移除' : (removedIds.length > 1 ? '已移除 ' + removedIds.length + ' 篇文献，原 PDF 文件已保留' : '文献已移除，PDF 文件已保留'), 'success');
+    var successMessage;
+    if (hasWordTargets && deleteInternalRequested) {
+      successMessage = '所选文献及应用内副本已移除，外部原文件不受影响';
+    } else if (hasWordTargets) {
+      successMessage = removedIds.length > 1
+        ? '已移除 ' + removedIds.length + ' 篇文献；Word 应用内语料副本已删除，PDF 文件已保留'
+        : 'Word 文献及应用内语料副本已移除，外部原文件不受影响';
+    } else if (deleteInternalRequested) {
+      successMessage = '所选文献及可删除的应用内 PDF 副本已移除';
+    } else {
+      successMessage = removedIds.length > 1 ? '已移除 ' + removedIds.length + ' 篇文献，原 PDF 文件已保留' : '文献已移除，PDF 文件已保留';
+    }
+    showToast(successMessage, 'success');
   }
 
   if (!removedIds.length && !failures.length) {
@@ -2597,10 +2712,11 @@ async function chooseDataLocation() {
 
 async function migrateDataLocation() {
   if (!pendingDataLocation) return;
-  if (!confirm(
+  if (!await showAppConfirm(
     '将把索引、语料和本机设置复制到：\n\n'
     + pendingDataLocation
-    + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留。继续吗？'
+    + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留。',
+    {title:'迁移数据位置？', confirmText:'开始迁移', tone:'warning'}
   )) return;
   var button = document.getElementById('data-location-migrate');
   var choose = document.getElementById('data-location-choose');
@@ -2843,7 +2959,10 @@ async function runUpdateAction() {
     return;
   }
   if (updateState.status !== 'ready') return;
-  if (!confirm('安装更新会关闭 MEFinder，完成后自动重新打开。现在安装吗？')) return;
+  if (!await showAppConfirm(
+    '安装更新会关闭 MEFinder，完成后自动重新打开。',
+    {title:'现在安装更新？', confirmText:'安装并重启', tone:'warning'}
+  )) return;
   var installToken = updateState.install_token;
   if (!installToken) {
     showToast('安装确认已失效，请重新下载更新');
@@ -3102,7 +3221,10 @@ async function importBackup() {
   var input = document.getElementById('backup-import-path');
   var path = (input.value || '').trim();
   if (!path) { showToast('请先填写备份文件路径'); return; }
-  if (!confirm('导入将覆盖当前的页码映射与书目信息，并重建索引。确认继续吗？')) return;
+  if (!await showAppConfirm(
+    '导入将覆盖当前的页码映射与书目信息，并重建索引。',
+    {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
+  )) return;
   try {
     var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: path})});
     var data = await resp.json();
@@ -3893,7 +4015,10 @@ async function saveVisionProvider() {
 
 async function deleteVisionProvider(providerId) {
   var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
-  if (!provider || !confirm('删除解析接口“' + provider.name + '”？')) return;
+  if (!provider || !await showAppConfirm(
+    '将删除解析接口“' + provider.name + '”。',
+    {title:'删除解析接口？', confirmText:'删除', tone:'danger'}
+  )) return;
   try {
     var resp = await fetch('/api/vision-providers', {
       method: 'POST',
@@ -3918,7 +4043,10 @@ async function testVisionProvider(providerId) {
     showToast('请先保存 API Key、地址和模型名称');
     return;
   }
-  if (!confirm('测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入。继续吗？')) return;
+  if (!await showAppConfirm(
+    '测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入。',
+    {title:'测试视觉接口？', confirmText:'发送测试图片'}
+  )) return;
   showToast('正在测试 ' + provider.name + '…');
   try {
     var resp = await fetch('/api/vision-providers/test', {
@@ -4681,7 +4809,10 @@ async function resumeAllImports() {
   var hasPaidRoute = pending.some(function(item) {
     return item.failureStage !== 'index' && item.type === 'pdf' && item.route !== 'native';
   });
-  if (hasPaidRoute && !confirm('将从上次断点继续 ' + pending.length + ' 个任务，其中包含需要联网解析的文献，未完成部分可能产生费用。继续吗？')) return;
+  if (hasPaidRoute && !await showAppConfirm(
+    '将从上次断点继续 ' + pending.length + ' 个任务，其中包含需要联网解析的文献，未完成部分可能产生费用。',
+    {title:'继续联网解析任务？', confirmText:'继续任务', tone:'warning'}
+  )) return;
   if (button) { button.disabled = true; button.textContent = '正在继续…'; }
   for (var index = 0; index < pending.length; index += 1) {
     // 串行发起，避免同时唤起多个解析任务把本地或额度打满。
@@ -4848,7 +4979,10 @@ async function resumeImport(id, options) {
   if (!q || !q.jobId || !q.canResume) return;
   var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
   if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
-      && !confirm('将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用。继续吗？')) return;
+      && !await showAppConfirm(
+        '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用。',
+        {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
+      )) return;
   try {
     var resp = await fetch('/api/import-resume', {
       method: 'POST',
@@ -4880,7 +5014,10 @@ async function retryImportWithVision(id) {
   }
   var providerId = provider.id;
   var providerName = provider.name || '其他解析 API';
-  if (!confirm('将改用“' + providerName + '”重新解析这份 PDF，可能产生费用。继续吗？')) return;
+  if (!await showAppConfirm(
+    '将改用“' + providerName + '”重新解析这份 PDF，可能产生费用。',
+    {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
+  )) return;
   try {
     var resp = await fetch('/api/import-retry', {
       method: 'POST',

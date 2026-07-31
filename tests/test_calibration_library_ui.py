@@ -308,7 +308,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('#page-library .page-header-row { flex-wrap: wrap; }', HTML)
         self.assertIn('#page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }', HTML)
 
-    def test_library_supports_click_and_drag_multi_selection_for_pdf_removal(self) -> None:
+    def test_library_supports_click_and_drag_multi_selection_for_pdf_and_word_removal(self) -> None:
         for element_id in (
             'id="library-selection-bar"',
             'id="library-selection-count"',
@@ -327,7 +327,9 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("setupLibraryDragSelection();", HTML)
         self.assertIn('function openRemoveSelectedDocumentsModal()', HTML)
         self.assertIn("fetch('/api/documents/remove-batch'", HTML)
-        self.assertIn('Word 文献由本地语料目录管理，目前只能在这里移除 PDF 文献', HTML)
+        self.assertIn("source.source_type === 'pdf' || source.source_type === 'word'", HTML)
+        self.assertIn('Word 文献的应用内语料副本会一并删除', HTML)
+        self.assertNotIn('Word 文献由本地语料目录管理，目前只能在这里移除 PDF 文献', HTML)
 
     def test_drag_selection_reaches_documents_below_the_fold(self) -> None:
         """框选一次只能选一屏，是因为锚点和命中判定都用视口坐标、且不自动滚动。"""

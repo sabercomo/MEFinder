@@ -1402,8 +1402,8 @@ def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> D
     ).fetchone()
     if source is None:
         raise ValueError("文献不存在。")
-    if str(source[0]) != "pdf":
-        raise ValueError("当前移除服务仅允许处理 PDF 文献。")
+    if str(source[0]) not in {"pdf", "word"}:
+        raise ValueError("当前移除服务仅允许处理 PDF 或 Word 文献。")
     volume_ids = [
         str(row[0])
         for row in connection.execute(

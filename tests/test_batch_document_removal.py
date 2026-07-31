@@ -22,6 +22,7 @@ from src.me_finder.database import (
     delete_sources_from_database,
 )
 from src.me_finder.document_deletion import DocumentDeletionService
+from src.me_finder.search import SearchEngine
 from src.me_finder.web import HTML
 
 
@@ -73,6 +74,47 @@ def _index(source_ids) -> dict:
         "works": works,
         "paragraphs": paragraphs,
     }
+
+
+def _add_word_source(index: dict, source_id: str, *, relative_path=None) -> dict:
+    relative_path = relative_path or f"corpus/raw_docx/{source_id}.docx"
+    index["source_files"].append(
+        {
+            "source_file_id": source_id,
+            "source_type": "word",
+            "file_name": f"{source_id}.docx",
+            "relative_path": relative_path,
+        }
+    )
+    index["volumes"].append(
+        {
+            "volume_id": f"VOL_{source_id}",
+            "source_file_id": source_id,
+            "source_type": "word",
+            "display_title": source_id,
+        }
+    )
+    index["works"].append(
+        {
+            "work_id": f"WORK_{source_id}",
+            "volume_id": f"VOL_{source_id}",
+            "source_file_id": source_id,
+            "source_type": "word",
+            "title": source_id,
+        }
+    )
+    index["paragraphs"].append(
+        {
+            "paragraph_id": f"{source_id}-p0",
+            "source_file_id": source_id,
+            "volume_id": f"VOL_{source_id}",
+            "work_id": f"WORK_{source_id}",
+            "source_type": "word",
+            "text_raw": "Word 文献删除回归文本",
+            "eligible_for_search": 1,
+        }
+    )
+    return index
 
 
 class BatchDatabaseDeletionTests(unittest.TestCase):
@@ -189,6 +231,28 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
         )
         return temp_dir, root, database_path
 
+    def _mixed_service_root(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        root = Path(temp_dir.name) / "app"
+        raw_pdf = root / "corpus" / "raw_pdf"
+        raw_docx = root / "corpus" / "raw_docx"
+        raw_pdf.mkdir(parents=True)
+        raw_docx.mkdir(parents=True)
+        (raw_pdf / "pdf-0.pdf").write_bytes(b"pdf")
+        (raw_docx / "word-0.docx").write_bytes(b"docx")
+        database_path = root / "data" / "index.sqlite3"
+        build_database(_add_word_source(_index(["pdf-0"]), "word-0"), database_path)
+        config_path = root / "config" / "pdf_imports.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            json.dumps(
+                {"documents": [{"source_file_id": "pdf-0", "document_id": "DOC_pdf-0"}]},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return temp_dir, root, database_path
+
     def test_remove_many_takes_one_snapshot_and_clears_config_once(self) -> None:
         ids = [f"pdf-{i}" for i in range(6)]
         temp_dir, root, database_path = self._service_root(ids)
@@ -251,6 +315,87 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             self.assertTrue((root / "corpus" / "raw_pdf" / "pdf-0.pdf").exists())
             self.assertFalse((root / "corpus" / "raw_pdf" / "pdf-1.pdf").exists())
 
+    def test_word_removal_deletes_managed_copy_and_keeps_other_sources(self) -> None:
+        temp_dir, root, database_path = self._mixed_service_root()
+        with temp_dir:
+            original = Path(temp_dir.name) / "outside-original.docx"
+            original.write_bytes(b"original")
+            result = DocumentDeletionService(root, database_path).remove("word-0")
+            self.assertEqual(result["source_type"], "word")
+            self.assertTrue(result["internal_copy_deleted"])
+            self.assertFalse(result["original_pdf_preserved"])
+            self.assertFalse((root / "corpus" / "raw_docx" / "word-0.docx").exists())
+            self.assertTrue(original.exists())
+            self.assertEqual(result["removed_from_config"], False)
+            with sqlite3.connect(str(database_path)) as connection:
+                remaining = [
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT source_file_id FROM source_files ORDER BY source_file_id"
+                    )
+                ]
+            self.assertEqual(remaining, ["pdf-0"])
+            engine = SearchEngine(database_path)
+            try:
+                self.assertEqual(
+                    engine.search("Word 文献删除回归文本", source_type="word")["total"],
+                    0,
+                )
+            finally:
+                engine.close()
+
+    def test_mixed_pdf_word_batch_removes_word_copy_and_preserves_pdf_by_default(self) -> None:
+        temp_dir, root, database_path = self._mixed_service_root()
+        with temp_dir:
+            result = DocumentDeletionService(root, database_path).remove_many(
+                ["pdf-0", "word-0"]
+            )
+            self.assertEqual(result["removed_source_ids"], ["pdf-0", "word-0"])
+            self.assertEqual(result["source_types"], {"pdf-0": "pdf", "word-0": "word"})
+            self.assertEqual(result["internal_copies_deleted"], ["word-0"])
+            self.assertTrue((root / "corpus" / "raw_pdf" / "pdf-0.pdf").exists())
+            self.assertFalse((root / "corpus" / "raw_docx" / "word-0.docx").exists())
+            with sqlite3.connect(str(database_path)) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0], 0)
+
+    def test_word_removal_refuses_to_touch_a_file_outside_managed_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            outside = root / "outside" / "word-unsafe.docx"
+            outside.parent.mkdir(parents=True)
+            outside.write_bytes(b"do not delete")
+            database_path = root / "data" / "index.sqlite3"
+            build_database(
+                _add_word_source(
+                    _index([]), "word-unsafe", relative_path="outside/word-unsafe.docx"
+                ),
+                database_path,
+            )
+            with self.assertRaisesRegex(ValueError, "corpus/raw_docx"):
+                DocumentDeletionService(root, database_path).remove("word-unsafe")
+            self.assertTrue(outside.exists())
+            with sqlite3.connect(str(database_path)) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0], 1)
+
+    def test_word_copy_is_restored_when_database_removal_fails(self) -> None:
+        temp_dir, root, database_path = self._mixed_service_root()
+        with temp_dir:
+            word_path = root / "corpus" / "raw_docx" / "word-0.docx"
+            with patch(
+                "src.me_finder.document_deletion.delete_sources_from_database",
+                side_effect=RuntimeError("database delete failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "database delete failed"):
+                    DocumentDeletionService(root, database_path).remove("word-0")
+            self.assertTrue(word_path.exists())
+            with sqlite3.connect(str(database_path)) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM source_files WHERE source_file_id='word-0'"
+                    ).fetchone()[0],
+                    1,
+                )
+
     def test_single_remove_still_works_through_the_batch_path(self) -> None:
         ids = ["pdf-0", "pdf-1"]
         temp_dir, root, database_path = self._service_root(ids)
@@ -287,6 +432,7 @@ class BatchRemovalWiringTests(unittest.TestCase):
         self.assertIn("let removeRequestController = null;", HTML)
         self.assertIn("removeRequestController.abort();", HTML)
         self.assertIn("e.name === 'AbortError'", HTML)
+        self.assertIn('id="remove-generated-option"', HTML)
 
 
 if __name__ == "__main__":
