@@ -151,7 +151,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertEqual(HTML.count("--match-focus-ring:"), 6)
 
     def test_settings_uses_preview_cards_and_switches_without_reload(self) -> None:
-        expected_order = ["清霜蓝", "鼠尾草", "暖砂金", "蔷薇雾", "暮云紫", "深海夜"]
+        expected_order = ["晴蓝", "抹茶", "暖沙", "樱粉", "薰衣草", "午夜"]
         positions = [HTML.index(f"name:'{name}'") for name in expected_order]
         self.assertEqual(positions, sorted(positions))
         for theme in self.THEMES:
@@ -163,9 +163,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('class="theme-mini-match"', HTML)
         self.assertIn('class="theme-option-tone"', HTML)
         for description in (
-            "清爽理性，适合日间使用。", "低刺激、安静，适合长时间阅读。",
-            "温暖柔和，带轻微纸张气质。", "清柔克制，带淡粉强调。",
-            "优雅现代，使用柔和薰衣草紫。", "低亮度深色主题，适合夜间使用。",
+            "清爽理性，适合日间使用", "低刺激、安静，适合长时间阅读",
+            "温暖柔和，带轻微纸张气质", "清柔克制，带淡粉强调",
+            "优雅现代，使用柔和薰衣草紫", "低亮度深色主题，适合夜间使用",
         ):
             self.assertIn(description, HTML)
         self.assertIn('.theme-option:focus-visible', HTML)
@@ -185,12 +185,12 @@ class ThemeMarkupTests(unittest.TestCase):
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(
-            'class="settings-section settings-collapse expanded desktop-pdf-settings" id="pdf-reader-settings"',
+            'class="settings-section desktop-pdf-settings active" id="pdf-reader-settings"',
             HTML,
         )
-        self.assertIn('aria-controls="pdf-reader-body"', HTML)
+        self.assertIn('data-target="pdf-reader-settings"', HTML)
         self.assertIn(
-            "toggleSettingsSection('pdf-reader-settings')",
+            "showSettingsCategory('pdf-reader-settings')",
             HTML,
         )
         self.assertIn('id="pdf-reader-body"', HTML)
@@ -209,8 +209,8 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("failedStatus.textContent = '读取失败';", HTML)
         self.assertIn(".pdf-open-options.is-busy", HTML)
         self.assertIn("pdf_open_mode: mode", HTML)
-        self.assertIn('html[data-desktop-shell="macos"] .desktop-pdf-settings', HTML)
-        self.assertIn('html[data-desktop-shell="win32"] .desktop-pdf-settings', HTML)
+        self.assertIn('html[data-desktop-shell="macos"] .settings-nav-item.plat-desktop', HTML)
+        self.assertIn('html[data-desktop-shell="win32"] .settings-nav-item.plat-desktop', HTML)
 
     def test_windows_settings_offer_webview2_system_reader_and_updates(self) -> None:
         for marker in (
@@ -228,13 +228,13 @@ class ThemeMarkupTests(unittest.TestCase):
         ):
             self.assertIn(marker, HTML)
         self.assertIn(
-            'html[data-desktop-shell="win32"] .windows-update-settings',
+            'html[data-desktop-shell="win32"] .settings-nav-item.plat-win',
             HTML,
         )
 
     def test_macos_settings_offer_manual_updates_and_data_location_migration(self) -> None:
         self.assertIn('id="macos-update-settings"', HTML)
-        self.assertIn('id="macos-update-body" hidden', HTML)
+        self.assertIn('id="macos-update-body"', HTML)
         self.assertIn("function checkMacosUpdate()", HTML)
         self.assertIn("fetch('/api/macos-update'", HTML)
         self.assertIn("打开 Releases 下载 DMG", HTML)
@@ -243,9 +243,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertNotIn("__APP_VERSION__", HTML)
 
         self.assertIn('id="data-location-settings"', HTML)
-        self.assertIn('id="data-location-body" hidden', HTML)
+        self.assertIn('id="data-location-body"', HTML)
         self.assertIn(
-            "toggleSettingsSection('data-location-settings')",
+            "showSettingsCategory('data-location-settings')",
             HTML,
         )
         self.assertIn("外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive", HTML)
@@ -256,7 +256,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("旧位置的数据会保留", HTML)
         self.assertIn("不要让两台电脑同时打开同一份云盘或 NAS 数据库", HTML)
         self.assertIn(
-            'html[data-desktop-shell="macos"] .macos-data-location-settings',
+            'html[data-desktop-shell="macos"] .settings-nav-item.plat-macos',
             HTML,
         )
 
@@ -273,10 +273,13 @@ class ThemeMarkupTests(unittest.TestCase):
         ):
             self.assertIn(f"var({token})", preview_css)
 
-    def test_rose_and_lavender_cards_use_neutral_primary_surfaces(self) -> None:
+    def test_rose_and_lavender_cards_use_tinted_near_white_surfaces(self) -> None:
+        # Pink/purple card surfaces are a faint hue-tinted near-white, matching the
+        # warm themes, so cards lift gently off the tinted page instead of reading as
+        # a stark white rectangle. They must not fall back to pure #FFFFFF.
         expected_surfaces = {
-            "rose-mist": "#FFFFFF",
-            "lavender-purple": "#FFFFFF",
+            "rose-mist": "#FFFBFC",
+            "lavender-purple": "#FDFBFE",
         }
         for theme, expected in expected_surfaces.items():
             block = re.search(
@@ -288,6 +291,7 @@ class ThemeMarkupTests(unittest.TestCase):
                 r"--surface-primary:\s*([^;]+);", block.group(1)
             ).group(1).strip()
             self.assertEqual(surface, expected)
+            self.assertNotEqual(surface.upper(), "#FFFFFF", theme)
         self.assertIn(".library-card {", HTML)
         self.assertIn("background: var(--surface-primary);", HTML)
 
@@ -370,37 +374,38 @@ class ThemeMarkupTests(unittest.TestCase):
         )
         self.assertIn("margin-top: var(--windows-titlebar-height);", rendered)
 
-    def test_all_top_level_settings_sections_are_collapsible(self) -> None:
+    def test_all_top_level_settings_sections_are_two_pane_panels(self) -> None:
         sections = {
-            "appearance-card": "appearance-body",
             "pdf-reader-settings": "pdf-reader-body",
-            "software-update-settings": "software-update-body",
-            "macos-update-settings": "macos-update-body",
-            "data-location-settings": "data-location-body",
             "mineru-api-settings": "mineru-api-body",
             "vision-api-settings": "vision-api-body",
+            "appearance-card": "appearance-body",
+            "data-location-settings": "data-location-body",
             "backup-settings": "backup-settings-body",
+            "software-update-settings": "software-update-body",
+            "macos-update-settings": "macos-update-body",
         }
-        self.assertEqual(HTML.count("onclick=\"toggleSettingsSection('"), len(sections))
+        # One left-rail entry per category switches which panel is active.
+        self.assertEqual(HTML.count("onclick=\"showSettingsCategory('"), len(sections))
         for section_id, body_id in sections.items():
             self.assertRegex(
                 HTML,
-                rf'<section class="[^"]*\bsettings-collapse\b[^"]*" id="{section_id}">',
+                rf'<section class="[^"]*\bsettings-section\b[^"]*" id="{section_id}" role="tabpanel">',
             )
-            self.assertIn(f'aria-controls="{body_id}"', HTML)
-            self.assertIn(f"toggleSettingsSection('{section_id}')", HTML)
+            self.assertIn(f'data-target="{section_id}"', HTML)
+            self.assertIn(f"showSettingsCategory('{section_id}')", HTML)
             self.assertRegex(
                 HTML,
-                rf'class="settings-collapse-body" id="{body_id}"(?: hidden)?>',
+                rf'class="settings-collapse-body" id="{body_id}">',
             )
 
-        toggle_start = HTML.index("function toggleSettingsSection(sectionId)")
-        toggle_end = HTML.index("function toggleAppearance()", toggle_start)
-        toggle_block = HTML[toggle_start:toggle_end]
-        self.assertIn("head.setAttribute('aria-expanded', open ? 'true' : 'false')", toggle_block)
-        self.assertIn("body.hidden = !open", toggle_block)
-        self.assertIn("section.classList.toggle('expanded', open)", toggle_block)
-        self.assertIn(".settings-collapse-body[hidden] { display: none; }", HTML)
+        show_start = HTML.index("function showSettingsCategory(sectionId)")
+        show_end = HTML.index("function ensureVisibleSettingsCategory()", show_start)
+        show_block = HTML[show_start:show_end]
+        self.assertIn("s.classList.toggle('active', s === section)", show_block)
+        self.assertIn("btn.setAttribute('aria-selected', on ? 'true' : 'false')", show_block)
+        self.assertIn("function ensureVisibleSettingsCategory()", HTML)
+        self.assertIn(".settings-section.active { display: block; }", HTML)
 
     def test_update_heading_uses_one_baseline_for_title_and_note(self) -> None:
         heading_rule = re.search(
@@ -412,7 +417,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("align-items: baseline;", heading_rule.group(1))
 
         update_start = HTML.index('id="software-update-settings"')
-        update_end = HTML.index('id="mineru-api-settings"', update_start)
+        update_end = HTML.index('id="macos-update-settings"', update_start)
         update_markup = HTML[update_start:update_end]
         self.assertRegex(
             update_markup,

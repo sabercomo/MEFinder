@@ -44,6 +44,7 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertFalse(options["easy_drag"])
         self.assertTrue(options["shadow"])
         self.assertTrue(options["resizable"])
+        self.assertTrue(options["text_select"])
         self.assertIs(options["js_api"], controller)
         self.assertIs(controller._window, window)
         self.assertFalse(hasattr(controller, "window"))
@@ -72,6 +73,7 @@ class DesktopPortableTests(unittest.TestCase):
         options = webview.create_window.call_args.kwargs
         self.assertNotIn("frameless", options)
         self.assertNotIn("js_api", options)
+        self.assertTrue(options["text_select"])
         self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
 
     def test_scan_directory_picker_enables_native_multiple_selection(self) -> None:
@@ -204,6 +206,7 @@ class DesktopPortableTests(unittest.TestCase):
         class NativeWindow:
             def __init__(self) -> None:
                 self.style_mask = 4
+                self.movable = False
                 self.transparent = False
                 self.title_visibility = None
                 self.separator_style = None
@@ -215,6 +218,9 @@ class DesktopPortableTests(unittest.TestCase):
 
             def setStyleMask_(self, value: int) -> None:
                 self.style_mask = value
+
+            def setMovable_(self, value: bool) -> None:
+                self.movable = value
 
             def setTitlebarAppearsTransparent_(self, value: bool) -> None:
                 self.transparent = value
@@ -246,11 +252,100 @@ class DesktopPortableTests(unittest.TestCase):
             desktop.configure_macos_titlebar(window)
 
         self.assertEqual(native_window.style_mask, 4 | (1 << 15))
+        self.assertTrue(native_window.movable)
         self.assertTrue(native_window.transparent)
         self.assertEqual(native_window.title_visibility, 7)
         self.assertEqual(native_window.separator_style, 9)
         self.assertEqual(native_window.titlebar.background, "clear")
         self.assertEqual(native_window.standard_button_requests, [])
+
+    def test_macos_native_drag_strip_uses_cocoa_window_dragging(self) -> None:
+        class Anchor:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            def constraintEqualToAnchor_(self, other: "Anchor") -> tuple:
+                return self.name, other.name, 0.0
+
+            def constraintEqualToAnchor_constant_(
+                self,
+                other: "Anchor",
+                constant: float,
+            ) -> tuple:
+                return self.name, other.name, constant
+
+            def constraintEqualToConstant_(self, constant: float) -> tuple:
+                return self.name, constant
+
+        class FakeNSView:
+            @classmethod
+            def alloc(cls):
+                return cls()
+
+            def __init__(self) -> None:
+                self.frame = None
+                self.translates_mask = True
+                self.children = []
+
+            def initWithFrame_(self, frame: tuple):
+                self.frame = frame
+                return self
+
+            def setTranslatesAutoresizingMaskIntoConstraints_(self, value: bool) -> None:
+                self.translates_mask = value
+
+            def addSubview_(self, child: "FakeNSView") -> None:
+                self.children.append(child)
+
+            def bounds(self):
+                return types.SimpleNamespace(size=types.SimpleNamespace(width=1000.0))
+
+            def leadingAnchor(self) -> Anchor:
+                return Anchor("leading")
+
+            def trailingAnchor(self) -> Anchor:
+                return Anchor("trailing")
+
+            def topAnchor(self) -> Anchor:
+                return Anchor("top")
+
+            def heightAnchor(self) -> Anchor:
+                return Anchor("height")
+
+        class NativeWindow:
+            def __init__(self) -> None:
+                self.movable = False
+                self.content = FakeNSView()
+
+            def setMovable_(self, value: bool) -> None:
+                self.movable = value
+
+            def contentView(self) -> FakeNSView:
+                return self.content
+
+        activated = []
+        appkit = types.SimpleNamespace(
+            NSView=FakeNSView,
+            NSMakeRect=lambda x, y, width, height: (x, y, width, height),
+            NSLayoutConstraint=types.SimpleNamespace(
+                activateConstraints_=lambda constraints: activated.extend(constraints)
+            ),
+        )
+        native_window = NativeWindow()
+        window = types.SimpleNamespace()
+
+        with mock.patch.object(desktop, "_macos_drag_strip_class", None):
+            desktop._install_macos_native_drag_strip(window, native_window, appkit)
+
+        strip = window._mefinder_native_drag_strip
+        self.assertTrue(native_window.movable)
+        self.assertEqual(native_window.content.children, [strip])
+        self.assertFalse(strip.translates_mask)
+        self.assertEqual(strip.frame, (82.0, 0.0, 918.0, 28.0))
+        self.assertTrue(strip.acceptsFirstMouse_(None))
+        self.assertTrue(strip.mouseDownCanMoveWindow())
+        self.assertEqual(len(activated), 4)
+        self.assertEqual(window._mefinder_native_drag_constraints, activated)
 
     def test_macos_app_uses_bundle_resources(self) -> None:
         executable = "/Applications/MEFinder.app/Contents/MacOS/MEFinder"

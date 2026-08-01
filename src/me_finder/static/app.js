@@ -15,6 +15,8 @@ let searchDocumentsLoaded = false;
 // 文献库摘要在搜索下拉与文献库页之间共用一份：两处并发打开时只发一次请求。
 let libraryCatalog = null;
 let libraryCatalogPromise = null;
+const DETAIL_CONTEXT_PREVIEW_CHARS = 180;
+let detailContextResizeObserver = null;
 
 let libSources = [];
 let libVolumes = [];
@@ -184,6 +186,7 @@ function navigateTo(page) {
   if (page === 'library' && !libLoaded) loadLibrary();
   if (page === 'import' && !visionConfigLoaded) loadVisionProviders();
   if (page === 'settings') {
+    ensureVisibleSettingsCategory();
     if (!preferencesLoaded) loadPreferences();
     if (!mineruConfigLoaded) loadMineruConfig();
     if (!visionConfigLoaded) loadVisionProviders();
@@ -470,6 +473,91 @@ function selectResult(index) {
   if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
 }
 
+function detailContextText(items) {
+  if (!Array.isArray(items)) return '';
+  return items.map(function(item) {
+    return item && item.text != null ? String(item.text) : '';
+  }).filter(Boolean).join('\n');
+}
+
+function detailContextPreview(text, side) {
+  const characters = Array.from(String(text || ''));
+  if (characters.length <= DETAIL_CONTEXT_PREVIEW_CHARS) return characters.join('');
+  if (side === 'before') {
+    return '…' + characters.slice(-DETAIL_CONTEXT_PREVIEW_CHARS).join('');
+  }
+  return characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS).join('') + '…';
+}
+
+function detailContextHTML(items, side) {
+  const fullText = detailContextText(items);
+  if (!fullText) return '';
+  const isBefore = side === 'before';
+  const label = isBefore ? '上文' : '下文';
+  const contentId = 'detail-context-' + side;
+  const characterTruncated = Array.from(fullText).length > DETAIL_CONTEXT_PREVIEW_CHARS;
+  return '<section class="detail-context-section detail-context-' + side + '">'
+    + '<div class="detail-context-heading">'
+    + '<span class="detail-context-label">' + label + '</span>'
+    + '<button class="detail-context-toggle" type="button" aria-label="展开' + label + '" aria-expanded="false" aria-controls="' + contentId + '" data-context-label="' + label + '" data-character-truncated="' + (characterTruncated ? 'true' : 'false') + '"' + (characterTruncated ? '' : ' hidden') + ' onclick="toggleDetailContext(this)">展开</button>'
+    + '</div>'
+    + '<div class="detail-context" id="' + contentId + '" role="region" aria-label="' + label + '">'
+    + '<span class="detail-context-preview">' + esc(detailContextPreview(fullText, side)) + '</span>'
+    + '<span class="detail-context-full" hidden>' + esc(fullText) + '</span>'
+    + '</div>'
+    + '</section>';
+}
+
+function refreshDetailContextToggles(panel) {
+  if (!panel) return;
+  panel.querySelectorAll('.detail-context-toggle').forEach(function(button) {
+    if (button.getAttribute('aria-expanded') === 'true') {
+      button.hidden = false;
+      return;
+    }
+    const contentId = button.getAttribute('aria-controls');
+    const content = contentId ? document.getElementById(contentId) : null;
+    const preview = content ? content.querySelector('.detail-context-preview') : null;
+    const characterTruncated = button.dataset.characterTruncated === 'true';
+    const lineTruncated = !!preview && preview.scrollHeight > preview.clientHeight + 1;
+    button.hidden = !(characterTruncated || lineTruncated);
+  });
+}
+
+function observeDetailContextLayout(panel) {
+  if (detailContextResizeObserver) {
+    detailContextResizeObserver.disconnect();
+    detailContextResizeObserver = null;
+  }
+  if (!panel || typeof ResizeObserver !== 'function') return;
+  const detailScroll = panel.querySelector('.detail-scroll');
+  if (!detailScroll) return;
+  detailContextResizeObserver = new ResizeObserver(function() {
+    refreshDetailContextToggles(panel);
+  });
+  detailContextResizeObserver.observe(detailScroll);
+}
+
+function toggleDetailContext(button) {
+  const contentId = button.getAttribute('aria-controls');
+  const content = contentId ? document.getElementById(contentId) : null;
+  if (!content) return;
+  const expanded = button.getAttribute('aria-expanded') !== 'true';
+  const preview = content.querySelector('.detail-context-preview');
+  const full = content.querySelector('.detail-context-full');
+  button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  button.textContent = expanded ? '收起' : '展开';
+  button.setAttribute('aria-label', (expanded ? '收起' : '展开') + (button.dataset.contextLabel || '上下文'));
+  content.classList.toggle('is-expanded', expanded);
+  if (preview) preview.hidden = expanded;
+  if (full) full.hidden = !expanded;
+  if (!expanded) {
+    requestAnimationFrame(function() {
+      refreshDetailContextToggles(button.closest('#detail-panel'));
+    });
+  }
+}
+
 function showDetail(item) {
   const panel = document.getElementById('detail-panel');
   const title = esc(item.document_title || item.work_title || item.volume_display || '');
@@ -480,14 +568,8 @@ function showDetail(item) {
   const typeLabel = matchTypeLabel(item.match_type);
   const sourceLabel = item.source_type === 'pdf' ? 'PDF' : 'Word';
 
-  let contextBefore = '';
-  if (item.context_before && item.context_before.length) {
-    contextBefore = '<div class="detail-context">' + item.context_before.map(c => esc(c.text)).join('\n') + '</div>';
-  }
-  let contextAfter = '';
-  if (item.context_after && item.context_after.length) {
-    contextAfter = '<div class="detail-context">' + item.context_after.map(c => esc(c.text)).join('\n') + '</div>';
-  }
+  const contextBefore = detailContextHTML(item.context_before, 'before');
+  const contextAfter = detailContextHTML(item.context_after, 'after');
 
   let pageDetail = '';
   if (item.source_type === 'pdf') {
@@ -510,6 +592,7 @@ function showDetail(item) {
   );
 
   panel.innerHTML = '<div class="detail-card">'
+    + '<div class="detail-scroll">'
     + '<div class="detail-header">'
     + '<div class="detail-title">' + title + '</div>'
     + (author ? '<div class="detail-author">' + author + '</div>' : '')
@@ -526,7 +609,8 @@ function showDetail(item) {
     + '<div class="detail-hit">' + (item.highlighted_html || esc(item.paragraph_text || '')) + '</div>'
     + contextAfter
     + '</div>'
-    + '<div class="detail-actions">'
+    + '</div>'
+    + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
     + '<button class="action-btn" onclick="copySelectedOriginal()">复制原文</button>'
     + '<span class="citation-copy-group">'
     + '<span class="app-select citation-style-control" id="citation-style-control">'
@@ -535,22 +619,29 @@ function showDetail(item) {
     + '</span>'
     + '<button class="action-btn" onclick="copySelectedCitation()">复制出处</button>'
     + '</span>'
-    + '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">复制原文与出处</button>'
-    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="action-btn" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\')">补全书目信息</button>' : '')
-    + (item.source_file_id ? '<button class="action-btn" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
     + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
+    + '<span class="app-select detail-more-control" id="detail-more-control">'
+    + '<button class="app-select-trigger detail-more-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-more-control\')"><span class="app-select-value">更多</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<span class="app-select-menu" role="menu">'
+    + '<button class="app-select-option" type="button" role="menuitem" onclick="copySelectedOriginalAndCitation(); closeAppSelects()">复制原文与出处</button>'
+    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="app-select-option" type="button" role="menuitem" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\'); closeAppSelects()">补全书目信息</button>' : '')
+    + (item.source_file_id ? '<button class="app-select-option" type="button" role="menuitem" onclick="openSelectedStructuredReader(); closeAppSelects()">查看结构化文本</button>' : '')
+    + '</span>'
+    + '</span>'
     + '</div>'
     + '</div>';
 
+  observeDetailContextLayout(panel);
   requestAnimationFrame(function() {
+    refreshDetailContextToggles(panel);
     const hit = panel.querySelector('.detail-hit');
     if (!hit) return;
     hit.classList.remove('is-locating');
     void hit.offsetWidth;
     hit.classList.add('is-locating');
-    const detailPane = document.querySelector('.results-detail-pane');
-    if (!detailPane) return;
-    const paneRect = detailPane.getBoundingClientRect();
+    const detailScroll = panel.querySelector('.detail-scroll');
+    if (!detailScroll) return;
+    const paneRect = detailScroll.getBoundingClientRect();
     const hitRect = hit.getBoundingClientRect();
     if (hitRect.top < paneRect.top + 16 || hitRect.bottom > paneRect.bottom - 16) {
       hit.scrollIntoView({block: 'center', behavior: 'smooth'});
@@ -558,7 +649,15 @@ function showDetail(item) {
   });
 }
 
+window.addEventListener('resize', function() {
+  refreshDetailContextToggles(document.getElementById('detail-panel'));
+});
+
 function showEmptyDetail() {
+  if (detailContextResizeObserver) {
+    detailContextResizeObserver.disconnect();
+    detailContextResizeObserver = null;
+  }
   document.getElementById('detail-panel').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><rect x="8" y="6" width="32" height="36" rx="3"/><line x1="16" y1="16" x2="32" y2="16"/><line x1="16" y1="22" x2="32" y2="22"/><line x1="16" y1="28" x2="28" y2="28"/></svg></div><div class="empty-state-text">选择一条结果查看详情</div></div>';
 }
 
@@ -571,12 +670,20 @@ function togglePageDetail(el) {
 }
 
 /* ═══ Keyboard shortcuts ═══ */
+function isSearchShortcutInteractiveTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false;
+  return !!target.closest(
+    'button, input, textarea, select, summary, a[href], [role="button"], [role="option"], [role="listbox"], [role="menuitem"], [role="switch"], [contenteditable]:not([contenteditable="false"])'
+  );
+}
+
 document.addEventListener('keydown', function(e) {
   if (currentPage !== 'search') return;
   if (e.target && e.target.id === 'document-filter-query') {
     if (e.key === 'Escape') closeSearchSelects();
     return;
   }
+  if ((!e.target || e.target.id !== 'query') && isSearchShortcutInteractiveTarget(e.target)) return;
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     runSearch();
     e.preventDefault();
@@ -1610,7 +1717,7 @@ function collectBibliographicForm() {
 
 async function detectBibliographicMetadata(sourceId, force) {
   if (force && !await showAppConfirm(
-    '自动识别结果将覆盖当前表单中的人工书目信息。',
+    '自动识别结果将覆盖当前表单中的人工书目信息',
     {title:'覆盖人工书目信息？', confirmText:'确认覆盖', tone:'warning'}
   )) return;
   try {
@@ -1648,7 +1755,7 @@ function showBibliographicEvidence(sourceId) {
     var item = evidence[field] || {};
     return (labels[field] || field) + '：' + (item.evidence_text || '无文本依据') + (item.source_page ? '（PDF 第 ' + item.source_page + ' 页）' : '') + (item.source === 'inferred_from_publisher' ? '（由出版社推断）' : '');
   });
-  showAppAlert(lines.length ? lines.join('\n') : '暂无自动识别依据。', {title:'自动识别依据'});
+  showAppAlert(lines.length ? lines.join('\n') : '暂无自动识别依据', {title:'自动识别依据'});
 }
 
 async function openMetadataForSource(sourceId) {
@@ -1680,7 +1787,7 @@ function toggleDrawerSection(event, sectionId) {
 
 async function submitMineruReparse(sourceId) {
   if (!await showAppConfirm(
-    '将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入。',
+    '将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入',
     {title:'重新解析 PDF？', confirmText:'上传并重新解析', tone:'warning'}
   )) return;
   try {
@@ -1923,7 +2030,7 @@ async function runAutoDetection(sourceId) {
   var panel = document.getElementById('cal-auto-preview');
   var button = document.getElementById('cal-auto-detect-btn');
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="auto-detect-title">正在检测页码…</div><div class="auto-detect-note">正在读取 PDF 标签、数字书签、现有 MinerU 结果和页面边缘文本。</div>';
+  panel.innerHTML = '<div class="auto-detect-title">正在检测页码…</div><div class="auto-detect-note">正在读取 PDF 标签、数字书签、现有 MinerU 结果和页面边缘文本</div>';
   if (button) button.disabled = true;
   try {
     var resp = await fetch('/api/auto-page-mapping/detect', {
@@ -1953,16 +2060,16 @@ function renderAutoDetectionResult(result) {
   var segments = (result.selected_segments || []).filter(function(s) { return s && s.confidence_level !== 'low'; });
   var html = '<div class="auto-detect-title">检测完成</div>';
   if (result.manual_mapping_present) {
-    html += '<div class="auto-detect-note auto-detect-warning">当前文献已有人工页码映射。以下结果仅为预览，不会自动覆盖。</div>';
+    html += '<div class="auto-detect-note auto-detect-warning">当前文献已有人工页码映射。以下结果仅为预览，不会自动覆盖</div>';
   }
   if (!segments.length) {
-    html += '<div class="auto-detect-note">未能自动识别可靠页码区间。</div>';
+    html += '<div class="auto-detect-note">未能自动识别可靠页码区间</div>';
     html += '<div class="auto-detect-note">' + autoFailureReasons(result.failure_reasons || []) + '</div>';
     html += '<div class="auto-detect-actions"><button class="action-btn" onclick="cancelAutoDetection()">关闭</button></div>';
     panel.innerHTML = html;
     return;
   }
-  html += '<div class="auto-detect-note">识别到 ' + segments.length + ' 个页码区间，当前仍是预览状态。</div>';
+  html += '<div class="auto-detect-note">识别到 ' + segments.length + ' 个页码区间，当前仍是预览状态</div>';
   html += '<div class="auto-segment-list">' + segments.map(function(seg, index) {
     var evidence = seg.mapping_evidence || {};
     return '<div class="auto-segment-row"><div class="auto-segment-main">' + (index + 1) + '. ' + esc(autoMappingSegmentText(seg)) + '</div>'
@@ -1974,7 +2081,7 @@ function renderAutoDetectionResult(result) {
   }).join('') + '</div>';
   html += '<details style="margin-top:10px"><summary class="auto-detect-note">查看检测依据</summary><div class="auto-detect-note" style="margin-top:6px">'
     + 'PDF 标签 ' + Number((result.evidence_counts || {}).pdf_page_labels || 0) + ' 个；数字书签 ' + Number((result.evidence_counts || {}).numeric_bookmarks || 0)
-    + ' 个；MinerU 候选 ' + Number((result.evidence_counts || {}).mineru_candidates || 0) + ' 个；页边候选 ' + Number((result.evidence_counts || {}).native_edge_candidates || 0) + ' 个。</div></details>';
+    + ' 个；MinerU 候选 ' + Number((result.evidence_counts || {}).mineru_candidates || 0) + ' 个；页边候选 ' + Number((result.evidence_counts || {}).native_edge_candidates || 0) + ' 个</div></details>';
   html += '<div class="auto-detect-actions">'
     + '<button class="action-btn primary" onclick="applyAutoDetection()">' + (result.manual_mapping_present ? '用自动结果替换人工映射' : '应用自动映射') + '</button>'
     + '<button class="action-btn" onclick="editAutoDetectionResult()">编辑后应用</button>'
@@ -1995,7 +2102,7 @@ async function applyAutoDetection() {
   var replaceManual = false;
   if (calAutoResult.manual_mapping_present) {
     replaceManual = await showAppConfirm(
-      '当前文献已有人工映射。本次自动检测结果会替换已有映射。',
+      '当前文献已有人工映射。本次自动检测结果会替换已有映射',
       {title:'替换人工页码映射？', confirmText:'确认替换', tone:'warning'}
     );
     if (!replaceManual) return;
@@ -2243,9 +2350,9 @@ function showCalibrationEvidence() {
   if (item.mapping_summary) html += '<div class="auto-detect-note">当前映射：' + esc(item.mapping_summary) + '</div>';
   html += '<div class="auto-detect-note">映射方式：' + esc(mappingMethodLabel(item.mapping_method)) + '</div>';
   if (item.mapping_confidence) html += '<div class="auto-detect-note">置信度：' + Math.round(Number(item.mapping_confidence) * 100) + '%</div>';
-  if (evidence.length) html += '<div class="auto-detect-note" style="margin-top:8px">已保存 ' + evidence.length + ' 组序列、位置或结构证据。</div>';
+  if (evidence.length) html += '<div class="auto-detect-note" style="margin-top:8px">已保存 ' + evidence.length + ' 组序列、位置或结构证据</div>';
   if (failures.length) html += '<div class="auto-detect-note" style="margin-top:8px">未使用的证据：<br>' + autoFailureReasons(failures) + '</div>';
-  if (!item.mapping_summary && !evidence.length && !failures.length) html += '<div class="auto-detect-note">当前没有可显示的自动识别依据。</div>';
+  if (!item.mapping_summary && !evidence.length && !failures.length) html += '<div class="auto-detect-note">当前没有可显示的自动识别依据</div>';
   panel.innerHTML = html;
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'center'});
@@ -2283,15 +2390,15 @@ function openRemoveDocumentsModal(items) {
     : '从文献库移除所选 ' + count + ' 篇文献？';
   var removalCopy;
   if (wordCount && pdfCount) {
-    removalCopy = '移除后，所选文献将从文献库和搜索结果中消失。Word 文献的应用内语料副本会一并删除，外部原文件不受影响；PDF 文件默认保留。';
+    removalCopy = '移除后，所选文献将从文献库和搜索结果中消失。Word 文献的应用内语料副本会一并删除，外部原文件不受影响；PDF 文件默认保留';
   } else if (wordCount) {
     removalCopy = count === 1
-      ? '移除后，该文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响。'
-      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响。';
+      ? '移除后，该文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响'
+      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失，应用内保存的 Word 语料副本也会删除；最初导入位置的原文件不受影响';
   } else {
     removalCopy = count === 1
-      ? '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件。'
-      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留原 PDF 文件。';
+      ? '移除后，该文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留 PDF 文件；以后重新导入相同文件时会复用这份副本'
+      : '移除后，这 ' + count + ' 篇文献将从文献库和搜索结果中消失。默认清理索引、页码映射和元数据，但保留原 PDF 文件；以后重新导入相同文件时会复用已保留的副本';
   }
   document.getElementById('remove-modal-copy').textContent = removalCopy;
   document.getElementById('remove-generated').checked = true;
@@ -2302,8 +2409,8 @@ function openRemoveDocumentsModal(items) {
   }).length;
   document.getElementById('remove-internal-option').style.display = internalCount ? 'flex' : 'none';
   document.getElementById('remove-modal-warning').textContent = wordCount
-    ? '删除应用内 Word 语料副本后无法恢复，外部原文件不会删除。请再次确认此操作。'
-    : '删除应用内 PDF 副本后无法恢复。请再次确认此操作。';
+    ? '删除应用内 Word 语料副本后无法恢复，外部原文件不会删除。请再次确认此操作'
+    : '删除应用内 PDF 副本后无法恢复。请再次确认此操作';
   document.getElementById('remove-modal-warning').classList.remove('show');
   document.getElementById('confirm-remove-btn').textContent = count === 1 ? '从文献库移除' : '移除所选 ' + count + ' 篇';
   document.getElementById('confirm-remove-btn').disabled = false;
@@ -2453,12 +2560,12 @@ async function confirmRemoveDocument() {
 
 /* ═══ Appearance settings ═══ */
 const THEME_OPTIONS = [
-  {id:'frost-blue', name:'清霜蓝', tone:'浅色', description:'清爽理性，适合日间使用。'},
-  {id:'sage-ivory', name:'鼠尾草', tone:'浅色', description:'低刺激、安静，适合长时间阅读。'},
-  {id:'warm-sand', name:'暖砂金', tone:'浅色', description:'温暖柔和，带轻微纸张气质。'},
-  {id:'rose-mist', name:'蔷薇雾', tone:'浅色', description:'清柔克制，带淡粉强调。'},
-  {id:'lavender-purple', name:'暮云紫', tone:'浅色', description:'优雅现代，使用柔和薰衣草紫。'},
-  {id:'midnight', name:'深海夜', tone:'深色', description:'低亮度深色主题，适合夜间使用。'}
+  {id:'frost-blue', name:'晴蓝', tone:'浅色', description:'清爽理性，适合日间使用'},
+  {id:'sage-ivory', name:'抹茶', tone:'浅色', description:'低刺激、安静，适合长时间阅读'},
+  {id:'warm-sand', name:'暖沙', tone:'浅色', description:'温暖柔和，带轻微纸张气质'},
+  {id:'rose-mist', name:'樱粉', tone:'浅色', description:'清柔克制，带淡粉强调'},
+  {id:'lavender-purple', name:'薰衣草', tone:'浅色', description:'优雅现代，使用柔和薰衣草紫'},
+  {id:'midnight', name:'午夜', tone:'深色', description:'低亮度深色主题，适合夜间使用'}
 ];
 const THEME_IDS = new Set(THEME_OPTIONS.map(function(theme) { return theme.id; }));
 
@@ -2520,39 +2627,54 @@ function updateAppearanceSummary() {
   el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(current ? current.name : '');
 }
 
-function setSettingsSection(sectionId, open) {
+function showSettingsCategory(sectionId) {
   var section = document.getElementById(sectionId);
-  var head = section ? section.querySelector('.settings-collapse-head') : null;
-  var body = head ? document.getElementById(head.getAttribute('aria-controls')) : null;
-  if (!section || !head || !body) return;
-  head.setAttribute('aria-expanded', open ? 'true' : 'false');
-  body.hidden = !open;
-  section.classList.toggle('expanded', open);
+  if (!section) return;
+  document.querySelectorAll('.settings-content .settings-section').forEach(function(s) {
+    s.classList.toggle('active', s === section);
+  });
+  document.querySelectorAll('.settings-nav-item').forEach(function(btn) {
+    var on = btn.getAttribute('data-target') === sectionId;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  var content = document.querySelector('.settings-content');
+  if (content) content.scrollTop = 0;
+}
+
+// Fall back to the first platform-visible category when the active one is hidden
+// (e.g. a macOS-only entry while running the Windows shell, or a plain browser).
+function ensureVisibleSettingsCategory() {
+  var active = document.querySelector('.settings-nav-item.active');
+  if (active && active.offsetParent !== null) return;
+  var items = document.querySelectorAll('.settings-nav-item');
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].offsetParent !== null) {
+      showSettingsCategory(items[i].getAttribute('data-target'));
+      return;
+    }
+  }
+}
+
+// Backwards-compatible shims for callers that predate the two-pane layout.
+function setSettingsSection(sectionId, open) {
+  if (open !== false) showSettingsCategory(sectionId);
 }
 
 function toggleSettingsSection(sectionId) {
-  var section = document.getElementById(sectionId);
-  var head = section ? section.querySelector('.settings-collapse-head') : null;
-  var body = head ? document.getElementById(head.getAttribute('aria-controls')) : null;
-  if (!section || !head || !body) return;
-  var open = head.getAttribute('aria-expanded') !== 'true';
-  head.setAttribute('aria-expanded', open ? 'true' : 'false');
-  body.hidden = !open;
-  section.classList.toggle('expanded', open);
+  showSettingsCategory(sectionId);
 }
 
 function toggleAppearance() {
-  toggleSettingsSection('appearance-card');
+  showSettingsCategory('appearance-card');
 }
 
 function openVisionSettings() {
   navigateTo('settings');
-  setSettingsSection('vision-api-settings', true);
+  showSettingsCategory('vision-api-settings');
   var card = document.getElementById('vision-api-settings');
   if (card) requestAnimationFrame(function() {
     card.scrollIntoView({behavior: 'smooth', block: 'start'});
-    var head = card.querySelector('.settings-collapse-head');
-    if (head) head.focus({preventScroll: true});
   });
 }
 
@@ -2604,7 +2726,7 @@ function renderMacosUpdateState(state) {
     if (state.status === 'error') badge.classList.add('error');
     badge.textContent = labels[state.status] || '未检查';
   }
-  if (message) message.textContent = state.message || '更新状态未知。';
+  if (message) message.textContent = state.message || '更新状态未知';
   if (release) {
     var canOpen = state.status === 'available' && !!state.release_url;
     release.style.display = canOpen ? '' : 'none';
@@ -2636,7 +2758,7 @@ async function checkMacosUpdate() {
   } catch (e) {
     renderMacosUpdateState({
       status: 'error',
-      message: e.message || '检查更新失败，请稍后重试。'
+      message: e.message || '检查更新失败，请稍后重试'
     });
   } finally {
     if (button) button.disabled = false;
@@ -2715,7 +2837,7 @@ async function migrateDataLocation() {
   if (!await showAppConfirm(
     '将把索引、语料和本机设置复制到：\n\n'
     + pendingDataLocation
-    + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留。',
+    + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留',
     {title:'迁移数据位置？', confirmText:'开始迁移', tone:'warning'}
   )) return;
   var button = document.getElementById('data-location-migrate');
@@ -2740,7 +2862,7 @@ async function migrateDataLocation() {
     }
     var pending = document.getElementById('data-location-pending');
     var hint = pending ? pending.querySelector('small') : null;
-    if (hint) hint.textContent = '迁移完成。退出并重新打开应用后将使用此位置；旧位置的数据仍保留。';
+    if (hint) hint.textContent = '迁移完成。退出并重新打开应用后将使用此位置；旧位置的数据仍保留';
     if (button) button.style.display = 'none';
     showToast('数据迁移完成，请重启应用');
   } catch (e) {
@@ -2778,13 +2900,13 @@ function configureDesktopPlatformOptions() {
   var systemTitle = document.getElementById('pdf-system-title');
   var systemDescription = document.getElementById('pdf-system-description');
   if (desktopShell === 'win32') {
-    if (nativeDescription) nativeDescription.textContent = '使用 Microsoft Edge WebView2，在应用内直接跳到搜索命中的物理页码。';
+    if (nativeDescription) nativeDescription.textContent = '使用 Microsoft Edge WebView2，在应用内直接跳到搜索命中的物理页码';
     if (systemTitle) systemTitle.textContent = 'Windows 默认 PDF 阅读器';
-    if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开。';
+    if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开';
   } else if (desktopShell === 'macos') {
-    if (nativeDescription) nativeDescription.textContent = '使用 macOS PDFKit，直接跳到搜索命中的物理页码。';
+    if (nativeDescription) nativeDescription.textContent = '使用 macOS PDFKit，直接跳到搜索命中的物理页码';
     if (systemTitle) systemTitle.textContent = 'macOS 预览';
-    if (systemDescription) systemDescription.textContent = '在预览.app 中打开；命中页码需要手动翻到。';
+    if (systemDescription) systemDescription.textContent = '在预览.app 中打开；命中页码需要手动翻到';
   }
 }
 
@@ -2875,7 +2997,7 @@ function renderUpdateState(state) {
   var autoInput = document.getElementById('auto-update-enabled');
   var autoDescription = document.getElementById('update-auto-description');
   if (current && state.current_version) current.textContent = 'v' + state.current_version;
-  if (message) message.textContent = state.message || '更新状态未知。';
+  if (message) message.textContent = state.message || '更新状态未知';
   if (badge) {
     var labels = {
       idle: '未检查', checking: '检查中', up_to_date: '已是最新', available: '有新版本',
@@ -2905,8 +3027,8 @@ function renderUpdateState(state) {
   }
   if (autoDescription) {
     autoDescription.textContent = state.can_self_update
-      ? '仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认。'
-      : '自动更新只在 Windows 安装版中启用；绿色版和源码模式不会覆盖自身。';
+      ? '仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认'
+      : '自动更新只在 Windows 安装版中启用；绿色版和源码模式不会覆盖自身';
   }
 }
 
@@ -2960,7 +3082,7 @@ async function runUpdateAction() {
   }
   if (updateState.status !== 'ready') return;
   if (!await showAppConfirm(
-    '安装更新会关闭 MEFinder，完成后自动重新打开。',
+    '安装更新会关闭 MEFinder，完成后自动重新打开',
     {title:'现在安装更新？', confirmText:'安装并重启', tone:'warning'}
   )) return;
   var installToken = updateState.install_token;
@@ -3233,7 +3355,7 @@ async function exportBackup() {
     if (hint) hint.textContent = '已导出到：' + data.path;
     showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
   } catch (e) {
-    if (hint) hint.textContent = '生成一个包含页码映射、书目信息和偏好的小体积 zip。';
+    if (hint) hint.textContent = '生成一个包含页码映射、书目信息和偏好的小体积 zip';
     showToast('导出备份失败：' + e.message);
   }
 }
@@ -3243,7 +3365,7 @@ async function importBackup() {
   var path = (input.value || '').trim();
   if (!path) { showToast('请先填写备份文件路径'); return; }
   if (!await showAppConfirm(
-    '导入将覆盖当前的页码映射与书目信息，并重建索引。',
+    '导入将覆盖当前的页码映射与书目信息，并重建索引',
     {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
   )) return;
   try {
@@ -3323,7 +3445,7 @@ async function testMineruConnection() {
   var btn = document.getElementById('mineru-test-btn');
   var token = document.getElementById('mineru-token').value.trim();
   if (token) {
-    showToast('测试使用已保存的 Token，请先点“保存 API 配置”再测试。');
+    showToast('测试使用已保存的 Token，请先点“保存 API 配置”再测试');
     return;
   }
   if (btn) btn.disabled = true;
@@ -3681,12 +3803,12 @@ async function fetchVisionModels(options) {
   var silent = !!options.silent;
   var provider = currentVisionProviderDraft();
   if (!provider.api_base) {
-    setVisionModelHint('请先填写 API 地址；模型名称也可以手动输入。', 'is-error');
+    setVisionModelHint('请先填写 API 地址；模型名称也可以手动输入', 'is-error');
     if (!silent) showToast('请先填写 API 地址');
     return;
   }
   if (!visionDraftHasUsableKey(provider)) {
-    setVisionModelHint('请先填写 API Key；模型名称也可以手动输入。', 'is-error');
+    setVisionModelHint('请先填写 API Key；模型名称也可以手动输入', 'is-error');
     if (!silent) showToast('请先填写 API Key');
     return;
   }
@@ -3709,7 +3831,7 @@ async function fetchVisionModels(options) {
     if (requestSerial !== visionModelRequestSerial) return;
     renderVisionModelOptions(data.models || []);
     setVisionModelHint(
-      '已获取 ' + visionModelOptions.length + ' 个模型。点击输入框选择；“可能支持图片”仅为名称提示。',
+      '已获取 ' + visionModelOptions.length + ' 个模型。点击输入框选择；“可能支持图片”仅为名称提示',
       'is-ready'
     );
     if (!silent) {
@@ -3719,7 +3841,7 @@ async function fetchVisionModels(options) {
   } catch (e) {
     if (requestSerial !== visionModelRequestSerial) return;
     clearVisionModelOptions();
-    setVisionModelHint((e.message || '无法自动获取模型') + ' 仍可手动填写模型名称。', 'is-error');
+    setVisionModelHint((e.message || '无法自动获取模型') + ' 仍可手动填写模型名称', 'is-error');
     if (!silent) showToast('获取模型失败：' + e.message);
   } finally {
     if (requestSerial === visionModelRequestSerial && button) {
@@ -3737,7 +3859,7 @@ function maybeAutoFetchVisionModels() {
   if (provider.api_base && visionDraftHasUsableKey(provider)) {
     fetchVisionModels({silent: true});
   } else {
-    setVisionModelHint('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入。', '');
+    setVisionModelHint('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入', '');
   }
 }
 
@@ -3789,7 +3911,7 @@ function renderVisionProviders() {
       list.innerHTML = '<div class="vision-provider-empty">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
         + '<strong>尚未添加其他解析接口</strong>'
-        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问、DeepSeek 等视觉模型。</span>'
+        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问、DeepSeek 等视觉模型</span>'
         + '</div>';
     } else {
       var editingId = (document.getElementById('vision-provider-id') || {}).value || '';
@@ -3822,11 +3944,11 @@ function renderVisionProviders() {
   }
   if (fallbackSummary) {
     if (!fallbackProvider) {
-      fallbackSummary.textContent = '请先添加并启用一个解析接口，之后即可开启自动切换。';
+      fallbackSummary.textContent = '请先添加并启用一个解析接口，之后即可开启自动切换';
     } else if (visionConfig.auto_fallback_from_mineru) {
-      fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用“' + fallbackProvider.name + '”，可能产生调用费用。';
+      fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用“' + fallbackProvider.name + '”，可能产生调用费用';
     } else {
-      fallbackSummary.textContent = '已关闭；开启后将使用“' + fallbackProvider.name + '”，可能产生调用费用。';
+      fallbackSummary.textContent = '已关闭；开启后将使用“' + fallbackProvider.name + '”，可能产生调用费用';
     }
   }
   syncImportVisionProviders();
@@ -3917,7 +4039,7 @@ function resetVisionProviderForm() {
   if (enabled) enabled.checked = true;
   var hint = document.getElementById('vision-save-hint');
   if (hint) hint.textContent = '';
-  clearVisionModelOptions('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入。');
+  clearVisionModelOptions('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入');
   updateVisionEditorHead();
   renderVisionProviders();
 }
@@ -3940,7 +4062,7 @@ function editVisionProvider(providerId) {
   document.getElementById('vision-model').value = provider.model || '';
   document.getElementById('vision-api-key').value = '';
   document.getElementById('vision-provider-enabled').checked = !!provider.enabled;
-  document.getElementById('vision-save-hint').textContent = provider.has_api_key ? '已保存密钥；留空不会覆盖。' : '尚未保存 API Key。';
+  document.getElementById('vision-save-hint').textContent = provider.has_api_key ? '已保存密钥；留空不会覆盖' : '尚未保存 API Key';
   visionNameAutoValue = '';
   visionModelRequestSerial += 1;
   resetVisionModelButton();
@@ -4037,7 +4159,7 @@ async function saveVisionProvider() {
 async function deleteVisionProvider(providerId) {
   var provider = (visionConfig.providers || []).find(function(item) { return item.id === providerId; });
   if (!provider || !await showAppConfirm(
-    '将删除解析接口“' + provider.name + '”。',
+    '将删除解析接口“' + provider.name + '”',
     {title:'删除解析接口？', confirmText:'删除', tone:'danger'}
   )) return;
   try {
@@ -4065,7 +4187,7 @@ async function testVisionProvider(providerId) {
     return;
   }
   if (!await showAppConfirm(
-    '测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入。',
+    '测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入',
     {title:'测试视觉接口？', confirmText:'发送测试图片'}
   )) return;
   showToast('正在测试 ' + provider.name + '…');
@@ -4204,8 +4326,8 @@ async function runDirectoryScan() {
   var button = document.getElementById('scan-run-btn');
   if (!scanDirectories.length) {
     statusEl.textContent = desktopShell
-      ? '尚未添加文献文件夹：先点击“选择文件夹”。'
-      : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可。';
+      ? '尚未添加文献文件夹：先点击“选择文件夹”'
+      : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可';
     return;
   }
   button.disabled = true;
@@ -4283,10 +4405,10 @@ function renderScanResults(data) {
   var warnings = [];
   var deferredNew = Math.max(0, autoSelectable.length - SCAN_IMPORT_BATCH_LIMIT);
   if (deferredNew) {
-    warnings.push('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个，已自动勾选前 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；提交后会自动勾选剩余 ' + deferredNew + ' 个。');
+    warnings.push('每批最多导入 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个，已自动勾选前 ' + SCAN_IMPORT_BATCH_LIMIT + ' 个；提交后会自动勾选剩余 ' + deferredNew + ' 个');
   }
-  if (data.limit_reached) warnings.push('数量超出上限，仅显示前 ' + scanEntries.length + ' 个。');
-  (data.errors || []).forEach(function(err) { warnings.push(err.directory + '：' + err.error + '。'); });
+  if (data.limit_reached) warnings.push('数量超出上限，仅显示前 ' + scanEntries.length + ' 个');
+  (data.errors || []).forEach(function(err) { warnings.push(err.directory + '：' + err.error + ''); });
   statusEl.textContent = warnings.join(' ');
   updateScanImportButton();
 }
@@ -4815,11 +4937,18 @@ function resumableImportQueue() {
 }
 
 function syncResumeAllButton() {
-  var button = document.getElementById('import-resume-all-btn');
-  if (!button) return;
+  var resumeButton = document.getElementById('import-resume-all-btn');
+  var cancelButton = document.getElementById('import-cancel-all-btn');
+  if (!resumeButton && !cancelButton) return;
   var count = resumableImportQueue().length;
-  button.style.display = count > 1 ? 'inline-flex' : 'none';
-  button.textContent = '全部继续导入（' + count + '）';
+  if (resumeButton) {
+    resumeButton.style.display = count > 1 ? 'inline-flex' : 'none';
+    resumeButton.textContent = '全部继续导入（' + count + '）';
+  }
+  if (cancelButton) {
+    cancelButton.style.display = count > 1 ? 'inline-flex' : 'none';
+    cancelButton.textContent = '全部取消（' + count + '）';
+  }
 }
 
 async function resumeAllImports() {
@@ -4831,7 +4960,7 @@ async function resumeAllImports() {
     return item.failureStage !== 'index' && item.type === 'pdf' && item.route !== 'native';
   });
   if (hasPaidRoute && !await showAppConfirm(
-    '将从上次断点继续 ' + pending.length + ' 个任务，其中包含需要联网解析的文献，未完成部分可能产生费用。',
+    '将从上次断点继续 ' + pending.length + ' 个任务，其中包含需要联网解析的文献，未完成部分可能产生费用',
     {title:'继续联网解析任务？', confirmText:'继续任务', tone:'warning'}
   )) return;
   if (button) { button.disabled = true; button.textContent = '正在继续…'; }
@@ -4843,7 +4972,34 @@ async function resumeAllImports() {
   syncResumeAllButton();
 }
 
-async function removeImport(id) {
+async function cancelAllImports() {
+  var pending = resumableImportQueue();
+  if (!pending.length) return;
+  if (!await showAppConfirm(
+    '将取消 ' + pending.length + ' 个中断任务。原始文件不会被删除',
+    {title:'全部取消中断任务？', confirmText:'全部取消', tone:'danger'}
+  )) return;
+  var resumeButton = document.getElementById('import-resume-all-btn');
+  var cancelButton = document.getElementById('import-cancel-all-btn');
+  if (resumeButton) resumeButton.disabled = true;
+  if (cancelButton) { cancelButton.disabled = true; cancelButton.textContent = '正在取消…'; }
+  var failedCount = 0;
+  for (var index = 0; index < pending.length; index += 1) {
+    // 复用每条右上角 × 的持久化移除逻辑，串行处理以免并发改写任务日志。
+    if (!await removeImport(pending[index].id, {silent: true, deferRender: true})) {
+      failedCount += 1;
+    }
+  }
+  renderImportQueue();
+  if (failedCount) {
+    showToast('有 ' + failedCount + ' 个中断任务取消失败，请重试', 'warning');
+  } else {
+    showToast('已取消 ' + pending.length + ' 个中断任务', 'success');
+  }
+}
+
+async function removeImport(id, options) {
+  options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
   if (q && q.jobId && (q.status === 'paused' || q.status === 'error')) {
     try {
@@ -4855,12 +5011,13 @@ async function removeImport(id) {
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
     } catch (e) {
-      showToast('移除导入任务失败：' + e.message);
-      return;
+      if (!options.silent) showToast('移除导入任务失败：' + e.message);
+      return false;
     }
   }
   importQueue = importQueue.filter(function(item) { return item.id !== id; });
-  renderImportQueue();
+  if (!options.deferRender) renderImportQueue();
+  return true;
 }
 
 async function uploadImport(id) {
@@ -5001,7 +5158,7 @@ async function resumeImport(id, options) {
   var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
   if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
       && !await showAppConfirm(
-        '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用。',
+        '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用',
         {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
       )) return;
   try {
@@ -5036,7 +5193,7 @@ async function retryImportWithVision(id) {
   var providerId = provider.id;
   var providerName = provider.name || '其他解析 API';
   if (!await showAppConfirm(
-    '将改用“' + providerName + '”重新解析这份 PDF，可能产生费用。',
+    '将改用“' + providerName + '”重新解析这份 PDF，可能产生费用',
     {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
   )) return;
   try {

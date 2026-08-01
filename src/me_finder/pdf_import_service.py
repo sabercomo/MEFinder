@@ -448,6 +448,36 @@ def _configured_pdf_path(config_path: Path, document: Mapping[str, object]) -> O
     return config_path.parent.parent / "corpus" / "raw_pdf" / candidate
 
 
+def reuse_registered_pdf_copy(
+    root: Path,
+    incoming_path: Path,
+    document: Mapping[str, object],
+) -> Path:
+    """Reuse a configured identical PDF and discard only our new corpus copy."""
+
+    root = Path(root).resolve()
+    incoming_path = Path(incoming_path)
+    configured_path = _configured_pdf_path(
+        root / "config" / "pdf_imports.json",
+        document,
+    )
+    if configured_path is None or not configured_path.is_file():
+        return incoming_path
+    if configured_path.resolve() == incoming_path.resolve():
+        return configured_path
+
+    # ``incoming_path`` was created by this import.  Never unlink a caller's
+    # original file even if this helper is accidentally used outside the web
+    # import flow.
+    raw_pdf_dir = (root / "corpus" / "raw_pdf").resolve()
+    try:
+        incoming_path.resolve().relative_to(raw_pdf_dir)
+    except ValueError:
+        return configured_path
+    incoming_path.unlink(missing_ok=True)
+    return configured_path
+
+
 def _manifest_path(
     config_path: Path,
     parser_result: Mapping[str, object],
@@ -658,12 +688,142 @@ def _normalize_import_config(
     return normalized
 
 
+def _import_config_backup_path(path: Path) -> Path:
+    return Path(path).with_name(f"{Path(path).name}.bak")
+
+
+def _atomic_write_import_config_text(path: Path, text: str) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temp_path.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _decode_import_config_object(text: str) -> Optional[Dict[str, object]]:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return (
+        value
+        if isinstance(value, dict)
+        and isinstance(value.get("documents"), list)
+        else None
+    )
+
+
+def _recover_concatenated_import_config(
+    text: str,
+) -> Optional[Dict[str, object]]:
+    """Return the last complete object from accidentally concatenated JSON."""
+
+    decoder = json.JSONDecoder()
+    cursor = 0
+    recovered: Optional[Dict[str, object]] = None
+    while cursor < len(text):
+        while cursor < len(text) and text[cursor].isspace():
+            cursor += 1
+        if cursor >= len(text):
+            break
+        try:
+            value, cursor = decoder.raw_decode(text, cursor)
+        except json.JSONDecodeError:
+            break
+        if not isinstance(value, dict) or not isinstance(
+            value.get("documents"), list
+        ):
+            break
+        recovered = value
+    return recovered
+
+
+def _preserve_corrupt_import_config(path: Path) -> Optional[Path]:
+    """Copy a damaged config aside before replacing it with recovered data."""
+
+    path = Path(path)
+    if not path.is_file():
+        return None
+    try:
+        damaged_bytes = path.read_bytes()
+        for existing in reversed(
+            sorted(path.parent.glob(f"{path.name}.corrupt-*"))
+        ):
+            if existing.is_file() and existing.read_bytes() == damaged_bytes:
+                return existing
+    except OSError:
+        pass
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    target = path.with_name(f"{path.name}.corrupt-{stamp}")
+    counter = 1
+    while target.exists():
+        target = path.with_name(f"{path.name}.corrupt-{stamp}-{counter}")
+        counter += 1
+    try:
+        shutil.copy2(path, target)
+    except OSError:
+        logging.exception("failed to preserve corrupt PDF import config")
+        return None
+    return target
+
+
 def load_import_config(path: Path) -> Dict[str, object]:
     path = Path(path)
     with _IMPORT_CONFIG_LOCK:
         if not path.exists():
-            return {"documents": []}
-        data = json.loads(path.read_text(encoding="utf-8"))
+            backup_path = _import_config_backup_path(path)
+            if not backup_path.is_file():
+                return {"documents": []}
+            backup_data = _decode_import_config_object(
+                backup_path.read_text(encoding="utf-8-sig")
+            )
+            if backup_data is None:
+                raise MinerUError("PDF 导入配置备份已损坏，无法自动恢复。")
+            normalized = _normalize_import_config(path, backup_data)
+            _atomic_write_import_config_text(
+                path,
+                json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
+            )
+            logging.warning("restored missing PDF import config from backup")
+            return normalized
+        raw_text = path.read_text(encoding="utf-8-sig")
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            data = _recover_concatenated_import_config(raw_text)
+            recovery_source = "concatenated snapshot"
+            if data is None:
+                backup_path = _import_config_backup_path(path)
+                if backup_path.is_file():
+                    data = _decode_import_config_object(
+                        backup_path.read_text(encoding="utf-8-sig")
+                    )
+                    recovery_source = "rolling backup"
+            if data is None:
+                _preserve_corrupt_import_config(path)
+                raise MinerUError(
+                    "PDF 导入配置已损坏，且无法自动恢复。"
+                    "损坏文件已保留，请从数据备份恢复。"
+                ) from exc
+            preserved_path = _preserve_corrupt_import_config(path)
+            normalized = _normalize_import_config(path, data)
+            _atomic_write_import_config_text(
+                path,
+                json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
+            )
+            logging.warning(
+                "recovered PDF import config from %s; corrupt copy: %s",
+                recovery_source,
+                preserved_path,
+            )
+            return normalized
         if not isinstance(data, dict):
             raise MinerUError("PDF 导入配置必须是 JSON 对象。")
         return _normalize_import_config(path, data)
@@ -675,17 +835,23 @@ def save_import_config(path: Path, data: Dict[str, object]) -> None:
     path = Path(path)
     with _IMPORT_CONFIG_LOCK:
         normalized = _normalize_import_config(path, data)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        serialized = json.dumps(normalized, ensure_ascii=False, indent=2) + "\n"
+        _atomic_write_import_config_text(
+            path,
+            serialized,
+        )
         try:
-            with temp_path.open("w", encoding="utf-8") as stream:
-                stream.write(json.dumps(normalized, ensure_ascii=False, indent=2) + "\n")
-                stream.flush()
-                os.fsync(stream.fileno())
-            temp_path.replace(path)
-        finally:
-            if temp_path.exists():
-                temp_path.unlink()
+            # Mirror the committed snapshot rather than the previous one.  A
+            # transaction that later rolls back by saving its original config
+            # then restores both the primary file and this recovery copy.
+            _atomic_write_import_config_text(
+                _import_config_backup_path(path),
+                serialized,
+            )
+        except OSError:
+            # The primary config is already durable.  A backup failure must not
+            # turn a successful import/config transaction into a false failure.
+            logging.exception("failed to update PDF import config backup")
 
 
 @contextmanager
@@ -721,7 +887,8 @@ def register_pdf(
     if not display_file_name:
         display_file_name = pdf_path.name
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
-    source_file_id = f"pdf-import-{file_sha256(pdf_path)[:16]}"
+    content_sha256 = file_sha256(pdf_path)
+    source_file_id = f"pdf-import-{content_sha256[:16]}"
     with _IMPORT_CONFIG_LOCK:
         data = load_import_config(config_path)
         documents = data["documents"]
@@ -733,7 +900,22 @@ def register_pdf(
             ),
             None,
         )
+        if existing is None:
+            # Older indexes did not always use the content-derived source ID.
+            # A disabled removal marker may still carry the full hash, which
+            # lets the preserved copy be recovered without storing a duplicate.
+            existing = next(
+                (
+                    item
+                    for item in documents
+                    if item.get("retained_after_removal") is True
+                    and str(item.get("retained_sha256") or "").lower()
+                    == content_sha256
+                ),
+                None,
+            )
         if existing is not None:
+            old_source_file_id = str(existing.get("source_file_id") or "")
             configured_path = _configured_pdf_path(config_path, existing)
             if configured_path is None or not configured_path.is_file():
                 existing["file_name"] = pdf_path.name
@@ -741,6 +923,18 @@ def register_pdf(
             if not existing.get("title"):
                 existing["title"] = Path(display_file_name).stem
             existing["enabled"] = True
+            if old_source_file_id != source_file_id:
+                existing["source_file_id"] = source_file_id
+                existing["document_id"] = source_file_id.upper().replace("-", "_")
+                existing.pop("mineru", None)
+                existing.pop("parser_results", None)
+                existing.pop("mineru_results", None)
+                existing["page_mapping"] = {
+                    "validated_by": None,
+                    "segments": [],
+                }
+            existing.pop("retained_after_removal", None)
+            existing.pop("retained_sha256", None)
             save_import_config(config_path, data)
             return existing
 

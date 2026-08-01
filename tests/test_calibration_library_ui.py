@@ -12,6 +12,7 @@ from src.me_finder.calibration_library import build_calibration_library, build_l
 from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder.pdf_extractors import load_pdf_import_config
 from src.me_finder.search import SearchEngine
 from src.me_finder.web import HTML
 
@@ -204,6 +205,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("zh-CN-u-co-pinyin", HTML)
         self.assertIn("从文献库移除", HTML)
         self.assertIn("同时删除应用内保存的 PDF 副本", HTML)
+        self.assertIn("重新导入相同文件时会复用", HTML)
         self.assertIn("/api/documents/remove", HTML)
 
     def test_library_stats_are_interactive_and_drive_status_filter(self) -> None:
@@ -458,8 +460,16 @@ class DocumentDeletionServiceTests(unittest.TestCase):
             self.assertTrue(pdf_path.exists())
             self.assertTrue(result["original_pdf_preserved"])
             self.assertFalse((root / "corpus" / "parsed" / "pdf" / "PDF_CONSUMER.json").exists())
-            config = json.loads((root / "config" / "pdf_imports.json").read_text(encoding="utf-8"))
-            self.assertEqual(config["documents"], [])
+            config_path = root / "config" / "pdf_imports.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(config["documents"]), 1)
+            retained = config["documents"][0]
+            self.assertEqual(retained["source_file_id"], "pdf-consumer")
+            self.assertEqual(retained["file_name"], pdf_path.name)
+            self.assertFalse(retained["enabled"])
+            self.assertTrue(retained["retained_after_removal"])
+            self.assertNotIn("title", retained)
+            self.assertEqual(load_pdf_import_config(config_path), [])
             connection = sqlite3.connect(str(database_path))
             try:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM source_files WHERE source_file_id='pdf-consumer'").fetchone()[0], 0)
@@ -483,6 +493,43 @@ class DocumentDeletionServiceTests(unittest.TestCase):
             )
             self.assertFalse(pdf_path.exists())
             self.assertTrue(result["internal_copy_deleted"])
+            config = json.loads(
+                (root / "config" / "pdf_imports.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(config["documents"], [])
+
+    def test_retained_pdf_keeps_parser_reference_when_artifacts_are_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path, pdf_path = self._index(root)
+            config_path = root / "config" / "pdf_imports.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["documents"][0]["parser_results"] = {
+                "manifest": "corpus/processed/mineru/manifests/kept.json"
+            }
+            config_path.write_text(
+                json.dumps(config, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            parsed_cache = (
+                root / "corpus" / "parsed" / "pdf" / "PDF_CONSUMER.json"
+            )
+
+            DocumentDeletionService(root, database_path).remove(
+                "pdf-consumer",
+                delete_generated_artifacts=False,
+            )
+
+            self.assertTrue(pdf_path.exists())
+            self.assertTrue(parsed_cache.exists())
+            retained = json.loads(config_path.read_text(encoding="utf-8"))[
+                "documents"
+            ][0]
+            self.assertFalse(retained["enabled"])
+            self.assertEqual(
+                retained["parser_results"]["manifest"],
+                "corpus/processed/mineru/manifests/kept.json",
+            )
 
     def test_removal_cleans_vision_result_and_work_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -588,9 +635,20 @@ class DocumentDeletionServiceTests(unittest.TestCase):
             self.assertTrue(shared_result.exists())
             remaining = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(
-                [item["source_file_id"] for item in remaining["documents"]],
+                [
+                    item["source_file_id"]
+                    for item in remaining["documents"]
+                    if item.get("enabled", True)
+                ],
                 ["pdf-other"],
             )
+            retained = next(
+                item
+                for item in remaining["documents"]
+                if item["source_file_id"] == "pdf-consumer"
+            )
+            self.assertFalse(retained["enabled"])
+            self.assertNotIn("parser_results", retained)
 
     def test_removal_cleans_unattached_interrupted_parser_checkpoints(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

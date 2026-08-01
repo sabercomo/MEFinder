@@ -57,7 +57,14 @@ class SearchMatchSpanTests(unittest.TestCase):
         *,
         source_type: str = "pdf",
         is_cross_page: bool = False,
+        paragraph_index: int = 0,
+        pdf_page_start_index: int = 0,
+        pdf_page_end_index: int | None = None,
     ) -> Dict[str, object]:
+        if pdf_page_end_index is None:
+            pdf_page_end_index = (
+                pdf_page_start_index + 1 if is_cross_page else pdf_page_start_index
+            )
         paragraph: Dict[str, object] = {
             "paragraph_id": paragraph_id,
             "volume_id": "TEST-VOLUME",
@@ -65,7 +72,7 @@ class SearchMatchSpanTests(unittest.TestCase):
             "work_id": "TEST-WORK",
             "source_file_id": "pdf-test",
             "source_type": source_type,
-            "paragraph_index": 0,
+            "paragraph_index": paragraph_index,
             "eligible_for_search": True,
             "text_raw": text,
             "normalized_text": normalize_text(text),
@@ -76,8 +83,12 @@ class SearchMatchSpanTests(unittest.TestCase):
             "volume_display": "测试文献",
             "page_display": "引用页码尚未校准",
             "page_source_type": "uncalibrated" if source_type == "pdf" else "unknown",
-            "pdf_page_start_index": 0 if source_type == "pdf" else None,
-            "pdf_page_end_index": 1 if is_cross_page else (0 if source_type == "pdf" else None),
+            "pdf_page_start_index": (
+                pdf_page_start_index if source_type == "pdf" else None
+            ),
+            "pdf_page_end_index": (
+                pdf_page_end_index if source_type == "pdf" else None
+            ),
             "is_cross_page": is_cross_page,
             "original_file_name": "test.pdf" if source_type == "pdf" else "test.docx",
         }
@@ -411,6 +422,282 @@ class SearchMatchSpanTests(unittest.TestCase):
             "precise_highlight_available",
         ):
             self.assertEqual(sqlite_item[key], json_item[key], key)
+
+    def test_context_uses_one_real_neighbor_per_side_on_both_backends(self) -> None:
+        word_paragraphs = [
+            self._paragraph(
+                "WORD-0",
+                "完整的第一段上文",
+                source_type="word",
+                paragraph_index=0,
+            ),
+            self._paragraph(
+                "WORD-1",
+                "第二段包含唯一检索目标",
+                source_type="word",
+                paragraph_index=1,
+            ),
+            self._paragraph(
+                "WORD-2",
+                "完整的第三段下文",
+                source_type="word",
+                paragraph_index=2,
+            ),
+            self._paragraph(
+                "WORD-3",
+                "不应返回的第四段",
+                source_type="word",
+                paragraph_index=3,
+            ),
+        ]
+        # Context is document adjacency, not search eligibility.  Headings and
+        # other non-searchable paragraphs must behave the same in both stores.
+        word_paragraphs[0]["eligible_for_search"] = False
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(word_paragraphs) as engine:
+                item = engine.search(
+                    "唯一检索目标", mode="exact", source_type="word"
+                )["results"][0]
+
+            self.assertEqual(
+                item["context_before"],
+                [{"paragraph_id": "WORD-0", "text": "完整的第一段上文"}],
+            )
+            self.assertEqual(
+                item["context_after"],
+                [{"paragraph_id": "WORD-2", "text": "完整的第三段下文"}],
+            )
+
+    def test_pdf_context_skips_cross_windows_and_selected_page_range(self) -> None:
+        previous_text = "前一真实页完整文本" + "甲" * 80
+        following_text = "后一真实页完整文本" + "乙" * 80
+        paragraphs = [
+            self._paragraph(
+                "PDF-PAGE-0",
+                previous_text,
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            # A legacy helper can be identifiable only by its CROSS id.  It
+            # must not outrank the real page even if its stored range is bad.
+            self._paragraph(
+                "PDF-CROSS-LEGACY-0",
+                "重复的旧跨页窗口",
+                paragraph_index=1,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-PAGE-1",
+                "命中范围左页",
+                paragraph_index=2,
+                pdf_page_start_index=1,
+            ),
+            self._paragraph(
+                "PDF-CROSS-1-2",
+                "跨页唯一检索目标",
+                is_cross_page=True,
+                paragraph_index=3,
+                pdf_page_start_index=1,
+                pdf_page_end_index=2,
+            ),
+            self._paragraph(
+                "PDF-PAGE-2",
+                "命中范围右页",
+                paragraph_index=4,
+                pdf_page_start_index=2,
+            ),
+            self._paragraph(
+                "PDF-CROSS-2-3",
+                "重复的后方跨页窗口",
+                is_cross_page=True,
+                paragraph_index=5,
+                pdf_page_start_index=2,
+                pdf_page_end_index=3,
+            ),
+            self._paragraph(
+                "PDF-PAGE-3",
+                following_text,
+                paragraph_index=6,
+                pdf_page_start_index=3,
+            ),
+        ]
+        paragraphs[0]["eligible_for_search"] = False
+        paragraphs[-1]["eligible_for_search"] = False
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
+                cross_item = engine.search(
+                    "跨页唯一检索目标", mode="exact", source_type="pdf"
+                )["results"][0]
+                page_item = engine.search(
+                    "命中范围左页", mode="exact", source_type="pdf"
+                )["results"][0]
+
+            self.assertTrue(cross_item["is_cross_page"])
+            self.assertEqual(
+                cross_item["context_before"],
+                [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
+            )
+            self.assertEqual(
+                cross_item["context_after"],
+                [{"paragraph_id": "PDF-PAGE-3", "text": following_text}],
+            )
+            self.assertEqual(
+                page_item["context_before"],
+                [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
+            )
+            self.assertEqual(
+                page_item["context_after"],
+                [{"paragraph_id": "PDF-PAGE-2", "text": "命中范围右页"}],
+            )
+
+    def test_pdf_context_is_empty_outside_first_and_last_real_pages(self) -> None:
+        paragraphs = [
+            self._paragraph(
+                "PDF-FIRST",
+                "第一页首尾边界检索词",
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-CROSS-0-1",
+                "首尾之间的跨页辅助窗口",
+                is_cross_page=True,
+                paragraph_index=1,
+                pdf_page_start_index=0,
+                pdf_page_end_index=1,
+            ),
+            self._paragraph(
+                "PDF-LAST",
+                "最后一页首尾边界检索词",
+                paragraph_index=2,
+                pdf_page_start_index=1,
+            ),
+        ]
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
+                results = engine.search(
+                    "首尾边界检索词", mode="exact", source_type="pdf"
+                )["results"]
+
+            by_id = {item["paragraph_id"]: item for item in results}
+            self.assertEqual(by_id["PDF-FIRST"]["context_before"], [])
+            self.assertEqual(by_id["PDF-FIRST"]["context_after"], [
+                {"paragraph_id": "PDF-LAST", "text": "最后一页首尾边界检索词"}
+            ])
+            self.assertEqual(by_id["PDF-LAST"]["context_before"], [
+                {"paragraph_id": "PDF-FIRST", "text": "第一页首尾边界检索词"}
+            ])
+            self.assertEqual(by_id["PDF-LAST"]["context_after"], [])
+
+    def test_pdf_context_skips_empty_real_page_records_on_both_backends(self) -> None:
+        paragraphs = [
+            self._paragraph(
+                "PDF-NONEMPTY-BEFORE",
+                "空页之前的真实全文",
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-EMPTY-BEFORE",
+                "",
+                paragraph_index=1,
+                pdf_page_start_index=1,
+            ),
+            self._paragraph(
+                "PDF-EMPTY-CONTEXT-TARGET",
+                "空页上下文唯一检索目标",
+                paragraph_index=2,
+                pdf_page_start_index=2,
+            ),
+            self._paragraph(
+                "PDF-WHITESPACE-AFTER",
+                " \n\t ",
+                paragraph_index=3,
+                pdf_page_start_index=3,
+            ),
+            self._paragraph(
+                "PDF-NONEMPTY-AFTER",
+                "空页之后的真实全文",
+                paragraph_index=4,
+                pdf_page_start_index=4,
+            ),
+        ]
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
+                item = engine.search(
+                    "空页上下文唯一检索目标", mode="exact", source_type="pdf"
+                )["results"][0]
+
+            self.assertEqual(item["context_before"], [
+                {"paragraph_id": "PDF-NONEMPTY-BEFORE", "text": "空页之前的真实全文"}
+            ])
+            self.assertEqual(item["context_after"], [
+                {"paragraph_id": "PDF-NONEMPTY-AFTER", "text": "空页之后的真实全文"}
+            ])
+
+    def test_sqlite_pdf_context_query_uses_position_index_without_temp_sort(self) -> None:
+        paragraphs = [
+            self._paragraph(
+                "PDF-PLAN-0",
+                "查询计划上文",
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-PLAN-CROSS-0-1",
+                "查询计划跨页辅助记录",
+                is_cross_page=True,
+                paragraph_index=1,
+                pdf_page_start_index=0,
+                pdf_page_end_index=1,
+            ),
+            self._paragraph(
+                "PDF-PLAN-1",
+                "查询计划唯一检索目标",
+                paragraph_index=2,
+                pdf_page_start_index=1,
+            ),
+            self._paragraph(
+                "PDF-PLAN-CROSS-1-2",
+                "查询计划后方跨页辅助记录",
+                is_cross_page=True,
+                paragraph_index=3,
+                pdf_page_start_index=1,
+                pdf_page_end_index=2,
+            ),
+            self._paragraph(
+                "PDF-PLAN-2",
+                "查询计划下文",
+                paragraph_index=4,
+                pdf_page_start_index=2,
+            ),
+        ]
+
+        with self._sqlite_engine(paragraphs) as engine:
+            statements: List[str] = []
+            self.assertIsNotNone(engine.db)
+            engine.db.set_trace_callback(statements.append)
+            try:
+                engine.search(
+                    "查询计划唯一检索目标", mode="exact", source_type="pdf"
+                )
+            finally:
+                engine.db.set_trace_callback(None)
+
+            context_queries = [
+                statement for statement in statements if "/* pdf_context */" in statement
+            ]
+            self.assertEqual(len(context_queries), 2)
+            for query in context_queries:
+                self.assertNotIn("ORDER BY p.pdf_page_", query)
+                plan = engine.db.execute("EXPLAIN QUERY PLAN " + query).fetchall()
+                detail = " | ".join(str(row["detail"]) for row in plan)
+                self.assertIn("idx_paragraphs_source_position", detail)
+                self.assertNotIn("USE TEMP B-TREE", detail.upper())
 
     def test_search_result_uses_source_driven_page_display(self) -> None:
         pdf = self._paragraph("PDF-PAGE-DISPLAY", "PDF 页码展示")

@@ -572,7 +572,7 @@
           state.citationRange = null;
           state.citationLoading = false;
           updateCitationControls();
-          var warning = '选区端点必须都在当前已载入的文本窗口内，请缩小选区后重试。';
+          var warning = '选区端点必须都在当前已载入的文本窗口内，请缩小选区后重试';
           setAlert(warning, 'warning');
           notify(warning);
         }
@@ -656,7 +656,7 @@
       if (!citationCanCopy(target)) {
         setAlert(
           (payload.page_range && payload.page_range.note) ||
-          '所选页码尚未验证，暂不能复制带页码引文。',
+          '所选页码尚未验证，暂不能复制带页码引文',
           'warning'
         );
       }
@@ -681,11 +681,11 @@
     var target = citationTargetRange();
     if (!citationStyleCanCopy(target, style)) {
       var warning = state.citationLoading
-        ? '所选页码范围的引文仍在生成，请稍候。'
+        ? '所选页码范围的引文仍在生成，请稍候'
         : (
           citationCanCopy(target)
-            ? '当前引文缺少该格式所需的书目信息，暂不能复制。'
-            : '当前页码尚未验证，暂不能复制带页码引文。'
+            ? '当前引文缺少该格式所需的书目信息，暂不能复制'
+            : '当前页码尚未验证，暂不能复制带页码引文'
         );
       setAlert(warning, 'warning');
       notify(warning);
@@ -1159,11 +1159,11 @@
       if (!duplicate) recovered.push(nearest);
     });
     if (recovered.length) {
-      state.hashRecoveryNotice = '文本内容已变化，已在同一页按原句重新定位。';
+      state.hashRecoveryNotice = '文本内容已变化，已在同一页按原句重新定位';
       setAlert(state.hashRecoveryNotice, 'warning');
       return recovered;
     }
-    state.hashRecoveryNotice = '文本内容已变化，已跳转到相应页，但无法精确高亮。';
+    state.hashRecoveryNotice = '文本内容已变化，已跳转到相应页，但无法精确高亮';
     setAlert(state.hashRecoveryNotice, 'warning');
     return [];
   }
@@ -1470,7 +1470,7 @@
       renderWindow(scrollAnchorId);
 
       if (!items.length) {
-        setAlert('这本文献暂时没有可显示的结构化文本。', 'info');
+        setAlert('这本文献暂时没有可显示的结构化文本', 'info');
       }
       return true;
     } catch (error) {
@@ -1656,7 +1656,7 @@
       options.legacyIndex === true ||
       options.legacy_index === true
     )) {
-      var legacyMessage = '此文献使用旧索引，已跳转到相应位置，但无法精确高亮。重新导入后可启用精确定位。';
+      var legacyMessage = '此文献使用旧索引，已跳转到相应位置，但无法精确高亮。重新导入后可启用精确定位';
       setAlert(legacyMessage, 'warning');
       notify(legacyMessage);
     }

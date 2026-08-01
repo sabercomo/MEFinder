@@ -73,6 +73,7 @@ from .pdf_import_service import (
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
     rebuild_local_index,
+    reuse_registered_pdf_copy,
     release_document_storage_target,
     load_import_config,
     register_pdf,
@@ -1264,22 +1265,7 @@ def make_handler(
             except Exception:
                 pending_import_sources.discard(predicted_source_id)
                 raise
-        configured_name = str(document.get("file_name") or "").strip()
-        configured_target = Path(configured_name)
-        if not configured_target.is_absolute():
-            configured_target = root / "corpus" / "raw_pdf" / configured_target
-        if (
-            configured_target.is_file()
-            and configured_target.resolve() != target.resolve()
-        ):
-            # register_pdf reused a content-identical existing document.
-            # The just-created internal copy is redundant and is safe to
-            # remove; the user's original file is never touched.
-            raw_pdf_dir = (root / "corpus" / "raw_pdf").resolve()
-            resolved_target = target.resolve()
-            if raw_pdf_dir in resolved_target.parents:
-                target.unlink(missing_ok=True)
-            target = configured_target
+        target = reuse_registered_pdf_copy(root, target, document)
         return document, source_file_id, target
 
     def release_import_reservation(source_file_id: str) -> None:

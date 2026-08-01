@@ -34,6 +34,10 @@ APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = "portable.flag"
 INSTALLED_MARKER = "installed.flag"
 DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
+MACOS_TITLEBAR_HEIGHT = 28.0
+MACOS_TRAFFIC_LIGHT_SAFE_WIDTH = 82.0
+
+_macos_drag_strip_class = None
 
 WINDOWS_BOOTSTRAP_TITLEBAR = """
 <div class="windows-titlebar" role="banner" aria-label="窗口标题栏">
@@ -343,6 +347,69 @@ def error_html(
     return _decorate_bootstrap_html(rendered, desktop_shell)
 
 
+def _install_macos_native_drag_strip(window, native_window, appkit) -> None:
+    """Keep window dragging native even if the WebKit bridge is unavailable."""
+
+    global _macos_drag_strip_class
+
+    if hasattr(native_window, "setMovable_"):
+        native_window.setMovable_(True)
+
+    content_view = native_window.contentView()
+    if content_view is None or not hasattr(appkit, "NSView"):
+        return
+    if getattr(window, "_mefinder_native_drag_strip", None) is not None:
+        return
+
+    if _macos_drag_strip_class is None:
+        class MEFinderNativeDragStrip(appkit.NSView):
+            def acceptsFirstMouse_(self, _event):
+                return True
+
+            def mouseDownCanMoveWindow(self):
+                return True
+
+            def mouseDown_(self, event):
+                host_window = self.window()
+                if host_window is not None and hasattr(
+                    host_window, "performWindowDragWithEvent_"
+                ):
+                    host_window.performWindowDragWithEvent_(event)
+
+        _macos_drag_strip_class = MEFinderNativeDragStrip
+
+    drag_strip = _macos_drag_strip_class.alloc().initWithFrame_(
+        appkit.NSMakeRect(
+            MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
+            0.0,
+            max(
+                0.0,
+                float(content_view.bounds().size.width)
+                - MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
+            ),
+            MACOS_TITLEBAR_HEIGHT,
+        )
+    )
+    drag_strip.setTranslatesAutoresizingMaskIntoConstraints_(False)
+    content_view.addSubview_(drag_strip)
+    constraints = [
+        drag_strip.leadingAnchor().constraintEqualToAnchor_constant_(
+            content_view.leadingAnchor(),
+            MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
+        ),
+        drag_strip.trailingAnchor().constraintEqualToAnchor_(
+            content_view.trailingAnchor()
+        ),
+        drag_strip.topAnchor().constraintEqualToAnchor_(content_view.topAnchor()),
+        drag_strip.heightAnchor().constraintEqualToConstant_(MACOS_TITLEBAR_HEIGHT),
+    ]
+    appkit.NSLayoutConstraint.activateConstraints_(constraints)
+    # Native views retain their children, while these Python references also
+    # keep the PyObjC subclass and its constraints alive for the window lifetime.
+    window._mefinder_native_drag_strip = drag_strip
+    window._mefinder_native_drag_constraints = constraints
+
+
 def configure_macos_titlebar(window) -> None:
     """Extend the web content into a transparent native titlebar on macOS."""
 
@@ -364,6 +431,7 @@ def configure_macos_titlebar(window) -> None:
             native_window.setTitlebarSeparatorStyle_(
                 getattr(AppKit, "NSTitlebarSeparatorStyleNone", 0)
             )
+        _install_macos_native_drag_strip(window, native_window, AppKit)
         try:
             titlebar_view = (
                 native_window.contentView().superview().subviews().lastObject()
@@ -401,6 +469,7 @@ def create_main_window(webview_module, theme: str):
         "height": 860,
         "min_size": (900, 600),
         "resizable": True,
+        "text_select": True,
         "background_color": palette["app_bg"],
     }
     controller = None

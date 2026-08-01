@@ -22,6 +22,11 @@ from src.me_finder.database import (
     delete_sources_from_database,
 )
 from src.me_finder.document_deletion import DocumentDeletionService
+from src.me_finder.pdf_import_service import (
+    copy_local_document,
+    register_pdf,
+    reuse_registered_pdf_copy,
+)
 from src.me_finder.search import SearchEngine
 from src.me_finder.web import HTML
 
@@ -271,9 +276,20 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             config = json.loads(
                 (root / "config" / "pdf_imports.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(
-                [item["source_file_id"] for item in config["documents"]], ids[4:]
-            )
+            configured = {
+                item["source_file_id"]: item for item in config["documents"]
+            }
+            self.assertEqual(set(configured), set(ids))
+            for source_id in ids[:4]:
+                self.assertFalse(configured[source_id]["enabled"])
+                self.assertTrue(
+                    configured[source_id]["retained_after_removal"]
+                )
+                self.assertEqual(
+                    configured[source_id]["file_name"], f"{source_id}.pdf"
+                )
+            for source_id in ids[4:]:
+                self.assertTrue(configured[source_id].get("enabled", True))
             for source_id in ids[:4]:
                 self.assertFalse(
                     (root / "corpus" / "parsed" / "pdf" / f"DOC_{source_id}.json").exists()
@@ -314,6 +330,70 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             )
             self.assertTrue((root / "corpus" / "raw_pdf" / "pdf-0.pdf").exists())
             self.assertFalse((root / "corpus" / "raw_pdf" / "pdf-1.pdf").exists())
+            config = json.loads(
+                (root / "config" / "pdf_imports.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                [item["source_file_id"] for item in config["documents"]],
+                ["pdf-0"],
+            )
+            self.assertFalse(config["documents"][0]["enabled"])
+
+    def test_reimport_reuses_the_pdf_copy_retained_after_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            outside = Path(temp_dir) / "library"
+            outside.mkdir()
+            source = outside / "paper.pdf"
+            source.write_bytes(b"%PDF retained reimport regression")
+            stored = copy_local_document(root, source)
+            document = register_pdf(
+                root,
+                stored,
+                original_file_name=source.name,
+            )
+            source_id = str(document["source_file_id"])
+            index = _index([source_id])
+            index["source_files"][0].update(
+                {
+                    "file_name": source.name,
+                    "relative_path": f"corpus/raw_pdf/{stored.name}",
+                    "document_id": document["document_id"],
+                }
+            )
+            database_path = root / "data" / "index.sqlite3"
+            build_database(index, database_path)
+
+            DocumentDeletionService(root, database_path).remove(source_id)
+            copied_again = copy_local_document(root, source)
+            self.assertNotEqual(copied_again, stored)
+            reactivated = register_pdf(
+                root,
+                copied_again,
+                original_file_name=source.name,
+            )
+            effective_path = reuse_registered_pdf_copy(
+                root,
+                copied_again,
+                reactivated,
+            )
+
+            self.assertEqual(effective_path.resolve(), stored.resolve())
+            self.assertTrue(stored.exists())
+            self.assertFalse(copied_again.exists())
+            self.assertEqual(
+                list((root / "corpus" / "raw_pdf").glob("*.pdf")),
+                [stored],
+            )
+            config = json.loads(
+                (root / "config" / "pdf_imports.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(config["documents"]), 1)
+            self.assertTrue(config["documents"][0]["enabled"])
+            self.assertNotIn(
+                "retained_after_removal",
+                config["documents"][0],
+            )
 
     def test_word_removal_deletes_managed_copy_and_keeps_other_sources(self) -> None:
         temp_dir, root, database_path = self._mixed_service_root()

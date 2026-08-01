@@ -124,7 +124,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn("fetch('/api/import-resume'", APP_SOURCE)
 
     def test_resume_all_button_continues_every_pending_import_serially(self) -> None:
-        # 多个中断任务时，一个「全部继续导入」按钮代替逐个点击。
+        # 多个中断任务时，提供批量继续入口，同时保留逐项操作。
         self.assertIn('id="import-resume-all-btn"', TEMPLATE_SOURCE)
         self.assertIn("全部继续导入", TEMPLATE_SOURCE)
         self.assertIn("function resumeAllImports()", APP_SOURCE)
@@ -136,9 +136,26 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             APP_SOURCE,
         )
         # 只有多于一个可继续任务时才显示批量按钮。
-        self.assertIn("button.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
+        self.assertIn("resumeButton.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
         # 文案改成自然中文，不再是「从断点继续」翻译腔。
         self.assertNotIn("从断点继续", APP_SOURCE)
+
+    def test_cancel_all_button_preserves_item_dismiss_and_cancels_serially(self) -> None:
+        self.assertIn('id="import-cancel-all-btn"', TEMPLATE_SOURCE)
+        self.assertIn('onclick="cancelAllImports()"', TEMPLATE_SOURCE)
+        self.assertIn(">全部取消</button>", TEMPLATE_SOURCE)
+        self.assertIn("function cancelAllImports()", APP_SOURCE)
+        self.assertIn("全部取消中断任务？", APP_SOURCE)
+        self.assertIn("原始文件不会被删除", APP_SOURCE)
+        self.assertIn(
+            "await removeImport(pending[index].id, {silent: true, deferRender: true})",
+            APP_SOURCE,
+        )
+        self.assertIn("cancelButton.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
+        # 每条任务右上角的 × 和逐项继续入口必须继续存在。
+        self.assertIn('class="import-item-remove" onclick="removeImport(', APP_SOURCE)
+        self.assertIn("onclick=\"resumeImport(\\'", APP_SOURCE)
+        self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
     def test_resume_revalidates_identity_and_prevents_duplicate_workers(self) -> None:
         resume_start = WEB_SOURCE.index("def resume_import_job(")
@@ -161,7 +178,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             WEB_SOURCE,
         )
         self.assertIn('parsed.path == "/api/import-resume-dismiss"', WEB_SOURCE)
-        self.assertIn("function removeImport(id)", APP_SOURCE)
+        self.assertIn("function removeImport(id, options)", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
     def test_transient_mineru_interruption_never_starts_paid_fallback(self) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import shutil
@@ -87,12 +88,14 @@ class DocumentDeletionService:
         """Remove several PDF/Word sources with one database snapshot.
 
         Documents that fail validation are reported in ``failures`` and left
-        untouched; the rest still go through as a single transaction.  PDF
-        corpus copies remain optional because removing their config entry keeps
-        them out of later rebuilds.  Word files are discovered directly from
-        ``corpus/raw_docx``, so their managed copy must be removed as part of
-        the same recoverable transaction or the next rebuild would re-import
-        them.  Files outside the managed corpus are never touched.
+        untouched; the rest still go through as a single transaction.  A PDF
+        copy that the user keeps is represented by a disabled, minimal config
+        record.  Rebuilds ignore it, while a later import of the same content
+        can reactivate and reuse that copy instead of storing another one.
+        Word files are discovered directly from ``corpus/raw_docx``, so their
+        managed copy must be removed as part of the same recoverable
+        transaction or the next rebuild would re-import them.  Files outside
+        the managed corpus are never touched.
         """
 
         requested: List[str] = []
@@ -114,11 +117,13 @@ class DocumentDeletionService:
         failures: List[Dict[str, str]] = []
         internal_paths: Dict[str, Path] = {}
         source_types: Dict[str, str] = {}
+        source_records: Dict[str, Dict[str, object]] = {}
         for source_file_id in requested:
             try:
                 source = self._source_record(source_file_id)
                 source_type = str(source.get("source_type") or "")
                 source_types[source_file_id] = source_type
+                source_records[source_file_id] = source
                 source_path = self._source_path(source)
                 if source_type == "word" and source_path is not None:
                     if (
@@ -159,6 +164,17 @@ class DocumentDeletionService:
             for item in documents
             if str(item.get("source_file_id") or "") not in removing
         ]
+        retained_pdf_documents = [
+            self._retained_pdf_document(
+                source_file_id,
+                document_by_id.get(source_file_id),
+                source_records[source_file_id],
+                preserve_generated_artifacts=not delete_generated_artifacts,
+            )
+            for source_file_id in targets
+            if source_types.get(source_file_id) == "pdf"
+            and source_file_id not in internal_requested
+        ]
         original_config = json.loads(json.dumps(config, ensure_ascii=False))
         staged: List[Tuple[Path, Path]] = []
         cleanup_warnings: List[str] = []
@@ -183,7 +199,7 @@ class DocumentDeletionService:
                 if source_path is not None:
                     self._stage(source_path, staged)
 
-            config["documents"] = survivors
+            config["documents"] = [*survivors, *retained_pdf_documents]
             save_import_config(self.config_path, config)
             database_result = delete_sources_from_database(
                 targets,
@@ -224,11 +240,65 @@ class DocumentDeletionService:
                 for source_file_id in targets
                 if source_file_id in document_by_id
             ],
+            "retained_pdf_copies": [
+                str(item["source_file_id"])
+                for item in retained_pdf_documents
+            ],
             "internal_copies_deleted": sorted(internal_paths),
             "generated_artifacts_requested": delete_generated_artifacts,
             "staged_artifact_count": len(staged),
             "cleanup_warnings": cleanup_warnings,
         }
+
+    def _retained_pdf_document(
+        self,
+        source_file_id: str,
+        document: Optional[Mapping[str, object]],
+        source: Mapping[str, object],
+        *,
+        preserve_generated_artifacts: bool,
+    ) -> Dict[str, object]:
+        """Keep only enough identity to reuse a preserved PDF after removal."""
+
+        source_path = self._source_path(source)
+        if source_path is not None and self._is_within(
+            source_path, self.root / "corpus" / "raw_pdf"
+        ):
+            stored_file_name = source_path.name
+        elif source_path is not None:
+            stored_file_name = str(source_path)
+        else:
+            stored_file_name = str((document or {}).get("file_name") or "")
+
+        original_file_name = str(
+            (document or {}).get("original_file_name")
+            or source.get("file_name")
+            or Path(stored_file_name).name
+        ).strip()
+        document_id = str(
+            (document or {}).get("document_id")
+            or source.get("document_id")
+            or source_file_id.upper().replace("-", "_")
+        )
+        retained: Dict[str, object] = {
+            "enabled": False,
+            "retained_after_removal": True,
+            "source_file_id": source_file_id,
+            "document_id": document_id,
+            "file_name": stored_file_name,
+            "original_file_name": original_file_name,
+            # Removal clears calibration along with the searchable rows.
+            "page_mapping": {"validated_by": None, "segments": []},
+        }
+        source_sha256 = str(source.get("sha256") or "").strip().lower()
+        if source_sha256:
+            retained["retained_sha256"] = source_sha256
+        if preserve_generated_artifacts and document is not None:
+            for key in ("mineru", "parser_results", "mineru_results"):
+                value = document.get(key)
+                if isinstance(value, Mapping) and value:
+                    retained[key] = copy.deepcopy(value)
+        return retained
 
     def _source_record(self, source_file_id: str) -> Dict[str, object]:
         connection = sqlite3.connect(str(self.database_path))
@@ -378,13 +448,12 @@ class DocumentDeletionService:
         return candidates
 
     def _manifest_path(self, document: Mapping[str, object]) -> Optional[Path]:
-        parser_results = (
-            document.get("parser_results")
-            if isinstance(document.get("parser_results"), Mapping)
-            else document.get("mineru")
-            if isinstance(document.get("mineru"), Mapping)
-            else {}
-        )
+        parser_results: Mapping[str, object] = {}
+        for key in ("parser_results", "mineru", "mineru_results"):
+            candidate = document.get(key)
+            if isinstance(candidate, Mapping) and candidate:
+                parser_results = candidate
+                break
         value = str(parser_results.get("manifest") or "").strip()
         if not value:
             return None

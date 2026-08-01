@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import html
+import json
 import re
 import sqlite3
 import threading
@@ -72,8 +73,10 @@ class SearchEngine:
         ]
         self.by_id = {p["paragraph_id"]: p for p in self.paragraphs}
         self.by_volume: Dict[str, List[Dict[str, object]]] = defaultdict(list)
-        for paragraph in self.paragraphs:
-            self.by_volume[str(paragraph["volume_id"])].append(paragraph)
+        for paragraph in self.index.get("paragraphs", []):
+            if not isinstance(paragraph, dict) or not paragraph.get("text_raw"):
+                continue
+            self.by_volume[str(paragraph.get("volume_id"))].append(paragraph)
         for plist in self.by_volume.values():
             plist.sort(key=lambda p: int(p.get("paragraph_index", 0)))
         self.ngram_index: Dict[str, List[int]] = defaultdict(list)
@@ -878,22 +881,111 @@ class SearchEngine:
     def _context(self, paragraph: Dict[str, object], before: bool) -> List[Dict[str, str]]:
         if self.backend == "sqlite":
             return self._sql_context(paragraph, before)
-        volume_id = str(paragraph["volume_id"])
+        volume_id = str(paragraph.get("volume_id"))
         pidx = int(paragraph.get("paragraph_index", 0))
-        plist = self.by_volume[volume_id]
-        nearby = []
-        if before:
-            source = [p for p in plist if int(p.get("paragraph_index", 0)) < pidx][-2:]
-        else:
-            source = [p for p in plist if int(p.get("paragraph_index", 0)) > pidx][:2]
-        for p in source:
-            nearby.append({"paragraph_id": str(p["paragraph_id"]), "text": str(p.get("text_raw") or "")})
-        return nearby
+        source_file_id = str(paragraph.get("source_file_id") or "")
+        plist = [
+            item
+            for item in self.by_volume[volume_id]
+            if not source_file_id
+            or str(item.get("source_file_id") or "") == source_file_id
+        ]
+        if str(paragraph.get("source_type") or "word") == "pdf":
+            bounds = self._pdf_page_bounds(paragraph)
+            if bounds is None:
+                return []
+            start_page, end_page = bounds
+            positioned = [
+                item
+                for item in plist
+                if (
+                    int(item.get("paragraph_index") or 0) < pidx
+                    if before
+                    else int(item.get("paragraph_index") or 0) > pidx
+                )
+            ]
+            if before:
+                positioned.reverse()
+            for item in positioned:
+                item_bounds = self._pdf_page_bounds(item)
+                if not self._is_real_pdf_page(item, item_bounds):
+                    continue
+                item_start, item_end = item_bounds
+                if (before and item_end < start_page) or (
+                    not before and item_start > end_page
+                ):
+                    return [self._context_item(item)]
+            return []
+
+        candidates = [
+            item
+            for item in plist
+            if str(item.get("source_type") or "word") != "pdf"
+            and str(item.get("text_raw") or "").strip()
+            and (
+                int(item.get("paragraph_index") or 0) < pidx
+                if before
+                else int(item.get("paragraph_index") or 0) > pidx
+            )
+        ]
+        if not candidates:
+            return []
+        selected = (
+            max(candidates, key=lambda item: int(item.get("paragraph_index") or 0))
+            if before
+            else min(candidates, key=lambda item: int(item.get("paragraph_index") or 0))
+        )
+        return [self._context_item(selected)]
 
     def _sql_context(self, paragraph: Dict[str, object], before: bool) -> List[Dict[str, str]]:
         if self.db is None:
             return []
+        source_file_id = str(paragraph.get("source_file_id") or "")
         volume_id = paragraph.get("volume_id")
+        source_column = "source_file_id" if source_file_id else "volume_id"
+        source_value = source_file_id if source_file_id else volume_id
+        source_predicate = (
+            f"{source_column} IS NULL" if source_value is None else f"{source_column} = ?"
+        )
+        source_args = [] if source_value is None else [source_value]
+
+        if str(paragraph.get("source_type") or "word") == "pdf":
+            bounds = self._pdf_page_bounds(paragraph)
+            if bounds is None:
+                return []
+            start_page, end_page = bounds
+            paragraph_index = int(paragraph.get("paragraph_index") or 0)
+            if before:
+                position_predicate = "paragraph_index < ?"
+                order = "DESC"
+            else:
+                position_predicate = "paragraph_index > ?"
+                order = "ASC"
+            position_index = (
+                "idx_paragraphs_source_position"
+                if source_file_id
+                else "idx_paragraphs_volume_position"
+            )
+            sql = (
+                "/* pdf_context */ "
+                "SELECT p.paragraph_id, p.text_raw, p.pdf_page_start_index, "
+                "p.pdf_page_end_index, p.payload_json "
+                f"FROM paragraphs AS p INDEXED BY {position_index} "
+                f"WHERE p.{source_predicate} AND p.source_type = 'pdf' "
+                f"AND p.{position_predicate} ORDER BY p.paragraph_index {order}"
+            )
+            for row in self.db.execute(sql, [*source_args, paragraph_index]):
+                candidate = self._sql_context_candidate(row)
+                candidate_bounds = self._pdf_page_bounds(candidate)
+                if not self._is_real_pdf_page(candidate, candidate_bounds):
+                    continue
+                candidate_start, candidate_end = candidate_bounds
+                if (before and candidate_end < start_page) or (
+                    not before and candidate_start > end_page
+                ):
+                    return [self._context_item(candidate)]
+            return []
+
         paragraph_index = int(paragraph.get("paragraph_index") or 0)
         if before:
             order = "DESC"
@@ -901,22 +993,74 @@ class SearchEngine:
         else:
             order = "ASC"
             predicate = "paragraph_index > ?"
-        if volume_id is None:
-            sql = (
-                "SELECT paragraph_id, text_raw FROM paragraphs "
-                f"WHERE volume_id IS NULL AND {predicate} ORDER BY paragraph_index {order} LIMIT 2"
-            )
-            args = [paragraph_index]
-        else:
-            sql = (
-                "SELECT paragraph_id, text_raw FROM paragraphs "
-                f"WHERE volume_id = ? AND {predicate} ORDER BY paragraph_index {order} LIMIT 2"
-            )
-            args = [volume_id, paragraph_index]
-        rows = list(self.db.execute(sql, args))
-        if before:
-            rows.reverse()
-        return [{"paragraph_id": str(row["paragraph_id"]), "text": str(row["text_raw"] or "")} for row in rows]
+        sql = (
+            "SELECT paragraph_id, text_raw FROM paragraphs "
+            f"WHERE {source_predicate} AND source_type != 'pdf' "
+            f"AND trim(text_raw) != '' AND {predicate} "
+            f"ORDER BY paragraph_index {order} LIMIT 1"
+        )
+        row = self.db.execute(sql, [*source_args, paragraph_index]).fetchone()
+        if row is None:
+            return []
+        return [
+            {
+                "paragraph_id": str(row["paragraph_id"]),
+                "text": str(row["text_raw"] or ""),
+            }
+        ]
+
+    @staticmethod
+    def _context_item(paragraph: Dict[str, object]) -> Dict[str, str]:
+        return {
+            "paragraph_id": str(paragraph["paragraph_id"]),
+            "text": str(paragraph.get("text_raw") or ""),
+        }
+
+    @staticmethod
+    def _sql_context_candidate(row: sqlite3.Row) -> Dict[str, object]:
+        try:
+            payload = json.loads(row["payload_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        return {
+            "paragraph_id": row["paragraph_id"],
+            "text_raw": row["text_raw"],
+            "pdf_page_start_index": row["pdf_page_start_index"],
+            "pdf_page_end_index": row["pdf_page_end_index"],
+            "is_cross_page": payload.get("is_cross_page", False),
+        }
+
+    @staticmethod
+    def _pdf_page_bounds(
+        paragraph: Dict[str, object],
+    ) -> Optional[Tuple[int, int]]:
+        start = paragraph.get("pdf_page_start_index")
+        end = paragraph.get("pdf_page_end_index")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(end, int)
+            or isinstance(end, bool)
+            or start < 0
+            or end < start
+        ):
+            return None
+        return start, end
+
+    @staticmethod
+    def _is_real_pdf_page(
+        paragraph: Dict[str, object], bounds: Optional[Tuple[int, int]]
+    ) -> bool:
+        if (
+            bounds is None
+            or bounds[0] != bounds[1]
+            or not str(paragraph.get("text_raw") or "").strip()
+        ):
+            return False
+        paragraph_id = str(paragraph.get("paragraph_id") or "").upper()
+        return not paragraph.get("is_cross_page") and "-CROSS-" not in paragraph_id
 
     def _mapped_span(self, raw: str, query: str, mode: str) -> Tuple[int, int]:
         normalized, mapping = normalize_with_map(raw, mode)

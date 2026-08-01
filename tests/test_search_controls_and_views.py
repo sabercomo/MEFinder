@@ -33,6 +33,61 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="citation-style-control"', HTML)
         self.assertIn('segment-style-select', HTML)
 
+    def test_search_detail_context_is_compact_expandable_and_actions_are_docked(self) -> None:
+        self.assertIn("const DETAIL_CONTEXT_PREVIEW_CHARS = 180", HTML)
+        self.assertIn("const characters = Array.from(String(text || ''))", HTML)
+        self.assertIn("characters.slice(-DETAIL_CONTEXT_PREVIEW_CHARS)", HTML)
+        self.assertIn("characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS)", HTML)
+        self.assertIn("const label = isBefore ? '上文' : '下文'", HTML)
+        self.assertIn('class="detail-context-toggle" type="button"', HTML)
+        self.assertIn('aria-expanded="false" aria-controls="', HTML)
+        self.assertIn('data-character-truncated="', HTML)
+        self.assertIn("(characterTruncated ? '' : ' hidden')", HTML)
+        self.assertIn("function refreshDetailContextToggles(panel)", HTML)
+        self.assertIn("preview.scrollHeight > preview.clientHeight + 1", HTML)
+        self.assertIn("function observeDetailContextLayout(panel)", HTML)
+        self.assertIn("new ResizeObserver(function()", HTML)
+        self.assertIn("detailContextResizeObserver.observe(detailScroll)", HTML)
+        self.assertIn("function toggleDetailContext(button)", HTML)
+        self.assertIn("preview.hidden = expanded", HTML)
+        self.assertIn("full.hidden = !expanded", HTML)
+        self.assertRegex(
+            HTML,
+            r"\.detail-context-preview\s*\{[^}]*-webkit-line-clamp:\s*4",
+        )
+
+        detail_start = HTML.index("function showDetail(item)")
+        detail_end = HTML.index("function showEmptyDetail()", detail_start)
+        detail_source = HTML[detail_start:detail_end]
+        self.assertLess(
+            detail_source.index('<div class="detail-scroll">'),
+            detail_source.index('<div class="detail-actions"'),
+        )
+        self.assertIn("panel.querySelector('.detail-scroll')", detail_source)
+        self.assertNotIn("document.querySelector('.results-detail-pane')", detail_source)
+        self.assertRegex(HTML, r"\.detail-scroll\s*\{[^}]*overflow-y:\s*auto")
+        self.assertRegex(HTML, r"\.detail-actions\s*\{[^}]*flex:\s*0 0 auto")
+        self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
+        self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
+        self.assertIn('id="detail-more-control"', detail_source)
+        self.assertIn('aria-haspopup="menu"', detail_source)
+        self.assertIn('role="menuitem"', detail_source)
+        self.assertIn("copySelectedOriginalAndCitation(); closeAppSelects()", detail_source)
+        self.assertRegex(
+            HTML,
+            r"\.detail-more-control \.app-select-menu\s*\{[^}]*bottom:\s*calc\(100% \+ 7px\)",
+        )
+        actions_css = re.search(r"\.detail-actions\s*\{([^}]*)\}", HTML)
+        self.assertIsNotNone(actions_css)
+        self.assertNotIn("box-shadow", actions_css.group(1))
+
+        keydown_start = HTML.index("document.addEventListener('keydown', function(e)")
+        keydown_end = HTML.index("/* ═══ Helpers ═══ */", keydown_start)
+        keydown_source = HTML[keydown_start:keydown_end]
+        self.assertIn("isSearchShortcutInteractiveTarget(e.target)", keydown_source)
+        self.assertIn("e.target.id !== 'query'", keydown_source)
+        self.assertIn("'button, input, textarea, select, summary, a[href]", HTML)
+
     def test_library_filters_by_language_alongside_file_type(self) -> None:
         self.assertIn('id="lib-lang-control"', HTML)
         self.assertIn('data-lang="chinese"', HTML)
@@ -165,12 +220,12 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_api_settings_collapse_and_fallback_uses_one_auto_saving_switch(self) -> None:
         self.assertIn('id="mineru-api-settings"', HTML)
-        self.assertIn('aria-controls="mineru-api-body"', HTML)
-        self.assertIn("toggleSettingsSection('mineru-api-settings')", HTML)
+        self.assertIn('data-target="mineru-api-settings"', HTML)
+        self.assertIn("showSettingsCategory('mineru-api-settings')", HTML)
         self.assertIn('id="vision-api-settings"', HTML)
-        self.assertIn('aria-controls="vision-api-body"', HTML)
-        self.assertIn("toggleSettingsSection('vision-api-settings')", HTML)
-        self.assertIn("function toggleSettingsSection(sectionId)", HTML)
+        self.assertIn('data-target="vision-api-settings"', HTML)
+        self.assertIn("showSettingsCategory('vision-api-settings')", HTML)
+        self.assertIn("function showSettingsCategory(sectionId)", HTML)
         self.assertIn('class="vision-fallback-toggle"', HTML)
         self.assertIn('id="vision-fallback-summary"', HTML)
         self.assertIn('onchange="setVisionAutoFallback(this.checked)"', HTML)
@@ -198,9 +253,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('id="backup-settings"', HTML)
-        self.assertIn('aria-controls="backup-settings-body"', HTML)
+        self.assertIn('data-target="backup-settings"', HTML)
         self.assertIn(
-            "toggleSettingsSection('backup-settings')",
+            "showSettingsCategory('backup-settings')",
             HTML,
         )
         self.assertIn('onclick="exportBackup()"', HTML)
@@ -213,12 +268,12 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/backup/import"', WEB_SOURCE)
         self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
 
-    def test_every_top_level_settings_section_is_collapsible(self) -> None:
+    def test_every_top_level_settings_section_is_a_switchable_panel(self) -> None:
         settings_start = HTML.index('<div class="settings-page-content">')
         settings_end = HTML.index('</div><!-- /main-area -->', settings_start)
         settings_html = HTML[settings_start:settings_end]
         sections = re.findall(
-            r'<section class="([^"]+)" id="([^"]+)">',
+            r'<section class="([^"]+)" id="([^"]+)" role="tabpanel">',
             settings_html,
         )
         expected_ids = {
@@ -233,8 +288,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         }
         self.assertEqual({section_id for _, section_id in sections}, expected_ids)
         for classes, section_id in sections:
-            self.assertIn("settings-collapse", classes)
-            self.assertIn(f"toggleSettingsSection('{section_id}')", settings_html)
+            self.assertIn("settings-section", classes)
+            self.assertIn(f'data-target="{section_id}"', settings_html)
+            self.assertIn(f"showSettingsCategory('{section_id}')", settings_html)
 
     def test_batch_metadata_detection_is_wired(self) -> None:
         self.assertIn('id="batch-metadata-btn"', HTML)

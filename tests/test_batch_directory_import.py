@@ -124,6 +124,90 @@ def fake_native_extraction(
 
 
 class BatchDirectoryImportTests(unittest.TestCase):
+    def test_direct_upload_repairs_a_concatenated_pdf_config(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "app"
+            source = Path(temp_dir) / "paper.pdf"
+            (root / "data").mkdir(parents=True)
+            (root / "config").mkdir(parents=True)
+            write_native_pdf(source, "CONCATENATED-CONFIG")
+            build_database({"metadata": {}}, root / "data" / "index.sqlite3")
+            config_path = root / "config" / "pdf_imports.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "documents": [
+                            {
+                                "source_file_id": "stale-source",
+                                "file_name": "stale.pdf",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n"
+                + json.dumps({"documents": []}, indent=2)
+                + "\n",
+                encoding="utf-8",
+            )
+
+            previous_cwd = Path.cwd()
+            server = None
+            handler = None
+            with patch(
+                "src.me_finder.web.detect_imported_pdf",
+                return_value={
+                    "detected_pdf_type": "native_text",
+                    "pdf_page_count": 1,
+                },
+            ), patch(
+                "src.me_finder.web.extract_pdf_source",
+                side_effect=fake_native_extraction,
+            ):
+                try:
+                    os.chdir(root)
+                    handler = make_handler(root / "data" / "index.sqlite3")
+                    handler.log_message = lambda *_args: None
+                    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+                    threading.Thread(
+                        target=server.serve_forever,
+                        daemon=True,
+                    ).start()
+                    request = Request(
+                        f"http://127.0.0.1:{server.server_port}/api/import",
+                        data=source.read_bytes(),
+                        headers={
+                            "Content-Type": "application/pdf",
+                            "X-File-Name": source.name,
+                        },
+                        method="POST",
+                    )
+                    with urlopen(request, timeout=5) as response:
+                        imported = json.loads(response.read().decode("utf-8"))
+                    status = self._wait_for_jobs(
+                        f"http://127.0.0.1:{server.server_port}",
+                        [str(imported["job_id"])],
+                    )[0]
+                    self.assertEqual(status["status"], "completed")
+                    repaired = json.loads(config_path.read_text(encoding="utf-8"))
+                    self.assertEqual(len(repaired["documents"]), 1)
+                    self.assertEqual(
+                        repaired["documents"][0]["source_file_id"],
+                        imported["source_file_id"],
+                    )
+                    self.assertEqual(
+                        len(list(config_path.parent.glob("pdf_imports.json.corrupt-*"))),
+                        1,
+                    )
+                finally:
+                    if server is not None:
+                        server.shutdown()
+                        server.server_close()
+                    if handler is not None:
+                        handler.close_runtime()
+                    os.chdir(previous_cwd)
+
     def test_failed_pdf_detection_removes_the_unreferenced_copy(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "app"
@@ -813,6 +897,63 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         len(list((root / "corpus" / "raw_pdf").glob("*.pdf"))),
                         1,
                     )
+
+                    removal = self._post_json(
+                        base_url + "/api/documents/remove-batch",
+                        {
+                            "source_ids": source_ids,
+                            "delete_generated_artifacts": True,
+                            "internal_copy_source_ids": [],
+                        },
+                    )
+                    self.assertTrue(removal["ok"])
+                    retained_config = json.loads(
+                        (root / "config" / "pdf_imports.json").read_text("utf-8")
+                    )
+                    self.assertEqual(len(retained_config["documents"]), 1)
+                    self.assertFalse(retained_config["documents"][0]["enabled"])
+                    self.assertTrue(
+                        retained_config["documents"][0]["retained_after_removal"]
+                    )
+                    self.assertEqual(
+                        len(list((root / "corpus" / "raw_pdf").glob("*.pdf"))),
+                        1,
+                    )
+
+                    reimport_response = self._post_json(
+                        base_url + "/api/import-local",
+                        {"paths": [str(second)]},
+                    )
+                    self.assertEqual(reimport_response["errors"], [])
+                    reimport_status = self._wait_for_jobs(
+                        base_url,
+                        [str(reimport_response["jobs"][0]["job_id"])],
+                    )[0]
+                    self.assertEqual(reimport_status["status"], "completed")
+
+                    reactivated_config = json.loads(
+                        (root / "config" / "pdf_imports.json").read_text("utf-8")
+                    )
+                    self.assertEqual(len(reactivated_config["documents"]), 1)
+                    self.assertTrue(reactivated_config["documents"][0]["enabled"])
+                    self.assertNotIn(
+                        "retained_after_removal",
+                        reactivated_config["documents"][0],
+                    )
+                    self.assertEqual(
+                        len(list((root / "corpus" / "raw_pdf").glob("*.pdf"))),
+                        1,
+                    )
+                    with sqlite3.connect(
+                        root / "data" / "index.sqlite3"
+                    ) as connection:
+                        self.assertEqual(
+                            connection.execute(
+                                "SELECT COUNT(*) FROM source_files "
+                                "WHERE source_type = 'pdf'"
+                            ).fetchone()[0],
+                            1,
+                        )
                 finally:
                     if server is not None:
                         server.shutdown()
