@@ -1599,6 +1599,10 @@ function bibliographicDocType(meta) {
   return ['book','translated_book','journal_article'].indexOf(value) >= 0 ? value : 'book';
 }
 
+function bibliographicEditorDocType(docType) {
+  return docType === 'journal_article' ? 'journal_article' : 'book';
+}
+
 function bibliographicMissingFields(meta) {
   meta = meta || {};
   var docType = bibliographicDocType(meta);
@@ -1630,13 +1634,14 @@ let bibEditorTypeOverride = {};
 function bibliographicEditorHTML(src) {
   var meta = sourceBibliographicMetadata(src);
   var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
+  var editorDocType = bibliographicEditorDocType(docType);
   var missing = bibliographicMissingFields(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}));
   function field(id, metadataField, label, value, full) {
     var isMissing = missing.indexOf(metadataField) >= 0;
     return '<div class="bibliographic-field' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '"><label for="bib-' + id + '">' + label + (isMissing ? ' · 缺少' : '') + '</label><input id="bib-' + id + '" value="' + esc(value || '') + '"></div>';
   }
   function typeButton(value, label) {
-    return '<button class="seg-btn' + (docType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" onclick="setBibliographicType(\'' + esc(src.source_file_id) + '\',\'' + value + '\')">' + label + '</button>';
+    return '<button class="seg-btn' + (editorDocType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" onclick="setBibliographicType(\'' + esc(src.source_file_id) + '\',\'' + value + '\')">' + label + '</button>';
   }
   var fieldsHTML;
   if (docType === 'journal_article') {
@@ -1657,7 +1662,7 @@ function bibliographicEditorHTML(src) {
   return '<div id="bibliographic-editor">'
     + '<div class="drawer-section-title">书目信息</div>'
     + '<div class="segmented-control bibliographic-type-control" id="bib-doctype-control" role="group" aria-label="文献类型">'
-    + typeButton('book','图书') + typeButton('translated_book','译著') + typeButton('journal_article','期刊论文')
+    + typeButton('book','著作') + typeButton('journal_article','期刊论文')
     + '</div>'
     + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
     + '<div class="bibliographic-grid">'
@@ -1700,10 +1705,12 @@ function metadataSourceLabel(source) {
 function collectBibliographicForm() {
   function value(id) { var el = document.getElementById('bib-' + id); return el ? el.value.trim() : ''; }
   var typeButton = document.querySelector('#bib-doctype-control .seg-btn.active');
+  var editorDocType = typeButton ? typeButton.dataset.doctype : 'book';
+  var translator = value('translator');
   return {
-    document_type: typeButton ? typeButton.dataset.doctype : 'book',
+    document_type: editorDocType === 'journal_article' ? 'journal_article' : (translator ? 'translated_book' : 'book'),
     author: value('author'), country: value('country'), title: value('title'),
-    translator: value('translator'), publish_place: value('publish-place'),
+    translator: translator, publish_place: value('publish-place'),
     publisher: value('publisher'), publish_year: value('publish-year'), isbn: value('isbn'),
     journal_name: value('journal-name'), volume: value('volume'),
     issue: value('issue'), page_range: value('page-range')

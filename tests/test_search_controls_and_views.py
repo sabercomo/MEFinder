@@ -13,6 +13,8 @@ WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
 class SearchControlsAndViewsTests(unittest.TestCase):
     def test_search_controls_share_one_row_without_native_source_or_limit_selects(self) -> None:
         self.assertIn('class="search-controls-row"', HTML)
+        self.assertIn('id="query" class="search-box" placeholder="搜索引文"', HTML)
+        self.assertNotIn('placeholder="输入中文引文…"', HTML)
         self.assertIn('id="source-type-control"', HTML)
         self.assertIn('id="document-select"', HTML)
         self.assertIn('id="limit-select"', HTML)
@@ -347,14 +349,19 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function toggleDrawerSection(event, sectionId)", HTML)
         self.assertIn('<div class="drawer-collapse-body" style="display:none">', HTML)
         self.assertIn('id="bib-doctype-control"', HTML)
-        for label in ("图书", "译著", "期刊论文"):
+        for label in ("著作", "期刊论文"):
             self.assertIn(label, HTML)
+        self.assertNotIn("typeButton('book','图书')", HTML)
+        self.assertNotIn("typeButton('translated_book','译著')", HTML)
+        self.assertIn("function bibliographicEditorDocType(docType)", HTML)
+        self.assertIn("return docType === 'journal_article' ? 'journal_article' : 'book';", HTML)
         self.assertIn("function setBibliographicType(sourceId, docType)", HTML)
         self.assertIn("'出版刊物'", HTML)
         self.assertIn("'卷次'", HTML)
         self.assertIn("'期号'", HTML)
         self.assertIn("'页码（起止页）'", HTML)
-        self.assertIn("document_type: typeButton ? typeButton.dataset.doctype : 'book'", HTML)
+        self.assertIn("var translator = value('translator');", HTML)
+        self.assertIn("editorDocType === 'journal_article' ? 'journal_article' : (translator ? 'translated_book' : 'book')", HTML)
         self.assertIn("['author','title','journal_name','publish_year','issue']", HTML)
 
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
