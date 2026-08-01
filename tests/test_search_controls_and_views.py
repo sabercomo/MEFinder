@@ -73,6 +73,19 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('aria-haspopup="menu"', detail_source)
         self.assertIn('role="menuitem"', detail_source)
         self.assertIn("copySelectedOriginalAndCitation(); closeAppSelects()", detail_source)
+        structured_reader_action = (
+            '<button class="action-btn" onclick="openSelectedStructuredReader()">'
+            "查看结构化文本</button>"
+        )
+        self.assertIn(structured_reader_action, detail_source)
+        self.assertNotIn(
+            'role="menuitem" onclick="openSelectedStructuredReader()',
+            detail_source,
+        )
+        self.assertLess(
+            detail_source.index(structured_reader_action),
+            detail_source.index('class="action-btn primary"'),
+        )
         self.assertRegex(
             HTML,
             r"\.detail-more-control \.app-select-menu\s*\{[^}]*bottom:\s*calc\(100% \+ 7px\)",

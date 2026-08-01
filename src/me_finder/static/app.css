@@ -1369,7 +1369,10 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .settings-section.active { display: block; }
 #mineru-api-settings.active,
 #vision-api-settings.active { max-width: 880px; }
-#appearance-card.active { max-width: 840px; }
+#appearance-card.active {
+  width: 100%;
+  max-width: 1120px;
+}
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -2075,12 +2078,12 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .theme-options {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: 20px;
 }
 .theme-option {
   position: relative;
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   border: 2px solid var(--border-default);
   border-radius: 12px;
   background: var(--surface-secondary);
@@ -2108,7 +2111,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .theme-option.selected .theme-option-check { opacity: 1; transform: scale(1); }
 .theme-option-description { display: block; min-height: 35px; margin-top: 9px; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
 .theme-preview {
-  height: 124px;
+  height: 140px;
   display: grid;
   grid-template-columns: 26% minmax(0, 74%);
   overflow: hidden;

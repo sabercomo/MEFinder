@@ -7,6 +7,15 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseRoot = Join-Path $ProjectRoot "release"
 $DistPath = Join-Path $ProjectRoot "dist\MEFinder"
+$LocalDataRoot = Join-Path $ProjectRoot "dist\MEFinderData"
+$LocalDataMarker = Join-Path $DistPath "data_root.txt"
+
+function Restore-LocalDevelopmentDataMarker {
+    if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) { return }
+    New-Item -ItemType Directory -Force -Path $LocalDataRoot | Out-Null
+    Set-Content -LiteralPath $LocalDataMarker -Encoding UTF8 -NoNewline `
+        -Value ([IO.Path]::GetFullPath($LocalDataRoot))
+}
 
 $releaseFull = [IO.Path]::GetFullPath($ReleaseRoot).TrimEnd('\')
 
@@ -117,5 +126,15 @@ try {
     Write-Output "SHA256: $hash"
 }
 finally {
-    Pop-Location
+    try {
+        # PyInstaller recreates dist\MEFinder. Restore the local test-build
+        # pointer only after the public ZIP has already been staged and sealed.
+        Restore-LocalDevelopmentDataMarker
+    }
+    catch {
+        Write-Warning "Could not restore the local development data marker: $_"
+    }
+    finally {
+        Pop-Location
+    }
 }

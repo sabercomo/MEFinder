@@ -84,6 +84,12 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertIn("paragraphs_fts", script)
             self.assertIn("NO_PROXY", script)
 
+    def test_release_builds_restore_the_local_test_data_pointer(self) -> None:
+        for script in (self.build_script, self.portable_script):
+            self.assertIn('"dist\\MEFinderData"', script)
+            self.assertIn("function Restore-LocalDevelopmentDataMarker", script)
+            self.assertIn("Restore-LocalDevelopmentDataMarker", script.split("finally {", 1)[1])
+
 
 if __name__ == "__main__":
     unittest.main()

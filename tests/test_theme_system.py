@@ -182,6 +182,13 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('@container (min-width: 640px)', HTML)
         self.assertIn('@container (min-width: 720px)', HTML)
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
+        self.assertRegex(
+            HTML,
+            r"#appearance-card\.active\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*1120px",
+        )
+        self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
+        self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
+        self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*height:\s*140px")
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(

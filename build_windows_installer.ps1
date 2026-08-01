@@ -8,6 +8,15 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseRoot = Join-Path $ProjectRoot "release"
 $DistPath = Join-Path $ProjectRoot "dist\MEFinder"
+$LocalDataRoot = Join-Path $ProjectRoot "dist\MEFinderData"
+$LocalDataMarker = Join-Path $DistPath "data_root.txt"
+
+function Restore-LocalDevelopmentDataMarker {
+    if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) { return }
+    New-Item -ItemType Directory -Force -Path $LocalDataRoot | Out-Null
+    Set-Content -LiteralPath $LocalDataMarker -Encoding UTF8 -NoNewline `
+        -Value ([IO.Path]::GetFullPath($LocalDataRoot))
+}
 
 function Find-InnoCompiler {
     param([string]$ExplicitPath)
@@ -205,5 +214,15 @@ try {
     Write-Output "Checksum sidecar: $HashPath"
 }
 finally {
-    Pop-Location
+    try {
+        # The installer has already been compiled from the privacy-checked
+        # payload. Restore only the local dist build's persistent data pointer.
+        Restore-LocalDevelopmentDataMarker
+    }
+    catch {
+        Write-Warning "Could not restore the local development data marker: $_"
+    }
+    finally {
+        Pop-Location
+    }
 }
