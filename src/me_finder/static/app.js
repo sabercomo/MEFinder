@@ -619,15 +619,10 @@ function showDetail(item) {
     + '</span>'
     + '<button class="action-btn" onclick="copySelectedCitation()">复制出处</button>'
     + '</span>'
+    + '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">复制原文与出处</button>'
+    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="action-btn" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\')">补全书目信息</button>' : '')
     + (item.source_file_id ? '<button class="action-btn" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
     + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
-    + '<span class="app-select detail-more-control" id="detail-more-control">'
-    + '<button class="app-select-trigger detail-more-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-more-control\')"><span class="app-select-value">更多</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<span class="app-select-menu" role="menu">'
-    + '<button class="app-select-option" type="button" role="menuitem" onclick="copySelectedOriginalAndCitation(); closeAppSelects()">复制原文与出处</button>'
-    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="app-select-option" type="button" role="menuitem" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\'); closeAppSelects()">补全书目信息</button>' : '')
-    + '</span>'
-    + '</span>'
     + '</div>'
     + '</div>';
 

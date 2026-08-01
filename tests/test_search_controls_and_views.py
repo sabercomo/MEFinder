@@ -67,12 +67,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("document.querySelector('.results-detail-pane')", detail_source)
         self.assertRegex(HTML, r"\.detail-scroll\s*\{[^}]*overflow-y:\s*auto")
         self.assertRegex(HTML, r"\.detail-actions\s*\{[^}]*flex:\s*0 0 auto")
+        self.assertRegex(
+            HTML,
+            r"\.detail-actions\s*\{[^}]*padding:\s*16px 28px 24px[^}]*gap:\s*8px",
+        )
         self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
         self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
-        self.assertIn('id="detail-more-control"', detail_source)
-        self.assertIn('aria-haspopup="menu"', detail_source)
-        self.assertIn('role="menuitem"', detail_source)
-        self.assertIn("copySelectedOriginalAndCitation(); closeAppSelects()", detail_source)
+        combined_copy_action = (
+            '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">'
+            "复制原文与出处</button>"
+        )
+        self.assertIn(combined_copy_action, detail_source)
+        self.assertNotIn('id="detail-more-control"', detail_source)
+        self.assertNotIn('aria-haspopup="menu"', detail_source)
+        self.assertNotIn('role="menuitem"', detail_source)
         structured_reader_action = (
             '<button class="action-btn" onclick="openSelectedStructuredReader()">'
             "查看结构化文本</button>"
@@ -83,13 +91,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             detail_source,
         )
         self.assertLess(
+            detail_source.index(combined_copy_action),
+            detail_source.index(structured_reader_action),
+        )
+        self.assertLess(
             detail_source.index(structured_reader_action),
             detail_source.index('class="action-btn primary"'),
         )
-        self.assertRegex(
-            HTML,
-            r"\.detail-more-control \.app-select-menu\s*\{[^}]*bottom:\s*calc\(100% \+ 7px\)",
-        )
+        self.assertNotIn(".detail-more-control", HTML)
+        self.assertNotIn(".detail-more-trigger", HTML)
         actions_css = re.search(r"\.detail-actions\s*\{([^}]*)\}", HTML)
         self.assertIsNotNone(actions_css)
         self.assertNotIn("box-shadow", actions_css.group(1))

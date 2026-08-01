@@ -1225,11 +1225,11 @@ html.sidebar-collapsed { --sidebar-width: 64px; }
 
 /* ── Action buttons ────────────────────────────────────────── */
 .detail-actions {
-  padding: 8px 12px;
+  padding: 16px 28px 24px;
   border-top: 1px solid var(--divider);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   flex: 0 0 auto;
   position: relative;
@@ -1270,15 +1270,6 @@ html.sidebar-collapsed { --sidebar-width: 64px; }
 }
 .citation-style-control .app-select-trigger { min-width: 126px; height: 36px; border-radius: 8px; font-size: 13px; }
 .citation-style-control .app-select-menu { top: auto; bottom: calc(100% + 7px); right: auto; left: 0; width: 156px; }
-.detail-more-control { flex: 0 0 auto; }
-.detail-more-trigger { height: 36px; min-width: 70px; border-radius: 8px; font-size: 13px; }
-.detail-more-control .app-select-menu {
-  top: auto;
-  right: 0;
-  bottom: calc(100% + 7px);
-  left: auto;
-  width: 178px;
-}
 
 @media (max-width: 1100px) {
   .results-list-pane { width: 360px; min-width: 280px; }
@@ -1289,7 +1280,6 @@ html.sidebar-collapsed { --sidebar-width: 64px; }
   .detail-actions .action-btn { height: 32px; padding-left: 10px; padding-right: 10px; font-size: 12px; }
   .detail-actions .app-select-trigger { height: 32px; font-size: 12px; }
   .citation-style-control .app-select-trigger { min-width: 104px; }
-  .detail-more-trigger { min-width: 60px; }
 }
 
 /* ── Empty / placeholder states ────────────────────────────── */
