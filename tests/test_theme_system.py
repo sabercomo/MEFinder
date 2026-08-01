@@ -180,7 +180,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertNotIn('--preview-bg', HTML)
         self.assertNotIn('--preview-accent', HTML)
         self.assertIn('@container (min-width: 640px)', HTML)
-        self.assertIn('@container (min-width: 960px)', HTML)
+        self.assertIn('@container (min-width: 720px)', HTML)
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
@@ -476,7 +476,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "frost-blue": "#D99000",
             "sage-ivory": "#7656B8",
             "warm-sand": "#2563B8",
-            "rose-mist": "#B8860B",
+            "rose-mist": "#1B8A99",
             "lavender-purple": "#B86C08",
             "midnight": "#FBBF24",
         }

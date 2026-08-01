@@ -205,14 +205,14 @@ html[data-theme="rose-mist"], .theme-preview[data-preview-theme="rose-mist"] {
   --skeleton-base: #F0E6EA;
   --skeleton-highlight: #FFFFFF;
   --dialog-backdrop: rgba(44,37,40,0.30);
-  --match-block-bg: #FFF8E6;
-  --match-block-border: #E7C56D;
-  --match-block-accent: #B8860B;
-  --match-block-flash-bg: #FFEFC4;
-  --match-inline-bg: #FFE8B5;
-  --match-inline-border: #D4A844;
-  --match-inline-text: #3D2B08;
-  --match-focus-ring: rgba(184,134,11,0.20);
+  --match-block-bg: #EAF6F8;
+  --match-block-border: #93D2DB;
+  --match-block-accent: #1B8A99;
+  --match-block-flash-bg: #D7EFF3;
+  --match-inline-bg: #CDECEF;
+  --match-inline-border: #5FB6C4;
+  --match-inline-text: #0C3B42;
+  --match-focus-ring: rgba(27,138,153,0.22);
   color-scheme: light;
 }
 
@@ -1369,6 +1369,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .settings-section.active { display: block; }
 #mineru-api-settings.active,
 #vision-api-settings.active { max-width: 880px; }
+#appearance-card.active { max-width: 840px; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -2188,7 +2189,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .theme-mini-match { display: block; width: 70%; height: 7px; margin-top: 6px; border-left: 2px solid var(--match-block-accent); border-radius: 2px; background: var(--match-inline-bg); box-shadow: inset 0 0 0 1px var(--match-inline-border); }
 @container (min-width: 520px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 640px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (min-width: 960px) { .theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 720px) { .theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 430px) { .theme-mini-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .theme-mini-doc-card:nth-child(3) { display: none; }}
 
 /* ── Library list ──────────────────────────────────────────── */
