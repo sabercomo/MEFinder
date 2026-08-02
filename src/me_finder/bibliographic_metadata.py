@@ -16,7 +16,7 @@ METADATA_FIELDS = (
     "title", "author", "country", "translator", "publisher", "publish_place",
     "publish_year", "isbn", "journal_name", "volume", "issue", "page_range",
 )
-DOCUMENT_TYPES = ("book", "translated_book", "journal_article")
+DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
 PUBLISHER_PLACES = {
     "上海人民出版社": "上海",
     "上海译文出版社": "上海",
@@ -405,18 +405,27 @@ def detect_pdf_bibliographic_metadata(
 
     # 期刊单篇与专著的版式完全不同：专著的版权页/CIP 规则用在期刊首页上只会
     # 把院系、基金项目当成出版社。两条抽取链路互斥。
-    is_journal = any(
+    is_thesis = _looks_like_thesis(texts)
+    has_book_markers = _has_book_only_markers(texts)
+    is_journal_by_marker = any(
         page_idx < 2 and looks_like_journal_article(text) for page_idx, text in texts
     )
-    if is_journal:
+    # 只有带明确 GB/T 标记的期刊才走期刊提取器；页数兜底和学位论文仍走温和的
+    # 前置页提取，避免从糊掉的老扫描页里抽出垃圾作者。兜底只影响类型标签，
+    # 且在提取完成、掌握出版社等证据后再判定（见下方 document_type 决策）。
+    if is_thesis:
+        detected, detected_evidence, detected_confidence = _extract_thesis_metadata(texts)
+        conflicts = []
+    elif is_journal_by_marker:
         detected, detected_evidence, detected_confidence = _extract_journal_article(
             texts, Path(path).stem
         )
         conflicts = []
-        filename_values, filename_evidence, filename_confidence = {}, {}, {}
     else:
         detected, detected_evidence, detected_confidence, conflicts = _extract_from_front_matter(texts)
-        filename_values, filename_evidence, filename_confidence = _extract_explicit_filename_metadata(Path(path).stem)
+    # 文件名里的作者/标题/年份对期刊和专著同样有效：两条路径都用它补空字段，
+    # 绝不能因为判成期刊就丢掉文件名里的作者。
+    filename_values, filename_evidence, filename_confidence = _extract_explicit_filename_metadata(Path(path).stem)
     for field, value in filename_values.items():
         if not detected.get(field) or filename_confidence[field] > detected_confidence.get(field, 0.0):
             detected[field] = value
@@ -490,12 +499,44 @@ def detect_pdf_bibliographic_metadata(
         }
         confidence["publish_place"] = 0.62
 
-    if is_journal:
+    # 兜底：没有专著版权页/CIP 标记、且总页数不超过阈值的 PDF 视为单篇论文。
+    # 用于救回老期刊、访谈等首页缺 GB/T 标记的文章。不依赖出版社字段——期刊
+    # 引文里常出现被引专著的出版社，据此判书会把大量论文误判成专著。兜底只改
+    # 类型标签，不改提取路径。
+    is_journal_by_size = (
+        not has_book_markers and 0 < total_pages <= _JOURNAL_MAX_FALLBACK_PAGES
+    )
+    if is_thesis:
+        result["document_type"] = "thesis"
+        for field in (
+            "country", "translator", "publish_place", "isbn",
+            "journal_name", "volume", "issue", "page_range",
+        ):
+            result[field] = None
+            evidence.pop(field, None)
+    elif is_journal_by_marker or is_journal_by_size:
         result["document_type"] = "journal_article"
     elif result.get("translator"):
         result["document_type"] = "translated_book"
     else:
         result.setdefault("document_type", "book")
+    # 期刊论文（学位论文除外）若还没有刊名，尝试从首页报头版式认出刊名；认不出
+    # 就保持缺失，交给文件名/人工，绝不猜。
+    if (
+        result.get("document_type") == "journal_article"
+        and not is_thesis
+        and not is_valid_bibliographic_value(result.get("journal_name"))
+    ):
+        journal_name, journal_evidence, journal_rule = _extract_journal_name(texts)
+        if journal_name:
+            result["journal_name"] = journal_name
+            evidence["journal_name"] = {
+                "source": "masthead",
+                "source_page": 0,
+                "evidence_text": journal_evidence,
+                "rule": journal_rule,
+            }
+            confidence["journal_name"] = 0.82 if journal_rule == "masthead_suffix_line" else 0.9
     missing = metadata_missing_fields(result)
     invalid = invalid_metadata_fields(result)
     if invalid:
@@ -522,7 +563,10 @@ def detect_pdf_bibliographic_metadata(
 
 def metadata_missing_fields(metadata: Mapping[str, object]) -> List[str]:
     doc_type = str(metadata.get("document_type") or "")
-    if doc_type == "journal_article":
+    if doc_type == "thesis":
+        # 学位论文用 publisher 承载学位授予学校；出版地、刊名和期号均不适用。
+        required = ["author", "title", "publisher", "publish_year"]
+    elif doc_type == "journal_article":
         # 期刊论文不需要出版社/出版地；卷次和起止页可选。
         required = ["author", "title", "journal_name", "publish_year", "issue"]
     else:
@@ -546,6 +590,12 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
         raise ValueError(f"未知文献类型：{requested_type}")
     else:
         result["document_type"] = "translated_book" if result.get("translator") else "book"
+    if result["document_type"] == "thesis":
+        for field in (
+            "country", "translator", "publish_place", "isbn",
+            "journal_name", "volume", "issue", "page_range",
+        ):
+            result[field] = None
     missing = metadata_missing_fields(result)
     result["metadata_status"] = "complete" if not missing else "partial"
     result["metadata_source"] = "manual"
@@ -672,6 +722,31 @@ def _extract_explicit_filename_metadata(
         normalized,
     )
     if not match:
+        # 知网导出常用「篇名_作者」命名：末段是作者，其余是篇名。仅当末段像人名
+        # 时才采用，避免把含下划线的普通文件名错拆。作者置信度略高，以压过期刊
+        # 首页里偶尔抽出的报头/日期噪声，保证文件名里的作者不被丢。
+        cnki = re.fullmatch(r"\s*(?P<title>.+?)\s*_\s*(?P<author>[^_]{2,20})\s*", normalized)
+        if cnki and _is_plausible_person_name(cnki.group("author")):
+            values = {
+                # 拆掉末段作者后，篇名里残留的下划线是知网导出遗留的分隔符，去掉。
+                "title": cnki.group("title").strip().replace("_", "").replace(":", "："),
+                "author": _clean_people(cnki.group("author")),
+            }
+            values = {field: value for field, value in values.items() if is_valid_bibliographic_value(value)}
+            # 知网导出文件名带完整篇名与作者，置信度设得高于期刊首页抽取，确保
+            # 篇名/作者这两项最重要的信息不被报头、页码、日期等版面噪声覆盖。
+            scores = {"title": 0.95, "author": 0.95}
+            evidence = {
+                field: {
+                    "source": "file_name",
+                    "source_page": None,
+                    "evidence_text": normalized,
+                    "rule": "cnki_underscore_filename",
+                    "confidence": scores[field],
+                }
+                for field in values
+            }
+            return values, evidence, {field: scores[field] for field in values}
         return {}, {}, {}
 
     title = normalized[: match.start()].strip()
@@ -1071,7 +1146,57 @@ def _extract_from_front_matter(
 # 版权页也可能印中图分类号，因此书刊判定必须先看专著独有的版权信息。
 _JOURNAL_MARKERS = ("中图分类号", "文献标识码", "文献标志码")
 _JOURNAL_WEAK_MARKERS = ("摘要", "关键词", "DOI:", "doi:")
-_BOOK_ONLY_MARKERS = ("图书在版编目", "ISBN", "出版发行", "版次", "定价")
+# 版权页/CIP 专有标记，只属于正式出版的专著。含美国国会图书馆 CIP 短语，
+# 用于识别没有中文版权页、也没印 ISBN 的外文专著。
+_BOOK_ONLY_MARKERS = ("图书在版编目", "ISBN", "出版发行", "版次", "定价", "Cataloging-in-Publication")
+# 学位论文封面用语：识别为独立文献类型。
+_THESIS_MARKERS = ("硕士学位论文", "博士学位论文", "专业学位论文", "学位论文")
+_THESIS_FIELD_LABEL_RE = re.compile(
+    r"^(?:"
+    r"(?:中文)?(?:学位)?论文(?:题目|题名)(?:名称)?|题目|题名|"
+    r"作者(?:姓名)?|研究生(?:姓名)?|"
+    r"学位授予单位|培养单位|授予单位|学校|院校|"
+    r"答辩日期|论文日期|提交日期|完成日期|学位授予日期|"
+    r"学号|指导教师|导师|学科(?:专业)?|专业(?:名称)?|学院|院系|"
+    r"英文(?:题目|题名)|分类号|密级|UDC"
+    r")\s*[:：]?"
+)
+_THESIS_TITLE_LABEL_RE = re.compile(
+    r"^(?:(?:中文)?(?:学位)?论文(?:题目|题名)(?:名称)?|题目|题名)\s*[:：]?\s*(?P<value>.*)$"
+)
+_THESIS_AUTHOR_LABEL_RE = re.compile(
+    r"^(?:作者(?:姓名)?|研究生(?:姓名)?)\s*[:：]?\s*(?P<value>.*)$"
+)
+_THESIS_SCHOOL_LABEL_RE = re.compile(
+    r"^(?:学位授予单位|培养单位|授予单位|学校|院校)\s*[:：]?\s*(?P<value>.*)$"
+)
+_THESIS_DATE_LABEL_RE = re.compile(
+    r"^(?:答辩日期|论文日期|提交日期|完成日期|学位授予日期)\s*[:：]?\s*(?P<value>.*)$"
+)
+_THESIS_INSTITUTION_RE = re.compile(
+    r"^[\u3400-\u9fff·]{2,30}(?:大学|学院|研究院|党校)$"
+)
+# 无版权页/CIP 标记且总页数不超过该阈值的 PDF 视为单篇论文而非专著。学位论文
+# 另由封面标记识别、与页数无关；阈值取 60 以容纳较长的外文期刊论文，真实专著
+# 通常在 200 页以上，不会被误判。
+_JOURNAL_MAX_FALLBACK_PAGES = 60
+
+# 从中文期刊首页版式里认出刊名用的后缀与佐证词。多数近年期刊会把刊名印在首页
+# 报头（常与「YYYY 年第 N 期」或英文刊名相邻）。抽印本若没印刊名则保持缺失。
+_JOURNAL_NAME_SUFFIXES = (
+    "学报", "学刊", "论丛", "季刊", "月刊", "与现实", "战线", "评论", "论坛",
+    "研究", "科学", "世界", "文摘", "杂志", "通讯", "动态", "译丛", "丛刊", "前沿", "探索",
+)
+# 独立成行、缺其它佐证时只接受较强后缀且长度更短，避免把文章标题误当刊名。
+_JOURNAL_NAME_SUFFIXES_STANDALONE = (
+    "学报", "学刊", "论丛", "季刊", "月刊", "与现实", "战线", "研究", "科学", "世界", "文摘",
+)
+# 与中文刊名相邻的英文刊名常含这些词，用作强佐证以排除英文文章标题。
+_JOURNAL_EN_HINTS = (
+    "journal", "university", "review", "studies", "science", "sciences",
+    "academic", "bulletin", "acta", "annals", "quarterly", "tribune",
+)
+_JOURNAL_NAME_CHARS = r"[㐀-鿿()·—\-]"
 
 # 例：文章编号 0439-8041(2020)09-0015-13
 #     ISSN 0439-8041、2020 年、第 09 期、起始页 15、共 13 页 → 15-27。
@@ -1104,6 +1229,271 @@ def looks_like_journal_article(text: str) -> bool:
     if any(marker in compact for marker in _JOURNAL_MARKERS):
         return True
     return sum(1 for marker in _JOURNAL_WEAK_MARKERS if marker in compact) >= 2
+
+
+def _looks_like_thesis(texts: Sequence[Tuple[int, str]]) -> bool:
+    """Report whether the front pages carry degree-thesis cover markers."""
+
+    for page_idx, text in texts:
+        if page_idx >= 2:
+            continue
+        compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+        if any(marker in compact for marker in _THESIS_MARKERS):
+            return True
+    return False
+
+
+def _compact_thesis_cover_text(value: object) -> str:
+    """Normalize spacing introduced by PDF glyph positioning on thesis covers."""
+
+    text = unicodedata.normalize("NFKC", str(value or "")).strip()
+    text = re.sub(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])", "", text)
+    return re.sub(r"\s+", " ", text).strip(" \t:：")
+
+
+def _following_thesis_cover_value(
+    lines: Sequence[Tuple[int, str]],
+    index: int,
+) -> Tuple[Optional[str], Optional[int], Optional[str]]:
+    """Read a cover field whose label and value were extracted on separate lines."""
+
+    for next_index in range(index + 1, min(len(lines), index + 4)):
+        page_idx, raw_line = lines[next_index]
+        value = _compact_thesis_cover_text(raw_line)
+        if not value:
+            continue
+        if _THESIS_FIELD_LABEL_RE.match(value):
+            break
+        if any(marker in value for marker in _THESIS_MARKERS):
+            continue
+        return value, page_idx, raw_line
+    return None, None, None
+
+
+def _extract_thesis_metadata(
+    texts: Sequence[Tuple[int, str]],
+) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
+    """Extract thesis title, author, degree-granting school and defense year.
+
+    Thesis covers do not contain book publication statements or journal
+    mastheads.  This precision-first path therefore reads only the first two
+    pages and only accepts cover labels, a standalone degree-granting
+    institution, or a cover date.  The school is stored in ``publisher`` for
+    compatibility with the existing bibliographic schema.
+    """
+
+    lines: List[Tuple[int, str]] = []
+    for page_idx, text in texts:
+        if page_idx >= 2:
+            continue
+        lines.extend(
+            (page_idx, line.strip())
+            for line in unicodedata.normalize("NFKC", text).splitlines()
+            if line.strip()
+        )
+
+    candidates: Dict[str, List[Tuple[float, int, int, str, str, str]]] = {
+        field: [] for field in ("title", "author", "publisher", "publish_year")
+    }
+
+    def record(
+        field: str,
+        value: object,
+        page_idx: int,
+        line_index: int,
+        evidence_text: str,
+        rule: str,
+        score: float,
+    ) -> None:
+        cleaned = _compact_thesis_cover_text(value)
+        if field == "author":
+            cleaned = _clean_people(cleaned)
+        elif field == "publisher":
+            cleaned = re.sub(r"\s+", "", cleaned)
+        elif field == "title":
+            cleaned = cleaned.strip("《》")
+        elif field == "publish_year":
+            year = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", cleaned)
+            cleaned = year.group(1) if year else ""
+        if not is_valid_bibliographic_value(cleaned):
+            return
+        if field == "author" and not _is_plausible_person_name(cleaned):
+            return
+        candidates[field].append((score, page_idx, line_index, cleaned, evidence_text, rule))
+
+    marker_line_indexes: List[int] = []
+    for line_index, (page_idx, raw_line) in enumerate(lines):
+        line = _compact_thesis_cover_text(raw_line)
+        if any(marker in line for marker in _THESIS_MARKERS):
+            marker_line_indexes.append(line_index)
+
+        for field, pattern, rule in (
+            ("title", _THESIS_TITLE_LABEL_RE, "thesis_title_label"),
+            ("author", _THESIS_AUTHOR_LABEL_RE, "thesis_author_label"),
+            ("publisher", _THESIS_SCHOOL_LABEL_RE, "thesis_school_label"),
+            ("publish_year", _THESIS_DATE_LABEL_RE, "thesis_defense_date"),
+        ):
+            match = pattern.match(line)
+            if not match:
+                continue
+            value = match.group("value").strip()
+            value_page_idx, value_evidence = page_idx, raw_line
+            if not value:
+                value, following_page_idx, following_line = _following_thesis_cover_value(
+                    lines, line_index
+                )
+                if value and following_page_idx is not None and following_line is not None:
+                    value_page_idx = following_page_idx
+                    value_evidence = f"{raw_line} / {following_line}"
+            if value:
+                record(field, value, value_page_idx, line_index, value_evidence, rule, 0.99)
+
+        institution = re.sub(r"\s+", "", line)
+        if (
+            _THESIS_INSTITUTION_RE.fullmatch(institution)
+            and "出版社" not in institution
+            and not _THESIS_FIELD_LABEL_RE.match(line)
+        ):
+            score = 0.99 if institution.endswith("大学") else 0.92
+            record(
+                "publisher",
+                institution,
+                page_idx,
+                line_index,
+                raw_line,
+                "thesis_cover_institution",
+                score,
+            )
+
+        if re.fullmatch(r"(?:19|20)\d{2}\s*年(?:\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*日)?)?", line):
+            record(
+                "publish_year",
+                line,
+                page_idx,
+                line_index,
+                raw_line,
+                "thesis_cover_date",
+                0.93,
+            )
+
+    # Some covers put an unlabeled Chinese title directly below the thesis
+    # marker.  Accept only the first plausible line before the next field label.
+    if not candidates["title"]:
+        for marker_index in marker_line_indexes:
+            for line_index in range(marker_index + 1, min(len(lines), marker_index + 7)):
+                page_idx, raw_line = lines[line_index]
+                line = _compact_thesis_cover_text(raw_line)
+                if _THESIS_FIELD_LABEL_RE.match(line):
+                    break
+                if (
+                    len(line) >= 5
+                    and re.search(r"[\u3400-\u9fff]", line)
+                    and not _THESIS_INSTITUTION_RE.fullmatch(re.sub(r"\s+", "", line))
+                    and not any(marker in line for marker in _THESIS_MARKERS)
+                    and not re.search(r"(?:申请|学位|专业|学科|导师|指导教师)", line)
+                    and not re.fullmatch(r"(?:19|20)\d{2}.*", line)
+                ):
+                    record(
+                        "title",
+                        line,
+                        page_idx,
+                        line_index,
+                        raw_line,
+                        "thesis_title_after_marker",
+                        0.93,
+                    )
+                    break
+            if candidates["title"]:
+                break
+
+    values: Dict[str, str] = {}
+    evidence: Dict[str, object] = {}
+    confidence: Dict[str, float] = {}
+    for field, items in candidates.items():
+        if not items:
+            continue
+        score, page_idx, _line_index, value, evidence_text, rule = sorted(
+            items, key=lambda item: (-item[0], item[1], item[2])
+        )[0]
+        values[field] = value
+        evidence[field] = {
+            "source": "thesis_cover_text",
+            "source_page": page_idx + 1,
+            "evidence_text": evidence_text,
+            "rule": rule,
+            "confidence": score,
+        }
+        confidence[field] = score
+    return values, evidence, confidence
+
+
+def _has_book_only_markers(texts: Sequence[Tuple[int, str]]) -> bool:
+    """Report whether any scanned page shows a book copyright/CIP marker."""
+
+    for _, text in texts:
+        compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
+        if any(marker.casefold() in compact.casefold() for marker in _BOOK_ONLY_MARKERS):
+            return True
+    return False
+
+
+def _looks_like_english_journal(line: str) -> bool:
+    """Report whether a line reads like an English journal title, not prose."""
+
+    stripped = line.strip().lower()
+    letters = sum(1 for ch in stripped if ch.isascii() and ch.isalpha())
+    if len(stripped) < 6 or letters < len(stripped.replace(" ", "")) * 0.6:
+        return False
+    return any(word in stripped for word in _JOURNAL_EN_HINTS)
+
+
+def _extract_journal_name(
+    texts: Sequence[Tuple[int, str]],
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Read the journal title from the first page's masthead when it is printed.
+
+    Precision-first: only returns a name when the layout gives a strong signal
+    (a ``刊名 + 年 + 期`` line, a Chinese name next to an English journal title,
+    or a short standalone name line). Offprints that never print the journal
+    name return ``None`` rather than a guess -- the field stays missing.
+    """
+
+    first = next((text for idx, text in texts if idx == 0), None)
+    if not first:
+        return None, None, None
+    lines = [
+        re.sub(r"\s+", " ", unicodedata.normalize("NFKC", line)).strip()
+        for line in first.splitlines()
+        if line.strip()
+    ]
+    head = lines[:15]
+    # 规则1：同一行「刊名 YYYY 年第 N 期」。
+    for line in head:
+        match = re.match(
+            r"^(" + _JOURNAL_NAME_CHARS + r"{2,20}?)\s*(?:19|20)\d{2}\s*年", line
+        )
+        if match and any(sfx in match.group(1) for sfx in _JOURNAL_NAME_SUFFIXES):
+            return re.sub(r"\s+", "", match.group(1)), line, "masthead_name_year"
+    # 规则2：中文刊名行紧跟英文刊名行。
+    for i in range(len(head) - 1):
+        compact = re.sub(r"\s+", "", head[i])
+        if (
+            2 <= len(compact) <= 20
+            and re.fullmatch(_JOURNAL_NAME_CHARS + r"+", compact)
+            and any(sfx in compact for sfx in _JOURNAL_NAME_SUFFIXES)
+            and _looks_like_english_journal(head[i + 1])
+        ):
+            return compact, f"{head[i]} / {head[i + 1]}", "masthead_cn_en"
+    # 规则3：首几行里独立成行的短刊名。
+    for line in head[:5]:
+        compact = re.sub(r"\s+", "", line)
+        if (
+            2 <= len(compact) <= 8
+            and re.fullmatch(_JOURNAL_NAME_CHARS + r"+", compact)
+            and any(sfx in compact for sfx in _JOURNAL_NAME_SUFFIXES_STANDALONE)
+        ):
+            return compact, line, "masthead_suffix_line"
+    return None, None, None
 
 
 def _extract_journal_article(

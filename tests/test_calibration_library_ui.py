@@ -262,6 +262,30 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         for element_id in ('id="cal-editor"', 'id="cal-auto-preview"', 'id="cal-segments-body"', 'id="cal-preview-input"', 'id="cal-detail-actions"'):
             self.assertIn(element_id, drawer)
 
+    def test_manual_calibration_supports_spread_layout_and_safe_single_default(self) -> None:
+        self.assertIn("function segmentLayoutControl(layout, index)", HTML)
+        self.assertIn("layout === 'spread' ? '双开页' : '单页'", HTML)
+        self.assertIn("function setSegmentReadingDirection(index, value)", HTML)
+        self.assertIn("setSegmentReadingDirection(' + index + ',\\'ltr\\')", HTML)
+        self.assertIn("setSegmentReadingDirection(' + index + ',\\'rtl\\')", HTML)
+        self.assertIn('aria-label="双开页阅读方向"', HTML)
+        self.assertIn('>左→右</button>', HTML)
+        self.assertIn('>右→左</button>', HTML)
+        self.assertIn("function updateSegmentGutter(index, value)", HTML)
+        self.assertIn("seg.layout_mode === 'spread' ? 2 : 1", HTML)
+        self.assertIn("clean.layout_mode = seg.layout_mode === 'spread' ? 'spread' : 'single'", HTML)
+        self.assertIn("clean.reading_direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr'", HTML)
+        self.assertIn("<th>页面布局</th>", HTML)
+        self.assertIn("segment-col-layout", HTML)
+
+    def test_auto_detection_reports_spread_layout_direction_and_evidence(self) -> None:
+        self.assertIn("正在检测页码与页面布局", HTML)
+        self.assertIn("页面布局：双开页", HTML)
+        self.assertIn("layout.reading_direction === 'rtl' ? '右→左' : '左→右'", HTML)
+        self.assertIn("layoutEvidence.paired_page_numbers", HTML)
+        self.assertIn("layoutEvidence.stride_two_support", HTML)
+        self.assertIn("spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列'", HTML)
+
     def test_sidebar_has_no_calibration_entry_and_deep_links_stay_in_library(self) -> None:
         self.assertNotIn('data-page="calibration"', HTML)
         library = HTML.index('data-page="library"')

@@ -43,9 +43,15 @@ def build_citation_formats(document_metadata: CitationMetadata, hit_page: object
 
 
 def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    doc_type = _document_type(meta)
+    if doc_type == "thesis":
+        return _finish_chinese(_join_nonempty([
+            _author_prefix(meta),
+            _quoted_title(_title(meta)),
+            _publisher_year_chinese(meta),
+        ]))
     if page.get("uncalibrated"):
         return "该文献页码尚未校准，不能生成可靠脚注。"
-    doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return _finish_chinese(_join_nonempty([
             _marx_engels_volume_title_chinese(meta),
@@ -84,9 +90,18 @@ def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
 
 
 def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    doc_type = _document_type(meta)
+    if doc_type == "thesis":
+        missing = _missing_fields(meta, page, "gb")
+        if missing:
+            labels = ["学校" if field == "publisher" else _field_label(field) for field in missing]
+            return f"无法生成完整 GB/T 引文：缺少{' / '.join(labels)}。"
+        title = _title(meta)
+        base = _join_gb([_author_plain(meta), f"{title}[D]" if title else ""])
+        school_year = f"{_first(meta, 'publisher', 'press')}, {_year(meta)}"
+        return _finish_gb(_join_gb([base, school_year]))
     if page.get("uncalibrated"):
         return "该文献页码尚未校准，不能生成 GB/T 引文。"
-    doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return _finish_gb(_marx_engels_volume_gb(meta, page))
     if doc_type == "journal_article":
@@ -163,6 +178,8 @@ def _document_type(meta: CitationMetadata) -> str:
         "journal": "journal_article",
         "article": "journal_article",
         "journal-article": "journal_article",
+        "thesis": "thesis",
+        "dissertation": "thesis",
         "book": "book",
         "monograph": "book",
         "translated": "translated_book",
@@ -427,6 +444,19 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
     doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return [] if not page.get("uncalibrated") else ["citation_page"]
+    if doc_type == "thesis":
+        required = ["author", "title", "publisher", "publish_year"]
+        missing = []
+        for field in required:
+            if field == "author" and not _author_plain(meta, include_country=False):
+                missing.append(field)
+            elif field == "title" and not _title(meta):
+                missing.append(field)
+            elif field == "publisher" and not _first(meta, "publisher", "press"):
+                missing.append(field)
+            elif field == "publish_year" and not _year(meta):
+                missing.append(field)
+        return missing
     if doc_type not in {"book", "translated_book"}:
         return [] if not page.get("uncalibrated") else ["citation_page"]
     required = ["author", "title", "publisher", "publish_year"]

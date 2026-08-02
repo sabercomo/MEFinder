@@ -564,8 +564,6 @@ function showDetail(item) {
   const author = item.author_label ? esc(item.author_label) : '';
   const pageLabel = formatCitationPageLabel(item);
   const page = esc(pageLabel);
-  const score = Math.round(item.match_score * 100);
-  const typeLabel = matchTypeLabel(item.match_type);
   const sourceLabel = item.source_type === 'pdf' ? 'PDF' : 'Word';
 
   const contextBefore = detailContextHTML(item.context_before, 'before');
@@ -578,6 +576,7 @@ function showDetail(item) {
       + pdRow('引用页码', pageLabel)
       + pdRow('PDF 页码标签', item.pdf_page_start_label || '无')
       + pdRow('PDF 物理页', item.pdf_page_start_index != null ? 'PDF 第 ' + (item.pdf_page_start_index + 1) + ' 页' : '—')
+      + (item.layout_mode === 'spread' ? pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision)) : '')
       + pdRow('映射方式', mappingMethodLabel(item.page_mapping_method))
       + (item.mapping_confidence_level ? pdRow('映射置信度', mappingConfidenceLabel(item.mapping_confidence_level, item.page_mapping_confidence)) : '')
       + (item.page_scope ? pdRow('页码范围', pageScopeLabel(item.page_scope)) : '')
@@ -600,7 +599,6 @@ function showDetail(item) {
     + '<span class="detail-pill">' + sourceLabel + '</span>'
     + (item.volume_display ? '<span class="detail-pill">' + esc(item.volume_display) + '</span>' : '')
     + '<span class="detail-pill">' + page + '</span>'
-    + '<span class="detail-pill accent">' + score + '% ' + typeLabel + '</span>'
     + '</div>'
     + pageDetail
     + '</div>'
@@ -735,6 +733,12 @@ function pageScopeLabel(scope) {
   const labels = {body:'正文', preface:'序言', front_matter:'前置页', appendix:'附录', mixed:'混合'};
   return labels[scope] || scope || '';
 }
+function logicalPageSideLabel(side, precision) {
+  if (side === 'left') return '左页';
+  if (side === 'right') return '右页';
+  if (side === 'both') return '跨左右页';
+  return precision === 'range_fallback' ? '坐标不足，显示页码范围' : '—';
+}
 function mappingEvidenceSummary(evidence) {
   if (!evidence) return '';
   if (typeof evidence === 'string') return evidence;
@@ -756,7 +760,10 @@ function autoMappingSegmentText(seg) {
     citation_page_start: seg.citation_page_start,
     citation_page_end: seg.citation_page_end
   });
-  return pageScopeLabel(seg.page_scope) + ' PDF ' + pdfStart + '–' + pdfEnd + ' → ' + citation + ' ' + mappingConfidenceLabel(seg.confidence_level, seg.mapping_confidence);
+  const layout = seg.layout_mode === 'spread'
+    ? ' · 双开页' + (seg.reading_direction === 'rtl' ? '（右→左）' : '（左→右）')
+    : '';
+  return pageScopeLabel(seg.page_scope) + ' PDF ' + pdfStart + '–' + pdfEnd + ' → ' + citation + layout + ' ' + mappingConfidenceLabel(seg.confidence_level, seg.mapping_confidence);
 }
 
 function firstPageValue(values) {
@@ -1084,7 +1091,8 @@ function setLibLangFilter(btn) {
 }
 
 function libraryDocType(source) {
-  return String((source && source.document_type) || '') === 'journal_article' ? 'journal_article' : 'book';
+  var value = String((source && source.document_type) || '');
+  return value === 'journal_article' || value === 'thesis' ? value : 'book';
 }
 
 function setLibDocTypeFilter(btn) {
@@ -1319,11 +1327,12 @@ function renderLibraryList() {
     btn.textContent = label + ' (' + count + ')';
   });
   const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
-  const bookCount = allCount - journalCount;
+  const thesisCount = libSources.filter(s => libraryDocType(s) === 'thesis').length;
+  const bookCount = allCount - journalCount - thesisCount;
   document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(btn) {
     var dt = btn.dataset.doctype;
-    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : bookCount;
-    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : '著作';
+    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : dt === 'thesis' ? thesisCount : bookCount;
+    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : dt === 'thesis' ? '学位论文' : '著作';
     btn.textContent = label + ' (' + count + ')';
   });
 
@@ -1365,6 +1374,9 @@ function libraryEntryHTML(src) {
   var isPdf = src.source_type === 'pdf';
   var title = src.title || (src.file_name || src.source_file_id);
   var author = src.author || '作者信息待完善';
+  var thesisIcon = src.document_type === 'thesis'
+    ? '<svg class="doc-thesis-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="学位论文"><title>学位论文</title><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/><path d="M22 10v5"/></svg>'
+    : '';
   var bib = sourceBibliographicMetadata(src);
   var missingMetadataText = isPdf ? bibliographicMissingText(bib) : '';
   var size = formatFileSize(src.size_bytes);
@@ -1393,7 +1405,7 @@ function libraryEntryHTML(src) {
     var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
     return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
       + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div>' + selectionControl + '</div>'
-      + '<div class="library-card-title">' + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
+      + '<div class="library-card-title">' + thesisIcon + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
       + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
       + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
       + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
@@ -1402,7 +1414,7 @@ function libraryEntryHTML(src) {
   return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
     + selectionControl
     + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
-    + '<span class="library-row-title">' + esc(title) + '</span>'
+    + '<span class="library-row-title">' + thesisIcon + esc(title) + '</span>'
     + '<span class="library-row-info">'
     + statusChip
     + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '')
@@ -1596,20 +1608,22 @@ const bibliographicFieldLabels = {author:'作者',title:'书名',translator:'译
 
 function bibliographicDocType(meta) {
   var value = String((meta && meta.document_type) || '');
-  return ['book','translated_book','journal_article'].indexOf(value) >= 0 ? value : 'book';
+  return ['book','translated_book','journal_article','thesis'].indexOf(value) >= 0 ? value : 'book';
 }
 
 function bibliographicEditorDocType(docType) {
-  return docType === 'journal_article' ? 'journal_article' : 'book';
+  return docType === 'journal_article' || docType === 'thesis' ? docType : 'book';
 }
 
 function bibliographicMissingFields(meta) {
   meta = meta || {};
   var docType = bibliographicDocType(meta);
   var listed = Array.isArray(meta.metadata_missing_fields) ? meta.metadata_missing_fields.slice() : null;
-  var required = listed || (docType === 'journal_article'
-    ? ['author','title','journal_name','publish_year','issue']
-    : ['author','title','publisher','publish_place','publish_year']);
+  var required = listed || (docType === 'thesis'
+    ? ['author','title','publisher','publish_year']
+    : docType === 'journal_article'
+      ? ['author','title','journal_name','publish_year','issue']
+      : ['author','title','publisher','publish_place','publish_year']);
   if (!listed && docType === 'translated_book') required.splice(2, 0, 'translator');
   return required.filter(function(field, index, values) {
     if (field === 'isbn' || !bibliographicFieldLabels[field] || values.indexOf(field) !== index) return false;
@@ -1620,7 +1634,10 @@ function bibliographicMissingFields(meta) {
 
 function bibliographicMissingText(meta) {
   var fields = bibliographicMissingFields(meta);
-  return fields.length ? '缺少：' + fields.map(function(field) { return bibliographicFieldLabels[field]; }).join('、') : '';
+  var docType = bibliographicDocType(meta);
+  return fields.length ? '缺少：' + fields.map(function(field) {
+    return docType === 'thesis' && field === 'publisher' ? '学校' : bibliographicFieldLabels[field];
+  }).join('、') : '';
 }
 
 function bibliographicMissingBadge(meta) {
@@ -1644,7 +1661,12 @@ function bibliographicEditorHTML(src) {
     return '<button class="seg-btn' + (editorDocType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" onclick="setBibliographicType(\'' + esc(src.source_file_id) + '\',\'' + value + '\')">' + label + '</button>';
   }
   var fieldsHTML;
-  if (docType === 'journal_article') {
+  if (docType === 'thesis') {
+    fieldsHTML = field('author','author','作者',meta.author,false)
+      + field('title','title','篇名',meta.title,true)
+      + field('publisher','publisher','学校',meta.publisher,false)
+      + field('publish-year','publish_year','年份',meta.publish_year,false);
+  } else if (docType === 'journal_article') {
     fieldsHTML = field('title','title','标题（篇名）',meta.title,true)
       + field('author','author','作者',meta.author,false)
       + field('journal-name','journal_name','出版刊物',meta.journal_name,false)
@@ -1662,7 +1684,7 @@ function bibliographicEditorHTML(src) {
   return '<div id="bibliographic-editor">'
     + '<div class="drawer-section-title">书目信息</div>'
     + '<div class="segmented-control bibliographic-type-control" id="bib-doctype-control" role="group" aria-label="文献类型">'
-    + typeButton('book','著作') + typeButton('journal_article','期刊论文')
+    + typeButton('book','著作') + typeButton('journal_article','期刊论文') + typeButton('thesis','学位论文')
     + '</div>'
     + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
     + '<div class="bibliographic-grid">'
@@ -1708,7 +1730,7 @@ function collectBibliographicForm() {
   var editorDocType = typeButton ? typeButton.dataset.doctype : 'book';
   var translator = value('translator');
   return {
-    document_type: editorDocType === 'journal_article' ? 'journal_article' : (translator ? 'translated_book' : 'book'),
+    document_type: editorDocType === 'journal_article' || editorDocType === 'thesis' ? editorDocType : (translator ? 'translated_book' : 'book'),
     author: value('author'), country: value('country'), title: value('title'),
     translator: translator, publish_place: value('publish-place'),
     publisher: value('publisher'), publish_year: value('publish-year'), isbn: value('isbn'),
@@ -1751,8 +1773,14 @@ async function saveBibliographicMetadata(sourceId) {
 
 function showBibliographicEvidence(sourceId) {
   var src = libSources.find(function(item){return item.source_file_id === sourceId;});
-  var evidence = sourceBibliographicMetadata(src).metadata_evidence || {};
+  var metadata = sourceBibliographicMetadata(src);
+  var evidence = metadata.metadata_evidence || {};
   var labels = {title:'书名',author:'作者',country:'国别',translator:'译者',publisher:'出版社',publish_place:'出版地',publish_year:'出版年份',isbn:'ISBN'};
+  if (bibliographicDocType(metadata) === 'thesis') {
+    labels.title = '篇名';
+    labels.publisher = '学校';
+    labels.publish_year = '年份';
+  }
   var lines = Object.keys(evidence).map(function(field) {
     var item = evidence[field] || {};
     return (labels[field] || field) + '：' + (item.evidence_text || '无文本依据') + (item.source_page ? '（PDF 第 ' + item.source_page + ' 页）' : '') + (item.source === 'inferred_from_publisher' ? '（由出版社推断）' : '');
@@ -2032,7 +2060,7 @@ async function runAutoDetection(sourceId) {
   var panel = document.getElementById('cal-auto-preview');
   var button = document.getElementById('cal-auto-detect-btn');
   panel.style.display = 'block';
-  panel.innerHTML = '<div class="auto-detect-title">正在检测页码…</div><div class="auto-detect-note">正在读取 PDF 标签、数字书签、现有 MinerU 结果和页面边缘文本</div>';
+  panel.innerHTML = '<div class="auto-detect-title">正在检测页码与页面布局…</div><div class="auto-detect-note">正在读取页面尺寸、左右内容分布、中缝、页码位置、PDF 标签、数字书签和现有 MinerU 结果</div>';
   if (button) button.disabled = true;
   try {
     var resp = await fetch('/api/auto-page-mapping/detect', {
@@ -2061,6 +2089,20 @@ function renderAutoDetectionResult(result) {
   var panel = document.getElementById('cal-auto-preview');
   var segments = (result.selected_segments || []).filter(function(s) { return s && s.confidence_level !== 'low'; });
   var html = '<div class="auto-detect-title">检测完成</div>';
+  var layout = result.layout_detection || {};
+  if (layout.layout_mode === 'spread') {
+    var layoutEvidence = layout.evidence || {};
+    html += '<div class="auto-detect-note auto-detect-layout">页面布局：双开页 · '
+      + (layout.reading_direction === 'rtl' ? '右→左' : '左→右')
+      + ' · 中缝 ' + Math.round(Number(layout.gutter_x || 0.5) * 100) + '%'
+      + ' · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence)
+      + '</div>';
+    html += '<div class="auto-detect-note">布局依据：' + Number(layoutEvidence.split_pages || 0) + ' 个双栏页面；'
+      + Number(layoutEvidence.paired_page_numbers || 0) + ' 页检测到成对页码；双页序列支持 '
+      + Number(layoutEvidence.stride_two_support || 0) + ' 页</div>';
+  } else if (layout.layout_mode === 'single') {
+    html += '<div class="auto-detect-note">页面布局：单页 · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence) + '</div>';
+  }
   if (result.manual_mapping_present) {
     html += '<div class="auto-detect-note auto-detect-warning">当前文献已有人工页码映射。以下结果仅为预览，不会自动覆盖</div>';
   }
@@ -2092,7 +2134,7 @@ function renderAutoDetectionResult(result) {
 }
 
 function autoFailureReasons(reasons) {
-  var labels = {no_page_labels:'没有 PDF Page Labels',no_bookmarks:'没有数字书签',no_mineru_candidates:'现有 MinerU 结果没有可靠页码候选',no_edge_candidates:'页边区域未发现页码候选',sequence_not_found:'未找到稳定递增页码序列',source_missing:'原始 PDF 文件不存在'};
+  var labels = {no_page_labels:'没有 PDF Page Labels',no_bookmarks:'没有数字书签',no_mineru_candidates:'现有 MinerU 结果没有可靠页码候选',no_edge_candidates:'页边区域未发现页码候选',sequence_not_found:'未找到稳定递增页码序列',spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列',source_missing:'原始 PDF 文件不存在'};
   return reasons.map(function(reason) { return '• ' + (labels[reason] || reason); }).join('<br>');
 }
 
@@ -2162,6 +2204,146 @@ function setSegmentNumberStyle(event, index, value) {
   renderCalSegments();
 }
 
+function segmentLayoutLabel(layout) {
+  return layout === 'spread' ? '双开页' : '单页';
+}
+
+function segmentLayoutControl(layout, index) {
+  var values = ['single','spread'];
+  return '<div class="app-select segment-layout-select" id="segment-layout-select-' + index + '">'
+    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-layout-select-' + index + '\')"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
+      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentLayout(event,' + index + ',\'' + value + '\')">' + segmentLayoutLabel(value) + '</button>';
+    }).join('') + '</div></div>';
+}
+
+function setSegmentLayout(event, index, value) {
+  event.stopPropagation();
+  updateCalSeg(index, 'layout_mode', value);
+  closeAppSelects();
+  renderCalSegments();
+}
+
+function setSegmentReadingDirection(index, value) {
+  var seg = calSegments[index];
+  if (!seg) return;
+  seg.reading_direction = value === 'rtl' ? 'rtl' : 'ltr';
+  updateSpreadPanel(index);
+  updateCalPreview();
+}
+
+function updateSegmentGutter(index, value) {
+  var seg = calSegments[index];
+  if (!seg) return;
+  var percent = Number(value);
+  if (!isFinite(percent)) percent = 50;
+  percent = Math.max(30, Math.min(70, percent));
+  seg.gutter_x = percent / 100;
+  updateSpreadPanel(index);
+  updateCalPreview();
+}
+
+function spreadGutterPercent(seg) {
+  var gutter = Number(seg.gutter_x);
+  if (!isFinite(gutter) || gutter < 0.3 || gutter > 0.7) gutter = 0.5;
+  return Math.round(gutter * 100);
+}
+
+function spreadCitationPair(seg) {
+  if (seg.number_style === 'none') return { mapped: false };
+  if (seg.citation === null && !seg.citation_page_start) return { mapped: false };
+  if (seg.citation_page_start == null || seg.citation_page_start === '') return { mapped: false };
+  var base = parseInt(seg.citation_page_start, 10);
+  if (isNaN(base)) return { mapped: false };
+  var style = seg.number_style || 'arabic';
+  function fmt(n) {
+    if (style === 'roman_lower' || style === 'roman_upper') return intToRoman(n, style === 'roman_upper');
+    return String(n);
+  }
+  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+  var first = fmt(base), second = fmt(base + 1);
+  return direction === 'rtl'
+    ? { mapped: true, left: second, right: first, firstSide: 'right' }
+    : { mapped: true, left: first, right: second, firstSide: 'left' };
+}
+
+function segmentSpreadPanelRow(seg, index) {
+  if ((seg.layout_mode || 'single') !== 'spread') return '';
+  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+  var gp = spreadGutterPercent(seg);
+  var pair = spreadCitationPair(seg);
+  var leftFirst = direction !== 'rtl';
+  var leftLabel = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
+  var rightLabel = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
+  var diagram = '<div class="spread-diagram" id="spread-diagram-' + index + '">'
+    + '<div class="spread-half left" id="spread-half-left-' + index + '" style="width:' + gp + '%">'
+    + '<span class="spread-badge" id="spread-badge-left-' + index + '">' + (leftFirst ? '1' : '2') + '</span>'
+    + '<span class="spread-half-name">左半页</span>'
+    + '<span class="spread-half-page" id="spread-page-left-' + index + '">' + leftLabel + '</span>'
+    + '</div>'
+    + '<div class="spread-half right" id="spread-half-right-' + index + '" style="width:' + (100 - gp) + '%">'
+    + '<span class="spread-badge alt" id="spread-badge-right-' + index + '">' + (leftFirst ? '2' : '1') + '</span>'
+    + '<span class="spread-half-name">右半页</span>'
+    + '<span class="spread-half-page" id="spread-page-right-' + index + '">' + rightLabel + '</span>'
+    + '</div>'
+    + '<div class="spread-gutter-line" id="spread-gutter-line-' + index + '" style="left:' + gp + '%"></div>'
+    + '</div>';
+  var controls = '<div class="spread-controls">'
+    + '<div class="spread-field"><span class="spread-field-label">阅读方向</span>'
+    + '<div class="segment-direction-control" role="group" aria-label="双开页阅读方向">'
+    + '<button class="segment-direction-btn' + (direction === 'ltr' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'ltr' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'ltr\')">左→右</button>'
+    + '<button class="segment-direction-btn' + (direction === 'rtl' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'rtl' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'rtl\')">右→左</button>'
+    + '</div></div>'
+    + '<div class="spread-field"><div class="spread-field-row"><span class="spread-field-label">中缝位置</span><span class="spread-gutter-out" id="spread-gutter-out-' + index + '">' + gp + '%</span></div>'
+    + '<input class="spread-gutter-range" type="range" min="30" max="70" step="1" value="' + gp + '" aria-label="中缝横向位置" oninput="updateSegmentGutter(' + index + ',this.value)">'
+    + '</div></div>';
+  var summary = '<div class="spread-summary" id="spread-summary-' + index + '">' + spreadSummaryHtml(seg) + '</div>';
+  return '<tr class="segment-spread-row"><td colspan="7">'
+    + '<div class="segment-spread-panel">'
+    + '<div class="spread-panel-main">' + diagram + controls + '</div>'
+    + summary
+    + '</td></tr>';
+}
+
+function spreadSummaryHtml(seg) {
+  var firstPdf = seg.pdf_page_start != null ? seg.pdf_page_start + 1 : 1;
+  var pair = spreadCitationPair(seg);
+  if (!pair.mapped) {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+      + ' PDF 第 ' + firstPdf + ' 页 → 该分段未设引用页码，仅按双开切分';
+  }
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+    + ' PDF 第 ' + firstPdf + ' 页 → 左半页 <b>引文 ' + pair.left + ' 页</b>，右半页 <b>引文 ' + pair.right + ' 页</b>';
+}
+
+function updateSpreadPanel(index) {
+  var seg = calSegments[index];
+  if (!seg) return;
+  var diagram = document.getElementById('spread-diagram-' + index);
+  if (!diagram) { renderCalSegments(); return; }
+  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+  var gp = spreadGutterPercent(seg);
+  var pair = spreadCitationPair(seg);
+  var leftFirst = direction !== 'rtl';
+  document.getElementById('spread-gutter-line-' + index).style.left = gp + '%';
+  document.getElementById('spread-half-left-' + index).style.width = gp + '%';
+  document.getElementById('spread-half-right-' + index).style.width = (100 - gp) + '%';
+  document.getElementById('spread-gutter-out-' + index).textContent = gp + '%';
+  document.getElementById('spread-badge-left-' + index).textContent = leftFirst ? '1' : '2';
+  document.getElementById('spread-badge-right-' + index).textContent = leftFirst ? '2' : '1';
+  document.getElementById('spread-page-left-' + index).textContent = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
+  document.getElementById('spread-page-right-' + index).textContent = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
+  document.getElementById('spread-summary-' + index).innerHTML = spreadSummaryHtml(seg);
+  var ltrBtn = diagram.parentNode.querySelector('.segment-direction-btn[onclick*="\'ltr\'"]');
+  var rtlBtn = diagram.parentNode.querySelector('.segment-direction-btn[onclick*="\'rtl\'"]');
+  if (ltrBtn && rtlBtn) {
+    ltrBtn.classList.toggle('is-active', direction === 'ltr');
+    ltrBtn.setAttribute('aria-pressed', direction === 'ltr' ? 'true' : 'false');
+    rtlBtn.classList.toggle('is-active', direction === 'rtl');
+    rtlBtn.setAttribute('aria-pressed', direction === 'rtl' ? 'true' : 'false');
+  }
+}
+
 function renderCalSegments() {
   var body = document.getElementById('cal-segments-body');
   var noSeg = document.getElementById('cal-no-segments');
@@ -2177,15 +2359,18 @@ function renderCalSegments() {
     var citStart = seg.citation_page_start != null ? seg.citation_page_start : '';
     if (seg.citation === null && !citStart) citStart = '';
     var style = seg.number_style || 'arabic';
+    var layout = seg.layout_mode === 'spread' ? 'spread' : 'single';
     var label = seg.label || seg.evidence || '';
     return '<tr>'
       + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_start != null ? seg.pdf_page_start + 1 : '') + '" onchange="updateCalSeg(' + i + ',\'pdf_page_start\',this.value)"></td>'
       + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_end != null ? seg.pdf_page_end + 1 : '') + '" onchange="updateCalSeg(' + i + ',\'pdf_page_end\',this.value)"></td>'
       + '<td><input class="seg-input narrow" type="text" value="' + esc(String(citStart)) + '" placeholder="留空=不映射" onchange="updateCalSeg(' + i + ',\'citation_page_start\',this.value)"></td>'
+      + '<td>' + segmentLayoutControl(layout, i) + '</td>'
       + '<td>' + segmentNumberStyleControl(style, i) + '</td>'
       + '<td><input class="seg-input" type="text" value="' + esc(label) + '" placeholder="序言、正文或附录" onchange="updateCalSeg(' + i + ',\'label\',this.value)"></td>'
       + '<td><button class="seg-remove" onclick="removeCalSegment(' + i + ')" title="删除分段" aria-label="删除分段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></td>'
-      + '</tr>';
+      + '</tr>'
+      + segmentSpreadPanelRow(seg, i);
   }).join('');
 }
 
@@ -2206,11 +2391,18 @@ function updateCalSeg(index, field, value) {
     seg.number_style = 'none';
     seg.citation = null;
     delete seg.citation_page_start;
+  } else if (field === 'layout_mode') {
+    seg.layout_mode = value === 'spread' ? 'spread' : 'single';
+    if (seg.layout_mode === 'spread') {
+      if (seg.reading_direction !== 'rtl') seg.reading_direction = 'ltr';
+      if (!isFinite(Number(seg.gutter_x))) seg.gutter_x = 0.5;
+    }
   } else {
     seg[field] = value;
   }
   if (!seg.method) seg.method = 'manual_segment';
   if (seg.confidence == null) seg.confidence = 0.9;
+  if (field !== 'layout_mode' && seg.layout_mode === 'spread') updateSpreadPanel(index);
   updateCalPreview();
 }
 
@@ -2224,6 +2416,7 @@ function addCalSegment() {
     pdf_page_start: lastEnd,
     pdf_page_end: lastEnd + 49,
     citation_page_start: '1',
+    layout_mode: 'single',
     number_style: 'arabic',
     method: 'manual_segment',
     confidence: 0.9,
@@ -2248,6 +2441,7 @@ function updateCalPreview() {
     return;
   }
   var mapped = null;
+  var mappedEnd = null;
   var method = 'uncalibrated';
   for (var i = 0; i < calSegments.length; i++) {
     var seg = calSegments[i];
@@ -2260,14 +2454,19 @@ function updateCalPreview() {
         break;
       }
       if (seg.citation_page_start != null && seg.citation_page_start !== '') {
-        var offset = pageIndex - start;
+        var logicalPageCount = seg.layout_mode === 'spread' ? 2 : 1;
+        var offset = (pageIndex - start) * logicalPageCount;
         var style = seg.number_style || 'arabic';
-        var citNum;
-        try { citNum = parseInt(seg.citation_page_start, 10) + offset; } catch(e) { citNum = offset + 1; }
+        var baseNumber = parseInt(seg.citation_page_start, 10);
+        if (isNaN(baseNumber)) baseNumber = 1;
+        var citNum = baseNumber + offset;
+        var citEndNum = citNum + logicalPageCount - 1;
         if (style === 'roman_lower' || style === 'roman_upper') {
           mapped = intToRoman(citNum, style === 'roman_upper');
+          mappedEnd = intToRoman(citEndNum, style === 'roman_upper');
         } else {
           mapped = String(citNum);
+          mappedEnd = String(citEndNum);
         }
         method = seg.method || 'manual_segment';
         break;
@@ -2275,7 +2474,7 @@ function updateCalPreview() {
     }
   }
   if (mapped) {
-    result.textContent = '引用' + formatCitationPageLabel({source_type:'pdf', citation_page_start:mapped}) + '（' + mappingMethodLabel(method) + '）';
+    result.textContent = '引用' + formatCitationPageLabel({source_type:'pdf', citation_page_start:mapped, citation_page_end:mappedEnd || mapped}) + '（' + mappingMethodLabel(method) + '）';
     result.style.color = 'var(--accent)';
   } else {
     result.textContent = '未校准';
@@ -2307,6 +2506,12 @@ async function saveCalibration() {
       clean.citation = null;
     }
     if (seg.number_style) clean.number_style = seg.number_style;
+    clean.layout_mode = seg.layout_mode === 'spread' ? 'spread' : 'single';
+    if (clean.layout_mode === 'spread') {
+      clean.reading_direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+      var gutter = Number(seg.gutter_x);
+      clean.gutter_x = isFinite(gutter) && gutter >= 0.3 && gutter <= 0.7 ? gutter : 0.5;
+    }
     if (seg.method) clean.method = seg.method;
     if (seg.confidence != null) clean.confidence = seg.confidence;
     if (seg.label) clean.label = seg.label;

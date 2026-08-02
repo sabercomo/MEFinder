@@ -63,6 +63,7 @@ from .calibration_library import (
 )
 from .document_deletion import DocumentDeletionService
 from .pdf_extractors import extract_pdf_source
+from .pdf_page_mapping import normalize_manual_mapping_segments
 from .pdf_import_service import (
     copy_local_document,
     cleanup_stale_document_storage_files,
@@ -881,6 +882,8 @@ def make_handler(
                     "issue": "期号",
                     "page_range": "页码",
                 }
+                if metadata.get("document_type") == "thesis":
+                    labels.update({"title": "篇名", "publisher": "学校", "publish_year": "年份"})
                 missing_labels = [labels[field] for field in missing if field in labels]
                 metadata_note = "；书目信息已自动填入"
                 if missing_labels:
@@ -1985,7 +1988,15 @@ def make_handler(
                     "confidence": float(segment.get("mapping_confidence") or 0.95),
                     "label": "已接受自动页码映射",
                     "evidence": segment.get("mapping_evidence"),
+                    "layout_mode": "spread"
+                    if segment.get("layout_mode") == "spread"
+                    else "single",
                 }
+                if clean["layout_mode"] == "spread":
+                    clean["reading_direction"] = (
+                        "rtl" if segment.get("reading_direction") == "rtl" else "ltr"
+                    )
+                    clean["gutter_x"] = segment.get("gutter_x") or 0.5
                 manual_segments.append(clean)
             document.setdefault("page_mapping", {})
             document["page_mapping"]["segments"] = manual_segments
@@ -2001,6 +2012,7 @@ def make_handler(
     ) -> None:
         """Persist manual mapping and rebuild as one deletion-safe mutation."""
 
+        cleaned_segments = normalize_manual_mapping_segments(segments)
         with rebuild_lock:
             config_path = root / "config" / "pdf_imports.json"
             if not config_path.exists():
@@ -2017,10 +2029,12 @@ def make_handler(
                 if not document:
                     raise MinerUError("PDF 配置中找不到该文献。")
                 document.setdefault("page_mapping", {})
-                document["page_mapping"]["segments"] = segments
+                document["page_mapping"]["segments"] = cleaned_segments
                 document["page_mapping"]["validated_by"] = "manual_ui"
                 document["page_mapping"]["mapping_origin"] = "manual"
-                document["page_mapping"]["mapping_status"] = "manual_mapped"
+                document["page_mapping"]["mapping_status"] = (
+                    "manual_mapped" if cleaned_segments else "unmapped"
+                )
                 document["page_mapping"]["updated_at"] = datetime.now(
                     timezone.utc
                 ).isoformat()
@@ -2275,19 +2289,26 @@ def make_handler(
         return persist_bibliographic_metadata(source_id, metadata)
 
     def batch_metadata_candidates() -> List[Dict[str, object]]:
-        """PDF sources with missing bibliographic fields, excluding manual ones."""
+        """PDF sources that still need automatic bibliographic recognition.
+
+        Besides sources with missing fields, this re-checks anything classified
+        as a book/translated_book: a journal offprint whose publisher was pulled
+        from a cited work looks "complete" as a book, so filtering by missing
+        fields alone would never revisit that misclassification. Manually edited
+        records are always left untouched.
+        """
         data = library_data()
         candidates = []
         for item in data.get("items", []):
             if str(item.get("source_type") or "") != "pdf":
                 continue
-            if not item.get("metadata_missing_fields"):
-                continue
             nested = item.get("bibliographic_metadata")
             source = str((nested or {}).get("metadata_source") or item.get("metadata_source") or "")
             if source == "manual":
                 continue
-            candidates.append(item)
+            doc_type = str(item.get("document_type") or (nested or {}).get("document_type") or "")
+            if item.get("metadata_missing_fields") or doc_type in ("book", "translated_book"):
+                candidates.append(item)
         return candidates
 
     def run_batch_metadata_job(job_id: str, candidates: List[Dict[str, object]]) -> None:
@@ -3440,6 +3461,9 @@ def make_handler(
                     return
                 try:
                     apply_manual_page_mapping(sid, segments)
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return

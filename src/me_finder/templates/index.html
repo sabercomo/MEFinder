@@ -65,7 +65,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <span>设置</span>
       </button>
     </nav>
-    <div class="sidebar-footer">ME_Finder v__APP_VERSION__</div>
+    <div class="sidebar-footer">MEFinder v__APP_VERSION__</div>
   </aside>
 
   <!-- ═══ Main ═══ -->
@@ -207,6 +207,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <button class="seg-btn active" data-doctype="all" onclick="setLibDocTypeFilter(this)">全部类型</button>
                   <button class="seg-btn" data-doctype="book" onclick="setLibDocTypeFilter(this)">著作</button>
                   <button class="seg-btn" data-doctype="journal_article" onclick="setLibDocTypeFilter(this)">期刊论文</button>
+                  <button class="seg-btn" data-doctype="thesis" onclick="setLibDocTypeFilter(this)">学位论文</button>
                 </div>
               </div>
               <button class="action-btn library-metadata-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
@@ -273,6 +274,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                           <col class="segment-col-pdf">
                           <col class="segment-col-pdf">
                           <col class="segment-col-citation">
+                          <col class="segment-col-layout">
                           <col class="segment-col-style">
                           <col class="segment-col-note">
                           <col class="segment-col-action">
@@ -282,6 +284,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                             <th>PDF 起始页</th>
                             <th>PDF 结束页</th>
                             <th>引用起始页</th>
+                            <th>页面布局</th>
                             <th>编号样式</th>
                             <th>范围说明</th>
                             <th>操作</th>

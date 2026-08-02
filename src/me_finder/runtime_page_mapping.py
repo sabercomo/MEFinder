@@ -16,6 +16,9 @@ from .database import (
 )
 from .pdf_page_mapping import (
     PageMapper,
+    mapping_gutter_x,
+    mapping_layout_mode,
+    mapping_reading_direction,
     mapped_page_display,
     mapping_segment_id,
 )
@@ -48,6 +51,9 @@ def normalize_auto_segments(segments: Sequence[Dict[str, object]]) -> List[Dict[
                 "segment_id": mapping_segment_id(item, start=start, end=end),
                 "mapping_evidence": item.get("mapping_evidence") or item.get("evidence"),
                 "label": item.get("label") or "自动检测页码",
+                "layout_mode": mapping_layout_mode(item),
+                "reading_direction": mapping_reading_direction(item),
+                "gutter_x": mapping_gutter_x(item),
             }
         )
     cleaned.sort(key=lambda item: int(item["pdf_page_start"]))
@@ -180,18 +186,36 @@ def _apply_page_mapping(
 ) -> None:
     result = mapper.map_page(page_idx, page.get("pdf_page_label"))
     segment = _segment_for_page(segments, page_idx)
-    citation = result.citation_page
+    citation = result.citation_page_start
+    citation_end = result.citation_page_end or citation
     page["citation_page"] = citation
+    page["citation_page_start"] = citation
+    page["citation_page_end"] = citation_end
     page["printed_page"] = citation
+    page["printed_page_start"] = citation
+    page["printed_page_end"] = citation_end
     page["page_mapping_method"] = result.method
     page["page_mapping_confidence"] = result.confidence
     page["mapping_method"] = result.method
     page["mapping_confidence"] = result.confidence
     page["citation_page_label"] = citation
+    page["citation_page_label_start"] = citation
+    page["citation_page_label_end"] = citation_end
     try:
         page["citation_page_number"] = int(str(citation)) if citation is not None else None
     except ValueError:
         page["citation_page_number"] = None
+    try:
+        page["citation_page_number_start"] = int(str(citation)) if citation is not None else None
+    except ValueError:
+        page["citation_page_number_start"] = None
+    try:
+        page["citation_page_number_end"] = int(str(citation_end)) if citation_end is not None else None
+    except ValueError:
+        page["citation_page_number_end"] = None
+    page["layout_mode"] = result.layout_mode
+    page["reading_direction"] = result.reading_direction
+    page["gutter_x"] = result.gutter_x
     page["page_scope"] = segment.get("page_scope") if segment else None
     page["mapping_confidence_level"] = segment.get("confidence_level") if segment else None
     page["mapping_evidence"] = segment.get("mapping_evidence") if segment else None
@@ -205,8 +229,8 @@ def _apply_paragraph_mapping(
     start_page: Dict[str, object],
     end_page: Dict[str, object],
 ) -> None:
-    start_citation = start_page.get("citation_page")
-    end_citation = end_page.get("citation_page")
+    start_citation = start_page.get("citation_page_start") or start_page.get("citation_page")
+    end_citation = end_page.get("citation_page_end") or end_page.get("citation_page")
     calibrated = bool(start_citation and end_citation)
     method = start_page.get("page_mapping_method")
     if method != end_page.get("page_mapping_method"):
@@ -219,12 +243,20 @@ def _apply_paragraph_mapping(
     paragraph["original_page_end"] = str(end_citation) if calibrated else None
     paragraph["citation_page_start"] = str(start_citation) if calibrated else None
     paragraph["citation_page_end"] = str(end_citation) if calibrated else None
-    paragraph["citation_page_number_start"] = start_page.get("citation_page_number")
-    paragraph["citation_page_number_end"] = end_page.get("citation_page_number")
-    paragraph["citation_page_label_start"] = start_page.get("citation_page_label")
-    paragraph["citation_page_label_end"] = end_page.get("citation_page_label")
-    paragraph["printed_page_start"] = start_page.get("printed_page")
-    paragraph["printed_page_end"] = end_page.get("printed_page")
+    paragraph["citation_page_number_start"] = start_page.get(
+        "citation_page_number_start", start_page.get("citation_page_number")
+    )
+    paragraph["citation_page_number_end"] = end_page.get(
+        "citation_page_number_end", end_page.get("citation_page_number")
+    )
+    paragraph["citation_page_label_start"] = start_page.get(
+        "citation_page_label_start", start_page.get("citation_page_label")
+    )
+    paragraph["citation_page_label_end"] = end_page.get(
+        "citation_page_label_end", end_page.get("citation_page_label")
+    )
+    paragraph["printed_page_start"] = start_page.get("printed_page_start") or start_page.get("printed_page")
+    paragraph["printed_page_end"] = end_page.get("printed_page_end") or end_page.get("printed_page")
     paragraph["page_source_type"] = str(method or "uncalibrated")
     paragraph["page_mapping_method"] = str(method or "uncalibrated")
     paragraph["mapping_method"] = str(method or "uncalibrated")
@@ -243,6 +275,11 @@ def _apply_paragraph_mapping(
     )
     paragraph["mapping_evidence"] = start_page.get("mapping_evidence")
     paragraph["segment_id"] = _same_or_none(start_page.get("segment_id"), end_page.get("segment_id"))
+    paragraph["layout_mode"] = _same_or_mixed(start_page.get("layout_mode"), end_page.get("layout_mode"))
+    paragraph["reading_direction"] = _same_or_mixed(
+        start_page.get("reading_direction"), end_page.get("reading_direction")
+    )
+    paragraph["gutter_x"] = _same_or_none(start_page.get("gutter_x"), end_page.get("gutter_x"))
 
 
 def _segment_for_page(segments: Sequence[Dict[str, object]], page_idx: int) -> Optional[Dict[str, object]]:

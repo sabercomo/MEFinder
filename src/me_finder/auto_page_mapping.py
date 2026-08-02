@@ -15,6 +15,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import median
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .pdf_page_mapping import int_to_roman
@@ -29,6 +30,21 @@ AUTO_PAGE_MAPPING_THRESHOLDS: Dict[str, float] = {
     "max_bookmark_cluster_gap": 250,
     "high_confidence": 0.86,
     "medium_confidence": 0.68,
+}
+
+AUTO_LAYOUT_THRESHOLDS: Dict[str, float] = {
+    "landscape_ratio": 1.05,
+    "left_zone_end": 0.46,
+    "right_zone_start": 0.54,
+    "min_side_share": 0.22,
+    "max_center_share": 0.20,
+    "min_eligible_pages": 4,
+    "min_high_split_ratio": 0.55,
+    "min_medium_split_ratio": 0.45,
+    "min_high_pair_pages": 3,
+    "min_medium_pair_pages": 1,
+    "min_high_stride_support": 6,
+    "min_medium_stride_support": 3,
 }
 
 STRUCTURE_KEYWORDS = {
@@ -66,6 +82,295 @@ class PageNumberCandidate:
             "outline_level": self.outline_level,
             "target_pdf_page_1based": self.target_pdf_page_1based,
         }
+
+
+def detect_pdf_page_layout(
+    pages: Sequence[Dict[str, object]],
+    candidates: Sequence[PageNumberCandidate],
+    *,
+    thresholds: Optional[Dict[str, float]] = None,
+) -> Dict[str, object]:
+    """Conservatively classify physical PDF pages as single pages or spreads.
+
+    A wide page with two text columns is not enough on its own: automatic
+    spread mode additionally requires paired outer-edge page numbers or a
+    stable two-logical-pages-per-PDF-page sequence.  This keeps ordinary
+    landscape papers and two-column articles on the established single-page
+    path.
+    """
+
+    limits = {**AUTO_LAYOUT_THRESHOLDS, **(thresholds or {})}
+    eligible_pages = 0
+    landscape_pages = 0
+    split_pages = 0
+    gutter_samples: List[float] = []
+    page_dimensions: List[float] = []
+    for page in pages:
+        width = _positive_float(page.get("page_width"))
+        height = _positive_float(page.get("page_height"))
+        blocks = page.get("blocks")
+        if width is None or height is None or not isinstance(blocks, list):
+            continue
+        bbox_width, bbox_height = _layout_bbox_scale(blocks, width, height)
+        weights = {"left": 0, "center": 0, "right": 0}
+        left_edges: List[float] = []
+        right_edges: List[float] = []
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            text = str(block.get("text") or "").strip()
+            if len(text) < 20:
+                continue
+            bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+            if bbox is None:
+                continue
+            x0, _, x1, _ = bbox
+            center = (x0 + x1) / 2
+            weight = min(len(text), 1000)
+            if x0 < float(limits["left_zone_end"]) and x1 > float(limits["right_zone_start"]):
+                weights["center"] += weight
+            elif center < float(limits["left_zone_end"]):
+                weights["left"] += weight
+                left_edges.append(x1)
+            elif center > float(limits["right_zone_start"]):
+                weights["right"] += weight
+                right_edges.append(x0)
+            else:
+                weights["center"] += weight
+        total_weight = sum(weights.values())
+        if total_weight < 80:
+            continue
+        eligible_pages += 1
+        ratio = width / height
+        page_dimensions.append(ratio)
+        is_landscape = ratio >= float(limits["landscape_ratio"])
+        if is_landscape:
+            landscape_pages += 1
+        left_share = weights["left"] / total_weight
+        right_share = weights["right"] / total_weight
+        center_share = weights["center"] / total_weight
+        is_split = (
+            is_landscape
+            and left_share >= float(limits["min_side_share"])
+            and right_share >= float(limits["min_side_share"])
+            and center_share <= float(limits["max_center_share"])
+        )
+        if not is_split:
+            continue
+        split_pages += 1
+        if left_edges and right_edges:
+            left_edge = max(left_edges)
+            right_edge = min(right_edges)
+            if 0.30 <= left_edge < right_edge <= 0.70:
+                gutter_samples.append((left_edge + right_edge) / 2)
+
+    gutter_x = median(gutter_samples) if gutter_samples else 0.5
+    gutter_x = max(0.3, min(0.7, float(gutter_x)))
+    pair_evidence = _spread_pair_evidence(candidates, gutter_x)
+    pair_pages = int(pair_evidence["paired_pages"])
+    direction = str(pair_evidence["reading_direction"])
+    direction_confidence = float(pair_evidence["direction_confidence"])
+    stride_support = _spread_stride_support(candidates, direction, gutter_x)
+    landscape_ratio = landscape_pages / max(eligible_pages, 1)
+    split_ratio = split_pages / max(eligible_pages, 1)
+    enough_pages = eligible_pages >= int(limits["min_eligible_pages"])
+    high_sequence_evidence = (
+        pair_pages >= int(limits["min_high_pair_pages"])
+        and stride_support >= int(limits["min_high_stride_support"])
+        and direction_confidence >= 0.75
+    )
+    medium_sequence_evidence = (
+        pair_pages >= int(limits["min_medium_pair_pages"])
+        or stride_support >= int(limits["min_medium_stride_support"])
+    )
+    high_spread = (
+        enough_pages
+        and landscape_ratio >= 0.75
+        and split_ratio >= float(limits["min_high_split_ratio"])
+        and high_sequence_evidence
+    )
+    medium_spread = (
+        enough_pages
+        and landscape_ratio >= 0.65
+        and split_ratio >= float(limits["min_medium_split_ratio"])
+        and medium_sequence_evidence
+    )
+    if high_spread:
+        layout_mode = "spread"
+        confidence_level = "high"
+        confidence = min(
+            0.99,
+            0.56
+            + 0.16 * min(1.0, split_ratio / 0.75)
+            + 0.12 * min(1.0, pair_pages / 6)
+            + 0.15 * min(1.0, stride_support / 12),
+        )
+    elif medium_spread:
+        layout_mode = "spread"
+        confidence_level = "medium"
+        confidence = min(
+            0.85,
+            0.48
+            + 0.14 * min(1.0, split_ratio / 0.65)
+            + 0.10 * min(1.0, pair_pages / 4)
+            + 0.12 * min(1.0, stride_support / 8),
+        )
+    else:
+        layout_mode = "single"
+        confidence_level = "high" if eligible_pages and landscape_ratio <= 0.25 else "medium"
+        confidence = 0.96 if confidence_level == "high" else 0.72
+
+    return {
+        "layout_mode": layout_mode,
+        "confidence": round(confidence, 4),
+        "confidence_level": confidence_level,
+        "reading_direction": direction if layout_mode == "spread" else "ltr",
+        "reading_direction_confidence": round(direction_confidence, 4),
+        "gutter_x": round(gutter_x, 4),
+        "evidence": {
+            "eligible_pages": eligible_pages,
+            "landscape_pages": landscape_pages,
+            "landscape_ratio": round(landscape_ratio, 4),
+            "split_pages": split_pages,
+            "split_ratio": round(split_ratio, 4),
+            "paired_page_numbers": pair_pages,
+            "ltr_pair_votes": pair_evidence["ltr_votes"],
+            "rtl_pair_votes": pair_evidence["rtl_votes"],
+            "stride_two_support": stride_support,
+            "median_page_aspect_ratio": round(median(page_dimensions), 4) if page_dimensions else None,
+        },
+    }
+
+
+def _layout_bbox_scale(
+    blocks: Sequence[object],
+    page_width: float,
+    page_height: float,
+) -> Tuple[float, float]:
+    """Adapt MinerU's common 1000-unit boxes to physical page dimensions."""
+
+    max_x = 0.0
+    max_y = 0.0
+    for block in blocks:
+        if not isinstance(block, dict) or block.get("bbox_normalized") is not None:
+            continue
+        bbox = _bbox(block.get("bbox"))
+        if bbox is None:
+            continue
+        max_x = max(max_x, bbox[0], bbox[2])
+        max_y = max(max_y, bbox[1], bbox[3])
+    width = page_width
+    height = page_height
+    if max_x > page_width * 1.2:
+        width = 1000.0 if max_x <= 1200 else max_x
+    if max_y > page_height * 1.2:
+        height = 1000.0 if max_y <= 1200 else max_y
+    return width, height
+
+
+def _spread_pair_evidence(
+    candidates: Sequence[PageNumberCandidate],
+    gutter_x: float,
+) -> Dict[str, object]:
+    by_page_style: Dict[Tuple[int, str], List[PageNumberCandidate]] = defaultdict(list)
+    for candidate in candidates:
+        if _candidate_side(candidate, gutter_x) is not None:
+            by_page_style[(candidate.page_idx, _style_family(candidate.number_style))].append(candidate)
+    ltr_pages: set[int] = set()
+    rtl_pages: set[int] = set()
+    for (page_idx, _), group in by_page_style.items():
+        for left in group:
+            if _candidate_side(left, gutter_x) != "left":
+                continue
+            for right in group:
+                if _candidate_side(right, gutter_x) != "right":
+                    continue
+                if right.number == left.number + 1:
+                    ltr_pages.add(page_idx)
+                elif left.number == right.number + 1:
+                    rtl_pages.add(page_idx)
+    ltr_votes = len(ltr_pages)
+    rtl_votes = len(rtl_pages)
+    total = ltr_votes + rtl_votes
+    direction = "rtl" if rtl_votes > ltr_votes else "ltr"
+    return {
+        "paired_pages": max(ltr_votes, rtl_votes),
+        "ltr_votes": ltr_votes,
+        "rtl_votes": rtl_votes,
+        "reading_direction": direction,
+        "direction_confidence": max(ltr_votes, rtl_votes) / max(total, 1),
+    }
+
+
+def _spread_stride_support(
+    candidates: Sequence[PageNumberCandidate],
+    reading_direction: str,
+    gutter_x: float,
+) -> int:
+    pages_by_offset: Dict[Tuple[str, int], set[int]] = defaultdict(set)
+    for candidate in _spread_page_candidates(candidates, reading_direction, gutter_x):
+        family = _style_family(candidate.number_style)
+        pages_by_offset[(family, candidate.number - 2 * candidate.page_idx)].add(candidate.page_idx)
+    return max((len(pages) for pages in pages_by_offset.values()), default=0)
+
+
+def _spread_page_candidates(
+    candidates: Sequence[PageNumberCandidate],
+    reading_direction: str,
+    gutter_x: float,
+) -> List[PageNumberCandidate]:
+    adjusted: List[PageNumberCandidate] = []
+    for candidate in candidates:
+        side = _candidate_side(candidate, gutter_x)
+        if side is None:
+            continue
+        lower_side = "right" if reading_direction == "rtl" else "left"
+        lower_number = candidate.number if side == lower_side else candidate.number - 1
+        if lower_number <= 0:
+            continue
+        style = candidate.number_style
+        normalized = (
+            str(lower_number)
+            if _style_family(style) == "arabic"
+            else int_to_roman(lower_number, upper=style == "roman_upper")
+        )
+        adjusted.append(
+            PageNumberCandidate(
+                page_idx=candidate.page_idx,
+                raw_candidate=candidate.raw_candidate,
+                normalized_candidate=normalized,
+                candidate_type=candidate.candidate_type,
+                number_style=style,
+                number=lower_number,
+                bbox=candidate.bbox,
+                source=candidate.source,
+                confidence=candidate.confidence,
+                score=min(1.0, candidate.score + 0.06),
+                outline_level=candidate.outline_level,
+                target_pdf_page_1based=candidate.target_pdf_page_1based,
+            )
+        )
+    return adjusted
+
+
+def _candidate_side(candidate: PageNumberCandidate, gutter_x: float) -> Optional[str]:
+    if not candidate.bbox or len(candidate.bbox) < 4:
+        return None
+    try:
+        x0 = float(candidate.bbox[0])
+        x1 = float(candidate.bbox[2])
+    except (TypeError, ValueError):
+        return None
+    if max(abs(x0), abs(x1)) > 1.5:
+        x0 /= 1000.0
+        x1 /= 1000.0
+    center = (x0 + x1) / 2
+    margin = 0.08
+    if center < gutter_x - margin:
+        return "left"
+    if center > gutter_x + margin:
+        return "right"
+    return None
 
 
 def has_manual_mapping(config: Dict[str, object]) -> bool:
@@ -355,11 +660,31 @@ def infer_auto_page_mapping(
     *,
     page_texts: Optional[Dict[int, str]] = None,
     thresholds: Optional[Dict[str, float]] = None,
+    layout_detection: Optional[Dict[str, object]] = None,
 ) -> Dict[str, object]:
     """Fit stable citation-page segments from extracted candidates."""
 
     thresholds = {**AUTO_PAGE_MAPPING_THRESHOLDS, **(thresholds or {})}
-    suggestions = _fit_sequence_segments(candidates, max(0, int(page_count)), page_texts or {}, thresholds)
+    layout = dict(layout_detection or {})
+    spread_mode = layout.get("layout_mode") == "spread"
+    logical_pages_per_pdf = 2 if spread_mode else 1
+    sequence_candidates = (
+        _spread_page_candidates(
+            candidates,
+            "rtl" if layout.get("reading_direction") == "rtl" else "ltr",
+            float(layout.get("gutter_x") or 0.5),
+        )
+        if spread_mode
+        else list(candidates)
+    )
+    suggestions = _fit_sequence_segments(
+        sequence_candidates,
+        max(0, int(page_count)),
+        page_texts or {},
+        thresholds,
+        logical_pages_per_pdf=logical_pages_per_pdf,
+        layout_detection=layout,
+    )
     selected = _select_non_overlapping_segments(suggestions)
     applied = [segment for segment in selected if segment.get("confidence_level") == "high"]
     mapped_pages = _mapped_page_indices(applied)
@@ -375,12 +700,14 @@ def infer_auto_page_mapping(
     return {
         "method": overall_method,
         "candidate_count": len(candidates),
+        "sequence_candidate_count": len(sequence_candidates),
         "segments": suggestions,
         "selected_segments": selected,
         "applied_segments": applied,
         "applied_segment_count": len(applied),
         "exception_pages": exception_pages[:100],
         "thresholds": thresholds,
+        "layout_detection": layout,
     }
 
 
@@ -396,23 +723,49 @@ def apply_auto_mapping_to_pages(pages: List[Dict[str, object]], auto_mapping: Di
         end = int(segment["pdf_page_end"])
         citation_start = int(segment["citation_page_start"])
         style = str(segment.get("number_style") or "arabic")
+        layout_mode = "spread" if segment.get("layout_mode") == "spread" else "single"
+        logical_pages_per_pdf = 2 if layout_mode == "spread" else 1
+        reading_direction = "rtl" if segment.get("reading_direction") == "rtl" else "ltr"
+        try:
+            gutter_x = float(segment.get("gutter_x") or 0.5)
+        except (TypeError, ValueError):
+            gutter_x = 0.5
+        if not 0.3 <= gutter_x <= 0.7:
+            gutter_x = 0.5
         evidence = segment.get("mapping_evidence") or {}
         for page_idx in range(start, end + 1):
             page = by_index.get(page_idx)
             if page is None:
                 continue
-            offset = page_idx - start
+            offset = (page_idx - start) * logical_pages_per_pdf
             citation_number = citation_start + offset
-            citation_label = _format_citation_label(citation_number, style, str(segment.get("page_scope") or "body"))
+            citation_number_end = citation_number + logical_pages_per_pdf - 1
+            citation_label = _format_citation_label(
+                citation_number, style, str(segment.get("page_scope") or "body")
+            )
+            citation_label_end = _format_citation_label(
+                citation_number_end, style, str(segment.get("page_scope") or "body")
+            )
             method = str(segment.get("method") or "ocr_sequence")
             confidence = float(segment.get("mapping_confidence") or 0.0)
             page["citation_page"] = citation_label
+            page["citation_page_start"] = citation_label
+            page["citation_page_end"] = citation_label_end
             page["printed_page"] = citation_label
+            page["printed_page_start"] = citation_label
+            page["printed_page_end"] = citation_label_end
             page["page_mapping_method"] = method
             page["page_mapping_confidence"] = confidence
+            page["layout_mode"] = layout_mode
+            page["reading_direction"] = reading_direction
+            page["gutter_x"] = gutter_x
             page["page_scope"] = segment.get("page_scope")
             page["citation_page_number"] = citation_number
+            page["citation_page_number_start"] = citation_number
+            page["citation_page_number_end"] = citation_number_end
             page["citation_page_label"] = citation_label
+            page["citation_page_label_start"] = citation_label
+            page["citation_page_label_end"] = citation_label_end
             page["mapping_method"] = method
             page["mapping_confidence"] = confidence
             page["mapping_confidence_level"] = segment.get("confidence_level")
@@ -425,6 +778,9 @@ def _fit_sequence_segments(
     page_count: int,
     page_texts: Dict[int, str],
     thresholds: Dict[str, float],
+    *,
+    logical_pages_per_pdf: int = 1,
+    layout_detection: Optional[Dict[str, object]] = None,
 ) -> List[Dict[str, object]]:
     best_by_page_style: Dict[Tuple[int, str], PageNumberCandidate] = {}
     for candidate in candidates:
@@ -440,7 +796,9 @@ def _fit_sequence_segments(
     by_offset: Dict[Tuple[str, int], List[PageNumberCandidate]] = defaultdict(list)
     for candidate in best_by_page_style.values():
         family = _style_family(candidate.number_style)
-        by_offset[(family, candidate.number - candidate.page_idx)].append(candidate)
+        by_offset[
+            (family, candidate.number - logical_pages_per_pdf * candidate.page_idx)
+        ].append(candidate)
 
     suggestions: List[Dict[str, object]] = []
     for (family, offset), group in by_offset.items():
@@ -450,7 +808,16 @@ def _fit_sequence_segments(
         numeric_bookmark_group = all(item.candidate_type == "numeric_bookmark" for item in group)
         max_gap = thresholds["max_bookmark_cluster_gap"] if numeric_bookmark_group else thresholds["max_cluster_gap"]
         for cluster in _split_clusters(group, int(max_gap)):
-            segment = _cluster_to_segment(cluster, family, offset, page_count, page_texts, thresholds)
+            segment = _cluster_to_segment(
+                cluster,
+                family,
+                offset,
+                page_count,
+                page_texts,
+                thresholds,
+                logical_pages_per_pdf=logical_pages_per_pdf,
+                layout_detection=layout_detection,
+            )
             if segment:
                 suggestions.append(segment)
     suggestions.sort(
@@ -470,6 +837,9 @@ def _cluster_to_segment(
     page_count: int,
     page_texts: Dict[int, str],
     thresholds: Dict[str, float],
+    *,
+    logical_pages_per_pdf: int = 1,
+    layout_detection: Optional[Dict[str, object]] = None,
 ) -> Optional[Dict[str, object]]:
     unique: Dict[int, PageNumberCandidate] = {}
     for candidate in cluster:
@@ -483,8 +853,14 @@ def _cluster_to_segment(
     first = observed[0]
     last = observed[-1]
     first_citation = first.number
-    start = first.page_idx - (first_citation - 1)
-    if start < 0:
+    if logical_pages_per_pdf == 1:
+        start = first.page_idx - (first_citation - 1)
+        if start < 0:
+            start = first.page_idx
+    else:
+        # Spread scans often include unnumbered covers and half-title pages.
+        # Start at the first reliable physical spread instead of inventing a
+        # mapping back to logical page 1 across those front-matter images.
         start = first.page_idx
     end = last.page_idx
     if page_count:
@@ -494,7 +870,9 @@ def _cluster_to_segment(
 
     span = max(1, end - start + 1)
     density = round(support / span, 4)
-    consistency = _observed_sequence_consistency(observed)
+    consistency = _observed_sequence_consistency(
+        observed, logical_pages_per_pdf=logical_pages_per_pdf
+    )
     avg_score = sum(candidate.score for candidate in observed) / support
     source_counts = Counter(candidate.source for candidate in observed)
     type_counts = Counter(candidate.candidate_type for candidate in observed)
@@ -512,8 +890,8 @@ def _cluster_to_segment(
         method = "native_pdf_edge_sequence"
     else:
         method = "ocr_sequence_with_structure" if structure else "ocr_sequence"
-    citation_start = start + offset
-    if citation_start < 1:
+    citation_start = logical_pages_per_pdf * start + offset
+    if citation_start < 1 and logical_pages_per_pdf == 1:
         start += 1 - citation_start
         citation_start = 1
     if end < start:
@@ -540,14 +918,29 @@ def _cluster_to_segment(
         "candidate_sources": dict(source_counts),
         "candidate_types": dict(type_counts),
         "structure_evidence": page_scope if structure else None,
+        "logical_pages_per_pdf": logical_pages_per_pdf,
     }
-    segment_id = f"AUTO-{family}-{start:06d}-{end:06d}-{offset:+d}"
-    return {
+    layout = dict(layout_detection or {})
+    if logical_pages_per_pdf == 2:
+        evidence["layout_detection"] = layout.get("evidence") or {}
+        if layout.get("confidence_level") != "high" and level == "high":
+            level = "medium"
+            confidence = min(confidence, float(thresholds["high_confidence"]) - 0.01)
+    segment_id = (
+        f"AUTO-{'spread-' if logical_pages_per_pdf == 2 else ''}"
+        f"{family}-{start:06d}-{end:06d}-{offset:+d}"
+    )
+    segment = {
         "segment_id": segment_id,
         "pdf_page_start": start,
         "pdf_page_end": end,
         "citation_page_start": str(citation_start),
-        "citation_page_end": str(citation_start + (end - start)),
+        "citation_page_end": str(
+            citation_start
+            + logical_pages_per_pdf * (end - start)
+            + logical_pages_per_pdf
+            - 1
+        ),
         "number_style": _segment_number_style(observed, family),
         "page_scope": page_scope,
         "method": method,
@@ -557,6 +950,17 @@ def _cluster_to_segment(
         "observed_page_numbers": support,
         "mapping_evidence": evidence,
     }
+    if logical_pages_per_pdf == 2:
+        segment.update(
+            {
+                "layout_mode": "spread",
+                "reading_direction": "rtl"
+                if layout.get("reading_direction") == "rtl"
+                else "ltr",
+                "gutter_x": float(layout.get("gutter_x") or 0.5),
+            }
+        )
+    return segment
 
 
 def _segment_confidence(
@@ -573,7 +977,11 @@ def _segment_confidence(
     return min(0.99, round(confidence, 4))
 
 
-def _observed_sequence_consistency(observed: Sequence[PageNumberCandidate]) -> float:
+def _observed_sequence_consistency(
+    observed: Sequence[PageNumberCandidate],
+    *,
+    logical_pages_per_pdf: int = 1,
+) -> float:
     if len(observed) <= 1:
         return 0.0
     good = 0
@@ -584,7 +992,7 @@ def _observed_sequence_consistency(observed: Sequence[PageNumberCandidate]) -> f
         number_gap = candidate.number - previous.number
         if page_gap > 0:
             total += 1
-            if page_gap == number_gap:
+            if page_gap * logical_pages_per_pdf == number_gap:
                 good += 1
         previous = candidate
     return round(good / max(total, 1), 4)

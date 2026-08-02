@@ -83,6 +83,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="detail-more-control"', detail_source)
         self.assertNotIn('aria-haspopup="menu"', detail_source)
         self.assertNotIn('role="menuitem"', detail_source)
+        self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
+        self.assertIn(
+            "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
+            detail_source,
+        )
         structured_reader_action = (
             '<button class="action-btn" onclick="openSelectedStructuredReader()">'
             "查看结构化文本</button>"
@@ -124,6 +129,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="lib-doctype-control"', HTML)
         self.assertIn('data-doctype="book"', HTML)
         self.assertIn('data-doctype="journal_article"', HTML)
+        self.assertIn('data-doctype="thesis"', HTML)
+        self.assertLess(
+            HTML.index('data-doctype="journal_article"'),
+            HTML.index('data-doctype="thesis"'),
+        )
         self.assertIn("function setLibDocTypeFilter(btn)", HTML)
         self.assertIn("function libraryDocType(source)", HTML)
         self.assertIn("libraryDocType(s) === libDocTypeFilter", HTML)
@@ -349,20 +359,23 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function toggleDrawerSection(event, sectionId)", HTML)
         self.assertIn('<div class="drawer-collapse-body" style="display:none">', HTML)
         self.assertIn('id="bib-doctype-control"', HTML)
-        for label in ("著作", "期刊论文"):
+        for label in ("著作", "期刊论文", "学位论文"):
             self.assertIn(label, HTML)
         self.assertNotIn("typeButton('book','图书')", HTML)
         self.assertNotIn("typeButton('translated_book','译著')", HTML)
         self.assertIn("function bibliographicEditorDocType(docType)", HTML)
-        self.assertIn("return docType === 'journal_article' ? 'journal_article' : 'book';", HTML)
+        self.assertIn("docType === 'journal_article' || docType === 'thesis'", HTML)
         self.assertIn("function setBibliographicType(sourceId, docType)", HTML)
         self.assertIn("'出版刊物'", HTML)
         self.assertIn("'卷次'", HTML)
         self.assertIn("'期号'", HTML)
         self.assertIn("'页码（起止页）'", HTML)
         self.assertIn("var translator = value('translator');", HTML)
-        self.assertIn("editorDocType === 'journal_article' ? 'journal_article' : (translator ? 'translated_book' : 'book')", HTML)
+        self.assertIn("editorDocType === 'journal_article' || editorDocType === 'thesis'", HTML)
         self.assertIn("['author','title','journal_name','publish_year','issue']", HTML)
+        self.assertIn("['author','title','publisher','publish_year']", HTML)
+        self.assertIn("field('publisher','publisher','学校'", HTML)
+        self.assertIn("docType === 'thesis' && field === 'publisher' ? '学校'", HTML)
 
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
         self.assertIn('phase="metadata_recognition"', WEB_SOURCE)

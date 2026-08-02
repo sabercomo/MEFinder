@@ -392,6 +392,151 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(detected.get("publish_year"), "2017")
         self.assertEqual(detected.get("author"), "孙向晨")
 
+    def test_journal_name_from_masthead_cn_en(self) -> None:
+        # 首页报头「中文刊名 + 英文刊名」相邻是强佐证，应认出刊名。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "复旦学报（社会科学版）\n"
+                    "FUDAN JOURNAL (Social Sciences)\n"
+                    "2018 年第 1 期\n"
+                    "第二自然与自由\n"
+                    "张双利\n"
+                    "摘要 本文讨论卢卡奇对黑格尔第二自然概念的转化。"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("张双利 - 2018 - 第二自然与自由.pdf"), pages, {}
+        )
+        self.assertEqual(detected["document_type"], "journal_article")
+        self.assertEqual(detected["journal_name"], "复旦学报(社会科学版)")
+
+    def test_journal_name_from_masthead_name_and_year(self) -> None:
+        # 同一行「刊名 YYYY 年第 N 期」。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "社会科学 2024 年第 5 期\n"
+                    "论法兰克福学派批判理论面临的“根本挑战”\n"
+                    "周爱民\n"
+                    "摘要 本文从社会批判的方法论视角展开分析。"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("周爱民 - 2024 - 论法兰克福学派批判理论.pdf"), pages, {}
+        )
+        self.assertEqual(detected["journal_name"], "社会科学")
+
+    def test_offprint_without_masthead_leaves_journal_name_missing(self) -> None:
+        # 抽印本首页只有篇名/作者/摘要；篇名以“理论”结尾也不得被当作刊名，
+        # 认不出刊名时保持缺失而非猜测。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "重思马克思的市民社会理论\n"
+                    "张双利\n"
+                    "摘要 “黑格尔−马克思问题”是理解马克思市民社会理论的关键线索。\n"
+                    "关键词 市民社会 伦理性"
+                ),
+            },
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("重思马克思的市民社会理论_张双利.pdf"), pages, {}
+        )
+        self.assertEqual(detected["document_type"], "journal_article")
+        self.assertIsNone(detected.get("journal_name"))
+
+    def test_thesis_cover_extracts_title_author_school_and_defense_year(self) -> None:
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "硕士学位论文\n"
+                    "拉埃尔·耶吉生活形式批判理论研究\n"
+                    "Research on Rahel Jaeggi’s Critical Theory of Forms of Life\n"
+                    "作者姓名：\n"
+                    "金芳冰\n"
+                    "学\n"
+                    "号：\n"
+                    "22219008\n"
+                    "指导教师：\n"
+                    "李雪梅副教授\n"
+                    "学科、专业：\n"
+                    "马克思主义理论\n"
+                    "答辩日期：\n"
+                    "2025 年5 月29 日\n"
+                    "大连理工大学\n"
+                    "Dalian University of Technology"
+                ),
+            }
+        ]
+
+        detected = detect_pdf_bibliographic_metadata(
+            Path("金芳冰.pdf"),
+            pages,
+            {
+                "document_type": "journal_article",
+                "journal_name": "旧误识别刊名",
+                "issue": "1",
+                "page_range": "1-20",
+                "publish_place": "大连",
+            },
+        )
+
+        self.assertEqual(detected["document_type"], "thesis")
+        self.assertNotIn("subtype", detected)
+        self.assertEqual(detected["title"], "拉埃尔·耶吉生活形式批判理论研究")
+        self.assertEqual(detected["author"], "金芳冰")
+        self.assertEqual(detected["publisher"], "大连理工大学")
+        self.assertEqual(detected["publish_year"], "2025")
+        self.assertEqual(detected["metadata_missing_fields"], [])
+        self.assertEqual(detected["metadata_status"], "complete")
+        for field in ("journal_name", "volume", "issue", "page_range", "publish_place"):
+            self.assertIsNone(detected[field])
+
+    def test_thesis_required_fields_do_not_use_journal_or_book_requirements(self) -> None:
+        metadata = {
+            "document_type": "thesis",
+            "title": "拉埃尔·耶吉生活形式批判理论研究",
+            "author": "金芳冰",
+            "publisher": None,
+            "publish_year": "2025",
+        }
+
+        self.assertEqual(metadata_missing_fields(metadata), ["publisher"])
+        metadata["publisher"] = "大连理工大学"
+        self.assertEqual(metadata_missing_fields(metadata), [])
+
+        saved = manual_metadata(metadata)
+        self.assertEqual(saved["document_type"], "thesis")
+        self.assertEqual(saved["metadata_status"], "complete")
+
+    def test_thesis_gb_citation_uses_degree_document_marker(self) -> None:
+        metadata = {
+            "document_type": "thesis",
+            "title": "拉埃尔·耶吉生活形式批判理论研究",
+            "author": "金芳冰",
+            "publisher": "大连理工大学",
+            "publish_year": "2025",
+            "publish_place": "不应进入学位论文引文的旧值",
+            "journal_name": "不应进入学位论文引文的旧值",
+            "issue": "9",
+            "page_range": "1-99",
+        }
+
+        self.assertEqual(
+            format_citation(metadata, None, "gb"),
+            "金芳冰. 拉埃尔·耶吉生活形式批判理论研究[D]. 大连理工大学, 2025.",
+        )
+        formats = build_citation_formats(metadata, None)
+        self.assertEqual(formats["gb_status"], "complete")
+        self.assertEqual(formats["gb_missing_fields"], [])
+
     def test_manual_metadata_accepts_journal_article_type(self) -> None:
         from src.me_finder.bibliographic_metadata import manual_metadata
 
