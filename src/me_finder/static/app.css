@@ -2470,7 +2470,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .library-row-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
   font-size: 12px;
   color: var(--text-tertiary);
@@ -2482,6 +2482,31 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   padding: 1px 8px;
   border-radius: 5px;
 }
+/* 列表模式：校准状态 / 缺书目 收成仅图标（悬停显示完整文字），把宽度让给标题。 */
+.cal-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+.cal-status-icon .status-chip__icon,
+.cal-status-icon .status-chip__icon svg { width: 14px; height: 14px; }
+.library-row-missing-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--warning);
+}
+.library-row-missing-icon svg { width: 15px; height: 15px; }
+/* 详情抽屉打开时列表被压窄：隐藏次要的页数/大小，标题优先可读。 */
+.library-body.detail-open .library-view-list .library-row-info .works-count,
+.library-body.detail-open .library-view-list .library-row-size { display: none; }
 .library-list-container.library-view-list {
   margin: 0;
   border: 0;
