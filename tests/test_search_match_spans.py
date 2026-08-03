@@ -14,13 +14,18 @@ from src.me_finder.search import SearchEngine
 
 class SearchMatchSpanTests(unittest.TestCase):
     @contextmanager
-    def _engine(self, paragraphs: List[Dict[str, object]]) -> Iterator[SearchEngine]:
+    def _engine(
+        self,
+        paragraphs: List[Dict[str, object]],
+        pdf_pages: List[Dict[str, object]] | None = None,
+    ) -> Iterator[SearchEngine]:
         index = {
             "metadata": {"anchor_spec_version": 1},
             "source_files": [],
             "volumes": [],
             "works": [],
             "paragraphs": paragraphs,
+            "pdf_pages": pdf_pages or [],
         }
         with tempfile.TemporaryDirectory() as temp_dir:
             index_path = Path(temp_dir) / "index.json"
@@ -32,13 +37,18 @@ class SearchMatchSpanTests(unittest.TestCase):
                 engine.close()
 
     @contextmanager
-    def _sqlite_engine(self, paragraphs: List[Dict[str, object]]) -> Iterator[SearchEngine]:
+    def _sqlite_engine(
+        self,
+        paragraphs: List[Dict[str, object]],
+        pdf_pages: List[Dict[str, object]] | None = None,
+    ) -> Iterator[SearchEngine]:
         index = {
             "metadata": {"anchor_spec_version": 1},
             "source_files": [],
             "volumes": [],
             "works": [],
             "paragraphs": paragraphs,
+            "pdf_pages": pdf_pages or [],
         }
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "index.sqlite3"
@@ -335,6 +345,138 @@ class SearchMatchSpanTests(unittest.TestCase):
         self.assertEqual((item["match_start"], item["match_end"]), (3, 7))
         self.assertEqual(item["page_match_spans"], [])
         self.assertFalse(item["precise_highlight_available"])
+
+    def test_spread_hits_resolve_left_right_and_cross_gutter_pages(self) -> None:
+        text = "左页包含定位目标\n右页同样包含定位目标"
+        right_start = text.index("右页")
+        page = {
+            "pdf_page_id": "pdf-test-PAGE-000013",
+            "source_file_id": "pdf-test",
+            "pdf_page_index": 13,
+            "text_raw": text,
+            "citation_page": "28",
+            "citation_page_start": "28",
+            "citation_page_end": "29",
+            "layout_mode": "spread",
+            "reading_direction": "ltr",
+            "gutter_x": 0.5,
+            "page_width": 1000,
+            "page_height": 800,
+            "blocks": [
+                {
+                    "text": text[:right_start].rstrip("\n"),
+                    "page_char_start": 0,
+                    "page_char_end": right_start - 1,
+                    "bbox_normalized": [0.08, 0.08, 0.46, 0.88],
+                },
+                {
+                    "text": text[right_start:],
+                    "page_char_start": right_start,
+                    "page_char_end": len(text),
+                    "bbox_normalized": [0.54, 0.08, 0.94, 0.88],
+                },
+            ],
+        }
+        paragraph = self._paragraph(
+            "PDF-SPREAD",
+            text,
+            [
+                {
+                    "paragraph_char_start": 0,
+                    "paragraph_char_end": len(text),
+                    "pdf_page_id": page["pdf_page_id"],
+                    "pdf_page_index": 13,
+                    "page_char_start": 0,
+                    "page_char_end": len(text),
+                }
+            ],
+            pdf_page_start_index=13,
+        )
+        paragraph.update(
+            {
+                "page_display": "引用页码：28-29",
+                "page_source_type": "manual_segment",
+                "page_mapping_method": "manual_segment",
+                "citation_page_start": "28",
+                "citation_page_end": "29",
+                "printed_page_start": "28",
+                "printed_page_end": "29",
+                "layout_mode": "spread",
+                "reading_direction": "ltr",
+                "gutter_x": 0.5,
+            }
+        )
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory([paragraph], [page]) as engine:
+                left = engine.search("左页包含", mode="exact", source_type="pdf")["results"][0]
+                right = engine.search("右页同样", mode="exact", source_type="pdf")["results"][0]
+                both = engine.search("目标\n右页", mode="exact", source_type="pdf")["results"][0]
+
+            self.assertEqual(left["page"], "引用页码：28")
+            self.assertEqual(left["citation_page_start"], "28")
+            self.assertEqual(left["citation_page_end"], "28")
+            self.assertEqual(left["logical_page_side"], "left")
+            self.assertEqual(left["spread_hit_precision"], "exact_region")
+            self.assertEqual(left["page_match_spans"][0]["logical_page_side"], "left")
+            self.assertEqual(right["page"], "引用页码：29")
+            self.assertEqual(right["logical_page_side"], "right")
+            self.assertEqual(both["page"], "引用页码：28–29")
+            self.assertEqual(both["logical_page_side"], "both")
+            self.assertIn("第28—29页", both["citation_formats"]["chinese"])
+
+        rtl_page = dict(page)
+        rtl_page["reading_direction"] = "rtl"
+        rtl_paragraph = dict(paragraph)
+        rtl_paragraph["reading_direction"] = "rtl"
+        with self._engine([rtl_paragraph], [rtl_page]) as engine:
+            left = engine.search("左页包含", mode="exact", source_type="pdf")["results"][0]
+            right = engine.search("右页同样", mode="exact", source_type="pdf")["results"][0]
+        self.assertEqual(left["citation_page_start"], "29")
+        self.assertEqual(right["citation_page_start"], "28")
+
+    def test_spread_hit_without_aligned_blocks_falls_back_to_full_range(self) -> None:
+        text = "双开页坐标缺失时保留可靠范围"
+        page = {
+            "pdf_page_id": "pdf-test-PAGE-000020",
+            "source_file_id": "pdf-test",
+            "pdf_page_index": 20,
+            "text_raw": text,
+            "citation_page_start": "42",
+            "citation_page_end": "43",
+            "layout_mode": "spread",
+            "blocks": [{"text": text, "bbox_normalized": [0.08, 0.1, 0.46, 0.9]}],
+        }
+        paragraph = self._paragraph(
+            "PDF-SPREAD-FALLBACK",
+            text,
+            [
+                {
+                    "paragraph_char_start": 0,
+                    "paragraph_char_end": len(text),
+                    "pdf_page_id": page["pdf_page_id"],
+                    "pdf_page_index": 20,
+                    "page_char_start": 0,
+                    "page_char_end": len(text),
+                }
+            ],
+            pdf_page_start_index=20,
+        )
+        paragraph.update(
+            {
+                "page_source_type": "manual_segment",
+                "citation_page_start": "42",
+                "citation_page_end": "43",
+                "layout_mode": "spread",
+            }
+        )
+
+        with self._engine([paragraph], [page]) as engine:
+            item = engine.search("坐标缺失", mode="exact", source_type="pdf")["results"][0]
+
+        self.assertEqual(item["page"], "引用页码：42–43")
+        self.assertIsNone(item["logical_page_side"])
+        self.assertEqual(item["spread_hit_precision"], "range_fallback")
 
     def test_unknown_span_offset_unit_degrades_safely(self) -> None:
         text = "偏移单位不兼容"

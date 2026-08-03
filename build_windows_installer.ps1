@@ -101,12 +101,18 @@ try {
         tests.test_backup_service `
         tests.test_batch_document_removal `
         tests.test_citations `
+        tests.test_cnki_citation `
+        tests.test_journal_metadata_lookup `
+        tests.test_foreign_book_lookup `
+        tests.test_crossref_lookup `
+        tests.test_book_metadata_lookup `
         tests.test_database_resilience `
         tests.test_fts_search_scalability `
         tests.test_large_index_resilience `
         tests.test_library_startup_performance `
         tests.test_pdf_import_config `
         tests.test_import_config_concurrency `
+        tests.test_preferences_concurrency `
         tests.test_long_filename_import `
         tests.test_pdf_match_anchors `
         tests.test_page_display `

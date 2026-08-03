@@ -21,10 +21,26 @@ def format_citation(document_metadata: CitationMetadata, hit_page: object, citat
     where the search result actually matched, not a source article page range.
     """
 
-    style = "gb" if str(citation_style).lower() in {"gb", "gbt", "gb/t", "gbt7714", "gb/t 7714"} else "chinese"
+    raw_style = str(citation_style).lower()
+    if raw_style in {"chicago", "cms", "cmos", "chicago-note"}:
+        style = "chicago"
+    elif raw_style in {"apa", "apa7", "apa-7"}:
+        style = "apa"
+    elif raw_style in {"mla", "mla9", "mla-9"}:
+        style = "mla"
+    elif raw_style in {"gb", "gbt", "gb/t", "gbt7714", "gb/t 7714"}:
+        style = "gb"
+    else:
+        style = "chinese"
     page = _page_info(hit_page)
     if style == "gb":
         return _format_gb(document_metadata, page)
+    if style == "chicago":
+        return _format_chicago(document_metadata, page)
+    if style == "apa":
+        return _format_apa(document_metadata)
+    if style == "mla":
+        return _format_mla(document_metadata)
     return _format_chinese(document_metadata, page)
 
 
@@ -32,20 +48,38 @@ def build_citation_formats(document_metadata: CitationMetadata, hit_page: object
     page = _page_info(hit_page)
     chinese_missing = _missing_fields(document_metadata, page, "chinese")
     gb_missing = _missing_fields(document_metadata, page, "gb")
+    chicago_missing = _missing_fields(document_metadata, page, "chicago")
+    apa_missing = _missing_fields(document_metadata, page, "apa")
+    mla_missing = _missing_fields(document_metadata, page, "mla")
     return {
         "chinese": format_citation(document_metadata, hit_page, "chinese"),
         "gb": format_citation(document_metadata, hit_page, "gb"),
+        "chicago": format_citation(document_metadata, hit_page, "chicago"),
+        "apa": format_citation(document_metadata, hit_page, "apa"),
+        "mla": format_citation(document_metadata, hit_page, "mla"),
         "chinese_status": "complete" if not chinese_missing else "metadata_incomplete",
         "gb_status": "complete" if not gb_missing else "metadata_incomplete",
+        "chicago_status": "complete" if not chicago_missing else "metadata_incomplete",
+        "apa_status": "complete" if not apa_missing else "metadata_incomplete",
+        "mla_status": "complete" if not mla_missing else "metadata_incomplete",
         "chinese_missing_fields": chinese_missing,
         "gb_missing_fields": gb_missing,
+        "chicago_missing_fields": chicago_missing,
+        "apa_missing_fields": apa_missing,
+        "mla_missing_fields": mla_missing,
     }
 
 
 def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    doc_type = _document_type(meta)
+    if doc_type == "thesis":
+        return _finish_chinese(_join_nonempty([
+            _author_prefix(meta),
+            _quoted_title(_title(meta)),
+            _publisher_year_chinese(meta),
+        ]))
     if page.get("uncalibrated"):
         return "该文献页码尚未校准，不能生成可靠脚注。"
-    doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return _finish_chinese(_join_nonempty([
             _marx_engels_volume_title_chinese(meta),
@@ -84,9 +118,18 @@ def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
 
 
 def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    doc_type = _document_type(meta)
+    if doc_type == "thesis":
+        missing = _missing_fields(meta, page, "gb")
+        if missing:
+            labels = ["学校" if field == "publisher" else _field_label(field) for field in missing]
+            return f"无法生成完整 GB/T 引文：缺少{' / '.join(labels)}。"
+        title = _title(meta)
+        base = _join_gb([_author_plain(meta), f"{title}[D]" if title else ""])
+        school_year = f"{_first(meta, 'publisher', 'press')}, {_year(meta)}"
+        return _finish_gb(_join_gb([base, school_year]))
     if page.get("uncalibrated"):
         return "该文献页码尚未校准，不能生成 GB/T 引文。"
-    doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return _finish_gb(_marx_engels_volume_gb(meta, page))
     if doc_type == "journal_article":
@@ -123,6 +166,253 @@ def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
     translator = _translator_gb(meta) if doc_type == "translated_book" else ""
     pub = _publisher_year_gb(meta)
     return _finish_gb(_join_gb_with_page([base, translator, pub], page))
+
+
+def _format_chicago(meta: CitationMetadata, page: Dict[str, object]) -> str:
+    """Chicago 17th notes-bibliography *footnote* form.
+
+    Chinese source names are not inverted (Chinese personal names have no
+    first/last separation to reorder).  Article/chapter/thesis titles take
+    double quotes; book/journal titles are left plain (they would be italic in
+    a word processor, which a copied plain string cannot carry).
+    """
+
+    doc_type = _document_type(meta)
+    author = _author_plain(meta)
+
+    if doc_type == "thesis":
+        title = _title(meta)
+        paren = _chicago_paren(["学位论文", _first(meta, "publisher", "press"), _year(meta)])
+        head = _join_chicago([author, _chicago_quoted(title)])
+        body = f"{head} {paren}".strip() if paren else head
+        return _finish_chicago(_chicago_with_page(body, page, thesis=True))
+
+    if page.get("uncalibrated"):
+        return "该文献页码尚未校准，不能生成 Chicago 引文。"
+
+    if doc_type == "marx_engels_collection":
+        volume = _marx_engels_volume(meta)
+        book_title = _marx_engels_collection_title(meta) + (volume if volume else "")
+        paren = _chicago_place_pub_year(meta)
+        head = _join_chicago([author, book_title]) if author else book_title
+        body = f"{head} {paren}".strip() if paren else head
+        return _finish_chicago(_chicago_with_page(body, page))
+
+    if doc_type == "journal_article":
+        head = _join_chicago([author, _chicago_quoted(_title(meta), trailing_comma=True)])
+        journal_part = _chicago_journal(
+            _first(meta, "journal_name", "journal_title", "journal", "periodical"),
+            _first(meta, "volume", "journal_volume"),
+            _first(meta, "issue", "issue_number", "journal_issue"),
+            _year(meta),
+        )
+        body = f"{head} {journal_part}".strip() if journal_part else head
+        raw = str(page.get("raw") or "")
+        return _finish_chicago(f"{body}: {raw}" if raw else body)
+
+    if doc_type in {"book_chapter", "collection_article"}:
+        container = _container_plain(meta)
+        editor = _first(meta, "editor", "editors", "chief_editor")
+        container_part = ""
+        if container:
+            container_part = f"in {container}"
+            if editor:
+                container_part += f", ed. {editor}"
+        paren = _chicago_place_pub_year(meta)
+        head = _join_chicago([author, _chicago_quoted(_title(meta), trailing_comma=bool(container_part))])
+        body = _join_chicago([head, container_part]) if container_part else head
+        body = f"{body} {paren}".strip() if paren else body
+        return _finish_chicago(_chicago_with_page(body, page))
+
+    if doc_type == "translated_book":
+        translator = _first(meta, "translator", "translators", "translated_by")
+        trans_part = f"trans. {translator}" if translator else ""
+        paren = _chicago_place_pub_year(meta)
+        head = _join_chicago([author, _book_title(meta), trans_part])
+        body = f"{head} {paren}".strip() if paren else head
+        return _finish_chicago(_chicago_with_page(body, page))
+
+    paren = _chicago_place_pub_year(meta)
+    head = _join_chicago([author, _book_title(meta)])
+    body = f"{head} {paren}".strip() if paren else head
+    return _finish_chicago(_chicago_with_page(body, page))
+
+
+def _chicago_quoted(title: str, trailing_comma: bool = False) -> str:
+    title = _strip_title_marks(title)
+    if not title:
+        return ""
+    return f'"{title},"' if trailing_comma else f'"{title}"'
+
+
+def _chicago_journal(journal: str, volume: str, issue: str, year: str) -> str:
+    if not journal:
+        return f"({year})" if year else ""
+    parts = journal
+    if volume:
+        parts += f" {volume}"
+    if issue:
+        parts += f", no. {issue}"
+    if year:
+        parts += f" ({year})"
+    return parts
+
+
+def _chicago_place_pub_year(meta: CitationMetadata) -> str:
+    place = _first(meta, "publish_place", "publication_place", "place", "city", "publisher_place")
+    publisher = _first(meta, "publisher", "press")
+    year = _year(meta)
+    head = f"{place}: {publisher}" if place and publisher else (publisher or place)
+    return _chicago_paren([head, year])
+
+
+def _chicago_paren(parts: object) -> str:
+    inner = ", ".join(str(part).strip() for part in parts if str(part).strip())
+    return f"({inner})" if inner else ""
+
+
+def _chicago_with_page(body: str, page: Dict[str, object], thesis: bool = False) -> str:
+    raw = str(page.get("raw") or "")
+    if not raw or page.get("uncalibrated"):
+        return body
+    return f"{body}, {raw}" if body else raw
+
+
+def _join_chicago(parts: object) -> str:
+    return ", ".join(str(part).strip().strip(",") for part in parts if str(part).strip().strip(","))
+
+
+def _finish_chicago(text: str) -> str:
+    text = text.strip().strip(",").strip()
+    return f"{text}." if text else "出处元数据不足，无法生成 Chicago 引文。"
+
+
+def _format_apa(meta: CitationMetadata) -> str:
+    """APA 7 reference-list form (plain text, without typography)."""
+
+    doc_type = _document_type(meta)
+    author = _author_plain(meta)
+    year = _year(meta)
+    date = f"({year})." if year else "(n.d.)."
+    doi = _doi_url(meta)
+
+    if doc_type == "journal_article":
+        journal = _first(meta, "journal_name", "journal_title", "journal", "periodical")
+        volume = _first(meta, "volume", "journal_volume")
+        issue = _first(meta, "issue", "issue_number", "journal_issue")
+        pages = _first(meta, "page_range", "pages", "article_pages")
+        journal_part = journal
+        if volume:
+            journal_part += (", " if journal_part else "") + volume
+        if issue:
+            journal_part += f"({issue})"
+        if pages:
+            journal_part += (", " if journal_part else "") + pages
+        return _finish_reference(_join_reference([author, date, _title(meta), journal_part, doi]))
+
+    if doc_type == "thesis":
+        title = _title(meta)
+        school = _first(meta, "publisher", "press")
+        thesis = f"{title} [学位论文, {school}]" if school else f"{title} [学位论文]"
+        return _finish_reference(_join_reference([author, date, thesis, doi]))
+
+    if doc_type in {"book_chapter", "collection_article"}:
+        editor = _first(meta, "editor", "editors", "chief_editor")
+        container = _container_plain(meta)
+        container_part = f"In {editor} (Ed.), {container}" if editor and container else (f"In {container}" if container else "")
+        pages = _first(meta, "page_range", "pages", "article_pages")
+        if pages and container_part:
+            container_part += f" (pp. {pages})"
+        return _finish_reference(_join_reference([
+            author, date, _title(meta), container_part, _first(meta, "publisher", "press"), doi
+        ]))
+
+    translator = _first(meta, "translator", "translators", "translated_by")
+    title = _book_title(meta)
+    if doc_type == "translated_book" and translator:
+        title += f" ({translator}, Trans.)"
+    return _finish_reference(_join_reference([
+        author, date, title, _first(meta, "publisher", "press"), doi
+    ]))
+
+
+def _format_mla(meta: CitationMetadata) -> str:
+    """MLA 9 works-cited form (plain text, without typography)."""
+
+    doc_type = _document_type(meta)
+    author = _author_plain(meta)
+    year = _year(meta)
+    doi = _doi_url(meta)
+
+    if doc_type == "journal_article":
+        journal = _first(meta, "journal_name", "journal_title", "journal", "periodical")
+        volume = _first(meta, "volume", "journal_volume")
+        issue = _first(meta, "issue", "issue_number", "journal_issue")
+        pages = _first(meta, "page_range", "pages", "article_pages")
+        container_parts = [journal]
+        if volume:
+            container_parts.append(f"vol. {volume}")
+        if issue:
+            container_parts.append(f"no. {issue}")
+        if year:
+            container_parts.append(year)
+        if pages:
+            container_parts.append(f"pp. {pages}")
+        if doi:
+            container_parts.append(doi)
+        head = _join_reference([author, _mla_quoted(_title(meta))])
+        return _finish_reference(_join_reference([head, ", ".join(filter(None, container_parts))]))
+
+    if doc_type == "thesis":
+        school = _first(meta, "publisher", "press")
+        head = _join_reference([author, _book_title(meta)])
+        details = ", ".join(filter(None, [year, school, "学位论文", doi]))
+        return _finish_reference(_join_reference([head, details]))
+
+    if doc_type in {"book_chapter", "collection_article"}:
+        container = _container_plain(meta)
+        editor = _first(meta, "editor", "editors", "chief_editor")
+        if editor:
+            container += (", " if container else "") + f"edited by {editor}"
+        pages = _first(meta, "page_range", "pages", "article_pages")
+        head = _join_reference([author, _mla_quoted(_title(meta))])
+        details = ", ".join(filter(None, [
+            container, _first(meta, "publisher", "press"), year,
+            f"pp. {pages}" if pages else "", doi,
+        ]))
+        return _finish_reference(_join_reference([head, details]))
+
+    translator = _first(meta, "translator", "translators", "translated_by")
+    translated_by = f"Translated by {translator}" if doc_type == "translated_book" and translator else ""
+    head = _join_reference([author, _book_title(meta), translated_by])
+    details = ", ".join(filter(None, [_first(meta, "publisher", "press"), year, doi]))
+    return _finish_reference(_join_reference([head, details]))
+
+
+def _mla_quoted(title: str) -> str:
+    title = _strip_title_marks(title)
+    return f'“{title}”' if title else ""
+
+
+def _doi_url(meta: CitationMetadata) -> str:
+    doi = _first(meta, "doi", "DOI")
+    if not doi:
+        return ""
+    normalized = doi.strip().removeprefix("doi:").removeprefix("DOI:").strip()
+    for prefix in ("https://doi.org/", "http://doi.org/", "http://dx.doi.org/", "https://dx.doi.org/"):
+        if normalized.lower().startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    return f"https://doi.org/{normalized}" if normalized else ""
+
+
+def _join_reference(parts: object) -> str:
+    return ". ".join(str(part).strip(" .") for part in parts if str(part).strip(" ."))
+
+
+def _finish_reference(text: str) -> str:
+    text = text.strip(" .")
+    return f"{text}." if text else "Citation metadata unavailable."
 
 
 def _page_info(hit_page: object) -> Dict[str, object]:
@@ -163,6 +453,9 @@ def _document_type(meta: CitationMetadata) -> str:
         "journal": "journal_article",
         "article": "journal_article",
         "journal-article": "journal_article",
+        "journal_article": "journal_article",
+        "thesis": "thesis",
+        "dissertation": "thesis",
         "book": "book",
         "monograph": "book",
         "translated": "translated_book",
@@ -427,7 +720,45 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
     doc_type = _document_type(meta)
     if doc_type == "marx_engels_collection":
         return [] if not page.get("uncalibrated") else ["citation_page"]
+    if doc_type == "thesis":
+        required = ["author", "title", "publisher", "publish_year"]
+        missing = []
+        for field in required:
+            if field == "author" and not _author_plain(meta, include_country=False):
+                missing.append(field)
+            elif field == "title" and not _title(meta):
+                missing.append(field)
+            elif field == "publisher" and not _first(meta, "publisher", "press"):
+                missing.append(field)
+            elif field == "publish_year" and not _year(meta):
+                missing.append(field)
+        return missing
+    if doc_type == "journal_article":
+        # Chicago 脚注引命中页；APA/MLA 是参考文献表体例，不要求命中页。
+        # GB/中文仍需期号，且有文章起止页时可兜底。
+        required = ["author", "title", "journal_name", "publish_year"]
+        if style in {"chinese", "gb"}:
+            required.append("issue")
+        missing = []
+        for field in required:
+            if field == "author" and not _author_plain(meta, include_country=False):
+                missing.append(field)
+            elif field == "title" and not _title(meta):
+                missing.append(field)
+            elif field == "journal_name" and not _first(meta, "journal_name", "journal_title", "journal", "periodical"):
+                missing.append(field)
+            elif field == "publish_year" and not _year(meta):
+                missing.append(field)
+            elif field == "issue" and not _first(meta, "issue", "issue_number", "journal_issue"):
+                missing.append(field)
+        has_range_fallback = style in {"chinese", "gb"} and _first(meta, "page_range", "pages", "article_pages")
+        needs_hit_page = style not in {"apa", "mla"}
+        if needs_hit_page and not has_range_fallback and (page.get("uncalibrated") or not page.get("raw")):
+            missing.append("citation_page")
+        return missing
     if doc_type not in {"book", "translated_book"}:
+        if style in {"apa", "mla"}:
+            return []
         return [] if not page.get("uncalibrated") else ["citation_page"]
     required = ["author", "title", "publisher", "publish_year"]
     if style == "gb":
@@ -448,7 +779,7 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
             missing.append(field)
         elif field == "publish_year" and not _year(meta):
             missing.append(field)
-    if page.get("uncalibrated") or not page.get("raw"):
+    if style not in {"apa", "mla"} and (page.get("uncalibrated") or not page.get("raw")):
         missing.append("citation_page")
     return missing
 
@@ -461,6 +792,8 @@ def _field_label(field: str) -> str:
         "publisher": "出版社",
         "publish_place": "出版地",
         "publish_year": "出版年份",
+        "journal_name": "出版刊物",
+        "issue": "期号",
         "citation_page": "引用页码",
     }.get(field, field)
 

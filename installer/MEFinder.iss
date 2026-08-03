@@ -32,6 +32,8 @@ UninstallDisplayIcon={app}\{#AppExeName}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardImageFile=wizard-large.bmp
+WizardSmallImageFile=wizard-small.bmp
 CloseApplications=yes
 RestartApplications=no
 RestartIfNeededByRun=no
@@ -45,10 +47,28 @@ VersionInfoCopyright=Copyright (C) 2026 {#AppPublisher}
 MinVersion=10.0.17763
 
 [Languages]
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+; Custom wizard strings, kept in sync across both languages so choosing English
+; also translates the tasks, run entry and the data-directory page (not just the
+; built-in Inno chrome).  %n = newline, %1 = the first parameter.
+[CustomMessages]
+chinesesimplified.DesktopIcon=创建桌面快捷方式
+english.DesktopIcon=Create a desktop shortcut
+chinesesimplified.AdditionalShortcuts=附加快捷方式：
+english.AdditionalShortcuts=Additional shortcuts:
+chinesesimplified.LaunchApp=启动 %1
+english.LaunchApp=Launch %1
+chinesesimplified.DataDirTitle=选择数据存储位置
+english.DataDirTitle=Choose where to store your data
+chinesesimplified.DataDirSubtitle=文献索引、语料和设置的保存位置
+english.DataDirSubtitle=Where the index, corpus and settings are kept
+chinesesimplified.DataDirBody=导入的 PDF/Word 原文、搜索索引和个人设置会保存在下面选择的目录中，与程序安装目录分开，后续静默更新不会影响这些数据。%n%n如果语料库较大，建议选择空间充足的磁盘。
+english.DataDirBody=Your imported PDF/Word originals, the search index and personal settings are kept in the folder you choose below, separate from the program's install folder. Silent updates never touch this data.%n%nIf your corpus is large, pick a drive with plenty of free space.
+
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加快捷方式："; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:AdditionalShortcuts}"; Flags: unchecked
 
 [Files]
 Source: "..\dist\MEFinder\*"; DestDir: "{app}"; Excludes: "portable.flag"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -64,7 +84,7 @@ Type: files; Name: "{app}\data_root.txt"
 [Run]
 ; This is deliberately not skipifsilent: an in-app silent update closes the old
 ; process first and must relaunch the newly installed version on completion.
-Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowait skipifdoesntexist runascurrentuser
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchApp,{#AppName}}"; Flags: nowait skipifdoesntexist runascurrentuser
 
 [Code]
 var
@@ -87,10 +107,9 @@ end;
 procedure InitializeWizard;
 begin
   DataDirPage := CreateInputDirPage(wpSelectDir,
-    '选择数据存储位置',
-    '文献索引、语料和设置的保存位置',
-    '导入的 PDF/Word 原文、搜索索引和个人设置会保存在下面选择的目录中，与程序安装目录分开，后续静默更新不会影响这些数据。' + #13#10#13#10 +
-    '如果语料库较大，建议选择空间充足的磁盘。',
+    ExpandConstant('{cm:DataDirTitle}'),
+    ExpandConstant('{cm:DataDirSubtitle}'),
+    ExpandConstant('{cm:DataDirBody}'),
     False, '');
   DataDirPage.Add('');
   DataDirPage.Values[0] := DefaultDataDir();

@@ -7,6 +7,7 @@ from unittest import mock
 from src.me_finder.auto_page_mapping import (
     PageNumberCandidate,
     apply_auto_mapping_to_pages,
+    detect_pdf_page_layout,
     infer_auto_page_mapping,
     extract_pdf_numeric_bookmark_candidates,
     extract_native_pdf_edge_candidates,
@@ -33,11 +34,130 @@ def cand(page_idx: int, number: int, style: str = "arabic", x: float = 0.5, y: f
     )
 
 
-def infer(candidates, page_count=600, page_texts=None):
-    return infer_auto_page_mapping(candidates, page_count, page_texts=page_texts or {})
+def infer(candidates, page_count=600, page_texts=None, layout_detection=None):
+    return infer_auto_page_mapping(
+        candidates,
+        page_count,
+        page_texts=page_texts or {},
+        layout_detection=layout_detection,
+    )
+
+
+def layout_pages(start: int, count: int, *, landscape: bool = True, split: bool = True):
+    width, height = (1200, 800) if landscape else (600, 800)
+    pages = []
+    for page_idx in range(start, start + count):
+        blocks = [
+            {
+                "text": "左侧正文内容" * 30,
+                "bbox_normalized": [0.06, 0.10, 0.44 if split else 0.88, 0.88],
+            }
+        ]
+        if split:
+            blocks.append(
+                {
+                    "text": "右侧正文内容" * 30,
+                    "bbox_normalized": [0.56, 0.10, 0.94, 0.88],
+                }
+            )
+        pages.append(
+            {
+                "pdf_page_index": page_idx,
+                "page_width": width,
+                "page_height": height,
+                "blocks": blocks,
+                "text_raw": "页面正文",
+            }
+        )
+    return pages
 
 
 class AutoPageMappingTests(unittest.TestCase):
+    def test_detects_ltr_spread_and_fits_two_logical_pages_per_pdf_page(self) -> None:
+        pages = layout_pages(4, 8)
+        candidates = []
+        for offset, page_idx in enumerate(range(4, 12)):
+            lower = 10 + offset * 2
+            candidates.extend(
+                [cand(page_idx, lower, x=0.08), cand(page_idx, lower + 1, x=0.92)]
+            )
+
+        layout = detect_pdf_page_layout(pages, candidates)
+        self.assertEqual(layout["layout_mode"], "spread")
+        self.assertEqual(layout["confidence_level"], "high")
+        self.assertEqual(layout["reading_direction"], "ltr")
+        self.assertEqual(layout["evidence"]["paired_page_numbers"], 8)
+
+        result = infer(candidates, page_count=20, layout_detection=layout)
+        segment = result["applied_segments"][0]
+        self.assertEqual(segment["pdf_page_start"], 4)
+        self.assertEqual(segment["pdf_page_end"], 11)
+        self.assertEqual(segment["citation_page_start"], "10")
+        self.assertEqual(segment["citation_page_end"], "25")
+        self.assertEqual(segment["layout_mode"], "spread")
+        self.assertEqual(segment["reading_direction"], "ltr")
+
+        mapped_pages = [{"pdf_page_index": page_idx} for page_idx in range(4, 12)]
+        apply_auto_mapping_to_pages(mapped_pages, result)
+        self.assertEqual(mapped_pages[0]["citation_page_start"], "10")
+        self.assertEqual(mapped_pages[0]["citation_page_end"], "11")
+        self.assertEqual(mapped_pages[1]["citation_page_start"], "12")
+        self.assertEqual(mapped_pages[1]["citation_page_end"], "13")
+
+    def test_detects_rtl_spread_from_paired_outer_page_numbers(self) -> None:
+        pages = layout_pages(20, 8)
+        candidates = []
+        for offset, page_idx in enumerate(range(20, 28)):
+            lower = 40 + offset * 2
+            candidates.extend(
+                [cand(page_idx, lower + 1, x=0.08), cand(page_idx, lower, x=0.92)]
+            )
+
+        layout = detect_pdf_page_layout(pages, candidates)
+        self.assertEqual(layout["layout_mode"], "spread")
+        self.assertEqual(layout["reading_direction"], "rtl")
+        result = infer(candidates, page_count=40, layout_detection=layout)
+        segment = result["applied_segments"][0]
+        self.assertEqual(segment["citation_page_start"], "40")
+        self.assertEqual(segment["reading_direction"], "rtl")
+
+    def test_landscape_two_column_single_pages_are_not_mistaken_for_spreads(self) -> None:
+        pages = layout_pages(10, 10)
+        candidates = [cand(page_idx, page_idx - 9, x=0.92) for page_idx in range(10, 20)]
+
+        layout = detect_pdf_page_layout(pages, candidates)
+
+        self.assertEqual(layout["layout_mode"], "single")
+        self.assertEqual(layout["evidence"]["paired_page_numbers"], 0)
+
+    def test_spread_without_direction_pairs_requires_review(self) -> None:
+        pages = layout_pages(40, 8)
+        candidates = [
+            cand(page_idx, 80 + offset * 2, x=0.08)
+            for offset, page_idx in enumerate(range(40, 48))
+        ]
+
+        layout = detect_pdf_page_layout(pages, candidates)
+        result = infer(candidates, page_count=60, layout_detection=layout)
+
+        self.assertEqual(layout["layout_mode"], "spread")
+        self.assertEqual(layout["confidence_level"], "medium")
+        self.assertEqual(result["applied_segments"], [])
+        self.assertEqual(result["selected_segments"][0]["confidence_level"], "medium")
+
+    def test_portrait_pages_keep_the_existing_single_page_mapping_path(self) -> None:
+        pages = layout_pages(30, 8, landscape=False, split=False)
+        candidates = [cand(page_idx, page_idx - 29, x=0.5) for page_idx in range(30, 38)]
+
+        layout = detect_pdf_page_layout(pages, candidates)
+        result = infer(candidates, page_count=50, layout_detection=layout)
+
+        self.assertEqual(layout["layout_mode"], "single")
+        self.assertEqual(result["applied_segments"][0].get("layout_mode"), None)
+        mapped_pages = [{"pdf_page_index": page_idx} for page_idx in range(30, 38)]
+        apply_auto_mapping_to_pages(mapped_pages, result)
+        self.assertTrue(all(page["layout_mode"] == "single" for page in mapped_pages))
+
     def test_normalizes_common_page_number_forms(self) -> None:
         self.assertEqual(normalize_page_candidate("— 12 —"), ("arabic", 12, "12"))
         self.assertEqual(normalize_page_candidate("第１２页"), ("arabic", 12, "12"))
@@ -238,6 +358,9 @@ class AutoPageMappingTests(unittest.TestCase):
         apply_auto_mapping_to_pages(pages, result)
         by_page = {page["pdf_page_index"]: page for page in pages}
         self.assertEqual(by_page[52]["citation_page"], "23")
+        self.assertEqual(by_page[52]["citation_page_start"], "23")
+        self.assertEqual(by_page[52]["citation_page_end"], "23")
+        self.assertEqual(by_page[52]["layout_mode"], "single")
         self.assertEqual(by_page[54]["citation_page"], "25")
 
     def test_single_wrong_ocr_number_is_ignored(self) -> None:

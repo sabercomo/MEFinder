@@ -7,8 +7,16 @@ from pathlib import Path
 
 from src.me_finder.database import DEFAULT_DATABASE_PATH
 from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
-from src.me_finder.pdf_extractors import _attach_bibliographic_metadata, detect_pdf_type
-from src.me_finder.pdf_page_mapping import PageMapper
+from src.me_finder.pdf_extractors import (
+    _attach_bibliographic_metadata,
+    attach_page_block_offsets,
+    detect_pdf_type,
+    make_pdf_paragraphs,
+)
+from src.me_finder.pdf_page_mapping import (
+    PageMapper,
+    normalize_manual_mapping_segments,
+)
 from src.me_finder.search import SearchEngine
 
 
@@ -34,6 +42,19 @@ def ensure_pdf_index() -> None:
 
 
 class PDFPageMappingTests(unittest.TestCase):
+    def test_layout_blocks_receive_exact_page_text_offsets(self) -> None:
+        text = "左页正文\n右页正文\n"
+        blocks = [
+            {"text": "左页正文\n", "bbox_normalized": [0.1, 0.1, 0.45, 0.9]},
+            {"text": "右页正文\n", "bbox_normalized": [0.55, 0.1, 0.9, 0.9]},
+        ]
+
+        attach_page_block_offsets(text, blocks)
+
+        self.assertEqual((blocks[0]["page_char_start"], blocks[0]["page_char_end"]), (0, 5))
+        self.assertEqual((blocks[1]["page_char_start"], blocks[1]["page_char_end"]), (5, 10))
+        self.assertEqual(blocks[0]["offset_unit"], "unicode_codepoint")
+
     def test_manual_segment_mapping(self) -> None:
         mapper = PageMapper.from_config(
             {
@@ -57,6 +78,121 @@ class PDFPageMappingTests(unittest.TestCase):
         self.assertEqual(mapped.citation_page, "1")
         self.assertEqual(mapped.method, "manual_segment")
         self.assertEqual(mapper.map_page(22, "2").citation_page, "2")
+
+    def test_spread_segment_maps_each_pdf_page_to_two_citation_pages(self) -> None:
+        mapper = PageMapper.from_config(
+            {
+                "page_mapping": {
+                    "segments": [
+                        {
+                            "pdf_page_start": 4,
+                            "pdf_page_end": 45,
+                            "citation_page_start": "10",
+                            "layout_mode": "spread",
+                            "reading_direction": "ltr",
+                            "gutter_x": 0.505,
+                        }
+                    ]
+                }
+            }
+        )
+
+        page_14 = mapper.map_page(13)
+        self.assertEqual(page_14.citation_page_start, "28")
+        self.assertEqual(page_14.citation_page_end, "29")
+        self.assertEqual(page_14.layout_mode, "spread")
+        self.assertEqual(page_14.reading_direction, "ltr")
+        self.assertEqual(page_14.gutter_x, 0.505)
+        page_46 = mapper.map_page(45)
+        self.assertEqual(page_46.citation_page_start, "92")
+        self.assertEqual(page_46.citation_page_end, "93")
+
+    def test_legacy_segment_without_layout_remains_single_page(self) -> None:
+        mapper = PageMapper.from_config(
+            {
+                "page_mapping": {
+                    "segments": [
+                        {
+                            "pdf_page_start": 4,
+                            "pdf_page_end": 45,
+                            "citation_page_start": "10",
+                        }
+                    ]
+                }
+            }
+        )
+
+        page_14 = mapper.map_page(13)
+        self.assertEqual(page_14.citation_page_start, "19")
+        self.assertEqual(page_14.citation_page_end, "19")
+        self.assertEqual(page_14.layout_mode, "single")
+
+    def test_manual_spread_segment_is_normalized_before_persistence(self) -> None:
+        segments = normalize_manual_mapping_segments(
+            [
+                {
+                    "pdf_page_start": "4",
+                    "pdf_page_end": "45",
+                    "citation_page_start": 10,
+                    "layout_mode": "spread",
+                    "reading_direction": "rtl",
+                    "gutter_x": 0.52,
+                }
+            ]
+        )
+
+        self.assertEqual(
+            segments[0],
+            {
+                "pdf_page_start": 4,
+                "pdf_page_end": 45,
+                "citation_page_start": "10",
+                "number_style": "arabic",
+                "method": "manual_segment",
+                "confidence": 0.9,
+                "layout_mode": "spread",
+                "reading_direction": "rtl",
+                "gutter_x": 0.52,
+            },
+        )
+
+    def test_spread_page_paragraph_uses_the_full_logical_page_range(self) -> None:
+        page = {
+            "pdf_page_id": "pdf-spread-PAGE-000013",
+            "source_file_id": "pdf-spread",
+            "pdf_page_index": 13,
+            "text_raw": (
+                "左页与右页组成一张双开扫描页，当前阶段按可靠范围生成引用页码。"
+            ),
+            "citation_page": "28",
+            "citation_page_start": "28",
+            "citation_page_end": "29",
+            "printed_page_start": "28",
+            "printed_page_end": "29",
+            "page_mapping_method": "manual_segment",
+            "page_mapping_confidence": 0.9,
+            "segment_id": "MAPSEG-000004-000045",
+            "layout_mode": "spread",
+            "reading_direction": "ltr",
+            "gutter_x": 0.5,
+        }
+
+        paragraphs = make_pdf_paragraphs(
+            "pdf-spread",
+            "PDF_SPREAD",
+            "双开扫描测试",
+            "测试作者",
+            "spread.pdf",
+            [page],
+            "WORK-SPREAD",
+        )
+
+        self.assertEqual(len(paragraphs), 1)
+        paragraph = paragraphs[0]
+        self.assertEqual(paragraph["citation_page_start"], "28")
+        self.assertEqual(paragraph["citation_page_end"], "29")
+        self.assertEqual(paragraph["page_display"], "引用页码：28-29")
+        self.assertEqual(paragraph["layout_mode"], "spread")
 
     def test_critical_theory_duplicate_scan_pages_use_segmented_mapping(self) -> None:
         mapper = PageMapper.from_config(
