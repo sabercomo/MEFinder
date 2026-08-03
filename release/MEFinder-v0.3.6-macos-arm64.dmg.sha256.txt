@@ -1,1 +1,1 @@
-905d19bb831c48957dd77cdc5614902733f2ee17a9d1188468fdb10e43e3458f  MEFinder-v0.3.6-macos-arm64.dmg
+9a095374f58bfe77b1b56d5e9bb483b4b5de0991ec1f9de5b32f0eb92d28e19a  MEFinder-v0.3.6-macos-arm64.dmg

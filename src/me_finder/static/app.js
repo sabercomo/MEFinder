@@ -1486,6 +1486,14 @@ function libraryEntryHTML(src) {
   var statusChip = isPdf
     ? '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '">' + statusChipIcon(statusGroup) + esc(calibrationStatusLabel(itemStatus)) + '</span>'
     : '';
+  // 列表模式空间窄：校准状态与「缺书目」都收成仅图标（含 title 悬停提示），
+  // 让标题成为主列不被文字徽章挤掉。这也是 Zotero 等主流列表视图的做法。
+  var statusIconOnly = isPdf
+    ? '<span class="cal-status-icon status-chip--' + statusSemanticVariant(statusGroup) + ' ' + statusGroup + '" title="' + esc(calibrationStatusLabel(itemStatus)) + '" aria-label="' + esc(calibrationStatusLabel(itemStatus)) + '">' + statusChipIcon(statusGroup) + '</span>'
+    : '';
+  var missingIcon = missingMetadataText
+    ? '<span class="library-row-missing-icon" title="' + esc(missingMetadataText) + '" aria-label="' + esc(missingMetadataText) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg></span>'
+    : '';
   var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : '';
   var countMeta = isPdf
     ? (src.page_count ? src.page_count + ' 页' : '页数未知')
@@ -1513,11 +1521,11 @@ function libraryEntryHTML(src) {
     + '<span class="library-row-title">' + thesisIcon + esc(title) + '</span>'
     + '<span class="library-row-author">' + esc(author) + '</span>'
     + '<span class="library-row-info">'
-    + statusChip
+    + statusIconOnly
+    + missingIcon
     + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '')
     + '<span class="works-count">' + esc(countMeta) + '</span>'
-    + (missingMetadataText ? '<span class="library-row-missing" title="' + esc(missingMetadataText) + '">' + esc(missingMetadataText) + '</span>' : '')
-    + '<span>' + size + '</span>'
+    + '<span class="library-row-size">' + size + '</span>'
     + '</span>'
     + '</div>';
 }
