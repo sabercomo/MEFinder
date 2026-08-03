@@ -590,6 +590,16 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-collapse-body" id="bib-completion-body">
             <div class="auto-match-setting">
               <div class="auto-match-head">
+                <span class="auto-match-label">文献默认语言</span>
+              </div>
+              <div class="segmented-control" id="lib-default-lang-control">
+                <button class="seg-btn active" type="button" data-deflang="chinese" onclick="setLibDefaultLanguage(this)">中文</button>
+                <button class="seg-btn" type="button" data-deflang="foreign" onclick="setLibDefaultLanguage(this)">外文</button>
+              </div>
+              <small class="auto-match-hint">选「中文」时以中文文献为主，语言筛选条里「中文」排在前；选「外文」时以外文文献为主，「外文」排在前。只影响文献库语言筛选的主次顺序，不改变联网数据源的选择——中文期刊始终查知网。</small>
+            </div>
+            <div class="auto-match-setting">
+              <div class="auto-match-head">
                 <span class="auto-match-label">自动匹配阈值</span>
                 <span class="auto-match-value" id="online-auto-match-value">90%</span>
               </div>

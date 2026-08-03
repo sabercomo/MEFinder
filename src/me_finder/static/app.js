@@ -50,6 +50,10 @@ const DRAG_SELECT_MAX_SCROLL_SPEED = 26;
 let libTypeFilter = 'all';
 let libLangFilter = 'all';
 let libDocTypeFilter = 'all';
+// 本国语言视角：'chinese'（中文为本国）或 'foreign'（西文为本国，此时中文计入外文）。
+// 只改变文献库的语言分类标签与「本国/外文」归属，不改变联网数据源路由——
+// 数据源永远按文字系统事实选择（中文→知网，其余→Crossref / 图书目录）。
+let libDefaultLanguage = loadLibDefaultLanguage();
 let libStatusFilter = 'all';
 let libSelectedId = null;
 let libDeleteSelection = new Set();
@@ -1147,6 +1151,35 @@ function setLibLangFilter(btn) {
   renderLibraryList();
 }
 
+function loadLibDefaultLanguage() {
+  var raw = null;
+  try { raw = localStorage.getItem('meFinderLibDefaultLanguage'); } catch (_) {}
+  return raw === 'foreign' ? 'foreign' : 'chinese';
+}
+
+function setLibDefaultLanguage(btn) {
+  var value = btn && btn.dataset ? btn.dataset.deflang : btn;
+  value = value === 'foreign' ? 'foreign' : 'chinese';
+  if (value === libDefaultLanguage) return;
+  libDefaultLanguage = value;
+  try { localStorage.setItem('meFinderLibDefaultLanguage', value); } catch (_) {}
+  syncLibDefaultLanguageControl();
+  renderLibraryList();  // 重绘以刷新语言筛选条的标签与「本国/外文」归属
+}
+
+function syncLibDefaultLanguageControl() {
+  document.querySelectorAll('#lib-default-lang-control .seg-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.deflang === libDefaultLanguage);
+  });
+}
+
+// 文字系统事实（'chinese' / 'foreign'）→ 语言筛选条上的显示标签。
+// 标签始终是「中文 / 外文」；默认语言不改标签文字，只改两档的排列主次
+// （见 renderLibraryList 里对 style.order 的设置）。
+function libLangChipLabel(scriptLang) {
+  return scriptLang === 'chinese' ? '中文' : '外文';
+}
+
 function libraryDocType(source) {
   var value = String((source && source.document_type) || '');
   return value === 'journal_article' || value === 'thesis' ? value : 'book';
@@ -1384,8 +1417,10 @@ function renderLibraryList() {
   document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(btn) {
     var lang = btn.dataset.lang;
     var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
-    var label = lang === 'all' ? '全部语言' : lang === 'chinese' ? '中文' : '外文';
+    var label = lang === 'all' ? '全部语言' : libLangChipLabel(lang);
     btn.textContent = label + ' (' + count + ')';
+    // 默认语言那一档排在「全部语言」之后、另一档之前，让主语言文献靠前。
+    btn.style.order = lang === 'all' ? '0' : (lang === libDefaultLanguage ? '1' : '2');
   });
   const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
   const thesisCount = libSources.filter(s => libraryDocType(s) === 'thesis').length;
@@ -1753,7 +1788,7 @@ function bibliographicEditorHTML(src) {
   var isJournal = docType === 'journal_article';
   var isBook = docType === 'book' || docType === 'translated_book';
   // 一条紧凑工具条容纳所有补全动作：不再用大卡片外壳和常驻大文本框，
-  // 期刊主路径“查询知网”置为主按钮，粘贴引用点开才就地展开；图书用 Google Books（外文）。
+  // 期刊主路径“查询知网”置为主按钮，粘贴引用点开才就地展开；图书查图书目录（外文，多源）。
   var toolbarHTML = '<div class="bib-toolbar">'
     + (isJournal
       ? '<button class="action-btn primary" type="button" onclick="lookupCnkiMetadata(\'' + sid + '\')">查询知网补全</button>'
@@ -2011,7 +2046,7 @@ function applyCnkiSearchCandidate(sourceId, index) {
   setCnkiLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
 }
 
-/* ═══ Google Books 图书联网补全（外文）═══
+/* ═══ 外文图书联网补全（Open Library / K10plus / LoC，Google 兜底）═══
  * 干净 JSON API，一次返回完整题录；连不上时安全降级，只提示不阻塞。
  * 图书字段与知网期刊字段不同，单独走 applyBookLookupMetadata 只补空字段。 */
 const bookLookupFields = {
@@ -3804,6 +3839,7 @@ async function loadPreferences() {
   renderPdfOpenMode();
   renderCitationStylePreferences();
   syncOnlineAutoMatchControl();
+  syncLibDefaultLanguageControl();
   setPdfOpenModeControlsDisabled(true);
   setCitationStyleControlsDisabled(true);
   var current = document.getElementById('pdf-reader-current');
@@ -5188,7 +5224,7 @@ function isForeignTitle(title) {
   return !!String(title || '').trim() && !/[㐀-鿿]/.test(String(title));
 }
 
-// 中文期刊→知网，外文期刊→Crossref，外文图书→Google Books，中文图书→本地 CIP（不联网）。
+// 中文期刊→知网，外文期刊→Crossref，外文图书→图书目录（Open Library / K10plus / LoC，Google 兜底），中文图书→本地 CIP（不联网）。
 function batchLookupSourceFor(meta) {
   var docType = bibliographicDocType(meta);
   var foreign = isForeignTitle(meta.title);
