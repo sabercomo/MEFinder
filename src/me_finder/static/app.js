@@ -5,6 +5,7 @@ let currentPage = 'search';
 let currentMode = 'auto';
 let searchResults = [];
 let selectedIndex = -1;
+let searchSeq = 0;
 const CITATION_STYLE_OPTIONS = [
   {id:'chinese', label:'中文脚注'},
   {id:'gb', label:'GB/T 7714'},
@@ -14,7 +15,9 @@ const CITATION_STYLE_OPTIONS = [
 ];
 const CITATION_STYLE_IDS = new Set(CITATION_STYLE_OPTIONS.map(function(option) { return option.id; }));
 const DEFAULT_CITATION_STYLES = ['chinese', 'gb'];
-const ONLINE_METADATA_AUTO_MATCH_THRESHOLD = 0.95;
+const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;  // 联网书目补全自动采用唯一高匹配候选的分数下限
+const ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT = 80;  // 低于此值只弹候选让人工确认，避免误采
+let onlineMetadataAutoMatchThreshold = loadOnlineAutoMatchThreshold();
 let enabledCitationStyles = DEFAULT_CITATION_STYLES.slice();
 let citationStyle = CITATION_STYLE_IDS.has(localStorage.getItem('meFinderCitationStyle'))
   ? localStorage.getItem('meFinderCitationStyle')
@@ -421,6 +424,7 @@ function updateSearchDocumentLabel() {
 async function runSearch() {
   const query = document.getElementById('query').value.trim();
   if (!query) return;
+  const seq = ++searchSeq;  // 只有最后一次发起的检索能写回结果，避免慢响应覆盖新结果
   const statusEl = document.getElementById('results-status');
   const listEl = document.getElementById('results-list');
   statusEl.style.display = 'block';
@@ -436,6 +440,7 @@ async function runSearch() {
       body: JSON.stringify({query, mode: currentMode, limit: searchLimit, source_type: searchSourceType, source_file_id: searchDocumentId || null})
     });
     const data = await resp.json();
+    if (seq !== searchSeq) return;  // 已有更新的检索发起，丢弃这次过期响应
     searchResults = data.results || [];
     if (data.total_is_exact === false || data.has_more) {
       statusEl.textContent = '显示前 ' + searchResults.length + ' 条匹配结果，还有更多';
@@ -451,6 +456,7 @@ async function runSearch() {
     listEl.innerHTML = searchResults.map((item, i) => resultRowHTML(item, i)).join('');
     selectResult(0);
   } catch (err) {
+    if (seq !== searchSeq) return;
     statusEl.textContent = '检索失败：' + err.message;
   }
 }
@@ -728,9 +734,24 @@ function truncate(s, n) {
 function truncateHTML(html, maxText) {
   const div = document.createElement('div');
   div.innerHTML = html;
-  const text = div.textContent || '';
-  if (text.length <= maxText) return html;
-  return esc(text.slice(0, maxText)) + '…';
+  if ((div.textContent || '').length <= maxText) return html;
+  // 按可见字符截断，同时保留高亮标签（服务端只产出扁平的 <mark> 包裹）。
+  let remaining = maxText;
+  let out = '';
+  for (const node of div.childNodes) {
+    if (remaining <= 0) break;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const slice = node.nodeValue.slice(0, remaining);
+      out += esc(slice);
+      remaining -= slice.length;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName.toLowerCase();
+      const slice = (node.textContent || '').slice(0, remaining);
+      out += '<' + tag + '>' + esc(slice) + '</' + tag + '>';
+      remaining -= slice.length;
+    }
+  }
+  return out + '…';
 }
 function matchTypeLabel(t) {
   const m = {exact:'精确',normalized_exact:'标准化',space_insensitive:'忽略空格',punctuation_insensitive:'忽略标点',ngram_fuzzy:'模糊'};
@@ -3782,6 +3803,7 @@ async function loadPreferences() {
   renderThemeSelection();
   renderPdfOpenMode();
   renderCitationStylePreferences();
+  syncOnlineAutoMatchControl();
   setPdfOpenModeControlsDisabled(true);
   setCitationStyleControlsDisabled(true);
   var current = document.getElementById('pdf-reader-current');
@@ -5179,7 +5201,8 @@ function cnkiBatchLookupTargets() {
   return (libSources || []).filter(function(src) {
     if (!src || String(src.source_type || '') !== 'pdf') return false;
     var meta = sourceBibliographicMetadata(src);
-    if (String(meta.metadata_source || '') === 'manual') return false;
+    // 人工维护的文献也纳入：applyBatchCandidateToSource 只补当前为空的字段，
+    // 绝不覆盖已手动填写的值，因此不会破坏人工维护的内容。
     if (!batchLookupSourceFor(meta)) return false;
     var hasQueryKey = String(meta.title || '').trim() || String(meta.doi || '').trim() || String(meta.isbn || '').trim();
     if (!hasQueryKey) return false;
@@ -5248,12 +5271,38 @@ function batchQueryFor(source, meta) {
   return {title:meta.title||'', author:meta.author||'', publish_year:meta.publish_year||'', isbn:meta.isbn||''};
 }
 
+function loadOnlineAutoMatchThreshold() {
+  var raw = null;
+  try { raw = localStorage.getItem('meFinderOnlineAutoMatchThreshold'); } catch (_) {}
+  var pct = Math.round(Number(raw));
+  if (!Number.isFinite(pct)) return ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT;
+  pct = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, pct));
+  return pct / 100;
+}
+
+function setOnlineAutoMatchThreshold(pct) {
+  var value = Math.round(Number(pct));
+  if (!Number.isFinite(value)) return;
+  value = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, value));
+  onlineMetadataAutoMatchThreshold = value / 100;
+  try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(value)); } catch (_) {}
+  syncOnlineAutoMatchControl();
+}
+
+function syncOnlineAutoMatchControl() {
+  var pct = Math.round(onlineMetadataAutoMatchThreshold * 100);
+  var slider = document.getElementById('online-auto-match-range');
+  var label = document.getElementById('online-auto-match-value');
+  if (slider && String(slider.value) !== String(pct)) slider.value = String(pct);
+  if (label) label.textContent = pct + '%';
+}
+
 function automaticBatchCandidateIndex(candidates) {
   var bestIndex = -1;
   var bestScore = -1;
   (candidates || []).forEach(function(candidate, index) {
     var score = Number(candidate && candidate.match && candidate.match.score);
-    if (Number.isFinite(score) && score >= ONLINE_METADATA_AUTO_MATCH_THRESHOLD && score > bestScore) {
+    if (Number.isFinite(score) && score >= onlineMetadataAutoMatchThreshold && score > bestScore) {
       bestIndex = index;
       bestScore = score;
     }

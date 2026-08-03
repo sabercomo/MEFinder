@@ -401,6 +401,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "mineru-api-settings": "mineru-api-body",
             "vision-api-settings": "vision-api-body",
             "citation-format-settings": "citation-format-body",
+            "bib-completion-settings": "bib-completion-body",
             "appearance-card": "appearance-body",
             "data-location-settings": "data-location-body",
             "backup-settings": "backup-settings-body",

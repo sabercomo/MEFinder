@@ -3510,6 +3510,13 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .spread-field-row { display: flex; align-items: baseline; justify-content: space-between; }
 .spread-gutter-out { font-size: 12px; color: var(--text-primary); }
 .spread-gutter-range { width: 100%; accent-color: var(--accent); }
+.auto-match-setting { max-width: 520px; margin-top: 16px; }
+.auto-match-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.auto-match-label { font-size: 14px; color: var(--text-primary); font-weight: 600; }
+.auto-match-value { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.auto-match-range { width: 100%; accent-color: var(--accent); }
+.auto-match-scale { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-tertiary); }
+.auto-match-hint { display: block; margin-top: 12px; font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
 .spread-summary {
   margin-top: 12px;
   padding: 8px 10px;

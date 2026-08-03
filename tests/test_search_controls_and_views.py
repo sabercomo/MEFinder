@@ -320,6 +320,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "mineru-api-settings",
             "vision-api-settings",
             "citation-format-settings",
+            "bib-completion-settings",
             "backup-settings",
         }
         self.assertEqual({section_id for _, section_id in sections}, expected_ids)
@@ -337,15 +338,26 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('if source == "manual":', WEB_SOURCE)
         self.assertIn("batchmeta-", WEB_SOURCE)
 
-    def test_online_metadata_candidates_at_95_percent_are_automatic(self) -> None:
-        self.assertIn("const ONLINE_METADATA_AUTO_MATCH_THRESHOLD = 0.95;", HTML)
+    def test_online_metadata_auto_match_threshold_defaults_to_90_percent(self) -> None:
+        self.assertIn("const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;", HTML)
         self.assertIn("function automaticBatchCandidateIndex(candidates)", HTML)
-        self.assertIn("score >= ONLINE_METADATA_AUTO_MATCH_THRESHOLD", HTML)
+        self.assertIn("score >= onlineMetadataAutoMatchThreshold", HTML)
         self.assertIn("var automaticIndex = automaticBatchCandidateIndex(candidates);", HTML)
         self.assertNotIn(
             "candidates.length === 1 && candidates[0].match && candidates[0].match.level === 'high'",
             HTML,
         )
+
+    def test_online_auto_match_threshold_has_its_own_settings_category(self) -> None:
+        self.assertIn('data-target="bib-completion-settings"', HTML)
+        self.assertIn('id="bib-completion-settings"', HTML)
+        self.assertIn('id="online-auto-match-range"', HTML)
+        self.assertIn("setOnlineAutoMatchThreshold(this.value)", HTML)
+        self.assertIn("function loadOnlineAutoMatchThreshold()", HTML)
+        # 匹配门槛属于“书目补全”，不能塞进“引文格式”一级菜单
+        bib_at = HTML.index('data-target="bib-completion-settings"')
+        citation_at = HTML.index('data-target="citation-format-settings"')
+        self.assertNotEqual(bib_at, citation_at)
 
     def test_citation_format_preferences_filter_the_result_dropdown(self) -> None:
         vision_at = HTML.index('data-target="vision-api-settings"')

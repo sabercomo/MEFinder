@@ -212,9 +212,14 @@ class CNKILookupParserTests(unittest.TestCase):
 
     def test_external_open_url_is_strictly_allowlisted(self) -> None:
         valid = "https://oversea.cnki.net/kns8s/search?kw=%E6%B5%8B%E8%AF%95"
-        with patch("src.me_finder.web.subprocess.Popen") as popen:
-            open_external_cnki_url(valid)
-        popen.assert_called_once()
+        if os.name == "nt":
+            with patch("src.me_finder.web.os.startfile") as startfile:
+                open_external_cnki_url(valid)
+            startfile.assert_called_once_with(valid)
+        else:
+            with patch("src.me_finder.web.subprocess.Popen") as popen:
+                open_external_cnki_url(valid)
+            popen.assert_called_once()
         for url in (
             "http://oversea.cnki.net/kns8s/search?kw=x",
             "https://user@oversea.cnki.net/kns8s/search?kw=x",

@@ -29,6 +29,33 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn('[string]$PythonExe = ""', self.portable_script)
         self.assertIn("& $pythonCommand @pythonLauncherArgs -m PyInstaller", self.portable_script)
 
+    def test_installer_wizard_is_localized_and_branded(self) -> None:
+        # 简体中文与英文双语可选；启动时的语言对话框负责切换。
+        self.assertIn(
+            r'MessagesFile: "compiler:Languages\ChineseSimplified.isl"',
+            self.inno_script,
+        )
+        self.assertIn('MessagesFile: "compiler:Default.isl"', self.inno_script)
+        self.assertIn('Name: "english"', self.inno_script)
+        self.assertIn('Name: "chinesesimplified"', self.inno_script)
+        # 自定义串（任务/运行项/数据目录页）两种语言都有，避免中英混排。
+        self.assertIn("[CustomMessages]", self.inno_script)
+        for key in ("DesktopIcon", "LaunchApp", "DataDirTitle", "DataDirBody"):
+            self.assertIn(f"chinesesimplified.{key}=", self.inno_script)
+            self.assertIn(f"english.{key}=", self.inno_script)
+        self.assertIn("{cm:DesktopIcon}", self.inno_script)
+        self.assertIn("{cm:LaunchApp,{#AppName}}", self.inno_script)
+        self.assertIn("{cm:DataDirTitle}", self.inno_script)
+        # 品牌向导图（欢迎/完成页左栏大图与页眉小图）替换 Inno 默认占位图。
+        self.assertIn("WizardImageFile=wizard-large.bmp", self.inno_script)
+        self.assertIn("WizardSmallImageFile=wizard-small.bmp", self.inno_script)
+        self.assertIn("WizardStyle=modern", self.inno_script)
+        for image in ("wizard-large.bmp", "wizard-small.bmp"):
+            self.assertTrue(
+                (Path("installer") / image).is_file(),
+                f"缺少向导图 installer/{image}",
+            )
+
     def test_installer_program_files_are_separate_from_user_data(self) -> None:
         self.assertIn(r"DefaultDirName={localappdata}\Programs\MEFinder", self.inno_script)
         self.assertNotIn(r"DefaultDirName={localappdata}\MEFinder", self.inno_script)
