@@ -1,0 +1,1 @@
+2273d3e8fc870b43f843d82fe1946d03255a08bde8afd9796d7ab951f3154fb1  MEFinder-v0.3.6-macos-arm64.zip
