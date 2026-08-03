@@ -74,6 +74,16 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertIn("tests.test_anchor_metadata", script)
             self.assertIn("tests.test_pdf_match_anchors", script)
 
+    def test_windows_builds_gate_preferences_theme_and_desktop_contracts(self) -> None:
+        for script in (
+            self.dev_build_script,
+            self.build_script,
+            self.portable_script,
+        ):
+            self.assertIn("tests.test_preferences_concurrency", script)
+            self.assertIn("tests.test_theme_system", script)
+            self.assertIn("tests.test_desktop_portable", script)
+
     def test_windows_builds_gate_fts5_and_keep_loopback_local(self) -> None:
         for script in (
             self.dev_build_script,

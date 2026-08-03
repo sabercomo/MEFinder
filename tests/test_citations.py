@@ -214,6 +214,103 @@ class CitationFormatTests(unittest.TestCase):
             "孙向晨：《现代社会中的“家庭”及其所代表的伦理性原则——黑格尔〈法哲学原理〉中“家庭”问题的解读》，《学术月刊》2017年第4期，第18页。",
         )
 
+    def test_chicago_note_forms_by_document_type(self) -> None:
+        hit = {"start": "55"}
+        journal = {
+            "document_type": "journal_article", "author": "孙向晨", "title": "现代社会中的家庭",
+            "journal_name": "学术月刊", "publish_year": "2017", "volume": "49", "issue": "4",
+            "page_range": "15-27",
+        }
+        # 芝加哥脚注引命中页（55），而非文章起止页；有卷有期用 vol, no. issue。
+        self.assertEqual(
+            format_citation(journal, hit, "chicago"),
+            '孙向晨, "现代社会中的家庭," 学术月刊 49, no. 4 (2017): 55.',
+        )
+        issue_only = dict(journal, volume="")
+        self.assertEqual(
+            format_citation(issue_only, hit, "chicago"),
+            '孙向晨, "现代社会中的家庭," 学术月刊, no. 4 (2017): 55.',
+        )
+        book = {
+            "document_type": "book", "author": "张三", "title": "现代性批判",
+            "publisher": "商务印书馆", "publish_place": "北京", "publish_year": "2020",
+        }
+        self.assertEqual(
+            format_citation(book, hit, "chicago"),
+            "张三, 现代性批判 (北京: 商务印书馆, 2020), 55.",
+        )
+        thesis = {
+            "document_type": "thesis", "author": "金芳冰", "title": "耶吉生活形式批判理论研究",
+            "publisher": "大连理工大学", "publish_year": "2025",
+        }
+        self.assertEqual(
+            format_citation(thesis, hit, "chicago"),
+            '金芳冰, "耶吉生活形式批判理论研究" (学位论文, 大连理工大学, 2025), 55.',
+        )
+        translated = {
+            "document_type": "translated_book", "author": "耶吉", "country": "德",
+            "title": "生活形式批判", "translator": "李四", "publisher": "人民出版社",
+            "publish_place": "北京", "publish_year": "2021",
+        }
+        self.assertEqual(
+            format_citation(translated, hit, "chicago"),
+            "耶吉, 生活形式批判, trans. 李四 (北京: 人民出版社, 2021), 55.",
+        )
+
+    def test_build_citation_formats_includes_chicago(self) -> None:
+        metadata = {
+            "document_type": "journal_article", "author": "周爱民", "title": "根本挑战",
+            "journal_name": "社会科学", "publish_year": "2024", "issue": "5", "page_range": "53-61",
+        }
+        formats = build_citation_formats(metadata, {"start": "56"})
+        self.assertIn("chicago", formats)
+        self.assertEqual(formats["chicago_status"], "complete")
+        self.assertEqual(formats["chicago_missing_fields"], [])
+        self.assertTrue(formats["chicago"].endswith("(2024): 56."))
+        # 缺刊名时芝加哥应判为不完整。
+        incomplete = build_citation_formats(dict(metadata, journal_name=""), {"start": "56"})
+        self.assertEqual(incomplete["chicago_status"], "metadata_incomplete")
+        self.assertIn("journal_name", incomplete["chicago_missing_fields"])
+
+    def test_build_citation_formats_includes_apa_and_mla(self) -> None:
+        metadata = {
+            "document_type": "journal_article", "author": "周爱民", "title": "根本挑战",
+            "journal_name": "社会科学", "publish_year": "2024", "issue": "5",
+            "page_range": "53-61", "doi": "10.13644/j.cnki.cn31-1112.2024.05.009",
+        }
+        formats = build_citation_formats(metadata, {"start": "56"})
+        self.assertEqual(
+            formats["apa"],
+            "周爱民. (2024). 根本挑战. 社会科学(5), 53-61. "
+            "https://doi.org/10.13644/j.cnki.cn31-1112.2024.05.009.",
+        )
+        self.assertEqual(
+            formats["mla"],
+            "周爱民. “根本挑战”. 社会科学, no. 5, 2024, pp. 53-61, "
+            "https://doi.org/10.13644/j.cnki.cn31-1112.2024.05.009.",
+        )
+        self.assertEqual(formats["apa_status"], "complete")
+        self.assertEqual(formats["mla_status"], "complete")
+        self.assertEqual(formats["apa_missing_fields"], [])
+        self.assertEqual(formats["mla_missing_fields"], [])
+
+    def test_apa_and_mla_book_references_do_not_require_a_hit_page(self) -> None:
+        metadata = {
+            "document_type": "book", "author": "Amy Allen", "title": "The End of Progress",
+            "publisher": "Columbia University Press", "publish_year": "2016",
+        }
+        formats = build_citation_formats(metadata, None)
+        self.assertEqual(
+            formats["apa"],
+            "Amy Allen. (2016). The End of Progress. Columbia University Press.",
+        )
+        self.assertEqual(
+            formats["mla"],
+            "Amy Allen. The End of Progress. Columbia University Press, 2016.",
+        )
+        self.assertEqual(formats["apa_status"], "complete")
+        self.assertEqual(formats["mla_status"], "complete")
+
     def test_zotero_filename_pattern_beats_cnki_embedded_author(self) -> None:
         detected = detect_pdf_bibliographic_metadata(
             Path("孙向晨 - 2017 - 现代社会中的“家庭”及其所代表的伦理性原则——黑格尔《法哲学原理》中“家庭”问题的解读.pdf"),
@@ -499,6 +596,84 @@ class CitationFormatTests(unittest.TestCase):
         for field in ("journal_name", "volume", "issue", "page_range", "publish_place"):
             self.assertIsNone(detected[field])
 
+    def test_thesis_title_drops_author_prefix_from_filename(self) -> None:
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "硕士学位论文\n"
+                    "拉埃尔·耶吉生活形式批判理论研究\n"
+                    "作者姓名：\n"
+                    "金芳冰\n"
+                    "答辩日期：\n"
+                    "2025 年5 月29 日\n"
+                    "大连理工大学"
+                ),
+            }
+        ]
+
+        detected = detect_pdf_bibliographic_metadata(
+            Path("金芳冰 - 拉埃尔·耶吉生活形式批判理论研究.pdf"),
+            pages,
+            {"title": "金芳冰 - 拉埃尔·耶吉生活形式批判理论研究"},
+        )
+
+        self.assertEqual(detected["document_type"], "thesis")
+        self.assertEqual(detected["author"], "金芳冰")
+        self.assertEqual(detected["title"], "拉埃尔·耶吉生活形式批判理论研究")
+
+    def test_thesis_title_keeps_author_like_leading_characters(self) -> None:
+        # 作者名恰好是篇名开头字符、但后面不是分隔符时，不能误删。
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "text_raw": (
+                    "硕士学位论文\n"
+                    "金芳冰研究综述\n"
+                    "作者姓名：\n"
+                    "金芳冰\n"
+                    "答辩日期：\n"
+                    "2025 年5 月29 日\n"
+                    "大连理工大学"
+                ),
+            }
+        ]
+
+        detected = detect_pdf_bibliographic_metadata(
+            Path("金芳冰研究综述.pdf"),
+            pages,
+            {"title": "金芳冰研究综述"},
+        )
+
+        self.assertEqual(detected["document_type"], "thesis")
+        self.assertEqual(detected["title"], "金芳冰研究综述")
+
+    def test_foreign_article_isbn_in_references_not_classified_as_book(self) -> None:
+        # 外文论文正文无版权页，仅参考文献引用了带 ISBN 的图书；不应误判为著作。
+        pages = [
+            {"pdf_page_index": 0, "text_raw": (
+                "Against Manichaeism: The Politics of Forms of Life and the Possibilities of Critique\n"
+                "Rahel Jaeggi\n"
+            )},
+            {"pdf_page_index": 1, "text_raw": "Body text discussing forms of life and critique."},
+            {"pdf_page_index": 8, "text_raw": (
+                "References\n"
+                "Honneth, A. (2014). Freedom's Right. Cambridge: Polity. ISBN 978-0-231-15645-0.\n"
+            )},
+        ]
+        detected = detect_pdf_bibliographic_metadata(
+            Path("Against Manichaeism.pdf"), pages, {}
+        )
+        self.assertEqual(detected["document_type"], "journal_article")
+
+    def test_front_page_isbn_still_classifies_as_book(self) -> None:
+        pages = [
+            {"pdf_page_index": 0, "text_raw": "现代性批判\n张三 著"},
+            {"pdf_page_index": 1, "text_raw": "版权页\nISBN 978-7-100-15860-2\n商务印书馆"},
+        ]
+        detected = detect_pdf_bibliographic_metadata(Path("现代性批判.pdf"), pages, {})
+        self.assertIn(detected["document_type"], {"book", "translated_book"})
+
     def test_thesis_required_fields_do_not_use_journal_or_book_requirements(self) -> None:
         metadata = {
             "document_type": "thesis",
@@ -562,6 +737,71 @@ class CitationFormatTests(unittest.TestCase):
         self.assertIn("journal_name", partial["metadata_missing_fields"])
         self.assertIn("issue", partial["metadata_missing_fields"])
         self.assertNotIn("publisher", partial["metadata_missing_fields"])
+
+    def test_manual_journal_metadata_normalizes_identifiers_and_preserves_matching_cnki_evidence(self) -> None:
+        record_url = "https://oversea.cnki.net/kcms2/article/abstract?v=opaque"
+        saved = manual_metadata(
+            {
+                "document_type": "journal_article",
+                "author": "张双利",
+                "title": "重思马克思的市民社会理论",
+                "journal_name": "学术月刊",
+                "publish_year": "2020",
+                "issue": "09",
+                "doi": "https://doi.org/10.19862/J.CNKI.XSYK.000034",
+                "issn": "0439 8041",
+                "metadata_evidence": {
+                    "journal_name": {
+                        "source": "cnki_lookup",
+                        "value": "学术月刊",
+                        "evidence_text": "学术月刊",
+                        "record_url": record_url,
+                    },
+                    "title": {
+                        "source": "cnki_lookup",
+                        "value": "另一篇文章",
+                        "evidence_text": "不应保留",
+                        "record_url": record_url,
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(saved["doi"], "10.19862/j.cnki.xsyk.000034")
+        self.assertEqual(saved["issn"], "0439-8041")
+        self.assertEqual(saved["metadata_evidence"]["journal_name"]["record_url"], record_url)
+        self.assertNotIn("title", saved["metadata_evidence"])
+
+    def test_manual_edit_removes_stale_automatic_evidence(self) -> None:
+        previous = {
+            "document_type": "journal_article",
+            "author": "张双利",
+            "title": "旧篇名",
+            "journal_name": "学术月刊",
+            "publish_year": "2020",
+            "issue": "9",
+            "metadata_evidence": {
+                "title": {"source": "journal_title_line", "evidence_text": "旧篇名"},
+                "journal_name": {"source": "masthead", "evidence_text": "学术月刊"},
+            },
+        }
+        saved = manual_metadata({**previous, "title": "人工修订篇名"}, previous)
+
+        self.assertNotIn("title", saved["metadata_evidence"])
+        self.assertIn("journal_name", saved["metadata_evidence"])
+
+    def test_journal_citation_completeness_requires_catalog_fields(self) -> None:
+        metadata = {
+            "document_type": "journal_article",
+            "author": "张双利",
+            "title": "重思马克思的市民社会理论",
+            "publish_year": "2020",
+        }
+        formats = build_citation_formats(metadata, {"start": "18"})
+
+        self.assertEqual(formats["gb_status"], "metadata_incomplete")
+        self.assertIn("journal_name", formats["gb_missing_fields"])
+        self.assertIn("issue", formats["gb_missing_fields"])
 
     def test_book_and_translated_book_formats(self) -> None:
         book = {
@@ -967,6 +1207,7 @@ class CitationFormatTests(unittest.TestCase):
                     "中图分类号 A1\n"
                     "文献标识码 A\n"
                     "文章编号 0439-8041(2020)09-0015-13\n"
+                    "DOI: 10.19862/j.cnki.xsyk.000034\n"
                     "引 言\n"
                     "近十多年来，中国学界对马克思市民社会理论的研究兴趣日益浓厚。\n"
                     "15"
@@ -985,6 +1226,10 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(detected["issue"], "9")
         # 起始页 15 加篇幅 13 页 → 止页 27。
         self.assertEqual(detected["page_range"], "15-27")
+        self.assertEqual(detected["issn"], "0439-8041")
+        self.assertEqual(detected["doi"], "10.19862/j.cnki.xsyk.000034")
+        self.assertEqual(detected["metadata_evidence"]["issn"]["source_page"], 1)
+        self.assertEqual(detected["metadata_evidence"]["doi"]["rule"], "explicit_doi")
         # 版面上没有刊名和卷号，必须留空待补，不得臆造。
         self.assertIsNone(detected["journal_name"])
         self.assertIsNone(detected["volume"])

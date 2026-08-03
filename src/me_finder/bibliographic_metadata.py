@@ -15,6 +15,7 @@ from .database import paragraph_payload_for_storage
 METADATA_FIELDS = (
     "title", "author", "country", "translator", "publisher", "publish_place",
     "publish_year", "isbn", "journal_name", "volume", "issue", "page_range",
+    "doi", "issn",
 )
 DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
 PUBLISHER_PLACES = {
@@ -96,6 +97,8 @@ MIN_AUTO_CONFIDENCE = {
     "publish_place": 0.88,
     "publish_year": 0.86,
     "isbn": 0.88,
+    "doi": 0.9,
+    "issn": 0.9,
 }
 
 _CHINESE_PUBLISHER_SUFFIX = r"(?:出版集团(?:股份有限公司|有限公司)?|出版社|印书馆|书局)"
@@ -510,10 +513,13 @@ def detect_pdf_bibliographic_metadata(
         result["document_type"] = "thesis"
         for field in (
             "country", "translator", "publish_place", "isbn",
-            "journal_name", "volume", "issue", "page_range",
+            "journal_name", "volume", "issue", "page_range", "doi", "issn",
         ):
             result[field] = None
             evidence.pop(field, None)
+        # 学位论文文件名常写成「作者 - 篇名」（如「金芳冰 - 拉埃尔·耶吉…研究」）。
+        # 当篇名以作者名加分隔符开头时，作者已单列，篇名不应再重复带上作者前缀。
+        _strip_thesis_author_prefix(result, evidence)
     elif is_journal_by_marker or is_journal_by_size:
         result["document_type"] = "journal_article"
     elif result.get("translator"):
@@ -532,7 +538,7 @@ def detect_pdf_bibliographic_metadata(
             result["journal_name"] = journal_name
             evidence["journal_name"] = {
                 "source": "masthead",
-                "source_page": 0,
+                "source_page": 1,
                 "evidence_text": journal_evidence,
                 "rule": journal_rule,
             }
@@ -577,12 +583,24 @@ def metadata_missing_fields(metadata: Mapping[str, object]) -> List[str]:
 
 
 def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[str, object]] = None) -> Dict[str, object]:
-    result = _canonical_metadata(previous or {})
+    previous_metadata = _canonical_metadata(previous or {})
+    result = dict(previous_metadata)
     invalid = invalid_metadata_fields(payload)
     if invalid:
         raise ValueError("以下书目字段包含无效问号或不可用文本：" + "、".join(invalid))
     for field in METADATA_FIELDS:
-        result[field] = str(payload.get(field) or "").strip() or None
+        value = str(payload.get(field) or "").strip()
+        if field == "doi" and value:
+            normalized = normalize_doi(value)
+            if not normalized:
+                raise ValueError("DOI 格式无效。")
+            value = normalized
+        elif field == "issn" and value:
+            normalized = normalize_issn(value)
+            if not normalized:
+                raise ValueError("ISSN 格式或校验位无效。")
+            value = normalized
+        result[field] = value or None
     requested_type = str(payload.get("document_type") or "").strip()
     if requested_type in DOCUMENT_TYPES:
         result["document_type"] = requested_type
@@ -593,7 +611,7 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
     if result["document_type"] == "thesis":
         for field in (
             "country", "translator", "publish_place", "isbn",
-            "journal_name", "volume", "issue", "page_range",
+            "journal_name", "volume", "issue", "page_range", "doi", "issn",
         ):
             result[field] = None
     missing = metadata_missing_fields(result)
@@ -601,7 +619,40 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
     result["metadata_source"] = "manual"
     result["metadata_confidence"] = 1.0
     result["metadata_missing_fields"] = missing
-    result.setdefault("metadata_evidence", {})
+    # Evidence follows the exact value it justified.  Manual edits invalidate
+    # stale automatic evidence, while a user-confirmed CNKI candidate may pass
+    # narrowly validated evidence carrying the matching value.
+    evidence = dict(previous_metadata.get("metadata_evidence") or {})
+    for field in METADATA_FIELDS:
+        if result.get(field) != previous_metadata.get(field):
+            evidence.pop(field, None)
+    supplied_evidence = payload.get("metadata_evidence")
+    if isinstance(supplied_evidence, Mapping):
+        for field, raw_item in supplied_evidence.items():
+            if field not in METADATA_FIELDS or not isinstance(raw_item, Mapping):
+                continue
+            source = str(raw_item.get("source") or "")
+            value = str(raw_item.get("value") or "").strip()
+            if source not in {"cnki_lookup", "cnki_search_result", "cnki_citation", "google_books", "crossref", "k10plus"}:
+                continue
+            if not value or value != str(result.get(field) or "").strip():
+                continue
+            item = {
+                "source": source,
+                "source_page": None,
+                "evidence_text": str(raw_item.get("evidence_text") or value)[:500],
+                "value": value,
+            }
+            record_url = str(raw_item.get("record_url") or "").strip()
+            if (
+                record_url.startswith("https://oversea.cnki.net/")
+                or record_url.startswith("https://books.google.com/")
+                or record_url.startswith("https://play.google.com/")
+                or record_url.startswith("https://doi.org/")
+            ):
+                item["record_url"] = record_url[:4096]
+            evidence[field] = item
+    result["metadata_evidence"] = evidence
     return result
 
 
@@ -1148,7 +1199,17 @@ _JOURNAL_MARKERS = ("中图分类号", "文献标识码", "文献标志码")
 _JOURNAL_WEAK_MARKERS = ("摘要", "关键词", "DOI:", "doi:")
 # 版权页/CIP 专有标记，只属于正式出版的专著。含美国国会图书馆 CIP 短语，
 # 用于识别没有中文版权页、也没印 ISBN 的外文专著。
-_BOOK_ONLY_MARKERS = ("图书在版编目", "ISBN", "出版发行", "版次", "定价", "Cataloging-in-Publication")
+# 强图书标记：版权页/CIP 专有，出现在任意页都足以判定为图书。
+_BOOK_STRONG_MARKERS = ("图书在版编目", "出版发行", "版次", "定价", "Cataloging-in-Publication")
+# 版权页/CIP 语境线索（去空格、casefold 后匹配）。裸 ISBN 只有与这些线索同页时才算
+# 图书信号——外文/中文论文的参考文献会引用他书的 ISBN 甚至“出版社”，但绝不会出现
+# ©、版权、Identifiers:、Library of Congress 这类版权页专有字样，据此把两者分开。
+_BOOK_ISBN_CONTEXT = (
+    "版权", "©", "allrightsreserved", "firstpublished",
+    "libraryofcongress", "cataloging", "identifiers:", "description:",
+)
+# 用于期刊 GB/T 判定的排除标记：只在首页文本上判断，故含 ISBN 是安全的。
+_BOOK_ONLY_MARKERS = _BOOK_STRONG_MARKERS + ("ISBN",)
 # 学位论文封面用语：识别为独立文献类型。
 _THESIS_MARKERS = ("硕士学位论文", "博士学位论文", "专业学位论文", "学位论文")
 _THESIS_FIELD_LABEL_RE = re.compile(
@@ -1208,6 +1269,12 @@ _ARTICLE_NUMBER_RE = re.compile(
     r"(?P<start>\d{1,5})\s*-\s*"
     r"(?P<length>\d{1,4})"
 )
+_DOI_RE = re.compile(
+    r"(?:https?://(?:dx\.)?doi\.org/|\bDOI\s*[:：]?\s*)"
+    r"(?P<doi>10\.\d{4,9}/[-._;()/:A-Z0-9]+)",
+    re.IGNORECASE,
+)
+_ISSN_RE = re.compile(r"\b(?P<issn>\d{4}(?:\s*-\s*|\s+)\d{3}[\dXx])\b")
 # 期刊版式常见的卷期行：「第 52 卷第 9 期」「2020 年第 9 期」。
 _VOLUME_ISSUE_RE = re.compile(r"第\s*(?P<volume>\d{1,3})\s*卷\s*第\s*(?P<issue>\d{1,3})\s*期")
 _YEAR_ISSUE_RE = re.compile(r"(?P<year>\d{4})\s*年\s*第\s*(?P<issue>\d{1,3})\s*期")
@@ -1229,6 +1296,32 @@ def looks_like_journal_article(text: str) -> bool:
     if any(marker in compact for marker in _JOURNAL_MARKERS):
         return True
     return sum(1 for marker in _JOURNAL_WEAK_MARKERS if marker in compact) >= 2
+
+
+def normalize_doi(value: object) -> Optional[str]:
+    text = unicodedata.normalize("NFKC", str(value or "")).strip()
+    match = _DOI_RE.search(text)
+    if match is None:
+        match = re.search(r"(?P<doi>10\.\d{4,9}/[-._;()/:A-Z0-9]+)", text, re.IGNORECASE)
+    if match is None:
+        return None
+    doi = match.group("doi").rstrip(".,;:。；，）)]}").strip()
+    return doi.casefold() if doi else None
+
+
+def normalize_issn(value: object) -> Optional[str]:
+    text = unicodedata.normalize("NFKC", str(value or ""))
+    match = _ISSN_RE.search(text)
+    if match is None:
+        return None
+    compact = re.sub(r"\s|-", "", match.group("issn")).upper()
+    if len(compact) != 8:
+        return None
+    total = sum(int(char) * weight for char, weight in zip(compact[:7], range(8, 1, -1)))
+    check = 10 if compact[7] == "X" else int(compact[7])
+    if (total + check) % 11 != 0:
+        return None
+    return compact[:4] + "-" + compact[4:]
 
 
 def _looks_like_thesis(texts: Sequence[Tuple[int, str]]) -> bool:
@@ -1268,6 +1361,39 @@ def _following_thesis_cover_value(
             continue
         return value, page_idx, raw_line
     return None, None, None
+
+
+# 学位论文文件名分隔符：半角/全角连字符、破折号、下划线、间隔号、冒号。
+_THESIS_TITLE_AUTHOR_PREFIX_SEP = re.compile(r"^[\s\-‐-―－_·・:：]+")
+
+
+def _strip_thesis_author_prefix(
+    result: Dict[str, object],
+    evidence: Dict[str, object],
+) -> None:
+    """Drop a leading ``作者 - `` prefix from a thesis title.
+
+    Descriptive filenames often read ``作者 - 篇名``.  Because the author is
+    already stored separately, the title must not repeat it.  Only strip when
+    the title starts with the exact author name *and* a real separator follows,
+    so genuine titles that merely begin with the author's characters survive.
+    """
+
+    author = str(result.get("author") or "").strip()
+    title = str(result.get("title") or "").strip()
+    if not author or not title or not title.startswith(author):
+        return
+    remainder = title[len(author):]
+    separator = _THESIS_TITLE_AUTHOR_PREFIX_SEP.match(remainder)
+    if not separator or separator.end() == 0:
+        return
+    stripped = remainder[separator.end():].strip()
+    if not is_valid_bibliographic_value(stripped):
+        return
+    result["title"] = stripped
+    field_evidence = dict(evidence.get("title") or {}) if isinstance(evidence.get("title"), Mapping) else {}
+    field_evidence["author_prefix_stripped"] = title
+    evidence["title"] = field_evidence
 
 
 def _extract_thesis_metadata(
@@ -1428,11 +1554,18 @@ def _extract_thesis_metadata(
 
 
 def _has_book_only_markers(texts: Sequence[Tuple[int, str]]) -> bool:
-    """Report whether any scanned page shows a book copyright/CIP marker."""
+    """Report whether any scanned page shows a book copyright/CIP marker.
 
-    for _, text in texts:
-        compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
-        if any(marker.casefold() in compact.casefold() for marker in _BOOK_ONLY_MARKERS):
+    Strong CIP markers count on any page; a bare ISBN counts only on the front
+    pages so a cited book's ISBN in a foreign article's reference list does not
+    misclassify the article as a monograph.
+    """
+
+    for _page_idx, text in texts:
+        folded = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).casefold()
+        if any(marker.casefold() in folded for marker in _BOOK_STRONG_MARKERS):
+            return True
+        if "isbn" in folded and any(cue in folded for cue in _BOOK_ISBN_CONTEXT):
             return True
     return False
 
@@ -1513,11 +1646,24 @@ def _extract_journal_article(
     evidence: Dict[str, object] = {}
     confidence: Dict[str, float] = {}
 
-    def record(field: str, value: str, page_idx: Optional[int], source: str, score: float, text: str) -> None:
+    def record(
+        field: str,
+        value: str,
+        page_idx: Optional[int],
+        source: str,
+        score: float,
+        text: str,
+        rule: str,
+    ) -> None:
         if field in values or not is_valid_bibliographic_value(value):
             return
         values[field] = value
-        evidence[field] = {"source": source, "source_page": page_idx, "evidence_text": text}
+        evidence[field] = {
+            "source": source,
+            "source_page": page_idx + 1 if page_idx is not None else None,
+            "evidence_text": text,
+            "rule": rule,
+        }
         confidence[field] = score
 
     first_page = next((item for item in texts if item[0] == 0), None)
@@ -1528,12 +1674,15 @@ def _extract_journal_article(
 
         match = _ARTICLE_NUMBER_RE.search(compact)
         if match:
+            issn = normalize_issn(match.group("issn"))
             year = match.group("year")
             issue = str(int(match.group("issue")))
             start = int(match.group("start"))
             length = int(match.group("length"))
-            record("publish_year", year, page_idx, "article_number", 0.97, match.group(0))
-            record("issue", issue, page_idx, "article_number", 0.97, match.group(0))
+            if issn:
+                record("issn", issn, page_idx, "article_number", 0.99, match.group(0), "article_number_issn")
+            record("publish_year", year, page_idx, "article_number", 0.97, match.group(0), "article_number_year")
+            record("issue", issue, page_idx, "article_number", 0.97, match.group(0), "article_number_issue")
             if start > 0 and length > 0:
                 record(
                     "page_range",
@@ -1542,16 +1691,27 @@ def _extract_journal_article(
                     "article_number",
                     0.95,
                     match.group(0),
+                    "article_number_page_span",
                 )
+
+        doi_match = _DOI_RE.search(normalized)
+        doi = normalize_doi(doi_match.group(0)) if doi_match else None
+        if doi:
+            record("doi", doi, page_idx, "journal_front_page", 0.98, doi_match.group(0), "explicit_doi")
+
+        issn_match = _ISSN_RE.search(normalized)
+        issn = normalize_issn(issn_match.group(0)) if issn_match else None
+        if issn:
+            record("issn", issn, page_idx, "journal_front_page", 0.96, issn_match.group(0), "explicit_issn")
 
         volume_match = _VOLUME_ISSUE_RE.search(compact)
         if volume_match:
-            record("volume", str(int(volume_match.group("volume"))), page_idx, "masthead", 0.9, volume_match.group(0))
-            record("issue", str(int(volume_match.group("issue"))), page_idx, "masthead", 0.9, volume_match.group(0))
+            record("volume", str(int(volume_match.group("volume"))), page_idx, "masthead", 0.9, volume_match.group(0), "masthead_volume")
+            record("issue", str(int(volume_match.group("issue"))), page_idx, "masthead", 0.9, volume_match.group(0), "masthead_issue")
         year_match = _YEAR_ISSUE_RE.search(compact)
         if year_match:
-            record("publish_year", year_match.group("year"), page_idx, "masthead", 0.88, year_match.group(0))
-            record("issue", str(int(year_match.group("issue"))), page_idx, "masthead", 0.88, year_match.group(0))
+            record("publish_year", year_match.group("year"), page_idx, "masthead", 0.88, year_match.group(0), "masthead_year")
+            record("issue", str(int(year_match.group("issue"))), page_idx, "masthead", 0.88, year_match.group(0), "masthead_issue")
 
     # 篇名与作者：期刊首页顶部依次是篇名、作者，随后才是摘要。
     if first_page is not None:
@@ -1563,7 +1723,7 @@ def _extract_journal_article(
         for line in lines[:12]:
             statement = _AUTHOR_STATEMENT_RE.match(line)
             if statement:
-                record("author", _clean_person(statement.group("author")), 0, "author_statement", 0.93, line)
+                record("author", _clean_person(statement.group("author")), 0, "author_statement", 0.93, line, "journal_author_statement")
                 break
         heading: List[str] = []
         for line in lines:
@@ -1571,17 +1731,17 @@ def _extract_journal_article(
                 break
             heading.append(line)
         if heading:
-            record("title", heading[0], 0, "journal_title_line", 0.9, heading[0])
+            record("title", heading[0], 0, "journal_title_line", 0.9, heading[0], "journal_title_line")
             if len(heading) > 1 and _is_plausible_person_name(heading[1]):
-                record("author", _clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1])
+                record("author", _clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1], "journal_author_line")
 
     # CNKI 导出件的文件名是「篇名_作者」，可为版面抽取提供独立佐证。
     stem_match = re.match(r"^(?P<title>.+?)_(?P<author>[^_]{2,20})$", file_stem.strip())
     if stem_match:
-        record("title", stem_match.group("title").strip(), None, "file_name", 0.75, file_stem)
+        record("title", stem_match.group("title").strip(), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
         candidate = stem_match.group("author").strip()
         if _is_plausible_person_name(candidate):
-            record("author", _clean_person(candidate), None, "file_name", 0.75, file_stem)
+            record("author", _clean_person(candidate), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
 
     return values, evidence, confidence
 
@@ -2035,6 +2195,8 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         "volume": ("volume", "journal_volume"),
         "issue": ("issue", "issue_number", "journal_issue"),
         "page_range": ("page_range", "pages", "article_pages"),
+        "doi": ("doi", "DOI"),
+        "issn": ("issn", "ISSN"),
     }
     for field, keys in aliases.items():
         result[field] = next((source.get(key) for key in keys if source.get(key) not in (None, "")), None)

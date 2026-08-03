@@ -319,6 +319,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "data-location-settings",
             "mineru-api-settings",
             "vision-api-settings",
+            "citation-format-settings",
             "backup-settings",
         }
         self.assertEqual({section_id for _, section_id in sections}, expected_ids)
@@ -335,6 +336,29 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("def batch_metadata_candidates()", WEB_SOURCE)
         self.assertIn('if source == "manual":', WEB_SOURCE)
         self.assertIn("batchmeta-", WEB_SOURCE)
+
+    def test_online_metadata_candidates_at_95_percent_are_automatic(self) -> None:
+        self.assertIn("const ONLINE_METADATA_AUTO_MATCH_THRESHOLD = 0.95;", HTML)
+        self.assertIn("function automaticBatchCandidateIndex(candidates)", HTML)
+        self.assertIn("score >= ONLINE_METADATA_AUTO_MATCH_THRESHOLD", HTML)
+        self.assertIn("var automaticIndex = automaticBatchCandidateIndex(candidates);", HTML)
+        self.assertNotIn(
+            "candidates.length === 1 && candidates[0].match && candidates[0].match.level === 'high'",
+            HTML,
+        )
+
+    def test_citation_format_preferences_filter_the_result_dropdown(self) -> None:
+        vision_at = HTML.index('data-target="vision-api-settings"')
+        citation_at = HTML.index('data-target="citation-format-settings"')
+        appearance_at = HTML.index('data-target="appearance-card"')
+        self.assertLess(vision_at, citation_at)
+        self.assertLess(citation_at, appearance_at)
+        self.assertIn("const DEFAULT_CITATION_STYLES = ['chinese', 'gb'];", HTML)
+        self.assertIn("function citationStyleMenuMarkup()", HTML)
+        self.assertIn("function setCitationStyleEnabled(style, checked)", HTML)
+        for style in ("chinese", "gb", "chicago", "apa", "mla"):
+            self.assertIn(f'name="citation-format" value="{style}"', HTML)
+        self.assertIn("body: JSON.stringify({citation_styles: enabledCitationStyles})", HTML)
 
     def test_directory_scan_ui_and_endpoints_are_wired(self) -> None:
         self.assertIn('id="scan-section"', HTML)

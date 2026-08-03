@@ -14,6 +14,8 @@ DEFAULT_LIBRARY_VIEW = "list"
 DEFAULT_CALIBRATION_VIEW = "grid"
 DEFAULT_PDF_OPEN_MODE = "native"
 DEFAULT_AUTO_UPDATE = False
+DEFAULT_CITATION_STYLES = ("chinese", "gb")
+VALID_CITATION_STYLES = ("chinese", "gb", "chicago", "apa", "mla")
 VALID_THEMES = frozenset(
     {
         "frost-blue",
@@ -66,6 +68,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     auto_update = payload.get("auto_update") if isinstance(payload, dict) else None
     if not isinstance(auto_update, bool):
         auto_update = DEFAULT_AUTO_UPDATE
+    citation_styles = _normalized_citation_styles(
+        payload.get("citation_styles") if isinstance(payload, dict) else None
+    )
     return {
         "theme": theme,
         "library_view": library_view,
@@ -73,6 +78,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "scan_directories": scan_directories,
         "pdf_open_mode": pdf_open_mode,
         "auto_update": auto_update,
+        "citation_styles": citation_styles,
     }
 
 
@@ -88,6 +94,14 @@ def _normalized_scan_directories(value: Any) -> list[str]:
         if normalized not in result:
             result.append(normalized)
     return result[:20]
+
+
+def _normalized_citation_styles(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return list(DEFAULT_CITATION_STYLES)
+    selected = {str(item or "").strip().lower() for item in value}
+    normalized = [style for style in VALID_CITATION_STYLES if style in selected]
+    return normalized or list(DEFAULT_CITATION_STYLES)
 
 
 def save_preferences(
@@ -136,6 +150,19 @@ def _save_preferences_locked(
         if not isinstance(auto_update, bool):
             raise ValueError("自动更新设置必须为布尔值")
         current["auto_update"] = auto_update
+    if "citation_styles" in updates:
+        citation_styles = updates["citation_styles"]
+        if not isinstance(citation_styles, list):
+            raise ValueError("引文格式必须是列表")
+        requested = [str(item or "").strip().lower() for item in citation_styles]
+        if any(style not in VALID_CITATION_STYLES for style in requested):
+            raise ValueError("包含不支持的引文格式")
+        normalized = [
+            style for style in VALID_CITATION_STYLES if style in set(requested)
+        ]
+        if not normalized:
+            raise ValueError("至少选择一种引文格式")
+        current["citation_styles"] = normalized
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")

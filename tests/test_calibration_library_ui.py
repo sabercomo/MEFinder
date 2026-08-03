@@ -213,12 +213,26 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
         self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('failed','页码自动检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
-        self.assertNotIn("statusStatButton('failed','检测失败'", HTML)
+        self.assertIn("statusStatButton('calibrated','页码已校准'", HTML)
+        self.assertIn("statusStatButton('page_pending','页码待处理'", HTML)
+        self.assertIn("statusStatButton('bibliographic','书目待补全'", HTML)
+        self.assertNotIn("statusStatButton('pending','待校准'", HTML)
+        self.assertNotIn("statusStatButton('review','待确认'", HTML)
+        self.assertNotIn("statusStatButton('failed','页码自动检测失败'", HTML)
         self.assertIn("libStatusFilter = requested === libStatusFilter ? 'all' : requested", HTML)
         self.assertIn("if (libStatusFilter === 'pdf_all')", HTML)
         self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
+        self.assertIn("libStatusFilter === 'page_pending'", HTML)
+        self.assertIn("calibrationStatusGroup(s.status) !== 'calibrated'", HTML)
+        self.assertIn("libStatusFilter === 'bibliographic'", HTML)
+        self.assertIn("bibliographicMissingFields(sourceBibliographicMetadata(s)).length > 0", HTML)
         self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
+
+    def test_page_and_bibliographic_labels_are_unambiguous(self) -> None:
+        self.assertIn("needs_review:'页码待确认'", HTML)
+        self.assertIn("unmapped:'页码尚未检测'", HTML)
+        self.assertIn("return fields.length ? '书目缺失：'", HTML)
+        self.assertIn("needs_review:'书目待确认'", HTML)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
