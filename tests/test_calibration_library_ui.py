@@ -140,7 +140,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         word = by_id["word-vol1"]
         self.assertEqual(word["source_type"], "word")
         self.assertEqual(word["title"], "马克思恩格斯文集 第1卷")
-        self.assertEqual(word["author"], "马克思")
+        self.assertEqual(word["author"], "马克思、恩格斯")
         self.assertEqual(word["works_count"], 2)
         self.assertTrue(word["source_exists"])
         self.assertEqual(word["modified_at"], "2026-07-01T08:00:00")
@@ -163,7 +163,76 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
             {"total": 1, "calibrated": 1, "pending": 0, "review": 0, "failed": 0, "mapping": 0},
         )
         self.assertEqual(result["volumes"][0]["volume_id"], "vol-1")
+        self.assertEqual(result["volumes"][0]["primary_structure"], "article_collection")
         self.assertEqual(len(result["works"]), 2)
+
+    def test_collection_titles_control_word_type_and_author(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            sources = []
+            volumes = []
+            works = []
+            cases = [
+                ("marx-collection", "《马克思恩格斯文集》第9卷", "mixed", "article_collection", "马克思、恩格斯"),
+                ("marx-complete", "《马恩全集》第12卷", "standalone_document", "complete_works", "马克思、恩格斯"),
+                ("hegel-complete", "黑格尔全集 第3卷", "monograph", "complete_works", "黑格尔"),
+                ("dewey-collection", "杜威文集 第2卷", "letters", "article_collection", "杜威"),
+                ("mao-selected", "毛泽东选集 第1卷", "mixed", "selected_works", "毛泽东"),
+            ]
+            for source_id, title, old_structure, _, _ in cases:
+                sources.append({
+                    "source_file_id": source_id,
+                    "source_type": "word",
+                    "file_name": title + ".docx",
+                    "title": title,
+                })
+                volumes.append({
+                    "source_file_id": source_id,
+                    "volume_id": source_id + "-volume",
+                    "display_title": title,
+                    "primary_structure": old_structure,
+                })
+                works.append({
+                    "volume_id": source_id + "-volume",
+                    "title": "卷内第一篇",
+                    "author_label": "错误的卷内作者",
+                })
+            result = build_library(root, sources, volumes, works, [])
+
+        items = {item["source_file_id"]: item for item in result["items"]}
+        projected_volumes = {
+            item["source_file_id"]: item for item in result["volumes"]
+        }
+        for source_id, _, _, expected_structure, expected_author in cases:
+            self.assertEqual(items[source_id]["author"], expected_author)
+            self.assertEqual(
+                projected_volumes[source_id]["primary_structure"],
+                expected_structure,
+            )
+
+    def test_collection_editor_is_preserved_over_title_inference(self) -> None:
+        result = build_library(
+            Path("."),
+            [{
+                "source_file_id": "edited-collection",
+                "source_type": "word",
+                "file_name": "中国哲学文集第1卷.docx",
+                "bibliographic_metadata": {"editor": "张三"},
+            }],
+            [{
+                "source_file_id": "edited-collection",
+                "volume_id": "edited-volume",
+                "display_title": "中国哲学文集第1卷",
+                "primary_structure": "mixed",
+            }],
+            [{
+                "volume_id": "edited-volume",
+                "author_label": "卷内文章作者",
+            }],
+            [],
+        )
+        self.assertEqual(result["items"][0]["author"], "张三（主编）")
+        self.assertEqual(result["volumes"][0]["primary_structure"], "article_collection")
 
     def test_chinese_file_name_prevents_foreign_misclassification(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -261,6 +330,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("var statusChip = isPdf", HTML)
         self.assertIn("calTransientStatus[src.source_file_id] || src.status", HTML)
         self.assertIn("var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : ''", HTML)
+        self.assertIn("complete_works:'全集'", HTML)
+        self.assertIn("selected_works:'选集'", HTML)
         self.assertIn("src.mapping_summary || '尚未建立引用页码映射'", HTML)
         self.assertIn("src.page_count ? src.page_count + ' 页' : '页数未知'", HTML)
         self.assertIn("(src.works_count || 1) + ' 篇'", HTML)
