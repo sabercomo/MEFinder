@@ -10,7 +10,33 @@ fi
 
 MEFINDER_PYTHON="${MEFINDER_PYTHON:-python3}"
 MEFINDER_ARCH="${MEFINDER_TARGET_ARCH:-$(uname -m)}"
+# Minimum macOS version. Defaults to 14.0 so the Apple Silicon / macOS 14 build
+# is unchanged; the macOS 12 Intel build passes MEFINDER_MIN_MACOS_VERSION=12.0.
+# This value drives Info.plist's LSMinimumSystemVersion, the deployment target of
+# anything compiled during the build, and the post-build Mach-O verification.
+MEFINDER_MIN_MACOS_VERSION="${MEFINDER_MIN_MACOS_VERSION:-14.0}"
 MEFINDER_CODESIGN_IDENTITY="${MEFINDER_CODESIGN_IDENTITY:--}"
+
+# Ensure any C extension built from source during dependency install or by
+# PyInstaller inherits the requested deployment target rather than the build
+# machine's SDK default. Binaries shipped as wheels keep their own (already
+# lower) targets; both are checked later by tools/verify_macos_binaries.py.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-$MEFINDER_MIN_MACOS_VERSION}"
+
+# The interpreter must actually execute as the target architecture. On Apple
+# Silicon a universal2 interpreter defaults to its arm64 slice, so an x86_64
+# build requires an interpreter that runs under Rosetta (for example the
+# .venv-macos12-x86_64/bin/python-x86_64 wrapper). Refuse to "fake" an x86_64
+# build with a natively-arm64 interpreter, which would silently ship arm64
+# binaries. See MACOS_BUILD.md.
+MEFINDER_PYTHON_ARCH="$("$MEFINDER_PYTHON" -c 'import platform; print(platform.machine())')"
+if [[ "$MEFINDER_PYTHON_ARCH" != "$MEFINDER_ARCH" ]]; then
+  echo "Build failed: MEFINDER_PYTHON runs as '$MEFINDER_PYTHON_ARCH' but the target architecture is '$MEFINDER_ARCH'." >&2
+  echo "For an x86_64 build on Apple Silicon, point MEFINDER_PYTHON at an interpreter that runs under Rosetta," >&2
+  echo "e.g. MEFINDER_PYTHON=.venv-macos12-x86_64/bin/python-x86_64." >&2
+  exit 1
+fi
+
 MEFINDER_STAGE="build/macos-stage"
 MEFINDER_VERSION="$("$MEFINDER_PYTHON" -c 'from src.me_finder import __version__; print(__version__)')"
 MEFINDER_PACKAGE="MEFinder-v${MEFINDER_VERSION}-macos-${MEFINDER_ARCH}"
@@ -159,6 +185,7 @@ fi
 
 MEFINDER_APP_VERSION="$MEFINDER_VERSION" \
 MEFINDER_TARGET_ARCH="$MEFINDER_ARCH" \
+MEFINDER_MIN_MACOS_VERSION="$MEFINDER_MIN_MACOS_VERSION" \
   "$MEFINDER_PYTHON" -m PyInstaller desktop_macos.spec \
     --clean \
     --noconfirm \
@@ -184,6 +211,18 @@ if find "$MEFINDER_BUILT_APP" -type f \( \
   echo "Build failed: the app contains private or generated state." >&2
   exit 1
 fi
+
+# Recursively confirm that every Mach-O file carries the requested architecture
+# (and only it) and that no slice targets a macOS newer than the advertised
+# minimum. This is what makes the Intel/macOS 12 build trustworthy: it rejects
+# any arm64-only binary and any leftover 14.0-targeted Python runtime that would
+# stop the app from launching on Intel Macs running macOS 12. The default
+# arm64/14.0 build passes unchanged.
+"$MEFINDER_PYTHON" -m tools.verify_macos_binaries \
+  --require-arch "$MEFINDER_ARCH" \
+  --max-min-version "$MEFINDER_MIN_MACOS_VERSION" \
+  --forbid-extra-arch \
+  "$MEFINDER_BUILT_APP"
 
 clean_app_metadata "$MEFINDER_BUILT_APP"
 codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$MEFINDER_BUILT_APP"

@@ -13,6 +13,12 @@ stage_root = project_root / "build" / "macos-stage"
 target_arch = os.environ.get("MEFINDER_TARGET_ARCH") or None
 codesign_identity = os.environ.get("MEFINDER_CODESIGN_IDENTITY") or None
 app_version = os.environ.get("MEFINDER_APP_VERSION") or __version__
+# The minimum macOS version advertised in Info.plist. Defaults to 14.0 so the
+# existing Apple Silicon / macOS 14 build is unchanged. The dedicated macOS 12
+# Intel build sets MEFINDER_MIN_MACOS_VERSION=12.0. This only controls the
+# Gatekeeper/Finder gate; the binaries' own deployment targets come from the
+# Python toolchain and are checked separately by tools/verify_macos_binaries.py.
+min_macos_version = os.environ.get("MEFINDER_MIN_MACOS_VERSION") or "14.0"
 pdfkit_hiddenimports = collect_submodules("Quartz.PDFKit")
 
 required_stage_files = (
@@ -122,7 +128,7 @@ app = BUNDLE(
         "CFBundleDisplayName": "文献原句定位器",
         "CFBundleName": "MEFinder",
         "LSApplicationCategoryType": "public.app-category.productivity",
-        "LSMinimumSystemVersion": "14.0",
+        "LSMinimumSystemVersion": min_macos_version,
         "NSHighResolutionCapable": True,
     },
 )
