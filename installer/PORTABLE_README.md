@@ -1,4 +1,4 @@
-# ME_Finder 文献原句定位器（Windows 绿色版）
+# MEFinder 文献原句定位器（Windows 绿色版）
 
 ## 开始使用
 

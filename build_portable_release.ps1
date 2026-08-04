@@ -76,7 +76,7 @@ try {
 
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $StagePath "config\pdf_imports.json")
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $StagePath "config\mineru_api.local.example.json")
-    Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "installer\PORTABLE_README.md") -Destination (Join-Path $StagePath "README.md")
     $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }

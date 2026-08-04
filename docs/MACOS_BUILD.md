@@ -1,5 +1,7 @@
 # macOS 构建说明
 
+> 构建入口 `build_macos.sh` 与依赖清单仍位于仓库根目录。
+
 macOS 版本沿用现有的 Python 后端和 HTML/CSS/JavaScript 界面，用 pywebview 的
 Cocoa/WebKit 窗口封装，并由 PyInstaller 生成原生 `.app`。
 

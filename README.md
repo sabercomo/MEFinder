@@ -51,7 +51,7 @@ MEFINDER_PYTHON=.venv-macos/bin/python ./build_macos.sh
 系统“预览”，可在“设置 → PDF 阅读”中切换，使用预览时页码需要手动翻到。
 
 应用数据保存在 `~/Library/Application Support/MEFinder/`，替换或升级 `.app`
-不会删除文献、索引和设置。完整构建、签名与发布说明见 `MACOS_BUILD.md`。
+不会删除文献、索引和设置。完整构建、签名与发布说明见 `docs/MACOS_BUILD.md`。
 
 ## 安装方式
 
@@ -285,7 +285,7 @@ py -3 desktop.py
 生成带空白索引、隐私检查和 SHA256 的绿色发布 ZIP，可直接双击：
 
 ```powershell
-rebuild_portable_release.cmd
+powershell -ExecutionPolicy Bypass -File .\build_portable_release.ps1
 ```
 
 生成带空白索引、隐私检查和 SHA-256 的单文件安装程序（需安装 Inno Setup 6）：
@@ -294,7 +294,7 @@ rebuild_portable_release.cmd
 .\build_windows_installer.ps1
 ```
 
-安装版与发布流程详见 `WINDOWS_BUILD.md`。
+安装版与发布流程详见 `docs/WINDOWS_BUILD.md`。
 
 绿色版 ZIP 和安装程序都会生成到 `release\`。构建脚本只携带空白索引和示例配置，
 不会复制本机语料或私有 API 密钥；每位用户在应用中导入自己的文献，并在“设置”中填写 Token。
@@ -360,13 +360,6 @@ PDF 测试样例位于：
 ```text
 tests/known_pdf_quotes.json
 ```
-
-## 开发文档
-
-- `CORPUS_AUDIT.md`：初始 Word 语料结构与风险审计；
-- `PROPOSED_DATA_SCHEMA.md`：索引核心实体与可信度字段；
-- `PAGE_NUMBER_STRATEGY.md`：Word 原书页码的来源、限制和校验规则；
-- `PDF_PAGE_MODEL.md`：PDF 物理页、页码标签与引用页码的边界。
 
 ## 已知限制
 
