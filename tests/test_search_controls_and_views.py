@@ -366,6 +366,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertLess(vision_at, citation_at)
         self.assertLess(citation_at, appearance_at)
         self.assertIn("const DEFAULT_CITATION_STYLES = ['chinese', 'gb'];", HTML)
+        self.assertIn("meFinderEnabledCitationStylesV1", HTML)
+        self.assertIn("loadLocalCitationStyles() || DEFAULT_CITATION_STYLES.slice()", HTML)
+        self.assertIn("saveLocalCitationStyles(enabledCitationStyles)", HTML)
+        self.assertIn("body: JSON.stringify({citation_style: citationStyle})", HTML)
         self.assertIn("function citationStyleMenuMarkup()", HTML)
         self.assertIn("function setCitationStyleEnabled(style, checked)", HTML)
         for style in ("chinese", "gb", "chicago", "apa", "mla"):

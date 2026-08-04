@@ -7,7 +7,10 @@ pages are never substituted with PDF physical indexes.
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Mapping, Optional
+
+from .collection_metadata import infer_collection_metadata
 
 
 CitationMetadata = Mapping[str, object]
@@ -104,14 +107,14 @@ def _format_chinese(meta: CitationMetadata, page: Dict[str, object]) -> str:
     if doc_type == "translated_book":
         return _finish_chinese(_join_nonempty([
             _author_prefix(meta, include_country=True),
-            _quoted_title(_book_title(meta)),
+            _book_title_chinese(meta),
             _translator_chinese(meta),
             _publisher_year_chinese(meta),
             page["chinese"],
         ]))
     return _finish_chinese(_join_nonempty([
         _author_prefix(meta, include_country=True),
-        _quoted_title(_book_title(meta)),
+        _book_title_chinese(meta),
         _publisher_year_chinese(meta),
         page["chinese"],
     ]))
@@ -161,7 +164,7 @@ def _format_gb(meta: CitationMetadata, page: Dict[str, object]) -> str:
         if "citation_page" in missing:
             return "该文献页码尚未校准，不能生成 GB/T 引文。"
         return f"无法生成完整 GB/T 引文：缺少{' / '.join(_field_label(field) for field in missing)}。"
-    title = _book_title(meta)
+    title = _book_title_gb(meta)
     base = _join_gb([_author_plain(meta, include_country=True), f"{title}[M]" if title else ""])
     translator = _translator_gb(meta) if doc_type == "translated_book" else ""
     pub = _publisher_year_gb(meta)
@@ -494,6 +497,21 @@ def _author_prefix(meta: CitationMetadata, include_country: bool = False) -> str
 
 def _author_plain(meta: CitationMetadata, include_country: bool = False) -> str:
     author = _first(meta, "author", "authors", "author_label", "creator")
+    if not author:
+        editor = _first(meta, "editor", "editors", "chief_editor", "editorial_board")
+        if editor:
+            role = _first(meta, "editor_role", "responsibility_role") or "主编"
+            if re.search(r"(?:，|,\s*)?(?:主编|编著|编)$", editor):
+                author = editor
+            elif "编委会" in editor:
+                author = f"{editor}，编"
+            else:
+                author = f"{editor}，{role}"
+    if not author and not _responsibility_is_absent_or_unknown(meta):
+        author = infer_collection_metadata(
+            _first(meta, "collection_title", "book_title", "document_title", "display_title", "title"),
+            _first(meta, "file_name", "original_file_name"),
+        ).get("author", "")
     country = _first(meta, "country", "nationality") if include_country else ""
     if author and country and not author.startswith("[") and not author.startswith("［"):
         return f"[{country}]{author}"
@@ -510,6 +528,11 @@ def _is_marx_engels_collection(meta: CitationMetadata) -> bool:
     return any(marker in compact for marker in markers)
 
 
+def _responsibility_is_absent_or_unknown(meta: CitationMetadata) -> bool:
+    status = _first(meta, "responsibility_status", "author_status").lower()
+    return status in {"none", "unknown", "not_applicable", "no_responsible_person"}
+
+
 def _marx_engels_collection_title(meta: CitationMetadata) -> str:
     title = _first(meta, "collection_title", "document_title", "display_title", "title")
     file_name = _first(meta, "file_name", "original_file_name")
@@ -519,6 +542,43 @@ def _marx_engels_collection_title(meta: CitationMetadata) -> str:
     if "选集" in source:
         return "马克思恩格斯选集"
     return "马克思恩格斯文集"
+
+
+def _book_title_chinese(meta: CitationMetadata) -> str:
+    collection_title, volume = _personal_collection_title_and_volume(meta)
+    if collection_title:
+        quoted = _quoted_title(collection_title)
+        return f"{quoted}{volume}" if volume else quoted
+    return _quoted_title(_book_title(meta))
+
+
+def _book_title_gb(meta: CitationMetadata) -> str:
+    collection_title, volume = _personal_collection_title_and_volume(meta)
+    if collection_title:
+        return f"{collection_title}:{volume}" if volume else collection_title
+    return _book_title(meta)
+
+
+def _personal_collection_title_and_volume(meta: CitationMetadata) -> tuple[str, str]:
+    raw_title = _first(
+        meta, "collection_title", "book_title", "document_title", "display_title", "title"
+    )
+    collection = infer_collection_metadata(
+        raw_title, _first(meta, "file_name", "original_file_name")
+    )
+    if not collection or collection.get("author") == "马克思、恩格斯":
+        return "", ""
+    volume = _first(meta, "volume_number", "volume")
+    if not volume:
+        match = re.search(r"第\s*([^：:，,。；;\s]{1,12})\s*卷", raw_title)
+        volume = match.group(1) if match else ""
+    if volume:
+        volume = str(volume).strip()
+        if not volume.startswith("第"):
+            volume = f"第{volume}"
+        if not volume.endswith("卷"):
+            volume = f"{volume}卷"
+    return collection["collection_title"], volume
 
 
 def _marx_engels_volume(meta: CitationMetadata) -> str:
@@ -724,7 +784,7 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
         required = ["author", "title", "publisher", "publish_year"]
         missing = []
         for field in required:
-            if field == "author" and not _author_plain(meta, include_country=False):
+            if field == "author" and not _author_plain(meta, include_country=False) and not _responsibility_is_absent_or_unknown(meta):
                 missing.append(field)
             elif field == "title" and not _title(meta):
                 missing.append(field)
@@ -741,7 +801,7 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
             required.append("issue")
         missing = []
         for field in required:
-            if field == "author" and not _author_plain(meta, include_country=False):
+            if field == "author" and not _author_plain(meta, include_country=False) and not _responsibility_is_absent_or_unknown(meta):
                 missing.append(field)
             elif field == "title" and not _title(meta):
                 missing.append(field)
@@ -767,7 +827,7 @@ def _missing_fields(meta: CitationMetadata, page: Dict[str, object], style: str)
         required.insert(2, "translator")
     missing = []
     for field in required:
-        if field == "author" and not _author_plain(meta, include_country=False):
+        if field == "author" and not _author_plain(meta, include_country=False) and not _responsibility_is_absent_or_unknown(meta):
             missing.append(field)
         elif field == "title" and not _book_title(meta):
             missing.append(field)

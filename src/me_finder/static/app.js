@@ -15,13 +15,12 @@ const CITATION_STYLE_OPTIONS = [
 ];
 const CITATION_STYLE_IDS = new Set(CITATION_STYLE_OPTIONS.map(function(option) { return option.id; }));
 const DEFAULT_CITATION_STYLES = ['chinese', 'gb'];
+const CITATION_STYLES_STORAGE_KEY = 'meFinderEnabledCitationStylesV1';
 const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;  // 联网书目补全自动采用唯一高匹配候选的分数下限
 const ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT = 80;  // 低于此值只弹候选让人工确认，避免误采
 let onlineMetadataAutoMatchThreshold = loadOnlineAutoMatchThreshold();
-let enabledCitationStyles = DEFAULT_CITATION_STYLES.slice();
-let citationStyle = CITATION_STYLE_IDS.has(localStorage.getItem('meFinderCitationStyle'))
-  ? localStorage.getItem('meFinderCitationStyle')
-  : 'chinese';
+let enabledCitationStyles = loadLocalCitationStyles() || DEFAULT_CITATION_STYLES.slice();
+let citationStyle = loadLocalSelectedCitationStyle() || 'chinese';
 let searchSourceType = 'all';
 let searchLimit = 10;
 let searchDocumentId = '';
@@ -886,9 +885,30 @@ function citationStyleDisplayLabel(style) {
   return option ? option.label : '中文脚注';
 }
 
-function setCitationStyle(style) {
+function setCitationStyle(style, persist) {
   citationStyle = enabledCitationStyles.indexOf(style) >= 0 ? style : enabledCitationStyles[0];
-  localStorage.setItem('meFinderCitationStyle', citationStyle);
+  try { localStorage.setItem('meFinderCitationStyle', citationStyle); } catch (_) {}
+  if (persist) persistSelectedCitationStyle();
+}
+
+function loadLocalSelectedCitationStyle() {
+  try {
+    var value = localStorage.getItem('meFinderCitationStyle');
+    return CITATION_STYLE_IDS.has(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function persistSelectedCitationStyle() {
+  fetch('/api/preferences', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({citation_style: citationStyle})
+  }).catch(function() {
+    // localStorage remains a cross-platform fallback if the backend is old or
+    // temporarily unavailable.
+  });
 }
 
 function citationStyleMenuMarkup() {
@@ -903,7 +923,7 @@ function citationStyleMenuMarkup() {
 
 function selectCitationStyle(event, style) {
   event.stopPropagation();
-  setCitationStyle(style);
+  setCitationStyle(style, true);
   var label = document.getElementById('citation-style-label');
   if (label) label.textContent = citationStyleDisplayLabel(citationStyle);
   document.querySelectorAll('#citation-style-control .app-select-option').forEach(function(option) {
@@ -2523,7 +2543,7 @@ function pdfTypeLabel(type) {
 }
 
 function structureLabel(s) {
-  var labels = {article_collection:'文集',monograph:'专著',whole_pdf:'整本',pdf_document:'PDF 文献',manuscript_selection:'手稿选编',mixed:'混合',letters:'书信集'};
+  var labels = {article_collection:'文集',complete_works:'全集',selected_works:'选集',monograph:'专著',whole_pdf:'整本',pdf_document:'PDF 文献',manuscript_selection:'手稿选编',mixed:'混合',letters:'书信集'};
   return labels[s] || s || '';
 }
 
@@ -3499,6 +3519,27 @@ function normalizeCitationStyles(styles) {
   return normalized.length ? normalized : DEFAULT_CITATION_STYLES.slice();
 }
 
+function loadLocalCitationStyles() {
+  try {
+    var raw = localStorage.getItem(CITATION_STYLES_STORAGE_KEY);
+    if (raw === null) return null;
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    var selected = CITATION_STYLE_OPTIONS.filter(function(option) {
+      return parsed.indexOf(option.id) >= 0;
+    }).map(function(option) { return option.id; });
+    return selected.length ? selected : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveLocalCitationStyles(styles) {
+  try {
+    localStorage.setItem(CITATION_STYLES_STORAGE_KEY, JSON.stringify(normalizeCitationStyles(styles)));
+  } catch (_) {}
+}
+
 function ensureEnabledCitationStyle() {
   if (enabledCitationStyles.indexOf(citationStyle) < 0) {
     setCitationStyle(enabledCitationStyles[0]);
@@ -3544,6 +3585,7 @@ async function setCitationStyleEnabled(style, checked) {
     return;
   }
   enabledCitationStyles = next;
+  saveLocalCitationStyles(enabledCitationStyles);
   ensureEnabledCitationStyle();
   renderCitationStylePreferences();
   if (selectedResult()) showDetail();
@@ -3557,12 +3599,16 @@ async function setCitationStyleEnabled(style, checked) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    enabledCitationStyles = normalizeCitationStyles(data.citation_styles);
+    // Keep the just-saved local selection authoritative. This also preserves
+    // the setting when an older desktop backend omits citation_styles.
+    enabledCitationStyles = normalizeCitationStyles(enabledCitationStyles);
+    saveLocalCitationStyles(enabledCitationStyles);
     ensureEnabledCitationStyle();
     renderCitationStylePreferences();
     if (selectedResult()) showDetail();
   } catch (e) {
     enabledCitationStyles = previous;
+    saveLocalCitationStyles(enabledCitationStyles);
     ensureEnabledCitationStyle();
     renderCitationStylePreferences();
     if (selectedResult()) showDetail();
@@ -3777,7 +3823,9 @@ function applyPreferencesData(data, requestedThemeRevision) {
   else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
   currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
   autoUpdateEnabled = data.auto_update === true;
-  enabledCitationStyles = normalizeCitationStyles(data.citation_styles);
+  enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
+  saveLocalCitationStyles(enabledCitationStyles);
+  setCitationStyle(loadLocalSelectedCitationStyle() || data.citation_style || enabledCitationStyles[0], false);
   ensureEnabledCitationStyle();
   var autoUpdateInput = document.getElementById('auto-update-enabled');
   if (autoUpdateInput) autoUpdateInput.checked = autoUpdateEnabled;

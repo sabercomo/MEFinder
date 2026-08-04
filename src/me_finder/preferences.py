@@ -15,6 +15,7 @@ DEFAULT_CALIBRATION_VIEW = "grid"
 DEFAULT_PDF_OPEN_MODE = "native"
 DEFAULT_AUTO_UPDATE = False
 DEFAULT_CITATION_STYLES = ("chinese", "gb")
+DEFAULT_CITATION_STYLE = "chinese"
 VALID_CITATION_STYLES = ("chinese", "gb", "chicago", "apa", "mla")
 VALID_THEMES = frozenset(
     {
@@ -71,6 +72,11 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     citation_styles = _normalized_citation_styles(
         payload.get("citation_styles") if isinstance(payload, dict) else None
     )
+    citation_style = str(
+        payload.get("citation_style") if isinstance(payload, dict) else ""
+    ).strip().lower()
+    if citation_style not in citation_styles:
+        citation_style = citation_styles[0] if citation_styles else DEFAULT_CITATION_STYLE
     return {
         "theme": theme,
         "library_view": library_view,
@@ -79,6 +85,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "pdf_open_mode": pdf_open_mode,
         "auto_update": auto_update,
         "citation_styles": citation_styles,
+        "citation_style": citation_style,
     }
 
 
@@ -163,6 +170,15 @@ def _save_preferences_locked(
         if not normalized:
             raise ValueError("至少选择一种引文格式")
         current["citation_styles"] = normalized
+        if current.get("citation_style") not in normalized:
+            current["citation_style"] = normalized[0]
+    if "citation_style" in updates:
+        citation_style = str(updates["citation_style"] or "").strip().lower()
+        if citation_style not in VALID_CITATION_STYLES:
+            raise ValueError("不支持的当前引文格式")
+        if citation_style not in current.get("citation_styles", []):
+            raise ValueError("当前引文格式尚未启用")
+        current["citation_style"] = citation_style
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")

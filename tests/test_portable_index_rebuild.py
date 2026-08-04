@@ -175,6 +175,8 @@ class PortableIndexRebuildTests(unittest.TestCase):
             self.assertIsNone(word_source["volume_number"])
             self.assertTrue(word_source["source_file_id"].startswith("docx-"))
             self.assertFalse(index["volumes"][0]["volume_id"].startswith("MEWJ-"))
+            self.assertEqual(word_source["author"], "杜威")
+            self.assertEqual(index["volumes"][0]["primary_structure"], "complete_works")
             self.assertEqual(stored.parent, root / "corpus" / "raw_docx")
 
     def test_multiple_standalone_docx_files_have_distinct_stable_ids(self) -> None:
@@ -217,6 +219,8 @@ class PortableIndexRebuildTests(unittest.TestCase):
             self.assertEqual(extracted["source_file"]["source_file_id"], "source-01")
             self.assertEqual(extracted["volume"]["volume_id"], "MEWJ-01")
             self.assertEqual(extracted["volume"]["corpus_title"], "马克思恩格斯文集")
+            self.assertEqual(extracted["volume"]["primary_structure"], "article_collection")
+            self.assertEqual(extracted["source_file"]["author"], "马克思、恩格斯")
 
 
 class DataRootIndependentOfWorkingDirectoryTests(unittest.TestCase):

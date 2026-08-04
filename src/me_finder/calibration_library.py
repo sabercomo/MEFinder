@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .auto_page_mapping import has_manual_mapping
 from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
+from .collection_metadata import infer_collection_metadata
 
 
 _CJK_RE = re.compile(r"[㐀-鿿]")
@@ -83,9 +84,31 @@ def build_library(
     projection_by_id = {
         str(item.get("source_file_id")): item for item in calibration["items"]
     }
+    source_by_id = {
+        str(item.get("source_file_id")): item
+        for item in source_files
+        if item.get("source_file_id")
+    }
+    normalized_volumes: List[Dict[str, object]] = []
+    for raw_volume in volumes:
+        volume = dict(raw_volume)
+        source = source_by_id.get(str(volume.get("source_file_id") or ""), {})
+        collection = infer_collection_metadata(
+            volume.get("corpus_title"),
+            volume.get("display_title"),
+            volume.get("document_title"),
+            source.get("display_title"),
+            source.get("title"),
+            source.get("file_name"),
+        )
+        if collection:
+            volume["primary_structure"] = collection["primary_structure"]
+            if collection.get("author"):
+                volume["collection_author"] = collection["author"]
+        normalized_volumes.append(volume)
     volume_by_source = {
         str(item.get("source_file_id")): item
-        for item in volumes
+        for item in normalized_volumes
         if item.get("source_file_id")
     }
     works_by_volume: Dict[str, List[Mapping[str, object]]] = {}
@@ -98,13 +121,20 @@ def build_library(
         if not source_id:
             continue
         item = dict(source)
+        volume = volume_by_source.get(source_id, {})
+        metadata = source.get("bibliographic_metadata") if isinstance(source.get("bibliographic_metadata"), Mapping) else {}
+        explicit_author = _first_valid(metadata.get("author"), source.get("author"))
+        editor = _first_valid(
+            metadata.get("editor"), metadata.get("editors"), metadata.get("chief_editor"),
+            source.get("editor"), source.get("editors"), source.get("chief_editor"),
+        )
+        explicit_responsibility = explicit_author or _editor_responsibility(editor)
         projection = projection_by_id.get(source_id)
         if projection is not None:
             item.update(projection)
+            explicit_responsibility = _first_valid(item.get("author"), explicit_responsibility)
         else:
-            volume = volume_by_source.get(source_id, {})
             volume_works = works_by_volume.get(str(volume.get("volume_id")), []) if volume else []
-            metadata = source.get("bibliographic_metadata") if isinstance(source.get("bibliographic_metadata"), Mapping) else {}
             first_work = volume_works[0] if volume_works else {}
             item["title"] = _first_valid(
                 volume.get("display_title"),
@@ -120,6 +150,21 @@ def build_library(
             item["modified_at"] = source.get("last_modified") or source.get("imported_at")
             source_path = _source_path(root, source)
             item["source_exists"] = bool(source_path and source_path.exists())
+        collection = infer_collection_metadata(
+            volume.get("corpus_title"),
+            volume.get("display_title"),
+            item.get("title"),
+            item.get("display_title"),
+            item.get("file_name"),
+        )
+        if collection:
+            inferred_author = collection.get("author")
+            if inferred_author == "马克思、恩格斯":
+                item["author"] = inferred_author
+            elif explicit_responsibility:
+                item["author"] = explicit_responsibility
+            else:
+                item["author"] = inferred_author
         item["language"] = _item_language(
             item.get("title"), item.get("author"), item.get("file_name")
         )
@@ -133,7 +178,7 @@ def build_library(
     return {
         "items": items,
         "stats": calibration["stats"],
-        "volumes": list(volumes),
+        "volumes": normalized_volumes,
         "works": list(works),
     }
 
@@ -414,6 +459,17 @@ def _first_valid(*values: object) -> Optional[str]:
         if is_valid_bibliographic_value(value):
             return str(value).strip()
     return None
+
+
+def _editor_responsibility(editor: object) -> Optional[str]:
+    value = _first_valid(editor)
+    if not value:
+        return None
+    if re.search(r"(?:，|,\s*)?(?:主编|编著|编)$", value):
+        return value
+    if "编委会" in value:
+        return f"{value}（编）"
+    return f"{value}（主编）"
 
 
 def _source_path(root: Path, source: Mapping[str, object]) -> Optional[Path]:

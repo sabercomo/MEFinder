@@ -29,6 +29,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "pdf_open_mode": "system",
             "auto_update": True,
             "citation_styles": ["chinese", "gb", "apa"],
+            "citation_style": "chinese",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
