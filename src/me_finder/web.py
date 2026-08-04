@@ -36,6 +36,15 @@ from .bibliographic_metadata import (
     metadata_missing_fields,
     update_metadata_in_database,
 )
+from .book_metadata_lookup import lookup_book
+from .cnki_citation import parse_cnki_journal_citation
+from .crossref_lookup import CrossrefLookupError, lookup_crossref
+from .foreign_book_lookup import BookLookupError
+from .journal_metadata_lookup import (
+    CNKILookupError,
+    fetch_cnki_candidate,
+    lookup_cnki_journal,
+)
 from .mineru_api import (
     MinerUError,
     mineru_config_summary,
@@ -63,6 +72,7 @@ from .calibration_library import (
 )
 from .document_deletion import DocumentDeletionService
 from .pdf_extractors import extract_pdf_source
+from .pdf_page_mapping import normalize_manual_mapping_segments
 from .pdf_import_service import (
     copy_local_document,
     cleanup_stale_document_storage_files,
@@ -192,6 +202,28 @@ def open_path_with_default_app(target: Path) -> None:
         os.startfile(str(target))  # type: ignore[attr-defined]
         return
     command = ["open", str(target)] if sys.platform == "darwin" else ["xdg-open", str(target)]
+    subprocess.Popen(command, close_fds=True)
+
+
+def open_external_cnki_url(value: object) -> None:
+    """Open one validated public CNKI page in the system browser."""
+
+    url = str(value or "").strip()
+    parsed = urlparse(url)
+    if (
+        len(url) > 4096
+        or parsed.scheme != "https"
+        or parsed.hostname != "oversea.cnki.net"
+        or parsed.port not in (None, 443)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"/kns8s/search", "/kcms2/article/abstract"}
+    ):
+        raise ValueError("知网页面地址无效。")
+    if sys.platform == "win32":
+        os.startfile(url)  # type: ignore[attr-defined]
+        return
+    command = ["open", url] if sys.platform == "darwin" else ["xdg-open", url]
     subprocess.Popen(command, close_fds=True)
 
 
@@ -396,6 +428,7 @@ def make_handler(
     # shared rebuild helper, which acquires the same lock.
     rebuild_lock = threading.RLock()
     metadata_lock = threading.Lock()
+    cnki_lookup_lock = threading.Lock()
     import_jobs: Dict[str, Dict[str, object]] = {}
     import_job_contexts: Dict[str, Dict[str, object]] = {}
     import_jobs_lock = threading.RLock()
@@ -881,6 +914,8 @@ def make_handler(
                     "issue": "期号",
                     "page_range": "页码",
                 }
+                if metadata.get("document_type") == "thesis":
+                    labels.update({"title": "篇名", "publisher": "学校", "publish_year": "年份"})
                 missing_labels = [labels[field] for field in missing if field in labels]
                 metadata_note = "；书目信息已自动填入"
                 if missing_labels:
@@ -1985,7 +2020,15 @@ def make_handler(
                     "confidence": float(segment.get("mapping_confidence") or 0.95),
                     "label": "已接受自动页码映射",
                     "evidence": segment.get("mapping_evidence"),
+                    "layout_mode": "spread"
+                    if segment.get("layout_mode") == "spread"
+                    else "single",
                 }
+                if clean["layout_mode"] == "spread":
+                    clean["reading_direction"] = (
+                        "rtl" if segment.get("reading_direction") == "rtl" else "ltr"
+                    )
+                    clean["gutter_x"] = segment.get("gutter_x") or 0.5
                 manual_segments.append(clean)
             document.setdefault("page_mapping", {})
             document["page_mapping"]["segments"] = manual_segments
@@ -2001,6 +2044,7 @@ def make_handler(
     ) -> None:
         """Persist manual mapping and rebuild as one deletion-safe mutation."""
 
+        cleaned_segments = normalize_manual_mapping_segments(segments)
         with rebuild_lock:
             config_path = root / "config" / "pdf_imports.json"
             if not config_path.exists():
@@ -2017,10 +2061,12 @@ def make_handler(
                 if not document:
                     raise MinerUError("PDF 配置中找不到该文献。")
                 document.setdefault("page_mapping", {})
-                document["page_mapping"]["segments"] = segments
+                document["page_mapping"]["segments"] = cleaned_segments
                 document["page_mapping"]["validated_by"] = "manual_ui"
                 document["page_mapping"]["mapping_origin"] = "manual"
-                document["page_mapping"]["mapping_status"] = "manual_mapped"
+                document["page_mapping"]["mapping_status"] = (
+                    "manual_mapped" if cleaned_segments else "unmapped"
+                )
                 document["page_mapping"]["updated_at"] = datetime.now(
                     timezone.utc
                 ).isoformat()
@@ -2275,19 +2321,26 @@ def make_handler(
         return persist_bibliographic_metadata(source_id, metadata)
 
     def batch_metadata_candidates() -> List[Dict[str, object]]:
-        """PDF sources with missing bibliographic fields, excluding manual ones."""
+        """PDF sources that still need automatic bibliographic recognition.
+
+        Besides sources with missing fields, this re-checks anything classified
+        as a book/translated_book: a journal offprint whose publisher was pulled
+        from a cited work looks "complete" as a book, so filtering by missing
+        fields alone would never revisit that misclassification. Manually edited
+        records are always left untouched.
+        """
         data = library_data()
         candidates = []
         for item in data.get("items", []):
             if str(item.get("source_type") or "") != "pdf":
                 continue
-            if not item.get("metadata_missing_fields"):
-                continue
             nested = item.get("bibliographic_metadata")
             source = str((nested or {}).get("metadata_source") or item.get("metadata_source") or "")
             if source == "manual":
                 continue
-            candidates.append(item)
+            doc_type = str(item.get("document_type") or (nested or {}).get("document_type") or "")
+            if item.get("metadata_missing_fields") or doc_type in ("book", "translated_book"):
+                candidates.append(item)
         return candidates
 
     def run_batch_metadata_job(job_id: str, candidates: List[Dict[str, object]]) -> None:
@@ -2696,6 +2749,20 @@ def make_handler(
             if parsed.path == "/api/document/citation" and length > 16 * 1024:
                 self._send_json({"error": "引文请求内容过大。"}, status=413)
                 return
+            if parsed.path == "/api/bibliographic-metadata/parse-cnki-citation" and length > 32 * 1024:
+                self._send_json({"error": "知网引用文字过大，请只粘贴一条引文。"}, status=413)
+                return
+            if (
+                parsed.path
+                in {
+                    "/api/bibliographic-metadata/lookup-cnki",
+                    "/api/bibliographic-metadata/cnki-candidate",
+                    "/api/bibliographic-metadata/open-cnki",
+                }
+                and length > 32 * 1024
+            ):
+                self._send_json({"error": "知网题录请求内容过大。"}, status=413)
+                return
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
@@ -2793,7 +2860,7 @@ def make_handler(
                     self._send_json({"error": str(exc)}, status=400)
                     return
                 except OSError:
-                    self._send_json({"error": "外观设置无法保存，请检查配置目录是否可写。"}, status=500)
+                    self._send_json({"error": "应用设置无法保存，请检查配置目录是否可写。"}, status=500)
                     return
                 if "theme" in payload and native_theme_setter is not None:
                     try:
@@ -3440,6 +3507,9 @@ def make_handler(
                     return
                 try:
                     apply_manual_page_mapping(sid, segments)
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -3770,6 +3840,164 @@ def make_handler(
                     with import_jobs_lock:
                         for candidate in accepted:
                             deleting_import_sources.discard(candidate)
+                return
+            if parsed.path == "/api/bibliographic-metadata/parse-cnki-citation":
+                if not isinstance(payload, dict) or set(payload) != {"citation_text"}:
+                    self._send_json(
+                        {"error": "请求必须只包含 citation_text。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    metadata = parse_cnki_journal_citation(payload["citation_text"])
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json({"ok": True, "metadata": metadata})
+                return
+            if parsed.path == "/api/bibliographic-metadata/lookup-cnki":
+                if not isinstance(payload, dict) or set(payload) != {"metadata"}:
+                    self._send_json({"error": "请求必须只包含 metadata。"}, status=400)
+                    return
+                query_metadata = payload.get("metadata")
+                allowed_fields = {"title", "author", "publish_year", "journal_name", "doi", "issn"}
+                if not isinstance(query_metadata, dict) or set(query_metadata) - allowed_fields:
+                    self._send_json({"error": "知网查询字段无效。"}, status=400)
+                    return
+                if not cnki_lookup_lock.acquire(blocking=False):
+                    self._send_json(
+                        {"error": "已有知网查询正在进行，请稍候。", "code": "lookup_busy"},
+                        status=409,
+                    )
+                    return
+                try:
+                    result = lookup_cnki_journal(query_metadata)
+                except CNKILookupError as exc:
+                    status = {
+                        "invalid_query": 400,
+                        "verification_required": 403,
+                        "rate_limited": 429,
+                        "timeout": 504,
+                    }.get(exc.code, 502)
+                    self._send_json(
+                        {"error": str(exc), "code": exc.code, "open_url": exc.open_url},
+                        status=status,
+                    )
+                    return
+                finally:
+                    cnki_lookup_lock.release()
+                self._send_json({"ok": True, **result})
+                return
+            if parsed.path == "/api/bibliographic-metadata/cnki-candidate":
+                if not isinstance(payload, dict) or set(payload) != {"candidate"}:
+                    self._send_json({"error": "请求必须只包含 candidate。"}, status=400)
+                    return
+                candidate = payload.get("candidate")
+                if not isinstance(candidate, dict) or set(candidate) != {"record_url"}:
+                    self._send_json({"error": "知网候选字段无效。"}, status=400)
+                    return
+                if not cnki_lookup_lock.acquire(blocking=False):
+                    self._send_json(
+                        {"error": "已有知网查询正在进行，请稍候。", "code": "lookup_busy"},
+                        status=409,
+                    )
+                    return
+                try:
+                    result = fetch_cnki_candidate(candidate)
+                except CNKILookupError as exc:
+                    status = {
+                        "invalid_candidate": 400,
+                        "verification_required": 403,
+                        "rate_limited": 429,
+                        "timeout": 504,
+                    }.get(exc.code, 502)
+                    self._send_json(
+                        {"error": str(exc), "code": exc.code, "open_url": exc.open_url},
+                        status=status,
+                    )
+                    return
+                finally:
+                    cnki_lookup_lock.release()
+                self._send_json({"ok": True, **result})
+                return
+            if parsed.path == "/api/bibliographic-metadata/lookup-google-books":
+                if not isinstance(payload, dict) or set(payload) != {"metadata"}:
+                    self._send_json({"error": "请求必须只包含 metadata。"}, status=400)
+                    return
+                query_metadata = payload.get("metadata")
+                allowed_fields = {"title", "author", "publish_year", "isbn"}
+                if not isinstance(query_metadata, dict) or set(query_metadata) - allowed_fields:
+                    self._send_json({"error": "图书查询字段无效。"}, status=400)
+                    return
+                # 复用同一把外部查询锁，保证同一时刻只有一个联网元数据请求。
+                if not cnki_lookup_lock.acquire(blocking=False):
+                    self._send_json(
+                        {"error": "已有联网查询正在进行，请稍候。", "code": "lookup_busy"},
+                        status=409,
+                    )
+                    return
+                try:
+                    result = lookup_book(query_metadata)
+                except BookLookupError as exc:
+                    status = {
+                        "invalid_query": 400,
+                        "rate_limited": 429,
+                        "timeout": 504,
+                    }.get(exc.code, 502)
+                    self._send_json(
+                        {"error": str(exc), "code": exc.code, "open_url": exc.open_url},
+                        status=status,
+                    )
+                    return
+                finally:
+                    cnki_lookup_lock.release()
+                self._send_json({"ok": True, **result})
+                return
+            if parsed.path == "/api/bibliographic-metadata/lookup-crossref":
+                if not isinstance(payload, dict) or set(payload) != {"metadata"}:
+                    self._send_json({"error": "请求必须只包含 metadata。"}, status=400)
+                    return
+                query_metadata = payload.get("metadata")
+                allowed_fields = {"title", "author", "publish_year", "doi"}
+                if not isinstance(query_metadata, dict) or set(query_metadata) - allowed_fields:
+                    self._send_json({"error": "Crossref 查询字段无效。"}, status=400)
+                    return
+                if not cnki_lookup_lock.acquire(blocking=False):
+                    self._send_json(
+                        {"error": "已有联网查询正在进行，请稍候。", "code": "lookup_busy"},
+                        status=409,
+                    )
+                    return
+                try:
+                    result = lookup_crossref(query_metadata)
+                except CrossrefLookupError as exc:
+                    status = {
+                        "invalid_query": 400,
+                        "rate_limited": 429,
+                        "timeout": 504,
+                    }.get(exc.code, 502)
+                    self._send_json(
+                        {"error": str(exc), "code": exc.code, "open_url": exc.open_url},
+                        status=status,
+                    )
+                    return
+                finally:
+                    cnki_lookup_lock.release()
+                self._send_json({"ok": True, **result})
+                return
+            if parsed.path == "/api/bibliographic-metadata/open-cnki":
+                if not isinstance(payload, dict) or set(payload) != {"url"}:
+                    self._send_json({"error": "请求必须只包含 url。"}, status=400)
+                    return
+                try:
+                    open_external_cnki_url(payload.get("url"))
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except OSError as exc:
+                    self._send_json({"error": f"打开知网页面失败：{exc}"}, status=500)
+                    return
+                self._send_json({"ok": True})
                 return
             if parsed.path == "/api/bibliographic-metadata/detect":
                 sid = str(payload.get("source_id") or "")

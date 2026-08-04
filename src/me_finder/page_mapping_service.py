@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Sequence
 
 from .auto_page_mapping import (
     PageNumberCandidate,
+    detect_pdf_page_layout,
     extract_mineru_page_number_candidates,
     extract_native_pdf_edge_candidates,
     extract_pdf_numeric_bookmark_candidates,
@@ -40,10 +41,12 @@ class PageMappingService:
         effective_page_count = int(page_count or 0)
         if not effective_page_count:
             effective_page_count = max([int(page.get("pdf_page_index") or 0) for page in pages] or [-1]) + 1
+        layout_detection = detect_pdf_page_layout(pages, candidates)
         result = infer_auto_page_mapping(
             candidates,
             effective_page_count,
             page_texts={int(page.get("pdf_page_index") or 0): str(page.get("text_raw") or "") for page in pages},
+            layout_detection=layout_detection,
         )
         evidence_counts = {
             "pdf_page_labels": len(label_candidates),
@@ -62,6 +65,11 @@ class PageMappingService:
             failure_reasons.append("no_edge_candidates")
         if not result.get("selected_segments"):
             failure_reasons.append("sequence_not_found")
+        if (
+            layout_detection.get("layout_mode") == "spread"
+            and not result.get("selected_segments")
+        ):
+            failure_reasons.append("spread_sequence_not_found")
         selected = [item for item in result.get("selected_segments", []) if isinstance(item, dict)]
         applied = [item for item in result.get("applied_segments", []) if isinstance(item, dict)]
         if manual_mapping_present and not dry_run:

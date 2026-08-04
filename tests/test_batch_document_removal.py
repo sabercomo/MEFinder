@@ -11,6 +11,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -407,7 +408,7 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             self.assertFalse((root / "corpus" / "raw_docx" / "word-0.docx").exists())
             self.assertTrue(original.exists())
             self.assertEqual(result["removed_from_config"], False)
-            with sqlite3.connect(str(database_path)) as connection:
+            with closing(sqlite3.connect(str(database_path))) as connection:
                 remaining = [
                     row[0]
                     for row in connection.execute(
@@ -435,7 +436,7 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             self.assertEqual(result["internal_copies_deleted"], ["word-0"])
             self.assertTrue((root / "corpus" / "raw_pdf" / "pdf-0.pdf").exists())
             self.assertFalse((root / "corpus" / "raw_docx" / "word-0.docx").exists())
-            with sqlite3.connect(str(database_path)) as connection:
+            with closing(sqlite3.connect(str(database_path))) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0], 0)
 
     def test_word_removal_refuses_to_touch_a_file_outside_managed_corpus(self) -> None:
@@ -454,7 +455,7 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "corpus/raw_docx"):
                 DocumentDeletionService(root, database_path).remove("word-unsafe")
             self.assertTrue(outside.exists())
-            with sqlite3.connect(str(database_path)) as connection:
+            with closing(sqlite3.connect(str(database_path))) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0], 1)
 
     def test_word_copy_is_restored_when_database_removal_fails(self) -> None:
@@ -468,7 +469,7 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "database delete failed"):
                     DocumentDeletionService(root, database_path).remove("word-0")
             self.assertTrue(word_path.exists())
-            with sqlite3.connect(str(database_path)) as connection:
+            with closing(sqlite3.connect(str(database_path))) as connection:
                 self.assertEqual(
                     connection.execute(
                         "SELECT COUNT(*) FROM source_files WHERE source_file_id='word-0'"

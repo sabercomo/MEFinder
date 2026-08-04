@@ -143,9 +143,21 @@ class RuntimePageMappingTests(unittest.TestCase):
         self.assertIn("/api/auto-page-mapping/detect", HTML)
         self.assertIn("/api/auto-page-mapping/apply", HTML)
         self.assertIn("用自动结果替换人工映射", HTML)
-        self.assertIn("自动识别书目信息", HTML)
+        self.assertIn("自动识别", HTML)
         self.assertIn("/api/bibliographic-metadata/detect", HTML)
         self.assertIn("/api/bibliographic-metadata/save", HTML)
+        self.assertIn("粘贴引用", HTML)
+        self.assertIn("从引用文字补全", HTML)
+        self.assertIn("/api/bibliographic-metadata/parse-cnki-citation", HTML)
+        self.assertIn("/api/bibliographic-metadata/lookup-cnki", HTML)
+        self.assertIn("/api/bibliographic-metadata/cnki-candidate", HTML)
+        self.assertIn("查询知网", HTML)
+        self.assertIn("获取完整题录", HTML)
+        self.assertIn("打开知网检索", HTML)
+        self.assertIn("data.query_notice", HTML)
+        self.assertIn("field('doi','doi','DOI'", HTML)
+        self.assertIn("field('issn','issn','ISSN'", HTML)
+        self.assertIn("if (!existing)", HTML)
 
 
 if __name__ == "__main__":

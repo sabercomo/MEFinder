@@ -347,11 +347,18 @@ def extract_pdf_source(
                 "pdf_page_index": page.pdf_page_index,
                 "pdf_page_number_1based": page.pdf_page_index + 1,
                 "pdf_page_label": page.pdf_page_label,
-                "printed_page": None,
+                "printed_page": mapping.citation_page,
+                "printed_page_start": mapping.citation_page_start,
+                "printed_page_end": mapping.citation_page_end,
                 "citation_page": mapping.citation_page,
+                "citation_page_start": mapping.citation_page_start,
+                "citation_page_end": mapping.citation_page_end,
                 "page_mapping_method": mapping.method,
                 "page_mapping_confidence": mapping.confidence,
                 "segment_id": mapping.segment_id,
+                "layout_mode": mapping.layout_mode,
+                "reading_direction": mapping.reading_direction,
+                "gutter_x": mapping.gutter_x,
                 "text_raw": page.raw_text,
                 "page_text_hash": pdf_page_text_hash(page.raw_text),
                 "normalized_text": normalize_pdf_text(page.raw_text),
@@ -683,10 +690,14 @@ def load_mineru_pdf_pages(
                     "result_dir": str(result_dir),
                 }
             )
-    labels = get_pdf_page_labels(path, max(page_texts.keys()) + 1 if page_texts else 0)
+    detected_page_count = max(page_texts.keys()) + 1 if page_texts else 0
+    labels = get_pdf_page_labels(path, detected_page_count)
+    dimensions = get_pdf_page_dimensions(path, detected_page_count)
     pages: List[Dict[str, object]] = []
     for pdf_page_index in sorted(page_texts):
         raw_text = "\n".join(page_texts.get(pdf_page_index, [])).strip()
+        blocks = page_blocks.get(pdf_page_index, [])
+        attach_page_block_offsets(raw_text, blocks)
         label = labels[pdf_page_index] if pdf_page_index < len(labels) else None
         mapping = mapper.map_page(pdf_page_index, label)
         pages.append(
@@ -697,16 +708,29 @@ def load_mineru_pdf_pages(
                 "pdf_page_index": pdf_page_index,
                 "pdf_page_number_1based": pdf_page_index + 1,
                 "pdf_page_label": label,
-                "printed_page": None,
+                "printed_page": mapping.citation_page,
+                "printed_page_start": mapping.citation_page_start,
+                "printed_page_end": mapping.citation_page_end,
                 "citation_page": mapping.citation_page,
+                "citation_page_start": mapping.citation_page_start,
+                "citation_page_end": mapping.citation_page_end,
                 "page_mapping_method": mapping.method,
                 "page_mapping_confidence": mapping.confidence,
                 "segment_id": mapping.segment_id,
+                "layout_mode": mapping.layout_mode,
+                "reading_direction": mapping.reading_direction,
+                "gutter_x": mapping.gutter_x,
                 "text_raw": raw_text,
                 "page_text_hash": pdf_page_text_hash(raw_text),
                 "normalized_text": normalize_pdf_text(raw_text),
                 "text_source": parser_name,
-                "blocks": page_blocks.get(pdf_page_index, []),
+                "blocks": blocks,
+                "page_width": dimensions[pdf_page_index][0]
+                if pdf_page_index < len(dimensions)
+                else None,
+                "page_height": dimensions[pdf_page_index][1]
+                if pdf_page_index < len(dimensions)
+                else None,
                 "parser": parser_name,
                 "parser_label": provider_name,
                 "parser_version": parser_version,
@@ -746,12 +770,36 @@ def get_pdf_page_labels(path: Path, page_count: int) -> List[Optional[str]]:
     try:
         for index in range(min(len(doc), page_count)):
             page = doc.load_page(index)
-            page_rect = page.rect
             label = page.get_label() if getattr(page, "get_label", None) else None
             labels[index] = str(label) if label else None
     finally:
         doc.close()
     return labels
+
+
+def get_pdf_page_dimensions(
+    path: Path,
+    page_count: int,
+) -> List[Tuple[Optional[float], Optional[float]]]:
+    """Return physical PDF page dimensions for native and MinerU layouts."""
+
+    dimensions: List[Tuple[Optional[float], Optional[float]]] = [
+        (None, None)
+    ] * max(page_count, 0)
+    pymupdf = load_pymupdf()
+    if not pymupdf:
+        return dimensions
+    try:
+        doc = pymupdf.open(str(path))
+    except Exception:
+        return dimensions
+    try:
+        for index in range(min(len(doc), page_count)):
+            rect = doc.load_page(index).rect
+            dimensions[index] = (float(rect.width), float(rect.height))
+    finally:
+        doc.close()
+    return dimensions
 
 
 def detect_pdf_type(path: Path, sample_pages: int = 12) -> Dict[str, object]:
@@ -844,6 +892,7 @@ def extract_pages_with_pymupdf(path: Path, fitz) -> List[PDFTextPage]:
             page = doc.load_page(index)
             page_rect = page.rect
             label = page.get_label() if getattr(page, "get_label", None) else None
+            raw_text = page.get_text("text") or ""
             block_records = []
             for block_index, block in enumerate(page.get_text("blocks") or []):
                 if len(block) < 5:
@@ -861,11 +910,12 @@ def extract_pages_with_pymupdf(path: Path, fitz) -> List[PDFTextPage]:
                         ],
                     }
                 )
+            attach_page_block_offsets(raw_text, block_records)
             pages.append(
                 PDFTextPage(
                     pdf_page_index=index,
                     pdf_page_label=str(label) if label else None,
-                    raw_text=page.get_text("text") or "",
+                    raw_text=raw_text,
                     blocks=block_records,
                     parser="pymupdf",
                     parser_version=str(getattr(fitz, "VersionBind", "")),
@@ -876,6 +926,43 @@ def extract_pages_with_pymupdf(path: Path, fitz) -> List[PDFTextPage]:
     finally:
         doc.close()
     return pages
+
+
+def attach_page_block_offsets(
+    page_text: str,
+    blocks: Sequence[Dict[str, object]],
+) -> None:
+    """Attach exact Unicode-codepoint intervals to layout blocks when possible.
+
+    Layout extraction and page text extraction can disagree for malformed
+    PDFs.  Unaligned blocks deliberately keep no offsets so a later search hit
+    falls back to the physical page's full citation range instead of guessing
+    a left/right side.
+    """
+
+    cursor = 0
+    for block in blocks:
+        raw_block_text = str(block.get("text") or "")
+        candidates = [raw_block_text]
+        stripped = raw_block_text.strip()
+        if stripped and stripped != raw_block_text:
+            candidates.append(stripped)
+        matched_start = -1
+        matched_text = ""
+        for candidate in candidates:
+            if not candidate:
+                continue
+            matched_start = page_text.find(candidate, cursor)
+            if matched_start >= 0:
+                matched_text = candidate
+                break
+        if matched_start < 0:
+            continue
+        matched_end = matched_start + len(matched_text)
+        block["page_char_start"] = matched_start
+        block["page_char_end"] = matched_end
+        block["offset_unit"] = "unicode_codepoint"
+        cursor = matched_end
 
 
 def low_level_count(path: Path, needle: bytes) -> int:
@@ -1023,6 +1110,7 @@ def make_text_source_span(
         "paragraph_char_end": paragraph_char_end,
         "offset_unit": "unicode_codepoint",
         "pdf_page_id": str(page["pdf_page_id"]),
+        "pdf_page_index": int(page["pdf_page_index"]),
         "page_text_hash": str(page.get("page_text_hash") or pdf_page_text_hash(page_text)),
         "page_char_start": page_char_start,
         "page_char_end": page_char_end,
@@ -1046,8 +1134,8 @@ def base_pdf_paragraph(
     is_cross_page: bool,
     text_source_spans: Sequence[Mapping[str, object]],
 ) -> Dict[str, object]:
-    start_citation = start_page.get("citation_page")
-    end_citation = end_page.get("citation_page")
+    start_citation = start_page.get("citation_page_start") or start_page.get("citation_page")
+    end_citation = end_page.get("citation_page_end") or end_page.get("citation_page")
     calibrated = bool(start_citation and end_citation)
     method = (
         start_page.get("page_mapping_method")
@@ -1108,14 +1196,22 @@ def base_pdf_paragraph(
         "pdf_page_end_index": end_index,
         "pdf_page_start_label": start_page.get("pdf_page_label"),
         "pdf_page_end_label": end_page.get("pdf_page_label"),
-        "printed_page_start": start_page.get("printed_page"),
-        "printed_page_end": end_page.get("printed_page"),
+        "printed_page_start": start_page.get("printed_page_start") or start_page.get("printed_page"),
+        "printed_page_end": end_page.get("printed_page_end") or end_page.get("printed_page"),
         "citation_page_start": str(start_citation) if calibrated else None,
         "citation_page_end": str(end_citation) if calibrated else None,
-        "citation_page_number_start": start_page.get("citation_page_number"),
-        "citation_page_number_end": end_page.get("citation_page_number"),
-        "citation_page_label_start": start_page.get("citation_page_label"),
-        "citation_page_label_end": end_page.get("citation_page_label"),
+        "citation_page_number_start": start_page.get(
+            "citation_page_number_start", start_page.get("citation_page_number")
+        ),
+        "citation_page_number_end": end_page.get(
+            "citation_page_number_end", end_page.get("citation_page_number")
+        ),
+        "citation_page_label_start": start_page.get(
+            "citation_page_label_start", start_page.get("citation_page_label")
+        ),
+        "citation_page_label_end": end_page.get(
+            "citation_page_label_end", end_page.get("citation_page_label")
+        ),
         "page_scope": page_scope,
         "page_mapping_method": str(method or "uncalibrated"),
         "page_mapping_confidence": confidence if calibrated else 0.0,
@@ -1126,6 +1222,15 @@ def base_pdf_paragraph(
         else "mixed" if start_page.get("mapping_confidence_level") or end_page.get("mapping_confidence_level") else None,
         "mapping_evidence": mapping_evidence,
         "segment_id": segment_id,
+        "layout_mode": start_page.get("layout_mode")
+        if start_page.get("layout_mode") == end_page.get("layout_mode")
+        else "mixed",
+        "reading_direction": start_page.get("reading_direction")
+        if start_page.get("reading_direction") == end_page.get("reading_direction")
+        else "mixed",
+        "gutter_x": start_page.get("gutter_x")
+        if start_page.get("gutter_x") == end_page.get("gutter_x")
+        else None,
         "is_cross_page": is_cross_page,
         "text_source_spans": [dict(span) for span in text_source_spans],
         "text_source": "native_text",
@@ -1330,6 +1435,9 @@ class SimplePDF:
                             "bbox": None,
                             "text": raw_text,
                             "page_idx": index,
+                            "page_char_start": 0,
+                            "page_char_end": len(raw_text),
+                            "offset_unit": "unicode_codepoint",
                         }
                     ]
                     if raw_text

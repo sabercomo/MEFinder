@@ -106,6 +106,13 @@ class SearchEngine:
             for item in self.index.get("works", [])
             if isinstance(item, dict) and item.get("work_id")
         }
+        self._pdf_page_cache: Dict[Tuple[str, int], Optional[Dict[str, object]]] = {
+            (str(item.get("source_file_id")), int(item.get("pdf_page_index"))): item
+            for item in self.index.get("pdf_pages", [])
+            if isinstance(item, dict)
+            and item.get("source_file_id")
+            and isinstance(item.get("pdf_page_index"), int)
+        }
 
     def search(
         self,
@@ -637,7 +644,26 @@ class SearchEngine:
         match_quote = raw[start:end][:50] if end > start else ""
         source_type = str(paragraph.get("source_type") or "word")
         page_match_spans = self._page_match_spans(paragraph, source_type, start, end, len(raw))
-        page_display = build_page_display(paragraph)
+        spread_hit = self._resolve_spread_hit(paragraph, page_match_spans)
+        page_fields = dict(paragraph)
+        if spread_hit:
+            page_fields["citation_page_start"] = spread_hit["citation_page_start"]
+            page_fields["citation_page_end"] = spread_hit["citation_page_end"]
+            page_fields["printed_page_start"] = spread_hit["citation_page_start"]
+            page_fields["printed_page_end"] = spread_hit["citation_page_end"]
+            page_fields["citation_page_label_start"] = spread_hit["citation_page_start"]
+            page_fields["citation_page_label_end"] = spread_hit["citation_page_end"]
+            try:
+                page_fields["citation_page_number_start"] = int(
+                    str(spread_hit["citation_page_start"])
+                )
+                page_fields["citation_page_number_end"] = int(
+                    str(spread_hit["citation_page_end"])
+                )
+            except ValueError:
+                page_fields["citation_page_number_start"] = None
+                page_fields["citation_page_number_end"] = None
+        page_display = build_page_display(page_fields)
         page = page_display.display
         page_note = page_display.note
         if source_type == "pdf":
@@ -655,7 +681,7 @@ class SearchEngine:
             )
             copy_text = f"{volume_display}，{page}：{raw}"
         citation_metadata = self._citation_metadata(paragraph, source_type)
-        citation_formats = build_citation_formats(citation_metadata, self._hit_page(paragraph, source_type, page))
+        citation_formats = build_citation_formats(citation_metadata, self._hit_page(page_fields, source_type, page))
         return {
             "paragraph_id": paragraph["paragraph_id"],
             "volume_id": paragraph["volume_id"],
@@ -676,14 +702,14 @@ class SearchEngine:
             "pdf_page_end_index": paragraph.get("pdf_page_end_index"),
             "pdf_page_start_label": paragraph.get("pdf_page_start_label"),
             "pdf_page_end_label": paragraph.get("pdf_page_end_label"),
-            "printed_page_start": paragraph.get("printed_page_start"),
-            "printed_page_end": paragraph.get("printed_page_end"),
-            "citation_page_start": paragraph.get("citation_page_start"),
-            "citation_page_end": paragraph.get("citation_page_end"),
-            "citation_page_number_start": paragraph.get("citation_page_number_start"),
-            "citation_page_number_end": paragraph.get("citation_page_number_end"),
-            "citation_page_label_start": paragraph.get("citation_page_label_start"),
-            "citation_page_label_end": paragraph.get("citation_page_label_end"),
+            "printed_page_start": page_fields.get("printed_page_start"),
+            "printed_page_end": page_fields.get("printed_page_end"),
+            "citation_page_start": page_fields.get("citation_page_start"),
+            "citation_page_end": page_fields.get("citation_page_end"),
+            "citation_page_number_start": page_fields.get("citation_page_number_start"),
+            "citation_page_number_end": page_fields.get("citation_page_number_end"),
+            "citation_page_label_start": page_fields.get("citation_page_label_start"),
+            "citation_page_label_end": page_fields.get("citation_page_label_end"),
             "page_scope": paragraph.get("page_scope"),
             "page_mapping_method": paragraph.get("page_mapping_method"),
             "page_mapping_confidence": paragraph.get("page_mapping_confidence"),
@@ -692,6 +718,13 @@ class SearchEngine:
             "mapping_confidence_level": paragraph.get("mapping_confidence_level"),
             "mapping_evidence": paragraph.get("mapping_evidence"),
             "segment_id": paragraph.get("segment_id"),
+            "layout_mode": paragraph.get("layout_mode"),
+            "logical_page_side": spread_hit.get("logical_page_side") if spread_hit else None,
+            "spread_hit_precision": (
+                spread_hit.get("precision")
+                if spread_hit
+                else "range_fallback" if paragraph.get("layout_mode") == "spread" else None
+            ),
             "is_cross_page": paragraph.get("is_cross_page", False),
             "matched_text": matched,
             "match_quote": match_quote,
@@ -783,8 +816,179 @@ class SearchEngine:
                 # compares it with the current page hash before trusting the
                 # saved offsets and falls back to searching ``match_quote``.
                 mapped_span["page_text_hash"] = span.get("page_text_hash")
+            page_index = span.get("pdf_page_index")
+            if isinstance(page_index, int) and not isinstance(page_index, bool):
+                mapped_span["pdf_page_index"] = page_index
             mapped.append(mapped_span)
         return mapped
+
+    def _resolve_spread_hit(
+        self,
+        paragraph: Dict[str, object],
+        page_match_spans: List[Dict[str, object]],
+    ) -> Optional[Dict[str, object]]:
+        """Resolve a hit to logical spread pages, or fall back to its range."""
+
+        if paragraph.get("layout_mode") != "spread" or not page_match_spans:
+            return None
+        source_file_id = str(paragraph.get("source_file_id") or "")
+        if not source_file_id:
+            return None
+
+        citation_pages: List[str] = []
+        resolved_sides: List[str] = []
+        for span in page_match_spans:
+            page_index = self._span_pdf_page_index(span)
+            if page_index is None:
+                return None
+            page = self._pdf_page_record(source_file_id, page_index)
+            if not page or page.get("layout_mode") != "spread":
+                return None
+            sides = self._spread_sides_for_span(page, span)
+            if not sides:
+                return None
+            start_label = page.get("citation_page_start") or page.get("citation_page")
+            end_label = page.get("citation_page_end") or start_label
+            if not start_label or not end_label:
+                return None
+            direction = "rtl" if page.get("reading_direction") == "rtl" else "ltr"
+            side_order = ("right", "left") if direction == "rtl" else ("left", "right")
+            page_labels = {
+                side_order[0]: str(start_label),
+                side_order[1]: str(end_label),
+            }
+            ordered_sides = [side for side in side_order if side in sides]
+            labels = [page_labels[side] for side in ordered_sides]
+            for label in labels:
+                if not citation_pages or citation_pages[-1] != label:
+                    citation_pages.append(label)
+            side_label = ordered_sides[0] if len(ordered_sides) == 1 else "both"
+            resolved_sides.append(side_label)
+            span["logical_page_side"] = side_label
+            span["citation_page_start"] = labels[0]
+            span["citation_page_end"] = labels[-1]
+
+        if not citation_pages:
+            return None
+        unique_sides = set(resolved_sides)
+        return {
+            "citation_page_start": citation_pages[0],
+            "citation_page_end": citation_pages[-1],
+            "logical_page_side": next(iter(unique_sides)) if len(unique_sides) == 1 else "both",
+            "precision": "exact_region",
+        }
+
+    @staticmethod
+    def _span_pdf_page_index(span: Dict[str, object]) -> Optional[int]:
+        value = span.get("pdf_page_index")
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+        match = re.search(r"-PAGE-(\d+)\Z", str(span.get("pdf_page_id") or ""))
+        return int(match.group(1)) if match else None
+
+    def _pdf_page_record(
+        self,
+        source_file_id: str,
+        page_index: int,
+    ) -> Optional[Dict[str, object]]:
+        key = (source_file_id, page_index)
+        if key in self._pdf_page_cache:
+            return self._pdf_page_cache[key]
+        page: Optional[Dict[str, object]] = None
+        if self.db is not None:
+            row = self.db.execute(
+                "SELECT payload_json FROM pdf_pages "
+                "WHERE source_file_id = ? AND pdf_page_index = ? LIMIT 1",
+                (source_file_id, page_index),
+            ).fetchone()
+            if row is not None:
+                try:
+                    payload = json.loads(row[0])
+                except (TypeError, json.JSONDecodeError):
+                    payload = None
+                if isinstance(payload, dict):
+                    page = payload
+        self._pdf_page_cache[key] = page
+        return page
+
+    @classmethod
+    def _spread_sides_for_span(
+        cls,
+        page: Dict[str, object],
+        span: Dict[str, object],
+    ) -> set[str]:
+        start = span.get("page_char_start")
+        end = span.get("page_char_end")
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in (start, end)
+        ):
+            return set()
+        gutter_x = page.get("gutter_x")
+        try:
+            gutter = float(gutter_x)
+        except (TypeError, ValueError):
+            gutter = 0.5
+        if not 0.3 <= gutter <= 0.7:
+            gutter = 0.5
+
+        sides: set[str] = set()
+        blocks = page.get("blocks")
+        if not isinstance(blocks, list):
+            return sides
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            block_start = block.get("page_char_start")
+            block_end = block.get("page_char_end")
+            if not all(
+                isinstance(value, int) and not isinstance(value, bool)
+                for value in (block_start, block_end)
+            ):
+                continue
+            if max(int(start), block_start) >= min(int(end), block_end):
+                continue
+            bbox = cls._normalized_block_bbox(page, block)
+            if bbox is None:
+                return set()
+            x0, _, x1, _ = bbox
+            if x0 < gutter < x1 and min(gutter - x0, x1 - gutter) > 0.05:
+                return set()
+            sides.add("left" if (x0 + x1) / 2 < gutter else "right")
+        return sides
+
+    @staticmethod
+    def _normalized_block_bbox(
+        page: Dict[str, object],
+        block: Dict[str, object],
+    ) -> Optional[Tuple[float, float, float, float]]:
+        raw = block.get("bbox_normalized")
+        if isinstance(raw, (list, tuple)) and len(raw) == 4:
+            try:
+                values = tuple(float(value) for value in raw)
+            except (TypeError, ValueError):
+                values = ()
+            if len(values) == 4 and 0 <= values[0] <= values[2] <= 1:
+                return values[0], values[1], values[2], values[3]
+        raw = block.get("bbox")
+        try:
+            width = float(page.get("page_width") or 0)
+            height = float(page.get("page_height") or 0)
+            values = (
+                tuple(float(value) for value in raw)
+                if isinstance(raw, (list, tuple))
+                else ()
+            )
+        except (TypeError, ValueError):
+            return None
+        if len(values) != 4 or width <= 0 or height <= 0:
+            return None
+        return (
+            values[0] / width,
+            values[1] / height,
+            values[2] / width,
+            values[3] / height,
+        )
 
     def _citation_metadata(self, paragraph: Dict[str, object], source_type: str) -> Dict[str, object]:
         metadata: Dict[str, object] = {}

@@ -19,6 +19,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             {"scan_directories": ["D:/Papers", "E:/Notes"]},
             {"pdf_open_mode": "system"},
             {"auto_update": True},
+            {"citation_styles": ["chinese", "gb", "apa"]},
         )
         expected = {
             "theme": "midnight",
@@ -27,6 +28,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "scan_directories": [str(Path("D:/Papers")), str(Path("E:/Notes"))],
             "pdf_open_mode": "system",
             "auto_update": True,
+            "citation_styles": ["chinese", "gb", "apa"],
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

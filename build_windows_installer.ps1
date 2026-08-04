@@ -8,6 +8,15 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseRoot = Join-Path $ProjectRoot "release"
 $DistPath = Join-Path $ProjectRoot "dist\MEFinder"
+$LocalDataRoot = Join-Path $ProjectRoot "dist\MEFinderData"
+$LocalDataMarker = Join-Path $DistPath "data_root.txt"
+
+function Restore-LocalDevelopmentDataMarker {
+    if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) { return }
+    New-Item -ItemType Directory -Force -Path $LocalDataRoot | Out-Null
+    Set-Content -LiteralPath $LocalDataMarker -Encoding UTF8 -NoNewline `
+        -Value ([IO.Path]::GetFullPath($LocalDataRoot))
+}
 
 function Find-InnoCompiler {
     param([string]$ExplicitPath)
@@ -92,12 +101,18 @@ try {
         tests.test_backup_service `
         tests.test_batch_document_removal `
         tests.test_citations `
+        tests.test_cnki_citation `
+        tests.test_journal_metadata_lookup `
+        tests.test_foreign_book_lookup `
+        tests.test_crossref_lookup `
+        tests.test_book_metadata_lookup `
         tests.test_database_resilience `
         tests.test_fts_search_scalability `
         tests.test_large_index_resilience `
         tests.test_library_startup_performance `
         tests.test_pdf_import_config `
         tests.test_import_config_concurrency `
+        tests.test_preferences_concurrency `
         tests.test_long_filename_import `
         tests.test_pdf_match_anchors `
         tests.test_page_display `
@@ -205,5 +220,15 @@ try {
     Write-Output "Checksum sidecar: $HashPath"
 }
 finally {
-    Pop-Location
+    try {
+        # The installer has already been compiled from the privacy-checked
+        # payload. Restore only the local dist build's persistent data pointer.
+        Restore-LocalDevelopmentDataMarker
+    }
+    catch {
+        Write-Warning "Could not restore the local development data marker: $_"
+    }
+    finally {
+        Pop-Location
+    }
 }

@@ -13,6 +13,7 @@ from src.me_finder import __version__
 from src.me_finder.preferences import (
     DEFAULT_AUTO_UPDATE,
     DEFAULT_CALIBRATION_VIEW,
+    DEFAULT_CITATION_STYLES,
     DEFAULT_LIBRARY_VIEW,
     DEFAULT_PDF_OPEN_MODE,
     DEFAULT_THEME,
@@ -34,6 +35,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "scan_directories": [],
             "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
             "auto_update": DEFAULT_AUTO_UPDATE,
+            "citation_styles": list(DEFAULT_CITATION_STYLES),
         }
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
@@ -112,6 +114,18 @@ class PreferencePersistenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 save_preferences({"auto_update": "true"}, path)
 
+    def test_citation_styles_default_and_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            self.assertEqual(read_preferences(path)["citation_styles"], ["chinese", "gb"])
+            saved = save_preferences({"citation_styles": ["mla", "chinese", "apa", "mla"]}, path)
+            self.assertEqual(saved["citation_styles"], ["chinese", "apa", "mla"])
+            self.assertEqual(read_preferences(path)["citation_styles"], ["chinese", "apa", "mla"])
+            with self.assertRaises(ValueError):
+                save_preferences({"citation_styles": []}, path)
+            with self.assertRaises(ValueError):
+                save_preferences({"citation_styles": ["unknown"]}, path)
+
 
 class ThemeMarkupTests(unittest.TestCase):
     REQUIRED_TOKENS = (
@@ -182,6 +196,13 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('@container (min-width: 640px)', HTML)
         self.assertIn('@container (min-width: 720px)', HTML)
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
+        self.assertRegex(
+            HTML,
+            r"#appearance-card\.active\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*1120px",
+        )
+        self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
+        self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
+        self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*height:\s*140px")
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(
@@ -379,6 +400,8 @@ class ThemeMarkupTests(unittest.TestCase):
             "pdf-reader-settings": "pdf-reader-body",
             "mineru-api-settings": "mineru-api-body",
             "vision-api-settings": "vision-api-body",
+            "citation-format-settings": "citation-format-body",
+            "bib-completion-settings": "bib-completion-body",
             "appearance-card": "appearance-body",
             "data-location-settings": "data-location-body",
             "backup-settings": "backup-settings-body",

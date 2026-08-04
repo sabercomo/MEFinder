@@ -47,11 +47,11 @@ SUMMARY_DROPPED_METADATA_FIELDS = frozenset({"metadata_evidence", "metadata_conf
 
 
 STATUS_LABELS = {
-    "manual_mapped": "已校准 · 人工映射",
-    "auto_mapped_high": "已校准 · 自动映射",
-    "needs_review": "待确认",
-    "unmapped": "待校准",
-    "auto_mapping_failed": "检测失败",
+    "manual_mapped": "页码已校准 · 人工映射",
+    "auto_mapped_high": "页码已校准 · 自动映射",
+    "needs_review": "页码待确认",
+    "unmapped": "页码尚未检测",
+    "auto_mapping_failed": "页码自动检测失败",
     "mapping": "正在检测",
     "source_missing": "原文件缺失",
 }

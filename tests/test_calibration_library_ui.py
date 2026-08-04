@@ -213,12 +213,26 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
         self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('failed','页码自动检测失败',current.failed,'danger','danger',libStatusFilter,'applyLibStatusFilter')", HTML)
-        self.assertNotIn("statusStatButton('failed','检测失败'", HTML)
+        self.assertIn("statusStatButton('calibrated','页码已校准'", HTML)
+        self.assertIn("statusStatButton('page_pending','页码待处理'", HTML)
+        self.assertIn("statusStatButton('bibliographic','书目待补全'", HTML)
+        self.assertNotIn("statusStatButton('pending','待校准'", HTML)
+        self.assertNotIn("statusStatButton('review','待确认'", HTML)
+        self.assertNotIn("statusStatButton('failed','页码自动检测失败'", HTML)
         self.assertIn("libStatusFilter = requested === libStatusFilter ? 'all' : requested", HTML)
         self.assertIn("if (libStatusFilter === 'pdf_all')", HTML)
         self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
+        self.assertIn("libStatusFilter === 'page_pending'", HTML)
+        self.assertIn("calibrationStatusGroup(s.status) !== 'calibrated'", HTML)
+        self.assertIn("libStatusFilter === 'bibliographic'", HTML)
+        self.assertIn("bibliographicMissingFields(sourceBibliographicMetadata(s)).length > 0", HTML)
         self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
+
+    def test_page_and_bibliographic_labels_are_unambiguous(self) -> None:
+        self.assertIn("needs_review:'页码待确认'", HTML)
+        self.assertIn("unmapped:'页码尚未检测'", HTML)
+        self.assertIn("return fields.length ? '书目缺失：'", HTML)
+        self.assertIn("needs_review:'书目待确认'", HTML)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
@@ -261,6 +275,30 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         drawer = HTML.split('id="library-drawer"', 1)[1].split('<!-- ── Import Page ── -->', 1)[0]
         for element_id in ('id="cal-editor"', 'id="cal-auto-preview"', 'id="cal-segments-body"', 'id="cal-preview-input"', 'id="cal-detail-actions"'):
             self.assertIn(element_id, drawer)
+
+    def test_manual_calibration_supports_spread_layout_and_safe_single_default(self) -> None:
+        self.assertIn("function segmentLayoutControl(layout, index)", HTML)
+        self.assertIn("layout === 'spread' ? '双开页' : '单页'", HTML)
+        self.assertIn("function setSegmentReadingDirection(index, value)", HTML)
+        self.assertIn("setSegmentReadingDirection(' + index + ',\\'ltr\\')", HTML)
+        self.assertIn("setSegmentReadingDirection(' + index + ',\\'rtl\\')", HTML)
+        self.assertIn('aria-label="双开页阅读方向"', HTML)
+        self.assertIn('>左→右</button>', HTML)
+        self.assertIn('>右→左</button>', HTML)
+        self.assertIn("function updateSegmentGutter(index, value)", HTML)
+        self.assertIn("seg.layout_mode === 'spread' ? 2 : 1", HTML)
+        self.assertIn("clean.layout_mode = seg.layout_mode === 'spread' ? 'spread' : 'single'", HTML)
+        self.assertIn("clean.reading_direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr'", HTML)
+        self.assertIn("<th>页面布局</th>", HTML)
+        self.assertIn("segment-col-layout", HTML)
+
+    def test_auto_detection_reports_spread_layout_direction_and_evidence(self) -> None:
+        self.assertIn("正在检测页码与页面布局", HTML)
+        self.assertIn("页面布局：双开页", HTML)
+        self.assertIn("layout.reading_direction === 'rtl' ? '右→左' : '左→右'", HTML)
+        self.assertIn("layoutEvidence.paired_page_numbers", HTML)
+        self.assertIn("layoutEvidence.stride_two_support", HTML)
+        self.assertIn("spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列'", HTML)
 
     def test_sidebar_has_no_calibration_entry_and_deep_links_stay_in_library(self) -> None:
         self.assertNotIn('data-page="calibration"', HTML)

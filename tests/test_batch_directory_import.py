@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 import zipfile
+from contextlib import closing
 from http.server import ThreadingHTTPServer
 from html import escape
 from pathlib import Path
@@ -944,8 +945,8 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         len(list((root / "corpus" / "raw_pdf").glob("*.pdf"))),
                         1,
                     )
-                    with sqlite3.connect(
-                        root / "data" / "index.sqlite3"
+                    with closing(
+                        sqlite3.connect(root / "data" / "index.sqlite3")
                     ) as connection:
                         self.assertEqual(
                             connection.execute(
