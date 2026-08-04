@@ -110,6 +110,33 @@ class CNKILookupParserTests(unittest.TestCase):
             CNKIClient(opener=BrokenOpener()).search({"title": "测试文章"})
         self.assertEqual(caught.exception.code, "tls_error")
 
+    def test_search_uses_browser_transport_when_provided(self) -> None:
+        fixture = (FIXTURES / "cnki_search_results.html").read_text(encoding="utf-8")
+        calls: list[tuple[str, str, dict]] = []
+
+        def transport(url, method, data, headers):
+            calls.append((url, method, headers))
+            return {"status": 200, "text": fixture}
+
+        result = CNKIClient(transport=transport).search(
+            {"title": "重思马克思的市民社会理论", "author": "张双利"}
+        )
+        self.assertTrue(result["candidates"])
+        # The request goes through the browser session, targets the domestic
+        # host, and drops the forbidden UA/Origin/Referer headers.
+        self.assertEqual(calls[0][1], "POST")
+        self.assertIn("kns.cnki.net/kns8s/brief/grid", calls[0][0])
+        self.assertNotIn("Origin", calls[0][2])
+        self.assertNotIn("User-Agent", calls[0][2])
+
+    def test_transport_403_maps_to_verification_required(self) -> None:
+        def transport(url, method, data, headers):
+            return {"status": 403, "text": ""}
+
+        with self.assertRaises(CNKILookupError) as caught:
+            CNKIClient(transport=transport).search({"title": "测试文章"})
+        self.assertEqual(caught.exception.code, "verification_required")
+
     def test_rate_limit_is_explicit_and_not_retried(self) -> None:
         class LimitedOpener:
             def __init__(self):
@@ -208,7 +235,9 @@ class CNKILookupParserTests(unittest.TestCase):
         opener = TransientOpener()
         result = CNKIClient(opener=opener).search({"title": "测试文章"})
         self.assertEqual(result["candidates"], [])
-        self.assertEqual(opener.calls, 2)
+        # kns (primary): one 503 retried once, then an empty "no rows" page;
+        # since it yielded nothing, the oversea mirror is consulted once more.
+        self.assertEqual(opener.calls, 3)
 
     def test_external_open_url_is_strictly_allowlisted(self) -> None:
         valid = "https://oversea.cnki.net/kns8s/search?kw=%E6%B5%8B%E8%AF%95"
@@ -233,7 +262,7 @@ class CNKILookupParserTests(unittest.TestCase):
 
 class CNKILookupAPITests(unittest.TestCase):
     @contextmanager
-    def _server(self):
+    def _server(self, *, native_cnki_session=None):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "runtime"
             database = root / "data" / "index.sqlite3"
@@ -245,7 +274,7 @@ class CNKILookupAPITests(unittest.TestCase):
             server = None
             try:
                 os.chdir(root)
-                handler = make_handler(database)
+                handler = make_handler(database, native_cnki_session=native_cnki_session)
                 handler.log_message = lambda *_args: None
                 server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
                 threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -305,6 +334,57 @@ class CNKILookupAPITests(unittest.TestCase):
         self.assertEqual(lookup["provider"], "cnki")
         self.assertEqual(detail_status, 200)
         self.assertEqual(detail["metadata"]["journal_name"], "学术月刊")
+
+    def test_lookup_escalates_to_in_app_session_when_headless_empty(self) -> None:
+        class FakeBridge:
+            def __init__(self) -> None:
+                self.ensure_calls: list[str] = []
+
+            def is_ready(self) -> bool:
+                return True
+
+            def ensure_ready(self, open_url: str) -> bool:
+                self.ensure_calls.append(open_url)
+                return True
+
+            def fetch(self, url, method, data, headers):  # pragma: no cover - patched
+                return {"status": 200, "text": ""}
+
+        def fake_lookup(metadata, *, opener=None, transport=None):
+            base = {
+                "provider": "cnki",
+                "query_type": "title",
+                "open_url": "https://kns.cnki.net/kns8s/search?kw=x",
+            }
+            if transport is None:
+                # Headless attempt hits CNKI's captcha wall: no rows.
+                return {**base, "candidates": []}
+            # Issued from inside the authenticated window: the record is found.
+            return {
+                **base,
+                "candidates": [
+                    {
+                        "record_url": "https://kns.cnki.net/kcms2/article/abstract?v=x",
+                        "metadata": {"title": "命中"},
+                        "match": {"level": "high", "score": 1.0},
+                    }
+                ],
+            }
+
+        bridge = FakeBridge()
+        with self._server(native_cnki_session=bridge) as base_url, patch(
+            "src.me_finder.web.lookup_cnki_journal", side_effect=fake_lookup
+        ):
+            status, payload = self._post(
+                base_url,
+                "/api/bibliographic-metadata/lookup-cnki",
+                {"metadata": {"title": "命中"}},
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(len(payload["candidates"]), 1)
+        self.assertEqual(len(bridge.ensure_calls), 1)
+        self.assertTrue(bridge.ensure_calls[0].startswith("https://kns.cnki.net/kns8s/search"))
 
     def test_lookup_api_preserves_explicit_error_code_and_fallback_url(self) -> None:
         failure = CNKILookupError(

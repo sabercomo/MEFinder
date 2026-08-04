@@ -2019,7 +2019,7 @@ async function lookupCnkiMetadata(sourceId) {
   }
   cnkiLookupState[sourceId] = {candidates:[], open_url:cnkiSearchUrlFromForm()};
   renderCnkiCandidates(sourceId);
-  setCnkiLookupStatus('正在查询知网…', false);
+  setCnkiLookupStatus('正在查询知网…若弹出知网窗口，完成滑块验证后会自动回填', false);
   try {
     var resp = await fetch('/api/bibliographic-metadata/lookup-cnki', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
@@ -2262,8 +2262,8 @@ function cnkiSearchUrlFromForm() {
   var form = collectBibliographicForm();
   var keyword = form.doi || form.title;
   if (!keyword) return '';
-  return 'https://oversea.cnki.net/kns8s/search?classid=R0DPFOXP&kw=' + encodeURIComponent(keyword)
-    + '&korder=' + (form.doi ? 'DOI' : 'TI') + '&language=CHS';
+  return 'https://kns.cnki.net/kns8s/search?classid=WD0FTY92&kw=' + encodeURIComponent(keyword)
+    + '&korder=SU&language=CHS';
 }
 
 async function openCnkiExternal(url) {

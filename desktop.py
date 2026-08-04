@@ -495,6 +495,146 @@ def create_main_window(webview_module, theme: str):
     return window, controller
 
 
+# Injected into the CNKI window to report page state: keeps a non-blocking hint
+# banner visible and returns "verify" (still on the captcha), "rows" (results
+# visible), "ready" (on CNKI, past the captcha), or "other".  Runs through
+# evaluate_js, which is reliable from a background thread on macOS WKWebView.
+_CNKI_STATE_JS = """
+(function(){
+  try{
+    if(!document.getElementById('__mefinderCnkiHint')){
+      var b=document.createElement('div');
+      b.id='__mefinderCnkiHint';
+      b.textContent='完成滑块验证后将自动继续，之后无需再验证';
+      b.style.cssText='position:fixed;top:12px;right:12px;z-index:2147483647;'
+        +'padding:10px 14px;background:#2f6bff;color:#fff;'
+        +'border-radius:8px;font:700 13px sans-serif;pointer-events:none;'
+        +'box-shadow:0 4px 14px rgba(0,0,0,.35)';
+      (document.body||document.documentElement).appendChild(b);
+    }
+    var u=String(location.href||'');
+    if(u.indexOf('/verify')>=0 || /captcha/i.test(u)) return 'verify';
+    if(u.indexOf('cnki.net')<0 || u.indexOf('about:blank')>=0) return 'other';
+    var rows=document.querySelectorAll(
+      '.result-table-list tbody tr, table.result-table-list tr').length;
+    return rows>0 ? 'rows' : 'ready';
+  }catch(e){ return 'other'; }
+})()
+"""
+
+
+class CNKISessionBridge:
+    """A persistent, authenticated in-app CNKI window (Jasminum's approach).
+
+    ``kns.cnki.net`` gates its search API behind a block-puzzle captcha, so a
+    headless Python request only ever sees "暂无数据".  This keeps one real
+    WebView window open; the user clears the slider once, then every CNKI request
+    is issued *from inside that window* via ``fetch`` (``self.fetch``), carrying
+    the browser's authenticated session — so CNKI does not re-challenge and the
+    window is reused across records without re-prompting.
+    """
+
+    def __init__(self, webview_module) -> None:
+        self._webview = webview_module
+        self._lock = threading.RLock()
+        self._window = None
+        self._ready = False
+
+    def _on_closed(self) -> None:
+        self._window = None
+        self._ready = False
+
+    def is_ready(self) -> bool:
+        return self._ready and self._window is not None
+
+    def ensure_ready(self, open_url: str) -> bool:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(str(open_url or ""))
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"kns.cnki.net", "oversea.cnki.net"}
+            or parsed.path != "/kns8s/search"
+        ):
+            logging.info("CNKI session: rejected open_url %r", open_url)
+            return False
+        with self._lock:
+            if self.is_ready():
+                return True
+            import time
+
+            if self._window is None:
+                logging.info("CNKI session: opening window at %s", open_url)
+                self._window = self._webview.create_window(
+                    "知网检索 · 完成滑块验证后自动继续（仅需验证一次）",
+                    url=open_url,
+                    width=1120,
+                    height=840,
+                )
+                self._window.events.closed += self._on_closed
+
+            deadline = time.monotonic() + 240
+            seen_verify = False
+            stable = 0
+            while time.monotonic() < deadline and self._window is not None:
+                try:
+                    state = self._window.evaluate_js(_CNKI_STATE_JS)
+                except Exception:
+                    logging.exception("CNKI session: evaluate_js failed")
+                    state = None
+                if state == "verify":
+                    seen_verify = True
+                    stable = 0
+                elif state in {"rows", "ready"}:
+                    stable += 1
+                    if state == "rows" or seen_verify or stable >= 3:
+                        time.sleep(1.0)  # let the post-captcha session settle
+                        self._ready = True
+                        logging.info("CNKI session: ready (state=%s)", state)
+                        return True
+                else:
+                    stable = 0
+                time.sleep(1.0)
+            logging.info("CNKI session: not ready (window=%s)", self._window is not None)
+            return False
+
+    def fetch(self, url: str, method: str, data, headers) -> dict:
+        import json
+        import time
+
+        with self._lock:
+            if not self.is_ready():
+                return {"status": 0, "text": ""}
+            if isinstance(data, (bytes, bytearray)):
+                body = data.decode("utf-8", "replace")
+            else:
+                body = str(data) if data else ""
+            body_js = json.dumps(body) if body else "undefined"
+            kickoff = (
+                "window.__cnkiFetch=null;"
+                "fetch(%s,{method:%s,headers:%s,body:%s,credentials:'include'})"
+                ".then(function(r){return r.text().then(function(t){"
+                "window.__cnkiFetch={status:r.status,text:t};});})"
+                ".catch(function(e){window.__cnkiFetch={status:0,text:'',error:String(e)};});"
+                % (json.dumps(url), json.dumps(method or "GET"), json.dumps(headers or {}), body_js)
+            )
+            try:
+                self._window.evaluate_js(kickoff)
+            except Exception:
+                logging.exception("CNKI session: fetch kickoff failed")
+                return {"status": 0, "text": ""}
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline and self._window is not None:
+                try:
+                    res = self._window.evaluate_js("window.__cnkiFetch")
+                except Exception:
+                    res = None
+                if isinstance(res, dict):
+                    return {"status": int(res.get("status") or 0), "text": str(res.get("text") or "")}
+                time.sleep(0.4)
+            return {"status": 0, "text": ""}
+
+
 def setup_logging(root: Path) -> None:
     handlers = []
     for log_dir in (root, Path(tempfile.gettempdir())):
@@ -652,6 +792,7 @@ def main() -> None:
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
                 native_scan_directory_chooser=choose_scan_directories,
+                native_cnki_session=CNKISessionBridge(webview),
                 app_data_root=app_data_root,
                 default_app_data_root=default_app_data_root,
             )

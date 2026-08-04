@@ -42,6 +42,7 @@ from .crossref_lookup import CrossrefLookupError, lookup_crossref
 from .foreign_book_lookup import BookLookupError
 from .journal_metadata_lookup import (
     CNKILookupError,
+    cnki_open_search_url,
     fetch_cnki_candidate,
     lookup_cnki_journal,
 )
@@ -213,7 +214,7 @@ def open_external_cnki_url(value: object) -> None:
     if (
         len(url) > 4096
         or parsed.scheme != "https"
-        or parsed.hostname != "oversea.cnki.net"
+        or parsed.hostname not in {"kns.cnki.net", "oversea.cnki.net"}
         or parsed.port not in (None, 443)
         or parsed.username is not None
         or parsed.password is not None
@@ -277,6 +278,12 @@ NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
 NativeThemeSetter = Callable[[str], None]
 NativeDirectoryChooser = Callable[[], Optional[str]]
 NativeScanDirectoryChooser = Callable[[], Optional[Union[str, Sequence[str]]]]
+# The desktop CNKI session bridge: a persistent, authenticated in-app CNKI
+# window.  ``ensure_ready(open_url) -> bool`` opens it (once) and waits for the
+# user to clear the block-puzzle captcha; ``fetch(url, method, data, headers) ->
+# {"status", "text"}`` issues a request from inside that window; ``is_ready()``
+# reports whether the window is alive and past the captcha.
+NativeCNKISession = object
 
 
 def open_pdf_with_platform(
@@ -408,6 +415,7 @@ def make_handler(
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
     native_scan_directory_chooser: NativeScanDirectoryChooser | None = None,
+    native_cnki_session: NativeCNKISession | None = None,
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
@@ -429,6 +437,71 @@ def make_handler(
     rebuild_lock = threading.RLock()
     metadata_lock = threading.Lock()
     cnki_lookup_lock = threading.Lock()
+    def cnki_session_transport():
+        """The in-app CNKI window's fetch bridge, if the desktop shell wired one
+        and its authenticated window is still alive; otherwise None."""
+
+        bridge = native_cnki_session
+        if bridge is None or not getattr(bridge, "is_ready", lambda: False)():
+            return None
+        return bridge.fetch
+
+    def cnki_lookup_with_session(query_metadata: Dict[str, object]) -> Dict[str, object]:
+        """Headless CNKI lookup, escalating to the in-app CNKI window.
+
+        A plain headless request works from networks CNKI does not challenge
+        (e.g. oversea).  When it comes back empty or hits the captcha wall, and
+        the desktop shell exposes an in-app CNKI window, the user clears the
+        slider once; every subsequent request (this record and later ones) is
+        issued from inside that authenticated window via ``transport`` — the same
+        approach Jasminum uses — so CNKI does not re-challenge and the window is
+        reused without re-prompting.  Raises CNKILookupError for terminal
+        failures.
+        """
+
+        pending_error: CNKILookupError | None = None
+        try:
+            result = lookup_cnki_journal(query_metadata)
+            needs_session = not result.get("candidates")
+        except CNKILookupError as exc:
+            if exc.code != "verification_required":
+                raise
+            result = None
+            needs_session = True
+            pending_error = exc
+
+        if not needs_session:
+            return result
+
+        if native_cnki_session is not None:
+            open_url = cnki_open_search_url(query_metadata)
+            ready = False
+            try:
+                ready = bool(native_cnki_session.ensure_ready(open_url))
+            except Exception:
+                logging.exception("in-app CNKI session window failed")
+            logging.info("CNKI in-app session ready=%s", ready)
+            if ready:
+                result = lookup_cnki_journal(
+                    query_metadata, transport=native_cnki_session.fetch
+                )
+                logging.info(
+                    "CNKI lookup via in-app session returned %d candidate(s)",
+                    len(result.get("candidates") or []),
+                )
+
+        if result is None:
+            # No session capability (or the user cancelled) after a captcha
+            # wall: surface the original error so its open_url is preserved.
+            if pending_error is not None:
+                raise pending_error
+            raise CNKILookupError(
+                "verification_required",
+                "知网要求浏览器验证，请在弹出的知网窗口完成验证后重试，或粘贴引用文字。",
+                open_url=cnki_open_search_url(query_metadata),
+            )
+        return result
+
     import_jobs: Dict[str, Dict[str, object]] = {}
     import_job_contexts: Dict[str, Dict[str, object]] = {}
     import_jobs_lock = threading.RLock()
@@ -3871,7 +3944,7 @@ def make_handler(
                     )
                     return
                 try:
-                    result = lookup_cnki_journal(query_metadata)
+                    result = cnki_lookup_with_session(query_metadata)
                 except CNKILookupError as exc:
                     status = {
                         "invalid_query": 400,
@@ -3903,7 +3976,7 @@ def make_handler(
                     )
                     return
                 try:
-                    result = fetch_cnki_candidate(candidate)
+                    result = fetch_cnki_candidate(candidate, transport=cnki_session_transport())
                 except CNKILookupError as exc:
                     status = {
                         "invalid_candidate": 400,

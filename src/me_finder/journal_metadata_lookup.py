@@ -23,15 +23,43 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 from .bibliographic_metadata import normalize_doi, normalize_issn
 
 
-CNKI_SEARCH_ENDPOINT = "https://oversea.cnki.net/kns8s/brief/grid?language=CHS"
-CNKI_SEARCH_PAGE = "https://oversea.cnki.net/kns8s/search"
-CNKI_ALLOWED_HOST = "oversea.cnki.net"
+# CNKI mirrors, tried in order.  The domestic host is primary: from a mainland
+# IP the oversea host answers 404, while ``kns.cnki.net`` serves the same
+# ``/kns8s`` API.  Overseas (global VPN) traffic that cannot reach the domestic
+# host falls back to ``oversea.cnki.net``.
+CNKI_HOSTS = ("kns.cnki.net", "oversea.cnki.net")
+CNKI_PRIMARY_HOST = CNKI_HOSTS[0]
+CNKI_ALLOWED_HOSTS = frozenset(CNKI_HOSTS)
+# Kept for backwards compatibility; validation now accepts any allowed host.
+CNKI_ALLOWED_HOST = CNKI_PRIMARY_HOST
+
+
+def _cnki_search_endpoint(host: str) -> str:
+    return f"https://{host}/kns8s/brief/grid?language=CHS"
+
+
+def _cnki_search_page(host: str) -> str:
+    return f"https://{host}/kns8s/search"
+
+
+CNKI_SEARCH_ENDPOINT = _cnki_search_endpoint(CNKI_PRIMARY_HOST)
+CNKI_SEARCH_PAGE = _cnki_search_page(CNKI_PRIMARY_HOST)
+# CNKI lookup errors where the host itself is unreachable or absent, so the next
+# mirror is worth trying.  ``verification_required``/``rate_limited`` are user
+# actionable and must not silently fan out to another host.
+_CNKI_HOST_FALLBACK_CODES = frozenset(
+    {"provider_unavailable", "offline", "timeout", "tls_error", "site_changed"}
+)
 CNKI_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 CNKI_TIMEOUT_SECONDS = 12.0
 
+# CNKI cross-database codes currently served by kns.cnki.net (as used by the
+# maintained Zotero CNKI translator / Jasminum). The app's former codes were
+# oversea-only and, like the old ``R0DPFOXP`` classid, stopped returning rows.
+# Journal narrowing still happens downstream via the ``期刊/辑刊`` label filter.
 _JOURNAL_DATABASE_CODES = (
-    "ON8XK5WL,B7ZYGRCM,BT8YKI4I,TBRPZP83,I8IOAWAD,HT3U9UVL,"
-    "BHWTLLXZ,SZU0GLDC,IAF5Y951"
+    "YSTT4HG0,LSTPFY1C,JUP3MUPD,MPMFIG1A,WQ0UVIAA,"
+    "BLZOG7CK,PWFIRAGL,EMRPGLPA,NLBO1Z6R,NN3FJMUV"
 )
 _INVISIBLE_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]")
 _YEAR_RE = re.compile(r"(?:18|19|20)\d{2}")
@@ -91,11 +119,13 @@ def _author_tokens(value: object) -> set[str]:
 
 
 def cnki_open_search_url(metadata: Mapping[str, object]) -> str:
+    # ``classid=WD0FTY92`` + ``korder=SU`` is the general cross-database search
+    # scenario CNKI currently serves; the app's former ``R0DPFOXP`` classid now
+    # 404/400s on kns.cnki.net.
     doi = normalize_doi(metadata.get("doi"))
     keyword = doi or _clean_text(metadata.get("title"))
-    order = "DOI" if doi else "TI"
     return CNKI_SEARCH_PAGE + "?" + urlencode(
-        {"classid": "R0DPFOXP", "kw": keyword, "korder": order, "language": "CHS"}
+        {"classid": "WD0FTY92", "kw": keyword, "korder": "SU", "language": "CHS"}
     )
 
 
@@ -229,7 +259,7 @@ class _SearchResultsParser(HTMLParser):
             self.current_text = []
         elif tag == "tr" and self.current_row is not None:
             title = _clean_text(self.current_row.get("name"))
-            record_url = urljoin("https://oversea.cnki.net", str(self.current_row.get("record_url") or ""))
+            record_url = urljoin(f"https://{CNKI_PRIMARY_HOST}", str(self.current_row.get("record_url") or ""))
             if title and record_url:
                 self.current_row["title"] = title
                 self.current_row["author"] = _clean_text(self.current_row.get("author"))
@@ -371,7 +401,7 @@ def parse_cnki_search_results(
         if database_label and "期刊" not in database_label and "辑刊" not in database_label:
             continue
         parsed_url = urlparse(row.get("record_url", ""))
-        if parsed_url.scheme != "https" or parsed_url.hostname != CNKI_ALLOWED_HOST:
+        if parsed_url.scheme != "https" or parsed_url.hostname not in CNKI_ALLOWED_HOSTS:
             continue
         year_match = _YEAR_RE.search(row.get("publish_date", ""))
         metadata = {
@@ -470,9 +500,15 @@ def parse_cnki_detail_page(html_text: str, record_url: str) -> Tuple[Dict[str, s
 
 
 class CNKIClient:
-    def __init__(self, *, timeout: float = CNKI_TIMEOUT_SECONDS, opener=None) -> None:
+    def __init__(self, *, timeout: float = CNKI_TIMEOUT_SECONDS, opener=None, transport=None) -> None:
         self.timeout = float(timeout)
         self.opener = opener or build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        # Optional callable(url, method, data, headers) -> {"status": int, "text": str}
+        # that performs the request inside an already-authenticated browser
+        # (see the desktop CNKI session bridge).  This is how the app reuses the
+        # human-cleared captcha session without CNKI re-challenging a separate
+        # Python HTTP client.
+        self.transport = transport
 
     @staticmethod
     def _search_payload(metadata: Mapping[str, object]) -> Tuple[bytes, bool]:
@@ -489,7 +525,7 @@ class CNKIClient:
         query = {
             "Platform": "",
             "Resource": "CROSSDB",
-            "Classid": "R0DPFOXP",
+            "Classid": "WD0FTY92",
             "Products": "",
             "QNode": {
                 "QGroup": [
@@ -545,7 +581,32 @@ class CNKIClient:
         }
         return urlencode(encoded).encode("utf-8"), bool(doi)
 
+    def _request_via_transport(self, request: Request, *, open_url: str) -> str:
+        # Forbidden fetch headers (UA/Origin/Referer/Host/Cookie) are dropped:
+        # the browser sets them from the authenticated page itself.
+        allowed = {"content-type", "accept", "accept-language", "x-requested-with"}
+        headers = {k: v for k, v in request.header_items() if k.lower() in allowed}
+        try:
+            result = self.transport(request.full_url, request.get_method(), request.data, headers)
+        except Exception as exc:  # noqa: BLE001 - transport is a GUI bridge
+            raise CNKILookupError("offline", "无法通过知网窗口发起请求。", open_url=open_url) from exc
+        status = int((result or {}).get("status") or 0)
+        text = str((result or {}).get("text") or "")
+        if status == 200:
+            if len(text.encode("utf-8", "ignore")) > CNKI_MAX_RESPONSE_BYTES:
+                raise CNKILookupError("site_changed", "知网页面响应异常过大，已停止解析。", open_url=open_url)
+            return text
+        if status in {401, 403}:
+            raise CNKILookupError("verification_required", "知网要求浏览器验证。", open_url=open_url)
+        if status == 429:
+            raise CNKILookupError("rate_limited", "知网请求过于频繁，请稍后再试。", open_url=open_url)
+        if status == 0:
+            raise CNKILookupError("offline", "无法通过知网窗口连接知网。", open_url=open_url)
+        raise CNKILookupError("provider_unavailable", f"知网暂时不可用（HTTP {status}）。", open_url=open_url)
+
     def _request(self, request: Request, *, open_url: str) -> str:
+        if self.transport is not None:
+            return self._request_via_transport(request, open_url=open_url)
         for attempt in range(2):
             try:
                 with self.opener.open(request, timeout=self.timeout) as response:
@@ -657,22 +718,43 @@ class CNKIClient:
         doi_query: bool,
         open_url: str,
     ) -> List[Dict[str, object]]:
-        request = Request(
-            CNKI_SEARCH_ENDPOINT,
-            data=payload,
-            method="POST",
-            headers={
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) Gecko/20100101 Firefox/147.0",
-                "Accept": "text/html, */*; q=0.01",
-                "Accept-Language": "zh-CN,zh;q=0.9",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "X-Requested-With": "XMLHttpRequest",
-                "Origin": "https://oversea.cnki.net",
-                "Referer": open_url,
-            },
-        )
-        html_text = self._request(request, open_url=open_url)
-        return parse_cnki_search_results(html_text, metadata, doi_query=doi_query)
+        last_error: Optional[CNKILookupError] = None
+        empty_result: Optional[List[Dict[str, object]]] = None
+        for host in CNKI_HOSTS:
+            request = Request(
+                _cnki_search_endpoint(host),
+                data=payload,
+                method="POST",
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) Gecko/20100101 Firefox/147.0",
+                    "Accept": "text/html, */*; q=0.01",
+                    "Accept-Language": "zh-CN,zh;q=0.9",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Origin": f"https://{host}",
+                    "Referer": open_url,
+                },
+            )
+            try:
+                html_text = self._request(request, open_url=open_url)
+                candidates = parse_cnki_search_results(html_text, metadata, doi_query=doi_query)
+            except CNKILookupError as exc:
+                last_error = exc
+                if exc.code in _CNKI_HOST_FALLBACK_CODES:
+                    continue
+                raise
+            if candidates:
+                return candidates
+            # A host that answers but returns no rows is likely serving an
+            # un-warmed session (mainland ``kns`` before its cookie/verify gate)
+            # or simply has no record here.  Remember it and try the next mirror
+            # so global-VPN traffic still reaches ``oversea``; if none do better,
+            # return this empty list rather than raising the next host's error.
+            empty_result = candidates
+        if empty_result is not None:
+            return empty_result
+        assert last_error is not None
+        raise last_error
 
     def fetch_candidate(self, candidate: Mapping[str, object]) -> Dict[str, object]:
         record_url = str(candidate.get("record_url") or "").strip()
@@ -680,7 +762,7 @@ class CNKIClient:
         if (
             len(record_url) > 4096
             or parsed.scheme != "https"
-            or parsed.hostname != CNKI_ALLOWED_HOST
+            or parsed.hostname not in CNKI_ALLOWED_HOSTS
             or parsed.port not in (None, 443)
             or parsed.username is not None
             or parsed.password is not None
@@ -693,7 +775,7 @@ class CNKIClient:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:147.0) Gecko/20100101 Firefox/147.0",
                 "Accept": "text/html,application/xhtml+xml",
                 "Accept-Language": "zh-CN,zh;q=0.9",
-                "Referer": CNKI_SEARCH_PAGE,
+                "Referer": _cnki_search_page(parsed.hostname or CNKI_PRIMARY_HOST),
             },
         )
         html_text = self._request(request, open_url=record_url)
@@ -706,9 +788,9 @@ class CNKIClient:
         }
 
 
-def lookup_cnki_journal(metadata: Mapping[str, object]) -> Dict[str, object]:
-    return CNKIClient().search(metadata)
+def lookup_cnki_journal(metadata: Mapping[str, object], *, opener=None, transport=None) -> Dict[str, object]:
+    return CNKIClient(opener=opener, transport=transport).search(metadata)
 
 
-def fetch_cnki_candidate(candidate: Mapping[str, object]) -> Dict[str, object]:
-    return CNKIClient().fetch_candidate(candidate)
+def fetch_cnki_candidate(candidate: Mapping[str, object], *, opener=None, transport=None) -> Dict[str, object]:
+    return CNKIClient(opener=opener, transport=transport).fetch_candidate(candidate)

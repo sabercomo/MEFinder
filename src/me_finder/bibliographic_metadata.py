@@ -645,7 +645,8 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
             }
             record_url = str(raw_item.get("record_url") or "").strip()
             if (
-                record_url.startswith("https://oversea.cnki.net/")
+                record_url.startswith("https://kns.cnki.net/")
+                or record_url.startswith("https://oversea.cnki.net/")
                 or record_url.startswith("https://books.google.com/")
                 or record_url.startswith("https://play.google.com/")
                 or record_url.startswith("https://doi.org/")
