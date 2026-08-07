@@ -253,24 +253,7 @@ function selectResult(index) {
 
 
 
-function detailContextHTML(items, side) {
-  const fullText = detailContextText(items);
-  if (!fullText) return '';
-  const isBefore = side === 'before';
-  const label = isBefore ? '上文' : '下文';
-  const contentId = 'detail-context-' + side;
-  const characterTruncated = Array.from(fullText).length > DETAIL_CONTEXT_PREVIEW_CHARS;
-  return '<section class="detail-context-section detail-context-' + side + '">'
-    + '<div class="detail-context-heading">'
-    + '<span class="detail-context-label">' + label + '</span>'
-    + '<button class="detail-context-toggle" type="button" aria-label="展开' + label + '" aria-expanded="false" aria-controls="' + contentId + '" data-context-label="' + label + '" data-character-truncated="' + (characterTruncated ? 'true' : 'false') + '"' + (characterTruncated ? '' : ' hidden') + ' onclick="toggleDetailContext(this)">展开</button>'
-    + '</div>'
-    + '<div class="detail-context" id="' + contentId + '" role="region" aria-label="' + label + '">'
-    + '<span class="detail-context-preview">' + esc(detailContextPreview(fullText, side)) + '</span>'
-    + '<span class="detail-context-full" hidden>' + esc(fullText) + '</span>'
-    + '</div>'
-    + '</section>';
-}
+
 
 function refreshDetailContextToggles(panel) {
   if (!panel) return;

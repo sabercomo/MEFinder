@@ -1311,5 +1311,36 @@ class DetailContextPreviewTests(unittest.TestCase):
         self.assertEqual(got, "文" * 180 + "…")
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DetailContextHTMLTests(unittest.TestCase):
+    """上下文段落 HTML：空输入返回空串；短文本 toggle 隐藏且不截断；
+    长文本 toggle 可见、预览按 180 码点截断并加省略号，完整文本另存隐藏节点。"""
+
+    def test_empty_items_yield_empty(self):
+        self.assertEqual(_call("detailContextHTML", [], "before"), "")
+
+    def test_short_context_not_truncated(self):
+        html = _call("detailContextHTML", [{"text": "短上文内容"}], "before")
+        self.assertIn('detail-context-before', html)
+        self.assertIn('<span class="detail-context-label">上文</span>', html)
+        self.assertIn('data-character-truncated="false"', html)
+        # 未截断时 toggle 按钮带 hidden 属性
+        self.assertIn('data-character-truncated="false" hidden', html)
+        self.assertIn('<span class="detail-context-preview">短上文内容</span>', html)
+        self.assertIn('<span class="detail-context-full" hidden>短上文内容</span>', html)
+
+    def test_long_context_truncates_preview(self):
+        html = _call("detailContextHTML", [{"text": "文" * 300}], "after")
+        self.assertIn('detail-context-after', html)
+        self.assertIn('<span class="detail-context-label">下文</span>', html)
+        self.assertIn('data-character-truncated="true"', html)
+        # 截断时 toggle 按钮不带 hidden
+        self.assertNotIn('data-character-truncated="true" hidden', html)
+        # 预览按 180 码点截断加省略号
+        self.assertIn('<span class="detail-context-preview">' + "文" * 180 + "…</span>", html)
+        # 完整文本存进隐藏节点，保留全部 300 字
+        self.assertIn('<span class="detail-context-full" hidden>' + "文" * 300 + "</span>", html)
+
+
 if __name__ == "__main__":
     unittest.main()
