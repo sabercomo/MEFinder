@@ -56,6 +56,35 @@ def _run(cases):
         return json.loads(result.stdout)
 
 
+# 当纯函数的入参需要带方法的对象（如 getBoundingClientRect）时，JSON 无法承载，
+# 改用这个薄壳：eval 06-pure.js 后再 eval 一段任意表达式，回吐其 JSON 结果。
+_EVAL_HARNESS = r"""
+const fs = require('fs');
+const src = fs.readFileSync(process.argv[2], 'utf8');
+eval(src);
+const expr = fs.readFileSync(process.argv[3], 'utf8');
+process.stdout.write(JSON.stringify(eval(expr)));
+"""
+
+
+def _eval(expr):
+    """eval 06-pure.js 后执行一段 JS 表达式，返回其结果（用于需带方法入参的纯函数）。"""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = Path(tmp) / "eval_harness.js"
+        exprfile = Path(tmp) / "expr.js"
+        harness.write_text(_EVAL_HARNESS, encoding="utf-8")
+        exprfile.write_text(expr, encoding="utf-8")
+        result = subprocess.run(
+            [NODE, str(harness), str(PURE_JS), str(exprfile)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        return json.loads(result.stdout)
+
+
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CalibrateCitationForIndexTests(unittest.TestCase):
     def _check(self, segments, page_index, expected):
@@ -1138,6 +1167,117 @@ class PdRowTests(unittest.TestCase):
             '<span class="page-detail-label">&lt;b&gt;</span>'
             '<span>a&amp;b</span></div>',
         )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SegmentNumberStyleControlTests(unittest.TestCase):
+    """分段页码样式选择控件：渲染四个选项，当前样式带 is-selected。"""
+
+    def test_arabic_selected_and_all_options_present(self):
+        html = _call("segmentNumberStyleControl", "arabic", 0)
+        self.assertIn('id="segment-style-select-0"', html)
+        self.assertIn(
+            '<button class="app-select-option is-selected" type="button"'
+            ' data-value="arabic"', html)
+        for value in ("arabic", "roman_lower", "roman_upper", "none"):
+            self.assertIn('data-value="' + value + '"', html)
+
+    def test_index_threaded_into_ids_and_handlers(self):
+        html = _call("segmentNumberStyleControl", "none", 3)
+        self.assertIn('id="segment-style-select-3"', html)
+        self.assertIn("setSegmentNumberStyle(event,3,'roman_lower')", html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SegmentLayoutControlTests(unittest.TestCase):
+    """分段版式选择控件：单页/双开页两项，当前版式带 is-selected。"""
+
+    def test_single_selected(self):
+        html = _call("segmentLayoutControl", "single", 0)
+        self.assertIn('id="segment-layout-select-0"', html)
+        self.assertIn(
+            '<button class="app-select-option is-selected" type="button"'
+            ' data-value="single"', html)
+        self.assertIn('data-value="spread"', html)
+
+    def test_spread_selected_with_index(self):
+        html = _call("segmentLayoutControl", "spread", 2)
+        self.assertIn('id="segment-layout-select-2"', html)
+        self.assertIn(
+            '<button class="app-select-option is-selected" type="button"'
+            ' data-value="spread"', html)
+        self.assertIn("setSegmentLayout(event,2,'single')", html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class ScanEntryRowTests(unittest.TestCase):
+    """扫描列表行：类型徽标、勾选框、备注文案随状态变化，路径/名称经 esc。"""
+
+    def _entry(self, **over):
+        base = {"file_type": "pdf", "status": "new", "needs_ocr": None,
+                "path": "/a/b.pdf", "name": "b.pdf", "size_bytes": 1234}
+        base.update(over)
+        return base
+
+    def test_new_pdf_unchecked_row(self):
+        html = _call("scanEntryRow", self._entry(), 2, True, False)
+        self.assertIn('id="scan-check-2"', html)
+        self.assertIn('data-index="2"', html)
+        self.assertNotIn(" checked", html)
+        self.assertIn('<span class="type-badge pdf">PDF</span>', html)
+        self.assertIn("未预检测", html)
+
+    def test_checked_and_word_type(self):
+        html = _call("scanEntryRow",
+                     self._entry(file_type="word", needs_ocr=False), 0, True, True)
+        self.assertIn(" checked", html)
+        self.assertIn('<span class="type-badge word">DOCX</span>', html)
+
+    def test_ocr_note_and_escaping(self):
+        html = _call("scanEntryRow",
+                     self._entry(needs_ocr=True, name="<x>", path="a&b"), 1, True, False)
+        self.assertIn("需 OCR", html)
+        self.assertIn("&lt;x&gt;", html)
+        self.assertIn("a&amp;b", html)
+
+    def test_non_checkable_uses_placeholder(self):
+        html = _call("scanEntryRow", self._entry(), 4, False, False)
+        self.assertIn('<span class="scan-check-placeholder">', html)
+        self.assertNotIn('type="checkbox"', html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DragSelectionGeometryTests(unittest.TestCase):
+    """框选几何：锚点/选框/命中判定都由参数矩形推算，无副作用。"""
+
+    _SCROLLER = ("{getBoundingClientRect:function(){return {left:10,top:20};},"
+                 "scrollLeft:5,scrollTop:7}")
+
+    def test_anchor_adds_scroll_offset(self):
+        got = _eval("dragSelectionAnchor(" + self._SCROLLER +
+                    ",{clientX:100,clientY:200})")
+        self.assertEqual(got, {"anchorX": 95, "anchorY": 187})
+
+    def test_box_spans_anchor_and_pointer(self):
+        state = ("{scroller:" + self._SCROLLER +
+                 ",pointerX:150,pointerY:260,anchorX:95,anchorY:187}")
+        got = _eval("dragSelectionBox(" + state + ")")
+        self.assertEqual(got["left"], 95)
+        self.assertEqual(got["right"], 145)
+        self.assertEqual(got["top"], 187)
+        self.assertEqual(got["bottom"], 247)
+
+    def test_hits_true_when_overlapping(self):
+        box = "{viewport:{left:10,top:20},left:95,right:145,top:187,bottom:247}"
+        el = "{getBoundingClientRect:function(){return {left:100,top:200,width:30,height:15};}}"
+        got = _eval("dragSelectionHits(" + el + "," + box + "," + self._SCROLLER + ")")
+        self.assertIs(got, True)
+
+    def test_hits_false_when_disjoint(self):
+        box = "{viewport:{left:10,top:20},left:95,right:145,top:187,bottom:247}"
+        el = "{getBoundingClientRect:function(){return {left:500,top:800,width:10,height:10};}}"
+        got = _eval("dragSelectionHits(" + el + "," + box + "," + self._SCROLLER + ")")
+        self.assertIs(got, False)
 
 
 if __name__ == "__main__":

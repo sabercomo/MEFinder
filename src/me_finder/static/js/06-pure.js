@@ -639,3 +639,75 @@ function autoFailureReasons(reasons) {
 function pdRow(label, value) {
   return '<div class="page-detail-row"><span class="page-detail-label">' + esc(label) + '</span><span>' + esc(String(value)) + '</span></div>';
 }
+
+// 纯函数：由滚动容器与指针事件算出框选锚点坐标（读参数，无副作用）
+function dragSelectionAnchor(scroller, event) {
+  var viewport = scroller.getBoundingClientRect();
+  return {
+    anchorX: event.clientX - viewport.left + scroller.scrollLeft,
+    anchorY: event.clientY - viewport.top + scroller.scrollTop
+  };
+}
+
+// 纯函数：由框选状态算出当前选框的边界矩形（读参数，无副作用）
+function dragSelectionBox(state) {
+  var scroller = state.scroller;
+  var viewport = scroller.getBoundingClientRect();
+  var pointerX = state.pointerX - viewport.left + scroller.scrollLeft;
+  var pointerY = state.pointerY - viewport.top + scroller.scrollTop;
+  return {
+    viewport: viewport,
+    left: Math.min(state.anchorX, pointerX),
+    right: Math.max(state.anchorX, pointerX),
+    top: Math.min(state.anchorY, pointerY),
+    bottom: Math.max(state.anchorY, pointerY)
+  };
+}
+
+// 纯函数：判断元素矩形是否落入框选区域（读参数，无副作用）
+function dragSelectionHits(element, box, scroller) {
+  var rect = element.getBoundingClientRect();
+  var left = rect.left - box.viewport.left + scroller.scrollLeft;
+  var top = rect.top - box.viewport.top + scroller.scrollTop;
+  return left + rect.width >= box.left && left <= box.right
+    && top + rect.height >= box.top && top <= box.bottom;
+}
+
+// 纯函数：给定页码样式与索引，渲染分段页码样式选择控件的 HTML（无副作用）
+function segmentNumberStyleControl(style, index) {
+  var values = ['arabic','roman_lower','roman_upper','none'];
+  return '<div class="app-select segment-style-select" id="segment-style-select-' + index + '">'
+    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-style-select-' + index + '\')"><span class="app-select-value">' + segmentNumberStyleLabel(style) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
+      return '<button class="app-select-option' + (style === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentNumberStyle(event,' + index + ',\'' + value + '\')">' + segmentNumberStyleLabel(value) + '</button>';
+    }).join('') + '</div></div>';
+}
+
+// 纯函数：给定版式与索引，渲染分段版式选择控件的 HTML（无副作用）
+function segmentLayoutControl(layout, index) {
+  var values = ['single','spread'];
+  return '<div class="app-select segment-layout-select" id="segment-layout-select-' + index + '">'
+    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-layout-select-' + index + '\')"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
+      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentLayout(event,' + index + ',\'' + value + '\')">' + segmentLayoutLabel(value) + '</button>';
+    }).join('') + '</div></div>';
+}
+
+// 纯函数：给定扫描条目与勾选状态，渲染扫描列表行的 HTML（无副作用）
+function scanEntryRow(entry, index, checkable, checked) {
+  var typeCls = entry.file_type === 'pdf' ? 'pdf' : 'word';
+  var note = '';
+  if (entry.status === 'processing') note = '已提交，正在导入…';
+  else if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
+  else if (entry.needs_ocr === true) note = '需 OCR';
+  else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
+  return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
+    + (checkable
+      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
+      : '<span class="scan-check-placeholder"></span>')
+    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
+    + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
+    + '<span class="scan-row-size">' + formatFileSize(entry.size_bytes) + '</span>'
+    + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')
+    + '</div>';
+}

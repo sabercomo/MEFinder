@@ -361,23 +361,7 @@ async function runDirectoryScan() {
   }
 }
 
-function scanEntryRow(entry, index, checkable, checked) {
-  var typeCls = entry.file_type === 'pdf' ? 'pdf' : 'word';
-  var note = '';
-  if (entry.status === 'processing') note = '已提交，正在导入…';
-  else if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
-  else if (entry.needs_ocr === true) note = '需 OCR';
-  else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
-  return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
-    + (checkable
-      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
-      : '<span class="scan-check-placeholder"></span>')
-    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
-    + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
-    + '<span class="scan-row-size">' + formatFileSize(entry.size_bytes) + '</span>'
-    + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')
-    + '</div>';
-}
+
 
 function renderScanResults(data) {
   var statusEl = document.getElementById('scan-status');
@@ -440,27 +424,9 @@ function handleScanCheckChange(input) {
    框选一次只能选一屏，是因为锚点和命中判定都用视口坐标、拖到边缘又不滚动。
    下面这组函数把两者都换算到滚动容器的内容坐标系，并提供边缘自动滚动，
    文献库列表和扫描结果共用同一套实现。 */
-function dragSelectionAnchor(scroller, event) {
-  var viewport = scroller.getBoundingClientRect();
-  return {
-    anchorX: event.clientX - viewport.left + scroller.scrollLeft,
-    anchorY: event.clientY - viewport.top + scroller.scrollTop
-  };
-}
 
-function dragSelectionBox(state) {
-  var scroller = state.scroller;
-  var viewport = scroller.getBoundingClientRect();
-  var pointerX = state.pointerX - viewport.left + scroller.scrollLeft;
-  var pointerY = state.pointerY - viewport.top + scroller.scrollTop;
-  return {
-    viewport: viewport,
-    left: Math.min(state.anchorX, pointerX),
-    right: Math.max(state.anchorX, pointerX),
-    top: Math.min(state.anchorY, pointerY),
-    bottom: Math.max(state.anchorY, pointerY)
-  };
-}
+
+
 
 // 选框裁到滚动容器可视区，免得画到工具栏和侧边栏上。
 function paintDragSelectionMarquee(state, box) {
@@ -476,13 +442,7 @@ function paintDragSelectionMarquee(state, box) {
   state.marquee.style.height = Math.max(0, bottom - top) + 'px';
 }
 
-function dragSelectionHits(element, box, scroller) {
-  var rect = element.getBoundingClientRect();
-  var left = rect.left - box.viewport.left + scroller.scrollLeft;
-  var top = rect.top - box.viewport.top + scroller.scrollTop;
-  return left + rect.width >= box.left && left <= box.right
-    && top + rect.height >= box.top && top <= box.bottom;
-}
+
 
 // 指针压在容器上下边缘时持续滚动，否则一屏之外的条目根本够不着。
 function runDragSelectionAutoScroll(state, apply) {

@@ -190,14 +190,7 @@ function cancelAutoDetection() {
   document.getElementById('cal-auto-preview').style.display = 'none';
 }
 
-function segmentNumberStyleControl(style, index) {
-  var values = ['arabic','roman_lower','roman_upper','none'];
-  return '<div class="app-select segment-style-select" id="segment-style-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-style-select-' + index + '\')"><span class="app-select-value">' + segmentNumberStyleLabel(style) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (style === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentNumberStyle(event,' + index + ',\'' + value + '\')">' + segmentNumberStyleLabel(value) + '</button>';
-    }).join('') + '</div></div>';
-}
+
 
 function setSegmentNumberStyle(event, index, value) {
   event.stopPropagation();
@@ -206,14 +199,7 @@ function setSegmentNumberStyle(event, index, value) {
   renderCalSegments();
 }
 
-function segmentLayoutControl(layout, index) {
-  var values = ['single','spread'];
-  return '<div class="app-select segment-layout-select" id="segment-layout-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-layout-select-' + index + '\')"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentLayout(event,' + index + ',\'' + value + '\')">' + segmentLayoutLabel(value) + '</button>';
-    }).join('') + '</div></div>';
-}
+
 
 function setSegmentLayout(event, index, value) {
   event.stopPropagation();
