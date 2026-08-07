@@ -922,5 +922,34 @@ class SegmentSpreadPanelRowTests(unittest.TestCase):
         self.assertIn(">1<", html[right:right + 60])
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class EscTests(unittest.TestCase):
+    """HTML 转义。所有渲染函数拼接前的第一道防线，纯函数、无 DOM。"""
+
+    def test_ampersand_is_escaped(self):
+        self.assertEqual(_call("esc", "a & b"), "a &amp; b")
+
+    def test_angle_brackets_are_escaped(self):
+        self.assertEqual(_call("esc", "<div>"), "&lt;div&gt;")
+
+    def test_quotes_are_escaped(self):
+        self.assertEqual(
+            _call("esc", "he said \"hi\" & 'bye'"),
+            "he said &quot;hi&quot; &amp; &#39;bye&#39;",
+        )
+
+    def test_all_special_chars_together(self):
+        self.assertEqual(_call("esc", "&<>\"'"), "&amp;&lt;&gt;&quot;&#39;")
+
+    def test_plain_text_is_unchanged(self):
+        self.assertEqual(_call("esc", "纯文本无需转义"), "纯文本无需转义")
+
+    def test_non_string_is_coerced(self):
+        self.assertEqual(_call("esc", 42), "42")
+
+    def test_null_is_coerced_to_string(self):
+        self.assertEqual(_call("esc", None), "null")
+
+
 if __name__ == "__main__":
     unittest.main()

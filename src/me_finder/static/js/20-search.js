@@ -97,7 +97,6 @@ function fetchLibraryCatalog(force) {
 }
 
 
-
 function volumeForSource(sourceId) {
   return libVolumeBySource.get(sourceId) || null;
 }
@@ -250,7 +249,6 @@ function selectResult(index) {
   const row = document.querySelector('.result-row[data-index="' + index + '"]');
   if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
 }
-
 
 
 function detailContextPreview(text, side) {
@@ -471,9 +469,6 @@ document.addEventListener('keydown', function(e) {
 });
 
 /* ═══ Helpers ═══ */
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 
 function truncateHTML(html, maxText) {
   const div = document.createElement('div');

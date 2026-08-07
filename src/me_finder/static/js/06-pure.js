@@ -552,3 +552,8 @@ function detailContextText(items) {
     return item && item.text != null ? String(item.text) : '';
   }).filter(Boolean).join('\n');
 }
+
+// HTML 转义。原在 20-search.js，纯函数，前移以消除 06-pure 对外部符号的依赖。
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
