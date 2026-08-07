@@ -30,7 +30,7 @@ let searchDocumentsLoaded = false;
 // 文献库摘要在搜索下拉与文献库页之间共用一份：两处并发打开时只发一次请求。
 let libraryCatalog = null;
 let libraryCatalogPromise = null;
-const DETAIL_CONTEXT_PREVIEW_CHARS = 180;
+
 let detailContextResizeObserver = null;
 
 let libSources = [];

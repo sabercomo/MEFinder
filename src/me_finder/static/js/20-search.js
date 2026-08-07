@@ -251,14 +251,7 @@ function selectResult(index) {
 }
 
 
-function detailContextPreview(text, side) {
-  const characters = Array.from(String(text || ''));
-  if (characters.length <= DETAIL_CONTEXT_PREVIEW_CHARS) return characters.join('');
-  if (side === 'before') {
-    return '…' + characters.slice(-DETAIL_CONTEXT_PREVIEW_CHARS).join('');
-  }
-  return characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS).join('') + '…';
-}
+
 
 function detailContextHTML(items, side) {
   const fullText = detailContextText(items);

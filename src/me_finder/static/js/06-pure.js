@@ -711,3 +711,16 @@ function scanEntryRow(entry, index, checkable, checked) {
     + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')
     + '</div>';
 }
+
+// 纯常量：详情页上下文预览的最大可见字符数（原在 00-state.js，无副作用）
+const DETAIL_CONTEXT_PREVIEW_CHARS = 180;
+
+// 纯函数：按可见字符数截取上下文预览文本，超长两侧加省略号（读常量，无副作用）
+function detailContextPreview(text, side) {
+  const characters = Array.from(String(text || ''));
+  if (characters.length <= DETAIL_CONTEXT_PREVIEW_CHARS) return characters.join('');
+  if (side === 'before') {
+    return '…' + characters.slice(-DETAIL_CONTEXT_PREVIEW_CHARS).join('');
+  }
+  return characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS).join('') + '…';
+}

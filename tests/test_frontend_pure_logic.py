@@ -1280,5 +1280,36 @@ class DragSelectionGeometryTests(unittest.TestCase):
         self.assertIs(got, False)
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DetailContextPreviewTests(unittest.TestCase):
+    """上下文预览截断：阈值 DETAIL_CONTEXT_PREVIEW_CHARS(180) 随函数一并移入 06-pure，
+    闭包内可见。不超阈值原样返回；超出按 before/after 两端截断并补省略号；按码点计长。"""
+
+    def test_short_text_unchanged(self):
+        self.assertEqual(_call("detailContextPreview", "abc", "after"), "abc")
+
+    def test_exactly_threshold_unchanged(self):
+        text = "x" * 180
+        self.assertEqual(_call("detailContextPreview", text, "after"), text)
+
+    def test_after_truncates_head_with_ellipsis(self):
+        got = _call("detailContextPreview", "x" * 200, "after")
+        self.assertEqual(got, "x" * 180 + "…")
+        self.assertEqual(len(got), 181)
+
+    def test_before_truncates_tail_with_ellipsis(self):
+        got = _call("detailContextPreview", "x" * 200, "before")
+        self.assertEqual(got, "…" + "x" * 180)
+        self.assertEqual(len(got), 181)
+
+    def test_empty_and_null_yield_empty(self):
+        self.assertEqual(_call("detailContextPreview", "", "after"), "")
+        self.assertEqual(_call("detailContextPreview", None, "after"), "")
+
+    def test_counts_by_code_point(self):
+        got = _call("detailContextPreview", "文" * 200, "after")
+        self.assertEqual(got, "文" * 180 + "…")
+
+
 if __name__ == "__main__":
     unittest.main()
