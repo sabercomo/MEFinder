@@ -187,6 +187,41 @@ class LookupBookOrderingTests(unittest.TestCase):
             result = lookup_book({"isbn": "9783518290682"})
         self.assertEqual(result["candidates"], [])
 
+    def _low(self, source: str, score: float = 0.03) -> dict:
+        return {"metadata": {"title": source}, "match": {"score": score, "level": "low"},
+                "record_url": "", "publish_date": "", "evidence": {}}
+
+    def test_low_score_candidate_is_treated_as_no_hit(self) -> None:
+        """中文书在西文目录里撞出的 0.03 噪声不得截断链路，应继续往下试。"""
+        calls = []
+        def ol(_m):
+            calls.append("ol"); return [self._low("ol")]  # 只有噪声
+        def k10(_m):
+            calls.append("k10"); return [self._cand("k10")]  # 真实命中
+        with patch.object(bml, "lookup_open_library", ol), patch.object(bml, "lookup_k10plus", k10), \
+             patch.object(bml, "lookup_loc", lambda _m: []), patch.object(bml, "_google_books_candidates", lambda _m: []):
+            result = lookup_book({"title": "伦理学简史", "author": "阿拉斯代尔·麦金太尔"})
+        self.assertEqual(calls, ["ol", "k10"])  # 噪声不算命中，继续到 k10
+        self.assertEqual(result["candidates"][0]["metadata"]["title"], "k10")
+
+    def test_all_low_scores_return_empty_not_noise(self) -> None:
+        """所有源都只有低分噪声时，返回"未找到"而非误导性的低匹配结果。"""
+        with patch.object(bml, "lookup_open_library", lambda _m: [self._low("ol")]), \
+             patch.object(bml, "lookup_k10plus", lambda _m: [self._low("k10")]), \
+             patch.object(bml, "lookup_loc", lambda _m: [self._low("loc")]), \
+             patch.object(bml, "_google_books_candidates", lambda _m: [self._low("google")]):
+            result = lookup_book({"title": "伦理学简史"})
+        self.assertEqual(result["candidates"], [])
+
+    def test_mixed_candidates_keep_only_confident_ones(self) -> None:
+        """同一源内混有高低分候选时，只保留达到阈值的。"""
+        with patch.object(bml, "lookup_open_library", lambda _m: [self._cand("good"), self._low("noise")]), \
+             patch.object(bml, "lookup_k10plus", lambda _m: []), \
+             patch.object(bml, "lookup_loc", lambda _m: []), patch.object(bml, "_google_books_candidates", lambda _m: []):
+            result = lookup_book({"title": "x"})
+        titles = [c["metadata"]["title"] for c in result["candidates"]]
+        self.assertEqual(titles, ["good"])
+
 
 if __name__ == "__main__":
     unittest.main()
