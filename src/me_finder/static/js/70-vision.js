@@ -177,12 +177,6 @@ var VISION_PLUS_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor
 var VISION_BOLT_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5 4.5 11H9l-1 6.5L14.5 9H10l1-6.5z"/></svg>';
 var VISION_TRASH_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13M8 5.2V3.5h4v1.7M5.2 5.5l.7 11h8.2l.7-11M8.2 8.5v5.2M11.8 8.5v5.2"/></svg>';
 
-function visionHash(text) {
-  var h = 0;
-  for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
-  return h;
-}
-
 function visionBrandFromBase(apiBase) {
   if (!apiBase) return null;
   for (var i = 0; i < VISION_BRAND_RULES.length; i++) {
@@ -203,14 +197,6 @@ function visionBrandFromBase(apiBase) {
     name: label.charAt(0).toUpperCase() + label.slice(1),
     color: VISION_AVATAR_PALETTE[visionHash(host) % VISION_AVATAR_PALETTE.length]
   };
-}
-
-function visionHostLabel(apiBase) {
-  try {
-    return new URL(apiBase.indexOf('://') >= 0 ? apiBase : 'https://' + apiBase).hostname || apiBase;
-  } catch (e) {
-    return apiBase || '';
-  }
 }
 
 function visionAvatarFor(provider) {

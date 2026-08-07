@@ -1,22 +1,9 @@
-function sourceBibliographicMetadata(src) {
-  var nested = src && src.bibliographic_metadata ? src.bibliographic_metadata : {};
-  var meta = Object.assign({}, nested);
-  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
-    if (src && src[key] != null && src[key] !== '') meta[key] = src[key];
-  });
-  return meta;
-}
+
 
 // bibliographicFieldLabels / bibliographicDocType / bibliographicEditorDocType /
 // bibliographicMissingFields 已抽到 06-pure.js（纯逻辑，可单测）。
 
-function bibliographicMissingText(meta) {
-  var fields = bibliographicMissingFields(meta);
-  var docType = bibliographicDocType(meta);
-  return fields.length ? '书目缺失：' + fields.map(function(field) {
-    return docType === 'thesis' && field === 'publisher' ? '学校' : bibliographicFieldLabels[field];
-  }).join('、') : '';
-}
+
 
 function bibliographicMissingBadge(meta) {
   var text = bibliographicMissingText(meta);
@@ -147,11 +134,7 @@ function toggleCitationPanel() {
 
 // ── 期刊补全 split 按钮：标签、菜单、按语言智能选源（仅期刊，图书不用）──────
 // source 取值：'auto'（按文献语言智能选）、'cnki'、'crossref'。
-function bibPrimaryLabel(source) {
-  if (source === 'cnki') return '知网补全';
-  if (source === 'crossref') return 'Crossref 补全';
-  return '补全期刊信息';
-}
+
 
 function bibSourceMenuHTML(sid, active) {
   function item(source, label, note) {
@@ -242,13 +225,9 @@ function setBibliographicType(sourceId, docType) {
   });
 }
 
-function metadataStatusLabel(status) {
-  return ({complete:'完整',partial:'部分缺失',missing:'缺失',needs_review:'书目待确认',recognition_failed:'识别失败'})[status] || status || '未识别';
-}
 
-function metadataSourceLabel(source) {
-  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据'})[source] || source || '未知';
-}
+
+
 
 function collectBibliographicForm() {
   function value(id) { var el = document.getElementById('bib-' + id); return el ? el.value.trim() : ''; }

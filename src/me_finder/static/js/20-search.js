@@ -96,13 +96,7 @@ function fetchLibraryCatalog(force) {
   return libraryCatalogPromise;
 }
 
-function buildVolumeIndex(volumes) {
-  var index = new Map();
-  (volumes || []).forEach(function(volume) {
-    if (volume && volume.source_file_id) index.set(volume.source_file_id, volume);
-  });
-  return index;
-}
+
 
 function volumeForSource(sourceId) {
   return libVolumeBySource.get(sourceId) || null;
@@ -485,10 +479,7 @@ document.addEventListener('keydown', function(e) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function truncate(s, n) {
-  s = String(s || '').replace(/\s+/g, ' ');
-  return s.length > n ? s.slice(0, n) + '…' : s;
-}
+
 function truncateHTML(html, maxText) {
   const div = document.createElement('div');
   div.innerHTML = html;
@@ -511,10 +502,7 @@ function truncateHTML(html, maxText) {
   }
   return out + '…';
 }
-function matchTypeLabel(t) {
-  const m = {exact:'精确',normalized_exact:'标准化',space_insensitive:'忽略空格',punctuation_insensitive:'忽略标点',ngram_fuzzy:'模糊'};
-  return m[t] || t || '';
-}
+
 // mappingMethodLabel / mappingStatusLabel / mappingConfidenceLabel / pageScopeLabel /
 // logicalPageSideLabel / mappingEvidenceSummary / autoMappingSegmentText /
 // firstPageValue 已抽到 06-pure.js（纯逻辑，可单测）。

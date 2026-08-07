@@ -301,3 +301,195 @@ function batchQueryFor(source, meta) {
 function dragSelectionEdgeSpeed(depth) {
   return Math.min(DRAG_SELECT_MAX_SCROLL_SPEED, Math.max(4, Math.round(depth / 2)));
 }
+
+// ── 阶段3 续：从渲染模块整簇前移的自包含纯函数 ──
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function calibrationStatusGroup(status) {
+  if (status === 'manual_mapped' || status === 'auto_mapped_high') return 'calibrated';
+  if (status === 'needs_review') return 'review';
+  if (status === 'auto_mapping_failed' || status === 'source_missing') return 'failed';
+  if (status === 'mapping') return 'mapping';
+  return 'pending';
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function statusSemanticVariant(group) {
+  var variants = {calibrated:'success',pending:'neutral',review:'warning',failed:'danger',mapping:'info'};
+  return variants[group] || 'neutral';
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function calibrationStatusLabel(status) {
+  var labels = {manual_mapped:'页码已校准',auto_mapped_high:'页码已校准',needs_review:'页码待确认',unmapped:'页码尚未检测',auto_mapping_failed:'页码自动检测失败',mapping:'正在检测页码',source_missing:'原文件缺失'};
+  return labels[status] || '页码尚未检测';
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function formatCalDate(value) {
+  if (!value) return '未知';
+  var date = new Date(value);
+  if (isNaN(date.getTime())) return '未知';
+  return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function segmentNumberStyleLabel(style) {
+  return ({arabic:'阿拉伯数字',roman_lower:'罗马数字（小写）',roman_upper:'罗马数字（大写）',none:'无编号'})[style] || '阿拉伯数字';
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function segmentLayoutLabel(layout) {
+  return layout === 'spread' ? '双开页' : '单页';
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function spreadGutterPercent(seg) {
+  var gutter = Number(seg.gutter_x);
+  if (!isFinite(gutter) || gutter < 0.3 || gutter > 0.7) gutter = 0.5;
+  return Math.round(gutter * 100);
+}
+
+// 原在 50-calibration.js，纯函数，前移以便单测。
+function spreadCitationPair(seg) {
+  if (seg.number_style === 'none') return { mapped: false };
+  if (seg.citation === null && !seg.citation_page_start) return { mapped: false };
+  if (seg.citation_page_start == null || seg.citation_page_start === '') return { mapped: false };
+  var base = parseInt(seg.citation_page_start, 10);
+  if (isNaN(base)) return { mapped: false };
+  var style = seg.number_style || 'arabic';
+  function fmt(n) {
+    if (style === 'roman_lower' || style === 'roman_upper') return intToRoman(n, style === 'roman_upper');
+    return String(n);
+  }
+  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+  var first = fmt(base), second = fmt(base + 1);
+  return direction === 'rtl'
+    ? { mapped: true, left: second, right: first, firstSide: 'right' }
+    : { mapped: true, left: first, right: second, firstSide: 'left' };
+}
+
+// 原在 30-library.js，纯函数，前移以便单测。
+function libLangChipLabel(scriptLang) {
+  return scriptLang === 'chinese' ? '中文' : '外文';
+}
+
+// 原在 30-library.js，纯函数，前移以便单测。
+function libraryDocType(source) {
+  var value = String((source && source.document_type) || '');
+  return value === 'journal_article' || value === 'thesis' ? value : 'book';
+}
+
+// 原在 30-library.js，纯函数，前移以便单测。
+function librarySortProjection(source) {
+  return {
+    title: source.title || source.file_name || source.source_file_id,
+    author: source.author || '',
+    imported_at: source.imported_at || source.last_modified || '',
+    modified_at: source.modified_at || source.last_modified || '',
+    source_type: source.source_type === 'word' ? 'Word' : 'PDF'
+  };
+}
+
+// 原在 70-vision.js，纯函数，前移以便单测。
+function visionHash(text) {
+  var h = 0;
+  for (var i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+// 原在 70-vision.js，纯函数，前移以便单测。
+function visionHostLabel(apiBase) {
+  try {
+    return new URL(apiBase.indexOf('://') >= 0 ? apiBase : 'https://' + apiBase).hostname || apiBase;
+  } catch (e) {
+    return apiBase || '';
+  }
+}
+
+
+// 联网补全按钮主文案。原在 40-bibliography.js，纯映射。
+function bibPrimaryLabel(source) {
+  if (source === 'cnki') return '知网补全';
+  if (source === 'crossref') return 'Crossref 补全';
+  return '补全期刊信息';
+}
+
+// 书目元数据状态中文名。原在 40-bibliography.js，纯映射。
+function metadataStatusLabel(status) {
+  return ({complete:'完整',partial:'部分缺失',missing:'缺失',needs_review:'书目待确认',recognition_failed:'识别失败'})[status] || status || '未识别';
+}
+
+// 书目元数据来源中文名。原在 40-bibliography.js，纯映射。
+function metadataSourceLabel(source) {
+  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据'})[source] || source || '未知';
+}
+
+// 合并书源的书目字段：优先取顶层非空值覆盖嵌套元数据。原在 40-bibliography.js。
+function sourceBibliographicMetadata(src) {
+  var nested = src && src.bibliographic_metadata ? src.bibliographic_metadata : {};
+  var meta = Object.assign({}, nested);
+  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
+    if (src && src[key] != null && src[key] !== '') meta[key] = src[key];
+  });
+  return meta;
+}
+
+// 书目缺失字段的中文提示串。原在 40-bibliography.js，依赖本文件内的判定函数。
+function bibliographicMissingText(meta) {
+  var fields = bibliographicMissingFields(meta);
+  var docType = bibliographicDocType(meta);
+  return fields.length ? '书目缺失：' + fields.map(function(field) {
+    return docType === 'thesis' && field === 'publisher' ? '学校' : bibliographicFieldLabels[field];
+  }).join('、') : '';
+}
+
+// 主题预览缩略图标记。原在 60-settings.js，纯字符串拼接。
+function themePreviewMarkup(themeId) {
+  return '<span class="theme-preview" data-preview-theme="' + themeId + '" aria-hidden="true">'
+    + '<span class="theme-mini-sidebar">'
+    + '<span class="theme-mini-brand"><span class="theme-mini-brand-mark"></span><span class="theme-mini-brand-line"></span></span>'
+    + '<span class="theme-mini-nav">'
+    + '<span class="theme-mini-nav-item"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
+    + '<span class="theme-mini-nav-item is-selected"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
+    + '<span class="theme-mini-nav-item"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
+    + '</span></span>'
+    + '<span class="theme-mini-main">'
+    + '<span class="theme-mini-header"><span class="theme-mini-heading"><i class="theme-mini-title-line"></i><i class="theme-mini-subtitle-line"></i></span><span class="theme-mini-header-status"><i></i><b></b></span></span>'
+    + '<span class="theme-mini-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="theme-mini-search-line"></span><span class="theme-mini-search-action"></span></span>'
+    + '<span class="theme-mini-cards">'
+    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-success"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-doc-meta"></i></span>'
+    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-danger"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-match"></i></span>'
+    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-success"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-doc-meta"></i></span>'
+    + '</span></span></span>';
+}
+
+// 主题选项按钮标记。原在 60-settings.js，依赖 themePreviewMarkup。
+function themeOptionMarkup(theme) {
+  return '<button class="theme-option" type="button" data-theme-choice="' + theme.id + '" role="radio" aria-checked="false" onclick="setTheme(\'' + theme.id + '\')">'
+    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + theme.name + '</span><span class="theme-option-tone">' + theme.tone + '</span></span>'
+    + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
+    + themePreviewMarkup(theme.id)
+    + '<span class="theme-option-description">' + theme.description + '</span></button>';
+}
+
+// 卷册索引：source_file_id → volume。原在 20-search.js，纯。
+function buildVolumeIndex(volumes) {
+  var index = new Map();
+  (volumes || []).forEach(function(volume) {
+    if (volume && volume.source_file_id) index.set(volume.source_file_id, volume);
+  });
+  return index;
+}
+
+// 折叠空白后按长度截断加省略号。原在 20-search.js，纯。
+function truncate(s, n) {
+  s = String(s || '').replace(/\s+/g, ' ');
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+// 匹配类型中文名。原在 20-search.js，纯映射。
+function matchTypeLabel(t) {
+  const m = {exact:'精确',normalized_exact:'标准化',space_insensitive:'忽略空格',punctuation_insensitive:'忽略标点',ngram_fuzzy:'模糊'};
+  return m[t] || t || '';
+}

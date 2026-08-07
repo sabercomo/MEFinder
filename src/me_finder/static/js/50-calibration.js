@@ -58,31 +58,6 @@ function calibrationSortText(a, b, direction) {
   return direction === 'desc' ? -value : value;
 }
 
-function calibrationStatusGroup(status) {
-  if (status === 'manual_mapped' || status === 'auto_mapped_high') return 'calibrated';
-  if (status === 'needs_review') return 'review';
-  if (status === 'auto_mapping_failed' || status === 'source_missing') return 'failed';
-  if (status === 'mapping') return 'mapping';
-  return 'pending';
-}
-
-function statusSemanticVariant(group) {
-  var variants = {calibrated:'success',pending:'neutral',review:'warning',failed:'danger',mapping:'info'};
-  return variants[group] || 'neutral';
-}
-
-function calibrationStatusLabel(status) {
-  var labels = {manual_mapped:'页码已校准',auto_mapped_high:'页码已校准',needs_review:'页码待确认',unmapped:'页码尚未检测',auto_mapping_failed:'页码自动检测失败',mapping:'正在检测页码',source_missing:'原文件缺失'};
-  return labels[status] || '页码尚未检测';
-}
-
-function formatCalDate(value) {
-  if (!value) return '未知';
-  var date = new Date(value);
-  if (isNaN(date.getTime())) return '未知';
-  return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
-}
-
 async function loadCalibrationDoc(sourceId) {
   sourceId = sourceId || calSelectedSourceId;
   var editor = document.getElementById('cal-editor');
@@ -250,10 +225,6 @@ function cancelAutoDetection() {
   document.getElementById('cal-auto-preview').style.display = 'none';
 }
 
-function segmentNumberStyleLabel(style) {
-  return ({arabic:'阿拉伯数字',roman_lower:'罗马数字（小写）',roman_upper:'罗马数字（大写）',none:'无编号'})[style] || '阿拉伯数字';
-}
-
 function segmentNumberStyleControl(style, index) {
   var values = ['arabic','roman_lower','roman_upper','none'];
   return '<div class="app-select segment-style-select" id="segment-style-select-' + index + '">'
@@ -268,10 +239,6 @@ function setSegmentNumberStyle(event, index, value) {
   updateCalSeg(index, 'number_style', value);
   closeAppSelects();
   renderCalSegments();
-}
-
-function segmentLayoutLabel(layout) {
-  return layout === 'spread' ? '双开页' : '单页';
 }
 
 function segmentLayoutControl(layout, index) {
@@ -307,30 +274,6 @@ function updateSegmentGutter(index, value) {
   seg.gutter_x = percent / 100;
   updateSpreadPanel(index);
   updateCalPreview();
-}
-
-function spreadGutterPercent(seg) {
-  var gutter = Number(seg.gutter_x);
-  if (!isFinite(gutter) || gutter < 0.3 || gutter > 0.7) gutter = 0.5;
-  return Math.round(gutter * 100);
-}
-
-function spreadCitationPair(seg) {
-  if (seg.number_style === 'none') return { mapped: false };
-  if (seg.citation === null && !seg.citation_page_start) return { mapped: false };
-  if (seg.citation_page_start == null || seg.citation_page_start === '') return { mapped: false };
-  var base = parseInt(seg.citation_page_start, 10);
-  if (isNaN(base)) return { mapped: false };
-  var style = seg.number_style || 'arabic';
-  function fmt(n) {
-    if (style === 'roman_lower' || style === 'roman_upper') return intToRoman(n, style === 'roman_upper');
-    return String(n);
-  }
-  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
-  var first = fmt(base), second = fmt(base + 1);
-  return direction === 'rtl'
-    ? { mapped: true, left: second, right: first, firstSide: 'right' }
-    : { mapped: true, left: first, right: second, firstSide: 'left' };
 }
 
 function segmentSpreadPanelRow(seg, index) {

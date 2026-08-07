@@ -137,15 +137,6 @@ function syncLibDefaultLanguageControl() {
 // 文字系统事实（'chinese' / 'foreign'）→ 语言筛选条上的显示标签。
 // 标签始终是「中文 / 外文」；默认语言不改标签文字，只改两档的排列主次
 // （见 renderLibraryList 里对 style.order 的设置）。
-function libLangChipLabel(scriptLang) {
-  return scriptLang === 'chinese' ? '中文' : '外文';
-}
-
-function libraryDocType(source) {
-  var value = String((source && source.document_type) || '');
-  return value === 'journal_article' || value === 'thesis' ? value : 'book';
-}
-
 function setLibDocTypeFilter(btn) {
   libDocTypeFilter = btn.dataset.doctype;
   document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(b => b.classList.remove('active'));
@@ -207,16 +198,6 @@ function syncLibrarySortControls() {
   document.querySelectorAll('#library-sort-direction-select .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === libSortDirection);
   });
-}
-
-function librarySortProjection(source) {
-  return {
-    title: source.title || source.file_name || source.source_file_id,
-    author: source.author || '',
-    imported_at: source.imported_at || source.last_modified || '',
-    modified_at: source.modified_at || source.last_modified || '',
-    source_type: source.source_type === 'word' ? 'Word' : 'PDF'
-  };
 }
 
 function compareLibraryDates(a, b) {

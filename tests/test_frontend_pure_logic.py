@@ -361,5 +361,489 @@ class AutoMappingSegmentTextTests(unittest.TestCase):
         self.assertEqual(_call("autoMappingSegmentText", None), "")
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class PdfTypeLabelTests(unittest.TestCase):
+    """PDF 检测类型的中文标签，未知类型原样回吐、缺省为“未知”。"""
+
+    def test_known_types(self):
+        self.assertEqual(_call("pdfTypeLabel", "native_text"), "原生文本")
+        self.assertEqual(_call("pdfTypeLabel", "scanned"), "扫描版")
+        self.assertEqual(_call("pdfTypeLabel", "mineru_structured"), "MinerU 结构化")
+
+    def test_unknown_type_is_passed_through(self):
+        self.assertEqual(_call("pdfTypeLabel", "totally_unknown"), "totally_unknown")
+
+    def test_empty_and_missing_fall_back_to_unknown(self):
+        self.assertEqual(_call("pdfTypeLabel", ""), "未知")
+        self.assertEqual(_call("pdfTypeLabel", None), "未知")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class StructureLabelTests(unittest.TestCase):
+    """文献结构标签，未知结构原样回吐、缺省为空串。"""
+
+    def test_known_structures(self):
+        self.assertEqual(_call("structureLabel", "complete_works"), "全集")
+        self.assertEqual(_call("structureLabel", "letters"), "书信集")
+
+    def test_unknown_structure_is_passed_through(self):
+        self.assertEqual(_call("structureLabel", "nope"), "nope")
+
+    def test_empty_and_missing_fall_back_to_empty(self):
+        self.assertEqual(_call("structureLabel", ""), "")
+        self.assertEqual(_call("structureLabel", None), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class FormatFileSizeTests(unittest.TestCase):
+    """字节数转人读体积；0/缺省显示破折号，按 1024 进制切换单位。"""
+
+    def test_zero_and_missing_show_dash(self):
+        self.assertEqual(_call("formatFileSize", 0), "—")
+        self.assertEqual(_call("formatFileSize", None), "—")
+
+    def test_bytes(self):
+        self.assertEqual(_call("formatFileSize", 512), "512 B")
+
+    def test_kilobytes_boundary_and_fraction(self):
+        self.assertEqual(_call("formatFileSize", 1024), "1.0 KB")
+        self.assertEqual(_call("formatFileSize", 1536), "1.5 KB")
+
+    def test_megabytes_boundary_and_fraction(self):
+        self.assertEqual(_call("formatFileSize", 1048576), "1.0 MB")
+        self.assertEqual(_call("formatFileSize", 1572864), "1.5 MB")
+        self.assertEqual(_call("formatFileSize", 5242880), "5.0 MB")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class ImportStepsForTests(unittest.TestCase):
+    """导入队列的处理步骤文案，随文件类型与解析路线分支。"""
+
+    def test_non_pdf_skips_detection(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "docx"}),
+            ["读取文件", "文本入库", "建立索引"],
+        )
+
+    def test_pdf_mineru_route(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "pdf", "route": "mineru"}),
+            ["读取文件", "类型检测", "MinerU 解析", "文本入库", "建立索引"],
+        )
+
+    def test_pdf_vision_route_uses_provider_name(self):
+        self.assertEqual(
+            _call("importStepsFor",
+                  {"type": "pdf", "route": "vision", "providerName": "GPT-4o"}),
+            ["读取文件", "类型检测", "GPT-4o 解析", "文本入库", "建立索引"],
+        )
+
+    def test_pdf_vision_route_without_provider_name(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "pdf", "route": "vision"}),
+            ["读取文件", "类型检测", "其他 API 解析", "文本入库", "建立索引"],
+        )
+
+    def test_pdf_local_route(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "pdf", "route": "native"}),
+            ["读取文件", "类型检测", "本地解析", "建立索引"],
+        )
+        self.assertEqual(
+            _call("importStepsFor", {"type": "pdf"}),
+            ["读取文件", "类型检测", "本地解析", "建立索引"],
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BatchQueryForTests(unittest.TestCase):
+    """联网补全的查询字段裁剪：不同数据源接受的字段集不同。"""
+
+    def _meta(self):
+        return {"title": "T", "author": "A", "publish_year": "2020",
+                "journal_name": "J", "doi": "D", "issn": "I", "isbn": "B"}
+
+    def test_cnki_keeps_journal_doi_issn(self):
+        self.assertEqual(
+            _call("batchQueryFor", "cnki", self._meta()),
+            {"title": "T", "author": "A", "publish_year": "2020",
+             "journal_name": "J", "doi": "D", "issn": "I"},
+        )
+
+    def test_crossref_keeps_doi_only(self):
+        self.assertEqual(
+            _call("batchQueryFor", "crossref", self._meta()),
+            {"title": "T", "author": "A", "publish_year": "2020", "doi": "D"},
+        )
+
+    def test_default_source_keeps_isbn(self):
+        self.assertEqual(
+            _call("batchQueryFor", "openlibrary", self._meta()),
+            {"title": "T", "author": "A", "publish_year": "2020", "isbn": "B"},
+        )
+
+    def test_missing_fields_become_empty_strings(self):
+        self.assertEqual(
+            _call("batchQueryFor", "cnki", {}),
+            {"title": "", "author": "", "publish_year": "",
+             "journal_name": "", "doi": "", "issn": ""},
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class CalibrationStatusGroupTests(unittest.TestCase):
+    """校准状态 → 语义分组。未知状态一律落到 pending。"""
+
+    def test_manual_and_high_auto_are_calibrated(self):
+        self.assertEqual(_call("calibrationStatusGroup", "manual_mapped"), "calibrated")
+        self.assertEqual(_call("calibrationStatusGroup", "auto_mapped_high"), "calibrated")
+
+    def test_needs_review_is_review(self):
+        self.assertEqual(_call("calibrationStatusGroup", "needs_review"), "review")
+
+    def test_failed_and_missing_are_failed(self):
+        self.assertEqual(_call("calibrationStatusGroup", "auto_mapping_failed"), "failed")
+        self.assertEqual(_call("calibrationStatusGroup", "source_missing"), "failed")
+
+    def test_mapping_is_mapping(self):
+        self.assertEqual(_call("calibrationStatusGroup", "mapping"), "mapping")
+
+    def test_unknown_defaults_to_pending(self):
+        self.assertEqual(_call("calibrationStatusGroup", "unmapped"), "pending")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class StatusSemanticVariantTests(unittest.TestCase):
+    def test_known_groups(self):
+        self.assertEqual(_call("statusSemanticVariant", "calibrated"), "success")
+        self.assertEqual(_call("statusSemanticVariant", "review"), "warning")
+        self.assertEqual(_call("statusSemanticVariant", "failed"), "danger")
+        self.assertEqual(_call("statusSemanticVariant", "mapping"), "info")
+        self.assertEqual(_call("statusSemanticVariant", "pending"), "neutral")
+
+    def test_unknown_group_is_neutral(self):
+        self.assertEqual(_call("statusSemanticVariant", "whatever"), "neutral")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class CalibrationStatusLabelTests(unittest.TestCase):
+    def test_known_labels(self):
+        self.assertEqual(_call("calibrationStatusLabel", "manual_mapped"), "页码已校准")
+        self.assertEqual(_call("calibrationStatusLabel", "needs_review"), "页码待确认")
+        self.assertEqual(_call("calibrationStatusLabel", "mapping"), "正在检测页码")
+        self.assertEqual(_call("calibrationStatusLabel", "source_missing"), "原文件缺失")
+
+    def test_unknown_defaults_to_not_detected(self):
+        self.assertEqual(_call("calibrationStatusLabel", "unmapped"), "页码尚未检测")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class FormatCalDateTests(unittest.TestCase):
+    def test_empty_is_unknown(self):
+        self.assertEqual(_call("formatCalDate", ""), "未知")
+
+    def test_invalid_is_unknown(self):
+        self.assertEqual(_call("formatCalDate", "not-a-date"), "未知")
+
+    def test_valid_date_is_formatted(self):
+        # 用午间时刻，避免测试机时区把日期推到相邻一天。
+        self.assertEqual(_call("formatCalDate", "2024-03-05T12:00:00"), "2024-03-05")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SegmentNumberStyleLabelTests(unittest.TestCase):
+    def test_known_styles(self):
+        self.assertEqual(_call("segmentNumberStyleLabel", "arabic"), "阿拉伯数字")
+        self.assertEqual(_call("segmentNumberStyleLabel", "roman_lower"), "罗马数字（小写）")
+        self.assertEqual(_call("segmentNumberStyleLabel", "roman_upper"), "罗马数字（大写）")
+        self.assertEqual(_call("segmentNumberStyleLabel", "none"), "无编号")
+
+    def test_unknown_defaults_to_arabic(self):
+        self.assertEqual(_call("segmentNumberStyleLabel", "zzz"), "阿拉伯数字")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SegmentLayoutLabelTests(unittest.TestCase):
+    def test_spread_and_single(self):
+        self.assertEqual(_call("segmentLayoutLabel", "spread"), "双开页")
+        self.assertEqual(_call("segmentLayoutLabel", "single"), "单页")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SpreadGutterPercentTests(unittest.TestCase):
+    """装订线位置：缺省或越界 (0.3–0.7 之外) 归位到 50%。"""
+
+    def test_missing_defaults_to_fifty(self):
+        self.assertEqual(_call("spreadGutterPercent", {}), 50)
+
+    def test_in_range_value(self):
+        self.assertEqual(_call("spreadGutterPercent", {"gutter_x": 0.35}), 35)
+
+    def test_out_of_range_snaps_to_fifty(self):
+        self.assertEqual(_call("spreadGutterPercent", {"gutter_x": 0.9}), 50)
+
+    def test_midpoint(self):
+        self.assertEqual(_call("spreadGutterPercent", {"gutter_x": 0.5}), 50)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SpreadCitationPairTests(unittest.TestCase):
+    """双开页左右页码：rtl 时首页落在右侧，罗马数字沿用 intToRoman。"""
+
+    def test_no_number_style_is_unmapped(self):
+        self.assertEqual(_call("spreadCitationPair", {"number_style": "none"}), {"mapped": False})
+
+    def test_empty_citation_is_unmapped(self):
+        self.assertEqual(
+            _call("spreadCitationPair", {"citation": None}),
+            {"mapped": False},
+        )
+
+    def test_ltr_arabic_pair(self):
+        self.assertEqual(
+            _call("spreadCitationPair",
+                  {"citation_page_start": "5", "number_style": "arabic"}),
+            {"mapped": True, "left": "5", "right": "6", "firstSide": "left"},
+        )
+
+    def test_rtl_swaps_sides(self):
+        self.assertEqual(
+            _call("spreadCitationPair",
+                  {"citation_page_start": "5", "number_style": "arabic",
+                   "reading_direction": "rtl"}),
+            {"mapped": True, "left": "6", "right": "5", "firstSide": "right"},
+        )
+
+    def test_roman_lower_pair(self):
+        self.assertEqual(
+            _call("spreadCitationPair",
+                  {"citation_page_start": "1", "number_style": "roman_lower"}),
+            {"mapped": True, "left": "i", "right": "ii", "firstSide": "left"},
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class LibLangChipLabelTests(unittest.TestCase):
+    def test_chinese_and_foreign(self):
+        self.assertEqual(_call("libLangChipLabel", "chinese"), "中文")
+        self.assertEqual(_call("libLangChipLabel", "latin"), "外文")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class LibraryDocTypeTests(unittest.TestCase):
+    """只有 journal_article/thesis 原样保留，其余一律归为 book。"""
+
+    def test_journal_and_thesis_are_preserved(self):
+        self.assertEqual(_call("libraryDocType", {"document_type": "journal_article"}), "journal_article")
+        self.assertEqual(_call("libraryDocType", {"document_type": "thesis"}), "thesis")
+
+    def test_book_and_unknown_are_book(self):
+        self.assertEqual(_call("libraryDocType", {"document_type": "book"}), "book")
+        self.assertEqual(_call("libraryDocType", {}), "book")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class LibrarySortProjectionTests(unittest.TestCase):
+    """排序投影：last_modified 同时兜底导入时间与修改时间，word→Word。"""
+
+    def test_full_source(self):
+        self.assertEqual(
+            _call("librarySortProjection",
+                  {"title": "T", "author": "A", "imported_at": "2024",
+                   "modified_at": "2025", "source_type": "word"}),
+            {"title": "T", "author": "A", "imported_at": "2024",
+             "modified_at": "2025", "source_type": "Word"},
+        )
+
+    def test_fallbacks(self):
+        self.assertEqual(
+            _call("librarySortProjection",
+                  {"source_file_id": "sid", "last_modified": "2023",
+                   "source_type": "pdf"}),
+            {"title": "sid", "author": "", "imported_at": "2023",
+             "modified_at": "2023", "source_type": "PDF"},
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class VisionHashTests(unittest.TestCase):
+    """31 进制滚动哈希，无符号 32 位。"""
+
+    def test_known_string(self):
+        # 'abc' = ((0*31+97)*31+98)*31+99 = 96354
+        self.assertEqual(_call("visionHash", "abc"), 96354)
+
+    def test_empty_is_zero(self):
+        self.assertEqual(_call("visionHash", ""), 0)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class VisionHostLabelTests(unittest.TestCase):
+    def test_full_url_returns_host(self):
+        self.assertEqual(_call("visionHostLabel", "https://api.openai.com/v1"), "api.openai.com")
+
+    def test_bare_host_gets_https_prefix(self):
+        self.assertEqual(_call("visionHostLabel", "api.deepseek.com"), "api.deepseek.com")
+
+    def test_empty_is_empty(self):
+        self.assertEqual(_call("visionHostLabel", ""), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BibPrimaryLabelTests(unittest.TestCase):
+    """联网补全按钮文案，按数据源分支。"""
+
+    def test_cnki(self):
+        self.assertEqual(_call("bibPrimaryLabel", "cnki"), "知网补全")
+
+    def test_crossref(self):
+        self.assertEqual(_call("bibPrimaryLabel", "crossref"), "Crossref 补全")
+
+    def test_other_falls_back(self):
+        self.assertEqual(_call("bibPrimaryLabel", "google"), "补全期刊信息")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class MetadataStatusLabelTests(unittest.TestCase):
+    """书目状态中文名，未知值原样返回，空值兜底'未识别'。"""
+
+    def test_known(self):
+        self.assertEqual(_call("metadataStatusLabel", "complete"), "完整")
+        self.assertEqual(_call("metadataStatusLabel", "needs_review"), "书目待确认")
+
+    def test_unknown_is_passed_through(self):
+        self.assertEqual(_call("metadataStatusLabel", "zzz"), "zzz")
+
+    def test_empty_defaults(self):
+        self.assertEqual(_call("metadataStatusLabel", ""), "未识别")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class MetadataSourceLabelTests(unittest.TestCase):
+    """书目来源中文名，未知值原样返回，空值兜底'未知'。"""
+
+    def test_known(self):
+        self.assertEqual(_call("metadataSourceLabel", "manual"), "人工维护")
+        self.assertEqual(_call("metadataSourceLabel", "pdf_metadata"), "PDF 元数据")
+
+    def test_unknown_is_passed_through(self):
+        self.assertEqual(_call("metadataSourceLabel", "zzz"), "zzz")
+
+    def test_empty_defaults(self):
+        self.assertEqual(_call("metadataSourceLabel", ""), "未知")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SourceBibliographicMetadataTests(unittest.TestCase):
+    """合并 src 顶层字段到 bibliographic_metadata，顶层非空值覆盖嵌套。"""
+
+    def test_toplevel_overrides_nested(self):
+        src = {"bibliographic_metadata": {"title": "old", "author": "A"}, "title": "T"}
+        self.assertEqual(_call("sourceBibliographicMetadata", src),
+                         {"title": "T", "author": "A"})
+
+    def test_empty_toplevel_is_skipped(self):
+        src = {"bibliographic_metadata": {"author": "A"}, "title": ""}
+        self.assertEqual(_call("sourceBibliographicMetadata", src), {"author": "A"})
+
+    def test_null_src_is_empty(self):
+        self.assertEqual(_call("sourceBibliographicMetadata", None), {})
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BibliographicMissingTextTests(unittest.TestCase):
+    """书目缺失字段提示；thesis 的 publisher 显示为'学校'。"""
+
+    def test_book_lists_missing_fields(self):
+        self.assertEqual(_call("bibliographicMissingText", {}),
+                         "书目缺失：作者、书名、出版社、出版地、出版年份")
+
+    def test_complete_is_empty(self):
+        meta = {"title": "T", "author": "A", "publisher": "P",
+                "publish_place": "PL", "publish_year": "2020"}
+        self.assertEqual(_call("bibliographicMissingText", meta), "")
+
+    def test_thesis_renames_publisher_to_school(self):
+        meta = {"document_type": "thesis", "title": "T", "author": "A",
+                "publish_place": "PL"}
+        self.assertEqual(_call("bibliographicMissingText", meta), "书目缺失：学校、出版年份")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BuildVolumeIndexTests(unittest.TestCase):
+    """卷册按 source_file_id 建索引；缺 id 的项跳过。node 侧 Map 序列化成对象。"""
+
+    def _size(self, result):
+        # node 的 Map 经 JSON 序列化会变成 {}（无枚举属性），所以改用探针函数验证。
+        return result
+
+    def test_indexes_by_id(self):
+        vols = [{"source_file_id": "x", "v": 1}, {"source_file_id": "y", "v": 2}]
+        got = _run([{"fn": "buildVolumeIndex", "args": [vols]}])
+        # Map 不能直接比对，用 harness 无法透出 size；改测行为见 probe 测试。
+        self.assertIsNotNone(got)
+
+    def test_probe_via_get(self):
+        # 用一个内联探针：建索引后取回 x 的值、并确认坏项被跳过。
+        harness_case = [{
+            "fn": "(function(v){var m=buildVolumeIndex(v);return {size:m.size,x:m.get('x'),hasY:m.has('y')};})",
+            "args": [[{"source_file_id": "x", "v": 1}, {"v": 2}, {"source_file_id": "y"}]],
+        }]
+        got = _run(harness_case)[0]
+        self.assertEqual(got["size"], 2)
+        self.assertEqual(got["x"], {"source_file_id": "x", "v": 1})
+        self.assertTrue(got["hasY"])
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class TruncateTests(unittest.TestCase):
+    """折叠空白后按长度截断，超出加省略号。"""
+
+    def test_long_string_is_truncated(self):
+        self.assertEqual(_call("truncate", "hello world", 5), "hello…")
+
+    def test_short_string_is_unchanged(self):
+        self.assertEqual(_call("truncate", "hi", 5), "hi")
+
+    def test_whitespace_is_collapsed(self):
+        self.assertEqual(_call("truncate", "a  b\tc", 10), "a b c")
+
+    def test_null_is_empty(self):
+        self.assertEqual(_call("truncate", None, 5), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class MatchTypeLabelTests(unittest.TestCase):
+    """匹配类型中文名，未知值原样返回，空值兜底空串。"""
+
+    def test_known(self):
+        self.assertEqual(_call("matchTypeLabel", "exact"), "精确")
+        self.assertEqual(_call("matchTypeLabel", "ngram_fuzzy"), "模糊")
+
+    def test_unknown_is_passed_through(self):
+        self.assertEqual(_call("matchTypeLabel", "zzz"), "zzz")
+
+    def test_empty(self):
+        self.assertEqual(_call("matchTypeLabel", ""), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class ThemeMarkupTests(unittest.TestCase):
+    """主题预览/选项的纯字符串构造：只校验结构骨架，不锁死整段 HTML。"""
+
+    def test_preview_wraps_theme_id(self):
+        html = _call("themePreviewMarkup", "dawn")
+        self.assertTrue(html.startswith('<span class="theme-preview" data-preview-theme="dawn"'))
+
+    def test_option_wraps_choice_and_embeds_preview(self):
+        theme = {"id": "dawn", "name": "晨", "tone": "亮", "description": "desc"}
+        html = _call("themeOptionMarkup", theme)
+        self.assertTrue(html.startswith('<button class="theme-option" type="button" data-theme-choice="dawn"'))
+        # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
+        self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
+        self.assertIn(">晨<", html)
+        self.assertIn(">desc<", html)
+
+
 if __name__ == "__main__":
     unittest.main()
