@@ -6080,6 +6080,7 @@ function importStepsFor(q) {
   if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
   if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
   if (q.route === 'vision') return ['读取文件', '类型检测', (q.providerName || '其他 API') + ' 解析', '文本入库', '建立索引'];
+  if (!q.detectedType) return ['读取文件', '类型检测', '确定解析方式', '建立索引'];
   return ['读取文件', '类型检测', '本地解析', '建立索引'];
 }
 
@@ -6222,6 +6223,19 @@ async function cancelAllImports() {
 async function removeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
+  if (q && q.uploadId) {
+    var activeUploadId = q.uploadId;
+    q.uploadId = null;
+    try {
+      await fetch('/api/import-upload/cancel', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({upload_id: activeUploadId})
+      });
+    } catch (cancelError) {
+      console.warn('cancel chunked upload failed:', cancelError);
+    }
+  }
   if (q && q.jobId && (q.status === 'paused' || q.status === 'error')) {
     try {
       var resp = await fetch('/api/import-resume-dismiss', {
@@ -6241,6 +6255,8 @@ async function removeImport(id, options) {
   return true;
 }
 
+var IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES = 4 * 1024 * 1024;
+
 async function uploadImport(id) {
   var q = importQueue.find(function(q) { return q.id === id; });
   if (!q) return;
@@ -6248,19 +6264,59 @@ async function uploadImport(id) {
   q.step = 0;
   q.message = '正在读取文件…';
   renderImportQueue();
+  var uploadId = null;
   try {
-    var resp = await fetch('/api/import', {
+    var startResp = await fetch('/api/import-upload/start', {
       method: 'POST',
-      headers: {
-        'Content-Type': q.file.type || (q.type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-        'X-File-Name': encodeURIComponent(q.name),
-        'X-PDF-Parse-Mode': q.parseMode || 'auto',
-        'X-Vision-Provider-ID': q.providerId || ''
-      },
-      body: q.file
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        file_name: q.name,
+        size: q.file.size,
+        parse_mode: q.parseMode || 'auto',
+        provider_id: q.providerId || ''
+      })
+    });
+    var startData = await startResp.json();
+    if (!startResp.ok || startData.error) throw new Error(startData.error || '无法开始读取文件');
+    uploadId = startData.upload_id;
+    if (!uploadId) throw new Error('上传任务编号缺失');
+    q.uploadId = uploadId;
+    var totalSize = Number(q.file.size || 0);
+    var chunkSize = Number(startData.chunk_size || IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES);
+    if (!Number.isFinite(chunkSize) || chunkSize <= 0) chunkSize = IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES;
+    chunkSize = Math.min(chunkSize, 8 * 1024 * 1024);
+    var offset = 0;
+    while (offset < totalSize) {
+      var end = Math.min(offset + chunkSize, totalSize);
+      var chunkResp = await fetch('/api/import-upload/chunk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': q.file.type || 'application/octet-stream',
+          'X-Upload-ID': uploadId,
+          'X-Upload-Offset': String(offset)
+        },
+        body: q.file.slice(offset, end)
+      });
+      var chunkData = await chunkResp.json();
+      if (!chunkResp.ok || chunkData.error) throw new Error(chunkData.error || '读取文件失败');
+      var received = Number(chunkData.received_size);
+      if (!Number.isFinite(received) || received !== end) {
+        throw new Error('上传分块位置校验失败');
+      }
+      offset = received;
+      q.uploadProgress = totalSize ? Math.round(offset * 100 / totalSize) : 0;
+      q.message = '正在读取文件… ' + q.uploadProgress + '%';
+      renderImportQueue();
+    }
+    var resp = await fetch('/api/import-upload/finish', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({upload_id: uploadId})
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
+    uploadId = null;
+    q.uploadId = null;
     q.jobId = data.job_id;
     q.providerId = data.provider_id || q.providerId;
     if (q.type === 'pdf' && data.detected_pdf_type) {
@@ -6277,6 +6333,18 @@ async function uploadImport(id) {
     renderImportQueue();
     if (q.jobId) pollImportJob(q.id);
   } catch (e) {
+    if (uploadId) {
+      try {
+        await fetch('/api/import-upload/cancel', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({upload_id: uploadId})
+        });
+      } catch (cancelError) {
+        console.warn('cancel chunked upload failed:', cancelError);
+      }
+    }
+    q.uploadId = null;
     q.status = 'error';
     q.message = e.message || '导入失败';
     renderImportQueue();

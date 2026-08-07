@@ -96,6 +96,10 @@ from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportTaskQueue
 from .import_resume import ResumeManifestError, sha256_file
 from .search import SearchEngine
+from .chunked_upload import (
+    ChunkedUploadError,
+    ChunkedUploadStore,
+)
 from .structured_reader import (
     CitationPositionNotFound,
     InvalidCitationRange,
@@ -434,6 +438,7 @@ def make_handler(
     import_jobs_lock = threading.RLock()
     import_task_queue = ImportTaskQueue(worker_count=2)
     import_job_journal = ImportJobJournal(root / DEFAULT_IMPORT_JOB_DIR)
+    chunked_uploads = ChunkedUploadStore(root / "corpus" / ".upload-staging")
     deleting_import_sources: set[str] = set()
     pending_import_sources: set[str] = set()
     calibration_active_sources: set[str] = set()
@@ -1949,7 +1954,11 @@ def make_handler(
         threading.Thread(target=run_restore_job, daemon=True).start()
         return job_id
 
-    def store_upload(filename: str, length: int, is_pdf: bool, reader) -> Path:
+    def upload_storage_details(
+        filename: str,
+        length: int,
+        is_pdf: bool,
+    ) -> Tuple[str, Path]:
         if length <= 0 or length > 600 * 1024 * 1024:
             raise MinerUError("文件为空或超过 600 MB 限制。")
         safe_name = Path(filename).name
@@ -1960,6 +1969,10 @@ def make_handler(
         if suffix != expected:
             raise MinerUError(f"导入文件必须是 {expected}。")
         directory = root / "corpus" / ("raw_pdf" if is_pdf else "raw_docx")
+        return safe_name, directory
+
+    def store_upload(filename: str, length: int, is_pdf: bool, reader) -> Path:
+        safe_name, directory = upload_storage_details(filename, length, is_pdf)
         target: Optional[Path] = None
         temp_path: Optional[Path] = None
         remaining = length
@@ -1992,6 +2005,136 @@ def make_handler(
                 release_document_storage_target(target)
         assert target is not None
         return target
+
+    def store_completed_upload(
+        filename: str,
+        length: int,
+        is_pdf: bool,
+        staged_path: Path,
+    ) -> Path:
+        """Atomically move a verified chunked upload into document storage."""
+
+        safe_name, directory = upload_storage_details(filename, length, is_pdf)
+        target: Optional[Path] = None
+        try:
+            if staged_path.stat().st_size != length:
+                raise MinerUError("上传文件大小校验失败。")
+            directory.mkdir(parents=True, exist_ok=True)
+            cleanup_stale_document_storage_files(directory)
+            target = document_storage_target(
+                directory,
+                safe_name,
+                shorten_long_names=is_pdf,
+            )
+            staged_path.replace(target)
+        except OSError as exc:
+            raise document_storage_error(safe_name, exc) from exc
+        finally:
+            if target is not None:
+                release_document_storage_target(target)
+        assert target is not None
+        return target
+
+    def validate_upload_parse_options(
+        pdf_parse_mode: object,
+        vision_provider_id: object,
+    ) -> Tuple[str, str]:
+        mode = str(pdf_parse_mode or "auto").strip().lower()
+        if mode not in {"auto", "mineru", "vision"}:
+            raise MinerUError("PDF 解析方式无效。")
+        provider_id = (
+            str(vision_provider_id or "").strip()
+            if mode == "vision"
+            else ""
+        )
+        if mode == "vision" and not provider_id:
+            raise MinerUError("请选择一个其他解析 API。")
+        return mode, provider_id
+
+    def start_stored_upload_import(
+        target: Path,
+        *,
+        filename: str,
+        is_pdf: bool,
+        pdf_parse_mode: str,
+        vision_provider_id: str,
+        upload_id: str = "legacy",
+    ) -> Dict[str, object]:
+        """Run type detection and enqueue the existing import pipeline."""
+
+        reserved_source_id = ""
+        owned_target: Optional[Path] = target
+        try:
+            if is_pdf:
+                logging.info(
+                    "import type detection started upload_id=%s file=%r size=%d",
+                    upload_id,
+                    Path(filename).name,
+                    target.stat().st_size,
+                )
+                profile = detect_imported_pdf(target)
+                logging.info(
+                    "import type detection completed upload_id=%s detected_type=%s",
+                    upload_id,
+                    profile.get("detected_pdf_type"),
+                )
+                (
+                    _document,
+                    source_file_id,
+                    target,
+                ) = register_pdf_for_import(
+                    target,
+                    original_file_name=filename,
+                )
+                reserved_source_id = source_file_id
+            else:
+                profile = {"detected_pdf_type": "docx"}
+                source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+            force_mineru = is_pdf and pdf_parse_mode == "mineru"
+            job_id = start_import_job(
+                target,
+                profile,
+                source_file_id,
+                is_pdf,
+                force_mineru=force_mineru,
+                vision_provider_id=vision_provider_id or None,
+                consume_reservation=bool(reserved_source_id),
+                display_file_name=filename,
+            )
+            if reserved_source_id:
+                release_import_reservation(reserved_source_id)
+                reserved_source_id = ""
+            parse_route = None
+            if is_pdf:
+                parse_route = (
+                    "vision"
+                    if vision_provider_id
+                    else "mineru"
+                    if force_mineru
+                    or str(profile.get("detected_pdf_type")) != "native_text"
+                    else "native"
+                )
+            logging.info(
+                "import job queued upload_id=%s job_id=%s route=%s",
+                upload_id,
+                job_id,
+                parse_route or "docx",
+            )
+            return {
+                "ok": True,
+                "job_id": job_id,
+                "file_name": Path(filename).name,
+                "source_file_id": source_file_id,
+                "detected_pdf_type": (
+                    profile.get("detected_pdf_type") if is_pdf else None
+                ),
+                "parse_route": parse_route,
+                "provider_id": vision_provider_id or None,
+            }
+        finally:
+            if reserved_source_id:
+                release_import_reservation(reserved_source_id)
+            cleanup_unreferenced_import_target(owned_target)
 
     def accept_auto_page_mapping(source_id: str) -> int:
         config_path = root / "config" / "pdf_imports.json"
@@ -2661,82 +2804,89 @@ def make_handler(
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
             if parsed.path == "/api/import":
-                reserved_source_id = ""
-                owned_target: Optional[Path] = None
                 filename = unquote(self.headers.get("X-File-Name", ""))
                 suffix = Path(filename).suffix.lower()
                 if suffix not in {".pdf", ".docx"}:
                     self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
                     return
                 try:
-                    pdf_parse_mode = str(self.headers.get("X-PDF-Parse-Mode", "auto")).strip().lower()
-                    if pdf_parse_mode not in {"auto", "mineru", "vision"}:
-                        raise MinerUError("PDF 解析方式无效。")
-                    vision_provider_id = (
-                        str(self.headers.get("X-Vision-Provider-ID", "")).strip()
-                        if pdf_parse_mode == "vision"
-                        else ""
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        self.headers.get("X-PDF-Parse-Mode", "auto"),
+                        self.headers.get("X-Vision-Provider-ID", ""),
                     )
-                    if pdf_parse_mode == "vision" and not vision_provider_id:
-                        raise MinerUError("请选择一个其他解析 API。")
                     length = int(self.headers.get("Content-Length", "0"))
-                    target = store_upload(filename, length, suffix == ".pdf", self.rfile)
-                    owned_target = target
-                    is_pdf = suffix == ".pdf"
-                    if is_pdf:
-                        profile = detect_imported_pdf(target)
-                        (
-                            document,
-                            source_file_id,
-                            target,
-                        ) = register_pdf_for_import(
-                            target,
-                            original_file_name=filename,
-                        )
-                        reserved_source_id = source_file_id
-                    else:
-                        profile = {"detected_pdf_type": "docx"}
-                        source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                    force_mineru = is_pdf and pdf_parse_mode == "mineru"
-                    job_id = start_import_job(
-                        target,
-                        profile,
-                        source_file_id,
-                        is_pdf,
-                        force_mineru=force_mineru,
-                        vision_provider_id=vision_provider_id or None,
-                        consume_reservation=bool(reserved_source_id),
-                        display_file_name=filename,
+                    logging.info(
+                        "legacy import request received file=%r size=%d",
+                        Path(filename).name,
+                        length,
                     )
-                    if reserved_source_id:
-                        release_import_reservation(reserved_source_id)
-                        reserved_source_id = ""
-                    parse_route = None
-                    if is_pdf:
-                        parse_route = (
-                            "vision"
-                            if vision_provider_id
-                            else "mineru"
-                            if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
-                            else "native"
-                        )
-                    self._send_json({
-                        "ok": True,
-                        "job_id": job_id,
-                        "file_name": Path(filename).name,
-                        "source_file_id": source_file_id,
-                        "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
-                        "parse_route": parse_route,
-                        "provider_id": vision_provider_id or None,
-                    })
+                    target = store_upload(filename, length, suffix == ".pdf", self.rfile)
+                    logging.info(
+                        "legacy import upload completed file=%r size=%d",
+                        Path(filename).name,
+                        length,
+                    )
+                    result = start_stored_upload_import(
+                        target,
+                        filename=filename,
+                        is_pdf=suffix == ".pdf",
+                        pdf_parse_mode=pdf_parse_mode,
+                        vision_provider_id=vision_provider_id or None,
+                    )
+                    self._send_json(result)
                 except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
+                    logging.exception("legacy import request failed")
                     self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
-                finally:
-                    if reserved_source_id:
-                        release_import_reservation(reserved_source_id)
-                    cleanup_unreferenced_import_target(owned_target)
+                return
+            if parsed.path == "/api/import-upload/chunk":
+                try:
+                    upload_id = str(self.headers.get("X-Upload-ID", ""))
+                    offset = int(self.headers.get("X-Upload-Offset", "-1"))
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if offset == 0:
+                        logging.info(
+                            "chunked import first chunk request upload_id=%s size=%d",
+                            upload_id,
+                            length,
+                        )
+                    progress = chunked_uploads.append(
+                        upload_id,
+                        offset,
+                        length,
+                        self.rfile,
+                    )
+                    if progress["first_chunk"]:
+                        logging.info(
+                            "chunked import first chunk stored upload_id=%s received=%d",
+                            upload_id,
+                            progress["received_size"],
+                        )
+                    if progress["complete"]:
+                        logging.info(
+                            "chunked import upload completed upload_id=%s size=%d",
+                            upload_id,
+                            progress["received_size"],
+                        )
+                    else:
+                        logging.debug(
+                            "chunked import progress upload_id=%s received=%d total=%d",
+                            upload_id,
+                            progress["received_size"],
+                            progress["total_size"],
+                        )
+                    self._send_json({"ok": True, **progress})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (TypeError, ValueError):
+                    self._send_json({"error": "上传分块请求无效。"}, status=400)
+                except Exception:
+                    logging.exception("chunked import request failed")
+                    self._send_json(
+                        {"error": "上传分块失败，请查看 desktop.log。"},
+                        status=500,
+                    )
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -2755,6 +2905,17 @@ def make_handler(
             if (
                 parsed.path
                 in {
+                    "/api/import-upload/start",
+                    "/api/import-upload/finish",
+                    "/api/import-upload/cancel",
+                }
+                and length > 64 * 1024
+            ):
+                self._send_json({"error": "上传控制请求过大。"}, status=413)
+                return
+            if (
+                parsed.path
+                in {
                     "/api/bibliographic-metadata/lookup-cnki",
                     "/api/bibliographic-metadata/cnki-candidate",
                     "/api/bibliographic-metadata/open-cnki",
@@ -2767,6 +2928,114 @@ def make_handler(
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send_json({"error": "请求格式无效。"}, status=400)
+                return
+            if parsed.path == "/api/import-upload/start":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传开始请求必须是 JSON 对象。"}, status=400)
+                    return
+                filename = str(payload.get("file_name") or payload.get("filename") or "")
+                suffix = Path(filename).suffix.lower()
+                if suffix not in {".pdf", ".docx"}:
+                    self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
+                    return
+                try:
+                    total_size = int(payload.get("size") or 0)
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        payload.get("parse_mode", "auto"),
+                        payload.get("provider_id", ""),
+                    )
+                    result = chunked_uploads.start(
+                        filename,
+                        total_size,
+                        metadata={
+                            "is_pdf": "1" if suffix == ".pdf" else "0",
+                            "parse_mode": pdf_parse_mode,
+                            "provider_id": vision_provider_id,
+                        },
+                    )
+                    result.update({"file_name": Path(filename).name})
+                    logging.info(
+                        "chunked import session started upload_id=%s file=%r size=%d",
+                        result["upload_id"],
+                        Path(filename).name,
+                        total_size,
+                    )
+                    self._send_json({"ok": True, **result})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (MinerUError, ValueError, OSError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    logging.exception("chunked import session start failed")
+                    self._send_json(
+                        {"error": "无法开始上传，请查看 desktop.log。"},
+                        status=500,
+                    )
+                return
+            if parsed.path == "/api/import-upload/cancel":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传取消请求必须是 JSON 对象。"}, status=400)
+                    return
+                try:
+                    cancelled = chunked_uploads.cancel(str(payload.get("upload_id") or ""))
+                    self._send_json({"ok": True, "cancelled": cancelled})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                return
+            if parsed.path == "/api/import-upload/finish":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传完成请求必须是 JSON 对象。"}, status=400)
+                    return
+                upload_id = str(payload.get("upload_id") or "")
+                completed = None
+                staged_path: Optional[Path] = None
+                try:
+                    completed = chunked_uploads.finish(upload_id)
+                    staged_path = completed.temp_path
+                    metadata = dict(completed.metadata)
+                    is_pdf = metadata.get("is_pdf") == "1"
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        metadata.get("parse_mode", "auto"),
+                        metadata.get("provider_id", ""),
+                    )
+                    logging.info(
+                        "chunked import finalization started upload_id=%s file=%r size=%d",
+                        completed.upload_id,
+                        completed.filename,
+                        completed.total_size,
+                    )
+                    target = store_completed_upload(
+                        completed.filename,
+                        completed.total_size,
+                        is_pdf,
+                        completed.temp_path,
+                    )
+                    staged_path = None
+                    result = start_stored_upload_import(
+                        target,
+                        filename=completed.filename,
+                        is_pdf=is_pdf,
+                        pdf_parse_mode=pdf_parse_mode,
+                        vision_provider_id=vision_provider_id,
+                        upload_id=completed.upload_id,
+                    )
+                    self._send_json(result)
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    logging.exception("chunked import finalization failed")
+                    self._send_json(
+                        {"error": "导入失败，请查看 desktop.log。"},
+                        status=500,
+                    )
+                finally:
+                    if staged_path is not None:
+                        try:
+                            staged_path.unlink(missing_ok=True)
+                        except OSError:
+                            pass
                 return
             if parsed.path == "/api/document/citation":
                 if not isinstance(payload, dict):
@@ -4125,6 +4394,7 @@ def make_handler(
         delete a database that still has an open connection.
         """
 
+        chunked_uploads.close()
         with runtime_lock:
             current = runtime.get("engine")
             runtime["engine"] = None

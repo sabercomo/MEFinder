@@ -117,6 +117,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_foreign_book_lookup \
   tests.test_crossref_lookup \
   tests.test_book_metadata_lookup \
+  tests.test_chunked_upload \
   tests.test_data_location \
   tests.test_database_resilience \
   tests.test_desktop_portable \
