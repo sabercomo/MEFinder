@@ -27,9 +27,30 @@ PLACEHOLDERS = (
     "__APP_VERSION__",
 )
 
+def _split_dir_assets(subdir, suffix):
+    """某个资源目录下的拆分文件，按文件名排序 —— 顺序即加载顺序。"""
+
+    directory = _PACKAGE_DIR / subdir
+    if not directory.is_dir():
+        return ()
+    return tuple(
+        f"{subdir}/{path.name}"
+        for path in sorted(directory.glob(f"*{suffix}"), key=lambda p: p.name)
+    )
+
+
+def _split_js_assets():
+    return _split_dir_assets("static/js", ".js")
+
+
+def _split_css_assets():
+    return _split_dir_assets("static/css", ".css")
+
+
 # 必须被装进产物的静态资源；拆分后在此追加新文件即可。
-CSS_ASSETS = ("static/app.css", "static/reader.css")
-JS_ASSETS = ("static/app.js", "static/reader.js")
+CSS_ASSETS = _split_css_assets() + ("static/reader.css",)
+
+JS_ASSETS = _split_js_assets() + ("static/reader.js",)
 
 
 def _read(relative):
@@ -122,11 +143,62 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_reader_js_loads_after_app_js(self):
         """reader.js 依赖 app.js 的 showToast 兜底，顺序不能反。"""
 
-        if not (_PACKAGE_DIR / "static/app.js").is_file():
-            self.skipTest("app.js 已拆分，顺序由 js 目录的排序保证")
         self.assertLess(
             HTML.index("function callWindowsWindow"),
             HTML.index("global.MEFinderReader"),
+        )
+
+    def test_split_js_files_load_in_filename_order(self):
+        """拆分文件共享全局作用域，加载顺序必须严格等于文件名排序。"""
+
+        split = _split_js_assets()
+        self.assertGreater(len(split), 1, "static/js/ 下应有多个拆分文件")
+        code_line = re.compile(
+            r"^(?:async\s+function|function|let|const|var|\(function)\b"
+        )
+        positions = []
+        for relative in split:
+            marker = next(
+                line
+                for line in _read(relative).splitlines()
+                if code_line.match(line)
+            )
+            positions.append((relative, HTML.index(marker)))
+        self.assertEqual(
+            positions,
+            sorted(positions, key=lambda item: item[1]),
+            f"拆分文件在产物里的先后与文件名排序不一致：{[p[0] for p in positions]}",
+        )
+
+    def test_split_css_files_load_in_filename_order(self):
+        """CSS 后写的规则覆盖先写的，级联顺序必须严格等于文件名排序。"""
+
+        split = _split_css_assets()
+        self.assertGreater(len(split), 1, "static/css/ 下应有多个拆分文件")
+        positions = []
+        for relative in split:
+            marker = next(
+                line for line in _read(relative).splitlines() if line.strip()
+            )
+            positions.append((relative, HTML.index(marker)))
+        self.assertEqual(
+            positions,
+            sorted(positions, key=lambda item: item[1]),
+            f"拆分样式在产物里的先后与文件名排序不一致：{[p[0] for p in positions]}",
+        )
+        # 主题变量必须最先落地，对话框/toast 收尾。
+        self.assertTrue(split[0].endswith("00-themes.css"), split[:1])
+        self.assertTrue(split[-1].endswith("90-dialogs-toast.css"), split[-1:])
+
+    def test_state_loads_first_and_init_loads_last(self):
+        """00-state 定义全局变量，90-init 立即执行；两端顺序错了会直接白屏。"""
+
+        split = _split_js_assets()
+        self.assertTrue(split[0].endswith("00-state.js"), split[:1])
+        self.assertTrue(split[-1].endswith("90-init.js"), split[-1:])
+        self.assertLess(
+            HTML.index("let currentMode"),
+            HTML.index("async function loadMeta"),
         )
 
     def test_theme_injection_preserves_length(self):
@@ -182,9 +254,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
     BASELINE_SHA256 = (
-        "cc441bac5335911305fcb5cf701c8e3deaf328665856b6897da3265be4fd2bfa"
+        "987e4643369da47511c73bda83206f2f7fa1a4ec13fbd508d5a77c6211f1f4e4"
     )
-    BASELINE_BYTES = 567461
+    BASELINE_BYTES = 572263
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -53,13 +53,18 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_database_resilience tests.test_desktop_portable tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_database_resilience tests.test_desktop_portable tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system tests.test_frontend_assets tests.test_frontend_pure_logic
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
     if ($nodeCommand) {
-        & $nodeCommand.Source --check "src\me_finder\static\app.js"
-        if ($LASTEXITCODE -ne 0) { throw "app.js syntax check failed." }
+        # app.js 已按功能拆分到 static\js\，逐个检查以免新增文件漏检。
+        $frontendScripts = @(Get-ChildItem -LiteralPath "src\me_finder\static\js" -Filter "*.js" -File | Sort-Object Name)
+        if ($frontendScripts.Count -eq 0) { throw "static\js contains no JavaScript files." }
+        foreach ($script in $frontendScripts) {
+            & $nodeCommand.Source --check $script.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($script.Name) syntax check failed." }
+        }
         & $nodeCommand.Source --check "src\me_finder\static\reader.js"
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }

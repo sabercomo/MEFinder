@@ -150,10 +150,20 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_theme_system \
   tests.test_toast_presentation \
   tests.test_vision_api \
+  tests.test_frontend_assets \
+  tests.test_frontend_pure_logic \
   tests.test_portable_index_rebuild
 
 if command -v node >/dev/null 2>&1; then
-  node --check src/me_finder/static/app.js
+  # app.js 已按功能拆分到 static/js/，逐个检查以免新增文件漏检。
+  frontend_scripts=(src/me_finder/static/js/*.js)
+  if [ ! -e "${frontend_scripts[0]}" ]; then
+    echo "static/js contains no JavaScript files." >&2
+    exit 1
+  fi
+  for script in "${frontend_scripts[@]}"; do
+    node --check "$script"
+  done
   node --check src/me_finder/static/reader.js
 fi
 

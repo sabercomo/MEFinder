@@ -1,0 +1,339 @@
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; border: none; background: none; }
+input, textarea, select { font: inherit; }
+a { color: var(--accent); text-decoration: none; }
+
+/* ── Desktop Titlebar Integration ──────────────────────────── */
+.macos-titlebar,
+.windows-titlebar { display: none; }
+
+html[data-desktop-shell="macos"] {
+  --macos-titlebar-height: 28px;
+}
+html[data-desktop-shell="macos"] .macos-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--macos-titlebar-height);
+  padding: 0 82px;
+  color: var(--text-primary);
+  background: linear-gradient(
+    to right,
+    var(--sidebar-bg) 0,
+    var(--sidebar-bg) var(--sidebar-width),
+    var(--app-bg) var(--sidebar-width),
+    var(--app-bg) 100%
+  );
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+html[data-desktop-shell="macos"] .macos-titlebar-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html[data-desktop-shell="macos"] .app-shell {
+  height: calc(100vh - var(--macos-titlebar-height));
+  margin-top: var(--macos-titlebar-height);
+}
+html[data-desktop-shell="macos"] .sidebar,
+html[data-desktop-shell="macos"] .main-area {
+  height: 100%;
+}
+
+html[data-desktop-shell="win32"] {
+  --windows-titlebar-height: 40px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 200;
+  display: flex;
+  align-items: stretch;
+  height: var(--windows-titlebar-height);
+  color: var(--text-primary);
+  background: linear-gradient(
+    to right,
+    var(--sidebar-bg) 0,
+    var(--sidebar-bg) var(--sidebar-width),
+    var(--app-bg) var(--sidebar-width),
+    var(--app-bg) 100%
+  );
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-drag {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  padding: 0 14px;
+  -webkit-app-region: drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  color: var(--accent);
+  pointer-events: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-icon svg {
+  width: 17px;
+  height: 17px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button:hover {
+  background: var(--surface-hover);
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls .windows-close-button:hover {
+  color: #FFFFFF;
+  background: #C42B1C;
+}
+html[data-desktop-shell="win32"] .windows-titlebar-controls svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.windows-restore-icon { display: none; }
+html.windows-maximized .windows-maximize-icon { display: none; }
+html.windows-maximized .windows-restore-icon { display: block; }
+html[data-desktop-shell="win32"] .app-shell {
+  height: calc(100vh - var(--windows-titlebar-height));
+  margin-top: var(--windows-titlebar-height);
+}
+html[data-desktop-shell="win32"] .sidebar,
+html[data-desktop-shell="win32"] .main-area {
+  height: 100%;
+}
+
+/* ── App Shell ─────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px 12px;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 18px;
+}
+.sidebar-brand {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-app-region: no-drag;
+}
+.sidebar-collapse-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--widget-radius);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-app-region: no-drag;
+}
+.sidebar-collapse-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sidebar-collapse-icon { transition: transform var(--transition-fast); }
+.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  height: 40px;
+  border-radius: var(--widget-radius);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+  position: relative;
+  -webkit-app-region: no-drag;
+}
+.sidebar-item:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.sidebar-item.active {
+  background: var(--sidebar-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.sidebar-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.sidebar-item.active .sidebar-icon { opacity: 1; }
+.sidebar-footer {
+  padding: 12px 10px 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--divider);
+  margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+.sidebar { transition: width var(--transition-fast), min-width var(--transition-fast); }
+
+/* Collapsed rail: icons only. Width is driven through the shared
+   --sidebar-width variable so the desktop titlebar gradient stays in sync. */
+html.sidebar-collapsed { --sidebar-width: 64px; }
+.sidebar-collapsed .sidebar { padding-left: 10px; padding-right: 10px; }
+.sidebar-collapsed .sidebar-head { justify-content: center; }
+.sidebar-collapsed .sidebar-brand { display: none; }
+.sidebar-collapsed .sidebar-collapse-icon { transform: rotate(180deg); }
+.sidebar-collapsed .sidebar-item { justify-content: center; padding: 0; gap: 0; }
+.sidebar-collapsed .sidebar-item > span:not(.sidebar-icon) { display: none; }
+.sidebar-collapsed .sidebar-footer { display: none; }
+
+/* ── Main Area ─────────────────────────────────────────────── */
+.main-area {
+  flex: 1;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Page Container ────────────────────────────────────────── */
+.page { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+.page.active { display: flex; }
+
+/* ── Page Header ───────────────────────────────────────────── */
+.page-header {
+  padding: 28px 32px 0;
+  flex-shrink: 0;
+}
+.page-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.page-header-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Status badge ──────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--success-soft);
+  color: var(--success);
+}
+.status-badge .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+

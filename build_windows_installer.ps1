@@ -139,13 +139,20 @@ try {
         tests.test_windows_packaging `
         tests.test_platform_open `
         tests.test_theme_system `
+        tests.test_frontend_assets `
+        tests.test_frontend_pure_logic `
         tests.test_desktop_portable
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; installer was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
     if ($nodeCommand) {
-        & $nodeCommand.Source --check "src\me_finder\static\app.js"
-        if ($LASTEXITCODE -ne 0) { throw "app.js syntax check failed." }
+        # app.js 已按功能拆分到 static\js\，逐个检查以免新增文件漏检。
+        $frontendScripts = @(Get-ChildItem -LiteralPath "src\me_finder\static\js" -Filter "*.js" -File | Sort-Object Name)
+        if ($frontendScripts.Count -eq 0) { throw "static\js contains no JavaScript files." }
+        foreach ($script in $frontendScripts) {
+            & $nodeCommand.Source --check $script.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($script.Name) syntax check failed." }
+        }
         & $nodeCommand.Source --check "src\me_finder\static\reader.js"
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }

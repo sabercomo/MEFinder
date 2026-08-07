@@ -1,0 +1,123 @@
+/* ── Theme-aware dialogs ───────────────────────────────────── */
+.app-dialog-backdrop { position: fixed; inset: 0; z-index: 350; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.app-dialog-backdrop.open { display: grid; }
+.app-dialog {
+  width: min(460px, 100%);
+  padding: 22px;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  background: var(--dialog-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-popover);
+}
+.app-dialog-heading { display: flex; align-items: center; gap: 11px; }
+.app-dialog-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 9px; background: var(--info-soft); color: var(--info-icon); font-size: 16px; font-weight: 750; }
+.app-dialog[data-tone="warning"] .app-dialog-icon { background: var(--warning-soft); color: var(--warning-icon); }
+.app-dialog[data-tone="danger"] .app-dialog-icon { background: var(--danger-soft); color: var(--danger-icon); }
+.app-dialog-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.app-dialog-message { margin-top: 14px; color: var(--text-secondary); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app-dialog-actions { margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px; }
+.app-dialog[data-tone="danger"] #app-dialog-confirm { color: var(--danger); border-color: var(--danger); background: var(--surface); }
+.app-dialog[data-tone="danger"] #app-dialog-confirm:hover { background: var(--danger-soft); }
+
+.remove-modal-backdrop { position: fixed; inset: 0; z-index: 300; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(2px); }
+.remove-modal-backdrop.open { display: grid; }
+.remove-modal { width: min(470px, 100%); padding: 22px; border-radius: 14px; background: var(--dialog-bg); border: 1px solid var(--border-default); box-shadow: var(--shadow-popover); }
+.remove-modal-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.remove-modal-copy { margin-top: 9px; font-size: 13px; line-height: 1.65; color: var(--text-secondary); }
+.remove-options { margin-top: 16px; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); padding: 8px 0; }
+.remove-option { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; font-size: 13px; color: var(--text-primary); }
+.remove-option input { margin-top: 2px; }
+.remove-option small { display: block; color: var(--text-tertiary); line-height: 1.45; margin-top: 2px; }
+.remove-modal-warning { display: none; margin-top: 12px; padding: 9px 11px; border-radius: 7px; background: var(--danger-soft); color: var(--danger); font-size: 12px; line-height: 1.5; }
+.remove-modal-warning.show { display: block; }
+.remove-modal-actions { margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.cnki-batch-backdrop { position: fixed; inset: 0; z-index: 360; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.cnki-batch-backdrop.open { display: grid; }
+.cnki-batch-modal { width: min(560px, 100%); max-height: min(80vh, 720px); display: flex; flex-direction: column; padding: 22px; border-radius: 16px; background: var(--dialog-bg); border: 1px solid var(--border-default); box-shadow: var(--shadow-popover); }
+.cnki-batch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cnki-batch-title { font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+.cnki-batch-progress { margin-top: 4px; font-size: 12px; color: var(--text-tertiary); }
+.cnki-batch-doc { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: var(--surface-secondary); }
+.cnki-batch-doc-title { font-size: 13px; font-weight: 650; color: var(--text-primary); line-height: 1.45; }
+.cnki-batch-doc-meta { margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
+.cnki-batch-list { margin-top: 12px; overflow-y: auto; flex: 1 1 auto; }
+.cnki-batch-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 820px) { .cnki-batch-head { flex-direction: column; } }
+
+@media (max-width: 980px) { .calibration-header-stats { justify-content: flex-start; }}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* ── Toast notification ────────────────────────────────────── */
+/* ── Toasts ────────────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 48px));
+  /* 提示不该挡住下面的列表；整层都不接收指针事件。 */
+  pointer-events: none;
+  /* 高于对话框，弹窗打开时的提示也要看得见。 */
+  z-index: 400;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+  padding: 11px 16px 11px 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+  animation: toast-in 220ms cubic-bezier(.2, .8, .3, 1) both;
+}
+.toast.is-leaving { animation: toast-out 180ms ease forwards; }
+.toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+}
+.toast-icon svg { width: 13px; height: 13px; }
+.toast-text {
+  min-width: 0;
+  word-break: break-word;
+}
+.toast--success { border-color: var(--success-border); }
+.toast--success .toast-icon { background: var(--success-soft); color: var(--success-icon); }
+.toast--danger { border-color: var(--danger-border); }
+.toast--danger .toast-icon { background: var(--danger-soft); color: var(--danger-icon); }
+.toast--warning { border-color: var(--warning-border); }
+.toast--warning .toast-icon { background: var(--warning-soft); color: var(--warning-icon); }
+.toast--info .toast-icon { background: var(--info-soft); color: var(--info-icon); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.is-leaving { animation-duration: 1ms; }
+}

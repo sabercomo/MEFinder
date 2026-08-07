@@ -25,7 +25,17 @@ from src.me_finder.database import (
 from src.me_finder.web import make_handler
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
-APP_SOURCE = Path("src/me_finder/static/app.js").read_text(encoding="utf-8")
+def _read_app_source() -> str:
+    """app.js 已按功能拆分到 static/js/，按文件名排序拼接还原完整源码。"""
+
+    static_dir = Path("src/me_finder/static")
+    parts = sorted((static_dir / "js").glob("*.js"), key=lambda path: path.name)
+    if parts:
+        return "".join(path.read_text(encoding="utf-8") for path in parts)
+    return (static_dir / "app.js").read_text(encoding="utf-8")
+
+
+APP_SOURCE = _read_app_source()
 TEMPLATE_SOURCE = Path("src/me_finder/templates/index.html").read_text(encoding="utf-8")
 
 

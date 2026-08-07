@@ -65,11 +65,16 @@ if errorlevel 1 exit /b 1
   tests.test_windows_packaging ^
   tests.test_platform_open ^
   tests.test_theme_system ^
+  tests.test_frontend_assets ^
+  tests.test_frontend_pure_logic ^
   tests.test_desktop_portable
 if errorlevel 1 exit /b 1
 
-node --check src\me_finder\static\app.js
-if errorlevel 1 exit /b 1
+rem app.js 已按功能拆分到 static\js\，逐个语法检查，避免新增文件漏检。
+for %%F in (src\me_finder\static\js\*.js) do (
+  node --check "%%F"
+  if errorlevel 1 exit /b 1
+)
 node --check src\me_finder\static\reader.js
 if errorlevel 1 exit /b 1
 
