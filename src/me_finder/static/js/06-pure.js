@@ -617,3 +617,25 @@ function bibliographicMissingBadge(meta) {
   if (!text) return '';
   return '<span class="bibliographic-missing" title="ISBN、ISSN 与 DOI 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
 }
+
+// 依据文本长度计算 toast 停留时长（纯函数）
+function toastDuration(text) {
+  // 原来固定 1800ms，像「已停止等待。移除是一个整体事务…」这种长提示根本读不完。
+  return Math.min(6500, Math.max(2400, 1100 + text.length * 110));
+}
+
+// 判断书库条目是否可勾选删除（纯函数）
+function isLibraryDeleteSelectable(source) {
+  return !!source && (source.source_type === 'pdf' || source.source_type === 'word');
+}
+
+// 自动标定失败原因转中文提示（纯函数）
+function autoFailureReasons(reasons) {
+  var labels = {no_page_labels:'没有 PDF Page Labels',no_bookmarks:'没有数字书签',no_mineru_candidates:'现有 MinerU 结果没有可靠页码候选',no_edge_candidates:'页边区域未发现页码候选',sequence_not_found:'未找到稳定递增页码序列',spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列',source_missing:'原始 PDF 文件不存在'};
+  return reasons.map(function(reason) { return '• ' + (labels[reason] || reason); }).join('<br>');
+}
+
+// 页面详情行渲染：拼接 label/value 的转义 HTML（纯函数）
+function pdRow(label, value) {
+  return '<div class="page-detail-row"><span class="page-detail-label">' + esc(label) + '</span><span>' + esc(String(value)) + '</span></div>';
+}

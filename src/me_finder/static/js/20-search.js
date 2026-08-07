@@ -499,9 +499,6 @@ function truncateHTML(html, maxText) {
 
 // isUncalibratedPageLabel / formatChinesePageRange / formatCitationPageLabel
 // 已抽到 06-pure.js（纯逻辑，可单测）。
-function pdRow(label, value) {
-  return '<div class="page-detail-row"><span class="page-detail-label">' + esc(label) + '</span><span>' + esc(String(value)) + '</span></div>';
-}
 
 function selectedResult() {
   if (selectedIndex < 0 || selectedIndex >= searchResults.length) return null;

@@ -1067,5 +1067,78 @@ class BibliographicMissingBadgeTests(unittest.TestCase):
         self.assertIn("书目缺失", html)
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class ToastDurationTests(unittest.TestCase):
+    """toast 停留时长：文本越长停留越久，双端夹在 [2400, 6500] 内。"""
+
+    def test_short_text_hits_lower_bound(self):
+        self.assertEqual(_call("toastDuration", ""), 2400)
+
+    def test_medium_text_grows_with_length(self):
+        # 1100 + 10*110 = 2200，仍被下限夹到 2400
+        self.assertEqual(_call("toastDuration", "x" * 10), 2400)
+        # 1100 + 20*110 = 3300，落在区间内，随长度线性增长
+        self.assertEqual(_call("toastDuration", "x" * 20), 3300)
+
+    def test_long_text_hits_upper_bound(self):
+        self.assertEqual(_call("toastDuration", "x" * 500), 6500)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class IsLibraryDeleteSelectableTests(unittest.TestCase):
+    """只有 pdf / word 来源可勾选删除；其它类型与空值一律不可选。"""
+
+    def test_pdf_and_word_selectable(self):
+        self.assertTrue(_call("isLibraryDeleteSelectable", {"source_type": "pdf"}))
+        self.assertTrue(_call("isLibraryDeleteSelectable", {"source_type": "word"}))
+
+    def test_other_types_not_selectable(self):
+        self.assertFalse(_call("isLibraryDeleteSelectable", {"source_type": "epub"}))
+
+    def test_falsy_source_not_selectable(self):
+        self.assertFalse(_call("isLibraryDeleteSelectable", None))
+        self.assertFalse(_call("isLibraryDeleteSelectable", 0))
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class AutoFailureReasonsTests(unittest.TestCase):
+    """自动校准失败原因：已知原因映射为中文，未知原因原样透传，逐条前缀 •。"""
+
+    def test_empty_reasons(self):
+        self.assertEqual(_call("autoFailureReasons", []), "")
+
+    def test_known_reason_mapped(self):
+        self.assertEqual(
+            _call("autoFailureReasons", ["no_page_labels"]),
+            "• 没有 PDF Page Labels",
+        )
+
+    def test_unknown_reason_passthrough_and_join(self):
+        self.assertEqual(
+            _call("autoFailureReasons", ["no_page_labels", "unknown_reason"]),
+            "• 没有 PDF Page Labels<br>• unknown_reason",
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class PdRowTests(unittest.TestCase):
+    """页码明细行：标签与值都经 esc 转义后拼进固定结构。"""
+
+    def test_plain_row(self):
+        self.assertEqual(
+            _call("pdRow", "页码", 12),
+            '<div class="page-detail-row">'
+            '<span class="page-detail-label">页码</span><span>12</span></div>',
+        )
+
+    def test_html_escaped(self):
+        self.assertEqual(
+            _call("pdRow", "<b>", "a&b"),
+            '<div class="page-detail-row">'
+            '<span class="page-detail-label">&lt;b&gt;</span>'
+            '<span>a&amp;b</span></div>',
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -143,10 +143,6 @@ function renderAutoDetectionResult(result) {
   panel.innerHTML = html;
 }
 
-function autoFailureReasons(reasons) {
-  var labels = {no_page_labels:'没有 PDF Page Labels',no_bookmarks:'没有数字书签',no_mineru_candidates:'现有 MinerU 结果没有可靠页码候选',no_edge_candidates:'页边区域未发现页码候选',sequence_not_found:'未找到稳定递增页码序列',spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列',source_missing:'原始 PDF 文件不存在'};
-  return reasons.map(function(reason) { return '• ' + (labels[reason] || reason); }).join('<br>');
-}
 
 async function applyAutoDetection() {
   if (!calAutoResult) return;

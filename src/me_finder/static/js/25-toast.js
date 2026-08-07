@@ -8,10 +8,6 @@ const TOAST_ICONS = {
   info: '<circle cx="9" cy="9" r="7.2"/><path d="M9 8.4v4.2"/><path d="M9 5.6h.01"/>'
 };
 
-function toastDuration(text) {
-  // 原来固定 1800ms，像「已停止等待。移除是一个整体事务…」这种长提示根本读不完。
-  return Math.min(6500, Math.max(2400, 1100 + text.length * 110));
-}
 
 function dismissToast(item, immediate) {
   if (!item || item.dataset.dismissing === '1') return;

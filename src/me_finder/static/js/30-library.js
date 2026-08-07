@@ -257,9 +257,6 @@ function getFilteredSources() {
   return sources;
 }
 
-function isLibraryDeleteSelectable(source) {
-  return !!source && (source.source_type === 'pdf' || source.source_type === 'word');
-}
 
 function updateLibraryDeleteControls() {
   var bar = document.getElementById('library-selection-bar');
