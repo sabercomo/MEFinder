@@ -251,12 +251,7 @@ function selectResult(index) {
   if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
 }
 
-function detailContextText(items) {
-  if (!Array.isArray(items)) return '';
-  return items.map(function(item) {
-    return item && item.text != null ? String(item.text) : '';
-  }).filter(Boolean).join('\n');
-}
+
 
 function detailContextPreview(text, side) {
   const characters = Array.from(String(text || ''));

@@ -493,3 +493,62 @@ function matchTypeLabel(t) {
   const m = {exact:'精确',normalized_exact:'标准化',space_insensitive:'忽略空格',punctuation_insensitive:'忽略标点',ngram_fuzzy:'模糊'};
   return m[t] || t || '';
 }
+
+// 双开页分段的引用页码摘要文案。原在 50-calibration.js，纯字符串，依赖 spreadCitationPair。
+function spreadSummaryHtml(seg) {
+  var firstPdf = seg.pdf_page_start != null ? seg.pdf_page_start + 1 : 1;
+  var pair = spreadCitationPair(seg);
+  if (!pair.mapped) {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+      + ' PDF 第 ' + firstPdf + ' 页 → 该分段未设引用页码，仅按双开切分';
+  }
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+    + ' PDF 第 ' + firstPdf + ' 页 → 左半页 <b>引文 ' + pair.left + ' 页</b>，右半页 <b>引文 ' + pair.right + ' 页</b>';
+}
+
+// 双开页分段设置面板的 HTML。原在 50-calibration.js，纯字符串拼接（onclick 均为字面量）。
+function segmentSpreadPanelRow(seg, index) {
+  if ((seg.layout_mode || 'single') !== 'spread') return '';
+  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+  var gp = spreadGutterPercent(seg);
+  var pair = spreadCitationPair(seg);
+  var leftFirst = direction !== 'rtl';
+  var leftLabel = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
+  var rightLabel = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
+  var diagram = '<div class="spread-diagram" id="spread-diagram-' + index + '">'
+    + '<div class="spread-half left" id="spread-half-left-' + index + '" style="width:' + gp + '%">'
+    + '<span class="spread-badge" id="spread-badge-left-' + index + '">' + (leftFirst ? '1' : '2') + '</span>'
+    + '<span class="spread-half-name">左半页</span>'
+    + '<span class="spread-half-page" id="spread-page-left-' + index + '">' + leftLabel + '</span>'
+    + '</div>'
+    + '<div class="spread-half right" id="spread-half-right-' + index + '" style="width:' + (100 - gp) + '%">'
+    + '<span class="spread-badge alt" id="spread-badge-right-' + index + '">' + (leftFirst ? '2' : '1') + '</span>'
+    + '<span class="spread-half-name">右半页</span>'
+    + '<span class="spread-half-page" id="spread-page-right-' + index + '">' + rightLabel + '</span>'
+    + '</div>'
+    + '<div class="spread-gutter-line" id="spread-gutter-line-' + index + '" style="left:' + gp + '%"></div>'
+    + '</div>';
+  var controls = '<div class="spread-controls">'
+    + '<div class="spread-field"><span class="spread-field-label">阅读方向</span>'
+    + '<div class="segment-direction-control" role="group" aria-label="双开页阅读方向">'
+    + '<button class="segment-direction-btn' + (direction === 'ltr' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'ltr' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'ltr\')">左→右</button>'
+    + '<button class="segment-direction-btn' + (direction === 'rtl' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'rtl' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'rtl\')">右→左</button>'
+    + '</div></div>'
+    + '<div class="spread-field"><div class="spread-field-row"><span class="spread-field-label">中缝位置</span><span class="spread-gutter-out" id="spread-gutter-out-' + index + '">' + gp + '%</span></div>'
+    + '<input class="spread-gutter-range" type="range" min="30" max="70" step="1" value="' + gp + '" aria-label="中缝横向位置" oninput="updateSegmentGutter(' + index + ',this.value)">'
+    + '</div></div>';
+  var summary = '<div class="spread-summary" id="spread-summary-' + index + '">' + spreadSummaryHtml(seg) + '</div>';
+  return '<tr class="segment-spread-row"><td colspan="7">'
+    + '<div class="segment-spread-panel">'
+    + '<div class="spread-panel-main">' + diagram + controls + '</div>'
+    + summary
+    + '</td></tr>';
+}
+
+// 详情上下文条目拼成纯文本。原在 20-search.js，纯数组处理。
+function detailContextText(items) {
+  if (!Array.isArray(items)) return '';
+  return items.map(function(item) {
+    return item && item.text != null ? String(item.text) : '';
+  }).filter(Boolean).join('\n');
+}

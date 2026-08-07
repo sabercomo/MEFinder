@@ -845,5 +845,82 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn(">desc<", html)
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DetailContextTextTests(unittest.TestCase):
+    """详情上下文拼接：取每条 item.text，非空的用换行连成一段。"""
+
+    def test_joins_texts_with_newline(self):
+        items = [{"text": "a"}, {"text": "b"}, {"text": "c"}]
+        self.assertEqual(_call("detailContextText", items), "a\nb\nc")
+
+    def test_skips_blank_and_missing(self):
+        items = [{"text": "a"}, {"text": ""}, {}, {"text": "b"}]
+        self.assertEqual(_call("detailContextText", items), "a\nb")
+
+    def test_non_array_is_empty(self):
+        self.assertEqual(_call("detailContextText", None), "")
+
+    def test_empty_array_is_empty(self):
+        self.assertEqual(_call("detailContextText", []), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SpreadSummaryHtmlTests(unittest.TestCase):
+    """双开页摘要文案。PDF 页序号库内 0 基，展示 +1。"""
+
+    def test_unmapped_segment_explains_split_only(self):
+        seg = {"pdf_page_start": 0, "number_style": "none"}
+        html = _call("spreadSummaryHtml", seg)
+        self.assertIn("PDF 第 1 页", html)
+        self.assertIn("未设引用页码", html)
+
+    def test_mapped_segment_reports_both_halves(self):
+        seg = {"pdf_page_start": 4, "citation_page_start": "5",
+               "number_style": "arabic"}
+        html = _call("spreadSummaryHtml", seg)
+        self.assertIn("PDF 第 5 页", html)
+        self.assertIn("左半页 <b>引文 5 页</b>", html)
+        self.assertIn("右半页 <b>引文 6 页</b>", html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class SegmentSpreadPanelRowTests(unittest.TestCase):
+    """双开页面板行：非 spread 分段返回空；spread 时拼出示意图/控件/摘要。"""
+
+    def test_non_spread_is_empty(self):
+        self.assertEqual(
+            _call("segmentSpreadPanelRow", {"layout_mode": "single"}, 0), "")
+
+    def test_spread_builds_panel_markup(self):
+        seg = {"layout_mode": "spread", "citation_page_start": "5",
+               "number_style": "arabic", "reading_direction": "ltr"}
+        html = _call("segmentSpreadPanelRow", seg, 2)
+        self.assertTrue(html.startswith("<tr class=\"segment-spread-row\">"))
+        self.assertIn("spread-diagram-2", html)
+        self.assertIn("spread-summary-2", html)
+        self.assertIn("引文 5 页", html)
+        self.assertIn("引文 6 页", html)
+
+    def test_ltr_puts_badge_one_on_left(self):
+        seg = {"layout_mode": "spread", "citation_page_start": "5",
+               "number_style": "arabic", "reading_direction": "ltr"}
+        html = _call("segmentSpreadPanelRow", seg, 0)
+        left = html.index("spread-badge-left-0")
+        right = html.index("spread-badge-right-0")
+        # 左半页徽标为 1、右半页为 2（左→右阅读）。
+        self.assertIn(">1<", html[left:left + 60])
+        self.assertIn(">2<", html[right:right + 60])
+
+    def test_rtl_swaps_badges(self):
+        seg = {"layout_mode": "spread", "citation_page_start": "5",
+               "number_style": "arabic", "reading_direction": "rtl"}
+        html = _call("segmentSpreadPanelRow", seg, 0)
+        left = html.index("spread-badge-left-0")
+        right = html.index("spread-badge-right-0")
+        # 右→左阅读时左半页徽标变 2、右半页变 1。
+        self.assertIn(">2<", html[left:left + 60])
+        self.assertIn(">1<", html[right:right + 60])
+
+
 if __name__ == "__main__":
     unittest.main()
