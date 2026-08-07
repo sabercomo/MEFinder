@@ -12,37 +12,6 @@ async function refreshCalibrationSource(sourceId) {
   if (calSelectedSourceId === sourceId) await loadCalibrationDoc(sourceId);
 }
 
-function statusStatIcon(icon) {
-  var paths = {
-    document:'<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4"/>',
-    book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/>',
-    check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
-    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    notice:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
-    danger:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>'
-  };
-  return '<span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[icon] || paths.notice) + '</svg></span>';
-}
-
-function statusChipIcon(group) {
-  var icons = {
-    calibrated:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
-    pending:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    review:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
-    failed:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>',
-    mapping:'<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>'
-  };
-  var spinning = group === 'mapping' ? ' is-spinning' : '';
-  return '<span class="status-chip__icon' + spinning + '" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (icons[group] || icons.pending) + '</svg></span>';
-}
-
-function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName) {
-  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" onclick="' + handlerName + '(\'' + status + '\')">'
-    + statusStatIcon(icon)
-    + '<span class="status-stat__label">' + label + '</span>'
-    + '<span class="status-stat__count">' + value + '</span></button>';
-}
-
 const calPinyinCollator = new Intl.Collator('zh-CN-u-co-pinyin', {sensitivity:'base', numeric:true});
 const calLatinCollator = new Intl.Collator('en', {sensitivity:'base', numeric:true});
 

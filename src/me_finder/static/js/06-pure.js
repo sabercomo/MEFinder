@@ -557,3 +557,63 @@ function detailContextText(items) {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+// 校准状态统计的图标 SVG。原在 50-calibration.js，纯映射。
+function statusStatIcon(icon) {
+  var paths = {
+    document:'<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4"/>',
+    book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/>',
+    check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
+    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    notice:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
+    danger:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>'
+  };
+  return '<span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[icon] || paths.notice) + '</svg></span>';
+}
+
+// 校准状态芯片的图标 SVG。原在 50-calibration.js，纯映射。
+function statusChipIcon(group) {
+  var icons = {
+    calibrated:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
+    pending:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    review:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
+    failed:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>',
+    mapping:'<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>'
+  };
+  var spinning = group === 'mapping' ? ' is-spinning' : '';
+  return '<span class="status-chip__icon' + spinning + '" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (icons[group] || icons.pending) + '</svg></span>';
+}
+
+// 校准状态统计按钮。原在 50-calibration.js，纯字符串，依赖 statusStatIcon。
+function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName) {
+  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" onclick="' + handlerName + '(\'' + status + '\')">'
+    + statusStatIcon(icon)
+    + '<span class="status-stat__label">' + label + '</span>'
+    + '<span class="status-stat__count">' + value + '</span></button>';
+}
+
+// 书目补全来源菜单。原在 40-bibliography.js，纯字符串。
+function bibSourceMenuHTML(sid, active) {
+  function item(source, label, note) {
+    return '<button class="bib-menu-item' + (active === source ? ' active' : '') + '" type="button" role="menuitem" onclick="bibSetSource(event,\'' + sid + '\',\'' + source + '\')">' + label
+      + (note ? '<span class="bib-menu-note">' + note + '</span>' : '') + '</button>';
+  }
+  return item('auto', '智能补全', '推荐')
+    + item('cnki', '知网补全', '中文')
+    + item('crossref', 'Crossref 补全', '外文')
+    + '<div class="bib-menu-sep"></div>'
+    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'paste\',\'' + sid + '\')">粘贴引文</button>'
+    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'opencnki\',\'' + sid + '\')">打开知网检索</button>';
+}
+
+// 抽屉信息行。原在 40-bibliography.js，仅依赖 esc。
+function drawerInfoRow(label, value) {
+  return '<div class="drawer-info-row"><span class="drawer-info-label">' + esc(label) + '</span><span class="drawer-info-value">' + esc(String(value || '—')) + '</span></div>';
+}
+
+// 书目缺失徽标。原在 40-bibliography.js，依赖 bibliographicMissingText + esc。
+function bibliographicMissingBadge(meta) {
+  var text = bibliographicMissingText(meta);
+  if (!text) return '';
+  return '<span class="bibliographic-missing" title="ISBN、ISSN 与 DOI 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
+}

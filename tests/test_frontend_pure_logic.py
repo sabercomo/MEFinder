@@ -951,5 +951,121 @@ class EscTests(unittest.TestCase):
         self.assertEqual(_call("esc", None), "null")
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class StatusStatIconTests(unittest.TestCase):
+    """校准状态统计图标：按名取 SVG，未知回退到 notice。"""
+
+    def test_known_icon_renders_full_svg_span(self):
+        self.assertEqual(
+            _call("statusStatIcon", "check"),
+            '<span class="status-stat__icon" aria-hidden="true">'
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+            'stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>'
+            '<path d="m8 12 2.6 2.6L16.5 9"/></svg></span>',
+        )
+
+    def test_unknown_icon_falls_back_to_notice(self):
+        html = _call("statusStatIcon", "totally_unknown")
+        self.assertIn('<path d="M12 7.5v5.5"/>', html)
+        self.assertIn('<path d="M12 16.5h.01"/>', html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class StatusChipIconTests(unittest.TestCase):
+    """校准状态芯片图标：mapping 组带旋转动画，未知回退到 pending。"""
+
+    def test_mapping_group_is_spinning(self):
+        self.assertIn("is-spinning", _call("statusChipIcon", "mapping"))
+
+    def test_calibrated_group_is_not_spinning(self):
+        self.assertNotIn("is-spinning", _call("statusChipIcon", "calibrated"))
+
+    def test_unknown_group_falls_back_to_pending(self):
+        # pending 图标为时钟：圆 + 指针路径。
+        html = _call("statusChipIcon", "totally_unknown")
+        self.assertIn('<path d="M12 7v5l3 2"/>', html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class StatusStatButtonTests(unittest.TestCase):
+    """校准状态统计按钮：拼接图标/文案/计数，命中当前筛选时高亮。"""
+
+    def test_active_button_gets_active_class(self):
+        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
+                     "success", "check", "manual_mapped", "applyLibStatusFilter")
+        self.assertIn("status-stat--success", html)
+        self.assertIn(" active", html)
+        self.assertIn(">已校准<", html)
+        self.assertIn(">5<", html)
+        self.assertIn("applyLibStatusFilter('manual_mapped')", html)
+
+    def test_inactive_button_omits_active_class(self):
+        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
+                     "success", "check", "needs_review", "applyLibStatusFilter")
+        self.assertNotIn(" active", html)
+
+    def test_button_embeds_icon_markup(self):
+        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
+                     "success", "check", "", "applyLibStatusFilter")
+        self.assertIn('<span class="status-stat__icon"', html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BibSourceMenuHTMLTests(unittest.TestCase):
+    """书目补全来源菜单：标记当前来源、内含固定动作项。"""
+
+    def test_active_source_is_marked(self):
+        html = _call("bibSourceMenuHTML", "sid-1", "cnki")
+        self.assertIn('onclick="bibSetSource(event,\'sid-1\',\'cnki\')"', html)
+        # 当前来源那一项带 active。
+        cnki_at = html.index("'cnki')")
+        head = html.rfind("<button", 0, cnki_at)
+        self.assertIn("active", html[head:cnki_at])
+
+    def test_menu_has_auto_and_paste_actions(self):
+        html = _call("bibSourceMenuHTML", "sid-1", "cnki")
+        self.assertIn(">智能补全", html)
+        self.assertIn("bibMenuAction(event,'paste','sid-1')", html)
+        self.assertIn("bibMenuAction(event,'opencnki','sid-1')", html)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DrawerInfoRowTests(unittest.TestCase):
+    """抽屉信息行：转义标签与取值，空值显示破折号。"""
+
+    def test_basic_row(self):
+        self.assertEqual(
+            _call("drawerInfoRow", "作者", "马克思"),
+            '<div class="drawer-info-row"><span class="drawer-info-label">作者</span>'
+            '<span class="drawer-info-value">马克思</span></div>',
+        )
+
+    def test_value_is_escaped(self):
+        self.assertEqual(
+            _call("drawerInfoRow", "x", "<b>"),
+            '<div class="drawer-info-row"><span class="drawer-info-label">x</span>'
+            '<span class="drawer-info-value">&lt;b&gt;</span></div>',
+        )
+
+    def test_empty_value_shows_dash(self):
+        self.assertIn("—", _call("drawerInfoRow", "y", ""))
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BibliographicMissingBadgeTests(unittest.TestCase):
+    """书目缺失徽标：完整时为空，缺失时给出带类名的提示。"""
+
+    def test_complete_meta_yields_empty(self):
+        meta = {"title": "资本论", "author": "马克思", "publisher": "人民出版社",
+                "publish_place": "北京", "publish_year": "2004"}
+        self.assertEqual(_call("bibliographicMissingBadge", meta), "")
+
+    def test_missing_meta_renders_badge(self):
+        html = _call("bibliographicMissingBadge", {})
+        self.assertIn('class="bibliographic-missing"', html)
+        self.assertIn("书目缺失", html)
+
+
 if __name__ == "__main__":
     unittest.main()

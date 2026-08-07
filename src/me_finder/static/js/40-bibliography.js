@@ -5,12 +5,6 @@
 
 
 
-function bibliographicMissingBadge(meta) {
-  var text = bibliographicMissingText(meta);
-  if (!text) return '';
-  return '<span class="bibliographic-missing" title="ISBN、ISSN 与 DOI 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
-}
-
 let bibEditorTypeOverride = {};
 let bibLookupSource = {};
 let cnkiLookupState = {};
@@ -135,19 +129,6 @@ function toggleCitationPanel() {
 // ── 期刊补全 split 按钮：标签、菜单、按语言智能选源（仅期刊，图书不用）──────
 // source 取值：'auto'（按文献语言智能选）、'cnki'、'crossref'。
 
-
-function bibSourceMenuHTML(sid, active) {
-  function item(source, label, note) {
-    return '<button class="bib-menu-item' + (active === source ? ' active' : '') + '" type="button" role="menuitem" onclick="bibSetSource(event,\'' + sid + '\',\'' + source + '\')">' + label
-      + (note ? '<span class="bib-menu-note">' + note + '</span>' : '') + '</button>';
-  }
-  return item('auto', '智能补全', '推荐')
-    + item('cnki', '知网补全', '中文')
-    + item('crossref', 'Crossref 补全', '外文')
-    + '<div class="bib-menu-sep"></div>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'paste\',\'' + sid + '\')">粘贴引文</button>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'opencnki\',\'' + sid + '\')">打开知网检索</button>';
-}
 
 // 'auto' 按文献语言落地：中文期刊→知网，外文期刊→Crossref。
 function bibEffectiveSource(sid) {
@@ -852,9 +833,5 @@ async function openCalibrationForSource(sourceId) {
 async function openCalibrationAndDetect(sourceId) {
   await openCalibrationForSource(sourceId);
   await runAutoDetection(sourceId);
-}
-
-function drawerInfoRow(label, value) {
-  return '<div class="drawer-info-row"><span class="drawer-info-label">' + esc(label) + '</span><span class="drawer-info-value">' + esc(String(value || '—')) + '</span></div>';
 }
 
