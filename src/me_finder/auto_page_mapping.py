@@ -23,6 +23,8 @@ from .pdf_page_mapping import int_to_roman
 
 AUTO_PAGE_MAPPING_THRESHOLDS: Dict[str, float] = {
     "edge_ratio": 0.14,
+    "outer_margin_ratio": 0.16,
+    "vertical_page_number_min_y": 0.64,
     "max_candidate_chars": 18,
     "min_high_support": 4,
     "min_medium_support": 3,
@@ -50,6 +52,41 @@ AUTO_LAYOUT_THRESHOLDS: Dict[str, float] = {
 STRUCTURE_KEYWORDS = {
     "intro": ["导言", "绪论"],
 }
+
+_CJK_PAGE_DIGITS = {
+    "〇": "0",
+    "零": "0",
+    "一": "1",
+    "壹": "1",
+    "二": "2",
+    "两": "2",
+    "兩": "2",
+    "贰": "2",
+    "貳": "2",
+    "三": "3",
+    "叁": "3",
+    "參": "3",
+    "四": "4",
+    "肆": "4",
+    "五": "5",
+    "伍": "5",
+    "六": "6",
+    "陆": "6",
+    "陸": "6",
+    "七": "7",
+    "柒": "7",
+    "八": "8",
+    "捌": "8",
+    "九": "9",
+    "玖": "9",
+}
+_CJK_PAGE_UNITS = {"十": 10, "拾": 10, "百": 100, "佰": 100, "千": 1000, "仟": 1000}
+_CJK_PAGE_DIGIT_CHARS = "".join(_CJK_PAGE_DIGITS)
+_CJK_PAGE_UNIT_CHARS = "".join(_CJK_PAGE_UNITS)
+_CJK_PAGE_DIGIT_RE = re.compile(f"[{re.escape(_CJK_PAGE_DIGIT_CHARS)}]")
+_CJK_PAGE_NUMBER_RE = re.compile(
+    f"^[{re.escape(_CJK_PAGE_DIGIT_CHARS + _CJK_PAGE_UNIT_CHARS)}]{{1,6}}$"
+)
 
 
 @dataclass(frozen=True)
@@ -259,6 +296,22 @@ def _layout_bbox_scale(
             continue
         max_x = max(max_x, bbox[0], bbox[2])
         max_y = max(max_y, bbox[1], bbox[3])
+    # MinerU content-list/layout boxes use a normalized 1000 x 1000 canvas,
+    # while parsed pages retain the physical PDF dimensions.  The physical
+    # page may be either smaller or larger than 1000, so coordinate magnitude
+    # alone cannot identify the scale.  Preserve the parser metadata while
+    # converting the structured result and use it as the authoritative signal.
+    mineru_canvas = any(
+        isinstance(block, dict)
+        and (
+            "mineru_item_index" in block
+            or "mineru_type" in block
+            or str(block.get("parser_type") or "").lower().startswith("mineru")
+        )
+        for block in blocks
+    )
+    if mineru_canvas and max_x <= 1200 and max_y <= 1200:
+        return 1000.0, 1000.0
     width = page_width
     height = page_height
     if max_x > page_width * 1.2:
@@ -381,6 +434,38 @@ def has_manual_mapping(config: Dict[str, object]) -> bool:
     return any(isinstance(segment, dict) for segment in segments)
 
 
+def _normalize_cjk_page_number(value: str) -> Optional[Tuple[str, int, str]]:
+    """Parse Chinese page numerals without confusing digit strings with units.
+
+    Modern editions of vertical classics commonly print ``二三四`` for page
+    234.  This is deliberately different from the multiplicative ``二百三十四``.
+    Both forms are accepted, but they keep distinct styles in the evidence.
+    """
+
+    if not value or not _CJK_PAGE_NUMBER_RE.fullmatch(value):
+        return None
+    if not any(character in _CJK_PAGE_UNITS for character in value):
+        digits = "".join(_CJK_PAGE_DIGITS[character] for character in value)
+        number = int(digits)
+        if number <= 0:
+            return None
+        return "cjk_decimal", number, str(number)
+
+    total = 0
+    current_digit = 0
+    for character in value:
+        if character in _CJK_PAGE_DIGITS:
+            current_digit = int(_CJK_PAGE_DIGITS[character])
+            continue
+        unit = _CJK_PAGE_UNITS[character]
+        total += (current_digit or 1) * unit
+        current_digit = 0
+    total += current_digit
+    if total <= 0:
+        return None
+    return "cjk_multiplicative", total, str(total)
+
+
 def normalize_page_candidate(text: object) -> Optional[Tuple[str, int, str]]:
     """Normalize one OCR text fragment into a page number if possible."""
 
@@ -403,6 +488,10 @@ def normalize_page_candidate(text: object) -> Optional[Tuple[str, int, str]]:
     value = re.sub(r"\s+", "", value)
     if not value:
         return None
+
+    cjk_number = _normalize_cjk_page_number(value)
+    if cjk_number is not None:
+        return cjk_number
 
     numeric_context = re.sub(r"[Il|]", "1", value)
     numeric_context = re.sub(r"[Oo]", "0", numeric_context)
@@ -542,7 +631,7 @@ def extract_native_pdf_edge_candidates(
     *,
     thresholds: Optional[Dict[str, float]] = None,
 ) -> List[PageNumberCandidate]:
-    """Extract short page-number text from the top/bottom 15% of native PDF pages."""
+    """Extract page numbers from horizontal edges and vertical outer margins."""
 
     thresholds = {**AUTO_PAGE_MAPPING_THRESHOLDS, **(thresholds or {})}
     candidates: List[PageNumberCandidate] = []
@@ -557,41 +646,62 @@ def extract_native_pdf_edge_candidates(
         blocks = page.get("blocks") or []
         if not isinstance(blocks, list):
             continue
+        bbox_width, bbox_height = _layout_bbox_scale(
+            blocks,
+            width or 1000.0,
+            height or 1000.0,
+        )
+        page_items: List[Tuple[str, List[float], bool]] = []
         for block in blocks:
             if not isinstance(block, dict):
                 continue
-            bbox = _normalized_page_bbox(block, width, height)
-            if not _is_edge_bbox(bbox, thresholds):
+            bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+            is_outer_vertical = _is_outer_lower_margin_bbox(bbox, thresholds)
+            if not _is_edge_bbox(bbox, thresholds) and not is_outer_vertical:
                 continue
             text = str(block.get("text") or "").strip()
             for raw_piece in _candidate_text_pieces(text, "edge_short_text"):
-                normalized = normalize_page_candidate(raw_piece)
-                if normalized is None:
-                    continue
-                style, number, normalized_text = normalized
-                if style == "arabic" and 1800 <= number <= 2099:
-                    continue
-                compact = re.sub(r"\s+", "", str(raw_piece))
-                if re.search(r"ISBN", compact, flags=re.IGNORECASE) or len(re.sub(r"\D", "", compact)) > 5:
-                    continue
-                key = (page_idx, number, style)
-                if key in seen:
-                    continue
-                seen.add(key)
-                candidates.append(
-                    PageNumberCandidate(
-                        page_idx=page_idx,
-                        raw_candidate=str(raw_piece).strip(),
-                        normalized_candidate=normalized_text,
-                        candidate_type="native_edge_text",
-                        number_style=style,
-                        number=number,
-                        bbox=bbox,
-                        source="native_pdf_edge_text",
-                        confidence=0.85,
-                        score=0.82,
-                    )
+                page_items.append((str(raw_piece), bbox or [], False))
+        page_items.extend(
+            (text, bbox, True)
+            for text, bbox in _merged_vertical_cjk_digit_blocks(
+                blocks, bbox_width, bbox_height, thresholds
+            )
+        )
+        for raw_piece, bbox, is_merged_vertical in page_items:
+            normalized = normalize_page_candidate(raw_piece)
+            if normalized is None:
+                continue
+            style, number, normalized_text = normalized
+            if style == "arabic" and 1800 <= number <= 2099:
+                continue
+            compact = re.sub(r"\s+", "", str(raw_piece))
+            if re.search(r"ISBN", compact, flags=re.IGNORECASE) or len(re.sub(r"\D", "", compact)) > 5:
+                continue
+            key = (page_idx, number, style)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(
+                PageNumberCandidate(
+                    page_idx=page_idx,
+                    raw_candidate=str(raw_piece).strip(),
+                    normalized_candidate=normalized_text,
+                    candidate_type="native_edge_text",
+                    number_style=style,
+                    number=number,
+                    bbox=bbox,
+                    source="native_pdf_edge_text",
+                    confidence=0.9 if style.startswith("cjk_") else 0.85,
+                    score=(
+                        0.96
+                        if is_merged_vertical
+                        else 0.9
+                        if _is_outer_lower_margin_bbox(bbox, thresholds)
+                        else 0.82
+                    ),
                 )
+            )
     return sorted(candidates, key=lambda item: (item.page_idx, -item.score, item.number))
 
 
@@ -628,7 +738,10 @@ def extract_mineru_page_number_candidates(
                         continue
                     style, number, normalized_text = normalized
                     candidate_type = _candidate_type(block_type)
-                    if candidate_type == "edge_short_text" and not _is_edge_bbox(bbox, thresholds):
+                    if candidate_type == "edge_short_text" and not (
+                        _is_edge_bbox(bbox, thresholds)
+                        or _is_outer_lower_margin_bbox(bbox, thresholds)
+                    ):
                         continue
                     score = _candidate_score(candidate_type, raw_piece, bbox, thresholds)
                     if score <= 0:
@@ -820,6 +933,7 @@ def _fit_sequence_segments(
             )
             if segment:
                 suggestions.append(segment)
+    _trim_conflicting_backfills(suggestions)
     suggestions.sort(
         key=lambda item: (
             -float(item.get("mapping_confidence") or 0.0),
@@ -828,6 +942,62 @@ def _fit_sequence_segments(
         )
     )
     return suggestions
+
+
+def _trim_conflicting_backfills(segments: Sequence[Dict[str, object]]) -> None:
+    """Keep a late local offset from being extrapolated across earlier evidence."""
+
+    reliable = [
+        segment
+        for segment in segments
+        if segment.get("confidence_level") == "high"
+        and isinstance(segment.get("mapping_evidence"), dict)
+    ]
+    for segment in reliable:
+        evidence = segment["mapping_evidence"]
+        start = int(segment.get("pdf_page_start") or 0)
+        end = int(segment.get("pdf_page_end") or start)
+        observed_start = int(evidence.get("observed_page_start") or start)
+        if start >= observed_start:
+            continue
+        offset = int(evidence.get("inferred_offset") or 0)
+        family = _style_family(str(segment.get("number_style") or "arabic"))
+        same_offset_support = 0
+        conflicting_offset_support = 0
+        for other in reliable:
+            if other is segment:
+                continue
+            other_evidence = other.get("mapping_evidence") or {}
+            if _style_family(str(other.get("number_style") or "arabic")) != family:
+                continue
+            other_observed_end = int(other_evidence.get("observed_page_end") or -1)
+            if not start <= other_observed_end < observed_start:
+                continue
+            support = int(other.get("observed_page_numbers") or 0)
+            if int(other_evidence.get("inferred_offset") or 0) == offset:
+                same_offset_support += support
+            else:
+                conflicting_offset_support += support
+        if conflicting_offset_support <= same_offset_support:
+            continue
+
+        logical_pages_per_pdf = int(evidence.get("logical_pages_per_pdf") or 1)
+        citation_start = logical_pages_per_pdf * observed_start + offset
+        citation_end = citation_start + logical_pages_per_pdf * (end - observed_start + 1) - 1
+        old_start = start
+        segment["pdf_page_start"] = observed_start
+        segment["citation_page_start"] = str(citation_start)
+        segment["citation_page_end"] = str(citation_end)
+        segment["segment_id"] = str(segment.get("segment_id") or "").replace(
+            f"-{old_start:06d}-", f"-{observed_start:06d}-", 1
+        )
+        evidence["sequence_density"] = round(
+            int(segment.get("observed_page_numbers") or 0) / max(1, end - observed_start + 1),
+            4,
+        )
+        evidence["backfill_trimmed_due_to_conflicting_offset"] = True
+        evidence["same_offset_predecessor_support"] = same_offset_support
+        evidence["conflicting_offset_predecessor_support"] = conflicting_offset_support
 
 
 def _cluster_to_segment(
@@ -853,10 +1023,24 @@ def _cluster_to_segment(
     first = observed[0]
     last = observed[-1]
     first_citation = first.number
+    toc_backfill_suppressed = False
     if logical_pages_per_pdf == 1:
         start = first.page_idx - (first_citation - 1)
         if start < 0:
             start = first.page_idx
+        elif first_citation > 2 and any(
+            _has_toc_heading(page_texts.get(page_idx, ""))
+            for page_idx in range(
+                max(0, first.page_idx - int(thresholds["max_cluster_gap"])),
+                first.page_idx + 1,
+            )
+        ):
+            # Do not extrapolate an OCR sequence backwards across a nearby
+            # contents page.  Bound volumes often omit or duplicate a leaf at
+            # this transition, so the arithmetic offset is not trustworthy
+            # before the first observed page number.
+            start = first.page_idx
+            toc_backfill_suppressed = True
     else:
         # Spread scans often include unnumbered covers and half-title pages.
         # Start at the first reliable physical spread instead of inventing a
@@ -914,12 +1098,16 @@ def _cluster_to_segment(
         "sequence_consistency": consistency,
         "sequence_density": density,
         "inferred_offset": offset,
+        "observed_page_start": first.page_idx,
+        "observed_page_end": last.page_idx,
         "average_candidate_score": round(avg_score, 4),
         "candidate_sources": dict(source_counts),
         "candidate_types": dict(type_counts),
         "structure_evidence": page_scope if structure else None,
         "logical_pages_per_pdf": logical_pages_per_pdf,
     }
+    if toc_backfill_suppressed:
+        evidence["backfill_suppressed_near_toc"] = True
     layout = dict(layout_detection or {})
     if logical_pages_per_pdf == 2:
         evidence["layout_detection"] = layout.get("evidence") or {}
@@ -1084,6 +1272,8 @@ def _format_citation_label(number: int, style: str, scope: str) -> str:
 _BODY_HEADING_RE = re.compile(r"第\s*(?:一|1)\s*[章编部节卷]")
 # 整行标题才算序言；正文里的“无序/秩序/顺序”等子串不再误触发。
 _PREFACE_HEADING_RE = re.compile(r"^(?:译者|作者)?[自代译]?序言?$|^前言$|^出版说明$")
+_NON_PREFACE_SEQUENCE_WORDS = {"无序", "無序", "秩序", "顺序", "順序", "次序", "工序"}
+_TOC_HEADING_RE = re.compile(r"^(?:目[录錄]|目录|目錄)$")
 _MAX_PREFACE_SPAN_PAGES = 40
 
 
@@ -1092,7 +1282,30 @@ def _has_preface_heading(text: str) -> bool:
         compact = re.sub(r"[\s　]+", "", line)
         if compact and _PREFACE_HEADING_RE.match(compact):
             return True
+        if (
+            2 <= len(compact) <= 18
+            and compact.endswith("序")
+            and compact not in _NON_PREFACE_SEQUENCE_WORDS
+        ):
+            return True
     return False
+
+
+def _has_toc_heading(text: str) -> bool:
+    lines = [
+        re.sub(r"[\s　]+", "", line)
+        # Vertical ancient-book OCR often emits the visual title after many
+        # catalogue-entry columns even when it is prominent on the page.
+        for line in text.split("\n")[:40]
+        if re.sub(r"[\s　]+", "", line)
+    ]
+    candidates = list(lines)
+    candidates.extend(lines[index] + lines[index + 1] for index in range(len(lines) - 1))
+    return any(
+        _TOC_HEADING_RE.fullmatch(candidate)
+        or (2 <= len(candidate) <= 18 and candidate.endswith(("目录", "目錄")))
+        for candidate in candidates
+    )
 
 
 def _structure_signal(page_texts: Dict[int, str], start: int, end: int, family: str) -> Optional[str]:
@@ -1106,6 +1319,8 @@ def _structure_signal(page_texts: Dict[int, str], start: int, end: int, family: 
     # 其他页面 OCR 噪声里可能混入的正文标题字样。
     if span_ok_for_preface and any(_has_preface_heading(text) for text in pages[:2]):
         return "preface"
+    if span_ok_for_preface and any(_has_toc_heading(text) for text in pages[:2]):
+        return "front_matter"
     if family.startswith("roman"):
         # 中文书籍的罗马页码段属于前置部分；目录页上的"第一章……"
         # 等条目不代表正文，不参与正文判定。
@@ -1257,6 +1472,11 @@ def _candidate_score(
     }.get(candidate_type, 0.0)
     if _is_edge_bbox(bbox, thresholds):
         score += 0.14
+    if _is_outer_lower_margin_bbox(bbox, thresholds):
+        score += 0.20
+    normalized = _normalize_cjk_page_number(re.sub(r"[\s\u3000]+", "", str(raw_piece)))
+    if normalized is not None:
+        score += 0.10
     if len(str(raw_piece).strip()) <= 6:
         score += 0.06
     return min(1.0, round(score, 4))
@@ -1273,6 +1493,109 @@ def _is_edge_bbox(bbox: Optional[List[float]], thresholds: Dict[str, float]) -> 
     # MinerU v2 boxes are commonly in page coordinates around 1000x1000.
     y_center = (values[1] + values[3]) / 2
     return y_center <= 160 or y_center >= 840
+
+
+def _is_outer_lower_margin_bbox(
+    bbox: Optional[List[float]], thresholds: Dict[str, float]
+) -> bool:
+    """Recognize the alternating lower side-margin folios used by classics."""
+
+    if not bbox or len(bbox) < 4:
+        return False
+    try:
+        values = [float(value) for value in bbox[:4]]
+    except (TypeError, ValueError):
+        return False
+    if max(abs(value) for value in values) > 1.5:
+        values = [value / 1000.0 for value in values]
+    x_center = (values[0] + values[2]) / 2
+    y_center = (values[1] + values[3]) / 2
+    outer = float(thresholds.get("outer_margin_ratio") or 0.16)
+    lower = float(thresholds.get("vertical_page_number_min_y") or 0.64)
+    return (x_center <= outer or x_center >= 1.0 - outer) and y_center >= lower
+
+
+def _merged_vertical_cjk_digit_blocks(
+    blocks: Sequence[object],
+    bbox_width: Optional[float],
+    bbox_height: Optional[float],
+    thresholds: Dict[str, float],
+) -> List[Tuple[str, List[float]]]:
+    """Join one-glyph OCR blocks that form a vertical decimal folio.
+
+    The column grouping mirrors the useful part of Novel Formatter's bbox
+    reading-order recovery: cluster by x, then read top to bottom.  Joined
+    candidates receive a higher score than their component glyphs, allowing the
+    sequence fitter to prefer ``二三四`` over three competing 2/3/4 candidates.
+    """
+
+    parts: List[Dict[str, object]] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        text = re.sub(r"[\s\u3000]+", "", str(block.get("text") or ""))
+        if not _CJK_PAGE_DIGIT_RE.fullmatch(text):
+            continue
+        bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+        if not _is_outer_lower_margin_bbox(bbox, thresholds):
+            continue
+        assert bbox is not None
+        x_center = (bbox[0] + bbox[2]) / 2
+        parts.append(
+            {
+                "text": text,
+                "bbox": bbox,
+                "side": "left" if x_center < 0.5 else "right",
+                "x_center": x_center,
+                "height": max(0.001, bbox[3] - bbox[1]),
+            }
+        )
+
+    merged: List[Tuple[str, List[float]]] = []
+    for side in ("left", "right"):
+        side_parts = sorted(
+            (part for part in parts if part["side"] == side),
+            key=lambda part: (float(part["x_center"]), float(part["bbox"][1])),
+        )
+        columns: List[List[Dict[str, object]]] = []
+        for part in side_parts:
+            if not columns:
+                columns.append([part])
+                continue
+            average_x = sum(float(item["x_center"]) for item in columns[-1]) / len(columns[-1])
+            if abs(float(part["x_center"]) - average_x) <= 0.04:
+                columns[-1].append(part)
+            else:
+                columns.append([part])
+        for column in columns:
+            ordered = sorted(column, key=lambda part: float(part["bbox"][1]))
+            run: List[Dict[str, object]] = []
+            for part in ordered:
+                if run:
+                    previous = run[-1]
+                    gap = float(part["bbox"][1]) - float(previous["bbox"][3])
+                    allowed_gap = max(0.05, 1.8 * max(float(part["height"]), float(previous["height"])))
+                    if gap > allowed_gap or len(run) >= 6:
+                        if len(run) >= 2:
+                            merged.append(_merge_cjk_digit_run(run))
+                        run = []
+                run.append(part)
+            if len(run) >= 2:
+                merged.append(_merge_cjk_digit_run(run))
+    return merged
+
+
+def _merge_cjk_digit_run(run: Sequence[Dict[str, object]]) -> Tuple[str, List[float]]:
+    boxes = [list(item["bbox"]) for item in run]
+    return (
+        "".join(str(item["text"]) for item in run),
+        [
+            min(box[0] for box in boxes),
+            min(box[1] for box in boxes),
+            max(box[2] for box in boxes),
+            max(box[3] for box in boxes),
+        ],
+    )
 
 
 def _bbox(value: object) -> Optional[List[float]]:

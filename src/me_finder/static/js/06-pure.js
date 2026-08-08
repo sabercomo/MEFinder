@@ -277,6 +277,7 @@ function importStepsFor(q) {
   if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
   if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
   if (q.route === 'vision') return ['读取文件', '类型检测', (q.providerName || '其他 API') + ' 解析', '文本入库', '建立索引'];
+  if (!q.detectedType) return ['读取文件', '类型检测', '确定解析方式', '建立索引'];
   return ['读取文件', '类型检测', '本地解析', '建立索引'];
 }
 

@@ -475,12 +475,17 @@ class ImportStepsForTests(unittest.TestCase):
 
     def test_pdf_local_route(self):
         self.assertEqual(
-            _call("importStepsFor", {"type": "pdf", "route": "native"}),
+            _call(
+                "importStepsFor",
+                {"type": "pdf", "route": "native", "detectedType": "native_text"},
+            ),
             ["读取文件", "类型检测", "本地解析", "建立索引"],
         )
+
+    def test_pdf_waits_for_route_before_detection_finishes(self):
         self.assertEqual(
             _call("importStepsFor", {"type": "pdf"}),
-            ["读取文件", "类型检测", "本地解析", "建立索引"],
+            ["读取文件", "类型检测", "确定解析方式", "建立索引"],
         )
 
 

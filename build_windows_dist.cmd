@@ -31,6 +31,7 @@ if errorlevel 1 exit /b 1
   tests.test_foreign_book_lookup ^
   tests.test_crossref_lookup ^
   tests.test_book_metadata_lookup ^
+  tests.test_chunked_upload ^
   tests.test_database_resilience ^
   tests.test_fts_search_scalability ^
   tests.test_large_index_resilience ^
