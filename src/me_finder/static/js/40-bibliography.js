@@ -320,7 +320,22 @@ function setLookupStatus(config, message, warning) {
 
 // listHTML 引用的三个候选列表函数为函数声明，已提升，const 初始化时可用。
 const CNKI_LOOKUP = {listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML};
-const BOOK_LOOKUP = {listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML};
+const BOOK_LOOKUP = {
+  stateMap: bookLookupState, endpoint: '/api/bibliographic-metadata/lookup-google-books',
+  listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML,
+  loadingMessage: '正在查询图书目录…', defaultError: '图书查询失败',
+  buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, isbn: form.isbn}; },
+  validate: function (metadata) { return (!metadata.isbn && !metadata.title) ? '请先填写 ISBN 或书名' : null; },
+  resetState: function () { return {candidates: []}; },
+  saveErrorState: function () {},
+  describe: function (data) {
+    var c = data.candidates;
+    if (!c || !c.length) return {message: '未找到匹配图书，可核对 ISBN/书名或手动填写', warning: true};
+    if (c.length === 1 && c[0].match && c[0].match.level === 'high') return {message: '找到 1 条高匹配图书，请核对后补全', warning: false};
+    return {message: '找到 ' + c.length + ' 条候选，请选择正确的图书', warning: true};
+  },
+  onError: function (e) { return {message: e.message, warning: true}; }
+};
 const CROSSREF_LOOKUP = {
   stateMap: crossrefLookupState, endpoint: '/api/bibliographic-metadata/lookup-crossref',
   listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listHTML: crossrefCandidateListHTML,
@@ -440,34 +455,7 @@ function bookCandidateListHTML(sourceId) {
 }
 
 async function lookupGoogleBooks(sourceId) {
-  var form = collectBibliographicForm();
-  var metadata = {title:form.title, author:form.author, publish_year:form.publish_year, isbn:form.isbn};
-  if (!metadata.isbn && !metadata.title) {
-    setLookupStatus(BOOK_LOOKUP,'请先填写 ISBN 或书名', true);
-    return;
-  }
-  bookLookupState[sourceId] = {candidates:[]};
-  renderCandidates(BOOK_LOOKUP,sourceId);
-  setLookupStatus(BOOK_LOOKUP,'正在查询图书目录…', false);
-  try {
-    var resp = await fetch('/api/bibliographic-metadata/lookup-google-books', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
-    });
-    var data = await resp.json();
-    if (!resp.ok || !data.ok) throw new Error(data.error || '图书查询失败');
-    bookLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderCandidates(BOOK_LOOKUP,sourceId);
-    if (!data.candidates || !data.candidates.length) {
-      setLookupStatus(BOOK_LOOKUP,'未找到匹配图书，可核对 ISBN/书名或手动填写', true);
-    } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setLookupStatus(BOOK_LOOKUP,'找到 1 条高匹配图书，请核对后补全', false);
-    } else {
-      setLookupStatus(BOOK_LOOKUP,'找到 ' + data.candidates.length + ' 条候选，请选择正确的图书', true);
-    }
-  } catch(e) {
-    renderCandidates(BOOK_LOOKUP,sourceId);
-    setLookupStatus(BOOK_LOOKUP,e.message, true);
-  }
+  return runLookup(BOOK_LOOKUP, sourceId);
 }
 
 // 图书候选：只把当前为空的图书字段补进表单，绝不覆盖已有值。

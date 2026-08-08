@@ -1429,6 +1429,42 @@ class CrossrefLookupConfigTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class BookLookupConfigTests(unittest.TestCase):
+    """Books 走 runLookup 工厂后，BOOK_LOOKUP 回调须复现原 lookupGoogleBooks 行为。"""
+
+    def test_build_request_keeps_only_book_fields(self):
+        form = {"title": "T", "author": "A", "publish_year": "2020",
+                "isbn": "978", "doi": "D", "journal_name": "J"}
+        self.assertEqual(
+            _config_call("BOOK_LOOKUP", "buildRequest", form),
+            {"title": "T", "author": "A", "publish_year": "2020", "isbn": "978"},
+        )
+
+    def test_validate_requires_isbn_or_title(self):
+        self.assertEqual(_config_call("BOOK_LOOKUP", "validate", {}),
+                         "请先填写 ISBN 或书名")
+        self.assertIsNone(_config_call("BOOK_LOOKUP", "validate", {"title": "T"}))
+        self.assertIsNone(_config_call("BOOK_LOOKUP", "validate", {"isbn": "978"}))
+
+    def test_describe_three_branches(self):
+        self.assertEqual(
+            _config_call("BOOK_LOOKUP", "describe", {"candidates": []}),
+            {"message": "未找到匹配图书，可核对 ISBN/书名或手动填写", "warning": True})
+        self.assertEqual(
+            _config_call("BOOK_LOOKUP", "describe",
+                         {"candidates": [{"match": {"level": "high"}}]}),
+            {"message": "找到 1 条高匹配图书，请核对后补全", "warning": False})
+        self.assertEqual(
+            _config_call("BOOK_LOOKUP", "describe", {"candidates": [{}, {}, {}]}),
+            {"message": "找到 3 条候选，请选择正确的图书", "warning": True})
+
+    def test_on_error_passes_message_through(self):
+        self.assertEqual(
+            _config_call("BOOK_LOOKUP", "onError", {"message": "boom"}),
+            {"message": "boom", "warning": True})
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CandidateCardHTMLGoldenTests(unittest.TestCase):
     """联网补全候选卡抽出 candidateCardHTML 后，三套源的渲染必须逐字不变。
 
