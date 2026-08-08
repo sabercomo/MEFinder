@@ -264,14 +264,15 @@ const bibliographicLookupFields = {
   issn:{id:'issn',label:'ISSN'}
 };
 
-function applyBibliographicLookupMetadata(sourceId, metadata, evidence) {
+function applyBibliographicLookupMetadata(sourceId, metadata, evidence, fields) {
   var filled = [];
   var preserved = [];
   metadata = metadata || {};
   evidence = evidence || {};
-  Object.keys(bibliographicLookupFields).forEach(function(key) {
+  fields = fields || bibliographicLookupFields;
+  Object.keys(fields).forEach(function(key) {
     var incoming = String(metadata[key] || '').trim();
-    var field = bibliographicLookupFields[key];
+    var field = fields[key];
     var input = document.getElementById('bib-' + field.id);
     if (!incoming || !input) return;
     var existing = input.value.trim();
@@ -456,31 +457,11 @@ async function lookupGoogleBooks(sourceId) {
 function applyBookCandidate(sourceId, index) {
   var candidate = ((bookLookupState[sourceId] || {}).candidates || [])[index];
   if (!candidate) return;
-  var meta = candidate.metadata || {};
-  var evidence = candidate.evidence || {};
-  var filled = [];
-  var preserved = [];
-  Object.keys(bookLookupFields).forEach(function(key) {
-    var incoming = String(meta[key] || '').trim();
-    var field = bookLookupFields[key];
-    var input = document.getElementById('bib-' + field.id);
-    if (!incoming || !input) return;
-    var existing = input.value.trim();
-    if (!existing) {
-      input.value = incoming;
-      filled.push(field.label);
-      if (evidence[key]) {
-        if (!bibliographicPendingEvidence[sourceId]) bibliographicPendingEvidence[sourceId] = {};
-        bibliographicPendingEvidence[sourceId][key] = Object.assign({}, evidence[key], {value:incoming});
-      }
-    } else if (!bibliographicValuesEquivalent(key, existing, incoming)) {
-      preserved.push(field.label);
-    }
-  });
-  refreshBibliographicMissingDisplay();
-  var message = filled.length ? '已补全：' + filled.join('、') : '表单已有对应内容，未作覆盖';
-  if (preserved.length) message += '；已有值未覆盖：' + preserved.join('、');
-  setBookLookupStatus(message + '。请检查后保存', preserved.length > 0);
+  // 回填逻辑与期刊完全同构，复用 applyBibliographicLookupMetadata，仅换图书字段集。
+  var applied = applyBibliographicLookupMetadata(sourceId, candidate.metadata, candidate.evidence, bookLookupFields);
+  var message = applied.filled.length ? '已补全：' + applied.filled.join('、') : '表单已有对应内容，未作覆盖';
+  if (applied.preserved.length) message += '；已有值未覆盖：' + applied.preserved.join('、');
+  setBookLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
 }
 
 /* ═══ Crossref 外文期刊论文补全 ═══
