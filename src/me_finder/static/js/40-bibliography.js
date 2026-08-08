@@ -299,22 +299,7 @@ function cnkiCandidateListHTML(sourceId) {
   var candidates = Array.isArray(state.candidates) ? state.candidates : [];
   if (!candidates.length) return '';
   return candidates.map(function(candidate, index) {
-    var meta = candidate.metadata || {};
-    var match = candidate.match || {};
-    var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
-    var detail = [meta.author, meta.journal_name, candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
-    var reasons = (match.reasons || []).join('、');
-    var conflicts = (match.conflicts || []).join('、');
-    return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
-      + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || '未识别篇名') + '</div>'
-      + '<div class="cnki-candidate-detail">' + esc(detail || '联网记录') + '</div>'
-      + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
-      + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
-      + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
-      + '<div class="cnki-candidate-actions"><button class="action-btn" type="button" onclick="applyCnkiSearchCandidate(\'' + esc(sourceId) + '\',' + index + ')">先补列表字段</button>'
-      + '<button class="action-btn primary" type="button" onclick="fetchCnkiCandidate(\'' + esc(sourceId) + '\',' + index + ')">获取完整题录</button>'
-      + '<button class="action-btn" type="button" onclick="openCnkiCandidate(\'' + esc(sourceId) + '\',' + index + ')">打开记录</button></div>'
-      + '</div>';
+    return candidateCardHTML(sourceId, candidate, index, CNKI_CARD_CONFIG);
   }).join('');
 }
 
@@ -393,20 +378,7 @@ function bookCandidateListHTML(sourceId) {
   var candidates = ((bookLookupState[sourceId] || {}).candidates) || [];
   if (!candidates.length) return '';
   return candidates.map(function(candidate, index) {
-    var meta = candidate.metadata || {};
-    var match = candidate.match || {};
-    var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
-    var detail = [meta.author, meta.publisher, candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
-    var reasons = (match.reasons || []).join('、');
-    var conflicts = (match.conflicts || []).join('、');
-    return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
-      + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || '未识别书名') + '</div>'
-      + '<div class="cnki-candidate-detail">' + esc(detail || '图书目录记录') + (meta.isbn ? ' · ISBN ' + esc(meta.isbn) : '') + '</div>'
-      + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
-      + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
-      + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
-      + '<div class="cnki-candidate-actions"><button class="action-btn primary" type="button" onclick="applyBookCandidate(\'' + esc(sourceId) + '\',' + index + ')">补全书目字段</button></div>'
-      + '</div>';
+    return candidateCardHTML(sourceId, candidate, index, BOOK_CARD_CONFIG);
   }).join('');
 }
 
@@ -471,20 +443,7 @@ function crossrefCandidateListHTML(sourceId) {
   var candidates = ((crossrefLookupState[sourceId] || {}).candidates) || [];
   if (!candidates.length) return '';
   return candidates.map(function(candidate, index) {
-    var meta = candidate.metadata || {};
-    var match = candidate.match || {};
-    var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
-    var detail = [meta.author, meta.journal_name, candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
-    var reasons = (match.reasons || []).join('、');
-    var conflicts = (match.conflicts || []).join('、');
-    return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
-      + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || '未识别篇名') + '</div>'
-      + '<div class="cnki-candidate-detail">' + esc(detail || 'Crossref 记录') + (meta.doi ? ' · DOI ' + esc(meta.doi) : '') + '</div>'
-      + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
-      + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
-      + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
-      + '<div class="cnki-candidate-actions"><button class="action-btn primary" type="button" onclick="applyCrossrefCandidate(\'' + esc(sourceId) + '\',' + index + ')">补全书目字段</button></div>'
-      + '</div>';
+    return candidateCardHTML(sourceId, candidate, index, CROSSREF_CARD_CONFIG);
   }).join('');
 }
 

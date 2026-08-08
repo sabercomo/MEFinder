@@ -1347,5 +1347,89 @@ class DetailContextHTMLTests(unittest.TestCase):
         self.assertIn('<span class="detail-context-full" hidden>' + "文" * 300 + "</span>", html)
 
 
+# const/let 声明不会从 eval 泄漏到外层作用域，所以引用 06-pure.js 里的具名常量
+# （如 CNKI_CARD_CONFIG）时，必须把源码与表达式拼进同一次 eval——等同浏览器里
+# 各文件拼成同一 script 作用域的情形。
+_MODULE_EVAL_HARNESS = r"""
+const fs = require('fs');
+const src = fs.readFileSync(process.argv[2], 'utf8');
+const expr = fs.readFileSync(process.argv[3], 'utf8');
+process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
+"""
+
+
+def _module_eval(expr):
+    """在同一次 eval 中执行 06-pure.js + 表达式，可引用其中的 const/let。"""
+
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = Path(tmp) / "module_eval_harness.js"
+        exprfile = Path(tmp) / "expr.js"
+        harness.write_text(_MODULE_EVAL_HARNESS, encoding="utf-8")
+        exprfile.write_text(expr, encoding="utf-8")
+        result = subprocess.run(
+            [NODE, str(harness), str(PURE_JS), str(exprfile)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        return json.loads(result.stdout)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class CandidateCardHTMLGoldenTests(unittest.TestCase):
+    """联网补全候选卡抽出 candidateCardHTML 后，三套源的渲染必须逐字不变。
+
+    夹具的 expected 是重构前 cnki/book/crossref 三个 List 函数的真实输出（golden
+    baseline）。这里用重构后的 candidateCardHTML + 三套真实配置重新渲染同一批候选，
+    断言与 golden 逐字一致——覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、
+    ISBN/DOI 后缀与标题/详情兜底，以及知网 3 按钮 vs 图书/Crossref 1 按钮的差异。
+    """
+
+    FIXTURE = ROOT / "tests" / "fixtures" / "candidate_cards_golden.json"
+
+    def test_cards_match_pre_refactor_golden(self):
+        fixture = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
+        source_id = fixture["sourceId"]
+        candidates = fixture["candidates"]
+        configs = {
+            "cnki": "CNKI_CARD_CONFIG",
+            "book": "BOOK_CARD_CONFIG",
+            "crossref": "CROSSREF_CARD_CONFIG",
+        }
+        expr = (
+            "(function(){var sid=%s;var cs=%s;var out={};"
+            "[['cnki',CNKI_CARD_CONFIG],['book',BOOK_CARD_CONFIG],"
+            "['crossref',CROSSREF_CARD_CONFIG]].forEach(function(p){"
+            "out[p[0]]=cs.map(function(c,i){return candidateCardHTML(sid,c,i,p[1]);}).join('');});"
+            "return out;})()"
+        ) % (json.dumps(source_id), json.dumps(candidates))
+        got = _module_eval(expr)
+        for key in ("cnki", "book", "crossref"):
+            self.assertEqual(
+                got[key],
+                fixture["expected"][key],
+                f"{key} 候选卡渲染与重构前 golden 不一致",
+            )
+
+    def test_cnki_has_three_action_buttons(self):
+        # 知网是两阶段流程：先补列表字段 / 获取完整题录 / 打开记录。
+        html = _call(
+            "candidateCardHTML", "S", {"metadata": {"title": "x"}, "match": {}}, 0,
+            {
+                "titleFallback": "未识别篇名", "detailMidField": "journal_name",
+                "detailFallback": "联网记录", "detailExtra": None,
+                "actions": [
+                    {"handler": "applyCnkiSearchCandidate", "label": "先补列表字段", "primary": False},
+                    {"handler": "fetchCnkiCandidate", "label": "获取完整题录", "primary": True},
+                    {"handler": "openCnkiCandidate", "label": "打开记录", "primary": False},
+                ],
+            },
+        )
+        self.assertEqual(html.count("<button"), 3)
+        self.assertIn('class="cnki-candidate ', html)
+        self.assertIn("cnki-candidate-actions", html)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -619,6 +619,51 @@ function bibliographicMissingBadge(meta) {
   return '<span class="bibliographic-missing" title="ISBN、ISSN 与 DOI 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
 }
 
+// 联网补全候选卡骨架。三套源（知网/图书目录/Crossref）结构与类名完全一致，
+// 差异全部由 config 描述：标题/详情兜底文案、详情中段字段、详情后缀、动作按钮。
+// 类名固定为 cnki-candidate*（CSS 与批量列表共用，不得改动）。纯函数，只依赖 esc。
+function candidateCardHTML(sourceId, candidate, index, config) {
+  var meta = candidate.metadata || {};
+  var match = candidate.match || {};
+  var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
+  var detail = [meta.author, meta[config.detailMidField], candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
+  var reasons = (match.reasons || []).join('、');
+  var conflicts = (match.conflicts || []).join('、');
+  var extra = config.detailExtra && meta[config.detailExtra.field]
+    ? ' · ' + config.detailExtra.label + ' ' + esc(meta[config.detailExtra.field]) : '';
+  var actions = config.actions.map(function(btn) {
+    return '<button class="action-btn' + (btn.primary ? ' primary' : '') + '" type="button" onclick="' + btn.handler + '(\'' + esc(sourceId) + '\',' + index + ')">' + btn.label + '</button>';
+  }).join('');
+  return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
+    + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || config.titleFallback) + '</div>'
+    + '<div class="cnki-candidate-detail">' + esc(detail || config.detailFallback) + extra + '</div>'
+    + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
+    + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
+    + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
+    + '<div class="cnki-candidate-actions">' + actions + '</div>'
+    + '</div>';
+}
+
+// 三套候选卡的差异配置（纯数据；handler 为 40-bibliography.js 中的按钮回调名）。
+const CNKI_CARD_CONFIG = {
+  titleFallback: '未识别篇名', detailMidField: 'journal_name', detailFallback: '联网记录', detailExtra: null,
+  actions: [
+    {handler: 'applyCnkiSearchCandidate', label: '先补列表字段', primary: false},
+    {handler: 'fetchCnkiCandidate', label: '获取完整题录', primary: true},
+    {handler: 'openCnkiCandidate', label: '打开记录', primary: false}
+  ]
+};
+const BOOK_CARD_CONFIG = {
+  titleFallback: '未识别书名', detailMidField: 'publisher', detailFallback: '图书目录记录',
+  detailExtra: {field: 'isbn', label: 'ISBN'},
+  actions: [{handler: 'applyBookCandidate', label: '补全书目字段', primary: true}]
+};
+const CROSSREF_CARD_CONFIG = {
+  titleFallback: '未识别篇名', detailMidField: 'journal_name', detailFallback: 'Crossref 记录',
+  detailExtra: {field: 'doi', label: 'DOI'},
+  actions: [{handler: 'applyCrossrefCandidate', label: '补全书目字段', primary: true}]
+};
+
 // 依据文本长度计算 toast 停留时长（纯函数）
 function toastDuration(text) {
   // 原来固定 1800ms，像「已停止等待。移除是一个整体事务…」这种长提示根本读不完。

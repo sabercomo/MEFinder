@@ -1,0 +1,57 @@
+{
+ "sourceId": "S1",
+ "candidates": [
+  {
+   "metadata": {
+    "title": "T1",
+    "author": "A1",
+    "journal_name": "J1",
+    "publisher": "P1",
+    "publish_year": "2020",
+    "isbn": "978-7",
+    "doi": "10.1/x"
+   },
+   "publish_date": "2021-01",
+   "match": {
+    "level": "high",
+    "score": 0.95,
+    "reasons": [
+     "r1",
+     "r2"
+    ],
+    "conflicts": [
+     "c1"
+    ]
+   }
+  },
+  {
+   "metadata": {},
+   "match": {}
+  },
+  {
+   "metadata": {
+    "title": "T3"
+   },
+   "match": {
+    "level": "medium",
+    "score": 0.5,
+    "reasons": [],
+    "conflicts": []
+   }
+  },
+  {
+   "metadata": {
+    "title": "T4",
+    "author": "A4"
+   },
+   "match": {
+    "level": "low"
+   }
+  }
+ ],
+ "expected": {
+  "cnki": "<div class=\"cnki-candidate high\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T1</div><div class=\"cnki-candidate-detail\">A1 · J1 · 2021-01</div><div class=\"cnki-candidate-match\"><span>高匹配 · 95%</span><span>r1、r2</span><span class=\"has-warning\">冲突：c1</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn\" type=\"button\" onclick=\"applyCnkiSearchCandidate('S1',0)\">先补列表字段</button><button class=\"action-btn primary\" type=\"button\" onclick=\"fetchCnkiCandidate('S1',0)\">获取完整题录</button><button class=\"action-btn\" type=\"button\" onclick=\"openCnkiCandidate('S1',0)\">打开记录</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">未识别篇名</div><div class=\"cnki-candidate-detail\">联网记录</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn\" type=\"button\" onclick=\"applyCnkiSearchCandidate('S1',1)\">先补列表字段</button><button class=\"action-btn primary\" type=\"button\" onclick=\"fetchCnkiCandidate('S1',1)\">获取完整题录</button><button class=\"action-btn\" type=\"button\" onclick=\"openCnkiCandidate('S1',1)\">打开记录</button></div></div><div class=\"cnki-candidate medium\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T3</div><div class=\"cnki-candidate-detail\">联网记录</div><div class=\"cnki-candidate-match\"><span>需核对 · 50%</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn\" type=\"button\" onclick=\"applyCnkiSearchCandidate('S1',2)\">先补列表字段</button><button class=\"action-btn primary\" type=\"button\" onclick=\"fetchCnkiCandidate('S1',2)\">获取完整题录</button><button class=\"action-btn\" type=\"button\" onclick=\"openCnkiCandidate('S1',2)\">打开记录</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T4</div><div class=\"cnki-candidate-detail\">A4</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn\" type=\"button\" onclick=\"applyCnkiSearchCandidate('S1',3)\">先补列表字段</button><button class=\"action-btn primary\" type=\"button\" onclick=\"fetchCnkiCandidate('S1',3)\">获取完整题录</button><button class=\"action-btn\" type=\"button\" onclick=\"openCnkiCandidate('S1',3)\">打开记录</button></div></div>",
+  "book": "<div class=\"cnki-candidate high\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T1</div><div class=\"cnki-candidate-detail\">A1 · P1 · 2021-01 · ISBN 978-7</div><div class=\"cnki-candidate-match\"><span>高匹配 · 95%</span><span>r1、r2</span><span class=\"has-warning\">冲突：c1</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyBookCandidate('S1',0)\">补全书目字段</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">未识别书名</div><div class=\"cnki-candidate-detail\">图书目录记录</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyBookCandidate('S1',1)\">补全书目字段</button></div></div><div class=\"cnki-candidate medium\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T3</div><div class=\"cnki-candidate-detail\">图书目录记录</div><div class=\"cnki-candidate-match\"><span>需核对 · 50%</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyBookCandidate('S1',2)\">补全书目字段</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T4</div><div class=\"cnki-candidate-detail\">A4</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyBookCandidate('S1',3)\">补全书目字段</button></div></div>",
+  "crossref": "<div class=\"cnki-candidate high\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T1</div><div class=\"cnki-candidate-detail\">A1 · J1 · 2021-01 · DOI 10.1/x</div><div class=\"cnki-candidate-match\"><span>高匹配 · 95%</span><span>r1、r2</span><span class=\"has-warning\">冲突：c1</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyCrossrefCandidate('S1',0)\">补全书目字段</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">未识别篇名</div><div class=\"cnki-candidate-detail\">Crossref 记录</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyCrossrefCandidate('S1',1)\">补全书目字段</button></div></div><div class=\"cnki-candidate medium\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T3</div><div class=\"cnki-candidate-detail\">Crossref 记录</div><div class=\"cnki-candidate-match\"><span>需核对 · 50%</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyCrossrefCandidate('S1',2)\">补全书目字段</button></div></div><div class=\"cnki-candidate low\"><div class=\"cnki-candidate-main\"><div class=\"cnki-candidate-title\">T4</div><div class=\"cnki-candidate-detail\">A4</div><div class=\"cnki-candidate-match\"><span>低匹配</span></div></div><div class=\"cnki-candidate-actions\"><button class=\"action-btn primary\" type=\"button\" onclick=\"applyCrossrefCandidate('S1',3)\">补全书目字段</button></div></div>"
+ }
+}
