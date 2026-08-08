@@ -303,17 +303,25 @@ function cnkiCandidateListHTML(sourceId) {
   }).join('');
 }
 
-function renderCnkiCandidates(sourceId) {
-  var host = document.getElementById('cnki-candidate-list');
-  if (host) host.innerHTML = cnkiCandidateListHTML(sourceId);
+// 三套联网补全共用的通用渲染 / 状态函数（原 render*/set*LookupStatus 六个函数已合并）。
+// 差异只有宿主元素 id 与对应的候选列表函数，全部收进下面三个 *_LOOKUP 配置对象；
+// 每个函数只操作 config 指定的宿主，期刊场景下 CNKI 与 Crossref 两组宿主互不影响。
+function renderCandidates(config, sourceId) {
+  var host = document.getElementById(config.listElId);
+  if (host) host.innerHTML = config.listHTML(sourceId);
 }
 
-function setCnkiLookupStatus(message, warning) {
-  var status = document.getElementById('cnki-lookup-status');
+function setLookupStatus(config, message, warning) {
+  var status = document.getElementById(config.statusElId);
   if (!status) return;
   status.textContent = message || '';
   status.classList.toggle('has-warning', !!warning);
 }
+
+// listHTML 引用的三个候选列表函数为函数声明，已提升，const 初始化时可用。
+const CNKI_LOOKUP = {listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML};
+const BOOK_LOOKUP = {listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML};
+const CROSSREF_LOOKUP = {listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listHTML: crossrefCandidateListHTML};
 
 async function lookupCnkiMetadata(sourceId) {
   var form = collectBibliographicForm();
@@ -322,12 +330,12 @@ async function lookupCnkiMetadata(sourceId) {
     journal_name:form.journal_name, doi:form.doi, issn:form.issn
   };
   if (!metadata.title && !metadata.doi) {
-    setCnkiLookupStatus('请先填写篇名或 DOI', true);
+    setLookupStatus(CNKI_LOOKUP,'请先填写篇名或 DOI', true);
     return;
   }
   cnkiLookupState[sourceId] = {candidates:[], open_url:cnkiSearchUrlFromForm()};
-  renderCnkiCandidates(sourceId);
-  setCnkiLookupStatus('正在查询知网…', false);
+  renderCandidates(CNKI_LOOKUP,sourceId);
+  setLookupStatus(CNKI_LOOKUP,'正在查询知网…', false);
   try {
     var resp = await fetch('/api/bibliographic-metadata/lookup-cnki', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
@@ -338,18 +346,18 @@ async function lookupCnkiMetadata(sourceId) {
       throw new Error(data.error || '知网查询失败');
     }
     cnkiLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderCnkiCandidates(sourceId);
+    renderCandidates(CNKI_LOOKUP,sourceId);
     var notice = data.query_notice ? data.query_notice + '；' : '';
     if (!data.candidates || !data.candidates.length) {
-      setCnkiLookupStatus(notice + '知网未返回候选，可打开知网检索或粘贴引用文字', true);
+      setLookupStatus(CNKI_LOOKUP,notice + '知网未返回候选，可打开知网检索或粘贴引用文字', true);
     } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setCnkiLookupStatus(notice + '找到 1 条高匹配候选，请核对后获取完整题录', false);
+      setLookupStatus(CNKI_LOOKUP,notice + '找到 1 条高匹配候选，请核对后获取完整题录', false);
     } else {
-      setCnkiLookupStatus(notice + '找到 ' + data.candidates.length + ' 条候选，请选择正确记录', true);
+      setLookupStatus(CNKI_LOOKUP,notice + '找到 ' + data.candidates.length + ' 条候选，请选择正确记录', true);
     }
   } catch(e) {
-    renderCnkiCandidates(sourceId);
-    setCnkiLookupStatus(e.message + '；可打开知网检索或粘贴引用文字', true);
+    renderCandidates(CNKI_LOOKUP,sourceId);
+    setLookupStatus(CNKI_LOOKUP,e.message + '；可打开知网检索或粘贴引用文字', true);
   }
 }
 
@@ -359,7 +367,7 @@ function applyCnkiSearchCandidate(sourceId, index) {
   var applied = applyBibliographicLookupMetadata(sourceId, candidate.metadata, candidate.evidence);
   var message = applied.filled.length ? '已补全：' + applied.filled.join('、') : '表单已有对应内容，未作覆盖';
   if (applied.preserved.length) message += '；已有值未覆盖：' + applied.preserved.join('、');
-  setCnkiLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
+  setLookupStatus(CNKI_LOOKUP,message + '。请检查后保存', applied.preserved.length > 0);
 }
 
 /* ═══ 外文图书联网补全（Open Library / K10plus / LoC，Google 兜底）═══
@@ -382,28 +390,16 @@ function bookCandidateListHTML(sourceId) {
   }).join('');
 }
 
-function renderBookCandidates(sourceId) {
-  var host = document.getElementById('book-candidate-list');
-  if (host) host.innerHTML = bookCandidateListHTML(sourceId);
-}
-
-function setBookLookupStatus(message, warning) {
-  var status = document.getElementById('book-lookup-status');
-  if (!status) return;
-  status.textContent = message || '';
-  status.classList.toggle('has-warning', !!warning);
-}
-
 async function lookupGoogleBooks(sourceId) {
   var form = collectBibliographicForm();
   var metadata = {title:form.title, author:form.author, publish_year:form.publish_year, isbn:form.isbn};
   if (!metadata.isbn && !metadata.title) {
-    setBookLookupStatus('请先填写 ISBN 或书名', true);
+    setLookupStatus(BOOK_LOOKUP,'请先填写 ISBN 或书名', true);
     return;
   }
   bookLookupState[sourceId] = {candidates:[]};
-  renderBookCandidates(sourceId);
-  setBookLookupStatus('正在查询图书目录…', false);
+  renderCandidates(BOOK_LOOKUP,sourceId);
+  setLookupStatus(BOOK_LOOKUP,'正在查询图书目录…', false);
   try {
     var resp = await fetch('/api/bibliographic-metadata/lookup-google-books', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
@@ -411,17 +407,17 @@ async function lookupGoogleBooks(sourceId) {
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '图书查询失败');
     bookLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderBookCandidates(sourceId);
+    renderCandidates(BOOK_LOOKUP,sourceId);
     if (!data.candidates || !data.candidates.length) {
-      setBookLookupStatus('未找到匹配图书，可核对 ISBN/书名或手动填写', true);
+      setLookupStatus(BOOK_LOOKUP,'未找到匹配图书，可核对 ISBN/书名或手动填写', true);
     } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setBookLookupStatus('找到 1 条高匹配图书，请核对后补全', false);
+      setLookupStatus(BOOK_LOOKUP,'找到 1 条高匹配图书，请核对后补全', false);
     } else {
-      setBookLookupStatus('找到 ' + data.candidates.length + ' 条候选，请选择正确的图书', true);
+      setLookupStatus(BOOK_LOOKUP,'找到 ' + data.candidates.length + ' 条候选，请选择正确的图书', true);
     }
   } catch(e) {
-    renderBookCandidates(sourceId);
-    setBookLookupStatus(e.message, true);
+    renderCandidates(BOOK_LOOKUP,sourceId);
+    setLookupStatus(BOOK_LOOKUP,e.message, true);
   }
 }
 
@@ -433,7 +429,7 @@ function applyBookCandidate(sourceId, index) {
   var applied = applyBibliographicLookupMetadata(sourceId, candidate.metadata, candidate.evidence, bookLookupFields);
   var message = applied.filled.length ? '已补全：' + applied.filled.join('、') : '表单已有对应内容，未作覆盖';
   if (applied.preserved.length) message += '；已有值未覆盖：' + applied.preserved.join('、');
-  setBookLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
+  setLookupStatus(BOOK_LOOKUP,message + '。请检查后保存', applied.preserved.length > 0);
 }
 
 /* ═══ Crossref 外文期刊论文补全 ═══
@@ -447,28 +443,16 @@ function crossrefCandidateListHTML(sourceId) {
   }).join('');
 }
 
-function renderCrossrefCandidates(sourceId) {
-  var host = document.getElementById('crossref-candidate-list');
-  if (host) host.innerHTML = crossrefCandidateListHTML(sourceId);
-}
-
-function setCrossrefLookupStatus(message, warning) {
-  var status = document.getElementById('crossref-lookup-status');
-  if (!status) return;
-  status.textContent = message || '';
-  status.classList.toggle('has-warning', !!warning);
-}
-
 async function lookupCrossref(sourceId) {
   var form = collectBibliographicForm();
   var metadata = {title:form.title, author:form.author, publish_year:form.publish_year, doi:form.doi};
   if (!metadata.doi && !metadata.title) {
-    setCrossrefLookupStatus('请先填写 DOI 或篇名', true);
+    setLookupStatus(CROSSREF_LOOKUP,'请先填写 DOI 或篇名', true);
     return;
   }
   crossrefLookupState[sourceId] = {candidates:[]};
-  renderCrossrefCandidates(sourceId);
-  setCrossrefLookupStatus('正在查询 Crossref…', false);
+  renderCandidates(CROSSREF_LOOKUP,sourceId);
+  setLookupStatus(CROSSREF_LOOKUP,'正在查询 Crossref…', false);
   try {
     var resp = await fetch('/api/bibliographic-metadata/lookup-crossref', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
@@ -476,17 +460,17 @@ async function lookupCrossref(sourceId) {
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Crossref 查询失败');
     crossrefLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderCrossrefCandidates(sourceId);
+    renderCandidates(CROSSREF_LOOKUP,sourceId);
     if (!data.candidates || !data.candidates.length) {
-      setCrossrefLookupStatus('Crossref 未找到匹配文献，可核对 DOI/篇名或手动填写', true);
+      setLookupStatus(CROSSREF_LOOKUP,'Crossref 未找到匹配文献，可核对 DOI/篇名或手动填写', true);
     } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setCrossrefLookupStatus('找到 1 条高匹配文献，请核对后补全', false);
+      setLookupStatus(CROSSREF_LOOKUP,'找到 1 条高匹配文献，请核对后补全', false);
     } else {
-      setCrossrefLookupStatus('找到 ' + data.candidates.length + ' 条候选，请选择正确的文献', true);
+      setLookupStatus(CROSSREF_LOOKUP,'找到 ' + data.candidates.length + ' 条候选，请选择正确的文献', true);
     }
   } catch(e) {
-    renderCrossrefCandidates(sourceId);
-    setCrossrefLookupStatus(e.message, true);
+    renderCandidates(CROSSREF_LOOKUP,sourceId);
+    setLookupStatus(CROSSREF_LOOKUP,e.message, true);
   }
 }
 
@@ -496,13 +480,13 @@ function applyCrossrefCandidate(sourceId, index) {
   var applied = applyBibliographicLookupMetadata(sourceId, candidate.metadata, candidate.evidence);
   var message = applied.filled.length ? '已补全：' + applied.filled.join('、') : '表单已有对应内容，未作覆盖';
   if (applied.preserved.length) message += '；已有值未覆盖：' + applied.preserved.join('、');
-  setCrossrefLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
+  setLookupStatus(CROSSREF_LOOKUP,message + '。请检查后保存', applied.preserved.length > 0);
 }
 
 async function fetchCnkiCandidate(sourceId, index) {
   var candidate = ((cnkiLookupState[sourceId] || {}).candidates || [])[index];
   if (!candidate || !candidate.record_url) return;
-  setCnkiLookupStatus('正在读取知网完整题录…', false);
+  setLookupStatus(CNKI_LOOKUP,'正在读取知网完整题录…', false);
   try {
     var resp = await fetch('/api/bibliographic-metadata/cnki-candidate', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -513,10 +497,10 @@ async function fetchCnkiCandidate(sourceId, index) {
     var applied = applyBibliographicLookupMetadata(sourceId, data.metadata, data.evidence);
     var message = applied.filled.length ? '已补全：' + applied.filled.join('、') : '表单已有对应内容，未作覆盖';
     if (applied.preserved.length) message += '；已有值未覆盖：' + applied.preserved.join('、');
-    setCnkiLookupStatus(message + '。请检查后保存', applied.preserved.length > 0);
+    setLookupStatus(CNKI_LOOKUP,message + '。请检查后保存', applied.preserved.length > 0);
     showToast('知网题录已载入，请检查后保存', 'success');
   } catch(e) {
-    setCnkiLookupStatus(e.message + '；可打开记录后粘贴引用文字', true);
+    setLookupStatus(CNKI_LOOKUP,e.message + '；可打开记录后粘贴引用文字', true);
   }
 }
 
