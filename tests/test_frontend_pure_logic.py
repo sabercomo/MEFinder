@@ -1417,6 +1417,17 @@ def _import_eval(tail):
     return _module_eval(expr)
 
 
+def _vision_eval(tail):
+    """在 06-pure.js + 70-vision.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
+
+    视觉 API 下拉的 hide/revealVisionPop 触碰 DOM，用 tail 注入极小桩驱动。
+    70-vision.js 顶层无执行语句，单独 eval 只登记函数声明。"""
+
+    vis = ROOT / "src" / "me_finder" / "static" / "js" / "70-vision.js"
+    expr = "(function(){%s\n%s})()" % (vis.read_text(encoding="utf-8"), tail)
+    return _module_eval(expr)
+
+
 # 极小 DOM 元素桩：只实现两个助手用到的表面（classList/appendChild/remove/
 # 指针捕获/querySelectorAll），并把关键调用录进字段供断言。
 _DOM_STUB = r"""
@@ -1534,6 +1545,79 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
             "selector": ".library-entry.is-drag-target",
             "released": [9],
         })
+
+
+# 视觉下拉弹层的极小 DOM 桩：pop 需 hidden/innerHTML/querySelector，input 需
+# setAttribute，选中项需 scrollIntoView。
+_VISION_POP_STUB = r"""
+function mkInput() {
+  var attrs = {};
+  return {_attrs: attrs, setAttribute: function (k, v) { attrs[k] = v; }};
+}
+function mkPop(activeEl) {
+  return {
+    hidden: null, innerHTML: 'STALE', _active: activeEl || null,
+    querySelector: function (sel) { this._lastSelector = sel; return this._active; }
+  };
+}
+function mkActive() {
+  return {_scrolled: null, scrollIntoView: function (o) { this._scrolled = o; }};
+}
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class VisionPopVisibilityTests(unittest.TestCase):
+    """视觉 API 两套下拉（base/model）的弹层可见性样板抽成 hide/revealVisionPop
+    共用助手（Phase 4 步骤3）。两套 render 各自的分组、头像与 visionModelFlat
+    填充保持两份不动；这里只验证抽出的可见性助手契约。"""
+
+    def test_hide_clears_and_collapses(self):
+        tail = _VISION_POP_STUB + r"""
+        var pop = mkPop();
+        var input = mkInput();
+        hideVisionPop(pop, input);
+        return {hidden: pop.hidden, innerHTML: pop.innerHTML, aria: input._attrs['aria-expanded']};
+        """
+        self.assertEqual(_vision_eval(tail),
+                         {"hidden": True, "innerHTML": "", "aria": "false"})
+
+    def test_hide_tolerates_missing_input(self):
+        tail = _VISION_POP_STUB + r"""
+        var pop = mkPop();
+        hideVisionPop(pop, null);
+        return {hidden: pop.hidden, innerHTML: pop.innerHTML};
+        """
+        self.assertEqual(_vision_eval(tail), {"hidden": True, "innerHTML": ""})
+
+    def test_reveal_shows_and_scrolls_active_into_view(self):
+        tail = _VISION_POP_STUB + r"""
+        var active = mkActive();
+        var pop = mkPop(active);
+        var input = mkInput();
+        revealVisionPop(pop, input);
+        return {
+          hidden: pop.hidden,
+          aria: input._attrs['aria-expanded'],
+          selector: pop._lastSelector,
+          scrolled: active._scrolled
+        };
+        """
+        self.assertEqual(_vision_eval(tail), {
+            "hidden": False,
+            "aria": "true",
+            "selector": ".vision-model-item.active",
+            "scrolled": {"block": "nearest"},
+        })
+
+    def test_reveal_without_active_does_not_throw(self):
+        tail = _VISION_POP_STUB + r"""
+        var pop = mkPop(null);
+        revealVisionPop(pop, null);
+        return {hidden: pop.hidden, selector: pop._lastSelector};
+        """
+        self.assertEqual(_vision_eval(tail),
+                         {"hidden": False, "selector": ".vision-model-item.active"})
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

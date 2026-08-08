@@ -238,6 +238,23 @@ function visionBaseFiltered() {
   });
 }
 
+// 两套下拉（base 服务商 / model 模型）弹层的可见性样板完全同构：命中「关」时
+// 隐藏并清空、置 aria-expanded=false；命中「开」时显示、置 aria-expanded=true
+// 并把选中项滚入视野。抽出复用，两套 render 各自的分组构建、头像、
+// visionModelFlat 填充等差异逻辑一律不动。
+function hideVisionPop(pop, input) {
+  pop.hidden = true;
+  pop.innerHTML = '';
+  if (input) input.setAttribute('aria-expanded', 'false');
+}
+
+function revealVisionPop(pop, input) {
+  pop.hidden = false;
+  if (input) input.setAttribute('aria-expanded', 'true');
+  var active = pop.querySelector('.vision-model-item.active');
+  if (active) active.scrollIntoView({block: 'nearest'});
+}
+
 function renderVisionBasePop() {
   var pop = document.getElementById('vision-base-pop');
   var input = document.getElementById('vision-api-base');
@@ -245,9 +262,7 @@ function renderVisionBasePop() {
   if (!pop) return;
   visionBaseFlat = visionBaseFiltered();
   if (!visionBasePopOpen || !visionBaseFlat.length) {
-    pop.hidden = true;
-    pop.innerHTML = '';
-    if (input) input.setAttribute('aria-expanded', 'false');
+    hideVisionPop(pop, input);
     if (toggle) toggle.classList.remove('is-open');
     return;
   }
@@ -261,10 +276,7 @@ function renderVisionBasePop() {
           + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
           + '</div>';
       }).join('');
-  pop.hidden = false;
-  if (input) input.setAttribute('aria-expanded', 'true');
-  var active = pop.querySelector('.vision-model-item.active');
-  if (active) active.scrollIntoView({block: 'nearest'});
+  revealVisionPop(pop, input);
 }
 
 function openVisionBasePop() {
@@ -356,9 +368,7 @@ function renderVisionModelPop() {
   var items = visionModelFiltered();
   visionModelFlat = [];
   if (!visionModelPopOpen || !items.length) {
-    pop.hidden = true;
-    pop.innerHTML = '';
-    if (input) input.setAttribute('aria-expanded', 'false');
+    hideVisionPop(pop, input);
     return;
   }
   var owners = [];
@@ -381,10 +391,7 @@ function renderVisionModelPop() {
         }).join('');
   }).join('');
   pop.innerHTML = html;
-  pop.hidden = false;
-  if (input) input.setAttribute('aria-expanded', 'true');
-  var active = pop.querySelector('.vision-model-item.active');
-  if (active) active.scrollIntoView({block: 'nearest'});
+  revealVisionPop(pop, input);
 }
 
 function openVisionModelPop() {
