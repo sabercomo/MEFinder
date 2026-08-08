@@ -319,7 +319,23 @@ function setLookupStatus(config, message, warning) {
 }
 
 // listHTML 引用的三个候选列表函数为函数声明，已提升，const 初始化时可用。
-const CNKI_LOOKUP = {listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML};
+const CNKI_LOOKUP = {
+  stateMap: cnkiLookupState, endpoint: '/api/bibliographic-metadata/lookup-cnki',
+  listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML,
+  loadingMessage: '正在查询知网…', defaultError: '知网查询失败',
+  buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, journal_name: form.journal_name, doi: form.doi, issn: form.issn}; },
+  validate: function (metadata) { return (!metadata.title && !metadata.doi) ? '请先填写篇名或 DOI' : null; },
+  resetState: function () { return {candidates: [], open_url: cnkiSearchUrlFromForm()}; },
+  saveErrorState: function (data, sourceId) { if (data.open_url) cnkiLookupState[sourceId] = {candidates: [], open_url: data.open_url}; },
+  describe: function (data) {
+    var notice = data.query_notice ? data.query_notice + '；' : '';
+    var c = data.candidates;
+    if (!c || !c.length) return {message: notice + '知网未返回候选，可打开知网检索或粘贴引用文字', warning: true};
+    if (c.length === 1 && c[0].match && c[0].match.level === 'high') return {message: notice + '找到 1 条高匹配候选，请核对后获取完整题录', warning: false};
+    return {message: notice + '找到 ' + c.length + ' 条候选，请选择正确记录', warning: true};
+  },
+  onError: function (e) { return {message: e.message + '；可打开知网检索或粘贴引用文字', warning: true}; }
+};
 const BOOK_LOOKUP = {
   stateMap: bookLookupState, endpoint: '/api/bibliographic-metadata/lookup-google-books',
   listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML,
@@ -388,41 +404,7 @@ async function runLookup(config, sourceId) {
 }
 
 async function lookupCnkiMetadata(sourceId) {
-  var form = collectBibliographicForm();
-  var metadata = {
-    title:form.title, author:form.author, publish_year:form.publish_year,
-    journal_name:form.journal_name, doi:form.doi, issn:form.issn
-  };
-  if (!metadata.title && !metadata.doi) {
-    setLookupStatus(CNKI_LOOKUP,'请先填写篇名或 DOI', true);
-    return;
-  }
-  cnkiLookupState[sourceId] = {candidates:[], open_url:cnkiSearchUrlFromForm()};
-  renderCandidates(CNKI_LOOKUP,sourceId);
-  setLookupStatus(CNKI_LOOKUP,'正在查询知网…', false);
-  try {
-    var resp = await fetch('/api/bibliographic-metadata/lookup-cnki', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
-    });
-    var data = await resp.json();
-    if (!resp.ok || !data.ok) {
-      if (data.open_url) cnkiLookupState[sourceId] = {candidates:[], open_url:data.open_url};
-      throw new Error(data.error || '知网查询失败');
-    }
-    cnkiLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderCandidates(CNKI_LOOKUP,sourceId);
-    var notice = data.query_notice ? data.query_notice + '；' : '';
-    if (!data.candidates || !data.candidates.length) {
-      setLookupStatus(CNKI_LOOKUP,notice + '知网未返回候选，可打开知网检索或粘贴引用文字', true);
-    } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setLookupStatus(CNKI_LOOKUP,notice + '找到 1 条高匹配候选，请核对后获取完整题录', false);
-    } else {
-      setLookupStatus(CNKI_LOOKUP,notice + '找到 ' + data.candidates.length + ' 条候选，请选择正确记录', true);
-    }
-  } catch(e) {
-    renderCandidates(CNKI_LOOKUP,sourceId);
-    setLookupStatus(CNKI_LOOKUP,e.message + '；可打开知网检索或粘贴引用文字', true);
-  }
+  return runLookup(CNKI_LOOKUP, sourceId);
 }
 
 function applyCnkiSearchCandidate(sourceId, index) {

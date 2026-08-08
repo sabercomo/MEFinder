@@ -1392,6 +1392,19 @@ def _config_call(config_name, method, *args):
     return _module_eval(expr)
 
 
+def _bib_eval(tail):
+    """在 06-pure.js + 40-bibliography.js 同一 eval 里跑 tail（可含语句与 return）。
+
+    _config_call 只能调单个回调；当用例需要改写内部桩（如把 collectBibliographicForm
+    换成返回固定表单）或读取内部 let（cnkiLookupState）时，用本函数注入任意尾巴。
+    CNKI 的 resetState 会经 cnkiSearchUrlFromForm 读表单、saveErrorState 直接写
+    cnkiLookupState，两者都要靠这条通道验证。"""
+
+    bib = ROOT / "src" / "me_finder" / "static" / "js" / "40-bibliography.js"
+    expr = "(function(){%s\n%s})()" % (bib.read_text(encoding="utf-8"), tail)
+    return _module_eval(expr)
+
+
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CrossrefLookupConfigTests(unittest.TestCase):
     """Crossref 走 runLookup 工厂后，CROSSREF_LOOKUP 回调须复现原 lookupCrossref 行为。"""
@@ -1462,6 +1475,90 @@ class BookLookupConfigTests(unittest.TestCase):
         self.assertEqual(
             _config_call("BOOK_LOOKUP", "onError", {"message": "boom"}),
             {"message": "boom", "warning": True})
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class CnkiLookupConfigTests(unittest.TestCase):
+    """CNKI 走 runLookup 工厂后，CNKI_LOOKUP 回调须复现原 lookupCnkiMetadata 行为。
+
+    CNKI 比 Crossref/Book 多两条独有分支：resetState 预填 open_url（cnkiSearchUrlFromForm）
+    与 saveErrorState 在服务端回带 open_url 时改写状态；describe 还带 query_notice 前缀。
+    这几处正是步骤4c 迁移后最易走样的地方，单列验证。"""
+
+    def test_build_request_keeps_six_cnki_fields(self):
+        form = {"title": "T", "author": "A", "publish_year": "2020",
+                "journal_name": "J", "doi": "D", "issn": "S",
+                "isbn": "X", "publisher": "P"}
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "buildRequest", form),
+            {"title": "T", "author": "A", "publish_year": "2020",
+             "journal_name": "J", "doi": "D", "issn": "S"},
+        )
+
+    def test_validate_requires_title_or_doi(self):
+        self.assertEqual(_config_call("CNKI_LOOKUP", "validate", {}),
+                         "请先填写篇名或 DOI")
+        self.assertIsNone(_config_call("CNKI_LOOKUP", "validate", {"title": "T"}))
+        self.assertIsNone(_config_call("CNKI_LOOKUP", "validate", {"doi": "D"}))
+
+    def test_describe_three_branches(self):
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe", {"candidates": []}),
+            {"message": "知网未返回候选，可打开知网检索或粘贴引用文字", "warning": True})
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe",
+                         {"candidates": [{"match": {"level": "high"}}]}),
+            {"message": "找到 1 条高匹配候选，请核对后获取完整题录", "warning": False})
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe", {"candidates": [{}, {}]}),
+            {"message": "找到 2 条候选，请选择正确记录", "warning": True})
+
+    def test_describe_single_non_high_uses_multi_branch(self):
+        # 单条但非 high：走“多条”文案与 warning=true（非高匹配不给绿灯）。
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe",
+                         {"candidates": [{"match": {"level": "medium"}}]}),
+            {"message": "找到 1 条候选，请选择正确记录", "warning": True})
+
+    def test_describe_prefixes_query_notice(self):
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe",
+                         {"candidates": [], "query_notice": "仅按篇名检索"}),
+            {"message": "仅按篇名检索；知网未返回候选，可打开知网检索或粘贴引用文字",
+             "warning": True})
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "describe",
+                         {"candidates": [{"match": {"level": "high"}}],
+                          "query_notice": "已用 DOI 精确匹配"}),
+            {"message": "已用 DOI 精确匹配；找到 1 条高匹配候选，请核对后获取完整题录",
+             "warning": False})
+
+    def test_on_error_appends_cnki_hint(self):
+        self.assertEqual(
+            _config_call("CNKI_LOOKUP", "onError", {"message": "boom"}),
+            {"message": "boom；可打开知网检索或粘贴引用文字", "warning": True})
+
+    def test_reset_state_prefills_open_url_from_form(self):
+        # resetState 忽略入参 form，改经 cnkiSearchUrlFromForm 现读表单预填 open_url。
+        tail = ("collectBibliographicForm = function(){return {doi:'', title:'知网标题'};};"
+                "return {got: CNKI_LOOKUP.resetState({}),"
+                " expected_url: cnkiSearchUrlFromForm()};")
+        result = _bib_eval(tail)
+        self.assertEqual(result["got"]["candidates"], [])
+        self.assertEqual(result["got"]["open_url"], result["expected_url"])
+        self.assertTrue(result["got"]["open_url"].startswith(
+            "https://oversea.cnki.net/"))
+
+    def test_save_error_state_stores_open_url_when_present(self):
+        tail = ("CNKI_LOOKUP.saveErrorState({open_url:'U'}, 's1');"
+                "return cnkiLookupState;")
+        self.assertEqual(_bib_eval(tail),
+                         {"s1": {"candidates": [], "open_url": "U"}})
+
+    def test_save_error_state_is_noop_without_open_url(self):
+        tail = ("CNKI_LOOKUP.saveErrorState({error:'e'}, 's1');"
+                "return cnkiLookupState;")
+        self.assertEqual(_bib_eval(tail), {})
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
