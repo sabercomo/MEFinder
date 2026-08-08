@@ -1405,6 +1405,137 @@ def _bib_eval(tail):
     return _module_eval(expr)
 
 
+def _import_eval(tail):
+    """在 06-pure.js + 80-import.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
+
+    框选 marquee 生命周期助手 begin/end 触碰 document/window，无法当纯函数测；
+    用 tail 注入极小 DOM 桩驱动，回吐可断言的副作用摘要。80-import.js 顶层无执行
+    语句，单独 eval 只登记函数声明，只调这两个助手不牵动其它模块。"""
+
+    imp = ROOT / "src" / "me_finder" / "static" / "js" / "80-import.js"
+    expr = "(function(){%s\n%s})()" % (imp.read_text(encoding="utf-8"), tail)
+    return _module_eval(expr)
+
+
+# 极小 DOM 元素桩：只实现两个助手用到的表面（classList/appendChild/remove/
+# 指针捕获/querySelectorAll），并把关键调用录进字段供断言。
+_DOM_STUB = r"""
+function mkEl() {
+  var cls = {};
+  var self = {
+    className: '', _tag: '', _appended: [], _removed: false,
+    _captured: [], _released: [], _dragTargets: [], _lastSelector: null,
+    classList: {
+      add: function (c) { cls[c] = true; },
+      remove: function (c) { delete cls[c]; },
+      contains: function (c) { return !!cls[c]; }
+    },
+    _has: function (c) { return !!cls[c]; },
+    appendChild: function (x) { self._appended.push(x); },
+    setPointerCapture: function (id) { self._captured.push(id); },
+    releasePointerCapture: function (id) { self._released.push(id); },
+    remove: function () { self._removed = true; },
+    querySelectorAll: function (sel) { self._lastSelector = sel; return self._dragTargets; }
+  };
+  return self;
+}
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
+    """框选 marquee 生命周期助手（Phase 4 步骤2 抽出）：文献库与扫描结果两套框选
+    此前逐字重复的“建框/收尾”样板，抽成 begin/end 两个助手，差异只剩宿主容器与
+    类名/选择器。这里用 DOM 桩验证两个助手的副作用契约。"""
+
+    def test_begin_creates_marquee_and_enters_drag_state(self):
+        tail = _DOM_STUB + r"""
+        globalThis.__selCleared = false;
+        globalThis.window = {getSelection: function () {
+          return {removeAllRanges: function () { globalThis.__selCleared = true; }};
+        }};
+        var body = mkEl();
+        globalThis.document = {body: body, createElement: function (tag) {
+          var e = mkEl(); e._tag = tag; return e;
+        }};
+        var container = mkEl();
+        var state = {};
+        beginDragSelectionMarquee(state, container, 'library-selection-marquee', {pointerId: 7});
+        return {
+          started: state.started,
+          marqueeTag: state.marquee._tag,
+          marqueeClass: state.marquee.className,
+          appendedToBody: body._appended.indexOf(state.marquee) >= 0,
+          containerHasDragSelecting: container._has('is-drag-selecting'),
+          captured: container._captured,
+          selCleared: globalThis.__selCleared
+        };
+        """
+        self.assertEqual(_import_eval(tail), {
+            "started": True,
+            "marqueeTag": "div",
+            "marqueeClass": "library-selection-marquee",
+            "appendedToBody": True,
+            "containerHasDragSelecting": True,
+            "captured": [7],
+            "selCleared": True,
+        })
+
+    def test_begin_passes_through_marquee_class_verbatim(self):
+        # 扫描结果那套只有类名不同，助手须原样透传，不得改写。
+        tail = _DOM_STUB + r"""
+        globalThis.window = {getSelection: function () { return {removeAllRanges: function () {}}; }};
+        globalThis.document = {body: mkEl(), createElement: function (t) { var e = mkEl(); e._tag = t; return e; }};
+        var state = {};
+        beginDragSelectionMarquee(state, mkEl(), 'scan-selection-marquee', {pointerId: 1});
+        return state.marquee.className;
+        """
+        self.assertEqual(_import_eval(tail), "scan-selection-marquee")
+
+    def test_end_clears_targets_and_releases(self):
+        tail = _DOM_STUB + r"""
+        globalThis.document = {body: mkEl(), createElement: function (t) { return mkEl(); }};
+        var container = mkEl();
+        container.classList.add('is-drag-selecting');
+        var t1 = mkEl(); t1.classList.add('is-drag-target');
+        var t2 = mkEl(); t2.classList.add('is-drag-target');
+        container._dragTargets = [t1, t2];
+        var marquee = mkEl();
+        var state = {marquee: marquee, started: true};
+        endDragSelectionMarquee(state, container, '.scan-row', {pointerId: 3});
+        return {
+          usedSelector: container._lastSelector,
+          containerHasDragSelecting: container._has('is-drag-selecting'),
+          t1HasTarget: t1._has('is-drag-target'),
+          t2HasTarget: t2._has('is-drag-target'),
+          marqueeRemoved: marquee._removed,
+          released: container._released
+        };
+        """
+        self.assertEqual(_import_eval(tail), {
+            "usedSelector": ".scan-row.is-drag-target",
+            "containerHasDragSelecting": False,
+            "t1HasTarget": False,
+            "t2HasTarget": False,
+            "marqueeRemoved": True,
+            "released": [3],
+        })
+
+    def test_end_composes_library_selector(self):
+        # 文献库那套选择器不同，助手须拼成 '<sel>.is-drag-target'。
+        tail = _DOM_STUB + r"""
+        globalThis.document = {body: mkEl(), createElement: function (t) { return mkEl(); }};
+        var container = mkEl();
+        endDragSelectionMarquee({marquee: null}, container, '.library-entry', {pointerId: 9});
+        return {selector: container._lastSelector, released: container._released};
+        """
+        # state.marquee 为 null 时不得抛错，仍照常释放指针。
+        self.assertEqual(_import_eval(tail), {
+            "selector": ".library-entry.is-drag-target",
+            "released": [9],
+        })
+
+
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CrossrefLookupConfigTests(unittest.TestCase):
     """Crossref 走 runLookup 工厂后，CROSSREF_LOOKUP 回调须复现原 lookupCrossref 行为。"""

@@ -433,7 +433,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('function toggleLibraryDeleteSelection(sourceId, force)', HTML)
         self.assertIn('function toggleSelectVisibleLibraryDocuments()', HTML)
         self.assertIn('function setupLibraryDragSelection()', HTML)
-        self.assertIn("state.marquee.className = 'library-selection-marquee'", HTML)
+        # marquee 建框收尾抽入 begin/endDragSelectionMarquee 共用助手后，类名经调用点传入。
+        self.assertIn("beginDragSelectionMarquee(state, list, 'library-selection-marquee', event)", HTML)
         self.assertIn(".library-entry[data-delete-selectable=\"1\"]", HTML)
         self.assertIn("setupLibraryDragSelection();", HTML)
         self.assertIn('function openRemoveSelectedDocumentsModal()', HTML)

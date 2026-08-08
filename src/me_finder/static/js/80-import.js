@@ -478,6 +478,30 @@ function stopDragSelectionAutoScroll(state) {
   state.autoScrollFrame = null;
 }
 
+// 首次越过拖动阈值：建 marquee、进入拖选态、接管指针、清掉误触的文本选区。
+// 两套框选此处唯一差异是宿主容器与 marquee 类名，其余逐字相同。
+function beginDragSelectionMarquee(state, container, marqueeClass, event) {
+  state.started = true;
+  state.marquee = document.createElement('div');
+  state.marquee.className = marqueeClass;
+  document.body.appendChild(state.marquee);
+  container.classList.add('is-drag-selecting');
+  try { container.setPointerCapture(event.pointerId); } catch (e) {}
+  var selection = window.getSelection && window.getSelection();
+  if (selection) selection.removeAllRanges();
+}
+
+// 收尾：退出拖选态、清掉命中高亮、移除 marquee、释放指针。
+// 差异仅宿主容器与命中条目选择器（其后固定拼 .is-drag-target）。
+function endDragSelectionMarquee(state, container, targetSelector, event) {
+  container.classList.remove('is-drag-selecting');
+  container.querySelectorAll(targetSelector + '.is-drag-target').forEach(function(el) {
+    el.classList.remove('is-drag-target');
+  });
+  if (state.marquee) state.marquee.remove();
+  try { container.releasePointerCapture(event.pointerId); } catch (e) {}
+}
+
 function libraryScrollContainer() {
   return document.querySelector('#page-library .library-list-scroll');
 }
@@ -547,14 +571,7 @@ function setupLibraryDragSelection() {
     var distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
     if (!state.started && distance < 6) return;
     if (!state.started) {
-      state.started = true;
-      state.marquee = document.createElement('div');
-      state.marquee.className = 'library-selection-marquee';
-      document.body.appendChild(state.marquee);
-      list.classList.add('is-drag-selecting');
-      try { list.setPointerCapture(event.pointerId); } catch (e) {}
-      var selection = window.getSelection && window.getSelection();
-      if (selection) selection.removeAllRanges();
+      beginDragSelectionMarquee(state, list, 'library-selection-marquee', event);
     }
     event.preventDefault();
     updateLibraryDragSelection();
@@ -566,12 +583,7 @@ function setupLibraryDragSelection() {
     if (!state || event.pointerId !== state.pointerId) return;
     stopDragSelectionAutoScroll(state);
     libraryDragSelection = null;
-    list.classList.remove('is-drag-selecting');
-    list.querySelectorAll('.library-entry.is-drag-target').forEach(function(entry) {
-      entry.classList.remove('is-drag-target');
-    });
-    if (state.marquee) state.marquee.remove();
-    try { list.releasePointerCapture(event.pointerId); } catch (e) {}
+    endDragSelectionMarquee(state, list, '.library-entry', event);
     if (state.started) {
       suppressLibrarySelectionClick = true;
       setTimeout(function() { suppressLibrarySelectionClick = false; }, 0);
@@ -666,14 +678,7 @@ function setupScanResultDragSelection() {
     var distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
     if (!state.started && distance < 6) return;
     if (!state.started) {
-      state.started = true;
-      state.marquee = document.createElement('div');
-      state.marquee.className = 'scan-selection-marquee';
-      document.body.appendChild(state.marquee);
-      results.classList.add('is-drag-selecting');
-      try { results.setPointerCapture(event.pointerId); } catch (e) {}
-      var selection = window.getSelection && window.getSelection();
-      if (selection) selection.removeAllRanges();
+      beginDragSelectionMarquee(state, results, 'scan-selection-marquee', event);
     }
     event.preventDefault();
     updateScanDragSelection();
@@ -685,12 +690,7 @@ function setupScanResultDragSelection() {
     if (!state || event.pointerId !== state.pointerId) return;
     stopDragSelectionAutoScroll(state);
     scanDragSelection = null;
-    results.classList.remove('is-drag-selecting');
-    results.querySelectorAll('.scan-row.is-drag-target').forEach(function(item) {
-      item.classList.remove('is-drag-target');
-    });
-    if (state.marquee) state.marquee.remove();
-    try { results.releasePointerCapture(event.pointerId); } catch (e) {}
+    endDragSelectionMarquee(state, results, '.scan-row', event);
     if (state.started) {
       suppressScanSelectionClick = true;
       setTimeout(function() { suppressScanSelectionClick = false; }, 0);

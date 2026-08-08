@@ -200,7 +200,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("checked > SCAN_IMPORT_BATCH_LIMIT", HTML)
         self.assertIn("function setupScanResultDragSelection()", HTML)
         self.assertIn("targetChecked: !input.checked", HTML)
-        self.assertIn("className = 'scan-selection-marquee'", HTML)
+        # marquee 建框收尾抽入共用 begin/endDragSelectionMarquee 后，类名经调用点传入。
+        self.assertIn("beginDragSelectionMarquee(state, results, 'scan-selection-marquee', event)", HTML)
         self.assertIn("checkedCount < SCAN_IMPORT_BATCH_LIMIT", HTML)
         self.assertIn("setupScanResultDragSelection();", HTML)
         self.assertIn("下一批 ' + nextBatchCount + ' 个已自动勾选", HTML)
