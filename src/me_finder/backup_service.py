@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import uuid
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List, Optional
+
+from .pdf_import_service import import_config_lock, save_import_config
 
 BACKUP_MARKER = "me_finder_backup"
 BACKUP_VERSION = 1
@@ -184,6 +188,27 @@ def read_backup_bytes(source: Path) -> bytes:
     return Path(source).read_bytes()
 
 
+def _atomic_restore_bytes(target: Path, payload: bytes) -> None:
+    """Replace one restored file without exposing a partial snapshot."""
+
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(
+        f".{target.name}.restore-{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        with temporary.open("wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def restore_backup(
     runtime_root: Path,
     archive_bytes: bytes,
@@ -198,51 +223,60 @@ def restore_backup(
     except zipfile.BadZipFile as exc:
         raise ValueError("备份文件不是有效的 zip 归档。") from exc
 
-    names = set(archive.namelist())
-    if "backup.json" not in names:
-        raise ValueError("这不是 ME_Finder 备份文件（缺少 backup.json）。")
-    try:
-        meta = json.loads(archive.read("backup.json").decode("utf-8"))
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise ValueError("备份清单损坏。") from exc
-    if meta.get("marker") != BACKUP_MARKER:
-        raise ValueError("这不是 ME_Finder 备份文件。")
+    with archive:
+        names = set(archive.namelist())
+        if "backup.json" not in names:
+            raise ValueError("这不是 ME_Finder 备份文件（缺少 backup.json）。")
+        try:
+            meta = json.loads(archive.read("backup.json").decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ValueError("备份清单损坏。") from exc
+        if not isinstance(meta, dict) or meta.get("marker") != BACKUP_MARKER:
+            raise ValueError("这不是 ME_Finder 备份文件。")
 
-    for name in names:
-        if not _is_safe_member(name):
-            raise ValueError(f"备份包含不安全的路径：{name}")
+        for name in names:
+            if not _is_safe_member(name):
+                raise ValueError(f"备份包含不安全的路径：{name}")
 
-    restored: List[str] = []
+        restored: List[str] = []
 
-    if _CONFIG_FILE in names:
-        target = runtime_root / _CONFIG_FILE
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            backup_copy = target.with_suffix(target.suffix + ".pre-restore")
-            backup_copy.write_bytes(target.read_bytes())
-        target.write_bytes(archive.read(_CONFIG_FILE))
-        restored.append(_CONFIG_FILE)
+        if _CONFIG_FILE in names:
+            target = runtime_root / _CONFIG_FILE
+            try:
+                restored_config = json.loads(
+                    archive.read(_CONFIG_FILE).decode("utf-8-sig")
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise ValueError("PDF 导入配置损坏。") from exc
+            if not isinstance(restored_config, dict):
+                raise ValueError("PDF 导入配置必须是 JSON 对象。")
+            with import_config_lock():
+                if target.exists():
+                    backup_copy = target.with_suffix(
+                        target.suffix + ".pre-restore"
+                    )
+                    _atomic_restore_bytes(backup_copy, target.read_bytes())
+                save_import_config(target, restored_config)
+            restored.append(_CONFIG_FILE)
 
-    manifest_members = [
-        name
-        for name in names
-        if name.endswith(".json")
-        and any(
-            name.startswith(f"{relative_dir}/")
-            for relative_dir in _MANIFEST_DIRS
-        )
-    ]
-    for member in manifest_members:
-        target = runtime_root / member
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(archive.read(member))
-        restored.append(member)
+        manifest_members = [
+            name
+            for name in names
+            if name.endswith(".json")
+            and any(
+                name.startswith(f"{relative_dir}/")
+                for relative_dir in _MANIFEST_DIRS
+            )
+        ]
+        for member in manifest_members:
+            target = runtime_root / member
+            _atomic_restore_bytes(target, archive.read(member))
+            restored.append(member)
 
-    if "preferences.json" in names and app_data_root is not None:
-        target = Path(app_data_root) / "preferences.json"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(archive.read("preferences.json"))
-        restored.append("preferences.json")
+        if "preferences.json" in names and app_data_root is not None:
+            target = Path(app_data_root) / "preferences.json"
+            _atomic_restore_bytes(target, archive.read("preferences.json"))
+            restored.append("preferences.json")
 
     return {
         "restored": restored,

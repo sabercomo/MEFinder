@@ -8,6 +8,9 @@ from src.me_finder.web import HTML
 
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+SEARCH_SERVICE_SOURCE = Path(
+    "src/me_finder/application/search_service.py"
+).read_text(encoding="utf-8")
 
 
 class SearchControlsAndViewsTests(unittest.TestCase):
@@ -521,7 +524,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("fetch('/api/sources')", HTML)
         self.assertIn("var bib = source.bibliographic || source.bibliographic_metadata || {}", HTML)
         self.assertIn('source_file_id: searchDocumentId || null', HTML)
-        self.assertIn('payload.get("source_file_id")', WEB_SOURCE)
+        self.assertIn('payload.get("source_file_id")', SEARCH_SERVICE_SOURCE)
 
     def test_library_has_persistent_list_and_card_views(self) -> None:
         self.assertIn('aria-label="文献库显示方式"', HTML)

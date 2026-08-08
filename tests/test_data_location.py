@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import io
+import json
 import os
 import sqlite3
 import tempfile
+import threading
+import time
 import unittest
+import zipfile
+from http.client import HTTPConnection
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
+from src.me_finder.app_context import AppContext
+from src.me_finder.bibliographic_metadata import update_metadata_in_database
+from src.me_finder.database import build_database
 from src.me_finder.data_location import (
     DATA_ROOT_MARKER,
     DataLocationError,
@@ -15,6 +26,7 @@ from src.me_finder.data_location import (
     proposed_data_root,
     read_macos_data_root,
 )
+from src.me_finder.web import make_handler
 
 
 def _create_current_data_root(root: Path) -> None:
@@ -42,6 +54,78 @@ def _create_current_data_root(root: Path) -> None:
         '{"theme": "midnight"}\n',
         encoding="utf-8",
     )
+
+
+def _request_json(
+    server: ThreadingHTTPServer,
+    method: str,
+    path: str,
+    payload: object | None = None,
+) -> tuple[int, dict[str, object]]:
+    body = None
+    headers: dict[str, str] = {}
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Content-Length": str(len(body)),
+        }
+    connection = HTTPConnection(
+        "127.0.0.1", server.server_port, timeout=5
+    )
+    try:
+        connection.request(method, path, body=body, headers=headers)
+        response = connection.getresponse()
+        return response.status, json.loads(response.read().decode("utf-8"))
+    finally:
+        connection.close()
+
+
+def _make_web_runtime(base: Path):
+    app_data = base / "current" / "MEFinder"
+    runtime = app_data / "runtime"
+    index_path = runtime / "data" / "index.sqlite3"
+    config_path = runtime / "config" / "pdf_imports.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "documents": [
+                    {
+                        "source_file_id": "pdf-one",
+                        "file_name": "one.pdf",
+                        "title": "Old",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    build_database(
+        {
+            "metadata": {},
+            "source_files": [
+                {
+                    "source_file_id": "pdf-one",
+                    "source_type": "pdf",
+                    "file_name": "one.pdf",
+                    "title": "Old",
+                }
+            ],
+        },
+        index_path,
+    )
+    context = AppContext.create(
+        runtime,
+        index_path=index_path,
+        app_data_root=app_data,
+        default_app_data_root=app_data,
+    )
+    handler = make_handler(index_path, app_context=context)
+    handler.log_message = lambda *_args: None
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    return app_data, runtime, handler, server, thread
 
 
 class DataLocationTests(unittest.TestCase):
@@ -156,6 +240,171 @@ class DataLocationTests(unittest.TestCase):
             nested = current / "external" / "MEFinder"
             with self.assertRaisesRegex(DataLocationError, "内部"):
                 migrate_data_root(current, nested, current)
+
+    def test_web_migration_holds_durable_and_rebuild_region(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            _app_data, _runtime, handler, server, server_thread = (
+                _make_web_runtime(base)
+            )
+            target = base / "target" / "MEFinder"
+            migration_started = threading.Event()
+            release_migration = threading.Event()
+            metadata_write_started = threading.Event()
+            migration_response: list[tuple[int, dict[str, object]]] = []
+            metadata_response: list[tuple[int, dict[str, object]]] = []
+
+            def blocked_migration(*_args, **_kwargs):
+                migration_started.set()
+                release_migration.wait(timeout=3)
+                return {
+                    "ok": True,
+                    "target_path": str(target),
+                    "restart_required": True,
+                }
+
+            def observed_metadata_write(*args, **kwargs):
+                metadata_write_started.set()
+                return update_metadata_in_database(*args, **kwargs)
+
+            def migrate_request() -> None:
+                migration_response.append(
+                    _request_json(
+                        server,
+                        "POST",
+                        "/api/data-location/migrate",
+                        {"target_path": str(target)},
+                    )
+                )
+
+            def metadata_request() -> None:
+                metadata_response.append(
+                    _request_json(
+                        server,
+                        "POST",
+                        "/api/bibliographic-metadata/save",
+                        {
+                            "source_id": "pdf-one",
+                            "metadata": {"title": "New"},
+                        },
+                    )
+                )
+
+            migrate_thread = threading.Thread(target=migrate_request)
+            metadata_thread = threading.Thread(target=metadata_request)
+            try:
+                with patch(
+                    "src.me_finder.web.migrate_data_root",
+                    side_effect=blocked_migration,
+                ), patch(
+                    "src.me_finder.web.update_metadata_in_database",
+                    side_effect=observed_metadata_write,
+                ):
+                    server_thread.start()
+                    migrate_thread.start()
+                    self.assertTrue(migration_started.wait(timeout=2))
+                    self.assertFalse(
+                        handler.wait_for_durable_operations(timeout=0.01)
+                    )
+                    metadata_thread.start()
+                    self.assertFalse(metadata_write_started.wait(timeout=0.05))
+                    release_migration.set()
+                    migrate_thread.join(timeout=2)
+                    metadata_thread.join(timeout=2)
+                    self.assertTrue(metadata_write_started.is_set())
+            finally:
+                release_migration.set()
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                server_thread.join(timeout=2)
+                migrate_thread.join(timeout=2)
+                metadata_thread.join(timeout=2)
+
+            self.assertEqual(migration_response[0][0], 200)
+            self.assertEqual(metadata_response[0][0], 200)
+
+    def test_web_migration_rejects_active_job_inside_consistency_region(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            _app_data, runtime, handler, server, server_thread = (
+                _make_web_runtime(base)
+            )
+            target = base / "target" / "MEFinder"
+            worker_release = threading.Event()
+            both_workers_started = threading.Event()
+            worker_count = 0
+            worker_count_lock = threading.Lock()
+
+            def occupy_worker() -> None:
+                nonlocal worker_count
+                with worker_count_lock:
+                    worker_count += 1
+                    if worker_count == 2:
+                        both_workers_started.set()
+                worker_release.wait(timeout=3)
+
+            archive_buffer = io.BytesIO()
+            with zipfile.ZipFile(archive_buffer, "w") as archive:
+                archive.writestr(
+                    "backup.json",
+                    json.dumps(
+                        {
+                            "marker": "me_finder_backup",
+                            "version": 1,
+                        }
+                    ),
+                )
+            backup_path = base / "queued-backup.zip"
+            backup_path.write_bytes(archive_buffer.getvalue())
+
+            try:
+                server_thread.start()
+                handler._submit_background_task(occupy_worker)
+                handler._submit_background_task(occupy_worker)
+                self.assertTrue(both_workers_started.wait(timeout=2))
+                status, queued = _request_json(
+                    server,
+                    "POST",
+                    "/api/backup/import",
+                    {"path": str(backup_path)},
+                )
+                self.assertEqual(status, 200)
+                with patch("src.me_finder.web.migrate_data_root") as migrate:
+                    status, response = _request_json(
+                        server,
+                        "POST",
+                        "/api/data-location/migrate",
+                        {"target_path": str(target)},
+                    )
+                    migrate.assert_not_called()
+                self.assertEqual(status, 409)
+                self.assertIn("文献正在导入", str(response.get("error")))
+                job_id = str(queued.get("job_id", ""))
+                self.assertTrue(job_id.startswith("restore-"))
+                worker_release.set()
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    _status, job = _request_json(
+                        server,
+                        "GET",
+                        f"/api/import-status?job_id={job_id}",
+                    )
+                    if job.get("status") in {"completed", "failed"}:
+                        break
+                    time.sleep(0.02)
+                else:
+                    self.fail("queued backup job did not finish")
+            finally:
+                worker_release.set()
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                server_thread.join(timeout=2)
+
+            self.assertTrue((runtime / "data" / "index.sqlite3").exists())
 
 
 if __name__ == "__main__":

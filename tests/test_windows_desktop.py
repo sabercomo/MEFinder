@@ -3,7 +3,9 @@ from __future__ import annotations
 import ctypes
 import sys
 import tempfile
+import threading
 import unittest
+from concurrent.futures import CancelledError
 from pathlib import Path
 from unittest import mock
 
@@ -91,6 +93,47 @@ class _FakeWebview:
         window = _FakeWindow()
         self.created.append((title, kwargs, window))
         return window
+
+
+class _BlockingLoadWindow(_FakeWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.load_started = threading.Event()
+        self.allow_load = threading.Event()
+
+    def load_url(self, url: str) -> None:
+        self.load_started.set()
+        if not self.allow_load.wait(5):
+            raise TimeoutError("test did not release PDF navigation")
+        raise RuntimeError("the reused native window closed during navigation")
+
+
+class _BlockingCreateWebview(_FakeWebview):
+    def __init__(self) -> None:
+        super().__init__()
+        self.create_started = threading.Event()
+        self.allow_create = threading.Event()
+        self.failure = None
+
+    def create_window(self, title: str, **kwargs):
+        self.create_started.set()
+        if not self.allow_create.wait(5):
+            raise TimeoutError("test did not release PDF window creation")
+        if self.failure is not None:
+            raise self.failure
+        return super().create_window(title, **kwargs)
+
+
+class _ObservablePDFViewer(WindowsPDFViewer):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.operation_waiting = threading.Event()
+
+    def _begin_operation(self):
+        with self._condition:
+            if self._operation_active:
+                self.operation_waiting.set()
+        return super()._begin_operation()
 
 
 class WindowsNativeLibraryIsolationTests(unittest.TestCase):
@@ -299,6 +342,13 @@ class WindowsWindowControllerTests(unittest.TestCase):
 
 
 class WindowsPDFViewerTests(unittest.TestCase):
+    @staticmethod
+    def _record_failure(errors, operation) -> None:
+        try:
+            operation()
+        except BaseException as exc:
+            errors.append(exc)
+
     def test_pdf_url_encodes_path_and_carries_one_based_page_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "中文 文献.pdf"
@@ -389,6 +439,168 @@ class WindowsPDFViewerTests(unittest.TestCase):
 
         self.assertIsNone(result["page"])
         self.assertEqual(len(webview.created), 1)
+
+    def test_close_does_not_wait_for_blocked_reuse_or_recreate_window(self) -> None:
+        window = _BlockingLoadWindow()
+        webview = _FakeWebview()
+        webview.created.append(("existing", {}, window))
+        viewer = WindowsPDFViewer(
+            webview,
+            "frost-blue",
+            page_counter=lambda _target: 3,
+            titlebar_applier=lambda _window, _theme: True,
+        )
+        viewer.window = window
+        errors = []
+        close_finished = threading.Event()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "source.pdf"
+            target.write_bytes(b"%PDF-test")
+            opener = threading.Thread(
+                target=self._record_failure,
+                args=(errors, lambda: viewer.open(target, 2)),
+            )
+            opener.start()
+            self.assertTrue(window.load_started.wait(2))
+
+            closer = threading.Thread(
+                target=lambda: (viewer.close(), close_finished.set())
+            )
+            closer.start()
+            closed_without_navigation = close_finished.wait(2)
+            window.allow_load.set()
+            opener.join(5)
+            closer.join(5)
+
+        self.assertTrue(closed_without_navigation)
+        self.assertFalse(opener.is_alive())
+        self.assertFalse(closer.is_alive())
+        self.assertEqual(len(webview.created), 1)
+        self.assertEqual(window.destroy_count, 1)
+        self.assertIsNone(viewer.window)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], CancelledError)
+
+    def test_close_rejects_and_destroys_candidate_created_in_flight(self) -> None:
+        webview = _BlockingCreateWebview()
+        viewer = WindowsPDFViewer(
+            webview,
+            "frost-blue",
+            page_counter=lambda _target: 3,
+            titlebar_applier=lambda _window, _theme: True,
+        )
+        errors = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "source.pdf"
+            target.write_bytes(b"%PDF-test")
+            opener = threading.Thread(
+                target=self._record_failure,
+                args=(errors, lambda: viewer.open(target, 2)),
+            )
+            opener.start()
+            self.assertTrue(webview.create_started.wait(2))
+            viewer.close()
+            webview.allow_create.set()
+            opener.join(5)
+
+        self.assertFalse(opener.is_alive())
+        self.assertEqual(len(webview.created), 1)
+        candidate = webview.created[0][2]
+        self.assertEqual(candidate.destroy_count, 1)
+        self.assertIsNone(viewer.window)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], CancelledError)
+
+    def test_create_failure_after_close_is_reported_as_cancellation(self) -> None:
+        webview = _BlockingCreateWebview()
+        webview.failure = RuntimeError("WebView2 host is closing")
+        viewer = WindowsPDFViewer(
+            webview,
+            "frost-blue",
+            page_counter=lambda _target: 3,
+            titlebar_applier=lambda _window, _theme: True,
+        )
+        errors = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "source.pdf"
+            target.write_bytes(b"%PDF-test")
+            opener = threading.Thread(
+                target=self._record_failure,
+                args=(errors, lambda: viewer.open(target, 2)),
+            )
+            opener.start()
+            self.assertTrue(webview.create_started.wait(2))
+            viewer.close()
+            webview.allow_create.set()
+            opener.join(5)
+
+        self.assertFalse(opener.is_alive())
+        self.assertEqual(webview.created, [])
+        self.assertIsNone(viewer.window)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], CancelledError)
+        self.assertIsInstance(errors[0].__cause__, RuntimeError)
+
+    def test_concurrent_opens_share_one_window_after_creation(self) -> None:
+        webview = _BlockingCreateWebview()
+        viewer = _ObservablePDFViewer(
+            webview,
+            "frost-blue",
+            page_counter=lambda _target: 8,
+            titlebar_applier=lambda _window, _theme: True,
+        )
+        errors = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "source.pdf"
+            target.write_bytes(b"%PDF-test")
+            first = threading.Thread(
+                target=self._record_failure,
+                args=(errors, lambda: viewer.open(target, 2)),
+            )
+            second = threading.Thread(
+                target=self._record_failure,
+                args=(errors, lambda: viewer.open(target, 7)),
+            )
+            first.start()
+            self.assertTrue(webview.create_started.wait(2))
+            second.start()
+            self.assertTrue(viewer.operation_waiting.wait(2))
+            webview.allow_create.set()
+            first.join(5)
+            second.join(5)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(len(webview.created), 1)
+        window = webview.created[0][2]
+        self.assertEqual(len(window.urls), 1)
+        self.assertTrue(window.urls[0].endswith("#page=7"))
+        self.assertEqual(window.show_count, 1)
+        self.assertEqual(window.restore_count, 1)
+
+    def test_manually_closed_child_can_be_created_again(self) -> None:
+        webview = _FakeWebview()
+        viewer = WindowsPDFViewer(
+            webview,
+            "frost-blue",
+            page_counter=lambda _target: 3,
+            titlebar_applier=lambda _window, _theme: True,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "source.pdf"
+            target.write_bytes(b"%PDF-test")
+            viewer.open(target, 1)
+            first_window = viewer.window
+            first_window.events.closed.callbacks[0]()
+            viewer.open(target, 2)
+
+        self.assertEqual(len(webview.created), 2)
+        self.assertIsNot(viewer.window, first_window)
 
 
 if __name__ == "__main__":

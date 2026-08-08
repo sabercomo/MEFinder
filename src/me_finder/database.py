@@ -512,6 +512,114 @@ def _json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def _insert_page_anchors(
+    connection: sqlite3.Connection,
+    anchors: Sequence[Dict[str, object]],
+) -> None:
+    """Store canonical page anchors in the legacy schema-v2 table.
+
+    The v2 table called its typed lookup column ``paragraph_id``, while the
+    page-anchor model has always called that relationship
+    ``start_paragraph_id`` and also keeps ``end_paragraph_id`` and
+    ``source_file_id`` in its payload.  Treat the legacy column as a typed
+    alias for the start paragraph instead of silently writing NULL.
+    """
+
+    values = []
+    for anchor in anchors:
+        start_paragraph_id = anchor.get("start_paragraph_id")
+        if start_paragraph_id in (None, ""):
+            # Accept an old exported record that used the physical v2 column
+            # name, while current extractors use the canonical field name.
+            start_paragraph_id = anchor.get("paragraph_id")
+        values.append(
+            (
+                str(start_paragraph_id)
+                if start_paragraph_id not in (None, "")
+                else None,
+                _json(anchor),
+            )
+        )
+    if values:
+        connection.executemany(
+            "INSERT INTO page_anchors(paragraph_id, payload_json) VALUES (?, ?)",
+            values,
+        )
+
+
+def _delete_page_anchors_for_source(
+    connection: sqlite3.Connection,
+    source_file_id: str,
+) -> int:
+    """Delete current and legacy-v2 anchors owned by one source.
+
+    Older writers left ``page_anchors.paragraph_id`` NULL because of the
+    field-name mismatch.  Their canonical ownership data is still present in
+    payload_json, so source deletion must consult source/start/end there as
+    well as the repaired typed start-paragraph alias.
+    """
+
+    # Keep current typed rows entirely inside SQLite.  Expanding every
+    # paragraph id into an ``IN (?, ...)`` list crosses SQLite's variable
+    # limit for large books (32,766 on the Windows build).
+    typed_anchor_filter = (
+        "paragraph_id IN ("
+        "SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?"
+        ")"
+    )
+    deleted_count = int(
+        connection.execute(
+            f"SELECT COUNT(*) FROM page_anchors WHERE {typed_anchor_filter}",
+            (source_file_id,),
+        ).fetchone()[0]
+    )
+    connection.execute(
+        f"DELETE FROM page_anchors WHERE {typed_anchor_filter}",
+        (source_file_id,),
+    )
+
+    # Legacy NULL-typed rows still need payload inspection.  Materializing the
+    # ids for Python membership tests is safe here because they are no longer
+    # rebound as one SQL statement's parameters.
+    paragraph_ids = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?",
+            (source_file_id,),
+        )
+    }
+
+    # Only old buggy v2 rows require payload inspection.  Correctly written
+    # anchors are handled by the typed-column delete above, avoiding a
+    # full JSON scan for every source in ordinary batch removals.
+    owned_row_ids: List[int] = []
+    for row_id, raw_payload in connection.execute(
+        "SELECT row_id, payload_json FROM page_anchors WHERE paragraph_id IS NULL"
+    ):
+        belongs_to_source = False
+        try:
+            payload = json.loads(raw_payload) if raw_payload else {}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            payload = {}
+        if isinstance(payload, dict):
+            payload_source_id = str(payload.get("source_file_id") or "")
+            start_paragraph_id = str(payload.get("start_paragraph_id") or "")
+            end_paragraph_id = str(payload.get("end_paragraph_id") or "")
+            belongs_to_source = belongs_to_source or (
+                payload_source_id == source_file_id
+                or start_paragraph_id in paragraph_ids
+                or end_paragraph_id in paragraph_ids
+            )
+        if belongs_to_source:
+            owned_row_ids.append(int(row_id))
+    if owned_row_ids:
+        connection.executemany(
+            "DELETE FROM page_anchors WHERE row_id = ?",
+            [(row_id,) for row_id in owned_row_ids],
+        )
+    return deleted_count + len(owned_row_ids)
+
+
 def _int_or_none(value: object) -> Optional[int]:
     if value is None or value == "":
         return None
@@ -1081,16 +1189,14 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             """,
             paragraph_rows,
         )
+        _insert_page_anchors(connection, page_anchors)
         for table_name, key_fields in (
-            ("page_anchors", ("paragraph_id",)),
             ("pdf_pages", ("source_file_id", "pdf_page_index")),
             ("pdf_page_mappings", ("source_file_id", "pdf_page_index")),
             ("pdf_import_runs", ("source_file_id", "status")),
             ("audit_issues", ("source_file_id", "issue_type")),
         ):
-            if table_name == "page_anchors":
-                rows = page_anchors
-            elif table_name == "pdf_pages":
+            if table_name == "pdf_pages":
                 rows = pdf_pages
             elif table_name == "pdf_page_mappings":
                 rows = pdf_page_mappings
@@ -1236,11 +1342,7 @@ def replace_source_in_database(
                     f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", old_volume_ids
                 ).fetchall()
             ]
-        connection.execute(
-            "DELETE FROM page_anchors WHERE paragraph_id IN "
-            "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
-            (source_id,),
-        )
+        _delete_page_anchors_for_source(connection, source_id)
         if old_volume_ids:
             placeholders = ",".join("?" for _ in old_volume_ids)
             connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", old_volume_ids)
@@ -1350,8 +1452,15 @@ def replace_source_in_database(
                 if item.get("paragraph_id")
             ],
         )
+        _insert_page_anchors(
+            connection,
+            [
+                item
+                for item in extracted.get("page_anchors", [])
+                if isinstance(item, dict)
+            ],
+        )
         for table_name, key_fields in (
-            ("page_anchors", ("paragraph_id",)),
             ("pdf_pages", ("source_file_id", "pdf_page_index")),
             ("pdf_page_mappings", ("source_file_id", "pdf_page_index")),
             ("pdf_import_runs", ("source_file_id", "status")),
@@ -1426,15 +1535,8 @@ def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> D
     counts["pdf_pages"] = connection.execute(
         "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?", (source_file_id,)
     ).fetchone()[0]
-    counts["page_anchors"] = connection.execute(
-        "SELECT COUNT(*) FROM page_anchors WHERE paragraph_id IN "
-        "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
-        (source_file_id,),
-    ).fetchone()[0]
-    connection.execute(
-        "DELETE FROM page_anchors WHERE paragraph_id IN "
-        "(SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?)",
-        (source_file_id,),
+    counts["page_anchors"] = _delete_page_anchors_for_source(
+        connection, source_file_id
     )
     if volume_ids:
         placeholders = ",".join("?" for _ in volume_ids)

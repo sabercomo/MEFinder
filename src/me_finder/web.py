@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import CancelledError
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +21,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import __version__
+from .app_context import AppContext
+from .application import SearchRequest, SearchService
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import (
     DataLocationError,
@@ -79,6 +82,7 @@ from .pdf_import_service import (
     detect_imported_pdf,
     document_storage_error,
     document_storage_target,
+    import_config_lock,
     locked_import_config,
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
@@ -95,6 +99,8 @@ from .backup_service import restore_backup, write_backup
 from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportTaskQueue
 from .import_resume import ResumeManifestError, sha256_file
+from .http_range import InvalidByteRange, parse_byte_range
+from .lifecycle import DurableOperationGate
 from .search import SearchEngine
 from .chunked_upload import (
     ChunkedUploadError,
@@ -111,6 +117,61 @@ from .structured_reader import (
     get_document_citation,
     get_document_window,
 )
+
+
+MAX_JSON_REQUEST_BYTES = 1024 * 1024
+SOURCE_STREAM_CHUNK_BYTES = 1024 * 1024
+
+
+class ManagedThreadingHTTPServer(ThreadingHTTPServer):
+    """Threading server with an observable, bounded request drain.
+
+    ``ThreadingMixIn.server_close`` normally waits forever for non-daemon
+    handlers.  That can strand a Windows WebView2 process (and its updater) if
+    a client disappears during a native dialog, network lookup, or upload.
+    Track accepted handlers ourselves so the desktop adapter can wait for a
+    bounded interval without closing the runtime out from under live requests.
+    """
+
+    daemon_threads = True
+    block_on_close = False
+
+    def __init__(self, *args, **kwargs) -> None:
+        self._handler_condition = threading.Condition()
+        self._active_handlers = 0
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address) -> None:
+        with self._handler_condition:
+            self._active_handlers += 1
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            with self._handler_condition:
+                self._active_handlers -= 1
+                self._handler_condition.notify_all()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self._handler_condition:
+                self._active_handlers -= 1
+                self._handler_condition.notify_all()
+
+    def wait_for_handlers(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        with self._handler_condition:
+            while self._active_handlers:
+                if deadline is None:
+                    self._handler_condition.wait()
+                    continue
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._handler_condition.wait(remaining)
+            return True
 
 
 def find_adobe_pdf_app() -> Optional[Path]:
@@ -347,6 +408,10 @@ def open_pdf_with_platform(
                     page_number is not None and actual_page != page_number
                 ),
             }
+        except CancelledError:
+            # Application shutdown invalidated an in-flight native-window
+            # request. Do not turn cancellation into an external PDF launch.
+            raise
         except Exception as exc:
             native_error = exc
             logging.exception("native PDF reader failed; falling back to an external app")
@@ -443,6 +508,7 @@ def render_html(theme: str) -> str:
 def make_handler(
     index_path: Path,
     *,
+    app_context: AppContext | None = None,
     native_pdf_opener: NativePDFOpener | None = None,
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
@@ -451,8 +517,19 @@ def make_handler(
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
+    # Keep the existing ``index_path`` entry point while allowing desktop and
+    # future adapters to inject every process-level path explicitly.
+    context = app_context or AppContext.create(
+        Path.cwd(),
+        index_path=index_path,
+        app_data_root=app_data_root,
+        default_app_data_root=default_app_data_root,
+    )
+    index_path = context.paths.index_path
+    root = context.paths.runtime_root
+    app_data_root = context.paths.app_data_root
+    default_app_data_root = context.paths.default_app_data_root
     engine = SearchEngine(index_path)
-    root = Path(".").resolve()
     runtime = {
         "engine": engine,
         "source_files": {
@@ -462,6 +539,7 @@ def make_handler(
         },
         "index_metadata": engine.index.get("metadata", {}),
         "rebuilding": False,
+        "closing": False,
     }
     runtime_lock = threading.RLock()
     # Re-entrant because a config mutation may hold the lock while calling the
@@ -478,6 +556,8 @@ def make_handler(
     deleting_import_sources: set[str] = set()
     pending_import_sources: set[str] = set()
     calibration_active_sources: set[str] = set()
+    search_service = SearchService()
+    durable_operations = DurableOperationGate()
 
     def infer_import_failure_stage(
         job: Dict[str, object],
@@ -656,9 +736,13 @@ def make_handler(
         )
         raise MinerUError(message)
 
-    def reload_runtime_index() -> None:
+    def reload_runtime_index() -> bool:
+        new_engine = SearchEngine(index_path)
         with runtime_lock:
-            new_engine = SearchEngine(index_path)
+            if runtime["closing"]:
+                new_engine.close()
+                runtime["rebuilding"] = False
+                return False
             old_engine = runtime["engine"]
             runtime["engine"] = new_engine
             runtime["source_files"] = {
@@ -669,6 +753,29 @@ def make_handler(
             runtime["index_metadata"] = new_engine.index.get("metadata", {})
             if hasattr(old_engine, "close"):
                 old_engine.close()
+        return True
+
+    def recover_runtime_index() -> bool:
+        """Reopen the current DB unless shutdown has made runtime terminal."""
+
+        recovered_engine = SearchEngine(index_path)
+        with runtime_lock:
+            if runtime["closing"]:
+                recovered_engine.close()
+                runtime["rebuilding"] = False
+                return False
+            old_engine = runtime["engine"]
+            runtime["engine"] = recovered_engine
+            runtime["source_files"] = {
+                str(item.get("source_file_id")): item
+                for item in recovered_engine.index.get("source_files", [])
+                if item.get("source_file_id")
+            }
+            runtime["index_metadata"] = recovered_engine.index.get("metadata", {})
+            runtime["rebuilding"] = False
+            if hasattr(old_engine, "close"):
+                old_engine.close()
+        return True
 
     def latest_pdf_import_runs() -> Dict[str, Dict[str, object]]:
         connection = sqlite3.connect(str(index_path))
@@ -735,20 +842,43 @@ def make_handler(
                 if hasattr(old_engine, "close"):
                     old_engine.close()
             try:
-                rebuild_local_index(root, lambda update: progress_import_job(job_id, update))
+                rebuild_local_index(
+                    root,
+                    lambda update: progress_import_job(job_id, update),
+                    database_path=index_path,
+                )
+                new_engine = SearchEngine(index_path)
+                new_source_files = {
+                    str(item.get("source_file_id")): item
+                    for item in new_engine.index.get("source_files", [])
+                    if item.get("source_file_id")
+                }
+                indexed_source_ids = set(new_source_files)
                 with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
-                    runtime["source_files"] = {
-                        str(item.get("source_file_id")): item
-                        for item in runtime["engine"].index.get("source_files", [])
-                        if item.get("source_file_id")
-                    }
-                    runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                    runtime["rebuilding"] = False
-                    indexed_source_ids = set(runtime["source_files"])
+                    if runtime["closing"]:
+                        new_engine.close()
+                        runtime["rebuilding"] = False
+                    else:
+                        runtime["engine"] = new_engine
+                        runtime["source_files"] = new_source_files
+                        runtime["index_metadata"] = new_engine.index.get("metadata", {})
+                        runtime["rebuilding"] = False
             except Exception:
                 with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
+                    closing = bool(runtime["closing"])
+                    if closing:
+                        runtime["rebuilding"] = False
+                if closing:
+                    raise
+                recovered_engine = SearchEngine(index_path)
+                with runtime_lock:
+                    if runtime["closing"]:
+                        recovered_engine.close()
+                        runtime["rebuilding"] = False
+                        raise RuntimeError(
+                            "应用正在关闭，不再恢复运行时索引。"
+                        )
+                    runtime["engine"] = recovered_engine
                     runtime["source_files"] = {
                         str(item.get("source_file_id")): item
                         for item in runtime["engine"].index.get("source_files", [])
@@ -790,7 +920,7 @@ def make_handler(
             raise MinerUError(f"PDF 原文件不存在：{path.name}")
         return path, document
 
-    def restore_runtime_after_index_write() -> None:
+    def restore_runtime_after_index_write() -> bool:
         new_engine = None
         for attempt in range(5):
             try:
@@ -816,10 +946,17 @@ def make_handler(
         }
         index_metadata = new_engine.index.get("metadata", {})
         with runtime_lock:
+            if runtime["closing"]:
+                new_engine.close()
+                runtime["source_files"] = source_files
+                runtime["index_metadata"] = index_metadata
+                runtime["rebuilding"] = False
+                return False
             runtime["engine"] = new_engine
             runtime["source_files"] = source_files
             runtime["index_metadata"] = index_metadata
             runtime["rebuilding"] = False
+        return True
 
     def index_registered_pdf(
         job_id: str,
@@ -869,34 +1006,35 @@ def make_handler(
                 phase="rebuilding_index",
                 message="正在写入本地 SQLite 索引…",
             )
-            with runtime_lock:
-                runtime["rebuilding"] = True
-                old_engine = runtime["engine"]
-            try:
-                if hasattr(old_engine, "close"):
-                    old_engine.close()
-                replace_source_in_database(
-                    extracted,
-                    index_path,
-                    backup_existing=backup_existing,
-                )
-            except Exception as write_error:
+            with durable_operations.operation():
+                with runtime_lock:
+                    runtime["rebuilding"] = True
+                    old_engine = runtime["engine"]
                 try:
-                    restore_runtime_after_index_write()
-                except Exception:
-                    logging.exception(
-                        "index write failed and the previous runtime index "
-                        "could not be reopened"
+                    if hasattr(old_engine, "close"):
+                        old_engine.close()
+                    replace_source_in_database(
+                        extracted,
+                        index_path,
+                        backup_existing=backup_existing,
                     )
-                raise write_error.with_traceback(write_error.__traceback__)
-            else:
-                restore_runtime_after_index_write()
-            with runtime_lock:
-                indexed = source_file_id in runtime["source_files"]
-            if not indexed:
-                raise MinerUError(
-                    f"{display_name} 未能进入索引：写入后未找到文献记录。"
-                )
+                except Exception as write_error:
+                    try:
+                        restore_runtime_after_index_write()
+                    except Exception:
+                        logging.exception(
+                            "index write failed and the previous runtime index "
+                            "could not be reopened"
+                        )
+                    raise write_error.with_traceback(write_error.__traceback__)
+                else:
+                    restore_runtime_after_index_write()
+                with runtime_lock:
+                    indexed = source_file_id in runtime["source_files"]
+                if not indexed:
+                    raise MinerUError(
+                        f"{display_name} 未能进入索引：写入后未找到文献记录。"
+                    )
 
     def fail_import_at_index(
         job_id: str,
@@ -1978,19 +2116,33 @@ def make_handler(
             raise MinerUError("备份文件不存在。")
         if path.suffix.lower() != ".zip":
             raise MinerUError("请选择 .zip 备份文件。")
-        summary = restore_backup(root, path.read_bytes(), app_data_root=backup_app_data_root())
         job_id = f"restore-{uuid.uuid4().hex[:12]}"
         with import_jobs_lock:
             import_jobs[job_id] = {
                 "job_id": job_id,
                 "status": "processing",
-                "phase": "rebuilding_index",
-                "message": f"已恢复 {summary['count']} 项，正在重建索引…",
+                "phase": "restoring_backup",
+                "message": "正在恢复备份并重建索引…",
             }
 
         def run_restore_job() -> None:
             try:
-                rebuild_runtime_index(job_id)
+                with (
+                    durable_operations.operation(),
+                    rebuild_lock,
+                    import_config_lock(),
+                ):
+                    summary = restore_backup(
+                        root,
+                        path.read_bytes(),
+                        app_data_root=backup_app_data_root(),
+                    )
+                    update_import_job(
+                        job_id,
+                        phase="rebuilding_index",
+                        message=f"已恢复 {summary['count']} 项，正在重建索引…",
+                    )
+                    rebuild_runtime_index(job_id)
                 update_import_job(
                     job_id,
                     status="completed",
@@ -2005,7 +2157,18 @@ def make_handler(
                     message=f"文件已恢复，但索引重建失败：{exc}",
                 )
 
-        threading.Thread(target=run_restore_job, daemon=True).start()
+        try:
+            import_task_queue.submit(run_restore_job)
+        except Exception as exc:
+            update_import_job(
+                job_id,
+                status="failed",
+                phase="queue_failed",
+                message="备份恢复任务未能进入队列。",
+            )
+            raise MinerUError(
+                "备份恢复任务暂时无法启动，文件未更改。"
+            ) from exc
         return job_id
 
     def upload_storage_details(
@@ -2239,6 +2402,13 @@ def make_handler(
         source_id: str,
         segments: List[Dict[str, object]],
     ) -> None:
+        with durable_operations.operation():
+            _apply_manual_page_mapping(source_id, segments)
+
+    def _apply_manual_page_mapping(
+        source_id: str,
+        segments: List[Dict[str, object]],
+    ) -> None:
         """Persist manual mapping and rebuild as one deletion-safe mutation."""
 
         cleaned_segments = normalize_manual_mapping_segments(segments)
@@ -2354,6 +2524,20 @@ def make_handler(
         auto_mapping: Dict[str, object],
         replace_manual: bool,
     ) -> Dict[str, int]:
+        with durable_operations.operation():
+            return _apply_live_auto_mapping(
+                source_id,
+                segments,
+                auto_mapping,
+                replace_manual,
+            )
+
+    def _apply_live_auto_mapping(
+        source_id: str,
+        segments: List[Dict[str, object]],
+        auto_mapping: Dict[str, object],
+        replace_manual: bool,
+    ) -> Dict[str, int]:
         config_path = root / "config" / "pdf_imports.json"
         with locked_import_config(config_path) as config:
             document = next((doc for doc in config.get("documents", []) if doc.get("source_file_id") == source_id), None)
@@ -2380,6 +2564,7 @@ def make_handler(
                 old_engine = runtime["engine"]
                 if hasattr(old_engine, "close"):
                     old_engine.close()
+            database_updated = False
             try:
                 updated = apply_mapping_to_database(
                     index_path,
@@ -2388,21 +2573,19 @@ def make_handler(
                     auto_mapping=auto_mapping,
                     mapping_status=mapping_status,
                 )
+                database_updated = True
                 reload_runtime_index()
                 with runtime_lock:
                     runtime["rebuilding"] = False
                 return updated
             except Exception:
-                save_import_config(config_path, original_config)
-                with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
-                    runtime["source_files"] = {
-                        str(item.get("source_file_id")): item
-                        for item in runtime["engine"].index.get("source_files", [])
-                        if item.get("source_file_id")
-                    }
-                    runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                    runtime["rebuilding"] = False
+                # Once the SQLite transaction committed, the new config is the
+                # durable source of truth for the next rebuild.  Rolling it
+                # back merely because the in-memory engine could not reload
+                # would split config and DB into contradictory states.
+                if not database_updated:
+                    save_import_config(config_path, original_config)
+                recover_runtime_index()
                 raise
 
     def open_source_file(source_id: str, page: object = None) -> Dict[str, object]:
@@ -2455,7 +2638,15 @@ def make_handler(
             force=force,
         )
 
-    def persist_bibliographic_metadata(source_id: str, payload: Dict[str, object]) -> Dict[str, object]:
+    def persist_bibliographic_metadata(
+        source_id: str, payload: Dict[str, object]
+    ) -> Dict[str, object]:
+        with durable_operations.operation():
+            return _persist_bibliographic_metadata(source_id, payload)
+
+    def _persist_bibliographic_metadata(
+        source_id: str, payload: Dict[str, object]
+    ) -> Dict[str, object]:
         with metadata_lock, rebuild_lock:
             config_path = root / "config" / "pdf_imports.json"
             with locked_import_config(config_path) as config:
@@ -2493,23 +2684,18 @@ def make_handler(
                     old_engine = runtime["engine"]
                     if hasattr(old_engine, "close"):
                         old_engine.close()
+                database_updated = False
                 try:
                     update_metadata_in_database(index_path, source_id, metadata)
+                    database_updated = True
                     reload_runtime_index()
                     with runtime_lock:
                         runtime["rebuilding"] = False
                     return metadata
                 except Exception:
-                    save_import_config(config_path, original_config)
-                    with runtime_lock:
-                        runtime["engine"] = SearchEngine(index_path)
-                        runtime["source_files"] = {
-                            str(item.get("source_file_id")): item
-                            for item in runtime["engine"].index.get("source_files", [])
-                            if item.get("source_file_id")
-                        }
-                        runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                        runtime["rebuilding"] = False
+                    if not database_updated:
+                        save_import_config(config_path, original_config)
+                    recover_runtime_index()
                     raise
 
     def save_bibliographic_metadata(source_id: str, payload: Dict[str, object]) -> Dict[str, object]:
@@ -2580,6 +2766,9 @@ def make_handler(
     class Handler(BaseHTTPRequestHandler):
         _GET_ROUTE_TABLE = {
             "/api/document/pages": "_get_document_pages",
+        }
+        _POST_ROUTE_TABLE = {
+            "/api/search": "_post_search",
         }
 
         def _send(
@@ -2652,6 +2841,22 @@ def make_handler(
                     status=503,
                 )
                 return
+            self._send_json(result)
+
+        def _post_search(self, payload: object) -> None:
+            try:
+                request = SearchRequest.from_payload(payload)
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            with runtime_lock:
+                if runtime["rebuilding"]:
+                    self._send_json(
+                        {"error": "索引正在重建，请稍候再搜索。"},
+                        status=503,
+                    )
+                    return
+                result = search_service.execute(runtime["engine"], request)
             self._send_json(result)
 
         def do_GET(self) -> None:
@@ -2857,6 +3062,10 @@ def make_handler(
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
+            with runtime_lock:
+                if runtime["closing"]:
+                    self._send_json({"error": "应用正在关闭。"}, status=503)
+                    return
             if parsed.path == "/api/import":
                 filename = unquote(self.headers.get("X-File-Name", ""))
                 suffix = Path(filename).suffix.lower()
@@ -2949,6 +3158,9 @@ def make_handler(
                 return
             if length < 0:
                 self._send_json({"error": "Content-Length 无效。"}, status=400)
+                return
+            if length > MAX_JSON_REQUEST_BYTES:
+                self._send_json({"error": "JSON 请求内容过大。"}, status=413)
                 return
             if parsed.path == "/api/document/citation" and length > 16 * 1024:
                 self._send_json({"error": "引文请求内容过大。"}, status=413)
@@ -3091,6 +3303,10 @@ def make_handler(
                         except OSError:
                             pass
                 return
+            route_method = self._POST_ROUTE_TABLE.get(parsed.path)
+            if route_method is not None:
+                getattr(self, route_method)(payload)
+                return
             if parsed.path == "/api/document/citation":
                 if not isinstance(payload, dict):
                     self._send_json({"error": "引文请求必须是 JSON 对象。"}, status=400)
@@ -3151,29 +3367,6 @@ def make_handler(
                     )
                     return
                 self._send_json(citation_result)
-                return
-            if parsed.path == "/api/search":
-                requested_limit = payload.get("limit", 10)
-                search_limit: int | str
-                if str(requested_limit).strip().lower() in {"all", "0"}:
-                    search_limit = "all"
-                else:
-                    try:
-                        search_limit = int(requested_limit)
-                    except (TypeError, ValueError):
-                        search_limit = 10
-                with runtime_lock:
-                    if runtime["rebuilding"]:
-                        self._send_json({"error": "索引正在重建，请稍候再搜索。"}, status=503)
-                        return
-                    result = runtime["engine"].search(
-                        payload.get("query", ""),
-                        payload.get("mode", "auto"),
-                        search_limit,
-                        payload.get("source_type", "all"),
-                        payload.get("source_file_id"),
-                    )
-                self._send_json(result)
                 return
             if parsed.path == "/api/preferences":
                 preferences_path = resolve_preferences_path(root)
@@ -3301,24 +3494,31 @@ def make_handler(
                 if not target_value:
                     self._send_json({"error": "请先选择新的数据位置。"}, status=400)
                     return
-                with import_jobs_lock:
-                    has_active_job = any(
-                        job.get("status") == "processing"
-                        for job in import_jobs.values()
-                    )
-                if has_active_job:
-                    self._send_json(
-                        {"error": "文献正在导入或索引正在更新，请完成后再迁移。"},
-                        status=409,
-                    )
-                    return
                 try:
-                    with runtime_lock:
-                        result = migrate_data_root(
-                            app_data_root,
-                            Path(target_value),
-                            default_app_data_root,
-                        )
+                    with durable_operations.operation(), rebuild_lock:
+                        # A job may have entered the queue while this request
+                        # was waiting for the consistency locks.  Re-check only
+                        # after both locks are held so migration snapshots a
+                        # state that no import/rebuild can still mutate.
+                        with import_jobs_lock:
+                            has_active_job = any(
+                                job.get("status") == "processing"
+                                for job in import_jobs.values()
+                            )
+                        if has_active_job:
+                            raise MinerUError(
+                                "文献正在导入或索引正在更新，"
+                                "请完成后再迁移。"
+                            )
+                        with runtime_lock:
+                            result = migrate_data_root(
+                                app_data_root,
+                                Path(target_value),
+                                default_app_data_root,
+                            )
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=409)
+                    return
                 except DataLocationError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -3532,11 +3732,24 @@ def make_handler(
                         "phase": "metadata_recognition",
                         "message": f"准备识别 {len(candidates)} 部文献…",
                     }
-                threading.Thread(
-                    target=run_batch_metadata_job,
-                    args=(job_id, candidates),
-                    daemon=True,
-                ).start()
+                try:
+                    import_task_queue.submit(
+                        run_batch_metadata_job,
+                        job_id,
+                        candidates,
+                    )
+                except Exception as exc:
+                    update_import_job(
+                        job_id,
+                        status="failed",
+                        phase="queue_failed",
+                        message="批量识别任务未能进入处理队列。",
+                    )
+                    self._send_json(
+                        {"error": str(exc), "job_id": job_id},
+                        status=503,
+                    )
+                    return
                 self._send_json({"ok": True, "job_id": job_id, "candidates": len(candidates), "already_running": False})
                 return
             if parsed.path == "/api/backup/export":
@@ -3914,19 +4127,20 @@ def make_handler(
                                 old_engine = runtime["engine"]
                                 if hasattr(old_engine, "close"):
                                     old_engine.close()
-                            result = DocumentDeletionService(
-                                root, index_path
-                            ).remove(
-                                sid,
-                                delete_generated_artifacts=bool(
-                                    payload.get(
-                                        "delete_generated_artifacts", True
-                                    )
-                                ),
-                                delete_internal_copy=bool(
-                                    payload.get("delete_internal_copy", False)
-                                ),
-                            )
+                            with durable_operations.operation():
+                                result = DocumentDeletionService(
+                                    root, index_path
+                                ).remove(
+                                    sid,
+                                    delete_generated_artifacts=bool(
+                                        payload.get(
+                                            "delete_generated_artifacts", True
+                                        )
+                                    ),
+                                    delete_internal_copy=bool(
+                                        payload.get("delete_internal_copy", False)
+                                    ),
+                                )
                             removal_committed = True
                         except (
                             ValueError,
@@ -3941,19 +4155,7 @@ def make_handler(
                             removal_error_status = 500
                         finally:
                             try:
-                                with runtime_lock:
-                                    runtime["engine"] = SearchEngine(index_path)
-                                    runtime["source_files"] = {
-                                        str(item.get("source_file_id")): item
-                                        for item in runtime[
-                                            "engine"
-                                        ].index.get("source_files", [])
-                                        if item.get("source_file_id")
-                                    }
-                                    runtime["index_metadata"] = runtime[
-                                        "engine"
-                                    ].index.get("metadata", {})
-                                    runtime["rebuilding"] = False
+                                recover_runtime_index()
                             except Exception as exc:
                                 logging.exception(
                                     "document removed but search index reload failed"
@@ -4075,17 +4277,20 @@ def make_handler(
                                 old_engine = runtime["engine"]
                                 if hasattr(old_engine, "close"):
                                     old_engine.close()
-                            result = DocumentDeletionService(root, index_path).remove_many(
-                                accepted,
-                                delete_generated_artifacts=bool(
-                                    payload.get("delete_generated_artifacts", True)
-                                ),
-                                internal_copy_ids=[
-                                    candidate
-                                    for candidate in accepted
-                                    if candidate in internal_ids
-                                ],
-                            )
+                            with durable_operations.operation():
+                                result = DocumentDeletionService(
+                                    root, index_path
+                                ).remove_many(
+                                    accepted,
+                                    delete_generated_artifacts=bool(
+                                        payload.get("delete_generated_artifacts", True)
+                                    ),
+                                    internal_copy_ids=[
+                                        candidate
+                                        for candidate in accepted
+                                        if candidate in internal_ids
+                                    ],
+                                )
                             removal_committed = True
                         except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                             removal_error = exc
@@ -4095,17 +4300,7 @@ def make_handler(
                             removal_error_status = 500
                         finally:
                             try:
-                                with runtime_lock:
-                                    runtime["engine"] = SearchEngine(index_path)
-                                    runtime["source_files"] = {
-                                        str(item.get("source_file_id")): item
-                                        for item in runtime["engine"].index.get("source_files", [])
-                                        if item.get("source_file_id")
-                                    }
-                                    runtime["index_metadata"] = runtime["engine"].index.get(
-                                        "metadata", {}
-                                    )
-                                    runtime["rebuilding"] = False
+                                recover_runtime_index()
                             except Exception:
                                 logging.exception(
                                     "documents removed but search index reload failed"
@@ -4386,7 +4581,7 @@ def make_handler(
                     return
                 job_id = f"auto-map-{uuid.uuid4().hex[:12]}"
                 try:
-                    with rebuild_lock:
+                    with durable_operations.operation(), rebuild_lock:
                         segment_count = accept_auto_page_mapping(sid)
                         with import_jobs_lock:
                             import_jobs[job_id] = {
@@ -4433,13 +4628,69 @@ def make_handler(
                 ".doc": "application/msword",
                 ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             }.get(target.suffix.lower(), "application/octet-stream")
-            body = target.read_bytes() if send_body else b""
-            self._send(200, body, content_type, content_length=target.stat().st_size, send_body=send_body)
+            file_size = target.stat().st_size
+            try:
+                requested_range = parse_byte_range(
+                    self.headers.get("Range"),
+                    file_size,
+                )
+            except InvalidByteRange:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if requested_range is None:
+                status = 200
+                start = 0
+                content_length = file_size
+            else:
+                status = 206
+                start = requested_range.start
+                content_length = requested_range.length
+
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(content_length))
+            if requested_range is not None:
+                self.send_header(
+                    "Content-Range",
+                    f"bytes {requested_range.start}-{requested_range.end}/{file_size}",
+                )
+            self.end_headers()
+            if not send_body or content_length == 0:
+                return
+
+            try:
+                with target.open("rb") as stream:
+                    stream.seek(start)
+                    remaining = content_length
+                    while remaining:
+                        chunk = stream.read(min(SOURCE_STREAM_CHUNK_BYTES, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                # Closing a PDF tab while a range is streaming is normal and
+                # should not produce a server traceback.
+                return
 
         def log_message(self, format: str, *args) -> None:
             return
 
-    def close_runtime() -> None:
+    def begin_shutdown() -> None:
+        """Reject new writes and stop accepting background work."""
+
+        durable_operations.begin_shutdown()
+        with runtime_lock:
+            runtime["closing"] = True
+        import_task_queue.shutdown(wait=False)
+
+    def close_runtime(timeout: float = 2.0) -> bool:
         """Release the SQLite handle this handler holds open.
 
         The desktop app keeps its index open until the process exits, but a
@@ -4448,18 +4699,57 @@ def make_handler(
         delete a database that still has an open connection.
         """
 
+        begin_shutdown()
         chunked_uploads.close()
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        durable_stopped = durable_operations.wait(timeout=timeout)
+        if not durable_stopped:
+            logging.warning(
+                "durable mutations are still committing; runtime engine kept open"
+            )
+            return False
+        remaining = (
+            None if deadline is None else max(0.0, deadline - time.monotonic())
+        )
+        workers_stopped = import_task_queue.shutdown(wait=True, timeout=remaining)
+        if not workers_stopped:
+            # Keep the engine alive for the accepted task.  A long-lived caller
+            # can retry close_runtime after it checkpoints; a desktop process
+            # releases all handles immediately when it exits.
+            logging.warning(
+                "background imports are still stopping; runtime engine kept open"
+            )
+            return False
         with runtime_lock:
             current = runtime.get("engine")
             runtime["engine"] = None
         if current is not None:
             current.close()
+        return True
 
+    Handler.begin_shutdown = staticmethod(begin_shutdown)
     Handler.close_runtime = staticmethod(close_runtime)
+    Handler.wait_for_durable_operations = staticmethod(durable_operations.wait)
+    Handler._submit_background_task = staticmethod(import_task_queue.submit)
     return Handler
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765, index_path: Path = DEFAULT_DATABASE_PATH) -> None:
-    server = ThreadingHTTPServer((host, port), make_handler(index_path))
+    handler = make_handler(index_path)
+    server = ManagedThreadingHTTPServer((host, port), handler)
     print(f"ME Finder running at http://{host}:{port}/")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        handler.begin_shutdown()
+        server.server_close()
+        handlers_stopped = server.wait_for_handlers(timeout=5.0)
+        handler.wait_for_durable_operations()
+        if not handlers_stopped:
+            handlers_stopped = server.wait_for_handlers(timeout=2.0)
+        if handlers_stopped:
+            handler.close_runtime()
+        else:
+            logging.warning(
+                "active HTTP handlers did not finish; runtime kept open"
+            )

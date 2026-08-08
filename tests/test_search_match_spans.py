@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Dict, Iterator, List
 
 from src.me_finder.database import build_database
-from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder.normalization import (
+    compact_text,
+    normalize_pdf_text,
+    normalize_text,
+    punctuationless_text,
+)
 from src.me_finder.search import SearchEngine
 
 
@@ -142,6 +147,64 @@ class SearchMatchSpanTests(unittest.TestCase):
         self.assertEqual(item["match_quote"], "目标句")
         self.assertTrue(item["precise_highlight_available"])
 
+    def test_pdf_dehyphenation_maps_back_to_the_complete_raw_range(self) -> None:
+        text = "before inter-\nnational after"
+        paragraph = self._paragraph(
+            "PDF-DEHYPHENATED",
+            text,
+            [
+                {
+                    "paragraph_char_start": 0,
+                    "paragraph_char_end": len(text),
+                    "pdf_page_id": "pdf-test-PAGE-000000",
+                    "page_char_start": 20,
+                    "page_char_end": 20 + len(text),
+                }
+            ],
+        )
+        paragraph["normalized_text"] = normalize_pdf_text(text)
+        expected_start = text.index("inter-")
+        expected_end = expected_start + len("inter-\nnational")
+
+        for engine_factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=engine_factory.__name__):
+                with engine_factory([paragraph]) as engine:
+                    item = engine.search(
+                        "international", mode="exact", source_type="pdf"
+                    )["results"][0]
+
+                self.assertEqual(
+                    (item["match_start"], item["match_end"]),
+                    (expected_start, expected_end),
+                )
+                self.assertEqual(item["matched_text"], "inter-\nnational")
+                self.assertEqual(
+                    item["page_match_spans"],
+                    [
+                        {
+                            "pdf_page_id": "pdf-test-PAGE-000000",
+                            "page_char_start": 20 + expected_start,
+                            "page_char_end": 20 + expected_end,
+                            "match_quote": "inter-\nnational",
+                        }
+                    ],
+                )
+
+    def test_nfkc_composition_maps_to_all_consumed_source_codepoints(self) -> None:
+        text = "prefix e\u0301 suffix"
+        paragraph = self._paragraph(
+            "WORD-COMBINING",
+            text,
+            source_type="word",
+        )
+
+        with self._engine([paragraph]) as engine:
+            item = engine.search("é", mode="exact", source_type="word")["results"][0]
+
+        start = text.index("e\u0301")
+        self.assertEqual((item["match_start"], item["match_end"]), (start, start + 2))
+        self.assertEqual(item["matched_text"], "e\u0301")
+
     def test_cross_hits_map_to_left_right_and_both_pages(self) -> None:
         left = "左页开头与左页尾"
         right = "右页首句和右页末尾"
@@ -213,6 +276,168 @@ class SearchMatchSpanTests(unittest.TestCase):
             ["尾", "右"],
         )
         self.assertTrue(both_item["precise_highlight_available"])
+
+    def test_true_cross_page_hit_survives_same_text_on_real_page(self) -> None:
+        query = "跨页目标"
+        left_fragment = "跨页目"
+        right_fragment = "标随后继续"
+        left_page_text = f"{query}在左页另有一处；{left_fragment}"
+        right_page_text = right_fragment
+        cross_text = f"{left_fragment}\n{right_fragment}"
+        left_fragment_start = left_page_text.rindex(left_fragment)
+        paragraphs = [
+            self._paragraph(
+                "PDF-PAGE-TRUE-CROSS-0",
+                left_page_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(left_page_text),
+                        "pdf_page_id": "pdf-test-PAGE-000000",
+                        "pdf_page_index": 0,
+                        "page_char_start": 0,
+                        "page_char_end": len(left_page_text),
+                    }
+                ],
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-CROSS-TRUE-0-1",
+                cross_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(left_fragment),
+                        "pdf_page_id": "pdf-test-PAGE-000000",
+                        "pdf_page_index": 0,
+                        "page_char_start": left_fragment_start,
+                        "page_char_end": left_fragment_start + len(left_fragment),
+                    },
+                    {
+                        "paragraph_char_start": len(left_fragment) + 1,
+                        "paragraph_char_end": len(cross_text),
+                        "pdf_page_id": "pdf-test-PAGE-000001",
+                        "pdf_page_index": 1,
+                        "page_char_start": 0,
+                        "page_char_end": len(right_fragment),
+                    },
+                ],
+                is_cross_page=True,
+                paragraph_index=1,
+                pdf_page_start_index=0,
+                pdf_page_end_index=1,
+            ),
+            self._paragraph(
+                "PDF-PAGE-TRUE-CROSS-1",
+                right_page_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(right_page_text),
+                        "pdf_page_id": "pdf-test-PAGE-000001",
+                        "pdf_page_index": 1,
+                        "page_char_start": 0,
+                        "page_char_end": len(right_page_text),
+                    }
+                ],
+                paragraph_index=2,
+                pdf_page_start_index=1,
+            ),
+        ]
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
+                results = engine.search(
+                    query, mode="compact", limit="all", source_type="pdf"
+                )["results"]
+
+            by_id = {item["paragraph_id"]: item for item in results}
+            self.assertEqual(
+                set(by_id),
+                {"PDF-PAGE-TRUE-CROSS-0", "PDF-CROSS-TRUE-0-1"},
+            )
+            self.assertEqual(
+                {span["pdf_page_id"] for span in by_id["PDF-CROSS-TRUE-0-1"]["page_match_spans"]},
+                {"pdf-test-PAGE-000000", "pdf-test-PAGE-000001"},
+            )
+
+    def test_single_page_cross_helper_exact_duplicate_is_removed(self) -> None:
+        query = "页内唯一目标"
+        left_page_text = f"{query}留在左页"
+        right_page_text = "右页无关内容"
+        cross_text = f"{left_page_text}\n{right_page_text}"
+        paragraphs = [
+            self._paragraph(
+                "PDF-PAGE-SINGLE-0",
+                left_page_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(left_page_text),
+                        "pdf_page_id": "pdf-test-PAGE-000000",
+                        "pdf_page_index": 0,
+                        "page_char_start": 0,
+                        "page_char_end": len(left_page_text),
+                    }
+                ],
+                paragraph_index=0,
+                pdf_page_start_index=0,
+            ),
+            self._paragraph(
+                "PDF-CROSS-SINGLE-0-1",
+                cross_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(left_page_text),
+                        "pdf_page_id": "pdf-test-PAGE-000000",
+                        "pdf_page_index": 0,
+                        "page_char_start": 0,
+                        "page_char_end": len(left_page_text),
+                    },
+                    {
+                        "paragraph_char_start": len(left_page_text) + 1,
+                        "paragraph_char_end": len(cross_text),
+                        "pdf_page_id": "pdf-test-PAGE-000001",
+                        "pdf_page_index": 1,
+                        "page_char_start": 0,
+                        "page_char_end": len(right_page_text),
+                    },
+                ],
+                is_cross_page=True,
+                paragraph_index=1,
+                pdf_page_start_index=0,
+                pdf_page_end_index=1,
+            ),
+            self._paragraph(
+                "PDF-PAGE-SINGLE-1",
+                right_page_text,
+                [
+                    {
+                        "paragraph_char_start": 0,
+                        "paragraph_char_end": len(right_page_text),
+                        "pdf_page_id": "pdf-test-PAGE-000001",
+                        "pdf_page_index": 1,
+                        "page_char_start": 0,
+                        "page_char_end": len(right_page_text),
+                    }
+                ],
+                paragraph_index=2,
+                pdf_page_start_index=1,
+            ),
+        ]
+
+        for factory in (self._engine, self._sqlite_engine):
+            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
+                results = engine.search(
+                    query, mode="exact", limit="all", source_type="pdf"
+                )["results"]
+
+            self.assertEqual(
+                [item["paragraph_id"] for item in results],
+                ["PDF-PAGE-SINGLE-0"],
+            )
 
     def test_cross_joiner_only_has_no_page_mapping(self) -> None:
         left = "左页"
