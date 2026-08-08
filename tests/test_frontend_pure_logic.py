@@ -1376,6 +1376,58 @@ def _module_eval(expr):
         return json.loads(result.stdout)
 
 
+def _config_call(config_name, method, *args):
+    """调 40-bibliography.js 里某个 *_LOOKUP 配置对象的回调（describe/validate/…）。
+
+    这些回调承载三套联网补全的全部差异（请求字段、校验文案、三条状态文案、catch
+    文案、CNKI 的 query_notice/open_url）。runLookup 骨架只是把它们按固定顺序串起来，
+    所以逐一验证回调即覆盖 Phase 4 步骤4 的全部行为测试点。配置对象定义在
+    40-bibliography.js，需连同 06-pure.js 一起进同一 eval。"""
+
+    bib = ROOT / "src" / "me_finder" / "static" / "js" / "40-bibliography.js"
+    call = "%s.%s(%s)" % (
+        config_name, method, ",".join(json.dumps(a) for a in args)
+    )
+    expr = "(function(){%s\nreturn %s;})()" % (bib.read_text(encoding="utf-8"), call)
+    return _module_eval(expr)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class CrossrefLookupConfigTests(unittest.TestCase):
+    """Crossref 走 runLookup 工厂后，CROSSREF_LOOKUP 回调须复现原 lookupCrossref 行为。"""
+
+    def test_build_request_keeps_only_crossref_fields(self):
+        form = {"title": "T", "author": "A", "publish_year": "2020",
+                "doi": "D", "isbn": "X", "journal_name": "J", "issn": "S"}
+        self.assertEqual(
+            _config_call("CROSSREF_LOOKUP", "buildRequest", form),
+            {"title": "T", "author": "A", "publish_year": "2020", "doi": "D"},
+        )
+
+    def test_validate_requires_doi_or_title(self):
+        self.assertEqual(_config_call("CROSSREF_LOOKUP", "validate", {}),
+                         "请先填写 DOI 或篇名")
+        self.assertIsNone(_config_call("CROSSREF_LOOKUP", "validate", {"title": "T"}))
+        self.assertIsNone(_config_call("CROSSREF_LOOKUP", "validate", {"doi": "D"}))
+
+    def test_describe_three_branches(self):
+        self.assertEqual(
+            _config_call("CROSSREF_LOOKUP", "describe", {"candidates": []}),
+            {"message": "Crossref 未找到匹配文献，可核对 DOI/篇名或手动填写", "warning": True})
+        self.assertEqual(
+            _config_call("CROSSREF_LOOKUP", "describe",
+                         {"candidates": [{"match": {"level": "high"}}]}),
+            {"message": "找到 1 条高匹配文献，请核对后补全", "warning": False})
+        self.assertEqual(
+            _config_call("CROSSREF_LOOKUP", "describe", {"candidates": [{}, {}]}),
+            {"message": "找到 2 条候选，请选择正确的文献", "warning": True})
+
+    def test_on_error_passes_message_through(self):
+        self.assertEqual(
+            _config_call("CROSSREF_LOOKUP", "onError", {"message": "boom"}),
+            {"message": "boom", "warning": True})
+
+
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CandidateCardHTMLGoldenTests(unittest.TestCase):
     """联网补全候选卡抽出 candidateCardHTML 后，三套源的渲染必须逐字不变。

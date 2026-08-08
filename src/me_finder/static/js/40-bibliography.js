@@ -321,7 +321,56 @@ function setLookupStatus(config, message, warning) {
 // listHTML 引用的三个候选列表函数为函数声明，已提升，const 初始化时可用。
 const CNKI_LOOKUP = {listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML};
 const BOOK_LOOKUP = {listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML};
-const CROSSREF_LOOKUP = {listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listHTML: crossrefCandidateListHTML};
+const CROSSREF_LOOKUP = {
+  stateMap: crossrefLookupState, endpoint: '/api/bibliographic-metadata/lookup-crossref',
+  listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listHTML: crossrefCandidateListHTML,
+  loadingMessage: '正在查询 Crossref…', defaultError: 'Crossref 查询失败',
+  buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, doi: form.doi}; },
+  validate: function (metadata) { return (!metadata.doi && !metadata.title) ? '请先填写 DOI 或篇名' : null; },
+  resetState: function () { return {candidates: []}; },
+  saveErrorState: function () {},
+  describe: function (data) {
+    var c = data.candidates;
+    if (!c || !c.length) return {message: 'Crossref 未找到匹配文献，可核对 DOI/篇名或手动填写', warning: true};
+    if (c.length === 1 && c[0].match && c[0].match.level === 'high') return {message: '找到 1 条高匹配文献，请核对后补全', warning: false};
+    return {message: '找到 ' + c.length + ' 条候选，请选择正确的文献', warning: true};
+  },
+  onError: function (e) { return {message: e.message, warning: true}; }
+};
+
+// 三套联网补全的通用骨架：校验 → 清态 → 渲染 → 置“查询中” → fetch → 判 ok →
+// 存态 → 渲染 → 成功文案；失败先 saveErrorState 再 onError。差异全部由 config 的
+// 回调承接，工厂内没有一个 if (config.*)，也不加统一 toast（三套只写 status）。
+async function runLookup(config, sourceId) {
+  var form = collectBibliographicForm();
+  var metadata = config.buildRequest(form);
+  var invalid = config.validate(metadata);
+  if (invalid) {
+    setLookupStatus(config, invalid, true);
+    return;
+  }
+  config.stateMap[sourceId] = config.resetState(form);
+  renderCandidates(config, sourceId);
+  setLookupStatus(config, config.loadingMessage, false);
+  try {
+    var resp = await fetch(config.endpoint, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({metadata: metadata})
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      config.saveErrorState(data, sourceId);
+      throw new Error(data.error || config.defaultError);
+    }
+    config.stateMap[sourceId] = {candidates: data.candidates || [], open_url: data.open_url || ''};
+    renderCandidates(config, sourceId);
+    var described = config.describe(data);
+    setLookupStatus(config, described.message, described.warning);
+  } catch (e) {
+    renderCandidates(config, sourceId);
+    var errd = config.onError(e);
+    setLookupStatus(config, errd.message, errd.warning);
+  }
+}
 
 async function lookupCnkiMetadata(sourceId) {
   var form = collectBibliographicForm();
@@ -444,34 +493,7 @@ function crossrefCandidateListHTML(sourceId) {
 }
 
 async function lookupCrossref(sourceId) {
-  var form = collectBibliographicForm();
-  var metadata = {title:form.title, author:form.author, publish_year:form.publish_year, doi:form.doi};
-  if (!metadata.doi && !metadata.title) {
-    setLookupStatus(CROSSREF_LOOKUP,'请先填写 DOI 或篇名', true);
-    return;
-  }
-  crossrefLookupState[sourceId] = {candidates:[]};
-  renderCandidates(CROSSREF_LOOKUP,sourceId);
-  setLookupStatus(CROSSREF_LOOKUP,'正在查询 Crossref…', false);
-  try {
-    var resp = await fetch('/api/bibliographic-metadata/lookup-crossref', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:metadata})
-    });
-    var data = await resp.json();
-    if (!resp.ok || !data.ok) throw new Error(data.error || 'Crossref 查询失败');
-    crossrefLookupState[sourceId] = {candidates:data.candidates || [], open_url:data.open_url || ''};
-    renderCandidates(CROSSREF_LOOKUP,sourceId);
-    if (!data.candidates || !data.candidates.length) {
-      setLookupStatus(CROSSREF_LOOKUP,'Crossref 未找到匹配文献，可核对 DOI/篇名或手动填写', true);
-    } else if (data.candidates.length === 1 && data.candidates[0].match && data.candidates[0].match.level === 'high') {
-      setLookupStatus(CROSSREF_LOOKUP,'找到 1 条高匹配文献，请核对后补全', false);
-    } else {
-      setLookupStatus(CROSSREF_LOOKUP,'找到 ' + data.candidates.length + ' 条候选，请选择正确的文献', true);
-    }
-  } catch(e) {
-    renderCandidates(CROSSREF_LOOKUP,sourceId);
-    setLookupStatus(CROSSREF_LOOKUP,e.message, true);
-  }
+  return runLookup(CROSSREF_LOOKUP, sourceId);
 }
 
 function applyCrossrefCandidate(sourceId, index) {
