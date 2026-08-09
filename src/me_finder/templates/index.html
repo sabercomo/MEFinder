@@ -208,6 +208,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <button class="seg-btn" data-doctype="book" onclick="setLibDocTypeFilter(this)">著作</button>
                   <button class="seg-btn" data-doctype="journal_article" onclick="setLibDocTypeFilter(this)">期刊论文</button>
                   <button class="seg-btn" data-doctype="thesis" onclick="setLibDocTypeFilter(this)">学位论文</button>
+                  <button class="seg-btn" data-doctype="unknown" style="display:none" onclick="setLibDocTypeFilter(this)">未识别</button>
                 </div>
               </div>
               <button class="action-btn library-metadata-btn" type="button" id="batch-cnki-btn" title="联网补全期刊信息" onclick="runCnkiBatchButton()">联网补全</button>

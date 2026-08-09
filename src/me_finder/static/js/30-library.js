@@ -149,6 +149,21 @@ async function setLibDocTypeFilter(btn) {
   renderLibraryList();
 }
 
+// 清空所有筛选与搜索，回到全部（空态「清除全部筛选」用）。
+function clearLibraryFilters() {
+  libTypeFilter = 'all';
+  libLangFilter = 'all';
+  libDocTypeFilter = 'all';
+  libStatusFilter = 'all';
+  var search = document.getElementById('lib-search');
+  if (search) search.value = '';
+  document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.type === 'all'); });
+  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.lang === 'all'); });
+  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.doctype === 'all'); });
+  renderLibraryStats();
+  renderLibraryList();
+}
+
 function filterLibrary() {
   // 输入法与连续输入下，91 份以上的列表每敲一个字重排一次会明显发涩。
   if (libFilterTimer) clearTimeout(libFilterTimer);
@@ -221,7 +236,13 @@ function getFilteredSources() {
   if (libLangFilter !== 'all') {
     sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
   }
-  if (libDocTypeFilter !== 'all') {
+  if (libDocTypeFilter === 'unknown') {
+    // 未识别：从未跑过书目识别的 PDF（类型只是默认回落成 book，并非真的判定过）。
+    sources = sources.filter(s => s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)));
+  } else if (libDocTypeFilter === 'book') {
+    // 著作：仅已确认类型的图书 PDF；不再把 Word 文集和未识别 PDF 混进来。
+    sources = sources.filter(s => s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book');
+  } else if (libDocTypeFilter !== 'all') {
     sources = sources.filter(s => libraryDocType(s) === libDocTypeFilter);
   }
   if (libStatusFilter === 'pdf_all') {
@@ -367,17 +388,24 @@ function renderLibraryList() {
   });
   const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
   const thesisCount = libSources.filter(s => libraryDocType(s) === 'thesis').length;
-  const bookCount = allCount - journalCount - thesisCount;
+  // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
+  const bookCount = libSources.filter(s => s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book').length;
+  const unknownCount = libSources.filter(s => s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s))).length;
   document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(btn) {
     var dt = btn.dataset.doctype;
-    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : dt === 'thesis' ? thesisCount : bookCount;
-    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : dt === 'thesis' ? '学位论文' : '著作';
+    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : dt === 'thesis' ? thesisCount : dt === 'unknown' ? unknownCount : bookCount;
+    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : dt === 'thesis' ? '学位论文' : dt === 'unknown' ? '未识别' : '著作';
     btn.textContent = label + ' (' + count + ')';
+    // 没有未识别文献时隐藏该档，避免长期占位。
+    if (dt === 'unknown') btn.style.display = unknownCount > 0 ? '' : 'none';
   });
 
   libraryRenderToken += 1;
   if (sources.length === 0) {
-    listEl.innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">未找到匹配文献</div></div>';
+    // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
+    listEl.innerHTML = libSources.length === 0
+      ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF 或 DOCX 后即可检索、校准页码、补全书目</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
+      : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
     updateLibraryDeleteControls();
     return;
   }

@@ -377,6 +377,24 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 详情抽屉带 ARIA。
         self.assertIn('id="library-drawer" role="complementary" aria-label="文献详情"', HTML)
 
+    def test_library_empty_states_and_positive_doctype_counts(self) -> None:
+        """L-13 三态空状态 + L-15 著作正向计数与未识别档。"""
+
+        # 三态空状态：库空 → 去导入；筛选无果 → 清除筛选。
+        self.assertIn("libSources.length === 0", HTML)
+        self.assertIn("文献库还是空的", HTML)
+        self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
+        self.assertIn("当前筛选没有匹配文献", HTML)
+        self.assertIn("function clearLibraryFilters()", HTML)
+        self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
+        self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
+        # 著作正向计数（不再用减法），未识别单列一档。
+        self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
+        self.assertIn("!isBibliographicTypeConfirmed(sourceBibliographicMetadata(s))", HTML)
+        self.assertIn('data-doctype="unknown"', HTML)
+        self.assertIn("dt === 'unknown' ? '未识别'", HTML)
+        self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
+
     def test_calibration_has_one_level_preview_before_expert_table(self) -> None:
         """Phase 3b：页码校准两级深度。默认只出解释+自动检测+预览；7 列专家表收起。"""
 
