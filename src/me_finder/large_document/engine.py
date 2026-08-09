@@ -235,6 +235,17 @@ class LargeDocumentJobEngine:
         publish_index: Optional[Callable[[], None]] = None,
     ) -> DocumentJob:
         job = self.ledger.get_document_job(job_id)
+        requested_destination = Path(destination).resolve()
+        if (
+            job.status == "published"
+            and job.published_export_path
+            and Path(job.published_export_path).resolve() == requested_destination
+            and requested_destination.is_file()
+        ):
+            # A resumed caller may not know whether the final atomic switch
+            # completed before its process exited.  The ledger plus final file
+            # make publishing the same destination idempotent.
+            return job
         if job.status not in {"validated", "published"}:
             raise RuntimeError("document must pass merge validation before publish")
         merged_path = self._merged_path(job.id)

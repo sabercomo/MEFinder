@@ -190,4 +190,3 @@ def merge_normalized_result_files(
         sha256=sha256_file(target),
         page_count=page_count,
     )
-

@@ -45,4 +45,3 @@ def fsync_path(path: Path) -> None:
     with Path(path).open("rb+") as stream:
         stream.flush()
         os.fsync(stream.fileno())
-

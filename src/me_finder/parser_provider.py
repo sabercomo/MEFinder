@@ -253,4 +253,3 @@ class ParserProvider(ABC):
         request: ParserRequest,
     ) -> NormalizedParseResult:
         raise NotImplementedError
-
