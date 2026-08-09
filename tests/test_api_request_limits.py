@@ -39,6 +39,7 @@ class ApiRequestLimitTests(unittest.TestCase):
             context = AppContext.create(root, index_path=index_path)
             handler = make_handler(index_path, app_context=context)
             handler.log_message = lambda *_args: None
+            self._handler = handler
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -85,6 +86,40 @@ class ApiRequestLimitTests(unittest.TestCase):
 
         self.assertEqual(status, 413)
         self.assertEqual(payload["error"], "JSON 请求内容过大。")
+
+    def test_new_post_is_rejected_with_503_once_shutdown_begins(self) -> None:
+        def post_search(port: int):
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            try:
+                connection.request(
+                    "POST",
+                    "/api/search",
+                    body=b"{}",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Content-Length": "2",
+                    },
+                )
+                response = connection.getresponse()
+                return response.status, response.read().decode("utf-8")
+            finally:
+                connection.close()
+
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+
+            # Before shutdown the same well-formed POST must be accepted, so the
+            # 503 below is attributable to the closing state and nothing else.
+            warm_status, _ = post_search(port)
+
+            # Enter the closing/shutdown state and re-issue the POST.
+            self._handler.begin_shutdown()
+            status, body = post_search(port)
+            payload = json.loads(body)
+
+        self.assertNotEqual(warm_status, 503)
+        self.assertEqual(status, 503)
+        self.assertEqual(payload["error"], "应用正在关闭。")
 
     def test_close_keeps_runtime_open_until_accepted_work_finishes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
