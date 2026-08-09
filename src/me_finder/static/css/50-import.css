@@ -72,19 +72,23 @@
 @media (max-width: 800px) {
   .pdf-parse-mode { grid-template-columns: 1fr; }
 }
-.pdf-provider-select {
-  width: 100%;
-  height: 32px;
-  margin-top: 5px;
-  padding: 0 8px;
-  border: 1px solid var(--divider);
-  border-radius: 7px;
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font-size: 11px;
-  outline: none;
-}
-.pdf-provider-select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+/* 导入页“其他视觉 API”选择器：复用 .app-select，与设置页厂商列表同一套 logo。 */
+.import-vision-select { display: block; width: 100%; margin-top: 6px; }
+.import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border-radius: 7px; font-size: 12px; }
+.import-vision-select.is-disabled { opacity: .55; pointer-events: none; }
+.import-vision-select .app-select-value { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.import-vision-select .app-select-value .vision-avatar,
+.import-vision-option .vision-avatar { width: 22px; height: 22px; border-radius: 6px; }
+.import-vision-select .app-select-value .vision-avatar.has-icon img,
+.import-vision-option .vision-avatar.has-icon img { width: 15px; height: 15px; }
+.import-vision-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-menu { width: min(340px, calc(100vw - 48px)); padding: 6px; }
+.import-vision-option { display: flex; align-items: center; gap: 9px; height: auto; padding: 8px 10px; }
+.import-vision-option .import-vision-opt { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.import-vision-option .import-vision-opt-name { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-option.is-selected .import-vision-opt-name { color: var(--accent); }
+.import-vision-option .import-vision-opt-model { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-option .app-select-check { margin-left: auto; color: var(--accent); }
 .drop-zone {
   margin-top: 20px;
   border: 2px dashed var(--divider);

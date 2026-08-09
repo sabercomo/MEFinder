@@ -548,29 +548,81 @@ function configuredVisionProviders() {
   });
 }
 
+// 导入页“其他视觉 API”选择器：与设置页同一套 .app-select + 厂商 logo（visionAvatarHtml），
+// 不再用原生 <select>。选中值存在容器的 data-value 上，selectedVisionProviderId 读它。
 function syncImportVisionProviders() {
-  var select = document.getElementById('import-vision-provider');
+  var container = document.getElementById('import-vision-provider');
+  var options = document.getElementById('import-vision-provider-options');
   var option = document.getElementById('vision-parse-option');
   var radio = option ? option.querySelector('input[name="pdf-parse-mode"]') : null;
-  if (!select || !option || !radio) return;
+  if (!container || !options || !option || !radio) return;
   var providers = configuredVisionProviders();
-  select.innerHTML = providers.length
-    ? providers.map(function(provider) {
-        return '<option value="' + esc(provider.id) + '">' + esc(provider.name) + ' · ' + esc(provider.model) + '</option>';
-      }).join('')
-    : '<option value="">请先在设置中配置</option>';
-  select.hidden = providers.length === 0;
+  var trigger = container.querySelector('.app-select-trigger');
+  if (!providers.length) {
+    options.innerHTML = '<div class="document-options-empty">请先在设置中配置</div>';
+    container.dataset.value = '';
+  } else {
+    var current = container.dataset.value || '';
+    var preferred = visionConfig.default_provider_id || '';
+    if (!providers.some(function(provider) { return provider.id === current; })) {
+      current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : providers[0].id;
+    }
+    container.dataset.value = current;
+    var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
+    options.innerHTML = providers.map(function(provider) {
+      var selected = provider.id === current;
+      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')">'
+        + visionAvatarHtml(provider, 'vision-avatar-sm')
+        + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + '</span>'
+        + '<span class="import-vision-opt-model">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
+        + (selected ? check : '') + '</button>';
+    }).join('');
+  }
   var configLink = document.getElementById('vision-parse-config-link');
   if (configLink) configLink.hidden = providers.length > 0;
-  var preferred = visionConfig.default_provider_id || '';
-  if (providers.some(function(provider) { return provider.id === preferred; })) select.value = preferred;
   radio.disabled = providers.length === 0;
-  select.disabled = providers.length === 0;
+  if (trigger) trigger.disabled = providers.length === 0;
   option.classList.toggle('is-disabled', providers.length === 0);
+  container.classList.toggle('is-disabled', providers.length === 0);
   if (!providers.length && radio.checked) {
     var auto = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
     if (auto) auto.checked = true;
   }
+  updateImportVisionProviderLabel();
+}
+
+// 打开下拉即视作选择“其他视觉 API”这一档，与旧原生 select 的 onchange 行为一致。
+function toggleImportVisionProvider(event) {
+  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
+  if (radio && !radio.disabled) radio.checked = true;
+  toggleAppSelect(event, 'import-vision-provider');
+}
+
+function selectImportVisionProvider(event, providerId) {
+  if (event) event.stopPropagation();
+  var container = document.getElementById('import-vision-provider');
+  if (container) container.dataset.value = providerId;
+  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
+  if (radio && !radio.disabled) radio.checked = true;
+  document.querySelectorAll('#import-vision-provider-options .app-select-option').forEach(function(opt) {
+    opt.classList.toggle('is-selected', opt.dataset.value === providerId);
+  });
+  updateImportVisionProviderLabel();
+  closeAppSelects();
+}
+
+function updateImportVisionProviderLabel() {
+  var container = document.getElementById('import-vision-provider');
+  var label = document.getElementById('import-vision-provider-label');
+  if (!container || !label) return;
+  var providers = configuredVisionProviders();
+  var provider = providers.find(function(item) { return item.id === (container.dataset.value || ''); });
+  if (!provider) {
+    label.textContent = providers.length ? '选择解析接口' : '请先在设置中配置';
+    return;
+  }
+  label.innerHTML = visionAvatarHtml(provider, 'vision-avatar-sm')
+    + '<span class="import-vision-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>';
 }
 
 function renderVisionProviders() {

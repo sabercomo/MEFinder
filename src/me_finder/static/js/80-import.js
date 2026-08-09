@@ -786,8 +786,8 @@ function selectedPdfParseMode() {
 }
 
 function selectedVisionProviderId() {
-  var select = document.getElementById('import-vision-provider');
-  return selectedPdfParseMode() === 'vision' && select ? select.value : '';
+  var container = document.getElementById('import-vision-provider');
+  return selectedPdfParseMode() === 'vision' && container ? (container.dataset.value || '') : '';
 }
 
 function handleFileSelect(files) {
@@ -856,14 +856,14 @@ function renderImportQueue() {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
           + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
       }
-      retryHTML += '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">解析设置</button></div>';
+      retryHTML += '<button class="action-btn" type="button" onclick="openVisionSettings()">解析设置</button></div>';
     } else if (q.status === 'error' && retryProvider) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
         + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
-        + '<button class="action-btn" type="button" onclick="navigateTo(\'settings\')">切换设置</button></div>';
+        + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
     } else if (q.status === 'error'
         && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed)) {
-      retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="navigateTo(\'settings\')">配置其他解析 API</button></div>';
+      retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
     }
     return '<div class="import-item" data-id="' + q.id + '">'
       + '<div class="import-item-header">'

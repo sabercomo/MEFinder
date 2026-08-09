@@ -344,7 +344,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span>
               <strong>其他视觉 API</strong>
               <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析</small>
-              <select id="import-vision-provider" class="pdf-provider-select" onclick="event.stopPropagation()" onchange="document.querySelector('input[name=&quot;pdf-parse-mode&quot;][value=&quot;vision&quot;]').checked=true" aria-label="选择其他解析 API"></select>
+              <div class="app-select import-vision-select" id="import-vision-provider" data-value="" onclick="event.stopPropagation()">
+                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="选择其他解析 API" onclick="toggleImportVisionProvider(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                <div class="app-select-menu import-vision-menu" role="listbox" id="import-vision-provider-options"></div>
+              </div>
               <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
             </span>
           </label>
