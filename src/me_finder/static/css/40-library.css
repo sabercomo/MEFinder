@@ -133,6 +133,28 @@
 .library-sort-direction-select .app-select-trigger { min-width: 88px; }
 .library-sort-controls .app-select-menu { width: 178px; }
 .library-sort-direction-select .app-select-menu { width: 112px; }
+/* 常驻三态全选（L-09）：空 / 半选（横杠）/ 全选（对勾）。 */
+.lib-select-all {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  display: inline-grid; place-items: center;
+  border: 1.6px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-primary);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.lib-select-all:hover:not(:disabled) { border-color: var(--accent); }
+.lib-select-all:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
+.lib-select-all:disabled { opacity: .4; cursor: default; }
+.lib-select-all-check { width: 14px; height: 14px; opacity: 0; }
+.lib-select-all-dash { width: 10px; height: 2px; border-radius: 1px; background: var(--accent); display: none; }
+.lib-select-all.is-all { background: var(--accent); border-color: var(--accent); }
+.lib-select-all.is-all .lib-select-all-check { opacity: 1; }
+.lib-select-all.is-some .lib-select-all-dash { display: block; }
+/* 键盘导航焦点可见（L-11）。 */
+.library-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .library-body {
   flex: 1;
   display: flex;
@@ -341,7 +363,8 @@
 }
 .library-body.detail-open {
   display: grid;
-  grid-template-columns: minmax(320px, 36fr) minmax(0, 64fr);
+  /* 列表 : 详情 由 36:64 调平到 44:56，列表不再被压到只剩标题（L-07）。 */
+  grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);
 }
 .library-body.detail-open .library-list-scroll { min-width: 0; }
 .library-body.detail-open .library-drawer,
@@ -349,7 +372,8 @@
   width: auto;
   min-width: 0;
 }
-.library-body.detail-open .library-drawer-inner { width: auto; }
+/* 详情内容设上限并居中：宽窗口下短字段不再被拉成整屏（Zotero/Mail 检视器同款）。 */
+.library-body.detail-open .library-drawer-inner { width: auto; max-width: 760px; margin-inline: auto; }
 .library-body.detail-open .library-list-container.library-view-grid { grid-template-columns: minmax(0, 1fr); }
 .library-body.detail-open .library-row-missing { display: none; }
 @media (max-width: 1120px) {

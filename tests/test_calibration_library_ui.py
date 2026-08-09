@@ -395,6 +395,27 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("dt === 'unknown' ? '未识别'", HTML)
         self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
 
+    def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
+        """L-07 列表:详情比例 + 内容上限；L-09 常驻三态全选；L-11 列表键盘导航。"""
+
+        # L-07
+        self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", HTML)
+        self.assertIn("max-width: 760px; margin-inline: auto;", HTML)
+        # L-09
+        self.assertIn('id="lib-select-all"', HTML)
+        self.assertIn('role="checkbox"', HTML)
+        self.assertIn("function syncLibrarySelectAll()", HTML)
+        self.assertIn("syncLibrarySelectAll();", HTML)
+        self.assertIn(".lib-select-all.is-all", HTML)
+        self.assertIn(".lib-select-all.is-some .lib-select-all-dash { display: block; }", HTML)
+        # L-11
+        self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
+        self.assertIn('" tabindex="0" role="option" data-id="', HTML)
+        self.assertIn("function handleLibraryListKeydown(event)", HTML)
+        self.assertIn("function setupLibraryKeyboardNav()", HTML)
+        self.assertIn("setupLibraryKeyboardNav();", HTML)
+        self.assertIn(".library-entry:focus-visible", HTML)
+
     def test_calibration_has_one_level_preview_before_expert_table(self) -> None:
         """Phase 3b：页码校准两级深度。默认只出解释+自动检测+预览；7 列专家表收起。"""
 

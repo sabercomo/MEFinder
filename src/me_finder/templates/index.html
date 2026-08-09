@@ -192,6 +192,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="library-controls-row">
           <div id="library-toolbar-line">
             <div class="library-controls-line">
+              <button class="lib-select-all" id="lib-select-all" type="button" role="checkbox" aria-checked="false" aria-label="全选当前筛选结果" title="全选当前筛选结果" onclick="toggleSelectVisibleLibraryDocuments()">
+                <svg class="lib-select-all-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
+                <span class="lib-select-all-dash" aria-hidden="true"></span>
+              </button>
               <div class="library-filter-controls">
                 <div class="segmented-control" id="lib-type-control">
                   <button class="seg-btn active" data-type="all" onclick="setLibFilter(this)">全部</button>
@@ -242,7 +246,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       </div>
       <div class="library-body">
         <div class="library-list-scroll">
-          <div id="library-list" class="library-list-container library-view-list"></div>
+          <div id="library-list" class="library-list-container library-view-list" role="listbox" aria-label="文献列表" aria-multiselectable="true"></div>
         </div>
         <div class="library-drawer" id="library-drawer" role="complementary" aria-label="文献详情">
           <div class="library-drawer-inner">

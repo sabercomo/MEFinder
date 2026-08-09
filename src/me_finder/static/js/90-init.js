@@ -65,6 +65,7 @@ document.addEventListener('input', function(event) {
 configureDesktopPlatformOptions();
 setupScanDirectoryControls();
 setupLibraryDragSelection();
+setupLibraryKeyboardNav();
 setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();

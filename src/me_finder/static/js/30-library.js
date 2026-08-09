@@ -304,6 +304,7 @@ function updateLibraryDeleteControls() {
     selectVisibleButton.textContent = allSelected ? '取消全选' : '全选当前';
     selectVisibleButton.disabled = selectable.length === 0;
   }
+  syncLibrarySelectAll();
 }
 
 function syncLibraryDeleteSelectionUI() {
@@ -345,6 +346,43 @@ function toggleSelectVisibleLibraryDocuments() {
     else libDeleteSelection.add(item.source_file_id);
   });
   syncLibraryDeleteSelectionUI();
+}
+
+// 列表键盘导航（L-11）：↑↓ 移动焦点，Enter 打开详情，空格切换勾选，Home/End 跳首尾。
+function handleLibraryListKeydown(event) {
+  var target = event.target && event.target.closest ? event.target.closest('.library-entry') : null;
+  if (!target) return;
+  var entries = Array.prototype.slice.call(document.querySelectorAll('#library-list .library-entry'));
+  var idx = entries.indexOf(target);
+  if (event.key === 'ArrowDown') { event.preventDefault(); if (entries[idx + 1]) entries[idx + 1].focus(); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); if (entries[idx - 1]) entries[idx - 1].focus(); }
+  else if (event.key === 'Home') { event.preventDefault(); if (entries[0]) entries[0].focus(); }
+  else if (event.key === 'End') { event.preventDefault(); if (entries.length) entries[entries.length - 1].focus(); }
+  else if (event.key === 'Enter') { event.preventDefault(); selectLibDoc(target.dataset.id); }
+  else if (event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); toggleLibraryDeleteSelection(target.dataset.id); }
+}
+
+function setupLibraryKeyboardNav() {
+  var list = document.getElementById('library-list');
+  if (!list || list.dataset.keyboardReady === '1') return;
+  list.dataset.keyboardReady = '1';
+  list.addEventListener('keydown', handleLibraryListKeydown);
+}
+
+// 常驻全选（L-09）：工具栏三态复选框——空 / 半选 / 全选当前筛选结果，
+// 既是全选入口，也是「这里可多选」的可发现锚点。
+function syncLibrarySelectAll() {
+  var box = document.getElementById('lib-select-all');
+  if (!box) return;
+  var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
+  var selectedVisible = selectable.filter(function(item) { return libDeleteSelection.has(item.source_file_id); });
+  var state = selectable.length === 0 ? 'empty'
+    : selectedVisible.length === 0 ? 'empty'
+    : selectedVisible.length === selectable.length ? 'all' : 'some';
+  box.classList.toggle('is-all', state === 'all');
+  box.classList.toggle('is-some', state === 'some');
+  box.setAttribute('aria-checked', state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false');
+  box.disabled = selectable.length === 0;
 }
 
 function handleLibraryEntryClick(event, sourceId) {
@@ -478,7 +516,7 @@ function libraryEntryHTML(src) {
   if (libViewMode === 'grid') {
     var imported = formatCalDate(src.imported_at || src.last_modified);
     var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
-    return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+    return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
       + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div>' + selectionControl + '</div>'
       + '<div class="library-card-title">' + thesisIcon + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
       + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
@@ -486,7 +524,7 @@ function libraryEntryHTML(src) {
       + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
       + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
   }
-  return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+  return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
     + selectionControl
     + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
     + '<span class="library-row-title">' + thesisIcon + esc(title) + '</span>'
