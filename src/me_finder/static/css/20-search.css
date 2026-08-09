@@ -142,7 +142,7 @@
 .app-select-menu {
   display: none;
   position: absolute;
-  z-index: 70;
+  z-index: var(--z-dropdown);
   top: calc(100% + 7px);
   right: 0;
   width: 180px;

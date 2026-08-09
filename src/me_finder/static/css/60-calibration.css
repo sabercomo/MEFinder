@@ -181,7 +181,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 40;
+  z-index: var(--z-dropdown);
   min-width: 188px;
   padding: 6px;
   background: var(--surface);

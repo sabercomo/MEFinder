@@ -34,7 +34,10 @@ class ToastPresentationTests(unittest.TestCase):
 
     def test_toast_never_blocks_clicks_and_sits_above_dialogs(self) -> None:
         self.assertIn("pointer-events: none;", HTML)
-        self.assertIn("z-index: 400;", HTML)
+        # 统一层级 token（G-03）：toast 用 --z-toast(500)，高于弹窗 --z-modal(400)。
+        self.assertIn("z-index: var(--z-toast);", HTML)
+        self.assertIn("--z-toast: 500;", HTML)
+        self.assertIn("--z-modal: 400;", HTML)
 
     def test_showtoast_still_accepts_a_bare_message(self) -> None:
         # reader.js 只传一个参数。

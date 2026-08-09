@@ -212,7 +212,7 @@
 }
 .library-selection-marquee {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-dropdown);
   border: 1px solid var(--danger);
   border-radius: 3px;
   background: var(--danger-soft);
@@ -443,7 +443,7 @@
 .drawer-close-bar {
   position: sticky;
   top: 0;
-  z-index: 6;
+  z-index: var(--z-sticky);
   margin: 0 -24px 16px;
   padding: 14px 24px 10px;
   background: var(--bg);

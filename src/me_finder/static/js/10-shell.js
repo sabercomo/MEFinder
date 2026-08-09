@@ -92,18 +92,49 @@ function appDialogBackdropClick(event) {
   if (event.target && event.target.id === 'app-dialog-backdrop') settleAppDialog(false);
 }
 
+// 统一 Esc 栈（G-02）：按从最内层到最外层的顺序，一次 Esc 关一层。
 document.addEventListener('keydown', function(event) {
   if (event.key !== 'Escape') return;
+  // 1. 开着的下拉 / 菜单先关。
+  if (document.querySelector('.app-select.is-open, .bib-menu.open')) {
+    event.preventDefault();
+    if (typeof closeAppSelects === 'function') closeAppSelects();
+    if (typeof bibCloseMenus === 'function') bibCloseMenus();
+    return;
+  }
+  // 2. 知网批量选择弹窗。
   var cnkiBatch = document.getElementById('cnki-batch-modal');
   if (cnkiBatch && cnkiBatch.classList.contains('open')) {
     event.preventDefault();
     resolveCnkiBatchChoice({action:'skip'});
     return;
   }
+  // 3. 通用确认 / 提示对话框。
   var backdrop = document.getElementById('app-dialog-backdrop');
   if (backdrop && backdrop.classList.contains('open')) {
     event.preventDefault();
     settleAppDialog(false);
+    return;
+  }
+  // 4. 移除确认弹窗（移除进行中不响应 Esc，避免中止事务）。
+  var removeModal = document.getElementById('remove-document-modal');
+  if (removeModal && removeModal.classList.contains('open')) {
+    if (typeof removeRequestController !== 'undefined' && removeRequestController) return;
+    event.preventDefault();
+    closeRemoveDocumentModal();
+    return;
+  }
+  // 5. 文献库批量选择态：先退选择。
+  if (typeof libDeleteSelection !== 'undefined' && libDeleteSelection && libDeleteSelection.size > 0) {
+    event.preventDefault();
+    clearLibrarySelection();
+    return;
+  }
+  // 6. 文献详情抽屉：带脏检查关闭。
+  var drawer = document.getElementById('library-drawer');
+  if (drawer && drawer.classList.contains('open')) {
+    event.preventDefault();
+    requestCloseLibDrawer();
   }
 });
 

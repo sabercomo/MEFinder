@@ -395,6 +395,24 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("dt === 'unknown' ? '未识别'", HTML)
         self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
 
+    def test_global_layering_tokens_and_escape_stack(self) -> None:
+        """G-03 统一 z-index token；G-02 统一 Esc 栈。"""
+
+        # 层级 token 定义与套用。
+        self.assertIn("--z-dropdown: 100;", HTML)
+        self.assertIn("--z-modal: 400;", HTML)
+        self.assertIn("--z-toast: 500;", HTML)
+        self.assertIn("z-index: var(--z-titlebar);", HTML)
+        self.assertIn("z-index: var(--z-modal);", HTML)
+        self.assertIn("z-index: var(--z-toast);", HTML)
+        self.assertIn("z-index: var(--z-dropdown);", HTML)
+        # 框选 marquee 不再用 9999 盖过一切（注释除外，规则里不得再出现）。
+        self.assertNotIn("z-index: 9999;", HTML)
+        # Esc 栈：从下拉 → 弹窗 → 选择态 → 抽屉逐层。
+        self.assertIn("document.querySelector('.app-select.is-open, .bib-menu.open')", HTML)
+        self.assertIn("libDeleteSelection.size > 0) {\n    event.preventDefault();\n    clearLibrarySelection();", HTML)
+        self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
+
     def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
         """L-07 列表:详情比例 + 内容上限；L-09 常驻三态全选；L-11 列表键盘导航。"""
 

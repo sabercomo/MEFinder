@@ -1,5 +1,5 @@
 /* ── Theme-aware dialogs ───────────────────────────────────── */
-.app-dialog-backdrop { position: fixed; inset: 0; z-index: 350; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.app-dialog-backdrop { position: fixed; inset: 0; z-index: var(--z-modal); display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
 .app-dialog-backdrop.open { display: grid; }
 .app-dialog {
   width: min(460px, 100%);
@@ -20,7 +20,7 @@
 .app-dialog[data-tone="danger"] #app-dialog-confirm { color: var(--danger); border-color: var(--danger); background: var(--surface); }
 .app-dialog[data-tone="danger"] #app-dialog-confirm:hover { background: var(--danger-soft); }
 
-.remove-modal-backdrop { position: fixed; inset: 0; z-index: 300; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(2px); }
+.remove-modal-backdrop { position: fixed; inset: 0; z-index: var(--z-modal); display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(2px); }
 .remove-modal-backdrop.open { display: grid; }
 .remove-modal { width: min(470px, 100%); padding: 22px; border-radius: 14px; background: var(--dialog-bg); border: 1px solid var(--border-default); box-shadow: var(--shadow-popover); }
 .remove-modal-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
@@ -33,7 +33,7 @@
 .remove-modal-warning.show { display: block; }
 .remove-modal-actions { margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; }
 
-.cnki-batch-backdrop { position: fixed; inset: 0; z-index: 360; display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.cnki-batch-backdrop { position: fixed; inset: 0; z-index: var(--z-modal); display: none; place-items: center; padding: 20px; background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
 .cnki-batch-backdrop.open { display: grid; }
 .cnki-batch-modal { width: min(560px, 100%); max-height: min(80vh, 720px); display: flex; flex-direction: column; padding: 22px; border-radius: 16px; background: var(--dialog-bg); border: 1px solid var(--border-default); box-shadow: var(--shadow-popover); }
 .cnki-batch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -70,7 +70,7 @@
   /* 提示不该挡住下面的列表；整层都不接收指针事件。 */
   pointer-events: none;
   /* 高于对话框，弹窗打开时的提示也要看得见。 */
-  z-index: 400;
+  z-index: var(--z-toast);
 }
 .toast {
   display: flex;

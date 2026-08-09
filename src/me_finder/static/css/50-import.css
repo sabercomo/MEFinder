@@ -232,7 +232,7 @@
 #scan-results.is-drag-selecting .scan-row { cursor: crosshair; user-select: none; }
 .scan-selection-marquee {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-dropdown);
   border: 1px solid var(--accent);
   border-radius: 2px;
   background: var(--accent-soft);

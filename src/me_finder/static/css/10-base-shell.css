@@ -23,7 +23,7 @@ html[data-desktop-shell="macos"] {
 html[data-desktop-shell="macos"] .macos-titlebar {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 200;
+  z-index: var(--z-titlebar);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,7 +65,7 @@ html[data-desktop-shell="win32"] {
 html[data-desktop-shell="win32"] .windows-titlebar {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 200;
+  z-index: var(--z-titlebar);
   display: flex;
   align-items: stretch;
   height: var(--windows-titlebar-height);
