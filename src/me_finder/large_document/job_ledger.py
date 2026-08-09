@@ -12,7 +12,7 @@ from typing import Dict, Iterable, List, Optional
 from .slicing import SliceDescriptor
 
 
-LEDGER_SCHEMA_VERSION = 1
+LEDGER_SCHEMA_VERSION = 2
 DOCUMENT_STATUSES = frozenset(
     {
         "preparing",
@@ -95,6 +95,30 @@ CREATE INDEX IF NOT EXISTS idx_slice_jobs_remote
 ON slice_jobs(provider_id, remote_task_id);
 """
 
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS parser_credentials (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    secret_ref TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    daily_page_budget INTEGER,
+    max_concurrency_override INTEGER,
+    current_in_flight INTEGER NOT NULL DEFAULT 0,
+    pages_used_today INTEGER NOT NULL DEFAULT 0,
+    usage_date TEXT,
+    cooldown_until TEXT,
+    last_401_at TEXT,
+    last_429_at TEXT,
+    health_status TEXT NOT NULL DEFAULT 'healthy',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_parser_credentials_provider
+ON parser_credentials(provider_id, enabled, health_status);
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -146,6 +170,30 @@ class SliceJob:
     @property
     def page_count(self) -> int:
         return self.page_end - self.page_start + 1
+
+
+@dataclass(frozen=True)
+class CredentialRecord:
+    id: str
+    provider_id: str
+    display_name: str
+    secret_ref: str
+    enabled: int
+    daily_page_budget: Optional[int]
+    max_concurrency_override: Optional[int]
+    current_in_flight: int
+    pages_used_today: int
+    usage_date: Optional[str]
+    cooldown_until: Optional[str]
+    last_401_at: Optional[str]
+    last_429_at: Optional[str]
+    health_status: str
+    created_at: str
+    updated_at: str
+
+    @property
+    def is_enabled(self) -> bool:
+        return bool(self.enabled)
 
 
 _DOCUMENT_UPDATE_FIELDS = frozenset(
@@ -201,6 +249,10 @@ class JobLedger:
             if version < 1:
                 connection.executescript(SCHEMA_V1)
                 connection.execute("PRAGMA user_version = 1")
+                version = 1
+            if version < 2:
+                connection.executescript(SCHEMA_V2)
+                connection.execute("PRAGMA user_version = 2")
             connection.commit()
 
     def create_document_job(
@@ -389,6 +441,221 @@ class JobLedger:
             )
         return self.get_document_job(job_id)
 
+    def upsert_credential(
+        self,
+        *,
+        credential_id: str,
+        provider_id: str,
+        display_name: str,
+        secret_ref: str,
+        enabled: bool = True,
+        daily_page_budget: Optional[int] = None,
+        max_concurrency_override: Optional[int] = None,
+    ) -> CredentialRecord:
+        if daily_page_budget is not None and daily_page_budget < 0:
+            raise ValueError("daily_page_budget cannot be negative")
+        if max_concurrency_override is not None and max_concurrency_override < 1:
+            raise ValueError("max_concurrency_override must be positive")
+        now = _now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO parser_credentials(
+                    id, provider_id, display_name, secret_ref, enabled,
+                    daily_page_budget, max_concurrency_override, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    provider_id = excluded.provider_id,
+                    display_name = excluded.display_name,
+                    secret_ref = excluded.secret_ref,
+                    enabled = excluded.enabled,
+                    daily_page_budget = excluded.daily_page_budget,
+                    max_concurrency_override = excluded.max_concurrency_override,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    credential_id,
+                    provider_id,
+                    display_name,
+                    secret_ref,
+                    1 if enabled else 0,
+                    daily_page_budget,
+                    max_concurrency_override,
+                    now,
+                    now,
+                ),
+            )
+        return self.get_credential(credential_id)
+
+    def get_credential(self, credential_id: str) -> CredentialRecord:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM parser_credentials WHERE id = ?", (credential_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(credential_id)
+        return _credential_from_row(row)
+
+    def list_credentials(self, provider_id: str) -> List[CredentialRecord]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM parser_credentials WHERE provider_id = ? ORDER BY id",
+                (provider_id,),
+            ).fetchall()
+        return [_credential_from_row(row) for row in rows]
+
+    def try_reserve_credential(
+        self,
+        credential_id: str,
+        *,
+        page_count: int,
+        provider_max_concurrency: int,
+        today: str,
+        now_iso: str,
+    ) -> Optional[CredentialRecord]:
+        """Atomically reserve concurrency and budget for one not-yet-submitted slice."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM parser_credentials WHERE id = ?", (credential_id,)
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            record = _credential_from_row(row)
+            used = record.pages_used_today if record.usage_date == today else 0
+            concurrency = record.max_concurrency_override or provider_max_concurrency
+            eligible = bool(
+                record.is_enabled
+                and record.health_status not in {"unauthorized", "disabled"}
+                and (not record.cooldown_until or record.cooldown_until <= now_iso)
+                and record.current_in_flight < concurrency
+                and (
+                    record.daily_page_budget is None
+                    or used + page_count <= record.daily_page_budget
+                )
+            )
+            if not eligible:
+                connection.rollback()
+                return None
+            connection.execute(
+                """
+                UPDATE parser_credentials
+                SET current_in_flight = current_in_flight + 1,
+                    pages_used_today = ?, usage_date = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (used + page_count, today, now_iso, credential_id),
+            )
+            connection.commit()
+        return self.get_credential(credential_id)
+
+    def release_credential(
+        self,
+        credential_id: str,
+        *,
+        reserved_pages: int = 0,
+        refund_budget: bool = False,
+        today: Optional[str] = None,
+    ) -> CredentialRecord:
+        now = _now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM parser_credentials WHERE id = ?", (credential_id,)
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                raise KeyError(credential_id)
+            record = _credential_from_row(row)
+            used = record.pages_used_today
+            if refund_budget and (today is None or record.usage_date == today):
+                used = max(0, used - max(0, int(reserved_pages)))
+            connection.execute(
+                """
+                UPDATE parser_credentials
+                SET current_in_flight = MAX(0, current_in_flight - 1),
+                    pages_used_today = ?, updated_at = ? WHERE id = ?
+                """,
+                (used, now, credential_id),
+            )
+            connection.commit()
+        return self.get_credential(credential_id)
+
+    def update_credential_health(
+        self,
+        credential_id: str,
+        *,
+        enabled: Optional[bool] = None,
+        health_status: Optional[str] = None,
+        cooldown_until: Optional[str] = None,
+        last_401_at: Optional[str] = None,
+        last_429_at: Optional[str] = None,
+    ) -> CredentialRecord:
+        values: Dict[str, object] = {"updated_at": _now()}
+        if enabled is not None:
+            values["enabled"] = 1 if enabled else 0
+        if health_status is not None:
+            values["health_status"] = health_status
+        if cooldown_until is not None:
+            values["cooldown_until"] = cooldown_until
+        if last_401_at is not None:
+            values["last_401_at"] = last_401_at
+        if last_429_at is not None:
+            values["last_429_at"] = last_429_at
+        assignments = ", ".join(f"{key} = ?" for key in values)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE parser_credentials SET {assignments} WHERE id = ?",
+                (*values.values(), credential_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(credential_id)
+        return self.get_credential(credential_id)
+
+    def set_credential_in_flight(
+        self, credential_id: str, count: int
+    ) -> CredentialRecord:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE parser_credentials SET current_in_flight = ?, updated_at = ? "
+                "WHERE id = ?",
+                (max(0, int(count)), _now(), credential_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(credential_id)
+        return self.get_credential(credential_id)
+
+    def recover_credential(self, credential_id: str) -> CredentialRecord:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE parser_credentials
+                SET enabled = 1, health_status = 'healthy', cooldown_until = NULL,
+                    updated_at = ? WHERE id = ?
+                """,
+                (_now(), credential_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(credential_id)
+        return self.get_credential(credential_id)
+
+    def active_remote_counts(self, provider_id: str) -> Dict[str, int]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT credential_id, COUNT(*)
+                FROM slice_jobs
+                WHERE provider_id = ? AND credential_id IS NOT NULL
+                  AND remote_task_id IS NOT NULL
+                  AND status IN ('submitted', 'waiting', 'retryable_failure')
+                GROUP BY credential_id
+                """,
+                (provider_id,),
+            ).fetchall()
+        return {str(row[0]): int(row[1]) for row in rows}
+
 
 def _document_from_row(row: sqlite3.Row) -> DocumentJob:
     return DocumentJob(**{key: row[key] for key in row.keys()})
@@ -396,3 +663,7 @@ def _document_from_row(row: sqlite3.Row) -> DocumentJob:
 
 def _slice_from_row(row: sqlite3.Row) -> SliceJob:
     return SliceJob(**{key: row[key] for key in row.keys()})
+
+
+def _credential_from_row(row: sqlite3.Row) -> CredentialRecord:
+    return CredentialRecord(**{key: row[key] for key in row.keys()})

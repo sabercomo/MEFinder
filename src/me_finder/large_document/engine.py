@@ -16,6 +16,7 @@ from ..parser_provider import (
     ParserTaskStatus,
 )
 from .io_utils import sha256_file
+from .credential_pool import CredentialPool, CredentialPoolUnavailable
 from .job_ledger import DocumentJob, JobLedger, SliceJob
 from .merge import (
     CoverageValidationError,
@@ -61,6 +62,7 @@ class LargeDocumentJobEngine:
         page_counter: PageCounter = pymupdf_page_count,
         max_attempts: int = 3,
         publisher: Optional[AtomicPublisher] = None,
+        credential_pool: Optional[CredentialPool] = None,
     ) -> None:
         self.ledger = ledger
         self.provider = provider
@@ -70,6 +72,7 @@ class LargeDocumentJobEngine:
         self.page_counter = page_counter
         self.max_attempts = max(1, int(max_attempts))
         self.publisher = publisher or AtomicPublisher()
+        self.credential_pool = credential_pool
 
     def prepare(
         self,
@@ -173,6 +176,12 @@ class LargeDocumentJobEngine:
                 continue
             try:
                 self._advance_slice(job, slice_job)
+            except CredentialPoolUnavailable as exc:
+                self.ledger.update_slice(
+                    slice_job.id,
+                    status="waiting",
+                    last_error=str(exc)[:2000],
+                )
             except ParserProviderError as exc:
                 self._record_provider_failure(slice_job, exc)
             except Exception as exc:
@@ -258,14 +267,29 @@ class LargeDocumentJobEngine:
     def _advance_slice(self, job: DocumentJob, slice_job: SliceJob) -> None:
         request = self._parser_request(job, slice_job)
         if slice_job.remote_task_id:
-            poll = self.provider.poll(slice_job.remote_task_id)
+            credential = (
+                self.credential_pool.credential_for_affinity(slice_job.credential_id)
+                if self.credential_pool is not None
+                else None
+            )
+            poll = self.provider.poll(
+                slice_job.remote_task_id,
+                credential=credential,
+            )
             if poll.status == ParserTaskStatus.COMPLETED:
                 submission = ParserSubmission(
                     provider_id=self.provider.provider_id,
                     remote_task_id=slice_job.remote_task_id,
                     status=ParserTaskStatus.COMPLETED,
                 )
-                self._complete_slice(slice_job, request, submission)
+                self._complete_slice(
+                    slice_job,
+                    request,
+                    submission,
+                    credential=credential,
+                )
+                if self.credential_pool is not None:
+                    self.credential_pool.finish_remote(slice_job.credential_id)
             elif poll.status in {
                 ParserTaskStatus.PERMANENT_FAILURE,
                 ParserTaskStatus.CANCELLED,
@@ -279,6 +303,8 @@ class LargeDocumentJobEngine:
                     ),
                     last_error=poll.message,
                 )
+                if self.credential_pool is not None:
+                    self.credential_pool.finish_remote(slice_job.credential_id)
             else:
                 self.ledger.update_slice(
                     slice_job.id,
@@ -295,15 +321,49 @@ class LargeDocumentJobEngine:
             )
             return
         current_attempt = slice_job.attempt_count + 1
+        lease = (
+            self.credential_pool.acquire(slice_job.page_count)
+            if self.credential_pool is not None
+            else None
+        )
         self.ledger.update_slice(
             slice_job.id,
             status="running",
             attempt_count=current_attempt,
+            credential_id=(
+                lease.credential.credential_id if lease is not None else None
+            ),
             last_error=None,
         )
-        submission = self.provider.submit(request)
+        try:
+            submission = self.provider.submit(
+                request,
+                credential=lease.credential if lease is not None else None,
+            )
+        except ParserProviderError as exc:
+            if self.credential_pool is not None and lease is not None:
+                self.credential_pool.record_error(
+                    lease.credential.credential_id, exc
+                )
+                self.credential_pool.release_unsubmitted(lease)
+            raise
+        except Exception:
+            if self.credential_pool is not None and lease is not None:
+                self.credential_pool.release_unsubmitted(lease)
+            raise
         if submission.status == ParserTaskStatus.COMPLETED:
-            self._complete_slice(slice_job, request, submission)
+            try:
+                self._complete_slice(
+                    slice_job,
+                    request,
+                    submission,
+                    credential=lease.credential if lease is not None else None,
+                )
+            finally:
+                if self.credential_pool is not None and lease is not None:
+                    self.credential_pool.finish_remote(
+                        lease.credential.credential_id
+                    )
             return
         if not submission.remote_task_id:
             raise ParserProviderError(
@@ -314,6 +374,9 @@ class LargeDocumentJobEngine:
             slice_job.id,
             status="submitted",
             remote_task_id=submission.remote_task_id,
+            credential_id=(
+                lease.credential.credential_id if lease is not None else None
+            ),
             last_error=None,
         )
 
@@ -322,8 +385,14 @@ class LargeDocumentJobEngine:
         slice_job: SliceJob,
         request: ParserRequest,
         submission: ParserSubmission,
+        *,
+        credential=None,
     ) -> None:
-        raw = self.provider.fetch_result(submission, request)
+        raw = self.provider.fetch_result(
+            submission,
+            request,
+            credential=credential,
+        )
         normalized = self.provider.normalize_result(raw, request)
         expected = list(range(slice_job.page_start, slice_job.page_end + 1))
         actual = [page.physical_pdf_page for page in normalized.pages]
@@ -353,6 +422,10 @@ class LargeDocumentJobEngine:
             # Only an explicit upstream "task missing" classification permits a
             # new submission.  Network ambiguity keeps remote-task affinity.
             updates["remote_task_id"] = None
+            if self.credential_pool is not None:
+                self.credential_pool.finish_remote(slice_job.credential_id)
+        if self.credential_pool is not None:
+            self.credential_pool.record_error(slice_job.credential_id, exc)
         can_retry = exc.retryable and slice_job.attempt_count < self.max_attempts
         updates["status"] = "retryable_failure" if can_retry else "permanent_failure"
         self.ledger.update_slice(slice_job.id, **updates)
