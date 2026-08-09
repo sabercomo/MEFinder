@@ -336,6 +336,7 @@ function showDetail(item) {
   const citationIncomplete = item.citation_formats && enabledCitationStyles.some(function(style) {
     return item.citation_formats[style + '_status'] !== 'complete';
   });
+  const detailMenuChevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
 
   panel.innerHTML = '<div class="detail-card">'
     + '<div class="detail-scroll">'
@@ -356,18 +357,27 @@ function showDetail(item) {
     + '</div>'
     + '</div>'
     + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
-    + '<button class="action-btn" onclick="copySelectedOriginal()">复制原文</button>'
-    + '<span class="citation-copy-group">'
-    + '<span class="app-select citation-style-control" id="citation-style-control">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'citation-style-control\')"><span class="app-select-value" id="citation-style-label">' + citationStyleLabel + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<span class="app-select-menu" role="listbox">' + citationStyleMenuMarkup() + '</span>'
-    + '</span>'
-    + '<button class="action-btn" onclick="copySelectedCitation()">复制出处</button>'
-    + '</span>'
-    + '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">复制原文与出处</button>'
-    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="action-btn" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\')">补全书目信息</button>' : '')
-    + (item.source_file_id ? '<button class="action-btn" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
     + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
+    + '<span class="app-select detail-copy-control" id="detail-copy-control">'
+    + '<button class="action-btn app-select-trigger detail-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-copy-control\')"><span>复制</span>' + detailMenuChevron + '</button>'
+    + '<span class="app-select-menu detail-action-menu detail-copy-menu" role="menu" aria-label="复制操作">'
+    + '<span class="detail-menu-section" role="group" aria-label="复制出处所用引文格式">'
+    + '<span class="detail-menu-label">引文格式 · ' + citationStyleLabel + '</span>'
+    + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
+    + '</span>'
+    + '<span class="detail-action-menu-divider"></span>'
+    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-original\')">复制原文</button>'
+    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-citation\')">复制出处</button>'
+    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-combined\')">复制原文与出处</button>'
+    + '</span>'
+    + '</span>'
+    + (item.source_file_id || (citationIncomplete && item.source_type === 'pdf') ? '<span class="app-select detail-more-control" id="detail-more-control">'
+      + '<button class="action-btn app-select-trigger detail-more-trigger" type="button" aria-label="更多操作" title="更多操作" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-more-control\')">⋯</button>'
+      + '<span class="app-select-menu detail-action-menu detail-more-menu" role="menu" aria-label="更多操作">'
+      + (item.source_file_id ? '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'open-structured\')">查看结构化文本</button>' : '')
+      + (citationIncomplete && item.source_type === 'pdf' ? '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'complete-metadata\')">补全书目信息</button>' : '')
+      + '</span>'
+      + '</span>' : '')
     + '</div>'
     + '</div>';
 
@@ -543,6 +553,19 @@ function citationIsComplete(item) {
   return formats[citationStyle + '_status'] === 'complete';
 }
 
+function runSearchDetailAction(event, action) {
+  if (event) event.stopPropagation();
+  closeAppSelects();
+  if (action === 'copy-original') { copySelectedOriginal(); return; }
+  if (action === 'copy-citation') { copySelectedCitation(); return; }
+  if (action === 'copy-combined') { copySelectedOriginalAndCitation(); return; }
+  if (action === 'open-structured') { openSelectedStructuredReader(); return; }
+  if (action === 'complete-metadata') {
+    const item = selectedResult();
+    if (item) openMetadataForSource(item.source_file_id || '');
+  }
+}
+
 function showCitationMetadataError(item) {
   const formats = item && item.citation_formats ? item.citation_formats : {};
   const missing = formats[citationStyle + '_missing_fields'] || [];
@@ -611,4 +634,3 @@ async function openSelectedStructuredReader() {
     showToast(error && error.message ? error.message : '结构化文本打开失败', 'danger');
   }
 }
-

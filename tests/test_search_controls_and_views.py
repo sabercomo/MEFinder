@@ -75,38 +75,50 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
         self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
-        combined_copy_action = (
-            '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">'
-            "复制原文与出处</button>"
-        )
-        self.assertIn(combined_copy_action, detail_source)
-        self.assertNotIn('id="detail-more-control"', detail_source)
-        self.assertNotIn('aria-haspopup="menu"', detail_source)
-        self.assertNotIn('role="menuitem"', detail_source)
+        primary_open_action = '<button class="action-btn primary" onclick="openSource('
+        self.assertIn(primary_open_action, detail_source)
+        self.assertIn('id="detail-copy-control"', detail_source)
+        self.assertIn('aria-haspopup="menu"', detail_source)
+        self.assertIn('role="menu" aria-label="复制操作"', detail_source)
+        copy_menu_start = detail_source.index('id="detail-copy-control"')
+        copy_menu_end = detail_source.index('id="detail-more-control"')
+        copy_menu = detail_source[copy_menu_start:copy_menu_end]
+        for action, label in (
+            ("copy-original", "复制原文"),
+            ("copy-citation", "复制出处"),
+            ("copy-combined", "复制原文与出处"),
+        ):
+            self.assertIn(
+                f"runSearchDetailAction(event,\\'{action}\\')\">{label}</button>",
+                copy_menu,
+            )
+        self.assertEqual(copy_menu.count('role="menuitem"'), 3)
+        self.assertIn('id="citation-style-control"', copy_menu)
+        self.assertIn("citationStyleMenuMarkup()", copy_menu)
+        self.assertLess(detail_source.index(primary_open_action), copy_menu_start)
+        self.assertIn('id="detail-more-control"', detail_source)
+        self.assertIn('aria-label="更多操作" title="更多操作"', detail_source)
+        self.assertIn('role="menu" aria-label="更多操作"', detail_source)
         self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
         self.assertIn(
             "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
             detail_source,
         )
-        structured_reader_action = (
-            '<button class="action-btn" onclick="openSelectedStructuredReader()">'
-            "查看结构化文本</button>"
-        )
+        structured_reader_action = "runSearchDetailAction(event,\\'open-structured\\')\">查看结构化文本</button>"
         self.assertIn(structured_reader_action, detail_source)
-        self.assertNotIn(
-            'role="menuitem" onclick="openSelectedStructuredReader()',
-            detail_source,
-        )
+        self.assertIn("runSearchDetailAction(event,\\'complete-metadata\\')\">补全书目信息</button>", detail_source)
         self.assertLess(
-            detail_source.index(combined_copy_action),
-            detail_source.index(structured_reader_action),
+            copy_menu_start,
+            detail_source.index('id="detail-more-control"'),
         )
-        self.assertLess(
-            detail_source.index(structured_reader_action),
-            detail_source.index('class="action-btn primary"'),
-        )
-        self.assertNotIn(".detail-more-control", HTML)
-        self.assertNotIn(".detail-more-trigger", HTML)
+        self.assertIn("function runSearchDetailAction(event, action)", HTML)
+        self.assertIn("if (action === 'copy-original') { copySelectedOriginal(); return; }", HTML)
+        self.assertIn("if (action === 'copy-citation') { copySelectedCitation(); return; }", HTML)
+        self.assertIn("if (action === 'copy-combined') { copySelectedOriginalAndCitation(); return; }", HTML)
+        self.assertIn("if (action === 'open-structured') { openSelectedStructuredReader(); return; }", HTML)
+        self.assertIn("if (item) openMetadataForSource(item.source_file_id || '');", HTML)
+        self.assertIn(".detail-more-trigger", HTML)
+        self.assertIn(".detail-action-menu", HTML)
         actions_css = re.search(r"\.detail-actions\s*\{([^}]*)\}", HTML)
         self.assertIsNotNone(actions_css)
         self.assertNotIn("box-shadow", actions_css.group(1))
