@@ -66,6 +66,14 @@ function bibliographicDocType(meta) {
   return ['book','translated_book','journal_article','thesis'].indexOf(value) >= 0 ? value : 'book';
 }
 
+// 文献类型是否已确认：metadata_source 为空表示从未识别过（类型只是默认回落成
+// book，并非真的判定过），此时详情不该伪装成「著作」并红标缺字段。manual /
+// automatic_recognition / pdf_metadata 都算已确认（识别失败也置了来源，属已确认）。
+function isBibliographicTypeConfirmed(meta) {
+  var source = String((meta && meta.metadata_source) || '').trim();
+  return source !== '' && source !== 'unknown';
+}
+
 // 编辑器只区分 期刊/学位论文/图书 三档（译著在图书档内再由译者细分）。
 function bibliographicEditorDocType(docType) {
   return docType === 'journal_article' || docType === 'thesis' ? docType : 'book';

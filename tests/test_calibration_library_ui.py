@@ -348,8 +348,14 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 书目区查看态默认，点「编辑」进编辑态；共用宿主 #bib-host 就地切换。
         self.assertIn("function bibliographicReadHTML(src)", HTML)
         self.assertIn("function renderBibliographicSection(src)", HTML)
-        self.assertIn("function enterBibEdit(sourceId)", HTML)
+        self.assertIn("function enterBibEdit(sourceId, focusFieldId)", HTML)
         self.assertIn("function exitBibEdit(sourceId)", HTML)
+        # 查看态点任意字段即进入编辑并聚焦该字段——无独立「编辑」按钮。
+        self.assertIn('role="button" tabindex="0" title="点击编辑" onclick="', HTML)
+        # 无用的「识别依据」已整体删除（页码识别依据属校准，保留）。
+        self.assertNotIn("function showBibliographicEvidence(", HTML)
+        self.assertNotIn(">识别依据</button>", HTML)
+        self.assertNotIn("bibMenuAction(event,'evidence'", HTML)
         self.assertIn("bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src)", HTML)
         self.assertIn('id="bib-host"', HTML)
         # 编辑态页脚显式保存 + 取消，保存文案区分于校准保存。

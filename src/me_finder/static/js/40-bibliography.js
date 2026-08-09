@@ -88,7 +88,6 @@ function bibliographicEditorHTML(src) {
       + '<span class="bib-menu-wrap">'
       + '<button class="action-btn bib-caret-only" type="button" aria-label="更多" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-more-menu\')">' + moreSvg + '</button>'
       + '<span class="bib-menu bib-menu-end" id="bib-more-menu" role="menu">'
-      + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'evidence\',\'' + sid + '\')">查看识别依据</button>'
       + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'redetect\',\'' + sid + '\')">重新识别</button>'
       + '</span>'
       + '</span>'
@@ -98,7 +97,6 @@ function bibliographicEditorHTML(src) {
     toolbarHTML = '<div class="bib-toolbar">'
       + (isBook ? '<button class="action-btn primary" type="button" onclick="lookupGoogleBooks(\'' + sid + '\')">查图书信息</button>' : '')
       + '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>'
-      + '<button class="action-btn" type="button" onclick="showBibliographicEvidence(\'' + sid + '\')">识别依据</button>'
       + (meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
       + '</div>';
   }
@@ -134,9 +132,9 @@ function bibliographicEditorHTML(src) {
     + '</div>';
 }
 
-// 查看态：书目字段渲染成 label:value 只读行，缺失字段显示「—」并标黄；
-// 头部提供按类型的主补全动作 + 「编辑」入口 + 低频 ⋯（暂放识别依据）。
-// 与编辑态共用宿主 #bib-host，enterBibEdit / exitBibEdit 就地整块替换。
+// 查看态：书目字段渲染成 label:value 只读行，缺失字段显示「—」并标黄。
+// 直接点任意字段即进入编辑态并聚焦该字段（无需额外「编辑」按钮）；头部只留
+// 按类型的主补全动作。与编辑态共用宿主 #bib-host，就地整块替换。
 function bibliographicReadHTML(src) {
   var meta = sourceBibliographicMetadata(src);
   var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
@@ -146,7 +144,11 @@ function bibliographicReadHTML(src) {
   function row(label, fieldKey, value, full) {
     var isMissing = missing.indexOf(fieldKey) >= 0;
     var text = String(value == null ? '' : value).trim();
-    return '<div class="bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '">'
+    var focusId = fieldKey.replace(/_/g, '-');  // 输入框 id 用连字符
+    var edit = 'enterBibEdit(\'' + sid + '\',\'' + focusId + '\')';
+    return '<div class="bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '"'
+      + ' role="button" tabindex="0" title="点击编辑" onclick="' + edit + '"'
+      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + edit + ';}">'
       + '<span class="bib-read-label">' + label + '</span>'
       + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
   }
@@ -165,17 +167,21 @@ function bibliographicReadHTML(src) {
       + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
       + row('出版年份','publish_year',meta.publish_year) + row('ISBN','isbn',meta.isbn,true);
   }
-  var moreSvg = '<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+  // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
+  // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
+  var confirmed = isBibliographicTypeConfirmed(meta);
+  var primaryBtn = confirmed ? bibReadPrimaryButton(docType, sid)
+    : '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'detect\')">自动识别</button>';
+  var missingBadge = confirmed
+    ? bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
+    : '';
+  var unconfirmedHint = confirmed ? ''
+    : '<div class="bib-unconfirmed">尚未识别文献类型，点「自动识别」或任意字段手动选择类型并填写</div>';
   return '<div class="bib-read">'
     + '<div class="bib-section-head"><span class="drawer-section-title">书目信息</span>'
-    + '<span class="bib-section-tools">' + bibReadPrimaryButton(docType, sid)
-    + '<button class="action-btn sm" type="button" onclick="enterBibEdit(\'' + sid + '\')">编辑</button>'
-    + '<span class="bib-menu-wrap"><button class="action-btn sm bib-caret-only" type="button" aria-label="更多" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-read-more\')">' + moreSvg + '</button>'
-    + '<span class="bib-menu bib-menu-end" id="bib-read-more" role="menu">'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showBibliographicEvidence(\'' + sid + '\')">查看识别依据</button>'
-    + '</span></span>'
-    + '</span></div>'
-    + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
+    + '<span class="bib-section-tools">' + primaryBtn + '</span></div>'
+    + unconfirmedHint
+    + missingBadge
     + '<div class="bib-read-grid">' + rows + '</div>'
     + '<div class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</div>'
     + '</div>';
@@ -198,14 +204,15 @@ function renderBibliographicSection(src) {
     + '</div>';
 }
 
-function enterBibEdit(sourceId) {
+function enterBibEdit(sourceId, focusFieldId) {
   var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
   var host = document.getElementById('bib-host');
   if (!src || !host) return;
   bibEditMode[sourceId] = true;
   host.innerHTML = bibliographicEditorHTML(src);
-  var first = host.querySelector('.bibliographic-field input');
-  if (first) first.focus();
+  // 点某字段进来的聚焦该字段；否则聚焦第一个。
+  var target = (focusFieldId && host.querySelector('#bib-' + focusFieldId)) || host.querySelector('.bibliographic-field input');
+  if (target) target.focus();
 }
 
 // 取消编辑：放弃表单里未保存的输入，清脏，回到查看态（显示当前已保存值）。
@@ -277,7 +284,6 @@ function bibMenuAction(ev, action, sid) {
   bibCloseMenus();
   if (action === 'paste') return toggleCitationPanel();
   if (action === 'opencnki') return openCnkiSearch(sid);
-  if (action === 'evidence') return showBibliographicEvidence(sid);
   if (action === 'redetect') return detectBibliographicMetadata(sid, true);
 }
 
@@ -739,23 +745,6 @@ async function saveBibliographicMetadata(sourceId) {
     await loadLibrary(true);
     await selectLibDoc(sourceId);
   } catch(e) { showToast('保存失败：' + e.message, 'danger'); }
-}
-
-function showBibliographicEvidence(sourceId) {
-  var src = libSources.find(function(item){return item.source_file_id === sourceId;});
-  var metadata = sourceBibliographicMetadata(src);
-  var evidence = metadata.metadata_evidence || {};
-  var labels = {title:'书名',author:'作者',country:'国别',translator:'译者',publisher:'出版社',publish_place:'出版地',publish_year:'出版年份',isbn:'ISBN',journal_name:'出版刊物',volume:'卷次',issue:'期号',page_range:'页码',doi:'DOI',issn:'ISSN'};
-  if (bibliographicDocType(metadata) === 'thesis') {
-    labels.title = '篇名';
-    labels.publisher = '学校';
-    labels.publish_year = '年份';
-  }
-  var lines = Object.keys(evidence).map(function(field) {
-    var item = evidence[field] || {};
-    return (labels[field] || field) + '：' + (item.evidence_text || '无文本依据') + (item.source_page != null ? '（PDF 第 ' + item.source_page + ' 页）' : '') + (item.source === 'inferred_from_publisher' ? '（由出版社推断）' : '') + (item.record_url ? '\n知网记录：' + item.record_url : '');
-  });
-  showAppAlert(lines.length ? lines.join('\n') : '暂无自动识别依据', {title:'自动识别依据'});
 }
 
 async function openMetadataForSource(sourceId) {
