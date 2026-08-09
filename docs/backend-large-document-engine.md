@@ -98,10 +98,15 @@ Document 状态：`preparing/queued/running/waiting/retryable_failure/permanent_
 
 CredentialPool 支持 N 个用户明确配置且已授权的 credential，并同时考虑 enabled、用户预算、provider/用户并发、cooldown 和健康状态。
 
+MinerU Cloud 的业务假设是“一个 credential 对应一个独立 MinerU 账号”，不对多 Token 做账号分组或共享预算。`MinerUAccountService` 可保存 N 个独立账号；默认每账号本地每日预算为 1000 页，也可逐账号修改。Token 存在权限为 `0600` 的本地私密配置中，job ledger 只保存 `mineru-account:<id>` 引用。安全 summary 只返回 MEFinder 本地已提交页数、剩余本地预算、in-flight 和健康状态，不返回 Token。
+
 - 只将 `secret_ref` 写入 SQLite，运行时由 resolver 解决真实 secret。
 - 401 会标记未授权并停用；429 进入 cooldown。
 - 未创建远程 task 的 slice 可换 credential。
 - `remote_task_id -> credential_id` 持久化；poll/result 一直使用原 credential。只有 provider 明确返回 remote task missing 才允许清除 affinity 并重提。
+- 不读取、抓取或同步 MinerU 官网用量；页数均明确标记为 MEFinder 本地调度统计。
+
+8000 页验收场景：当 capability 是 200 页/片，配置 8 个独立账号且每账号预算 1000 页时，系统生成 40 个实体 slice，每账号提交 5 片/1000 页，最终覆盖严格为 `1..8000`。
 
 credential JSON 只允许引用：
 

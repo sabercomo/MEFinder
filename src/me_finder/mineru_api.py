@@ -118,6 +118,15 @@ def _usable_token(value: object) -> bool:
     return bool(_validated_token(value))
 
 
+def normalize_mineru_token(value: object) -> str:
+    """Return one validated raw MinerU token without a Bearer prefix."""
+
+    token = _validated_token(value)
+    if not token:
+        raise MinerUError("请填写 MinerU API 管理页面创建的 Token。")
+    return token
+
+
 def _configured_token(data: Dict[str, object]) -> str:
     for field in ("token", "api_token", "bearer_token"):
         token = _validated_token(data.get(field))
