@@ -395,6 +395,20 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("dt === 'unknown' ? '未识别'", HTML)
         self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
 
+    def test_keyboard_focus_visibility_and_reduced_motion(self) -> None:
+        """Phase 5：常用可交互元素有键盘焦点环；尊重系统减弱动态效果。"""
+
+        self.assertIn(".action-btn:focus-visible", HTML)
+        self.assertIn(".sidebar-item:focus-visible", HTML)
+        self.assertIn(".settings-nav-item:focus-visible", HTML)
+        focus_block = HTML.split(".action-btn:focus-visible", 1)[1].split("}", 1)[0]
+        self.assertIn("box-shadow: var(--focus-ring)", focus_block)
+        # 全局 reduced-motion，不再只作用于 toast。
+        self.assertRegex(
+            HTML,
+            r"@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after",
+        )
+
     def test_search_to_library_has_a_return_path(self) -> None:
         """S-03：从检索结果跳去补书目后，可一键返回搜索结果。"""
 

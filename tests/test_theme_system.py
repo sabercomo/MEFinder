@@ -15,7 +15,9 @@ from src.me_finder.preferences import (
     DEFAULT_CALIBRATION_VIEW,
     DEFAULT_CITATION_STYLE,
     DEFAULT_CITATION_STYLES,
+    DEFAULT_LIBRARY_LANGUAGE,
     DEFAULT_LIBRARY_VIEW,
+    DEFAULT_ONLINE_AUTO_MATCH,
     DEFAULT_PDF_OPEN_MODE,
     DEFAULT_THEME,
     VALID_PDF_OPEN_MODES,
@@ -38,6 +40,8 @@ class PreferencePersistenceTests(unittest.TestCase):
             "auto_update": DEFAULT_AUTO_UPDATE,
             "citation_styles": list(DEFAULT_CITATION_STYLES),
             "citation_style": DEFAULT_CITATION_STYLE,
+            "lib_default_language": DEFAULT_LIBRARY_LANGUAGE,
+            "online_auto_match_threshold": DEFAULT_ONLINE_AUTO_MATCH,
         }
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
