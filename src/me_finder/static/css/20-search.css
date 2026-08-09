@@ -395,6 +395,23 @@
   background: var(--accent-light);
   color: var(--accent);
 }
+.detail-citation-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: 9px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.detail-citation-status[hidden] { display: none !important; }
+.detail-citation-status svg { width: 16px; height: 16px; margin-top: 1px; flex: 0 0 auto; color: var(--warning-icon); }
+.detail-citation-status strong { display: block; font-size: 13px; }
+.detail-citation-status strong + span { display: block; margin-top: 1px; color: var(--text-secondary); }
 .detail-body {
   padding: 24px 28px;
 }

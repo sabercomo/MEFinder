@@ -154,6 +154,34 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
         self.assertLess(row_source.index("result-match-type"), row_source.index("result-title"))
 
+    def test_search_detail_warns_before_incomplete_citation_copy(self) -> None:
+        detail_start = HTML.index("function showDetail(item)")
+        detail_end = HTML.index("function showEmptyDetail()", detail_start)
+        detail_source = HTML[detail_start:detail_end]
+        self.assertIn("citationAvailabilityMarkup(item)", detail_source)
+        self.assertLess(
+            detail_source.index("citationAvailabilityMarkup(item)"),
+            detail_source.index('<div class="detail-body">'),
+        )
+
+        availability_start = HTML.index("function citationAvailabilityMarkup(item)")
+        availability_end = HTML.index("function updateDetailCitationAvailability()", availability_start)
+        availability_source = HTML[availability_start:availability_end]
+        self.assertIn("citationIsComplete(item)", availability_source)
+        self.assertNotIn("_status']", availability_source)
+        self.assertIn("出处信息不完整", availability_source)
+        self.assertIn("暂不可生成完整引文；仍可查看正文和打开原文。", availability_source)
+        self.assertIn("role=\"status\"", availability_source)
+        self.assertIn("status.hidden = citationIsComplete(item)", HTML)
+        self.assertIn("updateDetailCitationAvailability();", HTML)
+        self.assertIn(".detail-citation-status[hidden] { display: none !important; }", HTML)
+
+        self.assertIn("if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }", HTML)
+        self.assertGreaterEqual(
+            HTML.count("if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }"),
+            2,
+        )
+
     def test_library_filters_by_language_alongside_file_type(self) -> None:
         self.assertIn('id="lib-lang-control"', HTML)
         self.assertIn('data-lang="chinese"', HTML)

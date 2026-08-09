@@ -370,6 +370,7 @@ function showDetail(item) {
     + '<span class="detail-pill">' + page + '</span>'
     + '</div>'
     + pageDetail
+    + citationAvailabilityMarkup(item)
     + '</div>'
     + '<div class="detail-body">'
     + contextBefore
@@ -383,7 +384,7 @@ function showDetail(item) {
     + '<button class="action-btn app-select-trigger detail-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-copy-control\')"><span>复制</span>' + detailMenuChevron + '</button>'
     + '<span class="app-select-menu detail-action-menu detail-copy-menu" role="menu" aria-label="复制操作">'
     + '<span class="detail-menu-section" role="group" aria-label="复制出处所用引文格式">'
-    + '<span class="detail-menu-label">引文格式 · ' + citationStyleLabel + '</span>'
+    + '<span class="detail-menu-label" id="detail-citation-style-label">引文格式 · ' + citationStyleLabel + '</span>'
     + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
     + '</span>'
     + '<span class="detail-action-menu-divider"></span>'
@@ -557,11 +558,12 @@ function citationStyleMenuMarkup() {
 function selectCitationStyle(event, style) {
   event.stopPropagation();
   setCitationStyle(style, true);
-  var label = document.getElementById('citation-style-label');
-  if (label) label.textContent = citationStyleDisplayLabel(citationStyle);
+  var label = document.getElementById('detail-citation-style-label') || document.getElementById('citation-style-label');
+  if (label) label.textContent = '引文格式 · ' + citationStyleDisplayLabel(citationStyle);
   document.querySelectorAll('#citation-style-control .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === citationStyle);
   });
+  updateDetailCitationAvailability();
   closeAppSelects();
 }
 
@@ -573,6 +575,21 @@ function citationForItem(item) {
 function citationIsComplete(item) {
   const formats = item && item.citation_formats ? item.citation_formats : {};
   return formats[citationStyle + '_status'] === 'complete';
+}
+
+function citationAvailabilityMarkup(item) {
+  const hidden = citationIsComplete(item) ? ' hidden' : '';
+  return '<div class="detail-citation-status" id="detail-citation-status" role="status"' + hidden + '>'
+    + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.25"/><path d="M10 14h.01"/></svg>'
+    + '<span><strong>出处信息不完整</strong><span>暂不可生成完整引文；仍可查看正文和打开原文。</span></span>'
+    + '</div>';
+}
+
+function updateDetailCitationAvailability() {
+  const status = document.getElementById('detail-citation-status');
+  const item = selectedResult();
+  if (!status || !item) return;
+  status.hidden = citationIsComplete(item);
 }
 
 function runSearchDetailAction(event, action) {
