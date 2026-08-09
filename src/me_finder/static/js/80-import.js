@@ -3,7 +3,9 @@ let importQueue = [];
 
 function visionRetryProviderFor(q) {
   if (!q || q.status !== 'error') return null;
-  if (q.failureStage === 'index' || q.mineruInterrupted) return null;
+  // 索引阶段失败不给切换（重解析救不了重建索引错误）。中断态不再一律屏蔽：
+  // 后端 public_import_job 会按当前配置回填 canRetryVision，配了接口才显式放行。
+  if (q.failureStage === 'index') return null;
   if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed) return null;
   var providers = configuredVisionProviders();
   var preferredId = q.retryProviderId || '';

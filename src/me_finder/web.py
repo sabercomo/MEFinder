@@ -1023,28 +1023,16 @@ def make_handler(
                         on_progress=lambda update: progress_import_job(job_id, update),
                     )
                 except Exception as mineru_exc:
-                    if (
+                    # A transient interruption (network timeout / non-fallback
+                    # MinerUError) keeps a resumable checkpoint; a permanent failure
+                    # does not. Either way an AUTOMATIC switch to a paid provider now
+                    # happens iff the user enabled it — the transient/permanent split
+                    # no longer blocks auto-switch, it only shapes the no-auto-switch
+                    # message and whether the checkpoint is kept for a free resume.
+                    transient = (
                         not isinstance(mineru_exc, MinerUError)
                         or not mineru_exc.allow_parser_fallback
-                    ):
-                        update_import_job(
-                            job_id,
-                            status="failed",
-                            phase="failed",
-                            can_resume=True,
-                            message=(
-                                f"MinerU 任务暂时中断：{mineru_exc}。"
-                                "断点已保存，可稍后继续；不会自动改用其他付费接口。"
-                            ),
-                            mineru_interrupted=True,
-                            mineru_failed=False,
-                            can_retry_with_provider=False,
-                            retry_provider_id=None,
-                            retry_provider_name=None,
-                            needs_provider_config=False,
-                            original_error=str(mineru_exc),
-                        )
-                        return False
+                    )
                     config_path = resolve_vision_config_path(root)
                     try:
                         summary = vision_config_summary(config_path)
@@ -1067,6 +1055,26 @@ def make_handler(
                         and fallback
                     )
                     if not auto_fallback:
+                        if transient:
+                            update_import_job(
+                                job_id,
+                                status="failed",
+                                phase="failed",
+                                can_resume=True,
+                                message=(
+                                    f"MinerU 任务暂时中断：{mineru_exc}。断点已保存，点「继续导入」"
+                                    "复用断点、不额外计费；不会自动改用其他付费接口，"
+                                    "如已配置可手动改用（放弃断点、从头解析）。"
+                                ),
+                                mineru_interrupted=True,
+                                mineru_failed=False,
+                                can_retry_with_provider=bool(fallback),
+                                retry_provider_id=fallback.get("id") if fallback else None,
+                                retry_provider_name=fallback.get("name") if fallback else None,
+                                needs_provider_config=False,
+                                original_error=str(mineru_exc),
+                            )
+                            return False
                         message = f"MinerU 解析失败：{mineru_exc}"
                         if fallback:
                             message += (
@@ -1091,6 +1099,7 @@ def make_handler(
                         return False
                     fallback_id = str(fallback.get("id"))
                     fallback_name = str(fallback.get("name") or "其他视觉 API")
+                    switch_reason = "任务暂时中断" if transient else "解析失败"
                     switch_import_job_route(
                         job_id,
                         parse_route="vision",
@@ -1102,7 +1111,7 @@ def make_handler(
                         job_id,
                         phase="vision_processing",
                         message=(
-                            f"MinerU 解析失败，已按设置自动切换到 {fallback_name}…"
+                            f"MinerU {switch_reason}，已按设置自动切换到 {fallback_name}…"
                         ),
                         parse_route="vision",
                         provider_id=fallback_id,
@@ -1126,7 +1135,7 @@ def make_handler(
                             status="failed",
                             phase="failed",
                             message=(
-                                f"MinerU 解析失败：{mineru_exc}；自动切换到 "
+                                f"MinerU {switch_reason}；自动切换到 "
                                 f"{fallback_name} 后仍失败：{fallback_exc}"
                             ),
                             fallback_error=str(fallback_exc),
@@ -1489,12 +1498,20 @@ def make_handler(
         job: Dict[str, object],
         context: Optional[Dict[str, object]] = None,
     ) -> bool:
-        """Authorize paid provider retry only for a permanent MinerU failure."""
+        """Authorize an EXPLICIT, user-initiated paid provider retry.
+
+        A permanent MinerU failure qualifies, and — per the user's decision —
+        so does a transient interruption: a stuck task should not be a dead end,
+        so the user may manually switch when a provider is configured. This
+        gate only governs explicit retries (the "改用 X" button / /api/import-retry);
+        it never enables *automatic* fallback, which stays forbidden on
+        interruption (the failure handler returns before any auto-switch).
+        Index-stage failures never qualify: re-parsing can't fix a rebuild error.
+        """
 
         return bool(
             str(job.get("status") or "") == "failed"
             and str(job.get("failure_stage") or "") != "index"
-            and not job.get("mineru_interrupted")
             and (
                 context is None
                 or bool(context.get("is_pdf"))
@@ -1503,6 +1520,7 @@ def make_handler(
                 job.get("mineru_failed")
                 or job.get("needs_provider_config")
                 or job.get("can_retry_with_provider")
+                or job.get("mineru_interrupted")
             )
         )
 
