@@ -395,6 +395,16 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("dt === 'unknown' ? '未识别'", HTML)
         self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
 
+    def test_search_to_library_has_a_return_path(self) -> None:
+        """S-03：从检索结果跳去补书目后，可一键返回搜索结果。"""
+
+        self.assertIn('id="library-return-banner"', HTML)
+        self.assertIn("function returnToSearch()", HTML)
+        self.assertIn('onclick="returnToSearch()"', HTML)
+        # 跳转时点亮横幅；任何 navigateTo 先清掉。
+        self.assertIn("if (banner) banner.hidden = false;", HTML)
+        self.assertIn("if (returnBanner) returnBanner.hidden = true;", HTML)
+
     def test_default_language_and_auto_match_persist_to_backend(self) -> None:
         """C-01：文献默认语言与联网自动匹配阈值走 /api/preferences，随数据备份/迁移。"""
 

@@ -244,6 +244,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </div>
         </div>
       </div>
+      <div class="library-return-banner" id="library-return-banner" hidden>
+        <button class="library-return-btn" type="button" onclick="returnToSearch()">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5l-5 5 5 5"/><path d="M6 10h9"/></svg>
+          返回搜索结果
+        </button>
+        <span class="library-return-text">从检索结果跳来补全书目，补完后可返回继续</span>
+      </div>
       <div class="library-body">
         <div class="library-list-scroll">
           <div id="library-list" class="library-list-container library-view-list" role="listbox" aria-label="文献列表" aria-multiselectable="true"></div>

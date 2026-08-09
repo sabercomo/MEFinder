@@ -140,6 +140,9 @@ document.addEventListener('keydown', function(event) {
 
 /* ═══ Navigation ═══ */
 function navigateTo(page) {
+  // 「返回搜索」横幅只在从检索结果跳来补书目时点亮；任何导航都先清掉（S-03）。
+  var returnBanner = document.getElementById('library-return-banner');
+  if (returnBanner) returnBanner.hidden = true;
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.sidebar-item').forEach(a => a.classList.remove('active'));

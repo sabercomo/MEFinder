@@ -745,8 +745,17 @@ async function saveBibliographicMetadata(sourceId) {
 
 async function openMetadataForSource(sourceId) {
   navigateTo('library');
+  // 从检索结果跳来的：给一条返回搜索的路（S-03）。navigateTo 会先清掉横幅，这里再点亮。
+  var banner = document.getElementById('library-return-banner');
+  if (banner) banner.hidden = false;
   if (!libLoaded) await loadLibrary();
   await selectLibDoc(sourceId);
+}
+
+function returnToSearch() {
+  var banner = document.getElementById('library-return-banner');
+  if (banner) banner.hidden = true;
+  navigateTo('search');
 }
 
 // 有未保存修改时先确认；用户放弃才返回 true。仅拦用户主动离开详情的路径，
