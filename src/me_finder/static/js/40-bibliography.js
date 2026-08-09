@@ -19,6 +19,9 @@ let bibFieldCache = {};
 // 保存或切换到别的文献才清零。离开详情前统一用 guardLeaveDetail 拦一道，
 // 避免关抽屉、点另一条文献、点顶部状态筛选时把手填内容静默丢掉。
 let bibEditorDirty = false;
+// 书目区默认查看态（label:value 只读），点「编辑」才进编辑态（输入表单）。
+// 每份文献一个开关，保存/取消/换文献回到查看态。语义仍是显式保存 + dirty 保护。
+let bibEditMode = {};
 const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'];
 function bibFieldCacheFromMeta(meta) {
   var out = {};
@@ -126,8 +129,104 @@ function bibliographicEditorHTML(src) {
     + lookupResultsHTML
     + citationPanelHTML
     + '<div class="bib-footer"><span class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</span>'
-    + '<button class="action-btn primary" onclick="saveBibliographicMetadata(\'' + sid + '\')">保存</button></div>'
+    + '<span class="bib-footer-actions"><button class="action-btn" type="button" onclick="exitBibEdit(\'' + sid + '\')">取消</button>'
+    + '<button class="action-btn primary" onclick="saveBibliographicMetadata(\'' + sid + '\')">保存书目信息</button></span></div>'
     + '</div>';
+}
+
+// 查看态：书目字段渲染成 label:value 只读行，缺失字段显示「—」并标黄；
+// 头部提供按类型的主补全动作 + 「编辑」入口 + 低频 ⋯（暂放识别依据）。
+// 与编辑态共用宿主 #bib-host，enterBibEdit / exitBibEdit 就地整块替换。
+function bibliographicReadHTML(src) {
+  var meta = sourceBibliographicMetadata(src);
+  var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
+  var missing = bibliographicMissingFields(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}));
+  var sid = esc(src.source_file_id);
+  var warnSvg = '<svg class="bib-read-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg>';
+  function row(label, fieldKey, value, full) {
+    var isMissing = missing.indexOf(fieldKey) >= 0;
+    var text = String(value == null ? '' : value).trim();
+    return '<div class="bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '">'
+      + '<span class="bib-read-label">' + label + '</span>'
+      + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
+  }
+  var rows;
+  if (docType === 'thesis') {
+    rows = row('作者','author',meta.author) + row('篇名','title',meta.title,true)
+      + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year);
+  } else if (docType === 'journal_article') {
+    rows = row('篇名','title',meta.title,true) + row('作者','author',meta.author)
+      + row('出版刊物','journal_name',meta.journal_name) + row('卷次','volume',meta.volume)
+      + row('期号','issue',meta.issue) + row('年份','publish_year',meta.publish_year)
+      + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn);
+  } else {
+    rows = row('作者','author',meta.author) + row('国别','country',meta.country)
+      + row('书名','title',meta.title,true) + row('译者','translator',meta.translator)
+      + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
+      + row('出版年份','publish_year',meta.publish_year) + row('ISBN','isbn',meta.isbn,true);
+  }
+  var moreSvg = '<svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+  return '<div class="bib-read">'
+    + '<div class="bib-section-head"><span class="drawer-section-title">书目信息</span>'
+    + '<span class="bib-section-tools">' + bibReadPrimaryButton(docType, sid)
+    + '<button class="action-btn sm" type="button" onclick="enterBibEdit(\'' + sid + '\')">编辑</button>'
+    + '<span class="bib-menu-wrap"><button class="action-btn sm bib-caret-only" type="button" aria-label="更多" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-read-more\')">' + moreSvg + '</button>'
+    + '<span class="bib-menu bib-menu-end" id="bib-read-more" role="menu">'
+    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showBibliographicEvidence(\'' + sid + '\')">查看识别依据</button>'
+    + '</span></span>'
+    + '</span></div>'
+    + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
+    + '<div class="bib-read-grid">' + rows + '</div>'
+    + '<div class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</div>'
+    + '</div>';
+}
+
+// 查看态头部的主补全按钮：期刊→补全期刊信息，图书→查图书信息，学位→自动识别。
+// 点它先进编辑态再执行（补全/识别本就是编辑动作，回填目标是编辑态的输入框）。
+function bibReadPrimaryButton(docType, sid) {
+  if (docType === 'journal_article')
+    return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'lookup\')">补全期刊信息</button>';
+  if (docType === 'book' || docType === 'translated_book')
+    return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'books\')">查图书信息</button>';
+  return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'detect\')">自动识别</button>';
+}
+
+// 书目区渲染分发：查看态 / 编辑态，共用稳定宿主 #bib-host。
+function renderBibliographicSection(src) {
+  return '<div id="bib-host">'
+    + (bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src))
+    + '</div>';
+}
+
+function enterBibEdit(sourceId) {
+  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var host = document.getElementById('bib-host');
+  if (!src || !host) return;
+  bibEditMode[sourceId] = true;
+  host.innerHTML = bibliographicEditorHTML(src);
+  var first = host.querySelector('.bibliographic-field input');
+  if (first) first.focus();
+}
+
+// 取消编辑：放弃表单里未保存的输入，清脏，回到查看态（显示当前已保存值）。
+function exitBibEdit(sourceId) {
+  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var host = document.getElementById('bib-host');
+  bibEditMode[sourceId] = false;
+  bibEditorDirty = false;
+  delete bibEditorTypeOverride[sourceId];
+  delete bibliographicPendingEvidence[sourceId];
+  if (!src || !host) return;
+  bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));
+  host.innerHTML = bibliographicReadHTML(src);
+}
+
+// 查看态点主补全/识别：先进编辑态（渲染出输入框），再运行对应动作。
+function bibEditAndRun(sourceId, action) {
+  enterBibEdit(sourceId);
+  if (action === 'lookup') bibRunLookup(sourceId);
+  else if (action === 'books') lookupGoogleBooks(sourceId);
+  else if (action === 'detect') detectBibliographicMetadata(sourceId, false);
 }
 
 function toggleCitationPanel() {
@@ -633,6 +732,7 @@ async function saveBibliographicMetadata(sourceId) {
     if (!resp.ok || !data.ok) throw new Error(data.error || '保存失败');
     showToast('书目信息已保存并立即生效', 'success');
     bibEditorDirty = false;
+    bibEditMode[sourceId] = false;  // 保存后回到查看态
     delete bibEditorTypeOverride[sourceId];
     delete bibliographicPendingEvidence[sourceId];
     delete bibFieldCache[sourceId];

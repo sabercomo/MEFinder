@@ -473,9 +473,108 @@ function libraryEntryHTML(src) {
     + '</div>';
 }
 
+// 详情抽屉按插槽渲染，不再堆进一个巨型 innerHTML：
+//   #library-drawer-content = 上一条/下一条 + 标题 + 徽章 + 书目区（读/写态）
+//   #library-drawer-calibration（模板静态卡片，介于两个插槽之间）= 页码校准
+//   #library-drawer-extra = 收录文献 + 文件信息 + 主操作栏
+// 区块顺序落为：书目 → 页码校准 → 收录文献 → 文件信息 → 主操作。
+function drawerNavHTML(sourceId) {
+  var list = getFilteredSources();
+  var idx = list.findIndex(function(s) { return s.source_file_id === sourceId; });
+  if (idx < 0 || list.length <= 1) return '';
+  var prevId = idx > 0 ? list[idx - 1].source_file_id : '';
+  var nextId = idx < list.length - 1 ? list[idx + 1].source_file_id : '';
+  function btn(id, label, arrow) {
+    return '<button class="drawer-nav-btn" type="button" aria-label="' + label + '"'
+      + (id ? ' onclick="selectLibDoc(\'' + esc(id) + '\')"' : ' disabled') + '>' + arrow + '</button>';
+  }
+  return '<div class="drawer-nav">' + btn(prevId, '上一条文献', '‹')
+    + '<span class="drawer-nav-pos" aria-live="polite">' + (idx + 1) + ' / ' + list.length + '</span>'
+    + btn(nextId, '下一条文献', '›') + '</div>';
+}
+
+function drawerStatusPill(src) {
+  if (src.source_type !== 'pdf') return '';
+  var status = calTransientStatus[src.source_file_id] || src.status;
+  var group = calibrationStatusGroup(status);
+  return '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(group) + ' ' + group + '">'
+    + statusChipIcon(group) + esc(calibrationStatusLabel(status)) + '</span>';
+}
+
+// 收录文献：不再内层滚动（L-14），随抽屉整体滚动，避免滚轮被内层吞掉。
+function drawerWorksHTML(works) {
+  if (!works.length) return '';
+  return '<div class="drawer-section-title">收录文献 (' + works.length + ')</div>'
+    + '<div class="drawer-works-list">'
+    + works.map(function(w) {
+      var meta = [];
+      if (w.author_label) meta.push(w.author_label);
+      if (w.date_label) meta.push(w.date_label);
+      if (w.toc_page_start) meta.push('p.' + w.toc_page_start + (w.toc_page_end ? '–' + w.toc_page_end : ''));
+      return '<div class="drawer-work-item"><div class="drawer-work-title">' + esc(w.title) + '</div>'
+        + (meta.length ? '<div class="drawer-work-meta">' + esc(meta.join(' · ')) + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+}
+
+function drawerFileInfoHTML(src, vol) {
+  var info = '';
+  info += drawerInfoRow('文件类型', src.source_type === 'pdf' ? 'PDF 文档' : 'Word 文档');
+  info += drawerInfoRow('文件名', src.file_name);
+  info += drawerInfoRow('大小', formatFileSize(src.size_bytes));
+  if (src.source_type === 'pdf' && src.pdf_profile) {
+    info += drawerInfoRow('PDF 页数', src.pdf_profile.pdf_page_count + ' 页');
+    info += drawerInfoRow('PDF 类型', pdfTypeLabel(src.pdf_profile.detected_pdf_type));
+    info += drawerInfoRow('页码状态', mappingStatusLabel(src.pdf_profile.mapping_status));
+    if (src.pdf_profile.auto_page_mapping) {
+      var autoMap = src.pdf_profile.auto_page_mapping;
+      info += drawerInfoRow('自动页码映射', autoMap.method === 'manual_override'
+        ? '保留人工映射'
+        : '应用 ' + (autoMap.applied_segment_count || 0) + ' 个自动段，候选 ' + (autoMap.candidate_count || 0) + ' 个');
+      if (autoMap.applied_segments && autoMap.applied_segments.length) info += drawerInfoRow('自动映射区间', autoMap.applied_segments.map(autoMappingSegmentText).join('；'));
+      if (autoMap.exception_pages && autoMap.exception_pages.length) info += drawerInfoRow('异常页面', autoMap.exception_pages.length + ' 页');
+    }
+  }
+  if (src.last_modified) info += drawerInfoRow('修改日期', src.last_modified.split('T')[0]);
+  if (vol && vol.version_info) info += drawerInfoRow('版本', vol.version_info);
+  return '<div class="drawer-collapse" id="drawer-file-info">'
+    + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
+    + '<span class="drawer-section-title">文件信息</span>'
+    + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
+    + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
+    + '</button>'
+    + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
+    + '</div>';
+}
+
+// 主操作栏收敛为「打开原文」+ ⋯（重新解析 / 接受自动映射 / 检查异常 / 移除）。
+// 「自动检测页码 / 编辑区间」不再在这里重复——页码校准卡片是唯一入口（L-04）。
+function drawerMainActionsHTML(src) {
+  var sid = esc(src.source_file_id);
+  var moreSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+  var items = '';
+  if (src.source_type === 'pdf') {
+    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
+    var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
+    items += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' onclick="bibCloseMenus();submitMineruReparse(\'' + sid + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
+    var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
+    if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
+    if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
+    items += '<div class="bib-menu-sep"></div>';
+  }
+  items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
+  return '<div class="drawer-actions">'
+    + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + sid + '\', null)">打开原文</button>' : '')
+    + '<span class="drawer-actions-spacer"></span>'
+    + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
+    + '<span class="bib-menu bib-menu-end" id="drawer-more-menu" role="menu">' + items + '</span></span>'
+    + '</div>';
+}
+
 async function selectLibDoc(sourceId) {
   // 切到别的文献前拦一道未保存修改；同一文献的重选（识别/保存后刷新）不打扰。
-  if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;
+  var switchingDoc = sourceId !== libSelectedId;
+  if (switchingDoc && !await guardLeaveDetail()) return;
+  if (switchingDoc) bibEditMode[sourceId] = false;  // 新文献默认查看态
   libSelectedId = sourceId;
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) {
     row.classList.toggle('selected', row.dataset.id === sourceId);
@@ -496,107 +595,36 @@ async function selectLibDoc(sourceId) {
   var title = vol ? vol.display_title : (src.file_name || sourceId);
   var corpusTitle = vol ? (vol.corpus_title || '') : '';
 
-  var info = '';
-  info += drawerInfoRow('文件类型', src.source_type === 'pdf' ? 'PDF 文档' : 'Word 文档');
-  info += drawerInfoRow('文件名', src.file_name);
-  info += drawerInfoRow('大小', formatFileSize(src.size_bytes));
-  if (src.source_type === 'pdf' && src.pdf_profile) {
-    info += drawerInfoRow('PDF 页数', src.pdf_profile.pdf_page_count + ' 页');
-    info += drawerInfoRow('PDF 类型', pdfTypeLabel(src.pdf_profile.detected_pdf_type));
-    info += drawerInfoRow('页码状态', mappingStatusLabel(src.pdf_profile.mapping_status));
-    if (src.pdf_profile.auto_page_mapping) {
-      var autoMap = src.pdf_profile.auto_page_mapping;
-      var autoText = autoMap.method === 'manual_override'
-        ? '保留人工映射'
-        : '应用 ' + (autoMap.applied_segment_count || 0) + ' 个自动段，候选 ' + (autoMap.candidate_count || 0) + ' 个';
-      info += drawerInfoRow('自动页码映射', autoText);
-      if (autoMap.applied_segments && autoMap.applied_segments.length) {
-        info += drawerInfoRow('自动映射区间', autoMap.applied_segments.map(autoMappingSegmentText).join('；'));
-      }
-      if (autoMap.exception_pages && autoMap.exception_pages.length) {
-        info += drawerInfoRow('异常页面', autoMap.exception_pages.length + ' 页');
-      }
-    }
-  }
-  if (src.last_modified) {
-    info += drawerInfoRow('修改日期', src.last_modified.split('T')[0]);
-  }
-  if (vol && vol.version_info) {
-    info += drawerInfoRow('版本', vol.version_info);
-  }
-
-  var worksHTML = '';
-  if (works.length > 0) {
-    worksHTML = '<div class="drawer-section-title">收录文献 (' + works.length + ')</div>'
-      + '<div class="drawer-works-list">'
-      + works.map(function(w) {
-        var meta = [];
-        if (w.author_label) meta.push(w.author_label);
-        if (w.date_label) meta.push(w.date_label);
-        if (w.toc_page_start) meta.push('p.' + w.toc_page_start + (w.toc_page_end ? '–' + w.toc_page_end : ''));
-        return '<div class="drawer-work-item">'
-          + '<div class="drawer-work-title">' + esc(w.title) + '</div>'
-          + (meta.length ? '<div class="drawer-work-meta">' + esc(meta.join(' · ')) + '</div>' : '')
-          + '</div>';
-      }).join('')
-      + '</div>';
-  }
-
   var bibliographicHTML = '';
   if (src.source_type === 'pdf') {
-    // 选中即以当前元数据初始化字段缓存；此后切类型只在缓存里保留隐藏字段，
-    // 不会丢。保存或重新选中文献会刷新这份缓存。
+    // 选中即以当前元数据初始化字段缓存；切类型只在缓存里保留隐藏字段，不会丢。
     bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));
-    bibliographicHTML = bibliographicEditorHTML(src);
+    bibliographicHTML = renderBibliographicSection(src);
   }
 
-  var autoActions = '';
-  if (src.source_type === 'pdf') {
-    autoActions += '<button class="action-btn primary" onclick="openCalibrationAndDetect(\'' + esc(src.source_file_id) + '\')">自动检测页码</button>';
-  }
-  if (src.source_type === 'pdf') {
-    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
-    var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
-    autoActions += '<button class="action-btn" id="mineru-reparse-btn"' + (ocrRunning ? ' disabled' : '') + ' onclick="submitMineruReparse(\'' + esc(src.source_file_id) + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
-  }
-  if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.auto_page_mapping) {
-    var autoMapForActions = src.pdf_profile.auto_page_mapping;
-    if (autoMapForActions.applied_segments && autoMapForActions.applied_segments.length) {
-      autoActions += '<button class="action-btn" onclick="acceptAutoMapping(\'' + esc(src.source_file_id) + '\')">接受自动映射</button>';
-    }
-    if (autoMapForActions.exception_pages && autoMapForActions.exception_pages.length) {
-      autoActions += '<button class="action-btn" onclick="showAutoMappingExceptions(\'' + esc(src.source_file_id) + '\')">检查异常</button>';
-    }
-    autoActions += '<button class="action-btn" onclick="openCalibrationForSource(\'' + esc(src.source_file_id) + '\')">编辑区间</button>';
-  }
-
-  var fileInfoHTML = '<div class="drawer-collapse" id="drawer-file-info">'
-    + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
-    + '<span class="drawer-section-title">文件信息</span>'
-    + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
-    + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
-    + '</button>'
-    + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
-    + '</div>';
-
-  var el = document.getElementById('library-drawer-content');
-  el.innerHTML = '<div class="drawer-title">' + esc(title) + '</div>'
+  var content = document.getElementById('library-drawer-content');
+  content.innerHTML = drawerNavHTML(sourceId)
+    + '<div class="drawer-title" tabindex="-1">' + esc(title) + '</div>'
     + (corpusTitle ? '<div class="drawer-subtitle">' + esc(corpusTitle) + '</div>' : '')
     + '<div class="detail-pills" style="margin-top:12px">'
     + '<span class="detail-pill">' + (src.source_type === 'pdf' ? 'PDF' : 'Word') + '</span>'
     + (vol && vol.primary_structure ? '<span class="detail-pill">' + structureLabel(vol.primary_structure) + '</span>' : '')
+    + drawerStatusPill(src)
     + '</div>'
-    + fileInfoHTML
-    + bibliographicHTML
-    + worksHTML
-    + '<div class="drawer-actions">'
-    + autoActions
-    + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(src.source_file_id) + '\', null)">打开原文</button>' : '')
-    + '</div>';
+    + bibliographicHTML;
+
+  var extra = document.getElementById('library-drawer-extra');
+  if (extra) extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);
+
   document.getElementById('library-drawer').classList.add('open');
   var body = document.querySelector('#page-library .library-body');
   if (body) body.classList.add('detail-open');
   renderDrawerCalibration(src);
+  // 新开详情时把焦点移到标题，便于读屏播报；同一文献刷新不夺焦点。
+  if (switchingDoc) {
+    var titleEl = content.querySelector('.drawer-title');
+    if (titleEl) titleEl.focus();
+  }
 }
 
 function renderDrawerCalibrationSummary(src) {

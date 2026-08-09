@@ -243,7 +243,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="library-list-scroll">
           <div id="library-list" class="library-list-container library-view-list"></div>
         </div>
-        <div class="library-drawer" id="library-drawer">
+        <div class="library-drawer" id="library-drawer" role="complementary" aria-label="文献详情">
           <div class="library-drawer-inner">
             <div class="drawer-close-bar">
               <button class="drawer-close" type="button" onclick="requestCloseLibDrawer()">← 关闭</button>
@@ -313,6 +313,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </div>
             </div>
+            <div id="library-drawer-extra"></div>
           </div>
         </div>
       </div>

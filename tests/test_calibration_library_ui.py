@@ -331,15 +331,45 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 关闭按钮走带确认的入口，程序化 closeLibDrawer 仍可静默关闭。
         self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
         # 切到别的文献前拦截；同一文献重选不打扰。
-        self.assertIn("if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;", HTML)
+        self.assertIn("var switchingDoc = sourceId !== libSelectedId;", HTML)
+        self.assertIn("if (switchingDoc && !await guardLeaveDetail()) return;", HTML)
         # 顶部状态筛选与三条筛选条离开详情前都拦截。
         self.assertIn("async function applyLibStatusFilter(status)", HTML)
         self.assertIn("async function setLibFilter(btn)", HTML)
         self.assertIn("async function setLibDocTypeFilter(btn)", HTML)
         # 任一字段输入即置脏。
         self.assertIn("event.target.closest('#bibliographic-editor')) bibEditorDirty = true;", HTML)
-        # 保存成功后清脏。
-        self.assertIn("bibEditorDirty = false;\n    delete bibEditorTypeOverride[sourceId];", HTML)
+        # 保存成功后清脏并回到查看态。
+        self.assertIn("bibEditorDirty = false;\n    bibEditMode[sourceId] = false;", HTML)
+
+    def test_detail_drawer_splits_read_edit_and_reorders_regions(self) -> None:
+        """Phase 3 详情外壳：查看/编辑态分离、插槽渲染、区块重排、操作收敛、上一条/下一条。"""
+
+        # 书目区查看态默认，点「编辑」进编辑态；共用宿主 #bib-host 就地切换。
+        self.assertIn("function bibliographicReadHTML(src)", HTML)
+        self.assertIn("function renderBibliographicSection(src)", HTML)
+        self.assertIn("function enterBibEdit(sourceId)", HTML)
+        self.assertIn("function exitBibEdit(sourceId)", HTML)
+        self.assertIn("bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src)", HTML)
+        self.assertIn('id="bib-host"', HTML)
+        # 编辑态页脚显式保存 + 取消，保存文案区分于校准保存。
+        self.assertIn(">取消</button>", HTML)
+        self.assertIn(">保存书目信息</button>", HTML)
+        # 插槽渲染：内容槽（书目）在校准卡片之前，extra 槽（收录/文件/操作）在其后。
+        self.assertIn('id="library-drawer-extra"', HTML)
+        self.assertIn("var extra = document.getElementById('library-drawer-extra');", HTML)
+        self.assertIn("extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);", HTML)
+        # 上一条 / 下一条。
+        self.assertIn("function drawerNavHTML(sourceId)", HTML)
+        # 主操作收敛为「打开原文」+ ⋯；页码相关不再在此重复。
+        self.assertIn("function drawerMainActionsHTML(src)", HTML)
+        self.assertIn('id="drawer-more-menu"', HTML)
+        self.assertNotIn("openCalibrationAndDetect(\\'' + esc(src.source_file_id) + '\\')\">自动检测页码", HTML)
+        # 收录文献不再内层滚动。
+        works_rule = HTML.split('.drawer-works-list {', 1)[1].split('}', 1)[0]
+        self.assertNotIn('max-height: 300px', works_rule)
+        # 详情抽屉带 ARIA。
+        self.assertIn('id="library-drawer" role="complementary" aria-label="文献详情"', HTML)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)

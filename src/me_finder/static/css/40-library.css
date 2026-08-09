@@ -484,8 +484,6 @@
   border-radius: var(--widget-radius);
   border: 1px solid var(--divider);
   overflow: hidden;
-  max-height: 300px;
-  overflow-y: auto;
 }
 .drawer-work-item {
   padding: 8px 14px;
@@ -508,4 +506,62 @@
   align-items: center;
 }
 .drawer-actions .action-btn { flex: 0 0 auto; white-space: nowrap; }
+.drawer-actions-spacer { flex: 1 1 auto; }
+
+/* 小号动作按钮，用于书目区头部/工具位。 */
+.action-btn.sm { height: 30px; padding: 0 11px; font-size: 12.5px; }
+
+/* ── 详情：上一条 / 下一条 ── */
+.drawer-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.drawer-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.drawer-nav-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+.drawer-nav-btn:disabled { opacity: .4; cursor: default; }
+.drawer-nav-pos { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.drawer-title:focus-visible { outline: none; }
+
+/* ── 书目区：查看态 ── */
+.bib-section-head { display: flex; align-items: center; gap: 10px; margin: 24px 0 10px; }
+.bib-section-head .drawer-section-title { margin: 0; }
+.bib-section-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.bib-read-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 4px;
+  border: 1px solid var(--divider);
+  border-radius: var(--widget-radius);
+  overflow: hidden;
+  background: var(--divider);
+}
+.bib-read-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 9px 12px; background: var(--surface); }
+.bib-read-row.full { grid-column: 1 / -1; }
+.bib-read-label { flex: 0 0 auto; width: 58px; font-size: 12px; color: var(--text-tertiary); }
+.bib-read-value { flex: 1; min-width: 0; font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bib-read-row.is-missing .bib-read-value { color: var(--text-tertiary); }
+.bib-read-warn { width: 13px; height: 13px; color: var(--warning); vertical-align: -2px; }
+.bib-read .bibliographic-meta { margin-top: 10px; }
+.bib-footer-actions { display: inline-flex; gap: 8px; }
+.bib-menu-item-danger { color: var(--danger); }
+.bib-menu-item-danger:hover { background: var(--danger-soft); }
+@media (max-width: 560px) {
+  .bib-read-grid { grid-template-columns: 1fr; }
+}
 
