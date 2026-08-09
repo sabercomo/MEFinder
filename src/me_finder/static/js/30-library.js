@@ -127,6 +127,7 @@ function setLibDefaultLanguage(btn) {
   if (value === libDefaultLanguage) return;
   libDefaultLanguage = value;
   try { localStorage.setItem('meFinderLibDefaultLanguage', value); } catch (_) {}
+  persistDisplayPreference('lib_default_language', value);  // 随数据备份/迁移（C-01）
   syncLibDefaultLanguageControl();
   renderLibraryList();  // 重绘以刷新语言筛选条的标签与「本国/外文」归属
 }

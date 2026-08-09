@@ -30,6 +30,21 @@ VALID_THEMES = frozenset(
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
+# 文献默认语言与联网自动匹配阈值：此前只存 localStorage，换机/迁移/导入备份后
+# 会静默复位。纳入 preferences.json 后随数据一起备份迁移（C-01）。
+DEFAULT_LIBRARY_LANGUAGE = "chinese"
+VALID_LIBRARY_LANGUAGES = frozenset({"chinese", "foreign"})
+DEFAULT_ONLINE_AUTO_MATCH = 0.90
+ONLINE_AUTO_MATCH_MIN = 0.80
+ONLINE_AUTO_MATCH_MAX = 1.00
+
+
+def _normalized_online_auto_match(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_ONLINE_AUTO_MATCH
+    return max(ONLINE_AUTO_MATCH_MIN, min(ONLINE_AUTO_MATCH_MAX, round(number, 2)))
 _PREFERENCES_LOCK = threading.RLock()
 
 
@@ -77,6 +92,12 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     ).strip().lower()
     if citation_style not in citation_styles:
         citation_style = citation_styles[0] if citation_styles else DEFAULT_CITATION_STYLE
+    library_language = payload.get("lib_default_language") if isinstance(payload, dict) else None
+    if library_language not in VALID_LIBRARY_LANGUAGES:
+        library_language = DEFAULT_LIBRARY_LANGUAGE
+    online_auto_match = _normalized_online_auto_match(
+        payload.get("online_auto_match_threshold") if isinstance(payload, dict) else None
+    )
     return {
         "theme": theme,
         "library_view": library_view,
@@ -86,6 +107,8 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "auto_update": auto_update,
         "citation_styles": citation_styles,
         "citation_style": citation_style,
+        "lib_default_language": library_language,
+        "online_auto_match_threshold": online_auto_match,
     }
 
 
@@ -179,6 +202,15 @@ def _save_preferences_locked(
         if citation_style not in current.get("citation_styles", []):
             raise ValueError("当前引文格式尚未启用")
         current["citation_style"] = citation_style
+    if "lib_default_language" in updates:
+        language = updates["lib_default_language"]
+        if language not in VALID_LIBRARY_LANGUAGES:
+            raise ValueError("不支持的文献默认语言")
+        current["lib_default_language"] = str(language)
+    if "online_auto_match_threshold" in updates:
+        current["online_auto_match_threshold"] = _normalized_online_auto_match(
+            updates["online_auto_match_threshold"]
+        )
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")

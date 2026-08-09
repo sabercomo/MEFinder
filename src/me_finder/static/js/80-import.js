@@ -173,6 +173,7 @@ function setOnlineAutoMatchThreshold(pct) {
   value = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, value));
   onlineMetadataAutoMatchThreshold = value / 100;
   try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(value)); } catch (_) {}
+  persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);  // 随数据备份/迁移（C-01）
   syncOnlineAutoMatchControl();
 }
 

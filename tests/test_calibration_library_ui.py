@@ -395,6 +395,15 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("dt === 'unknown' ? '未识别'", HTML)
         self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
 
+    def test_default_language_and_auto_match_persist_to_backend(self) -> None:
+        """C-01：文献默认语言与联网自动匹配阈值走 /api/preferences，随数据备份/迁移。"""
+
+        self.assertIn("persistDisplayPreference('lib_default_language', value);", HTML)
+        self.assertIn("persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);", HTML)
+        # 加载时以后端为准。
+        self.assertIn("data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign'", HTML)
+        self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)
+
     def test_global_layering_tokens_and_escape_stack(self) -> None:
         """G-03 统一 z-index token；G-02 统一 Esc 栈。"""
 

@@ -409,6 +409,17 @@ function applyPreferencesData(data, requestedThemeRevision) {
   }
   if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
   else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
+  // 后端为准（随数据迁移）：文献默认语言与联网自动匹配阈值（C-01）。
+  if (data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign') {
+    libDefaultLanguage = data.lib_default_language;
+    try { localStorage.setItem('meFinderLibDefaultLanguage', libDefaultLanguage); } catch (_) {}
+    syncLibDefaultLanguageControl();
+  }
+  if (typeof data.online_auto_match_threshold === 'number') {
+    onlineMetadataAutoMatchThreshold = data.online_auto_match_threshold;
+    try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(Math.round(onlineMetadataAutoMatchThreshold * 100))); } catch (_) {}
+    syncOnlineAutoMatchControl();
+  }
   currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
   autoUpdateEnabled = data.auto_update === true;
   enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
