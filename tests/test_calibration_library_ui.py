@@ -319,6 +319,28 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));", HTML)
         self.assertIn("delete bibFieldCache[sourceId];", HTML)
 
+    def test_unsaved_bibliographic_edits_are_guarded_on_leaving_detail(self) -> None:
+        """离开详情前拦一道未保存的书目修改：关抽屉 / 换文献 / 点状态筛选都要确认。
+
+        旧实现三条出口都直接丢弃编辑内容且无任何提示（P0）。
+        """
+
+        self.assertIn("let bibEditorDirty = false;", HTML)
+        self.assertIn("async function guardLeaveDetail()", HTML)
+        self.assertIn("async function requestCloseLibDrawer()", HTML)
+        # 关闭按钮走带确认的入口，程序化 closeLibDrawer 仍可静默关闭。
+        self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
+        # 切到别的文献前拦截；同一文献重选不打扰。
+        self.assertIn("if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;", HTML)
+        # 顶部状态筛选与三条筛选条离开详情前都拦截。
+        self.assertIn("async function applyLibStatusFilter(status)", HTML)
+        self.assertIn("async function setLibFilter(btn)", HTML)
+        self.assertIn("async function setLibDocTypeFilter(btn)", HTML)
+        # 任一字段输入即置脏。
+        self.assertIn("event.target.closest('#bibliographic-editor')) bibEditorDirty = true;", HTML)
+        # 保存成功后清脏。
+        self.assertIn("bibEditorDirty = false;\n    delete bibEditorTypeOverride[sourceId];", HTML)
+
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
         self.assertIn('class="status-stat status-stat--', HTML)

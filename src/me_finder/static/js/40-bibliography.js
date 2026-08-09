@@ -15,6 +15,10 @@ let bibliographicPendingEvidence = {};
 // 刊名/卷/期/页/DOI/ISSN）在 DOM 里消失，但仍留在这里，保存时随类型一并回填，
 // 避免“切类型 + 保存”把另一类型字段静默清空（数据丢失）。
 let bibFieldCache = {};
+// 书目编辑器是否有未保存修改：改字段 / 切类型 / 联网回填 / 自动识别都会置脏，
+// 保存或切换到别的文献才清零。离开详情前统一用 guardLeaveDetail 拦一道，
+// 避免关抽屉、点另一条文献、点顶部状态筛选时把手填内容静默丢掉。
+let bibEditorDirty = false;
 const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'];
 function bibFieldCacheFromMeta(meta) {
   var out = {};
@@ -201,6 +205,7 @@ if (typeof document !== 'undefined' && !window.__bibMenuOutside) {
 
 function setBibliographicType(sourceId, docType) {
   var current = collectBibliographicForm();
+  bibEditorDirty = true;
   bibEditorTypeOverride[sourceId] = docType;
   var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
   var editor = document.getElementById('bibliographic-editor');
@@ -310,6 +315,7 @@ function applyBibliographicLookupMetadata(sourceId, metadata, evidence, fields) 
     }
   });
   refreshBibliographicMissingDisplay();
+  if (filled.length) bibEditorDirty = true;  // 联网回填了空字段 = 有未保存修改
   return {filled:filled, preserved:preserved};
 }
 
@@ -613,6 +619,8 @@ async function detectBibliographicMetadata(sourceId, force) {
       src.bibliographic_metadata = data.metadata;
       Object.keys(data.metadata).forEach(function(key){src[key]=data.metadata[key];});
       selectLibDoc(sourceId);
+      // 识别结果只载入未保存，标脏以便离开时提醒。
+      if (data.metadata.metadata_source !== 'manual' || force) bibEditorDirty = true;
     }
     showToast(data.metadata.metadata_source === 'manual' && !force ? '人工元数据已保护，未覆盖' : '识别结果已载入，请检查后保存');
   } catch(e) { showToast('识别失败：' + e.message, 'danger'); }
@@ -624,6 +632,7 @@ async function saveBibliographicMetadata(sourceId) {
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '保存失败');
     showToast('书目信息已保存并立即生效', 'success');
+    bibEditorDirty = false;
     delete bibEditorTypeOverride[sourceId];
     delete bibliographicPendingEvidence[sourceId];
     delete bibFieldCache[sourceId];
@@ -655,9 +664,32 @@ async function openMetadataForSource(sourceId) {
   await selectLibDoc(sourceId);
 }
 
+// 有未保存修改时先确认；用户放弃才返回 true。仅拦用户主动离开详情的路径，
+// 程序内部的关闭（删除后、保存后重载）不经过这里。
+function guardDirty() {
+  if (!bibEditorDirty) return Promise.resolve(true);
+  return showAppConfirm(
+    '当前文献的书目信息有未保存的修改，离开将丢弃这些修改',
+    {title:'放弃未保存的书目修改？', confirmText:'放弃修改', tone:'warning'}
+  );
+}
+
+// 离开详情的统一闸门：确认放弃后清脏并放行。
+async function guardLeaveDetail() {
+  if (bibEditorDirty && !await guardDirty()) return false;
+  bibEditorDirty = false;
+  return true;
+}
+
+async function requestCloseLibDrawer() {
+  if (!await guardLeaveDetail()) return;
+  closeLibDrawer();
+}
+
 function closeLibDrawer() {
   libSelectedId = null;
   calSelectedSourceId = null;
+  bibEditorDirty = false;
   document.getElementById('library-drawer').classList.remove('open');
   var body = document.querySelector('#page-library .library-body');
   if (body) body.classList.remove('detail-open');

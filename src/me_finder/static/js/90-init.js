@@ -14,6 +14,10 @@ async function loadMeta() {
 document.addEventListener('click', function(event) {
   if (!event.target.closest('.app-select')) closeAppSelects();
 });
+// 书目字段任一输入即视为有未保存修改（程序化回填另行显式置脏）。
+document.addEventListener('input', function(event) {
+  if (event.target && event.target.closest && event.target.closest('#bibliographic-editor')) bibEditorDirty = true;
+});
 (function initVisionEditor() {
   var base = document.getElementById('vision-api-base');
   var key = document.getElementById('vision-api-key');

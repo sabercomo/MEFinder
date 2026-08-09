@@ -78,7 +78,8 @@ function renderLibraryStats() {
     + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter');
 }
 
-function applyLibStatusFilter(status) {
+async function applyLibStatusFilter(status) {
+  if (!await guardLeaveDetail()) return;
   var requested = status || 'all';
   libStatusFilter = requested === libStatusFilter ? 'all' : requested;
   if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
@@ -92,7 +93,8 @@ function applyLibStatusFilter(status) {
   renderLibraryList();
 }
 
-function setLibFilter(btn) {
+async function setLibFilter(btn) {
+  if (!await guardLeaveDetail()) return;
   libTypeFilter = btn.dataset.type;
   if (libTypeFilter === 'word' && libStatusFilter !== 'all') {
     libStatusFilter = 'all';
@@ -104,7 +106,8 @@ function setLibFilter(btn) {
   renderLibraryList();
 }
 
-function setLibLangFilter(btn) {
+async function setLibLangFilter(btn) {
+  if (!await guardLeaveDetail()) return;
   libLangFilter = btn.dataset.lang;
   document.querySelectorAll('#lib-lang-control .seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -137,7 +140,8 @@ function syncLibDefaultLanguageControl() {
 // 文字系统事实（'chinese' / 'foreign'）→ 语言筛选条上的显示标签。
 // 标签始终是「中文 / 外文」；默认语言不改标签文字，只改两档的排列主次
 // （见 renderLibraryList 里对 style.order 的设置）。
-function setLibDocTypeFilter(btn) {
+async function setLibDocTypeFilter(btn) {
+  if (!await guardLeaveDetail()) return;
   libDocTypeFilter = btn.dataset.doctype;
   document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -470,6 +474,8 @@ function libraryEntryHTML(src) {
 }
 
 async function selectLibDoc(sourceId) {
+  // 切到别的文献前拦一道未保存修改；同一文献的重选（识别/保存后刷新）不打扰。
+  if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;
   libSelectedId = sourceId;
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) {
     row.classList.toggle('selected', row.dataset.id === sourceId);
