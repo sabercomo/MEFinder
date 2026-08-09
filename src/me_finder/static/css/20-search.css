@@ -354,6 +354,7 @@
   border: 1px solid var(--divider);
   overflow: visible;
 }
+.detail-mobile-toolbar { display: none; }
 .detail-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -601,6 +602,45 @@
   .detail-actions .action-btn { height: 32px; padding-left: 10px; padding-right: 10px; font-size: 12px; }
   .detail-actions .app-select-trigger { height: 32px; font-size: 12px; }
   .detail-actions .detail-more-trigger { width: 34px; min-width: 34px; padding: 0; font-size: 18px; }
+}
+
+@media (max-width: 959px) {
+  .results-list-pane {
+    width: 100%;
+    min-width: 0;
+    border-right: 0;
+  }
+  .results-detail-pane {
+    display: none;
+    width: 100%;
+    padding: 12px;
+  }
+  .results-area.is-detail-open > .results-list-pane { display: none; }
+  .results-area.is-detail-open > .results-detail-pane {
+    display: block;
+    flex: 1 1 100%;
+  }
+  .detail-mobile-toolbar {
+    display: flex;
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .detail-back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 0 8px;
+    border-radius: 7px;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .detail-back-button:hover { background: var(--accent-light); }
+  .detail-back-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .detail-back-button svg { width: 16px; height: 16px; }
+  .detail-scroll { border-radius: 0; }
 }
 
 /* ── Empty / placeholder states ────────────────────────────── */

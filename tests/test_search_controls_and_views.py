@@ -130,6 +130,30 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("e.target.id !== 'query'", keydown_source)
         self.assertIn("'button, input, textarea, select, summary, a[href]", HTML)
 
+    def test_narrow_search_layout_opens_one_detail_with_a_list_return(self) -> None:
+        self.assertIn("selectResult(0, false)", HTML)
+        self.assertIn("function selectResult(index, openNarrowDetail)", HTML)
+        self.assertIn("if (openNarrowDetail !== false) showSearchResultDetail();", HTML)
+        self.assertIn("function showSearchResultDetail()", HTML)
+        self.assertIn("area.classList.add('is-detail-open')", HTML)
+        self.assertIn("function showSearchResultsList()", HTML)
+        self.assertIn("area.classList.remove('is-detail-open')", HTML)
+        self.assertIn('onclick="showSearchResultsList()"', HTML)
+        self.assertIn("返回结果列表", HTML)
+        self.assertIn("@media (max-width: 959px)", HTML)
+        self.assertIn(".results-area.is-detail-open > .results-list-pane { display: none; }", HTML)
+        self.assertRegex(
+            HTML,
+            r"\.results-area\.is-detail-open\s*>\s*\.results-detail-pane\s*\{[^}]*display:\s*block",
+        )
+        self.assertRegex(HTML, r"\.detail-mobile-toolbar\s*\{\s*display:\s*none")
+
+        row_start = HTML.index("function resultRowHTML(item, index)")
+        row_end = HTML.index("function searchResultsArea()", row_start)
+        row_source = HTML[row_start:row_end]
+        self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
+        self.assertLess(row_source.index("result-match-type"), row_source.index("result-title"))
+
     def test_library_filters_by_language_alongside_file_type(self) -> None:
         self.assertIn('id="lib-lang-control"', HTML)
         self.assertIn('data-lang="chinese"', HTML)

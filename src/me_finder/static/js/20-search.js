@@ -205,7 +205,7 @@ async function runSearch() {
     }
 
     listEl.innerHTML = searchResults.map((item, i) => resultRowHTML(item, i)).join('');
-    selectResult(0);
+    selectResult(0, false);
   } catch (err) {
     if (seq !== searchSeq) return;
     statusEl.textContent = '检索失败：' + err.message;
@@ -237,7 +237,24 @@ function resultRowHTML(item, index) {
     + '</div>';
 }
 
-function selectResult(index) {
+function searchResultsArea() {
+  return document.querySelector('#page-search .results-area');
+}
+
+function showSearchResultsList() {
+  closeAppSelects();
+  const area = searchResultsArea();
+  if (area) area.classList.remove('is-detail-open');
+  const row = document.querySelector('.result-row[data-index="' + selectedIndex + '"]');
+  if (row) row.scrollIntoView({block: 'nearest'});
+}
+
+function showSearchResultDetail() {
+  const area = searchResultsArea();
+  if (area) area.classList.add('is-detail-open');
+}
+
+function selectResult(index, openNarrowDetail) {
   if (index < 0 || index >= searchResults.length) return;
   selectedIndex = index;
   document.querySelectorAll('.result-row').forEach((row, i) => {
@@ -245,6 +262,7 @@ function selectResult(index) {
   });
   const item = searchResults[index];
   showDetail(item);
+  if (openNarrowDetail !== false) showSearchResultDetail();
 
   const row = document.querySelector('.result-row[data-index="' + index + '"]');
   if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
@@ -339,6 +357,9 @@ function showDetail(item) {
   const detailMenuChevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
 
   panel.innerHTML = '<div class="detail-card">'
+    + '<div class="detail-mobile-toolbar">'
+    + '<button class="detail-back-button" type="button" onclick="showSearchResultsList()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-5 5 5 5"/><path d="M7 10h8"/></svg><span>返回结果列表</span></button>'
+    + '</div>'
     + '<div class="detail-scroll">'
     + '<div class="detail-header">'
     + '<div class="detail-title">' + title + '</div>'
@@ -408,6 +429,7 @@ function showEmptyDetail() {
     detailContextResizeObserver.disconnect();
     detailContextResizeObserver = null;
   }
+  showSearchResultsList();
   document.getElementById('detail-panel').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><rect x="8" y="6" width="32" height="36" rx="3"/><line x1="16" y1="16" x2="32" y2="16"/><line x1="16" y1="22" x2="32" y2="22"/><line x1="16" y1="28" x2="28" y2="28"/></svg></div><div class="empty-state-text">选择一条结果查看详情</div></div>';
 }
 
