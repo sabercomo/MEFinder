@@ -119,6 +119,14 @@ try {
         tests.test_page_display `
         tests.test_runtime_page_mapping `
         tests.test_search_match_spans `
+        tests.test_search_occurrence_identity `
+        tests.test_search_service `
+        tests.test_api_request_limits `
+        tests.test_source_streaming `
+        tests.test_app_context `
+        tests.test_database_page_anchors `
+        tests.test_index_publication_guard `
+        tests.test_normalization `
         tests.test_vision_api `
         tests.test_search_controls_and_views `
         tests.test_structured_reader `
