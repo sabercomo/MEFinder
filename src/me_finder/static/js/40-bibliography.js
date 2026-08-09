@@ -75,7 +75,9 @@ function bibliographicEditorHTML(src) {
   if (isJournal) {
     var lookupSource = bibLookupSource[src.source_file_id] || 'auto';
     var chevronSvg = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-    var moreSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+    // 主操作用 split（点主体走当前生效源、▾ 换源）；「自动识别」独立次按钮；
+    // 「重新识别」（覆盖人工）只在有人工数据可覆盖时平铺出来，与图书工具条一致，
+    // 不再为单个低频项塞一个 ⋯ 菜单。
     toolbarHTML = '<div class="bib-toolbar">'
       + '<span class="bib-menu-wrap">'
       + '<span class="bib-split">'
@@ -85,12 +87,7 @@ function bibliographicEditorHTML(src) {
       + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(sid, lookupSource) + '</span>'
       + '</span>'
       + '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>'
-      + '<span class="bib-menu-wrap">'
-      + '<button class="action-btn bib-caret-only" type="button" aria-label="更多" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-more-menu\')">' + moreSvg + '</button>'
-      + '<span class="bib-menu bib-menu-end" id="bib-more-menu" role="menu">'
-      + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'redetect\',\'' + sid + '\')">重新识别</button>'
-      + '</span>'
-      + '</span>'
+      + (meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
       + '</div>';
   } else {
     // 图书 / 学位论文：维持原有平铺工具条，不改交互。
@@ -284,7 +281,6 @@ function bibMenuAction(ev, action, sid) {
   bibCloseMenus();
   if (action === 'paste') return toggleCitationPanel();
   if (action === 'opencnki') return openCnkiSearch(sid);
-  if (action === 'redetect') return detectBibliographicMetadata(sid, true);
 }
 
 function bibToggleMenu(ev, id) {
