@@ -817,6 +817,13 @@ async function removeScanDirectory(index) {
   }
 }
 
+// 显式保存区块的“未保存”提示（C-02）：把对应 hint 文案改成提醒；
+// 保存/重载函数写自己的文案时会覆盖它，无需单独清除。
+function markSettingsSectionDirty(hintId) {
+  var el = document.getElementById(hintId);
+  if (el) el.textContent = '有未保存的修改，记得点保存';
+}
+
 function persistDisplayPreference(key, value) {
   var payload = {};
   payload[key] = value;

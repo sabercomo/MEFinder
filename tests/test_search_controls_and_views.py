@@ -285,6 +285,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotIn("failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });\n    await runDirectoryScan();", HTML)
 
+    def test_explicit_save_settings_show_unsaved_hint(self) -> None:
+        """C-02：需显式保存的设置区块（MinerU / 视觉接口）改动即提示尚未保存。"""
+
+        self.assertIn("function markSettingsSectionDirty(hintId)", HTML)
+        self.assertIn("有未保存的修改，记得点保存", HTML)
+        self.assertIn("t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint')", HTML)
+        self.assertIn("t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint')", HTML)
+
     def test_import_action_precedes_config_with_intro_and_collapsed_parse_mode(self) -> None:
         """I-01/I-03：先动作后配置——顶部引导 + 拖放区在前，解析方式折叠在拖放区下方。"""
 
