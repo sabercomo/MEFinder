@@ -413,7 +413,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("'卷次'", HTML)
         self.assertIn("'期号'", HTML)
         self.assertIn("'页码（起止页）'", HTML)
-        self.assertIn("var translator = value('translator');", HTML)
+        self.assertIn("var translator = value('translator', 'translator');", HTML)
         self.assertIn("editorDocType === 'journal_article' || editorDocType === 'thesis'", HTML)
         self.assertIn("['author','title','journal_name','publish_year','issue']", HTML)
         self.assertIn("['author','title','publisher','publish_year']", HTML)

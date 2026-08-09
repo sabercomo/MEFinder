@@ -538,6 +538,9 @@ async function selectLibDoc(sourceId) {
 
   var bibliographicHTML = '';
   if (src.source_type === 'pdf') {
+    // 选中即以当前元数据初始化字段缓存；此后切类型只在缓存里保留隐藏字段，
+    // 不会丢。保存或重新选中文献会刷新这份缓存。
+    bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));
     bibliographicHTML = bibliographicEditorHTML(src);
   }
 

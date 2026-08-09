@@ -11,6 +11,16 @@ let cnkiLookupState = {};
 let bookLookupState = {};
 let crossrefLookupState = {};
 let bibliographicPendingEvidence = {};
+// 每份文献一个字段缓存：切换文献类型时，不属于新类型的字段（如期刊切图书时的
+// 刊名/卷/期/页/DOI/ISSN）在 DOM 里消失，但仍留在这里，保存时随类型一并回填，
+// 避免“切类型 + 保存”把另一类型字段静默清空（数据丢失）。
+let bibFieldCache = {};
+const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'];
+function bibFieldCacheFromMeta(meta) {
+  var out = {};
+  BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { out[field] = String((meta && meta[field]) || '').trim(); });
+  return out;
+}
 
 function bibliographicEditorHTML(src) {
   var meta = sourceBibliographicMetadata(src);
@@ -211,19 +221,30 @@ function setBibliographicType(sourceId, docType) {
 
 
 function collectBibliographicForm() {
-  function value(id) { var el = document.getElementById('bib-' + id); return el ? el.value.trim() : ''; }
+  var cache = (libSelectedId && bibFieldCache[libSelectedId]) || {};
+  // 可见字段以实时 DOM 值为准（尊重清空）；当前类型不含的字段回退到缓存里上次
+  // 已知的值，保存时随类型一并提交，杜绝切类型后另一类型字段被静默写空。
+  function value(id, field) {
+    var el = document.getElementById('bib-' + id);
+    return el ? el.value.trim() : String(cache[field] || '').trim();
+  }
   var typeButton = document.querySelector('#bib-doctype-control .seg-btn.active');
   var editorDocType = typeButton ? typeButton.dataset.doctype : 'book';
-  var translator = value('translator');
-  return {
+  var translator = value('translator', 'translator');
+  var result = {
     document_type: bibliographicFormDocType(editorDocType, translator),
-    author: value('author'), country: value('country'), title: value('title'),
-    translator: translator, publish_place: value('publish-place'),
-    publisher: value('publisher'), publish_year: value('publish-year'), isbn: value('isbn'),
-    journal_name: value('journal-name'), volume: value('volume'),
-    issue: value('issue'), page_range: value('page-range'), doi: value('doi'), issn: value('issn'),
+    author: value('author', 'author'), country: value('country', 'country'), title: value('title', 'title'),
+    translator: translator, publish_place: value('publish-place', 'publish_place'),
+    publisher: value('publisher', 'publisher'), publish_year: value('publish-year', 'publish_year'), isbn: value('isbn', 'isbn'),
+    journal_name: value('journal-name', 'journal_name'), volume: value('volume', 'volume'),
+    issue: value('issue', 'issue'), page_range: value('page-range', 'page_range'), doi: value('doi', 'doi'), issn: value('issn', 'issn'),
     metadata_evidence: bibliographicPendingEvidence[libSelectedId] || {}
   };
+  if (libSelectedId) {
+    var store = bibFieldCache[libSelectedId] || (bibFieldCache[libSelectedId] = {});
+    BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { store[field] = result[field]; });
+  }
+  return result;
 }
 
 function refreshBibliographicMissingDisplay() {
@@ -605,6 +626,7 @@ async function saveBibliographicMetadata(sourceId) {
     showToast('书目信息已保存并立即生效', 'success');
     delete bibEditorTypeOverride[sourceId];
     delete bibliographicPendingEvidence[sourceId];
+    delete bibFieldCache[sourceId];
     await loadLibrary(true);
     await selectLibDoc(sourceId);
   } catch(e) { showToast('保存失败：' + e.message, 'danger'); }

@@ -303,6 +303,22 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("return fields.length ? '书目缺失：'", HTML)
         self.assertIn("needs_review:'书目待确认'", HTML)
 
+    def test_document_type_switch_preserves_hidden_fields(self) -> None:
+        """切换文献类型不得静默清空另一类型的字段：靠 bibFieldCache 保留隐藏字段。
+
+        旧实现里 collectBibliographicForm 只读可见 DOM，期刊切著作再保存会把
+        刊名/卷/期/页/DOI/ISSN 写成 null。修复后隐藏字段回退到缓存并随保存回填。
+        """
+
+        self.assertIn("let bibFieldCache = {};", HTML)
+        self.assertIn("function bibFieldCacheFromMeta(meta)", HTML)
+        # collectBibliographicForm：可见取 DOM，隐藏取缓存（不再一律空串）。
+        self.assertIn("return el ? el.value.trim() : String(cache[field] || '').trim();", HTML)
+        self.assertIn("BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { store[field] = result[field]; });", HTML)
+        # 选中文献时以元数据初始化缓存；保存后清掉缓存以便下次重新初始化。
+        self.assertIn("bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));", HTML)
+        self.assertIn("delete bibFieldCache[sourceId];", HTML)
+
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
         self.assertIn('class="status-stat status-stat--', HTML)
