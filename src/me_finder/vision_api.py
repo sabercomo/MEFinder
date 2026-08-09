@@ -698,8 +698,18 @@ def _atomic_write_json_list(path: Path, payload: Sequence[Mapping[str, object]])
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as handle:
-            json.dump(list(payload), handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
+            encoder = json.JSONEncoder(
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            handle.write("[")
+            for index, item in enumerate(payload):
+                if index:
+                    handle.write(",")
+                for chunk in encoder.iterencode(item):
+                    handle.write(chunk)
+            handle.write("]\n")
             handle.flush()
             os.fsync(handle.fileno())
         temporary.replace(path)

@@ -328,11 +328,20 @@ class MinerUClient:
         return self._json_request("POST", "/api/v4/file-urls/batch", payload)
 
     def upload_file(self, upload_url: str, path: Path) -> int:
-        data = Path(path).read_bytes()
-        request = urllib.request.Request(upload_url, data=data, headers={"Content-Type": ""}, method="PUT")
+        path = Path(path)
         try:
-            with self.opener.open(request, timeout=180) as response:
-                return int(response.status)
+            with path.open("rb") as data:
+                request = urllib.request.Request(
+                    upload_url,
+                    data=data,
+                    headers={
+                        "Content-Type": "",
+                        "Content-Length": str(path.stat().st_size),
+                    },
+                    method="PUT",
+                )
+                with self.opener.open(request, timeout=180) as response:
+                    return int(response.status)
         except urllib.error.HTTPError as exc:
             raise MinerUError(
                 f"Upload failed: HTTP {exc.code}",
@@ -354,9 +363,19 @@ class MinerUClient:
     def download_url(self, url: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         request = urllib.request.Request(url, method="GET")
+        partial = output_path.with_name(output_path.name + ".partial")
         try:
-            with self.opener.open(request, timeout=300) as response:
-                output_path.write_bytes(response.read())
+            with self.opener.open(request, timeout=300) as response, partial.open(
+                "wb"
+            ) as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            partial.replace(output_path)
         except urllib.error.HTTPError as exc:
             raise MinerUError(f"Download failed: HTTP {exc.code}") from exc
 
@@ -488,11 +507,20 @@ class MinerUAgentClient:
         return self._json_request("POST", "/api/v1/agent/parse/file", payload)
 
     def upload_file(self, upload_url: str, path: Path) -> int:
-        data = Path(path).read_bytes()
-        request = urllib.request.Request(upload_url, data=data, headers={"Content-Type": ""}, method="PUT")
+        path = Path(path)
         try:
-            with self.opener.open(request, timeout=180) as response:
-                return int(response.status)
+            with path.open("rb") as data:
+                request = urllib.request.Request(
+                    upload_url,
+                    data=data,
+                    headers={
+                        "Content-Type": "",
+                        "Content-Length": str(path.stat().st_size),
+                    },
+                    method="PUT",
+                )
+                with self.opener.open(request, timeout=180) as response:
+                    return int(response.status)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")
             raise MinerUError(f"Agent upload failed: HTTP {exc.code}: {detail}") from exc
@@ -503,9 +531,19 @@ class MinerUAgentClient:
     def download_url(self, url: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         request = urllib.request.Request(url, method="GET")
+        partial = output_path.with_name(output_path.name + ".partial")
         try:
-            with self.opener.open(request, timeout=300) as response:
-                output_path.write_bytes(response.read())
+            with self.opener.open(request, timeout=300) as response, partial.open(
+                "wb"
+            ) as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            partial.replace(output_path)
         except urllib.error.HTTPError as exc:
             raise MinerUError(f"Agent download failed: HTTP {exc.code}") from exc
 

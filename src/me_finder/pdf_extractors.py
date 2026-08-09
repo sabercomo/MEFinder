@@ -26,6 +26,7 @@ from .pdf_page_mapping import PageMapper, mapped_page_display
 PDF_TYPES = {"native_text", "scanned", "broken_text", "complex_layout"}
 CROSS_PAGE_TAIL_CHARS = 900
 CROSS_PAGE_HEAD_CHARS = 900
+SIMPLE_PDF_MAX_BYTES = 128 * 1024 * 1024
 
 _BIBLIOGRAPHIC_STATE_FIELDS = (
     "document_type",
@@ -510,16 +511,29 @@ def write_parsed_pdf_snapshot(
     pages: Sequence[Dict[str, object]],
 ) -> None:
     parsed_dir.mkdir(parents=True, exist_ok=True)
-    snapshot = {
-        "document_id": document_id,
-        "profile": profile,
-        "page_count": len(pages),
-        "pages": pages,
-    }
-    (parsed_dir / f"{document_id}.json").write_text(
-        json.dumps(snapshot, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    target = parsed_dir / f"{document_id}.json"
+    partial = target.with_name(target.name + ".partial")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    with partial.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write("{")
+        stream.write('"document_id":')
+        for chunk in encoder.iterencode(document_id):
+            stream.write(chunk)
+        stream.write(',"profile":')
+        for chunk in encoder.iterencode(profile):
+            stream.write(chunk)
+        stream.write(f',"page_count":{len(pages)},"pages":[')
+        for index, page in enumerate(pages):
+            if index:
+                stream.write(",")
+            for chunk in encoder.iterencode(page):
+                stream.write(chunk)
+        stream.write("]}\n")
+        stream.flush()
+        import os
+
+        os.fsync(stream.fileno())
+    partial.replace(target)
 
 
 def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
@@ -966,7 +980,19 @@ def attach_page_block_offsets(
 
 
 def low_level_count(path: Path, needle: bytes) -> int:
-    return path.read_bytes().count(needle)
+    if not needle:
+        return 0
+    count = 0
+    overlap = b""
+    with Path(path).open("rb") as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            data = overlap + chunk
+            count += data.count(needle)
+            overlap = data[-(len(needle) - 1) :] if len(needle) > 1 else b""
+    return count
 
 
 def make_pdf_paragraphs(
@@ -1340,6 +1366,11 @@ class SimplePDF:
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
+        if self.path.stat().st_size > SIMPLE_PDF_MAX_BYTES:
+            raise PDFExtractionError(
+                "Large PDF fallback parsing requires PyMuPDF; refusing to load "
+                "the complete file into memory."
+            )
         self.data = self.path.read_bytes()
         self.objects = self._parse_objects()
 
