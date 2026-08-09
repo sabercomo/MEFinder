@@ -338,29 +338,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </div>
       </div>
       <div class="import-content">
-        <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
-          <div class="pdf-parse-mode-title">PDF 解析方式</div>
-          <label class="pdf-parse-option">
-            <input type="radio" name="pdf-parse-mode" value="auto" checked>
-            <span><strong>自动选择（默认）</strong><small>原生 PDF 快速解析；没有可靠文字层时自动使用 MinerU</small></span>
-          </label>
-          <label class="pdf-parse-option pdf-parse-option-online">
-            <input type="radio" name="pdf-parse-mode" value="mineru">
-            <span><strong>MinerU 在线解析（免费）</strong><small>强制上传 PDF 并进行 OCR，适合乱码、断字或复杂排版</small></span>
-          </label>
-          <label class="pdf-parse-option pdf-parse-option-paid" id="vision-parse-option">
-            <input type="radio" name="pdf-parse-mode" value="vision">
-            <span>
-              <strong>其他视觉 API</strong>
-              <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析</small>
-              <div class="app-select import-vision-select" id="import-vision-provider" data-value="" onclick="event.stopPropagation()">
-                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="选择其他解析 API" onclick="toggleImportVisionProvider(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                <div class="app-select-menu import-vision-menu" role="listbox" id="import-vision-provider-options"></div>
-              </div>
-              <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
-            </span>
-          </label>
-        </div>
+        <div class="import-intro">拖入或点击选择 PDF / DOCX 即可导入；也可扫描整个文件夹批量挑选。原始文件不会被移动或删除，导入时复制到应用语料目录。</div>
         <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
           <div class="drop-zone-icon">
             <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
@@ -373,6 +351,31 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </div>
         </div>
         <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <details class="pdf-parse-details">
+          <summary class="pdf-parse-summary">PDF 解析方式 · 默认自动选择（大多数情况无需更改，点此展开）</summary>
+          <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
+            <label class="pdf-parse-option">
+              <input type="radio" name="pdf-parse-mode" value="auto" checked>
+              <span><strong>自动选择（默认）</strong><small>原生 PDF 快速解析；没有可靠文字层时自动使用 MinerU。适合绝大多数文献</small></span>
+            </label>
+            <label class="pdf-parse-option pdf-parse-option-online">
+              <input type="radio" name="pdf-parse-mode" value="mineru">
+              <span><strong>MinerU 在线解析（免费）</strong><small>强制上传 PDF 并进行 OCR，适合乱码、断字或复杂排版</small></span>
+            </label>
+            <label class="pdf-parse-option pdf-parse-option-paid" id="vision-parse-option">
+              <input type="radio" name="pdf-parse-mode" value="vision">
+              <span>
+                <strong>其他视觉 API</strong>
+                <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析，可能产生调用费用</small>
+                <div class="app-select import-vision-select" id="import-vision-provider" data-value="" onclick="event.stopPropagation()">
+                  <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="选择其他解析 API" onclick="toggleImportVisionProvider(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                  <div class="app-select-menu import-vision-menu" role="listbox" id="import-vision-provider-options"></div>
+                </div>
+                <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
+              </span>
+            </label>
+          </div>
+        </details>
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>
@@ -385,7 +388,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <button class="action-btn" type="button" id="scan-run-btn" onclick="runDirectoryScan()">开始扫描</button>
             </div>
           </div>
-          <div class="scan-section-hint">可一次选择多个文件夹；扫描后再勾选要导入的文件。原始文件永远不会被移动或删除；导入时会复制到应用语料目录</div>
+          <div class="scan-section-hint">扫描只列出文件、不直接导入；可一次选择多个文件夹，扫描后勾选要导入的文件。原始文件永远不会被移动或删除；导入时会复制到应用语料目录</div>
           <div class="scan-subhead">已添加目录</div>
           <div class="scan-dir-list" id="scan-dir-list"></div>
           <div id="scan-status" class="scan-status"></div>

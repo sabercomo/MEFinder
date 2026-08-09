@@ -285,6 +285,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotIn("failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });\n    await runDirectoryScan();", HTML)
 
+    def test_import_action_precedes_config_with_intro_and_collapsed_parse_mode(self) -> None:
+        """I-01/I-03：先动作后配置——顶部引导 + 拖放区在前，解析方式折叠在拖放区下方。"""
+
+        self.assertIn('class="import-intro">', HTML)
+        drop = HTML.index('id="drop-zone"')
+        details = HTML.index('class="pdf-parse-details"')
+        parse_mode = HTML.index('class="pdf-parse-mode"')
+        self.assertLess(drop, details)          # 拖放区在解析方式之前
+        self.assertLess(details, parse_mode)    # 解析方式收在折叠区里
+        self.assertIn('<summary class="pdf-parse-summary">', HTML)
+        self.assertNotIn('class="pdf-parse-mode-title"', HTML)
+        # I-02：扫描只列出文件、不直接导入。
+        self.assertIn("扫描只列出文件、不直接导入", HTML)
+
     def test_optional_vision_api_and_mineru_fallback_are_wired(self) -> None:
         mineru_section = HTML.index('<span class="settings-section-title">MinerU API</span>')
         vision_section = HTML.index('<span class="settings-section-title">其他解析 API</span>')
