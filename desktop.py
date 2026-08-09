@@ -467,7 +467,7 @@ def create_main_window(webview_module, theme: str):
         "html": loading_html(theme, sys.platform),
         "width": 1500,
         "height": 860,
-        "min_size": (900, 600),
+        "min_size": (960, 640),
         "resizable": True,
         "text_select": True,
         "background_color": palette["app_bg"],
