@@ -14,7 +14,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.parse import urlparse
@@ -65,7 +65,7 @@ class VisionProviderConfig:
     provider_id: str
     name: str
     api_base: str
-    api_key: str
+    api_key: str = field(repr=False)
     model: str
     enabled: bool = True
     use_env_proxy: bool = False
