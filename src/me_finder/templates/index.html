@@ -258,12 +258,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div id="cal-section-body" style="display:none">
                 <div class="cal-detail-actions" id="cal-detail-actions"></div>
                 <div id="cal-editor" style="display:none">
+                  <div class="cal-intro">这本 PDF 的第 1 页往往不是书上印的页码。校准后，检索结果里的页码才能直接写进脚注。多数情况点「自动检测页码」看一眼预览即可；只有检测不准时才需要「手动调整」。</div>
                   <div class="cal-section">
                     <div class="cal-section-head">
                       <span class="cal-section-title">自动检测</span>
                     </div>
                     <div id="cal-auto-preview" class="auto-detect-panel" style="display:none"></div>
                   </div>
+                  <div id="cal-expert" style="display:none">
                   <div class="cal-section">
                     <div class="cal-section-head">
                       <span class="cal-section-title">页码映射分段</span>
@@ -308,6 +310,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <button class="action-btn primary" onclick="saveCalibration()">保存校准配置</button>
                     <button class="action-btn" onclick="loadCalibrationDoc()">放弃修改</button>
                     <span class="cal-save-hint">保存后自动重建索引</span>
+                  </div>
                   </div>
                   <div class="cal-danger-zone"><button class="action-btn danger-outline" onclick="openRemoveDocumentModal()">从文献库移除</button></div>
                 </div>

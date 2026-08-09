@@ -377,6 +377,25 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 详情抽屉带 ARIA。
         self.assertIn('id="library-drawer" role="complementary" aria-label="文献详情"', HTML)
 
+    def test_calibration_has_one_level_preview_before_expert_table(self) -> None:
+        """Phase 3b：页码校准两级深度。默认只出解释+自动检测+预览；7 列专家表收起。"""
+
+        self.assertIn('class="cal-intro"', HTML)
+        self.assertIn('id="cal-expert" style="display:none"', HTML)
+        self.assertIn("function setCalExpertVisible(show)", HTML)
+        # 已有分段直接展开专家表；否则收起。
+        self.assertIn("setCalExpertVisible(calSegments.length > 0);", HTML)
+        # 手动调整 / 载入自动结果 / 检测失败都展开专家表。
+        self.assertIn('onclick="scrollToManualMapping()">手动调整</button>', HTML)
+        self.assertIn("setCalExpertVisible(true);  // 「手动设置」", HTML)
+        self.assertIn("setCalExpertVisible(true);  // 检测失败", HTML)
+        self.assertIn("setCalExpertVisible(true);  // 载入自动结果", HTML)
+        # 专家表结构仍在 #cal-expert 内（自动检测预览在其外）。
+        expert = HTML.split('id="cal-expert"', 1)[1].split('cal-danger-zone', 1)[0]
+        self.assertIn('id="cal-segments-body"', expert)
+        self.assertIn('id="cal-preview-input"', expert)
+        self.assertNotIn('id="cal-auto-preview"', expert)
+
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
         self.assertIn('class="status-stat status-stat--', HTML)

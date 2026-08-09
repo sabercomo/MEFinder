@@ -27,6 +27,13 @@ function calibrationSortText(a, b, direction) {
   return direction === 'desc' ? -value : value;
 }
 
+// 页码校准两级深度：默认只出解释 + 自动检测 + 预览（L1，覆盖 90% 情况）；
+// 7 列专家分段表（L2）只在「手动调整」、载入自动结果编辑、检测失败或已有分段时展开。
+function setCalExpertVisible(show) {
+  var expert = document.getElementById('cal-expert');
+  if (expert) expert.style.display = show ? 'block' : 'none';
+}
+
 async function loadCalibrationDoc(sourceId) {
   sourceId = sourceId || calSelectedSourceId;
   var editor = document.getElementById('cal-editor');
@@ -47,13 +54,15 @@ async function loadCalibrationDoc(sourceId) {
     }
     var mapping = calSelectedDoc.page_mapping || {};
     calSegments = (mapping.segments || []).map(function(s) { return Object.assign({}, s); });
-    document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" onclick="runAutoDetection()">自动检测页码</button><button class="action-btn" onclick="scrollToManualMapping()">手动设置</button><button class="action-btn" onclick="showCalibrationEvidence()">查看识别依据</button>'
+    document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" onclick="runAutoDetection()">自动检测页码</button><button class="action-btn" onclick="scrollToManualMapping()">手动调整</button><button class="action-btn" onclick="showCalibrationEvidence()">查看识别依据</button>'
       + '<span class="detail-pill" style="margin-left:auto">' + (mapping.validated_by ? '已验证' : '未验证') + '</span>';
     editor.style.display = 'block';
     calAutoResult = null;
     document.getElementById('cal-auto-preview').style.display = 'none';
     renderCalSegments();
     updateCalPreview();
+    // 已有分段（配置过的文献）直接展开专家表；否则收起，先走自动检测 L1。
+    setCalExpertVisible(calSegments.length > 0);
   } catch(e) {
     showToast('加载校准数据失败', 'danger');
   }
@@ -121,6 +130,7 @@ function renderAutoDetectionResult(result) {
     html += '<div class="auto-detect-note">' + autoFailureReasons(result.failure_reasons || []) + '</div>';
     html += '<div class="auto-detect-actions"><button class="action-btn" onclick="cancelAutoDetection()">关闭</button></div>';
     panel.innerHTML = html;
+    setCalExpertVisible(true);  // 检测失败：展开专家表让用户手动设置
     return;
   }
   html += '<div class="auto-detect-note">识别到 ' + segments.length + ' 个页码区间，当前仍是预览状态</div>';
@@ -181,6 +191,7 @@ function editAutoDetectionResult() {
   });
   renderCalSegments();
   updateCalPreview();
+  setCalExpertVisible(true);  // 载入自动结果到手动编辑区：展开专家表
   document.getElementById('cal-auto-preview').style.display = 'none';
   showToast('自动结果已载入手动编辑区');
 }
@@ -420,6 +431,7 @@ async function saveCalibration() {
 }
 
 function scrollToManualMapping() {
+  setCalExpertVisible(true);  // 「手动设置」：展开专家分段表（L2）
   var table = document.querySelector('#library-drawer .segment-table-wrap');
   if (table) table.scrollIntoView({behavior:'smooth', block:'center'});
 }
