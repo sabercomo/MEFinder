@@ -3,11 +3,17 @@ from __future__ import annotations
 import io
 import json
 import tempfile
+import threading
 import unittest
 import zipfile
 from pathlib import Path
 
 from src.me_finder.backup_service import create_backup, restore_backup
+from src.me_finder.pdf_import_service import (
+    load_import_config,
+    locked_import_config,
+    save_import_config,
+)
 
 
 def _seed_runtime(root: Path) -> None:
@@ -45,6 +51,26 @@ def _seed_runtime(root: Path) -> None:
     results = root / "corpus" / "processed" / "mineru" / "results"
     results.mkdir(parents=True)
     (results / "huge.bin").write_bytes(b"0" * 4096)
+
+
+def _backup_with_config(config: object) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "backup.json",
+            json.dumps(
+                {
+                    "marker": "me_finder_backup",
+                    "version": 1,
+                    "created_at": "2026-08-09T00:00:00+00:00",
+                }
+            ),
+        )
+        archive.writestr(
+            "config/pdf_imports.json",
+            json.dumps(config, ensure_ascii=False),
+        )
+    return buffer.getvalue()
 
 
 class BackupServiceTests(unittest.TestCase):
@@ -196,11 +222,118 @@ class BackupServiceTests(unittest.TestCase):
             restored = json.loads((dest / "config" / "pdf_imports.json").read_text(encoding="utf-8"))
             self.assertEqual(restored["documents"][0]["source_file_id"], "pdf-x")
             self.assertTrue((dest / "config" / "pdf_imports.json.pre-restore").exists())
+            self.assertEqual(
+                json.loads(
+                    (dest / "config" / "pdf_imports.json.bak").read_text(
+                        encoding="utf-8"
+                    )
+                ),
+                restored,
+            )
             self.assertTrue((dest / "corpus" / "processed" / "mineru" / "manifests" / "segments-x.json").exists())
             self.assertTrue((dest / "corpus" / "processed" / "vision" / "manifests" / "vision-x.json").exists())
             self.assertEqual(
                 json.loads((dest_app_data / "preferences.json").read_text(encoding="utf-8"))["theme"], "midnight"
             )
+            self.assertEqual(
+                list(dest.rglob("*.restore-*.tmp")),
+                [],
+            )
+
+    def test_restore_normalizes_duplicate_config_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            archive = _backup_with_config(
+                {
+                    "documents": [
+                        {
+                            "source_file_id": "pdf-duplicate",
+                            "file_name": "first.pdf",
+                            "title": "First",
+                        },
+                        {
+                            "source_file_id": "pdf-duplicate",
+                            "file_name": "second.pdf",
+                            "author": "Author",
+                        },
+                    ]
+                }
+            )
+
+            restore_backup(root, archive)
+
+            restored = load_import_config(
+                root / "config" / "pdf_imports.json"
+            )
+            self.assertEqual(len(restored["documents"]), 1)
+            self.assertEqual(restored["documents"][0]["title"], "First")
+            self.assertEqual(restored["documents"][0]["author"], "Author")
+
+    def test_restore_participates_in_shared_config_transaction_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / "config" / "pdf_imports.json"
+            save_import_config(
+                config_path,
+                {"documents": [{"source_file_id": "old"}]},
+            )
+            archive = _backup_with_config(
+                {"documents": [{"source_file_id": "restored"}]}
+            )
+            mutation_holds_lock = threading.Event()
+            release_mutation = threading.Event()
+            restore_started = threading.Event()
+            restore_finished = threading.Event()
+            errors: list[BaseException] = []
+
+            def stale_mutation() -> None:
+                try:
+                    with locked_import_config(config_path) as config:
+                        mutation_holds_lock.set()
+                        release_mutation.wait(timeout=2)
+                        config["documents"].append(
+                            {"source_file_id": "concurrent"}
+                        )
+                        save_import_config(config_path, config)
+                except BaseException as exc:  # pragma: no cover - surfaced below
+                    errors.append(exc)
+
+            def restore() -> None:
+                restore_started.set()
+                try:
+                    restore_backup(root, archive)
+                except BaseException as exc:  # pragma: no cover - surfaced below
+                    errors.append(exc)
+                finally:
+                    restore_finished.set()
+
+            mutation_thread = threading.Thread(target=stale_mutation)
+            restore_thread = threading.Thread(target=restore)
+            mutation_thread.start()
+            self.assertTrue(mutation_holds_lock.wait(timeout=2))
+            restore_thread.start()
+            self.assertTrue(restore_started.wait(timeout=2))
+            self.assertFalse(restore_finished.wait(timeout=0.05))
+            release_mutation.set()
+            mutation_thread.join(timeout=2)
+            restore_thread.join(timeout=2)
+
+            self.assertFalse(mutation_thread.is_alive())
+            self.assertFalse(restore_thread.is_alive())
+            self.assertEqual(errors, [])
+            restored = load_import_config(config_path)
+            self.assertEqual(
+                [item["source_file_id"] for item in restored["documents"]],
+                ["restored"],
+            )
+
+    def test_restore_rejects_non_object_import_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "JSON 对象"):
+                restore_backup(
+                    Path(temp_dir),
+                    _backup_with_config([{"source_file_id": "invalid"}]),
+                )
 
     def test_restore_rejects_non_backup_zip(self) -> None:
         buffer = io.BytesIO()

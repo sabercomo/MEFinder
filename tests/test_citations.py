@@ -1478,6 +1478,61 @@ class CitationFormatTests(unittest.TestCase):
             "南希·弗雷泽. 食人资本主义[M]. 蓝江, 译. 上海: 上海人民出版社, 2023: 197.",
         )
 
+    def test_personal_collections_keep_the_personal_author(self) -> None:
+        cases = (
+            ("鲁迅全集", "鲁迅", "1"),
+            ("毛泽东选集", "毛泽东", "1"),
+            ("列宁全集", "列宁", "2"),
+            ("费尔巴哈文集", "费尔巴哈", "3"),
+        )
+        for title, author, volume in cases:
+            metadata = {
+                "document_type": "book",
+                "title": title,
+                "volume": volume,
+                "publisher": "人民出版社",
+                "publish_place": "北京",
+                "publish_year": "2025",
+            }
+            with self.subTest(title=title):
+                self.assertEqual(
+                    format_citation(metadata, "36", "chinese"),
+                    f"{author}：《{title}》第{volume}卷，人民出版社，2025年，第36页。",
+                )
+                self.assertEqual(
+                    format_citation(metadata, "36", "gb"),
+                    f"{author}. {title}:第{volume}卷[M]. 北京: 人民出版社, 2025: 36.",
+                )
+
+    def test_edited_collection_uses_editor_responsibility(self) -> None:
+        metadata = {
+            "document_type": "book",
+            "title": "中国哲学文集",
+            "volume": "1",
+            "editor": "张三",
+            "publisher": "示例出版社",
+            "publish_place": "北京",
+            "publish_year": "2025",
+        }
+        self.assertEqual(
+            format_citation(metadata, "36", "gb"),
+            "张三，主编. 中国哲学文集:第1卷[M]. 北京: 示例出版社, 2025: 36.",
+        )
+
+    def test_confirmed_authorless_work_starts_with_title(self) -> None:
+        metadata = {
+            "document_type": "book",
+            "title": "康熙字典：巳集上 水部",
+            "responsibility_status": "none",
+            "publisher": "中华书局",
+            "publish_place": "北京",
+            "publish_year": "1962",
+        }
+        self.assertEqual(
+            format_citation(metadata, "50", "gb"),
+            "康熙字典：巳集上 水部[M]. 北京: 中华书局, 1962: 50.",
+        )
+
     def test_marx_engels_collection_volume_is_a_special_case(self) -> None:
         metadata = {
             "document_type": "marx_engels_collection",

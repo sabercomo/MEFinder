@@ -25,7 +25,17 @@ from src.me_finder.database import (
 from src.me_finder.web import make_handler
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
-APP_SOURCE = Path("src/me_finder/static/app.js").read_text(encoding="utf-8")
+def _read_app_source() -> str:
+    """app.js 已按功能拆分到 static/js/，按文件名排序拼接还原完整源码。"""
+
+    static_dir = Path("src/me_finder/static")
+    parts = sorted((static_dir / "js").glob("*.js"), key=lambda path: path.name)
+    if parts:
+        return "".join(path.read_text(encoding="utf-8") for path in parts)
+    return (static_dir / "app.js").read_text(encoding="utf-8")
+
+
+APP_SOURCE = _read_app_source()
 TEMPLATE_SOURCE = Path("src/me_finder/templates/index.html").read_text(encoding="utf-8")
 
 
@@ -181,17 +191,29 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn("function removeImport(id, options)", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
-    def test_transient_mineru_interruption_never_starts_paid_fallback(self) -> None:
+    def test_transient_mineru_interruption_respects_auto_switch_setting(self) -> None:
+        # Auto-switch is now governed solely by the user's setting; a transient
+        # interruption no longer hard-blocks it. But without the setting on, the
+        # checkpoint is kept and NO paid fallback ever starts automatically.
         prepare_start = WEB_SOURCE.index("def prepare_import_job(")
         prepare_end = WEB_SOURCE.index("def run_import_job(", prepare_start)
-        prepare_block = WEB_SOURCE[prepare_start:prepare_end]
-        guard = prepare_block.index("not isinstance(mineru_exc, MinerUError)")
-        fallback_lookup = prepare_block.index("vision_config_summary(")
-        self.assertLess(guard, fallback_lookup)
-        guarded_block = prepare_block[guard:fallback_lookup]
-        self.assertIn("not mineru_exc.allow_parser_fallback", guarded_block)
-        self.assertIn("return False", guarded_block)
-        self.assertIn("不会自动改用其他付费接口", guarded_block)
+        block = WEB_SOURCE[prepare_start:prepare_end]
+        # The single auto-switch gate is derived from the user's saved setting.
+        self.assertIn("auto_fallback = bool(", block)
+        self.assertIn('summary.get("auto_fallback_from_mineru")', block)
+        # The decision NOT to auto-switch is reached before any route switch, so
+        # an auto-switch can only happen past that gate.
+        no_switch = block.index("if not auto_fallback:")
+        switch_route = block.index("switch_import_job_route(")
+        self.assertLess(no_switch, switch_route)
+        # With auto-switch off, a transient interruption keeps the checkpoint and
+        # never spends on a paid provider on its own.
+        transient_branch = block[no_switch:switch_route]
+        self.assertIn("if transient:", transient_branch)
+        self.assertIn("mineru_interrupted=True", transient_branch)
+        self.assertIn("can_resume=True", transient_branch)
+        self.assertIn("不会自动改用其他付费接口", transient_branch)
+        self.assertIn("return False", transient_branch)
 
     def test_paid_retry_endpoint_revalidates_mineru_failure_server_side(
         self,
@@ -217,9 +239,13 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         )
         eligibility = WEB_SOURCE[eligibility_start:eligibility_end]
         self.assertIn('str(job.get("failure_stage") or "") != "index"', eligibility)
-        self.assertIn("not job.get(\"mineru_interrupted\")", eligibility)
         self.assertIn('bool(context.get("is_pdf"))', eligibility)
         self.assertIn('job.get("mineru_failed")', eligibility)
+        # Interruption is now an eligible reason for an EXPLICIT retry (a stuck
+        # task must not be a dead end); the endpoint still re-validates it
+        # server-side rather than trusting the client. Auto-fallback stays
+        # forbidden — see test_transient_mineru_interruption_never_starts_paid_fallback.
+        self.assertIn('job.get("mineru_interrupted")', eligibility)
 
     def test_document_removal_blocks_running_parser_and_clears_old_jobs(self) -> None:
         removal_start = WEB_SOURCE.index(

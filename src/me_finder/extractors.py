@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from .collection_metadata import infer_collection_metadata
 from .normalization import (
     cn_volume_number,
     compact_text,
@@ -91,7 +92,8 @@ def source_file_record(path: Path, root: Path) -> Dict[str, object]:
     resolved_path = path.resolve()
     resolved_root = root.resolve()
     volume_number = volume_number_from_name(path.name)
-    return {
+    collection = infer_collection_metadata(path.name)
+    record = {
         "source_file_id": f"source-{volume_number:02d}",
         "relative_path": str(resolved_path.relative_to(resolved_root)).replace("\\", "/"),
         "volume_number": volume_number,
@@ -102,6 +104,9 @@ def source_file_record(path: Path, root: Path) -> Dict[str, object]:
         "sha256": file_sha256(path),
         "last_modified": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
     }
+    if collection.get("author"):
+        record["author"] = collection["author"]
+    return record
 
 
 def generic_docx_source_file_record(path: Path, root: Path) -> Dict[str, object]:
@@ -120,7 +125,11 @@ def generic_docx_source_file_record(path: Path, root: Path) -> Dict[str, object]
     title = re.sub(
         r"\s+\(imported-[0-9a-f]{8}\)$", "", path.stem, flags=re.I
     ).strip() or path.stem
-    return {
+    collection = infer_collection_metadata(title, path.name)
+    missing_fields = ["publisher", "publish_year"]
+    if not collection.get("author"):
+        missing_fields.insert(0, "author")
+    record = {
         "source_file_id": f"docx-{identity}",
         "source_type": "word",
         "relative_path": relative_path,
@@ -143,13 +152,20 @@ def generic_docx_source_file_record(path: Path, root: Path) -> Dict[str, object]
             "metadata_status": "partial",
             "metadata_source": "file_name",
             "metadata_confidence": 0.35,
-            "metadata_missing_fields": ["author", "publisher", "publish_year"],
+            "metadata_missing_fields": missing_fields,
         },
     }
+    if collection.get("author"):
+        record["author"] = collection["author"]
+        record["bibliographic_metadata"]["author"] = collection["author"]
+    return record
 
 
 def volume_record(volume_number: int, source_file_id: str, file_name: str) -> Dict[str, object]:
-    if volume_number <= 4:
+    collection = infer_collection_metadata(file_name)
+    if collection.get("primary_structure"):
+        structure = collection["primary_structure"]
+    elif volume_number <= 4:
         structure = "article_collection"
     elif volume_number in {5, 6, 7}:
         structure = "monograph"
@@ -159,13 +175,15 @@ def volume_record(volume_number: int, source_file_id: str, file_name: str) -> Di
         structure = "letters"
     else:
         structure = "mixed"
+    corpus_title = collection.get("collection_title") or "马克思恩格斯文集"
     return {
         "volume_id": f"MEWJ-{volume_number:02d}",
-        "corpus_title": "马克思恩格斯文集",
-        "display_title": f"《马克思恩格斯文集》第{volume_number}卷",
+        "corpus_title": corpus_title,
+        "display_title": f"《{corpus_title}》第{volume_number}卷",
         "volume_number": volume_number,
         "version_info": infer_version_info(file_name),
         "primary_structure": structure,
+        "collection_author": collection.get("author") or "马克思、恩格斯",
         "source_file_id": source_file_id,
     }
 
@@ -299,6 +317,7 @@ def extract_docx(path: Path, root: Path) -> Dict[str, object]:
     source = source_file_record(path, root)
     volume_number = int(source["volume_number"])
     volume = volume_record(volume_number, str(source["source_file_id"]), path.name)
+    source["author"] = volume.get("collection_author")
     paragraphs: List[Dict[str, object]] = []
     toc_entries: List[Dict[str, object]] = []
 
@@ -414,6 +433,7 @@ def extract_generic_docx(path: Path, root: Path) -> Dict[str, object]:
     source = generic_docx_source_file_record(path, root)
     source_id = str(source["source_file_id"])
     title = str(source["document_title"])
+    collection = infer_collection_metadata(title, path.name)
     volume_id = f"{source_id}-document"
     work_id_value = f"{source_id}-work"
     volume = {
@@ -423,7 +443,8 @@ def extract_generic_docx(path: Path, root: Path) -> Dict[str, object]:
         "display_title": title,
         "document_title": title,
         "volume_number": None,
-        "primary_structure": "standalone_document",
+        "primary_structure": collection.get("primary_structure") or "standalone_document",
+        "collection_author": collection.get("author"),
         "document_type": "book",
     }
     work = {
@@ -722,6 +743,7 @@ def extract_doc(path: Path, root: Path) -> Dict[str, object]:
     source = source_file_record(path, root)
     volume_number = int(source["volume_number"])
     volume = volume_record(volume_number, str(source["source_file_id"]), path.name)
+    source["author"] = volume.get("collection_author")
     cfb = CompoundFile(path)
     core = cfb.stream("WordDocument") + cfb.stream("0Table") + cfb.stream("1Table") + cfb.stream("Data")
     runs = utf16_text_runs(path.read_bytes())

@@ -13,8 +13,11 @@ from src.me_finder import __version__
 from src.me_finder.preferences import (
     DEFAULT_AUTO_UPDATE,
     DEFAULT_CALIBRATION_VIEW,
+    DEFAULT_CITATION_STYLE,
     DEFAULT_CITATION_STYLES,
+    DEFAULT_LIBRARY_LANGUAGE,
     DEFAULT_LIBRARY_VIEW,
+    DEFAULT_ONLINE_AUTO_MATCH,
     DEFAULT_PDF_OPEN_MODE,
     DEFAULT_THEME,
     VALID_PDF_OPEN_MODES,
@@ -36,6 +39,9 @@ class PreferencePersistenceTests(unittest.TestCase):
             "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
             "auto_update": DEFAULT_AUTO_UPDATE,
             "citation_styles": list(DEFAULT_CITATION_STYLES),
+            "citation_style": DEFAULT_CITATION_STYLE,
+            "lib_default_language": DEFAULT_LIBRARY_LANGUAGE,
+            "online_auto_match_threshold": DEFAULT_ONLINE_AUTO_MATCH,
         }
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
@@ -120,11 +126,16 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertEqual(read_preferences(path)["citation_styles"], ["chinese", "gb"])
             saved = save_preferences({"citation_styles": ["mla", "chinese", "apa", "mla"]}, path)
             self.assertEqual(saved["citation_styles"], ["chinese", "apa", "mla"])
+            saved = save_preferences({"citation_style": "apa"}, path)
+            self.assertEqual(saved["citation_style"], "apa")
             self.assertEqual(read_preferences(path)["citation_styles"], ["chinese", "apa", "mla"])
+            self.assertEqual(read_preferences(path)["citation_style"], "apa")
             with self.assertRaises(ValueError):
                 save_preferences({"citation_styles": []}, path)
             with self.assertRaises(ValueError):
                 save_preferences({"citation_styles": ["unknown"]}, path)
+            with self.assertRaises(ValueError):
+                save_preferences({"citation_style": "gb"}, path)
 
 
 class ThemeMarkupTests(unittest.TestCase):

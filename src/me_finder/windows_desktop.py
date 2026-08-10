@@ -18,6 +18,7 @@ import functools
 import logging
 import sys
 import threading
+from concurrent.futures import CancelledError
 from ctypes import wintypes
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -494,6 +495,10 @@ class WindowsPDFViewer:
         self.titlebar_applier = titlebar_applier
         self.window = None
         self._lock = threading.RLock()
+        self._condition = threading.Condition(self._lock)
+        self._operation_active = False
+        self._generation = 0
+        self._shutdown = False
 
     @property
     def background_color(self) -> str:
@@ -502,8 +507,8 @@ class WindowsPDFViewer:
         )[0]
 
     def set_theme(self, theme: str) -> None:
-        self.theme = theme if theme in _TITLEBAR_PALETTES else "frost-blue"
         with self._lock:
+            self.theme = theme if theme in _TITLEBAR_PALETTES else "frost-blue"
             window = self.window
         if window is not None and getattr(window, "native", None) is not None:
             try:
@@ -511,7 +516,34 @@ class WindowsPDFViewer:
             except Exception:
                 logging.exception("failed to update PDF reader titlebar")
 
-    def _create_window(self, url: str, title: str):
+    def _begin_operation(self) -> tuple[int, object | None]:
+        """Reserve the single PDF-window operation without holding its lock."""
+
+        with self._condition:
+            while self._operation_active and not self._shutdown:
+                self._condition.wait()
+            if self._shutdown:
+                raise CancelledError("PDF 阅读器正在关闭。")
+            self._operation_active = True
+            return self._generation, self.window
+
+    def _end_operation(self) -> None:
+        with self._condition:
+            self._operation_active = False
+            self._condition.notify_all()
+
+    @staticmethod
+    def _destroy_window(window: object | None) -> None:
+        if window is None:
+            return
+        try:
+            window.destroy()
+        except Exception:
+            logging.debug("PDF reader was already closed", exc_info=True)
+
+    def _create_window(self, url: str, title: str) -> tuple[object, threading.Event]:
+        """Create an unpublished candidate window entirely outside the state lock."""
+
         window = self.webview.create_window(
             title,
             url=url,
@@ -525,13 +557,17 @@ class WindowsPDFViewer:
         if window is None:
             raise RuntimeError("Edge WebView2 PDF 窗口创建失败。")
 
+        closed = threading.Event()
+
         def forget_closed_window() -> None:
-            with self._lock:
+            closed.set()
+            with self._condition:
                 if self.window is window:
                     self.window = None
+                    self._generation += 1
+                    self._condition.notify_all()
 
         window.events.closed += forget_closed_window
-        self.window = window
         # Runtime child windows have already emitted before_show by the time
         # create_window returns, and their native handle is ready at this point.
         try:
@@ -539,7 +575,7 @@ class WindowsPDFViewer:
         except Exception:
             # Titlebar styling is optional and must not make PDF opening fail.
             logging.exception("failed to configure PDF reader titlebar")
-        return window
+        return window, closed
 
     def open(self, target: Path, page: Optional[int] = None) -> Dict[str, object]:
         if getattr(self.webview, "renderer", None) != "edgechromium":
@@ -562,34 +598,81 @@ class WindowsPDFViewer:
             actual_page = min(max(requested, 1), page_count)
         url = pdf_file_url(target, actual_page)
         title = f"{PDF_WINDOW_TITLE} · {target.name}"
+        result = {"page": actual_page, "page_count": page_count, "url": url}
 
-        with self._lock:
-            window = self.window
-            if window is None:
-                window = self._create_window(url, title)
-            else:
+        generation, window = self._begin_operation()
+        try:
+            if window is not None:
                 try:
                     window.set_title(title)
                     window.load_url(url)
                     window.show()
                     window.restore()
                 except Exception:
-                    logging.exception("recreating a closed WebView2 PDF window")
-                    self.window = None
-                    try:
-                        window.destroy()
-                    except Exception:
-                        logging.debug("old PDF reader window was already closed", exc_info=True)
-                    window = self._create_window(url, title)
+                    with self._condition:
+                        owns_window = self.window is window
+                        if owns_window:
+                            self.window = None
+                            self._generation += 1
+                        cancelled = self._shutdown
+                    if not cancelled:
+                        logging.exception("recreating a closed WebView2 PDF window")
+                    if owns_window:
+                        self._destroy_window(window)
+                    if cancelled:
+                        raise CancelledError("PDF 阅读器正在关闭。")
+                else:
+                    with self._condition:
+                        if self._shutdown:
+                            raise CancelledError("PDF 阅读器正在关闭。")
+                        if (
+                            generation == self._generation
+                            and self.window is window
+                        ):
+                            return result
+                    # The native closed event raced with navigation. Create a
+                    # fresh child only if the viewer is still accepting work.
 
-        return {"page": actual_page, "page_count": page_count, "url": url}
+            with self._condition:
+                if self._shutdown:
+                    raise CancelledError("PDF 阅读器正在关闭。")
+                publish_generation = self._generation
+
+            try:
+                candidate, candidate_closed = self._create_window(url, title)
+            except Exception as exc:
+                with self._condition:
+                    cancelled = self._shutdown
+                if cancelled:
+                    raise CancelledError("PDF 阅读器正在关闭。") from exc
+                raise
+            with self._condition:
+                accepted = (
+                    not self._shutdown
+                    and publish_generation == self._generation
+                    and self.window is None
+                    and not candidate_closed.is_set()
+                )
+                if accepted:
+                    self.window = candidate
+                cancelled = self._shutdown
+
+            if not accepted:
+                self._destroy_window(candidate)
+                if cancelled:
+                    raise CancelledError("PDF 阅读器正在关闭。")
+                raise RuntimeError("Edge WebView2 PDF 窗口在创建时已关闭。")
+            return result
+        finally:
+            self._end_operation()
 
     def close(self, *_args: object) -> None:
-        with self._lock:
+        with self._condition:
+            if self._shutdown:
+                return
+            self._shutdown = True
+            self._generation += 1
             window = self.window
             self.window = None
-        if window is not None:
-            try:
-                window.destroy()
-            except Exception:
-                logging.debug("PDF reader was already closed", exc_info=True)
+            self._condition.notify_all()
+        self._destroy_window(window)

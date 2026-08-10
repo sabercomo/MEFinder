@@ -47,6 +47,33 @@ _MAX_RECORDS = 5
 _USER_AGENT = "MEFinder/0.3 (bibliographic lookup)"
 _MARC = "{http://www.loc.gov/MARC21/slim}"
 
+# 只有匹配分达到此阈值的候选才算"命中"，否则视同该源没找到、继续尝试下一个源。
+# `_match` 的正向信号最低是作者交集 +0.2、书名相似 ≥ +0.36、ISBN 命中 0.98；
+# 唯一低于 0.1 的贡献是"候选自带 ISBN"的 +0.03 兜底。中文书名/作者经 `_compact`
+# 归一后会被压成空串，无法参与打分，因而在西文目录里只会撞出这种 0.03 的噪声候选。
+# 阈值取 0.1 恰好滤掉这类噪声，同时不误伤任何真实匹配。
+_MIN_MATCH_SCORE = 0.1
+
+
+def _match_score(candidate: object) -> float:
+    """Return a candidate's numeric match score, or 0.0 when it is unreadable."""
+
+    if not isinstance(candidate, Mapping):
+        return 0.0
+    match = candidate.get("match")
+    if not isinstance(match, Mapping):
+        return 0.0
+    try:
+        return float(match.get("score"))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _confident(candidates: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    """Drop low-confidence noise so an irrelevant near-zero hit never wins."""
+
+    return [c for c in candidates if _match_score(c) >= _MIN_MATCH_SCORE]
+
 
 def lookup_book(metadata: Mapping[str, object]) -> Dict[str, object]:
     """Return book candidates from the first source that matches.
@@ -77,6 +104,9 @@ def lookup_book(metadata: Mapping[str, object]) -> Dict[str, object]:
             else:
                 network_error = network_error or exc
             continue
+        # 只保留达到阈值的候选：低分噪声（如中文书撞进西文目录的 0.03 命中）视同
+        # 该源没找到，继续往下试，最终宁可返回"未找到"也不给出误导性的低匹配结果。
+        candidates = _confident(candidates)
         if candidates:
             return {"candidates": candidates, "open_url": open_url}
     # 没有任何源命中：优先报联网错误（让用户知道是网络/代理问题），

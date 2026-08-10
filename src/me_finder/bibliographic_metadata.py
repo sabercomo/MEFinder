@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
+from .collection_metadata import infer_collection_metadata
 from .database import paragraph_payload_for_storage
 
 METADATA_FIELDS = (
@@ -18,6 +19,7 @@ METADATA_FIELDS = (
     "doi", "issn",
 )
 DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
+RESPONSIBILITY_STATUSES = ("present", "none", "unknown")
 PUBLISHER_PLACES = {
     "上海人民出版社": "上海",
     "上海译文出版社": "上海",
@@ -543,6 +545,19 @@ def detect_pdf_bibliographic_metadata(
                 "rule": journal_rule,
             }
             confidence["journal_name"] = 0.82 if journal_rule == "masthead_suffix_line" else 0.9
+    if result.get("document_type") in {"book", "translated_book"} and not is_valid_bibliographic_value(result.get("author")):
+        collection = infer_collection_metadata(result.get("title"), path.stem)
+        if collection.get("author"):
+            result["author"] = collection["author"]
+            result["responsibility_status"] = "present"
+            evidence["author"] = {
+                "source": "collection_title_rule",
+                "source_page": None,
+                "evidence_text": result.get("title") or path.name,
+                "rule": "personal_collection_creator",
+                "confidence": 0.93,
+            }
+            confidence["author"] = 0.93
     missing = metadata_missing_fields(result)
     invalid = invalid_metadata_fields(result)
     if invalid:
@@ -579,7 +594,20 @@ def metadata_missing_fields(metadata: Mapping[str, object]) -> List[str]:
         required = ["author", "title", "publisher", "publish_place", "publish_year"]
         if doc_type == "translated_book":
             required.insert(2, "translator")
-    return [field for field in required if not is_valid_bibliographic_value(metadata.get(field))]
+    return [
+        field
+        for field in required
+        if not (
+            field == "author"
+            and responsibility_is_absent_or_unknown(metadata)
+        )
+        and not is_valid_bibliographic_value(metadata.get(field))
+    ]
+
+
+def responsibility_is_absent_or_unknown(metadata: Mapping[str, object]) -> bool:
+    status = str(metadata.get("responsibility_status") or "").strip().lower()
+    return status in {"none", "unknown"}
 
 
 def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[str, object]] = None) -> Dict[str, object]:
@@ -608,6 +636,13 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
         raise ValueError(f"未知文献类型：{requested_type}")
     else:
         result["document_type"] = "translated_book" if result.get("translator") else "book"
+    requested_responsibility = str(payload.get("responsibility_status") or "").strip().lower()
+    if requested_responsibility:
+        if requested_responsibility not in RESPONSIBILITY_STATUSES:
+            raise ValueError("未知责任者状态")
+        result["responsibility_status"] = requested_responsibility
+    elif result.get("author"):
+        result["responsibility_status"] = "present"
     if result["document_type"] == "thesis":
         for field in (
             "country", "translator", "publish_place", "isbn",
@@ -2208,6 +2243,7 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         "metadata_evidence",
         "metadata_conflicts",
         "metadata_missing_fields",
+        "responsibility_status",
     ):
         if source.get(field) not in (None, ""):
             result[field] = source[field]

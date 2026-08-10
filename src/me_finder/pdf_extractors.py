@@ -18,7 +18,13 @@ from .auto_page_mapping import (
 )
 from .bibliographic_metadata import METADATA_FIELDS
 from .import_resume import resume_summary
-from .normalization import compact_text, normalize_text, punctuationless_text, split_sentences
+from .normalization import (
+    compact_text,
+    normalize_pdf_text,
+    normalize_text,
+    punctuationless_text,
+    split_sentences,
+)
 from .page_mapping_service import PageMappingService
 from .pdf_page_mapping import PageMapper, mapped_page_display
 
@@ -1251,11 +1257,6 @@ def enrich_pdf_paragraph_text(record: Dict[str, object]) -> None:
     record["plain_text"] = punctuationless_text(text)
     record["sentences"] = split_sentences(text)
     record["text_hash"] = hashlib.sha1(text.encode("utf-8", "ignore")).hexdigest()
-
-
-def normalize_pdf_text(text: str) -> str:
-    text = re.sub(r"([A-Za-z])-\s+([A-Za-z])", r"\1\2", text or "")
-    return normalize_text(text)
 
 
 def pdf_page_text_hash(text: str) -> str:

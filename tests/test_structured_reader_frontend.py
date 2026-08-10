@@ -12,12 +12,18 @@ READER_JS = (ROOT / "src" / "me_finder" / "static" / "reader.js").read_text(
 READER_CSS = (ROOT / "src" / "me_finder" / "static" / "reader.css").read_text(
     encoding="utf-8"
 )
-APP_CSS = (ROOT / "src" / "me_finder" / "static" / "app.css").read_text(
-    encoding="utf-8"
-)
-APP_JS = (ROOT / "src" / "me_finder" / "static" / "app.js").read_text(
-    encoding="utf-8"
-)
+def _read_split_source(subdir: str, suffix: str, fallback: str) -> str:
+    """app.js / app.css 已按功能拆分到 static/js|css/，按文件名排序拼接还原。"""
+
+    static_dir = ROOT / "src" / "me_finder" / "static"
+    parts = sorted((static_dir / subdir).glob(f"*{suffix}"), key=lambda p: p.name)
+    if parts:
+        return "".join(path.read_text(encoding="utf-8") for path in parts)
+    return (static_dir / fallback).read_text(encoding="utf-8")
+
+
+APP_CSS = _read_split_source("css", ".css", "app.css")
+APP_JS = _read_split_source("js", ".js", "app.js")
 
 
 class StructuredReaderFrontendTests(unittest.TestCase):

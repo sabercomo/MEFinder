@@ -31,6 +31,7 @@ if errorlevel 1 exit /b 1
   tests.test_foreign_book_lookup ^
   tests.test_crossref_lookup ^
   tests.test_book_metadata_lookup ^
+  tests.test_chunked_upload ^
   tests.test_database_resilience ^
   tests.test_fts_search_scalability ^
   tests.test_large_index_resilience ^
@@ -42,6 +43,14 @@ if errorlevel 1 exit /b 1
   tests.test_page_display ^
   tests.test_runtime_page_mapping ^
   tests.test_search_match_spans ^
+  tests.test_search_occurrence_identity ^
+  tests.test_search_service ^
+  tests.test_api_request_limits ^
+  tests.test_source_streaming ^
+  tests.test_app_context ^
+  tests.test_database_page_anchors ^
+  tests.test_index_publication_guard ^
+  tests.test_normalization ^
   tests.test_search_controls_and_views ^
   tests.test_structured_reader ^
   tests.test_structured_reader_frontend ^
@@ -65,11 +74,16 @@ if errorlevel 1 exit /b 1
   tests.test_windows_packaging ^
   tests.test_platform_open ^
   tests.test_theme_system ^
+  tests.test_frontend_assets ^
+  tests.test_frontend_pure_logic ^
   tests.test_desktop_portable
 if errorlevel 1 exit /b 1
 
-node --check src\me_finder\static\app.js
-if errorlevel 1 exit /b 1
+rem app.js 已按功能拆分到 static\js\，逐个语法检查，避免新增文件漏检。
+for %%F in (src\me_finder\static\js\*.js) do (
+  node --check "%%F"
+  if errorlevel 1 exit /b 1
+)
 node --check src\me_finder\static\reader.js
 if errorlevel 1 exit /b 1
 

@@ -106,6 +106,7 @@ try {
         tests.test_foreign_book_lookup `
         tests.test_crossref_lookup `
         tests.test_book_metadata_lookup `
+        tests.test_chunked_upload `
         tests.test_database_resilience `
         tests.test_fts_search_scalability `
         tests.test_large_index_resilience `
@@ -118,6 +119,14 @@ try {
         tests.test_page_display `
         tests.test_runtime_page_mapping `
         tests.test_search_match_spans `
+        tests.test_search_occurrence_identity `
+        tests.test_search_service `
+        tests.test_api_request_limits `
+        tests.test_source_streaming `
+        tests.test_app_context `
+        tests.test_database_page_anchors `
+        tests.test_index_publication_guard `
+        tests.test_normalization `
         tests.test_vision_api `
         tests.test_search_controls_and_views `
         tests.test_structured_reader `
@@ -139,13 +148,20 @@ try {
         tests.test_windows_packaging `
         tests.test_platform_open `
         tests.test_theme_system `
+        tests.test_frontend_assets `
+        tests.test_frontend_pure_logic `
         tests.test_desktop_portable
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; installer was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
     if ($nodeCommand) {
-        & $nodeCommand.Source --check "src\me_finder\static\app.js"
-        if ($LASTEXITCODE -ne 0) { throw "app.js syntax check failed." }
+        # app.js 已按功能拆分到 static\js\，逐个检查以免新增文件漏检。
+        $frontendScripts = @(Get-ChildItem -LiteralPath "src\me_finder\static\js" -Filter "*.js" -File | Sort-Object Name)
+        if ($frontendScripts.Count -eq 0) { throw "static\js contains no JavaScript files." }
+        foreach ($script in $frontendScripts) {
+            & $nodeCommand.Source --check $script.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($script.Name) syntax check failed." }
+        }
         & $nodeCommand.Source --check "src\me_finder\static\reader.js"
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }

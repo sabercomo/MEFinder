@@ -9,7 +9,12 @@ from src.me_finder.web import HTML
 
 class CitationPageDisplayMarkupTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.formatter = HTML.split("function formatChinesePageRange", 1)[1].split("function pdRow", 1)[0]
+        # 切出「页码范围拼接 + 引用页码标签」这两个函数。以函数体自身的结尾语句为
+        # 下界，而不是靠后面碰巧相邻的某个函数名——模块拆分后两者已不在同一文件。
+        start = HTML.index("function formatChinesePageRange")
+        end_marker = "return formatChinesePageRange(start, end);"
+        end = HTML.index(end_marker, start) + len(end_marker)
+        self.formatter = HTML[start:end]
 
     def test_word_numeric_page_is_formatted_as_chinese_page_label(self) -> None:
         self.assertIn("return '第' + start + (end ? '—' + end : '') + '页';", self.formatter)
@@ -55,10 +60,11 @@ class CitationPageDisplayMarkupTests(unittest.TestCase):
 
 
 class LibraryWorkspaceLayoutMarkupTests(unittest.TestCase):
-    def test_detail_workspace_uses_a_36_64_split(self) -> None:
+    def test_detail_workspace_uses_a_44_56_split(self) -> None:
+        # L-07：列表:详情由 36:64 调平到 44:56，列表不再被压到只剩标题。
         rule = re.search(r"\.library-body\.detail-open\s*\{([^}]+)\}", HTML, re.S)
         self.assertIsNotNone(rule)
-        self.assertIn("grid-template-columns: minmax(320px, 36fr) minmax(0, 64fr);", rule.group(1))
+        self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", rule.group(1))
 
     def test_open_detail_uses_a_single_column_document_list(self) -> None:
         self.assertIn(

@@ -26,7 +26,7 @@ from .indexer import DEFAULT_INDEX_PATH, load_index
 from .normalization import (
     compact_text,
     normalize_text,
-    normalize_with_map,
+    normalize_with_spans,
     punctuationless_text,
     trim_for_display,
 )
@@ -350,7 +350,7 @@ class SearchEngine:
             normalized = str(row["normalized_text"] or "")
             norm_pos = normalized.find(q_norm)
             if norm_pos >= 0:
-                span = self._mapped_span(raw, q_norm, "normalized")
+                span = self._mapped_span(paragraph, raw, q_norm, "normalized")
                 self._add_candidate(paragraph, "normalized_exact", 0.985, span[0], span[1], candidates)
         return truncated
 
@@ -404,11 +404,22 @@ class SearchEngine:
             if pos < 0:
                 continue
             raw = str(row["text_raw"] or "")
-            normalized, mapping = normalize_with_map(raw, "compact" if column == "compact_text" else "plain")
-            if pos >= len(mapping):
+            _, spans = self._normalization_spans(
+                paragraph,
+                raw,
+                "compact" if column == "compact_text" else "plain",
+            )
+            if pos >= len(spans):
                 continue
-            end_pos = min(pos + len(query) - 1, len(mapping) - 1)
-            self._add_candidate(paragraph, match_type, score, mapping[pos], mapping[end_pos] + 1, candidates)
+            end_pos = min(pos + len(query) - 1, len(spans) - 1)
+            self._add_candidate(
+                paragraph,
+                match_type,
+                score,
+                spans[pos][0],
+                spans[end_pos][1],
+                candidates,
+            )
         return truncated
 
     def _sql_fuzzy_pass(
@@ -446,18 +457,18 @@ class SearchEngine:
                 if ratio < 0.58:
                     continue
                 raw = str(paragraph.get("text_raw") or "")
-                _, mapping = normalize_with_map(raw, "plain")
-                if not mapping:
+                _, spans = self._normalization_spans(paragraph, raw, "plain")
+                if not spans:
                     continue
-                start = max(0, min(start, len(mapping) - 1))
-                end = max(start, min(end, len(mapping) - 1))
+                start = max(0, min(start, len(spans) - 1))
+                end = max(start, min(end, len(spans) - 1))
                 score = min(0.9, max(0.58, ratio))
                 self._add_candidate(
                     paragraph,
                     "ngram_fuzzy",
                     score,
-                    mapping[start],
-                    mapping[end] + 1,
+                    spans[start][0],
+                    spans[end][1],
                     candidates,
                 )
                 if candidate_budget is not None and len(candidates) >= candidate_budget:
@@ -490,13 +501,20 @@ class SearchEngine:
             if ratio < 0.58:
                 continue
             raw = str(paragraph.get("text_raw") or "")
-            _, mapping = normalize_with_map(raw, "plain")
-            if not mapping:
+            _, spans = self._normalization_spans(paragraph, raw, "plain")
+            if not spans:
                 continue
-            start = max(0, min(start, len(mapping) - 1))
-            end = max(start, min(end, len(mapping) - 1))
+            start = max(0, min(start, len(spans) - 1))
+            end = max(start, min(end, len(spans) - 1))
             score = min(0.9, max(0.58, ratio))
-            self._add_candidate(paragraph, "ngram_fuzzy", score, mapping[start], mapping[end] + 1, candidates)
+            self._add_candidate(
+                paragraph,
+                "ngram_fuzzy",
+                score,
+                spans[start][0],
+                spans[end][1],
+                candidates,
+            )
         return len(ranked) > 700
 
     @staticmethod
@@ -524,7 +542,7 @@ class SearchEngine:
                 continue
             norm_pos = normalized.find(q_norm)
             if norm_pos >= 0:
-                span = self._mapped_span(raw, q_norm, "normalized")
+                span = self._mapped_span(paragraph, raw, q_norm, "normalized")
                 self._add_candidate(paragraph, "normalized_exact", 0.985, span[0], span[1], candidates)
 
     def _mapped_substring_pass(
@@ -548,12 +566,12 @@ class SearchEngine:
             if pos < 0:
                 continue
             raw = str(paragraph.get("text_raw") or "")
-            normalized, mapping = normalize_with_map(raw, mode)
-            if pos >= len(mapping):
+            _, spans = self._normalization_spans(paragraph, raw, mode)
+            if pos >= len(spans):
                 continue
-            end_pos = min(pos + len(query) - 1, len(mapping) - 1)
-            start_raw = mapping[pos]
-            end_raw = mapping[end_pos] + 1
+            end_pos = min(pos + len(query) - 1, len(spans) - 1)
+            start_raw = spans[pos][0]
+            end_raw = spans[end_pos][1]
             self._add_candidate(paragraph, match_type, score, start_raw, end_raw, candidates)
 
     def _fuzzy_pass(
@@ -582,13 +600,20 @@ class SearchEngine:
             if ratio < 0.58:
                 continue
             raw = str(paragraph.get("text_raw") or "")
-            _, mapping = normalize_with_map(raw, "plain")
-            if not mapping:
+            _, spans = self._normalization_spans(paragraph, raw, "plain")
+            if not spans:
                 continue
-            start = max(0, min(start, len(mapping) - 1))
-            end = max(start, min(end, len(mapping) - 1))
+            start = max(0, min(start, len(spans) - 1))
+            end = max(start, min(end, len(spans) - 1))
             score = min(0.9, max(0.58, ratio))
-            self._add_candidate(paragraph, "ngram_fuzzy", score, mapping[start], mapping[end] + 1, candidates)
+            self._add_candidate(
+                paragraph,
+                "ngram_fuzzy",
+                score,
+                spans[start][0],
+                spans[end][1],
+                candidates,
+            )
 
     def _add_candidate(
         self,
@@ -1266,13 +1291,32 @@ class SearchEngine:
         paragraph_id = str(paragraph.get("paragraph_id") or "").upper()
         return not paragraph.get("is_cross_page") and "-CROSS-" not in paragraph_id
 
-    def _mapped_span(self, raw: str, query: str, mode: str) -> Tuple[int, int]:
-        normalized, mapping = normalize_with_map(raw, mode)
+    @staticmethod
+    def _normalization_spans(
+        paragraph: Dict[str, object], raw: str, mode: str
+    ) -> Tuple[str, List[Tuple[int, int]]]:
+        return normalize_with_spans(
+            raw,
+            mode,
+            pdf_hyphenation=(
+                mode == "normalized"
+                and str(paragraph.get("source_type") or "word") == "pdf"
+            ),
+        )
+
+    def _mapped_span(
+        self,
+        paragraph: Dict[str, object],
+        raw: str,
+        query: str,
+        mode: str,
+    ) -> Tuple[int, int]:
+        normalized, spans = self._normalization_spans(paragraph, raw, mode)
         pos = normalized.find(query)
-        if pos < 0 or not mapping:
+        if pos < 0 or not spans:
             return 0, min(len(raw), 80)
-        end_pos = min(pos + len(query) - 1, len(mapping) - 1)
-        return mapping[pos], mapping[end_pos] + 1
+        end_pos = min(pos + len(query) - 1, len(spans) - 1)
+        return spans[pos][0], spans[end_pos][1]
 
     @staticmethod
     def _ngrams(text: str, n: int = 2) -> List[str]:
@@ -1295,16 +1339,61 @@ class SearchEngine:
                 item, ranked
             ):
                 continue
+            # A result is an occurrence, not a unique text fragment.  The same
+            # sentence can legitimately appear in multiple paragraphs (for
+            # example in a preface and again in the main text), so text-based
+            # deduplication silently discarded valid locations.
             key = (
-                paragraph.get("volume_id"),
-                paragraph.get("work_id"),
-                punctuationless_text(str(paragraph.get("text_raw") or ""))[:180],
+                paragraph.get("source_file_id"),
+                paragraph.get("paragraph_id"),
+                item.get("match_start"),
+                item.get("match_end"),
             )
             if key in seen:
                 continue
             seen.add(key)
             merged.append(item)
         return merged
+
+    @staticmethod
+    def _physical_match_ranges(
+        page_match_spans: object,
+    ) -> Tuple[Tuple[str, int, int], ...]:
+        """Return canonical physical-page ranges for one paragraph match."""
+
+        if not isinstance(page_match_spans, list):
+            return ()
+        grouped: Dict[str, List[Tuple[int, int]]] = {}
+        for span in page_match_spans:
+            if not isinstance(span, dict):
+                continue
+            page_id = span.get("pdf_page_id")
+            start = span.get("page_char_start")
+            end = span.get("page_char_end")
+            if (
+                not page_id
+                or not isinstance(start, int)
+                or isinstance(start, bool)
+                or not isinstance(end, int)
+                or isinstance(end, bool)
+                or start < 0
+                or end <= start
+            ):
+                continue
+            grouped.setdefault(str(page_id), []).append((start, end))
+
+        canonical: List[Tuple[str, int, int]] = []
+        for page_id, ranges in grouped.items():
+            merged: List[List[int]] = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1]:
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+            canonical.extend(
+                (page_id, start, end) for start, end in merged
+            )
+        return tuple(sorted(canonical))
 
     @staticmethod
     def _cross_candidate_duplicate(
@@ -1319,6 +1408,20 @@ class SearchEngine:
         matched = punctuationless_text(raw[start:end])
         if not matched:
             return False
+        cross_ranges = SearchEngine._physical_match_ranges(
+            SearchEngine._page_match_spans(
+                cross,
+                str(cross.get("source_type") or "word"),
+                start,
+                end,
+                len(raw),
+            )
+        )
+        # A match touching two physical pages is the reason the CROSS helper
+        # exists.  Text repeated elsewhere on either full-page paragraph is a
+        # different occurrence and must not suppress it.
+        if len({page_id for page_id, _, _ in cross_ranges}) > 1:
+            return False
         start_page = cross.get("pdf_page_start_index")
         end_page = cross.get("pdf_page_end_index")
         for item in ranked:
@@ -1328,6 +1431,29 @@ class SearchEngine:
             if not isinstance(paragraph, dict) or paragraph.get("is_cross_page"):
                 continue
             if paragraph.get("source_file_id") != cross.get("source_file_id"):
+                continue
+            if cross_ranges:
+                page_raw = str(paragraph.get("text_raw") or "")
+                page_match_start = int(item.get("match_start") or 0)
+                page_match_end = int(item.get("match_end") or 0)
+                page_ranges = SearchEngine._physical_match_ranges(
+                    SearchEngine._page_match_spans(
+                        paragraph,
+                        str(paragraph.get("source_type") or "word"),
+                        page_match_start,
+                        page_match_end,
+                        len(page_raw),
+                    )
+                )
+                # Precise anchor data proves duplication only when both hits
+                # resolve to the same source-page character interval.  Merely
+                # finding the same text elsewhere on that page is insufficient.
+                if page_ranges:
+                    if page_ranges == cross_ranges:
+                        return True
+                    continue
+                # One precise side and one unanchored side cannot establish
+                # occurrence identity; prefer retaining the result.
                 continue
             page = paragraph.get("pdf_page_start_index")
             if page is None or start_page is None or end_page is None:
@@ -1346,9 +1472,10 @@ class SearchEngine:
             if item.get("is_cross_page") and self._cross_page_duplicate(item, ranked):
                 continue
             key = (
-                item.get("volume_id"),
-                item.get("work_id"),
-                punctuationless_text(str(item.get("paragraph_text") or ""))[:180],
+                item.get("source_file_id"),
+                item.get("paragraph_id"),
+                item.get("match_start"),
+                item.get("match_end"),
             )
             if key in seen:
                 continue
@@ -1365,12 +1492,26 @@ class SearchEngine:
         matched = punctuationless_text(str(cross_item.get("matched_text") or ""))
         if not matched:
             return False
+        cross_ranges = SearchEngine._physical_match_ranges(
+            cross_item.get("page_match_spans")
+        )
+        if len({page_id for page_id, _, _ in cross_ranges}) > 1:
+            return False
         start_page = cross_item.get("pdf_page_start_index")
         end_page = cross_item.get("pdf_page_end_index")
         for item in ranked:
             if item is cross_item or item.get("is_cross_page"):
                 continue
             if item.get("source_file_id") != cross_item.get("source_file_id"):
+                continue
+            if cross_ranges:
+                page_ranges = SearchEngine._physical_match_ranges(
+                    item.get("page_match_spans")
+                )
+                if page_ranges:
+                    if page_ranges == cross_ranges:
+                        return True
+                    continue
                 continue
             page = item.get("pdf_page_start_index")
             if page is None or start_page is None or end_page is None:

@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import uuid
+from concurrent.futures import CancelledError
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +21,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import parse_qs, unquote, urlparse
 
 from . import __version__
+from .app_context import AppContext
+from .application import SearchRequest, SearchService
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import (
     DataLocationError,
@@ -79,6 +82,7 @@ from .pdf_import_service import (
     detect_imported_pdf,
     document_storage_error,
     document_storage_target,
+    import_config_lock,
     locked_import_config,
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
@@ -95,7 +99,13 @@ from .backup_service import restore_backup, write_backup
 from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportTaskQueue
 from .import_resume import ResumeManifestError, sha256_file
+from .http_range import InvalidByteRange, parse_byte_range
+from .lifecycle import DurableOperationGate
 from .search import SearchEngine
+from .chunked_upload import (
+    ChunkedUploadError,
+    ChunkedUploadStore,
+)
 from .structured_reader import (
     CitationPositionNotFound,
     InvalidCitationRange,
@@ -107,6 +117,61 @@ from .structured_reader import (
     get_document_citation,
     get_document_window,
 )
+
+
+MAX_JSON_REQUEST_BYTES = 1024 * 1024
+SOURCE_STREAM_CHUNK_BYTES = 1024 * 1024
+
+
+class ManagedThreadingHTTPServer(ThreadingHTTPServer):
+    """Threading server with an observable, bounded request drain.
+
+    ``ThreadingMixIn.server_close`` normally waits forever for non-daemon
+    handlers.  That can strand a Windows WebView2 process (and its updater) if
+    a client disappears during a native dialog, network lookup, or upload.
+    Track accepted handlers ourselves so the desktop adapter can wait for a
+    bounded interval without closing the runtime out from under live requests.
+    """
+
+    daemon_threads = True
+    block_on_close = False
+
+    def __init__(self, *args, **kwargs) -> None:
+        self._handler_condition = threading.Condition()
+        self._active_handlers = 0
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address) -> None:
+        with self._handler_condition:
+            self._active_handlers += 1
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            with self._handler_condition:
+                self._active_handlers -= 1
+                self._handler_condition.notify_all()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            with self._handler_condition:
+                self._active_handlers -= 1
+                self._handler_condition.notify_all()
+
+    def wait_for_handlers(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        with self._handler_condition:
+            while self._active_handlers:
+                if deadline is None:
+                    self._handler_condition.wait()
+                    continue
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._handler_condition.wait(remaining)
+            return True
 
 
 def find_adobe_pdf_app() -> Optional[Path]:
@@ -343,6 +408,10 @@ def open_pdf_with_platform(
                     page_number is not None and actual_page != page_number
                 ),
             }
+        except CancelledError:
+            # Application shutdown invalidated an in-flight native-window
+            # request. Do not turn cancellation into an external PDF launch.
+            raise
         except Exception as exc:
             native_error = exc
             logging.exception("native PDF reader failed; falling back to an external app")
@@ -376,11 +445,47 @@ def _load_asset(relative: str) -> str:
     return (_PACKAGE_DIR / relative).read_text(encoding="utf-8")
 
 
+def _load_asset_dir(relative: str, suffix: str) -> str:
+    """按文件名排序拼接一个资源目录。
+
+    app.js 已按功能拆分到 static/js/，用数字前缀锁定加载顺序（00-state 最先、
+    90-init 最后）。这些文件共享同一个全局作用域，拼接结果与拆分前逐字节相同，
+    所以顺序必须严格按文件名排序，改名或加新文件时要注意前缀。
+    """
+
+    directory = _PACKAGE_DIR / relative
+    if not directory.is_dir():
+        return ""
+    parts = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(directory.glob(f"*{suffix}"), key=lambda p: p.name)
+    ]
+    return "".join(parts)
+
+
+def _load_app_js() -> str:
+    """优先使用拆分后的 static/js/；单文件 app.js 仅作为回退保留。"""
+
+    bundled = _load_asset_dir("static/js", ".js")
+    return bundled if bundled else _load_asset("static/app.js")
+
+
+def _load_app_css() -> str:
+    """优先使用拆分后的 static/css/；单文件 app.css 仅作为回退保留。
+
+    与 static/js/ 同理，按数字前缀（00-themes 最先、90-dialogs-toast 最后）
+    的文件名排序拼接，结果与拆分前逐字节相同，改名或加新文件时要注意前缀。
+    """
+
+    bundled = _load_asset_dir("static/css", ".css")
+    return bundled if bundled else _load_asset("static/app.css")
+
+
 HTML = (
     _load_asset("templates/index.html")
-    .replace("/*__APP_CSS__*/", _load_asset("static/app.css"), 1)
+    .replace("/*__APP_CSS__*/", _load_app_css(), 1)
     .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
-    .replace("//__APP_JS__", _load_asset("static/app.js"), 1)
+    .replace("//__APP_JS__", _load_app_js(), 1)
     .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
     .replace("__APP_VERSION__", __version__)
 )
@@ -403,6 +508,7 @@ def render_html(theme: str) -> str:
 def make_handler(
     index_path: Path,
     *,
+    app_context: AppContext | None = None,
     native_pdf_opener: NativePDFOpener | None = None,
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
@@ -411,8 +517,19 @@ def make_handler(
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
+    # Keep the existing ``index_path`` entry point while allowing desktop and
+    # future adapters to inject every process-level path explicitly.
+    context = app_context or AppContext.create(
+        Path.cwd(),
+        index_path=index_path,
+        app_data_root=app_data_root,
+        default_app_data_root=default_app_data_root,
+    )
+    index_path = context.paths.index_path
+    root = context.paths.runtime_root
+    app_data_root = context.paths.app_data_root
+    default_app_data_root = context.paths.default_app_data_root
     engine = SearchEngine(index_path)
-    root = Path(".").resolve()
     runtime = {
         "engine": engine,
         "source_files": {
@@ -422,6 +539,7 @@ def make_handler(
         },
         "index_metadata": engine.index.get("metadata", {}),
         "rebuilding": False,
+        "closing": False,
     }
     runtime_lock = threading.RLock()
     # Re-entrant because a config mutation may hold the lock while calling the
@@ -434,9 +552,12 @@ def make_handler(
     import_jobs_lock = threading.RLock()
     import_task_queue = ImportTaskQueue(worker_count=2)
     import_job_journal = ImportJobJournal(root / DEFAULT_IMPORT_JOB_DIR)
+    chunked_uploads = ChunkedUploadStore(root / "corpus" / ".upload-staging")
     deleting_import_sources: set[str] = set()
     pending_import_sources: set[str] = set()
     calibration_active_sources: set[str] = set()
+    search_service = SearchService()
+    durable_operations = DurableOperationGate()
 
     def infer_import_failure_stage(
         job: Dict[str, object],
@@ -615,9 +736,13 @@ def make_handler(
         )
         raise MinerUError(message)
 
-    def reload_runtime_index() -> None:
+    def reload_runtime_index() -> bool:
+        new_engine = SearchEngine(index_path)
         with runtime_lock:
-            new_engine = SearchEngine(index_path)
+            if runtime["closing"]:
+                new_engine.close()
+                runtime["rebuilding"] = False
+                return False
             old_engine = runtime["engine"]
             runtime["engine"] = new_engine
             runtime["source_files"] = {
@@ -628,6 +753,29 @@ def make_handler(
             runtime["index_metadata"] = new_engine.index.get("metadata", {})
             if hasattr(old_engine, "close"):
                 old_engine.close()
+        return True
+
+    def recover_runtime_index() -> bool:
+        """Reopen the current DB unless shutdown has made runtime terminal."""
+
+        recovered_engine = SearchEngine(index_path)
+        with runtime_lock:
+            if runtime["closing"]:
+                recovered_engine.close()
+                runtime["rebuilding"] = False
+                return False
+            old_engine = runtime["engine"]
+            runtime["engine"] = recovered_engine
+            runtime["source_files"] = {
+                str(item.get("source_file_id")): item
+                for item in recovered_engine.index.get("source_files", [])
+                if item.get("source_file_id")
+            }
+            runtime["index_metadata"] = recovered_engine.index.get("metadata", {})
+            runtime["rebuilding"] = False
+            if hasattr(old_engine, "close"):
+                old_engine.close()
+        return True
 
     def latest_pdf_import_runs() -> Dict[str, Dict[str, object]]:
         connection = sqlite3.connect(str(index_path))
@@ -694,20 +842,43 @@ def make_handler(
                 if hasattr(old_engine, "close"):
                     old_engine.close()
             try:
-                rebuild_local_index(root, lambda update: progress_import_job(job_id, update))
+                rebuild_local_index(
+                    root,
+                    lambda update: progress_import_job(job_id, update),
+                    database_path=index_path,
+                )
+                new_engine = SearchEngine(index_path)
+                new_source_files = {
+                    str(item.get("source_file_id")): item
+                    for item in new_engine.index.get("source_files", [])
+                    if item.get("source_file_id")
+                }
+                indexed_source_ids = set(new_source_files)
                 with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
-                    runtime["source_files"] = {
-                        str(item.get("source_file_id")): item
-                        for item in runtime["engine"].index.get("source_files", [])
-                        if item.get("source_file_id")
-                    }
-                    runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                    runtime["rebuilding"] = False
-                    indexed_source_ids = set(runtime["source_files"])
+                    if runtime["closing"]:
+                        new_engine.close()
+                        runtime["rebuilding"] = False
+                    else:
+                        runtime["engine"] = new_engine
+                        runtime["source_files"] = new_source_files
+                        runtime["index_metadata"] = new_engine.index.get("metadata", {})
+                        runtime["rebuilding"] = False
             except Exception:
                 with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
+                    closing = bool(runtime["closing"])
+                    if closing:
+                        runtime["rebuilding"] = False
+                if closing:
+                    raise
+                recovered_engine = SearchEngine(index_path)
+                with runtime_lock:
+                    if runtime["closing"]:
+                        recovered_engine.close()
+                        runtime["rebuilding"] = False
+                        raise RuntimeError(
+                            "应用正在关闭，不再恢复运行时索引。"
+                        )
+                    runtime["engine"] = recovered_engine
                     runtime["source_files"] = {
                         str(item.get("source_file_id")): item
                         for item in runtime["engine"].index.get("source_files", [])
@@ -749,7 +920,7 @@ def make_handler(
             raise MinerUError(f"PDF 原文件不存在：{path.name}")
         return path, document
 
-    def restore_runtime_after_index_write() -> None:
+    def restore_runtime_after_index_write() -> bool:
         new_engine = None
         for attempt in range(5):
             try:
@@ -775,10 +946,17 @@ def make_handler(
         }
         index_metadata = new_engine.index.get("metadata", {})
         with runtime_lock:
+            if runtime["closing"]:
+                new_engine.close()
+                runtime["source_files"] = source_files
+                runtime["index_metadata"] = index_metadata
+                runtime["rebuilding"] = False
+                return False
             runtime["engine"] = new_engine
             runtime["source_files"] = source_files
             runtime["index_metadata"] = index_metadata
             runtime["rebuilding"] = False
+        return True
 
     def index_registered_pdf(
         job_id: str,
@@ -828,34 +1006,35 @@ def make_handler(
                 phase="rebuilding_index",
                 message="正在写入本地 SQLite 索引…",
             )
-            with runtime_lock:
-                runtime["rebuilding"] = True
-                old_engine = runtime["engine"]
-            try:
-                if hasattr(old_engine, "close"):
-                    old_engine.close()
-                replace_source_in_database(
-                    extracted,
-                    index_path,
-                    backup_existing=backup_existing,
-                )
-            except Exception as write_error:
+            with durable_operations.operation():
+                with runtime_lock:
+                    runtime["rebuilding"] = True
+                    old_engine = runtime["engine"]
                 try:
-                    restore_runtime_after_index_write()
-                except Exception:
-                    logging.exception(
-                        "index write failed and the previous runtime index "
-                        "could not be reopened"
+                    if hasattr(old_engine, "close"):
+                        old_engine.close()
+                    replace_source_in_database(
+                        extracted,
+                        index_path,
+                        backup_existing=backup_existing,
                     )
-                raise write_error.with_traceback(write_error.__traceback__)
-            else:
-                restore_runtime_after_index_write()
-            with runtime_lock:
-                indexed = source_file_id in runtime["source_files"]
-            if not indexed:
-                raise MinerUError(
-                    f"{display_name} 未能进入索引：写入后未找到文献记录。"
-                )
+                except Exception as write_error:
+                    try:
+                        restore_runtime_after_index_write()
+                    except Exception:
+                        logging.exception(
+                            "index write failed and the previous runtime index "
+                            "could not be reopened"
+                        )
+                    raise write_error.with_traceback(write_error.__traceback__)
+                else:
+                    restore_runtime_after_index_write()
+                with runtime_lock:
+                    indexed = source_file_id in runtime["source_files"]
+                if not indexed:
+                    raise MinerUError(
+                        f"{display_name} 未能进入索引：写入后未找到文献记录。"
+                    )
 
     def fail_import_at_index(
         job_id: str,
@@ -982,28 +1161,16 @@ def make_handler(
                         on_progress=lambda update: progress_import_job(job_id, update),
                     )
                 except Exception as mineru_exc:
-                    if (
+                    # A transient interruption (network timeout / non-fallback
+                    # MinerUError) keeps a resumable checkpoint; a permanent failure
+                    # does not. Either way an AUTOMATIC switch to a paid provider now
+                    # happens iff the user enabled it — the transient/permanent split
+                    # no longer blocks auto-switch, it only shapes the no-auto-switch
+                    # message and whether the checkpoint is kept for a free resume.
+                    transient = (
                         not isinstance(mineru_exc, MinerUError)
                         or not mineru_exc.allow_parser_fallback
-                    ):
-                        update_import_job(
-                            job_id,
-                            status="failed",
-                            phase="failed",
-                            can_resume=True,
-                            message=(
-                                f"MinerU 任务暂时中断：{mineru_exc}。"
-                                "断点已保存，可稍后继续；不会自动改用其他付费接口。"
-                            ),
-                            mineru_interrupted=True,
-                            mineru_failed=False,
-                            can_retry_with_provider=False,
-                            retry_provider_id=None,
-                            retry_provider_name=None,
-                            needs_provider_config=False,
-                            original_error=str(mineru_exc),
-                        )
-                        return False
+                    )
                     config_path = resolve_vision_config_path(root)
                     try:
                         summary = vision_config_summary(config_path)
@@ -1026,6 +1193,26 @@ def make_handler(
                         and fallback
                     )
                     if not auto_fallback:
+                        if transient:
+                            update_import_job(
+                                job_id,
+                                status="failed",
+                                phase="failed",
+                                can_resume=True,
+                                message=(
+                                    f"MinerU 任务暂时中断：{mineru_exc}。断点已保存，点「继续导入」"
+                                    "复用断点、不额外计费；不会自动改用其他付费接口，"
+                                    "如已配置可手动改用（放弃断点、从头解析）。"
+                                ),
+                                mineru_interrupted=True,
+                                mineru_failed=False,
+                                can_retry_with_provider=bool(fallback),
+                                retry_provider_id=fallback.get("id") if fallback else None,
+                                retry_provider_name=fallback.get("name") if fallback else None,
+                                needs_provider_config=False,
+                                original_error=str(mineru_exc),
+                            )
+                            return False
                         message = f"MinerU 解析失败：{mineru_exc}"
                         if fallback:
                             message += (
@@ -1050,6 +1237,7 @@ def make_handler(
                         return False
                     fallback_id = str(fallback.get("id"))
                     fallback_name = str(fallback.get("name") or "其他视觉 API")
+                    switch_reason = "任务暂时中断" if transient else "解析失败"
                     switch_import_job_route(
                         job_id,
                         parse_route="vision",
@@ -1061,7 +1249,7 @@ def make_handler(
                         job_id,
                         phase="vision_processing",
                         message=(
-                            f"MinerU 解析失败，已按设置自动切换到 {fallback_name}…"
+                            f"MinerU {switch_reason}，已按设置自动切换到 {fallback_name}…"
                         ),
                         parse_route="vision",
                         provider_id=fallback_id,
@@ -1085,7 +1273,7 @@ def make_handler(
                             status="failed",
                             phase="failed",
                             message=(
-                                f"MinerU 解析失败：{mineru_exc}；自动切换到 "
+                                f"MinerU {switch_reason}；自动切换到 "
                                 f"{fallback_name} 后仍失败：{fallback_exc}"
                             ),
                             fallback_error=str(fallback_exc),
@@ -1448,12 +1636,20 @@ def make_handler(
         job: Dict[str, object],
         context: Optional[Dict[str, object]] = None,
     ) -> bool:
-        """Authorize paid provider retry only for a permanent MinerU failure."""
+        """Authorize an EXPLICIT, user-initiated paid provider retry.
+
+        A permanent MinerU failure qualifies, and — per the user's decision —
+        so does a transient interruption: a stuck task should not be a dead end,
+        so the user may manually switch when a provider is configured. This
+        gate only governs explicit retries (the "改用 X" button / /api/import-retry);
+        it never enables *automatic* fallback, which stays forbidden on
+        interruption (the failure handler returns before any auto-switch).
+        Index-stage failures never qualify: re-parsing can't fix a rebuild error.
+        """
 
         return bool(
             str(job.get("status") or "") == "failed"
             and str(job.get("failure_stage") or "") != "index"
-            and not job.get("mineru_interrupted")
             and (
                 context is None
                 or bool(context.get("is_pdf"))
@@ -1462,6 +1658,7 @@ def make_handler(
                 job.get("mineru_failed")
                 or job.get("needs_provider_config")
                 or job.get("can_retry_with_provider")
+                or job.get("mineru_interrupted")
             )
         )
 
@@ -1919,19 +2116,33 @@ def make_handler(
             raise MinerUError("备份文件不存在。")
         if path.suffix.lower() != ".zip":
             raise MinerUError("请选择 .zip 备份文件。")
-        summary = restore_backup(root, path.read_bytes(), app_data_root=backup_app_data_root())
         job_id = f"restore-{uuid.uuid4().hex[:12]}"
         with import_jobs_lock:
             import_jobs[job_id] = {
                 "job_id": job_id,
                 "status": "processing",
-                "phase": "rebuilding_index",
-                "message": f"已恢复 {summary['count']} 项，正在重建索引…",
+                "phase": "restoring_backup",
+                "message": "正在恢复备份并重建索引…",
             }
 
         def run_restore_job() -> None:
             try:
-                rebuild_runtime_index(job_id)
+                with (
+                    durable_operations.operation(),
+                    rebuild_lock,
+                    import_config_lock(),
+                ):
+                    summary = restore_backup(
+                        root,
+                        path.read_bytes(),
+                        app_data_root=backup_app_data_root(),
+                    )
+                    update_import_job(
+                        job_id,
+                        phase="rebuilding_index",
+                        message=f"已恢复 {summary['count']} 项，正在重建索引…",
+                    )
+                    rebuild_runtime_index(job_id)
                 update_import_job(
                     job_id,
                     status="completed",
@@ -1946,10 +2157,25 @@ def make_handler(
                     message=f"文件已恢复，但索引重建失败：{exc}",
                 )
 
-        threading.Thread(target=run_restore_job, daemon=True).start()
+        try:
+            import_task_queue.submit(run_restore_job)
+        except Exception as exc:
+            update_import_job(
+                job_id,
+                status="failed",
+                phase="queue_failed",
+                message="备份恢复任务未能进入队列。",
+            )
+            raise MinerUError(
+                "备份恢复任务暂时无法启动，文件未更改。"
+            ) from exc
         return job_id
 
-    def store_upload(filename: str, length: int, is_pdf: bool, reader) -> Path:
+    def upload_storage_details(
+        filename: str,
+        length: int,
+        is_pdf: bool,
+    ) -> Tuple[str, Path]:
         if length <= 0 or length > 600 * 1024 * 1024:
             raise MinerUError("文件为空或超过 600 MB 限制。")
         safe_name = Path(filename).name
@@ -1960,6 +2186,10 @@ def make_handler(
         if suffix != expected:
             raise MinerUError(f"导入文件必须是 {expected}。")
         directory = root / "corpus" / ("raw_pdf" if is_pdf else "raw_docx")
+        return safe_name, directory
+
+    def store_upload(filename: str, length: int, is_pdf: bool, reader) -> Path:
+        safe_name, directory = upload_storage_details(filename, length, is_pdf)
         target: Optional[Path] = None
         temp_path: Optional[Path] = None
         remaining = length
@@ -1992,6 +2222,136 @@ def make_handler(
                 release_document_storage_target(target)
         assert target is not None
         return target
+
+    def store_completed_upload(
+        filename: str,
+        length: int,
+        is_pdf: bool,
+        staged_path: Path,
+    ) -> Path:
+        """Atomically move a verified chunked upload into document storage."""
+
+        safe_name, directory = upload_storage_details(filename, length, is_pdf)
+        target: Optional[Path] = None
+        try:
+            if staged_path.stat().st_size != length:
+                raise MinerUError("上传文件大小校验失败。")
+            directory.mkdir(parents=True, exist_ok=True)
+            cleanup_stale_document_storage_files(directory)
+            target = document_storage_target(
+                directory,
+                safe_name,
+                shorten_long_names=is_pdf,
+            )
+            staged_path.replace(target)
+        except OSError as exc:
+            raise document_storage_error(safe_name, exc) from exc
+        finally:
+            if target is not None:
+                release_document_storage_target(target)
+        assert target is not None
+        return target
+
+    def validate_upload_parse_options(
+        pdf_parse_mode: object,
+        vision_provider_id: object,
+    ) -> Tuple[str, str]:
+        mode = str(pdf_parse_mode or "auto").strip().lower()
+        if mode not in {"auto", "mineru", "vision"}:
+            raise MinerUError("PDF 解析方式无效。")
+        provider_id = (
+            str(vision_provider_id or "").strip()
+            if mode == "vision"
+            else ""
+        )
+        if mode == "vision" and not provider_id:
+            raise MinerUError("请选择一个其他解析 API。")
+        return mode, provider_id
+
+    def start_stored_upload_import(
+        target: Path,
+        *,
+        filename: str,
+        is_pdf: bool,
+        pdf_parse_mode: str,
+        vision_provider_id: str,
+        upload_id: str = "legacy",
+    ) -> Dict[str, object]:
+        """Run type detection and enqueue the existing import pipeline."""
+
+        reserved_source_id = ""
+        owned_target: Optional[Path] = target
+        try:
+            if is_pdf:
+                logging.info(
+                    "import type detection started upload_id=%s file=%r size=%d",
+                    upload_id,
+                    Path(filename).name,
+                    target.stat().st_size,
+                )
+                profile = detect_imported_pdf(target)
+                logging.info(
+                    "import type detection completed upload_id=%s detected_type=%s",
+                    upload_id,
+                    profile.get("detected_pdf_type"),
+                )
+                (
+                    _document,
+                    source_file_id,
+                    target,
+                ) = register_pdf_for_import(
+                    target,
+                    original_file_name=filename,
+                )
+                reserved_source_id = source_file_id
+            else:
+                profile = {"detected_pdf_type": "docx"}
+                source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+            force_mineru = is_pdf and pdf_parse_mode == "mineru"
+            job_id = start_import_job(
+                target,
+                profile,
+                source_file_id,
+                is_pdf,
+                force_mineru=force_mineru,
+                vision_provider_id=vision_provider_id or None,
+                consume_reservation=bool(reserved_source_id),
+                display_file_name=filename,
+            )
+            if reserved_source_id:
+                release_import_reservation(reserved_source_id)
+                reserved_source_id = ""
+            parse_route = None
+            if is_pdf:
+                parse_route = (
+                    "vision"
+                    if vision_provider_id
+                    else "mineru"
+                    if force_mineru
+                    or str(profile.get("detected_pdf_type")) != "native_text"
+                    else "native"
+                )
+            logging.info(
+                "import job queued upload_id=%s job_id=%s route=%s",
+                upload_id,
+                job_id,
+                parse_route or "docx",
+            )
+            return {
+                "ok": True,
+                "job_id": job_id,
+                "file_name": Path(filename).name,
+                "source_file_id": source_file_id,
+                "detected_pdf_type": (
+                    profile.get("detected_pdf_type") if is_pdf else None
+                ),
+                "parse_route": parse_route,
+                "provider_id": vision_provider_id or None,
+            }
+        finally:
+            if reserved_source_id:
+                release_import_reservation(reserved_source_id)
+            cleanup_unreferenced_import_target(owned_target)
 
     def accept_auto_page_mapping(source_id: str) -> int:
         config_path = root / "config" / "pdf_imports.json"
@@ -2039,6 +2399,13 @@ def make_handler(
         return len(manual_segments)
 
     def apply_manual_page_mapping(
+        source_id: str,
+        segments: List[Dict[str, object]],
+    ) -> None:
+        with durable_operations.operation():
+            _apply_manual_page_mapping(source_id, segments)
+
+    def _apply_manual_page_mapping(
         source_id: str,
         segments: List[Dict[str, object]],
     ) -> None:
@@ -2157,6 +2524,20 @@ def make_handler(
         auto_mapping: Dict[str, object],
         replace_manual: bool,
     ) -> Dict[str, int]:
+        with durable_operations.operation():
+            return _apply_live_auto_mapping(
+                source_id,
+                segments,
+                auto_mapping,
+                replace_manual,
+            )
+
+    def _apply_live_auto_mapping(
+        source_id: str,
+        segments: List[Dict[str, object]],
+        auto_mapping: Dict[str, object],
+        replace_manual: bool,
+    ) -> Dict[str, int]:
         config_path = root / "config" / "pdf_imports.json"
         with locked_import_config(config_path) as config:
             document = next((doc for doc in config.get("documents", []) if doc.get("source_file_id") == source_id), None)
@@ -2183,6 +2564,7 @@ def make_handler(
                 old_engine = runtime["engine"]
                 if hasattr(old_engine, "close"):
                     old_engine.close()
+            database_updated = False
             try:
                 updated = apply_mapping_to_database(
                     index_path,
@@ -2191,21 +2573,19 @@ def make_handler(
                     auto_mapping=auto_mapping,
                     mapping_status=mapping_status,
                 )
+                database_updated = True
                 reload_runtime_index()
                 with runtime_lock:
                     runtime["rebuilding"] = False
                 return updated
             except Exception:
-                save_import_config(config_path, original_config)
-                with runtime_lock:
-                    runtime["engine"] = SearchEngine(index_path)
-                    runtime["source_files"] = {
-                        str(item.get("source_file_id")): item
-                        for item in runtime["engine"].index.get("source_files", [])
-                        if item.get("source_file_id")
-                    }
-                    runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                    runtime["rebuilding"] = False
+                # Once the SQLite transaction committed, the new config is the
+                # durable source of truth for the next rebuild.  Rolling it
+                # back merely because the in-memory engine could not reload
+                # would split config and DB into contradictory states.
+                if not database_updated:
+                    save_import_config(config_path, original_config)
+                recover_runtime_index()
                 raise
 
     def open_source_file(source_id: str, page: object = None) -> Dict[str, object]:
@@ -2258,7 +2638,15 @@ def make_handler(
             force=force,
         )
 
-    def persist_bibliographic_metadata(source_id: str, payload: Dict[str, object]) -> Dict[str, object]:
+    def persist_bibliographic_metadata(
+        source_id: str, payload: Dict[str, object]
+    ) -> Dict[str, object]:
+        with durable_operations.operation():
+            return _persist_bibliographic_metadata(source_id, payload)
+
+    def _persist_bibliographic_metadata(
+        source_id: str, payload: Dict[str, object]
+    ) -> Dict[str, object]:
         with metadata_lock, rebuild_lock:
             config_path = root / "config" / "pdf_imports.json"
             with locked_import_config(config_path) as config:
@@ -2296,23 +2684,18 @@ def make_handler(
                     old_engine = runtime["engine"]
                     if hasattr(old_engine, "close"):
                         old_engine.close()
+                database_updated = False
                 try:
                     update_metadata_in_database(index_path, source_id, metadata)
+                    database_updated = True
                     reload_runtime_index()
                     with runtime_lock:
                         runtime["rebuilding"] = False
                     return metadata
                 except Exception:
-                    save_import_config(config_path, original_config)
-                    with runtime_lock:
-                        runtime["engine"] = SearchEngine(index_path)
-                        runtime["source_files"] = {
-                            str(item.get("source_file_id")): item
-                            for item in runtime["engine"].index.get("source_files", [])
-                            if item.get("source_file_id")
-                        }
-                        runtime["index_metadata"] = runtime["engine"].index.get("metadata", {})
-                        runtime["rebuilding"] = False
+                    if not database_updated:
+                        save_import_config(config_path, original_config)
+                    recover_runtime_index()
                     raise
 
     def save_bibliographic_metadata(source_id: str, payload: Dict[str, object]) -> Dict[str, object]:
@@ -2383,6 +2766,9 @@ def make_handler(
     class Handler(BaseHTTPRequestHandler):
         _GET_ROUTE_TABLE = {
             "/api/document/pages": "_get_document_pages",
+        }
+        _POST_ROUTE_TABLE = {
+            "/api/search": "_post_search",
         }
 
         def _send(
@@ -2455,6 +2841,22 @@ def make_handler(
                     status=503,
                 )
                 return
+            self._send_json(result)
+
+        def _post_search(self, payload: object) -> None:
+            try:
+                request = SearchRequest.from_payload(payload)
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            with runtime_lock:
+                if runtime["rebuilding"]:
+                    self._send_json(
+                        {"error": "索引正在重建，请稍候再搜索。"},
+                        status=503,
+                    )
+                    return
+                result = search_service.execute(runtime["engine"], request)
             self._send_json(result)
 
         def do_GET(self) -> None:
@@ -2660,83 +3062,94 @@ def make_handler(
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
+            with runtime_lock:
+                if runtime["closing"]:
+                    self._send_json({"error": "应用正在关闭。"}, status=503)
+                    return
             if parsed.path == "/api/import":
-                reserved_source_id = ""
-                owned_target: Optional[Path] = None
                 filename = unquote(self.headers.get("X-File-Name", ""))
                 suffix = Path(filename).suffix.lower()
                 if suffix not in {".pdf", ".docx"}:
                     self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
                     return
                 try:
-                    pdf_parse_mode = str(self.headers.get("X-PDF-Parse-Mode", "auto")).strip().lower()
-                    if pdf_parse_mode not in {"auto", "mineru", "vision"}:
-                        raise MinerUError("PDF 解析方式无效。")
-                    vision_provider_id = (
-                        str(self.headers.get("X-Vision-Provider-ID", "")).strip()
-                        if pdf_parse_mode == "vision"
-                        else ""
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        self.headers.get("X-PDF-Parse-Mode", "auto"),
+                        self.headers.get("X-Vision-Provider-ID", ""),
                     )
-                    if pdf_parse_mode == "vision" and not vision_provider_id:
-                        raise MinerUError("请选择一个其他解析 API。")
                     length = int(self.headers.get("Content-Length", "0"))
-                    target = store_upload(filename, length, suffix == ".pdf", self.rfile)
-                    owned_target = target
-                    is_pdf = suffix == ".pdf"
-                    if is_pdf:
-                        profile = detect_imported_pdf(target)
-                        (
-                            document,
-                            source_file_id,
-                            target,
-                        ) = register_pdf_for_import(
-                            target,
-                            original_file_name=filename,
-                        )
-                        reserved_source_id = source_file_id
-                    else:
-                        profile = {"detected_pdf_type": "docx"}
-                        source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-                    force_mineru = is_pdf and pdf_parse_mode == "mineru"
-                    job_id = start_import_job(
-                        target,
-                        profile,
-                        source_file_id,
-                        is_pdf,
-                        force_mineru=force_mineru,
-                        vision_provider_id=vision_provider_id or None,
-                        consume_reservation=bool(reserved_source_id),
-                        display_file_name=filename,
+                    logging.info(
+                        "legacy import request received file=%r size=%d",
+                        Path(filename).name,
+                        length,
                     )
-                    if reserved_source_id:
-                        release_import_reservation(reserved_source_id)
-                        reserved_source_id = ""
-                    parse_route = None
-                    if is_pdf:
-                        parse_route = (
-                            "vision"
-                            if vision_provider_id
-                            else "mineru"
-                            if force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
-                            else "native"
-                        )
-                    self._send_json({
-                        "ok": True,
-                        "job_id": job_id,
-                        "file_name": Path(filename).name,
-                        "source_file_id": source_file_id,
-                        "detected_pdf_type": profile.get("detected_pdf_type") if is_pdf else None,
-                        "parse_route": parse_route,
-                        "provider_id": vision_provider_id or None,
-                    })
+                    target = store_upload(filename, length, suffix == ".pdf", self.rfile)
+                    logging.info(
+                        "legacy import upload completed file=%r size=%d",
+                        Path(filename).name,
+                        length,
+                    )
+                    result = start_stored_upload_import(
+                        target,
+                        filename=filename,
+                        is_pdf=suffix == ".pdf",
+                        pdf_parse_mode=pdf_parse_mode,
+                        vision_provider_id=vision_provider_id or None,
+                    )
+                    self._send_json(result)
                 except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
+                    logging.exception("legacy import request failed")
                     self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
-                finally:
-                    if reserved_source_id:
-                        release_import_reservation(reserved_source_id)
-                    cleanup_unreferenced_import_target(owned_target)
+                return
+            if parsed.path == "/api/import-upload/chunk":
+                try:
+                    upload_id = str(self.headers.get("X-Upload-ID", ""))
+                    offset = int(self.headers.get("X-Upload-Offset", "-1"))
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if offset == 0:
+                        logging.info(
+                            "chunked import first chunk request upload_id=%s size=%d",
+                            upload_id,
+                            length,
+                        )
+                    progress = chunked_uploads.append(
+                        upload_id,
+                        offset,
+                        length,
+                        self.rfile,
+                    )
+                    if progress["first_chunk"]:
+                        logging.info(
+                            "chunked import first chunk stored upload_id=%s received=%d",
+                            upload_id,
+                            progress["received_size"],
+                        )
+                    if progress["complete"]:
+                        logging.info(
+                            "chunked import upload completed upload_id=%s size=%d",
+                            upload_id,
+                            progress["received_size"],
+                        )
+                    else:
+                        logging.debug(
+                            "chunked import progress upload_id=%s received=%d total=%d",
+                            upload_id,
+                            progress["received_size"],
+                            progress["total_size"],
+                        )
+                    self._send_json({"ok": True, **progress})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (TypeError, ValueError):
+                    self._send_json({"error": "上传分块请求无效。"}, status=400)
+                except Exception:
+                    logging.exception("chunked import request failed")
+                    self._send_json(
+                        {"error": "上传分块失败，请查看 desktop.log。"},
+                        status=500,
+                    )
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -2746,11 +3159,25 @@ def make_handler(
             if length < 0:
                 self._send_json({"error": "Content-Length 无效。"}, status=400)
                 return
+            if length > MAX_JSON_REQUEST_BYTES:
+                self._send_json({"error": "JSON 请求内容过大。"}, status=413)
+                return
             if parsed.path == "/api/document/citation" and length > 16 * 1024:
                 self._send_json({"error": "引文请求内容过大。"}, status=413)
                 return
             if parsed.path == "/api/bibliographic-metadata/parse-cnki-citation" and length > 32 * 1024:
                 self._send_json({"error": "知网引用文字过大，请只粘贴一条引文。"}, status=413)
+                return
+            if (
+                parsed.path
+                in {
+                    "/api/import-upload/start",
+                    "/api/import-upload/finish",
+                    "/api/import-upload/cancel",
+                }
+                and length > 64 * 1024
+            ):
+                self._send_json({"error": "上传控制请求过大。"}, status=413)
                 return
             if (
                 parsed.path
@@ -2767,6 +3194,118 @@ def make_handler(
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send_json({"error": "请求格式无效。"}, status=400)
+                return
+            if parsed.path == "/api/import-upload/start":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传开始请求必须是 JSON 对象。"}, status=400)
+                    return
+                filename = str(payload.get("file_name") or payload.get("filename") or "")
+                suffix = Path(filename).suffix.lower()
+                if suffix not in {".pdf", ".docx"}:
+                    self._send_json({"error": "只支持 PDF 或 DOCX 文件。"}, status=400)
+                    return
+                try:
+                    total_size = int(payload.get("size") or 0)
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        payload.get("parse_mode", "auto"),
+                        payload.get("provider_id", ""),
+                    )
+                    result = chunked_uploads.start(
+                        filename,
+                        total_size,
+                        metadata={
+                            "is_pdf": "1" if suffix == ".pdf" else "0",
+                            "parse_mode": pdf_parse_mode,
+                            "provider_id": vision_provider_id,
+                        },
+                    )
+                    result.update({"file_name": Path(filename).name})
+                    logging.info(
+                        "chunked import session started upload_id=%s file=%r size=%d",
+                        result["upload_id"],
+                        Path(filename).name,
+                        total_size,
+                    )
+                    self._send_json({"ok": True, **result})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (MinerUError, ValueError, OSError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    logging.exception("chunked import session start failed")
+                    self._send_json(
+                        {"error": "无法开始上传，请查看 desktop.log。"},
+                        status=500,
+                    )
+                return
+            if parsed.path == "/api/import-upload/cancel":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传取消请求必须是 JSON 对象。"}, status=400)
+                    return
+                try:
+                    cancelled = chunked_uploads.cancel(str(payload.get("upload_id") or ""))
+                    self._send_json({"ok": True, "cancelled": cancelled})
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                return
+            if parsed.path == "/api/import-upload/finish":
+                if not isinstance(payload, dict):
+                    self._send_json({"error": "上传完成请求必须是 JSON 对象。"}, status=400)
+                    return
+                upload_id = str(payload.get("upload_id") or "")
+                completed = None
+                staged_path: Optional[Path] = None
+                try:
+                    completed = chunked_uploads.finish(upload_id)
+                    staged_path = completed.temp_path
+                    metadata = dict(completed.metadata)
+                    is_pdf = metadata.get("is_pdf") == "1"
+                    pdf_parse_mode, vision_provider_id = validate_upload_parse_options(
+                        metadata.get("parse_mode", "auto"),
+                        metadata.get("provider_id", ""),
+                    )
+                    logging.info(
+                        "chunked import finalization started upload_id=%s file=%r size=%d",
+                        completed.upload_id,
+                        completed.filename,
+                        completed.total_size,
+                    )
+                    target = store_completed_upload(
+                        completed.filename,
+                        completed.total_size,
+                        is_pdf,
+                        completed.temp_path,
+                    )
+                    staged_path = None
+                    result = start_stored_upload_import(
+                        target,
+                        filename=completed.filename,
+                        is_pdf=is_pdf,
+                        pdf_parse_mode=pdf_parse_mode,
+                        vision_provider_id=vision_provider_id,
+                        upload_id=completed.upload_id,
+                    )
+                    self._send_json(result)
+                except ChunkedUploadError as exc:
+                    self._send_json({"error": str(exc)}, status=exc.status)
+                except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    logging.exception("chunked import finalization failed")
+                    self._send_json(
+                        {"error": "导入失败，请查看 desktop.log。"},
+                        status=500,
+                    )
+                finally:
+                    if staged_path is not None:
+                        try:
+                            staged_path.unlink(missing_ok=True)
+                        except OSError:
+                            pass
+                return
+            route_method = self._POST_ROUTE_TABLE.get(parsed.path)
+            if route_method is not None:
+                getattr(self, route_method)(payload)
                 return
             if parsed.path == "/api/document/citation":
                 if not isinstance(payload, dict):
@@ -2828,29 +3367,6 @@ def make_handler(
                     )
                     return
                 self._send_json(citation_result)
-                return
-            if parsed.path == "/api/search":
-                requested_limit = payload.get("limit", 10)
-                search_limit: int | str
-                if str(requested_limit).strip().lower() in {"all", "0"}:
-                    search_limit = "all"
-                else:
-                    try:
-                        search_limit = int(requested_limit)
-                    except (TypeError, ValueError):
-                        search_limit = 10
-                with runtime_lock:
-                    if runtime["rebuilding"]:
-                        self._send_json({"error": "索引正在重建，请稍候再搜索。"}, status=503)
-                        return
-                    result = runtime["engine"].search(
-                        payload.get("query", ""),
-                        payload.get("mode", "auto"),
-                        search_limit,
-                        payload.get("source_type", "all"),
-                        payload.get("source_file_id"),
-                    )
-                self._send_json(result)
                 return
             if parsed.path == "/api/preferences":
                 preferences_path = resolve_preferences_path(root)
@@ -2978,24 +3494,31 @@ def make_handler(
                 if not target_value:
                     self._send_json({"error": "请先选择新的数据位置。"}, status=400)
                     return
-                with import_jobs_lock:
-                    has_active_job = any(
-                        job.get("status") == "processing"
-                        for job in import_jobs.values()
-                    )
-                if has_active_job:
-                    self._send_json(
-                        {"error": "文献正在导入或索引正在更新，请完成后再迁移。"},
-                        status=409,
-                    )
-                    return
                 try:
-                    with runtime_lock:
-                        result = migrate_data_root(
-                            app_data_root,
-                            Path(target_value),
-                            default_app_data_root,
-                        )
+                    with durable_operations.operation(), rebuild_lock:
+                        # A job may have entered the queue while this request
+                        # was waiting for the consistency locks.  Re-check only
+                        # after both locks are held so migration snapshots a
+                        # state that no import/rebuild can still mutate.
+                        with import_jobs_lock:
+                            has_active_job = any(
+                                job.get("status") == "processing"
+                                for job in import_jobs.values()
+                            )
+                        if has_active_job:
+                            raise MinerUError(
+                                "文献正在导入或索引正在更新，"
+                                "请完成后再迁移。"
+                            )
+                        with runtime_lock:
+                            result = migrate_data_root(
+                                app_data_root,
+                                Path(target_value),
+                                default_app_data_root,
+                            )
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=409)
+                    return
                 except DataLocationError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
@@ -3209,11 +3732,24 @@ def make_handler(
                         "phase": "metadata_recognition",
                         "message": f"准备识别 {len(candidates)} 部文献…",
                     }
-                threading.Thread(
-                    target=run_batch_metadata_job,
-                    args=(job_id, candidates),
-                    daemon=True,
-                ).start()
+                try:
+                    import_task_queue.submit(
+                        run_batch_metadata_job,
+                        job_id,
+                        candidates,
+                    )
+                except Exception as exc:
+                    update_import_job(
+                        job_id,
+                        status="failed",
+                        phase="queue_failed",
+                        message="批量识别任务未能进入处理队列。",
+                    )
+                    self._send_json(
+                        {"error": str(exc), "job_id": job_id},
+                        status=503,
+                    )
+                    return
                 self._send_json({"ok": True, "job_id": job_id, "candidates": len(candidates), "already_running": False})
                 return
             if parsed.path == "/api/backup/export":
@@ -3591,19 +4127,20 @@ def make_handler(
                                 old_engine = runtime["engine"]
                                 if hasattr(old_engine, "close"):
                                     old_engine.close()
-                            result = DocumentDeletionService(
-                                root, index_path
-                            ).remove(
-                                sid,
-                                delete_generated_artifacts=bool(
-                                    payload.get(
-                                        "delete_generated_artifacts", True
-                                    )
-                                ),
-                                delete_internal_copy=bool(
-                                    payload.get("delete_internal_copy", False)
-                                ),
-                            )
+                            with durable_operations.operation():
+                                result = DocumentDeletionService(
+                                    root, index_path
+                                ).remove(
+                                    sid,
+                                    delete_generated_artifacts=bool(
+                                        payload.get(
+                                            "delete_generated_artifacts", True
+                                        )
+                                    ),
+                                    delete_internal_copy=bool(
+                                        payload.get("delete_internal_copy", False)
+                                    ),
+                                )
                             removal_committed = True
                         except (
                             ValueError,
@@ -3618,19 +4155,7 @@ def make_handler(
                             removal_error_status = 500
                         finally:
                             try:
-                                with runtime_lock:
-                                    runtime["engine"] = SearchEngine(index_path)
-                                    runtime["source_files"] = {
-                                        str(item.get("source_file_id")): item
-                                        for item in runtime[
-                                            "engine"
-                                        ].index.get("source_files", [])
-                                        if item.get("source_file_id")
-                                    }
-                                    runtime["index_metadata"] = runtime[
-                                        "engine"
-                                    ].index.get("metadata", {})
-                                    runtime["rebuilding"] = False
+                                recover_runtime_index()
                             except Exception as exc:
                                 logging.exception(
                                     "document removed but search index reload failed"
@@ -3752,17 +4277,20 @@ def make_handler(
                                 old_engine = runtime["engine"]
                                 if hasattr(old_engine, "close"):
                                     old_engine.close()
-                            result = DocumentDeletionService(root, index_path).remove_many(
-                                accepted,
-                                delete_generated_artifacts=bool(
-                                    payload.get("delete_generated_artifacts", True)
-                                ),
-                                internal_copy_ids=[
-                                    candidate
-                                    for candidate in accepted
-                                    if candidate in internal_ids
-                                ],
-                            )
+                            with durable_operations.operation():
+                                result = DocumentDeletionService(
+                                    root, index_path
+                                ).remove_many(
+                                    accepted,
+                                    delete_generated_artifacts=bool(
+                                        payload.get("delete_generated_artifacts", True)
+                                    ),
+                                    internal_copy_ids=[
+                                        candidate
+                                        for candidate in accepted
+                                        if candidate in internal_ids
+                                    ],
+                                )
                             removal_committed = True
                         except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                             removal_error = exc
@@ -3772,17 +4300,7 @@ def make_handler(
                             removal_error_status = 500
                         finally:
                             try:
-                                with runtime_lock:
-                                    runtime["engine"] = SearchEngine(index_path)
-                                    runtime["source_files"] = {
-                                        str(item.get("source_file_id")): item
-                                        for item in runtime["engine"].index.get("source_files", [])
-                                        if item.get("source_file_id")
-                                    }
-                                    runtime["index_metadata"] = runtime["engine"].index.get(
-                                        "metadata", {}
-                                    )
-                                    runtime["rebuilding"] = False
+                                recover_runtime_index()
                             except Exception:
                                 logging.exception(
                                     "documents removed but search index reload failed"
@@ -4063,7 +4581,7 @@ def make_handler(
                     return
                 job_id = f"auto-map-{uuid.uuid4().hex[:12]}"
                 try:
-                    with rebuild_lock:
+                    with durable_operations.operation(), rebuild_lock:
                         segment_count = accept_auto_page_mapping(sid)
                         with import_jobs_lock:
                             import_jobs[job_id] = {
@@ -4110,13 +4628,69 @@ def make_handler(
                 ".doc": "application/msword",
                 ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             }.get(target.suffix.lower(), "application/octet-stream")
-            body = target.read_bytes() if send_body else b""
-            self._send(200, body, content_type, content_length=target.stat().st_size, send_body=send_body)
+            file_size = target.stat().st_size
+            try:
+                requested_range = parse_byte_range(
+                    self.headers.get("Range"),
+                    file_size,
+                )
+            except InvalidByteRange:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if requested_range is None:
+                status = 200
+                start = 0
+                content_length = file_size
+            else:
+                status = 206
+                start = requested_range.start
+                content_length = requested_range.length
+
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(content_length))
+            if requested_range is not None:
+                self.send_header(
+                    "Content-Range",
+                    f"bytes {requested_range.start}-{requested_range.end}/{file_size}",
+                )
+            self.end_headers()
+            if not send_body or content_length == 0:
+                return
+
+            try:
+                with target.open("rb") as stream:
+                    stream.seek(start)
+                    remaining = content_length
+                    while remaining:
+                        chunk = stream.read(min(SOURCE_STREAM_CHUNK_BYTES, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                # Closing a PDF tab while a range is streaming is normal and
+                # should not produce a server traceback.
+                return
 
         def log_message(self, format: str, *args) -> None:
             return
 
-    def close_runtime() -> None:
+    def begin_shutdown() -> None:
+        """Reject new writes and stop accepting background work."""
+
+        durable_operations.begin_shutdown()
+        with runtime_lock:
+            runtime["closing"] = True
+        import_task_queue.shutdown(wait=False)
+
+    def close_runtime(timeout: float = 2.0) -> bool:
         """Release the SQLite handle this handler holds open.
 
         The desktop app keeps its index open until the process exits, but a
@@ -4125,17 +4699,57 @@ def make_handler(
         delete a database that still has an open connection.
         """
 
+        begin_shutdown()
+        chunked_uploads.close()
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        durable_stopped = durable_operations.wait(timeout=timeout)
+        if not durable_stopped:
+            logging.warning(
+                "durable mutations are still committing; runtime engine kept open"
+            )
+            return False
+        remaining = (
+            None if deadline is None else max(0.0, deadline - time.monotonic())
+        )
+        workers_stopped = import_task_queue.shutdown(wait=True, timeout=remaining)
+        if not workers_stopped:
+            # Keep the engine alive for the accepted task.  A long-lived caller
+            # can retry close_runtime after it checkpoints; a desktop process
+            # releases all handles immediately when it exits.
+            logging.warning(
+                "background imports are still stopping; runtime engine kept open"
+            )
+            return False
         with runtime_lock:
             current = runtime.get("engine")
             runtime["engine"] = None
         if current is not None:
             current.close()
+        return True
 
+    Handler.begin_shutdown = staticmethod(begin_shutdown)
     Handler.close_runtime = staticmethod(close_runtime)
+    Handler.wait_for_durable_operations = staticmethod(durable_operations.wait)
+    Handler._submit_background_task = staticmethod(import_task_queue.submit)
     return Handler
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765, index_path: Path = DEFAULT_DATABASE_PATH) -> None:
-    server = ThreadingHTTPServer((host, port), make_handler(index_path))
+    handler = make_handler(index_path)
+    server = ManagedThreadingHTTPServer((host, port), handler)
     print(f"ME Finder running at http://{host}:{port}/")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    finally:
+        handler.begin_shutdown()
+        server.server_close()
+        handlers_stopped = server.wait_for_handlers(timeout=5.0)
+        handler.wait_for_durable_operations()
+        if not handlers_stopped:
+            handlers_stopped = server.wait_for_handlers(timeout=2.0)
+        if handlers_stopped:
+            handler.close_runtime()
+        else:
+            logging.warning(
+                "active HTTP handlers did not finish; runtime kept open"
+            )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from concurrent.futures import CancelledError
 from pathlib import Path
 from unittest import mock
 
@@ -208,6 +209,27 @@ class PlatformOpenTests(unittest.TestCase):
         self.assertTrue(result["page_jump"])
         self.assertEqual(result["page"], 12)
         self.assertEqual(result["page_count"], 240)
+
+    def test_windows_native_reader_cancellation_does_not_open_external_app(self) -> None:
+        target = Path("C:/Documents/source.pdf")
+        opener = mock.Mock(side_effect=CancelledError("application is closing"))
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            mock.patch.object(web.sys, "platform", "win32"),
+            mock.patch.object(web, "find_default_adobe_pdf_app") as find_adobe,
+            mock.patch.object(web, "open_path_with_default_app") as open_default,
+        ):
+            with self.assertRaises(CancelledError):
+                web.open_pdf_with_platform(
+                    target,
+                    12,
+                    preferences_path=Path(temp_dir) / "preferences.json",
+                    native_pdf_opener=opener,
+                )
+
+        opener.assert_called_once_with(target, 12)
+        find_adobe.assert_not_called()
+        open_default.assert_not_called()
 
     def test_windows_system_preference_uses_adobe_page_jump_when_available(self) -> None:
         target = Path("C:/Documents/source.pdf")

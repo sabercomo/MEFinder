@@ -5,13 +5,20 @@ import time
 import unittest
 from unittest.mock import patch
 
-from src.me_finder.import_queue import ImportBatchCompletion, ImportTaskQueue
+from src.me_finder.import_queue import (
+    ImportBatchCompletion,
+    ImportQueueClosedError,
+    ImportQueueFullError,
+    ImportTaskQueue,
+)
 
 
 class ImportTaskQueueTests(unittest.TestCase):
     def test_rejects_invalid_worker_count(self) -> None:
         with self.assertRaises(ValueError):
             ImportTaskQueue(worker_count=0)
+        with self.assertRaises(ValueError):
+            ImportTaskQueue(max_pending_tasks=0)
 
     def test_limits_concurrency_and_continues_after_task_failure(self) -> None:
         task_queue = ImportTaskQueue(worker_count=2)
@@ -59,6 +66,45 @@ class ImportTaskQueueTests(unittest.TestCase):
             self.assertTrue(failure_seen.wait(timeout=2))
             self.assertTrue(recovery_seen.wait(timeout=2))
             log_exception.assert_called_once_with("background import task failed")
+        self.assertTrue(task_queue.shutdown(timeout=2))
+
+    def test_queue_has_backpressure_and_preserves_accepted_tasks(self) -> None:
+        task_queue = ImportTaskQueue(worker_count=1, max_pending_tasks=1)
+        running = threading.Event()
+        release = threading.Event()
+        queued_finished = threading.Event()
+
+        def blocking_task() -> None:
+            running.set()
+            release.wait(timeout=2)
+
+        task_queue.submit(blocking_task)
+        self.assertTrue(running.wait(timeout=2))
+        task_queue.submit(queued_finished.set)
+        with self.assertRaises(ImportQueueFullError):
+            task_queue.submit(lambda: None)
+
+        release.set()
+        self.assertTrue(queued_finished.wait(timeout=2))
+        self.assertTrue(task_queue.shutdown(timeout=2))
+
+    def test_shutdown_rejects_new_work_and_is_idempotent(self) -> None:
+        task_queue = ImportTaskQueue(worker_count=1)
+
+        self.assertTrue(task_queue.shutdown(timeout=2))
+        self.assertTrue(task_queue.shutdown(timeout=2))
+        self.assertFalse(task_queue.accepting)
+        with self.assertRaises(ImportQueueClosedError):
+            task_queue.submit(lambda: None)
+
+    def test_immediate_shutdown_never_strands_an_accepted_task(self) -> None:
+        for _ in range(30):
+            task_queue = ImportTaskQueue(worker_count=1)
+            completed = threading.Event()
+
+            task_queue.submit(completed.set)
+            self.assertTrue(task_queue.shutdown(timeout=2))
+            self.assertTrue(completed.is_set())
 
     def test_batch_completion_calls_back_once_with_only_successes(self) -> None:
         callback_seen = threading.Event()

@@ -164,6 +164,15 @@ class AutoPageMappingTests(unittest.TestCase):
         self.assertEqual(normalize_page_candidate("[xii]"), ("roman_lower", 12, "xii"))
         self.assertEqual(normalize_page_candidate("O8"), ("arabic", 8, "8"))
 
+    def test_normalizes_vertical_chinese_page_number_forms(self) -> None:
+        self.assertEqual(normalize_page_candidate("七四"), ("cjk_decimal", 74, "74"))
+        self.assertEqual(normalize_page_candidate("二三四"), ("cjk_decimal", 234, "234"))
+        self.assertEqual(
+            normalize_page_candidate("二百三十四"),
+            ("cjk_multiplicative", 234, "234"),
+        )
+        self.assertEqual(normalize_page_candidate("貳參肆"), ("cjk_decimal", 234, "234"))
+
     def test_normalizes_numeric_bookmark_forms_without_chapter_false_positives(self) -> None:
         for raw in ("1", "003", "第12页", "P.12", "P 12", "Page 12", "页12"):
             self.assertEqual(normalize_numeric_bookmark_title(raw)[1], int(''.join(ch for ch in raw if ch.isdigit())))
@@ -246,6 +255,62 @@ class AutoPageMappingTests(unittest.TestCase):
         candidates = extract_native_pdf_edge_candidates(pages)
         self.assertEqual([item.number for item in candidates], [3])
 
+    def test_mineru_canvas_finds_alternating_vertical_chinese_folios(self) -> None:
+        digits = "一二三四五六七八九"
+        pages = []
+        for offset, page_idx in enumerate(range(27, 36)):
+            right_page = offset % 2 == 0
+            x0, x1 = (910, 940) if right_page else (65, 95)
+            pages.append(
+                {
+                    "pdf_page_index": page_idx,
+                    # Real MinerU imports retain physical dimensions that do
+                    # not match the structured 1000 x 1000 bbox canvas.
+                    "page_width": 407.52 if offset < 5 else 1634,
+                    "page_height": 589.68 if offset < 5 else 2400,
+                    "blocks": [
+                        {
+                            "text": digits[offset],
+                            "bbox": [x0, 760, x1, 815],
+                            "mineru_item_index": 2,
+                        }
+                    ],
+                }
+            )
+
+        candidates = extract_native_pdf_edge_candidates(pages)
+
+        self.assertEqual([item.number for item in candidates], list(range(1, 10)))
+        self.assertTrue(all(item.number_style == "cjk_decimal" for item in candidates))
+        result = infer(candidates, page_count=40)
+        segment = result["applied_segments"][0]
+        self.assertEqual(segment["pdf_page_start"], 27)
+        self.assertEqual(segment["citation_page_start"], "1")
+        self.assertEqual(segment["citation_page_end"], "9")
+        self.assertEqual(segment["confidence_level"], "high")
+
+    def test_split_vertical_digit_blocks_are_joined_before_sequence_fitting(self) -> None:
+        pages = [
+            {
+                "pdf_page_index": 260,
+                "page_width": 407.52,
+                "page_height": 589.68,
+                "blocks": [
+                    {"text": "二", "bbox": [910, 748, 940, 766], "mineru_item_index": 1},
+                    {"text": "三", "bbox": [910, 768, 940, 786], "mineru_item_index": 2},
+                    {"text": "四", "bbox": [910, 788, 940, 806], "mineru_item_index": 3},
+                ],
+            }
+        ]
+
+        candidates = extract_native_pdf_edge_candidates(pages)
+        best = max(candidates, key=lambda item: item.score)
+
+        self.assertEqual(best.raw_candidate, "二三四")
+        self.assertEqual(best.number, 234)
+        self.assertEqual(best.number_style, "cjk_decimal")
+        self.assertEqual(best.score, 0.96)
+
     def test_pdf_without_any_evidence_reports_failure_reasons(self) -> None:
         with mock.patch("src.me_finder.page_mapping_service.extract_pdf_page_label_candidates", return_value=[]), mock.patch(
             "src.me_finder.page_mapping_service.extract_pdf_numeric_bookmark_candidates", return_value=[]
@@ -276,6 +341,56 @@ class AutoPageMappingTests(unittest.TestCase):
         self.assertEqual(segment["pdf_page_start"], 10)
         self.assertEqual(segment["citation_page_start"], "1")
         self.assertEqual(segment["confidence_level"], "high")
+
+    def test_late_offset_cluster_does_not_backfill_over_earlier_sequence(self) -> None:
+        candidates = [cand(20 + i, 1 + i) for i in range(20)]
+        # One missing scan changes the local PDF-to-print offset.  The second
+        # cluster starts at printed page 21 and must not be extrapolated back
+        # over the already-established first cluster.
+        candidates += [cand(40 + i, 22 + i) for i in range(20)]
+
+        result = infer(candidates, page_count=80)
+        segments = result["applied_segments"]
+
+        self.assertEqual(
+            [
+                (
+                    segment["pdf_page_start"],
+                    segment["pdf_page_end"],
+                    segment["citation_page_start"],
+                    segment["citation_page_end"],
+                )
+                for segment in segments
+            ],
+            [(20, 39, "1", "20"), (40, 59, "22", "41")],
+        )
+
+    def test_ocr_sequence_does_not_backfill_across_nearby_toc(self) -> None:
+        candidates = [cand(22 + i, 3 + i) for i in range(12)]
+        page_texts = {
+            18: "\n".join(["目次條目"] * 10 + ["莊子集釋", "目", "錄"]),
+            22: "莊子集釋卷一上",
+        }
+
+        result = infer(candidates, page_count=80, page_texts=page_texts)
+        segment = result["applied_segments"][0]
+
+        self.assertEqual(segment["pdf_page_start"], 22)
+        self.assertEqual(segment["citation_page_start"], "3")
+        self.assertTrue(segment["mapping_evidence"]["backfill_suppressed_near_toc"])
+
+    def test_dominant_recurring_offset_ignores_small_conflicting_cluster(self) -> None:
+        candidates = [cand(20 + i, 1 + i) for i in range(20)]
+        candidates += [cand(45 + i, 10 + i) for i in range(4)]
+        candidates += [cand(60 + i, 41 + i) for i in range(30)]
+
+        result = infer(candidates, page_count=100)
+        segment = result["applied_segments"][0]
+
+        self.assertEqual(segment["pdf_page_start"], 20)
+        self.assertEqual(segment["pdf_page_end"], 89)
+        self.assertEqual(segment["citation_page_start"], "1")
+        self.assertEqual(segment["citation_page_end"], "70")
 
     def test_preface_and_body_can_reset_to_one(self) -> None:
         candidates = [cand(15 + i, 1 + i) for i in range(8)]
@@ -314,6 +429,21 @@ class AutoPageMappingTests(unittest.TestCase):
         candidates = [cand(5 + i, 1 + i) for i in range(6)]
         result = infer(candidates, page_count=400, page_texts=page_texts)
         self.assertEqual(result["applied_segments"][0]["page_scope"], "preface")
+
+    def test_classic_title_ending_in_preface_marker_is_preface(self) -> None:
+        page_texts = {
+            11: "淮南鴻烈集解序\n整理國故，約有三途。",
+            12: "序文繼續討論校勘方法。",
+        }
+        candidates = [cand(11 + i, 1 + i) for i in range(6)]
+        result = infer(candidates, page_count=100, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "preface")
+
+    def test_vertical_toc_heading_is_front_matter(self) -> None:
+        page_texts = {20: "目\n錄\n校點前言……一\n尚書正義序……一"}
+        candidates = [cand(20 + i, 1 + i) for i in range(7)]
+        result = infer(candidates, page_count=100, page_texts=page_texts)
+        self.assertEqual(result["applied_segments"][0]["page_scope"], "front_matter")
 
     def test_long_segment_is_never_classified_as_preface(self) -> None:
         page_texts = {20: "序言\n这个分段有一个像序言的开头，但长达六十页。"}
