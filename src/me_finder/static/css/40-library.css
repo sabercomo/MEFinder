@@ -412,8 +412,8 @@
   width: auto;
   min-width: 0;
 }
-/* 详情内容设上限并居中：宽窗口下短字段不再被拉成整屏（Zotero/Mail 检视器同款）。 */
-.library-body.detail-open .library-drawer-inner { width: auto; max-width: 760px; margin-inline: auto; }
+/* 详情内容随面板伸缩；水平安全留白由 drawer 自身的 24px padding 提供。 */
+.library-body.detail-open .library-drawer-inner { width: 100%; max-width: none; margin-inline: 0; }
 .library-body.detail-open .library-list-container.library-view-grid { grid-template-columns: minmax(0, 1fr); }
 .library-body.detail-open .library-row-missing { display: none; }
 @media (max-width: 1120px) {

@@ -99,20 +99,18 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="detail-copy-control"', detail_source)
         self.assertNotIn("复制原文", detail_source)
         self.assertNotIn("复制原文与出处", detail_source)
-        more_control = detail_source.index('id="detail-more-control"')
-        self.assertLess(open_action, more_control)
-        self.assertIn('aria-label="更多操作" title="更多操作"', detail_source)
-        self.assertIn("runSearchDetailAction(event,\\'complete-metadata\\')\">补全书目信息</button>", detail_source)
+        self.assertNotIn('id="detail-more-control"', detail_source)
+        self.assertNotIn('aria-label="更多操作" title="更多操作"', detail_source)
+        self.assertNotIn("补全书目信息", detail_source)
         self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
         self.assertIn(
             "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
             detail_source,
         )
-        self.assertIn("function runSearchDetailAction(event, action)", HTML)
+        self.assertNotIn("function runSearchDetailAction(event, action)", HTML)
         self.assertNotIn("if (action === 'copy-original')", HTML)
         self.assertNotIn("if (action === 'copy-citation')", HTML)
         self.assertNotIn("if (action === 'copy-combined')", HTML)
-        self.assertIn("if (item) openMetadataForSource(item.source_file_id || '');", HTML)
         self.assertNotIn("function copySelectedOriginal()", HTML)
         self.assertNotIn("function copySelectedOriginalAndCitation()", HTML)
         self.assertIn("function copySelectedCitation()", HTML)
@@ -227,7 +225,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
-        self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertIn("importQueue.push(queueItem)", HTML)
+        self.assertIn("navigateTo('import')", HTML)
+        self.assertIn("pollImportJob(queueItem.id)", HTML)
+        self.assertIn("queue.scrollIntoView({behavior: 'smooth', block: 'start'})", HTML)
         self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
         self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
@@ -306,20 +308,24 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint')", HTML)
         self.assertIn("t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint')", HTML)
 
-    def test_parse_modes_sit_below_dropzone_without_failure_recovery_panel(self) -> None:
-        """拖放区在前，三种解析方式常驻其下；不再有单独的失败恢复面板。"""
+    def test_parse_modes_sit_above_dropzone_with_progressive_failure_recovery(self) -> None:
+        """恢复 0.3.8 层级，并只在失败后渐进显示视觉 API 恢复区。"""
 
         self.assertNotIn('class="import-intro">', HTML)
         drop = HTML.index('id="drop-zone"')
         modes = HTML.index('class="pdf-parse-section"')
         scan = HTML.index('id="scan-section"')
         queue = HTML.index('id="import-queue"')
-        self.assertLess(drop, modes)
-        self.assertLess(modes, scan)
+        self.assertLess(modes, drop)
+        self.assertLess(drop, scan)
         self.assertLess(scan, queue)
-        # 失败恢复面板整体移除：第三种模式本就能主动指定视觉 API。
-        self.assertNotIn('id="import-recovery-panel"', HTML)
-        self.assertNotIn("function importQueueNeedsRecoverySelector()", HTML)
+        self.assertIn("padding: 36px 32px;", HTML)
+        self.assertIn("height: 28px; padding: 0 8px", HTML)
+        self.assertIn('id="import-recovery-panel" hidden', HTML)
+        self.assertIn('id="import-recovery-provider"', HTML)
+        self.assertIn("function importQueueNeedsRecoverySelector()", HTML)
+        self.assertIn("panel.hidden = !shouldShow", HTML)
+        self.assertIn("q.status === 'error'", HTML)
         self.assertNotIn('class="pdf-parse-details"', HTML)
         # I-02：扫描只列出文件、不直接导入。
         self.assertIn("扫描只列出文件、不直接导入", HTML)

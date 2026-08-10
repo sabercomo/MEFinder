@@ -8,10 +8,28 @@ function visionRetryProviderFor(q) {
   if (q.failureStage === 'index') return null;
   if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed) return null;
   var providers = configuredVisionProviders();
-  var preferredId = q.retryProviderId || '';
+  var selectedRecoveryId = typeof selectedImportRecoveryProviderId === 'function'
+    ? selectedImportRecoveryProviderId()
+    : '';
+  var preferredId = selectedRecoveryId || q.retryProviderId || '';
   return providers.find(function(provider) {
     return provider.id === preferredId;
   }) || providers[0] || null;
+}
+
+function importQueueNeedsRecoverySelector() {
+  return importQueue.some(function(q) {
+    return q && q.type === 'pdf' && q.status === 'error' && q.failureStage !== 'index'
+      && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed);
+  });
+}
+
+function syncImportRecoveryPanel() {
+  var panel = document.getElementById('import-recovery-panel');
+  if (!panel) return;
+  var shouldShow = importQueueNeedsRecoverySelector();
+  panel.hidden = !shouldShow;
+  if (shouldShow && typeof syncImportRecoveryProvider === 'function') syncImportRecoveryProvider();
 }
 
 function initDropZone() {
@@ -838,10 +856,12 @@ function renderImportQueue() {
   var itemsEl = document.getElementById('import-items');
   if (importQueue.length === 0) {
     queueEl.style.display = 'none';
+    syncImportRecoveryPanel();
     syncResumeAllButton();
     return;
   }
   queueEl.style.display = 'block';
+  syncImportRecoveryPanel();
   itemsEl.innerHTML = importQueue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : 'word';
     var retryProvider = visionRetryProviderFor(q);
@@ -1116,11 +1136,13 @@ function pollImportJob(id) {
       if (data.status === 'completed') {
         q.status = 'done';
         q.message = data.message || '导入完成，已自动更新索引';
+        if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
         invalidateLibraryCatalog();
         ensureSearchDocuments(true).then(updateSearchDocumentLabel);
       } else if (data.status === 'failed') {
         q.status = 'error';
         q.message = data.message || '导入失败';
+        if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
         q.failureStage = data.failure_stage || null;
         q.canResume = !!data.can_resume;
         q.canRetryVision = !!data.can_retry_with_provider;
@@ -1138,6 +1160,7 @@ function pollImportJob(id) {
     .catch(function(err) {
       q.status = 'error';
       q.message = err.message || '读取导入状态失败';
+      if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
       renderImportQueue();
     });
 }

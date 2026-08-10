@@ -351,9 +351,6 @@ function showDetail(item) {
   }
 
   const citationStyleLabel = citationStyleDisplayLabel(citationStyle);
-  const citationIncomplete = item.citation_formats && enabledCitationStyles.some(function(style) {
-    return item.citation_formats[style + '_status'] !== 'complete';
-  });
   const detailMenuChevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
 
   panel.innerHTML = '<div class="detail-card">'
@@ -388,12 +385,6 @@ function showDetail(item) {
     + '<button class="action-btn" type="button" onclick="copySelectedCitation()">复制出处</button>'
     + (item.source_file_id ? '<button class="action-btn" type="button" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
     + (item.source_file_id ? '<button class="action-btn primary" type="button" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
-    + (citationIncomplete && item.source_type === 'pdf' ? '<span class="app-select detail-more-control" id="detail-more-control">'
-      + '<button class="action-btn app-select-trigger detail-more-trigger" type="button" aria-label="更多操作" title="更多操作" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-more-control\')">⋯</button>'
-      + '<span class="app-select-menu detail-more-menu" role="menu" aria-label="更多操作">'
-      + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'complete-metadata\')">补全书目信息</button>'
-      + '</span>'
-      + '</span>' : '')
     + '</div>'
     + '</div>';
 
@@ -584,15 +575,6 @@ function updateDetailCitationAvailability() {
   const item = selectedResult();
   if (!status || !item) return;
   status.hidden = citationIsComplete(item);
-}
-
-function runSearchDetailAction(event, action) {
-  if (event) event.stopPropagation();
-  closeAppSelects();
-  if (action === 'complete-metadata') {
-    const item = selectedResult();
-    if (item) openMetadataForSource(item.source_file_id || '');
-  }
 }
 
 function showCitationMetadataError(item) {

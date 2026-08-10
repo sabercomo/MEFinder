@@ -66,6 +66,17 @@ class LibraryWorkspaceLayoutMarkupTests(unittest.TestCase):
         self.assertIsNotNone(rule)
         self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", rule.group(1))
 
+    def test_detail_content_expands_with_the_drawer(self) -> None:
+        rule = re.search(
+            r"\.library-body\.detail-open \.library-drawer-inner\s*\{([^}]+)\}",
+            HTML,
+            re.S,
+        )
+        self.assertIsNotNone(rule)
+        self.assertIn("width: 100%;", rule.group(1))
+        self.assertIn("max-width: none;", rule.group(1))
+        self.assertNotIn("max-width: 760px;", rule.group(1))
+
     def test_open_detail_uses_a_single_column_document_list(self) -> None:
         self.assertIn(
             ".library-body.detail-open .library-list-container.library-view-grid { grid-template-columns: minmax(0, 1fr); }",

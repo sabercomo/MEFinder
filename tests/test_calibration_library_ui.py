@@ -445,11 +445,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
 
     def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
-        """L-07 列表:详情比例 + 内容上限；L-09 常驻三态全选；L-11 列表键盘导航。"""
+        """L-07 列表:详情比例 + 自适应详情宽度；L-09 常驻三态全选；L-11 列表键盘导航。"""
 
         # L-07
         self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", HTML)
-        self.assertIn("max-width: 760px; margin-inline: auto;", HTML)
+        self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
         # L-09
         self.assertIn('id="lib-select-all"', HTML)
         self.assertIn('role="checkbox"', HTML)

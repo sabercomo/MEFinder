@@ -807,6 +807,27 @@ async function submitMineruReparse(sourceId) {
     '将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入',
     {title:'重新解析 PDF？', confirmText:'上传并重新解析', tone:'warning'}
   )) return;
+  var source = (libSources || []).find(function(item) { return item.source_file_id === sourceId; }) || {};
+  var queueItem = {
+    id: 'mineru-reparse-' + Date.now(),
+    sourceFileId: sourceId,
+    name: source.file_name || source.title || '未命名 PDF',
+    size: Number(source.size_bytes || 0),
+    type: 'pdf',
+    parseMode: 'mineru',
+    status: 'processing',
+    step: 2,
+    route: 'mineru',
+    detectedType: source.pdf_profile && source.pdf_profile.detected_pdf_type,
+    message: '正在提交 MinerU 在线解析…'
+  };
+  importQueue.push(queueItem);
+  navigateTo('import');
+  renderImportQueue();
+  requestAnimationFrame(function() {
+    var queue = document.getElementById('import-queue');
+    if (queue) queue.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
   try {
     var resp = await fetch('/api/mineru-reparse', {
       method: 'POST',
@@ -815,40 +836,32 @@ async function submitMineruReparse(sourceId) {
     });
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '提交失败');
-    showToast(data.already_running ? 'MinerU 解析已在进行中' : '已提交 MinerU 解析，完成后自动重建索引');
+    var tracked = importQueue.find(function(item) {
+      return item !== queueItem && item.jobId === data.job_id;
+    });
+    if (tracked) {
+      importQueue = importQueue.filter(function(item) { return item !== queueItem; });
+      tracked.status = 'processing';
+      tracked.route = 'mineru';
+      tracked.message = 'MinerU 解析已在进行中…';
+      renderImportQueue();
+      pollImportJob(tracked.id);
+      return;
+    }
+    queueItem.jobId = data.job_id;
+    queueItem.detectedType = data.detected_pdf_type || queueItem.detectedType;
+    queueItem.message = data.already_running
+      ? 'MinerU 解析已在进行中，正在读取进度…'
+      : '已提交 MinerU，正在等待解析进度…';
     calTransientStatus[sourceId] = 'mapping';
-    updateLibraryEntry(sourceId);
-    if (libSelectedId === sourceId) selectLibDoc(sourceId);
-    pollMineruReparse(sourceId, data.job_id);
+    renderImportQueue();
+    pollImportJob(queueItem.id);
   } catch(e) {
+    queueItem.status = 'error';
+    queueItem.message = '提交 MinerU 解析失败：' + e.message;
+    renderImportQueue();
     showToast('提交 MinerU 解析失败：' + e.message, 'danger');
   }
-}
-
-function pollMineruReparse(sourceId, jobId) {
-  fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
-    .then(function(resp) { return resp.json(); })
-    .then(function(data) {
-      if (data.status === 'completed') {
-        delete calTransientStatus[sourceId];
-        showToast('MinerU 解析完成，索引已更新', 'success');
-        refreshCalibrationSource(sourceId).then(function() {
-          if (libSelectedId === sourceId) selectLibDoc(sourceId);
-        }).catch(function() {});
-        return;
-      }
-      if (data.status === 'failed' || data.error) {
-        delete calTransientStatus[sourceId];
-        updateLibraryEntry(sourceId);
-        if (libSelectedId === sourceId) selectLibDoc(sourceId);
-        showToast('MinerU 解析失败：' + (data.message || data.error || '未知错误'), 'danger');
-        return;
-      }
-      setTimeout(function() { pollMineruReparse(sourceId, jobId); }, 4000);
-    })
-    .catch(function() {
-      setTimeout(function() { pollMineruReparse(sourceId, jobId); }, 8000);
-    });
 }
 
 async function acceptAutoMapping(sourceId) {

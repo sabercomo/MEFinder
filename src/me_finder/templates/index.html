@@ -350,18 +350,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </div>
       </div>
       <div class="import-content">
-        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="选择要导入的 PDF 或 DOCX 文件" onclick="document.getElementById('file-input').click()">
-          <div class="drop-zone-icon">
-            <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
-          </div>
-          <div class="drop-zone-text">拖放 PDF / DOCX 到此处，或点击选择</div>
-          <div class="drop-zone-hint">支持单个或多个文件同时导入</div>
-          <div class="drop-zone-formats">
-            <span class="format-tag">PDF</span>
-            <span class="format-tag">DOCX</span>
-          </div>
-        </div>
-        <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
         <div class="pdf-parse-section">
           <div class="pdf-parse-heading">
             <span class="pdf-parse-heading-title">PDF 解析方式</span>
@@ -398,6 +386,18 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </label>
           </div>
         </div>
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="选择要导入的 PDF 或 DOCX 文件" onclick="document.getElementById('file-input').click()">
+          <div class="drop-zone-icon">
+            <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
+          </div>
+          <div class="drop-zone-text">拖放 PDF / DOCX 到此处，或点击选择</div>
+          <div class="drop-zone-hint">支持单个或多个文件同时导入</div>
+          <div class="drop-zone-formats">
+            <span class="format-tag">PDF</span>
+            <span class="format-tag">DOCX</span>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>
@@ -427,6 +427,20 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="import-queue-batch-actions">
               <button class="action-btn primary import-queue-resume-all" type="button" id="import-resume-all-btn" style="display:none" onclick="resumeAllImports()">全部继续导入</button>
               <button class="action-btn import-queue-cancel-all" type="button" id="import-cancel-all-btn" style="display:none" onclick="cancelAllImports()">全部取消</button>
+            </div>
+          </div>
+          <div class="import-recovery-panel" id="import-recovery-panel" hidden>
+            <div class="import-recovery-copy">
+              <strong>PDF 解析失败处理</strong>
+              <span>可先继续当前 MinerU 任务；如需切换，从已配置的视觉 API 中选择后在失败任务上重试。</span>
+            </div>
+            <div class="import-recovery-provider">
+              <span class="import-recovery-label">视觉解析 API</span>
+              <div class="app-select import-recovery-select" id="import-recovery-provider" data-value="">
+                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-controls="import-recovery-provider-list" aria-expanded="false" aria-label="选择失败后重试使用的视觉解析 API" onclick="toggleImportRecoveryProvider(event)"><span class="app-select-value" id="import-recovery-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                <div class="app-select-menu import-recovery-menu" id="import-recovery-provider-options"><div class="import-vision-option-list" id="import-recovery-provider-list" role="listbox" aria-label="失败后重试使用的 API"></div></div>
+              </div>
+              <button class="action-btn import-recovery-settings" type="button" onclick="openVisionSettings()">解析设置</button>
             </div>
           </div>
           <div id="import-items"></div>

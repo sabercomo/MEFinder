@@ -581,15 +581,7 @@
   justify-content: space-between;
   gap: 10px;
 }
-.detail-more-trigger {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
-  font-size: 20px;
-  letter-spacing: 0.06em;
-}
-.detail-format-menu,
-.detail-more-menu {
+.detail-format-menu {
   top: auto;
   bottom: calc(100% + 7px);
 }
@@ -598,10 +590,8 @@
   left: 0;
   width: 180px;
 }
-.detail-more-menu { right: 0; left: auto; width: 188px; }
 .detail-citation-style-options { display: grid; gap: 2px; }
 .detail-citation-style-options .app-select-option { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
-.detail-action-option { font-size: 13px; }
 
 @media (max-width: 1100px) {
   .results-list-pane { width: 360px; min-width: 280px; }
@@ -611,7 +601,6 @@
   .detail-actions { padding: 7px 10px; gap: 6px; }
   .detail-actions .action-btn { height: 32px; padding-left: 10px; padding-right: 10px; font-size: 12px; }
   .detail-actions .app-select-trigger { height: 32px; font-size: 12px; }
-  .detail-actions .detail-more-trigger { width: 34px; min-width: 34px; padding: 0; font-size: 18px; }
 }
 
 @media (max-width: 959px) {

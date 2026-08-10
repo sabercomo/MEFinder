@@ -586,6 +586,74 @@ function configuredVisionProviders() {
 
 var importVisionProviderQuery = '';
 
+function selectedImportRecoveryProviderId() {
+  var container = document.getElementById('import-recovery-provider');
+  return container ? (container.dataset.value || '') : '';
+}
+
+function renderImportRecoveryProviderOptions() {
+  var list = document.getElementById('import-recovery-provider-list');
+  var container = document.getElementById('import-recovery-provider');
+  if (!list || !container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
+  list.innerHTML = providers.map(function(provider) {
+    var selected = provider.id === current;
+    return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportRecoveryProvider(event,\'' + esc(provider.id) + '\')">'
+      + visionAvatarHtml(provider, 'vision-avatar-sm')
+      + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
+      + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
+      + (selected ? check : '') + '</button>';
+  }).join('') || '<div class="document-options-empty">请先在设置中配置</div>';
+}
+
+function updateImportRecoveryProviderLabel() {
+  var container = document.getElementById('import-recovery-provider');
+  var label = document.getElementById('import-recovery-provider-label');
+  if (!container || !label) return;
+  var providers = configuredVisionProviders();
+  var provider = providers.find(function(item) { return item.id === (container.dataset.value || ''); });
+  if (!provider) {
+    label.textContent = providers.length ? '选择解析接口' : '请先在设置中配置';
+    return;
+  }
+  label.innerHTML = visionAvatarHtml(provider, 'vision-avatar-sm')
+    + '<span class="import-vision-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>';
+}
+
+function syncImportRecoveryProvider() {
+  var container = document.getElementById('import-recovery-provider');
+  if (!container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var preferred = visionConfig.default_provider_id || '';
+  if (!providers.some(function(provider) { return provider.id === current; })) {
+    current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : (providers[0] || {}).id || '';
+  }
+  container.dataset.value = current;
+  var trigger = container.querySelector('.app-select-trigger');
+  if (trigger) trigger.disabled = providers.length === 0;
+  container.classList.toggle('is-disabled', providers.length === 0);
+  renderImportRecoveryProviderOptions();
+  updateImportRecoveryProviderLabel();
+}
+
+function toggleImportRecoveryProvider(event) {
+  toggleAppSelect(event, 'import-recovery-provider');
+  renderImportRecoveryProviderOptions();
+}
+
+function selectImportRecoveryProvider(event, providerId) {
+  if (event) event.stopPropagation();
+  var container = document.getElementById('import-recovery-provider');
+  if (container) container.dataset.value = providerId;
+  updateImportRecoveryProviderLabel();
+  renderImportRecoveryProviderOptions();
+  closeAppSelects();
+  if (typeof renderImportQueue === 'function') renderImportQueue();
+}
+
 function importVisionProviderSearchText(provider) {
   return [provider.name, provider.model, provider.api_base, visionHostLabel(provider.api_base)]
     .map(function(value) { return String(value || '').toLowerCase(); })
@@ -643,6 +711,7 @@ function syncImportVisionProviders() {
   container.classList.toggle('is-disabled', providers.length === 0);
   renderImportVisionProviderOptions();
   updateImportVisionProviderLabel();
+  syncImportRecoveryProvider();
 }
 
 async function toggleImportVisionProvider(event) {
