@@ -740,6 +740,34 @@ function positionImportVisionMenu() {
   menu.dataset.placement = opensUp ? 'top' : 'bottom';
 }
 
+// Signature of the fields that决定连通性；一旦地址或模型变了，上次测连结果作废。
+function visionProviderSig(provider) {
+  return (provider.api_base || '') + '|' + (provider.model || '');
+}
+
+// Only ever返回 'ok' after a real 测试连接 succeeded for the current config.
+function visionVerifiedState(provider) {
+  var r = visionTestResults[provider.id];
+  if (!r || r.sig !== visionProviderSig(provider)) return null;
+  return r.ok ? 'ok' : 'failed';
+}
+
+function recordVisionTestResult(provider, ok) {
+  if (!provider) return;
+  visionTestResults[provider.id] = {sig: visionProviderSig(provider), ok: !!ok};
+}
+
+// Returns {label, cls} for the card badge. 绿色“已连通”只在真实测连成功后出现，
+// 填完三个框但未验证的接口显示中性的“待测试”，避免像旧版那样误报“可用”。
+function visionProviderBadge(provider) {
+  if (!provider.enabled) return {label: '已停用', cls: ' muted'};
+  if (!provider.configured) return {label: '缺少密钥', cls: ' warning'};
+  var verified = visionVerifiedState(provider);
+  if (verified === 'ok') return {label: '已连通', cls: ''};
+  if (verified === 'failed') return {label: '连接失败', cls: ' warning'};
+  return {label: '待测试', cls: ' pending'};
+}
+
 function renderVisionProviders() {
   var list = document.getElementById('vision-provider-list');
   var status = document.getElementById('vision-config-status');
@@ -762,8 +790,9 @@ function renderVisionProviders() {
     } else {
       var editingId = (document.getElementById('vision-provider-id') || {}).value || '';
       list.innerHTML = visionConfig.providers.map(function(provider) {
-        var state = provider.configured && provider.enabled ? '可用' : provider.enabled ? '缺少密钥' : '已停用';
-        var stateClass = provider.configured && provider.enabled ? '' : provider.enabled ? ' warning' : ' muted';
+        var badge = visionProviderBadge(provider);
+        var state = badge.label;
+        var stateClass = badge.cls;
         return '<div class="vision-provider-card' + (editingId === provider.id ? ' selected' : '')
           + '" role="button" tabindex="0" title="点击编辑这个接口"'
           + ' onclick="editVisionProvider(\'' + provider.id + '\')"'
@@ -1045,8 +1074,12 @@ async function testVisionProvider(providerId) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
+    recordVisionTestResult(provider, true);
+    renderVisionProviders();
     showToast(provider.name + ' 视觉连接成功 · ' + data.latency_ms + ' ms');
   } catch (e) {
+    recordVisionTestResult(provider, false);
+    renderVisionProviders();
     showToast(provider.name + ' 连接失败：' + e.message);
   }
 }

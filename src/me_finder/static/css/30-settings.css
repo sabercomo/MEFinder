@@ -643,6 +643,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .vision-provider-state.warning { background: var(--warning-soft); color: var(--warning); }
 .vision-provider-state.muted { background: var(--surface-hover); color: var(--text-tertiary); }
+.vision-provider-state.pending { background: var(--accent-soft); color: var(--accent); }
 .icon-btn {
   display: inline-flex;
   align-items: center;
