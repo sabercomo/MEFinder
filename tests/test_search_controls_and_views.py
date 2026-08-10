@@ -397,6 +397,16 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/vision-providers/models'", HTML)
         self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
         self.assertIn("manual_entry_allowed", WEB_SOURCE)
+        self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
+        self.assertIn("{key: 'vision', label: '通用视觉'}", HTML)
+        self.assertIn("{key: 'omni', label: '全模态'}", HTML)
+        self.assertIn(
+            "{key: 'unsupported', label: '不支持图片 · DeepSeek'}",
+            HTML,
+        )
+        self.assertIn("function visionModelPriority(item)", HTML)
+        self.assertIn("capability-unsupported", HTML)
+        self.assertNotIn("可能支持图片", HTML)
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('id="backup-settings"', HTML)

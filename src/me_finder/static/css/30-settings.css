@@ -794,6 +794,18 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   font-size: 11px;
   font-weight: 600;
 }
+.vision-model-badge.capability-ocr {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.vision-model-badge.capability-omni {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.vision-model-badge.capability-unsupported {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
 .vision-model-hint { transition: color var(--transition-fast); }
 .vision-model-hint.is-loading { color: var(--accent); }
 .vision-model-hint.is-ready { color: var(--success); }
@@ -935,4 +947,3 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 @container (min-width: 640px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 720px) { .theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 430px) { .theme-mini-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .theme-mini-doc-card:nth-child(3) { display: none; }}
-

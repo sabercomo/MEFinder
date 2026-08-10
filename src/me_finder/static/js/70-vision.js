@@ -357,8 +357,32 @@ function visionModelFiltered() {
   if (exactMatch) return visionModelOptions;
   return visionModelOptions.filter(function(item) {
     return item.id.toLowerCase().indexOf(query) >= 0
-      || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
+      || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0
+      || String(item.capability_label || '').toLowerCase().indexOf(query) >= 0;
   });
+}
+
+function visionModelCapability(item) {
+  var capability = String((item || {}).capability || '');
+  if (['ocr', 'vision', 'omni', 'text', 'unsupported'].indexOf(capability) >= 0) {
+    return capability;
+  }
+  return item && item.likely_vision ? 'vision' : 'text';
+}
+
+function visionModelPriority(item) {
+  var priority = Number((item || {}).capability_priority);
+  if (Number.isFinite(priority)) return priority;
+  var fallback = {ocr: 0, vision: 100, omni: 200, text: 900, unsupported: 1000};
+  return fallback[visionModelCapability(item)];
+}
+
+function visionModelBadgeHTML(item) {
+  var label = String((item || {}).capability_label || '');
+  if (!label && item && item.likely_vision) label = '通用视觉';
+  if (!label) return '';
+  var capability = visionModelCapability(item);
+  return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
 }
 
 function renderVisionModelPop() {
@@ -371,22 +395,30 @@ function renderVisionModelPop() {
     hideVisionPop(pop, input);
     return;
   }
-  var owners = [];
-  var byOwner = {};
+  var groups = [
+    {key: 'ocr', label: 'OCR 专用 · 优先'},
+    {key: 'vision', label: '通用视觉'},
+    {key: 'omni', label: '全模态'},
+    {key: 'text', label: '其他模型'},
+    {key: 'unsupported', label: '不支持图片 · DeepSeek'}
+  ];
+  var byCapability = {};
   items.forEach(function(item) {
-    var owner = String(item.owned_by || '其他');
-    if (!byOwner[owner]) { byOwner[owner] = []; owners.push(owner); }
-    byOwner[owner].push(item);
+    var capability = visionModelCapability(item);
+    if (!byCapability[capability]) byCapability[capability] = [];
+    byCapability[capability].push(item);
   });
-  var html = owners.map(function(owner) {
-    return '<div class="vision-model-group">' + esc(owner) + '</div>'
-      + byOwner[owner].map(function(item) {
+  var html = groups.filter(function(group) {
+    return byCapability[group.key] && byCapability[group.key].length;
+  }).map(function(group) {
+    return '<div class="vision-model-group">' + esc(group.label) + '</div>'
+      + byCapability[group.key].map(function(item) {
           var index = visionModelFlat.length;
           visionModelFlat.push(item);
           return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
             + '" data-model="' + esc(item.id) + '">'
             + '<span class="vision-model-id">' + esc(item.id) + '</span>'
-            + (item.likely_vision ? '<span class="vision-model-badge">可能支持图片</span>' : '')
+            + visionModelBadgeHTML(item)
             + '</div>';
         }).join('');
   }).join('');
@@ -454,6 +486,9 @@ function resetVisionModelButton() {
 function renderVisionModelOptions(models) {
   visionModelOptions = (models || []).filter(function(item) {
     return item && typeof item.id === 'string' && item.id.trim();
+  }).slice().sort(function(a, b) {
+    return visionModelPriority(a) - visionModelPriority(b)
+      || a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
   });
   visionModelActiveIndex = -1;
   renderVisionModelPop();
@@ -510,7 +545,7 @@ async function fetchVisionModels(options) {
     if (requestSerial !== visionModelRequestSerial) return;
     renderVisionModelOptions(data.models || []);
     setVisionModelHint(
-      '已获取 ' + visionModelOptions.length + ' 个模型。点击输入框选择；“可能支持图片”仅为名称提示',
+      '已获取 ' + visionModelOptions.length + ' 个模型。OCR 专用模型已优先排列；请选择支持图片输入的模型',
       'is-ready'
     );
     if (!silent) {

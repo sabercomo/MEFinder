@@ -436,20 +436,74 @@ def _models_endpoint(api_base: str) -> str:
     return _models_endpoints(api_base)[0]
 
 
-def _likely_vision_model(model_id: str, item: Mapping[str, object]) -> bool:
+def _model_has_image_input(item: Mapping[str, object]) -> bool:
     modalities = item.get("input_modalities") or item.get("modalities")
-    if isinstance(modalities, list) and any(
+    return isinstance(modalities, list) and any(
         str(modality).strip().lower() in {"image", "images", "vision"}
         for modality in modalities
-    ):
-        return True
+    )
+
+
+def _vision_model_capability(
+    model_id: str,
+    item: Mapping[str, object],
+) -> Dict[str, object]:
+    """Classify model-list entries for the visual-parser picker.
+
+    The catalog is advisory UI metadata, not an invocation allow-list. Unknown
+    models remain selectable, while explicit OCR/vision/omni families are
+    promoted and known DeepSeek text models are kept at the bottom.
+    """
+
     normalized = model_id.strip().lower()
-    hints = (
+    basename = normalized.rsplit("/", 1)[-1]
+
+    # DeepSeek's currently exposed chat/reasoning models do not accept the page
+    # images sent by this parser. Keep this override before generic "ocr" or
+    # provider-supplied modality hints so relay aliases cannot imply support.
+    if "deepseek" in normalized:
+        return {
+            "capability": "unsupported",
+            "capability_label": "不支持图片",
+            "capability_priority": 1000,
+            "likely_vision": False,
+        }
+
+    if "ocr" in basename:
+        if basename == "qwen3.5-ocr":
+            label = "OCR专用 · 推荐"
+            priority = 0
+        elif basename.endswith("-latest"):
+            label = "OCR专用"
+            priority = 1
+        elif re.search(r"[-_]20\d{2}[-_]\d{2}[-_]\d{2}$", basename):
+            label = "OCR专用 · 固定版本"
+            priority = 2
+        else:
+            label = "OCR专用"
+            priority = 3
+        return {
+            "capability": "ocr",
+            "capability_label": label,
+            "capability_priority": priority,
+            "likely_vision": True,
+        }
+
+    if "omni" in basename:
+        return {
+            "capability": "omni",
+            "capability_label": "全模态",
+            "capability_priority": 200,
+            "likely_vision": True,
+        }
+
+    vision_hints = (
         "vision",
         "qwen-vl",
         "qwen2-vl",
         "qwen2.5-vl",
         "qwen3-vl",
+        "qwen3.5-",
         "qvq",
         "internvl",
         "minicpm-v",
@@ -461,14 +515,44 @@ def _likely_vision_model(model_id: str, item: Mapping[str, object]) -> bool:
         "step-1v",
         "pixtral",
         "llava",
+        "llama-vision",
+        "llama-3.2-11b",
+        "llama-3.2-90b",
+        "doubao-vision",
+        "seed-vl",
+        "seed-vision",
+        "hunyuan-vision",
+        "ernie-vl",
+        "minimax-vl",
+        "moonshot-v1-vision",
         "gemini",
         "claude",
         "gpt-4o",
         "gpt-4.1",
         "gpt-5",
-        "omni",
     )
-    return any(hint in normalized for hint in hints)
+    if _model_has_image_input(item) or any(
+        hint in normalized for hint in vision_hints
+    ):
+        fast = "flash" in basename
+        plus = "plus" in basename
+        return {
+            "capability": "vision",
+            "capability_label": "通用视觉 · 快速" if fast else "通用视觉",
+            "capability_priority": 110 if fast else 100 if plus else 120,
+            "likely_vision": True,
+        }
+
+    return {
+        "capability": "text",
+        "capability_label": "",
+        "capability_priority": 900,
+        "likely_vision": False,
+    }
+
+
+def _likely_vision_model(model_id: str, item: Mapping[str, object]) -> bool:
+    return bool(_vision_model_capability(model_id, item)["likely_vision"])
 
 
 def _normalize_model_list(data: object) -> list[Dict[str, object]]:
@@ -500,11 +584,12 @@ def _normalize_model_list(data: object) -> list[Dict[str, object]]:
             continue
         seen.add(model_id)
         owned_by = str(item.get("owned_by") or item.get("provider") or "").strip()
+        capability = _vision_model_capability(model_id, item)
         models.append(
             {
                 "id": model_id,
                 "owned_by": owned_by[:160],
-                "likely_vision": _likely_vision_model(model_id, item),
+                **capability,
             }
         )
         if len(models) >= MAX_DISCOVERED_MODELS:
@@ -513,7 +598,7 @@ def _normalize_model_list(data: object) -> list[Dict[str, object]]:
         raise VisionAPIError("接口没有返回可选模型，请手动填写模型名称。")
     models.sort(
         key=lambda item: (
-            not bool(item.get("likely_vision")),
+            int(item.get("capability_priority") or 0),
             str(item.get("id") or "").casefold(),
         )
     )

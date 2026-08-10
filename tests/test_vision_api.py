@@ -552,6 +552,19 @@ class VisionAPIConfigTests(unittest.TestCase):
             opener = _FakeModelsOpener(
                 {
                     "data": [
+                        {"id": "deepseek-v4-flash", "owned_by": "deepseek"},
+                        {"id": "qwen-long", "owned_by": "qwen"},
+                        {"id": "qwen3-omni-flash", "owned_by": "qwen"},
+                        {"id": "qwen3-vl-flash", "owned_by": "qwen"},
+                        {"id": "qwen-vl-ocr-2025-11-20", "owned_by": "qwen"},
+                        {"id": "qwen-vl-ocr-latest", "owned_by": "qwen"},
+                        {"id": "qwen3.5-ocr", "owned_by": "qwen"},
+                        {"id": "vendor-document-ocr", "owned_by": "vendor"},
+                        {
+                            "id": "vendor-multimodal-model",
+                            "owned_by": "vendor",
+                            "input_modalities": ["text", "image"],
+                        },
                         {"id": "text-model", "owned_by": "relay"},
                         {"id": "qwen3-vl-plus", "owned_by": "qwen"},
                         {"id": "qwen3-vl-plus", "owned_by": "duplicate"},
@@ -574,10 +587,47 @@ class VisionAPIConfigTests(unittest.TestCase):
                 )
 
             self.assertFalse(path.exists())
-            self.assertEqual(result["count"], 2)
-            self.assertEqual(result["models"][0]["id"], "qwen3-vl-plus")
-            self.assertTrue(result["models"][0]["likely_vision"])
-            self.assertEqual(result["models"][1]["id"], "text-model")
+            self.assertEqual(result["count"], 11)
+            self.assertEqual(
+                [item["id"] for item in result["models"]],
+                [
+                    "qwen3.5-ocr",
+                    "qwen-vl-ocr-latest",
+                    "qwen-vl-ocr-2025-11-20",
+                    "vendor-document-ocr",
+                    "qwen3-vl-plus",
+                    "qwen3-vl-flash",
+                    "vendor-multimodal-model",
+                    "qwen3-omni-flash",
+                    "qwen-long",
+                    "text-model",
+                    "deepseek-v4-flash",
+                ],
+            )
+            by_id = {item["id"]: item for item in result["models"]}
+            self.assertEqual(
+                by_id["qwen3.5-ocr"]["capability_label"],
+                "OCR专用 · 推荐",
+            )
+            self.assertEqual(
+                by_id["qwen-vl-ocr-2025-11-20"]["capability_label"],
+                "OCR专用 · 固定版本",
+            )
+            self.assertEqual(
+                by_id["qwen3-vl-flash"]["capability_label"],
+                "通用视觉 · 快速",
+            )
+            self.assertEqual(
+                by_id["qwen3-omni-flash"]["capability_label"],
+                "全模态",
+            )
+            self.assertEqual(by_id["qwen-long"]["capability"], "text")
+            self.assertFalse(by_id["qwen-long"]["likely_vision"])
+            self.assertEqual(
+                by_id["deepseek-v4-flash"]["capability_label"],
+                "不支持图片",
+            )
+            self.assertFalse(by_id["deepseek-v4-flash"]["likely_vision"])
             self.assertEqual(opener.request.get_method(), "GET")
             self.assertEqual(
                 opener.request.full_url,
