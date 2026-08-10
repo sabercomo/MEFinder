@@ -153,7 +153,6 @@ async function testMineruConnection() {
 
 /* ═══ Optional OpenAI-compatible vision providers ═══ */
 var VISION_BRAND_RULES = [
-  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com'},
   {re: /dashscope|aliyuncs/i, name: '通义千问', color: '#615CED', icon: 'qwen-color.svg', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
   {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', iconBg: '#101319', base: 'https://api.moonshot.cn/v1'},
   {re: /bigmodel|zhipu/i, name: '智谱 GLM', color: '#3859FF', icon: 'zhipu-color.svg', base: 'https://open.bigmodel.cn/api/paas/v4'},
@@ -170,7 +169,8 @@ var VISION_BRAND_RULES = [
   {re: /(^|\W)x\.ai|grok/i, name: 'Grok', color: '#1D1F23', icon: 'grok.svg', base: 'https://api.x.ai/v1'},
   {re: /mistral/i, name: 'Mistral', color: '#FA520F', icon: 'mistral-color.svg', base: 'https://api.mistral.ai/v1'},
   {re: /groq/i, name: 'Groq', color: '#F55036', icon: 'groq.svg', base: 'https://api.groq.com/openai/v1'},
-  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'}
+  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'},
+  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com', unsupported: true}
 ];
 var VISION_AVATAR_PALETTE = ['#1677FF', '#7B5EC7', '#C9446A', '#B85C2B', '#637A50', '#0E8A8A', '#B0499B', '#4D6BFE'];
 var VISION_PLUS_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
@@ -273,6 +273,7 @@ function renderVisionBasePop() {
           + '" data-base="' + esc(rule.base) + '">'
           + visionAvatarHtml({api_base: rule.base, name: rule.name}, 'vision-avatar-sm')
           + '<span class="vision-base-name">' + esc(rule.name) + '</span>'
+          + (rule.unsupported ? '<span class="vision-model-badge capability-unsupported">不支持图片</span>' : '')
           + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
           + '</div>';
       }).join('');
@@ -820,7 +821,7 @@ function renderVisionProviders() {
       list.innerHTML = '<div class="vision-provider-empty">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
         + '<strong>尚未添加其他解析接口</strong>'
-        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问、DeepSeek 等视觉模型</span>'
+        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问等视觉模型</span>'
         + '</div>';
     } else {
       var editingId = (document.getElementById('vision-provider-id') || {}).value || '';

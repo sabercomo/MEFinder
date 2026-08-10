@@ -408,6 +408,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("capability-unsupported", HTML)
         self.assertNotIn("可能支持图片", HTML)
 
+        brand_start = HTML.index("var VISION_BRAND_RULES = [")
+        brand_end = HTML.index("];", brand_start)
+        brand_rules = HTML[brand_start:brand_end]
+        self.assertGreater(
+            brand_rules.index("{re: /deepseek/i"),
+            brand_rules.index("{re: /together/i"),
+        )
+        self.assertIn("base: 'https://api.deepseek.com', unsupported: true", brand_rules)
+        self.assertIn(
+            'vision-model-badge capability-unsupported">不支持图片',
+            HTML,
+        )
+        self.assertNotIn("通义千问、DeepSeek 等视觉模型", HTML)
+
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('id="backup-settings"', HTML)
         self.assertIn('data-target="backup-settings"', HTML)
