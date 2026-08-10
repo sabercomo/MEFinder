@@ -282,7 +282,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
         self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('calibrated','页码已校准'", HTML)
+        self.assertIn("statusStatButton('calibrated','已校准'", HTML)
         self.assertIn("statusStatButton('page_pending','页码待处理'", HTML)
         self.assertIn("statusStatButton('bibliographic','书目待补全'", HTML)
         self.assertNotIn("statusStatButton('pending','待校准'", HTML)
@@ -333,10 +333,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 切到别的文献前拦截；同一文献重选不打扰。
         self.assertIn("var switchingDoc = sourceId !== libSelectedId;", HTML)
         self.assertIn("if (switchingDoc && !await guardLeaveDetail()) return;", HTML)
-        # 顶部状态筛选与三条筛选条离开详情前都拦截。
+        # 顶部状态筛选、筛选弹层选档、移除 chip 离开详情前都拦截。
         self.assertIn("async function applyLibStatusFilter(status)", HTML)
-        self.assertIn("async function setLibFilter(btn)", HTML)
-        self.assertIn("async function setLibDocTypeFilter(btn)", HTML)
+        self.assertIn("async function setLibFacet(event, kind, value)", HTML)
+        self.assertIn("async function removeLibFacet(event, kind)", HTML)
         # 任一字段输入即置脏。
         self.assertIn("event.target.closest('#bibliographic-editor')) bibEditorDirty = true;", HTML)
         # 保存成功后清脏并回到查看态。
@@ -388,12 +388,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function clearLibraryFilters()", HTML)
         self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
-        # 著作正向计数（不再用减法），未识别单列一档。
+        # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
         self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
         self.assertIn("!isBibliographicTypeConfirmed(sourceBibliographicMetadata(s))", HTML)
-        self.assertIn('data-doctype="unknown"', HTML)
-        self.assertIn("dt === 'unknown' ? '未识别'", HTML)
-        self.assertIn("btn.style.display = unknownCount > 0 ? '' : 'none'", HTML)
+        self.assertIn("if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount})", HTML)
 
     def test_keyboard_focus_visibility_and_reduced_motion(self) -> None:
         """Phase 5：常用可交互元素有键盘焦点环；尊重系统减弱动态效果。"""
@@ -589,18 +587,19 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
     def test_library_header_and_controls_reflow_in_narrow_windows(self) -> None:
         controls_rule = HTML.split('.library-controls-row {', 1)[1].split('}', 1)[0]
         line_rule = HTML.split('.library-controls-line {', 1)[1].split('}', 1)[0]
-        filters_rule = HTML.split('.library-filter-controls {', 1)[1].split('}', 1)[0]
+        spacer_rule = HTML.split('.library-controls-spacer {', 1)[1].split('}', 1)[0]
+        stats_rule = HTML.split('.library-stats-row {', 1)[1].split('}', 1)[0]
         self.assertIn('flex-direction: column;', controls_rule)
         self.assertIn('align-items: stretch;', controls_rule)
-        # Each line spreads its left/right groups to opposite edges and wraps.
-        self.assertIn('justify-content: space-between;', line_rule)
+        # The single control line wraps; left/right groups split via a flexible spacer.
         self.assertIn('flex-wrap: wrap;', line_rule)
         self.assertIn('width: 100%;', line_rule)
-        # Filters grow and wrap internally so the view switch stays pinned right.
-        self.assertIn('flex: 1 1 auto;', filters_rule)
+        # The spacer grows so view + sort + 补全 stay pinned right of the filter button.
+        self.assertIn('flex: 1 1 auto;', spacer_rule)
+        # Stats split into 待处理 / 参考量 groups and wrap on narrow widths.
+        self.assertIn('flex-wrap: wrap;', stats_rule)
         self.assertIn('@media (max-width: 1100px)', HTML)
         self.assertIn('#page-library .page-header-row { flex-wrap: wrap; }', HTML)
-        self.assertIn('#page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }', HTML)
 
     def test_library_supports_click_and_drag_multi_selection_for_pdf_and_word_removal(self) -> None:
         for element_id in (

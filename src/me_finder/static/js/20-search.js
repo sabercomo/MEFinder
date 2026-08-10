@@ -379,25 +379,19 @@ function showDetail(item) {
     + '</div>'
     + '</div>'
     + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
-    + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
-    + '<span class="app-select detail-copy-control" id="detail-copy-control">'
-    + '<button class="action-btn app-select-trigger detail-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-copy-control\')"><span>复制</span>' + detailMenuChevron + '</button>'
-    + '<span class="app-select-menu detail-action-menu detail-copy-menu" role="menu" aria-label="复制操作">'
-    + '<span class="detail-menu-section" role="group" aria-label="复制出处所用引文格式">'
-    + '<span class="detail-menu-label" id="detail-citation-style-label">引文格式 · ' + citationStyleLabel + '</span>'
+    + '<span class="app-select detail-format-control" id="detail-format-control">'
+    + '<button class="action-btn app-select-trigger detail-format-trigger" type="button" aria-label="选择出处格式" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-format-control\')"><span id="detail-citation-style-label">' + citationStyleLabel + '</span>' + detailMenuChevron + '</button>'
+    + '<span class="app-select-menu detail-format-menu" role="menu" aria-label="出处格式">'
     + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
     + '</span>'
-    + '<span class="detail-action-menu-divider"></span>'
-    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-original\')">复制原文</button>'
-    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-citation\')">复制出处</button>'
-    + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'copy-combined\')">复制原文与出处</button>'
     + '</span>'
-    + '</span>'
-    + (item.source_file_id || (citationIncomplete && item.source_type === 'pdf') ? '<span class="app-select detail-more-control" id="detail-more-control">'
+    + '<button class="action-btn" type="button" onclick="copySelectedCitation()">复制出处</button>'
+    + (item.source_file_id ? '<button class="action-btn" type="button" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
+    + (item.source_file_id ? '<button class="action-btn primary" type="button" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
+    + (citationIncomplete && item.source_type === 'pdf' ? '<span class="app-select detail-more-control" id="detail-more-control">'
       + '<button class="action-btn app-select-trigger detail-more-trigger" type="button" aria-label="更多操作" title="更多操作" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-more-control\')">⋯</button>'
-      + '<span class="app-select-menu detail-action-menu detail-more-menu" role="menu" aria-label="更多操作">'
-      + (item.source_file_id ? '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'open-structured\')">查看结构化文本</button>' : '')
-      + (citationIncomplete && item.source_type === 'pdf' ? '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'complete-metadata\')">补全书目信息</button>' : '')
+      + '<span class="app-select-menu detail-more-menu" role="menu" aria-label="更多操作">'
+      + '<button class="app-select-option detail-action-option" type="button" role="menuitem" onclick="runSearchDetailAction(event,\'complete-metadata\')">补全书目信息</button>'
       + '</span>'
       + '</span>' : '')
     + '</div>'
@@ -559,7 +553,7 @@ function selectCitationStyle(event, style) {
   event.stopPropagation();
   setCitationStyle(style, true);
   var label = document.getElementById('detail-citation-style-label') || document.getElementById('citation-style-label');
-  if (label) label.textContent = '引文格式 · ' + citationStyleDisplayLabel(citationStyle);
+  if (label) label.textContent = citationStyleDisplayLabel(citationStyle);
   document.querySelectorAll('#citation-style-control .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === citationStyle);
   });
@@ -595,10 +589,6 @@ function updateDetailCitationAvailability() {
 function runSearchDetailAction(event, action) {
   if (event) event.stopPropagation();
   closeAppSelects();
-  if (action === 'copy-original') { copySelectedOriginal(); return; }
-  if (action === 'copy-citation') { copySelectedCitation(); return; }
-  if (action === 'copy-combined') { copySelectedOriginalAndCitation(); return; }
-  if (action === 'open-structured') { openSelectedStructuredReader(); return; }
   if (action === 'complete-metadata') {
     const item = selectedResult();
     if (item) openMetadataForSource(item.source_file_id || '');
@@ -612,26 +602,11 @@ function showCitationMetadataError(item) {
   showToast('无法复制：缺少' + missing.map(function(x){return labels[x] || x;}).join('、'));
 }
 
-function copySelectedOriginal() {
-  const item = selectedResult();
-  if (!item) return;
-  copyText(item.paragraph_text || '');
-}
-
 function copySelectedCitation() {
   const item = selectedResult();
   if (!item) return;
   if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }
   copyText(citationForItem(item));
-}
-
-function copySelectedOriginalAndCitation() {
-  const item = selectedResult();
-  if (!item) return;
-  if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }
-  const original = item.paragraph_text || '';
-  const citation = citationForItem(item);
-  copyText(original + (citation ? '\n\n' + citation : ''));
 }
 
 function copyText(text) {

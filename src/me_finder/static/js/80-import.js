@@ -24,6 +24,11 @@ function initDropZone() {
   zone.addEventListener('dragleave', function() {
     zone.classList.remove('dragover');
   });
+  zone.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    zone.click();
+  });
   zone.addEventListener('drop', function(e) {
     e.preventDefault();
     zone.classList.remove('dragover');
@@ -833,6 +838,7 @@ function renderImportQueue() {
   var itemsEl = document.getElementById('import-items');
   if (importQueue.length === 0) {
     queueEl.style.display = 'none';
+    syncResumeAllButton();
     return;
   }
   queueEl.style.display = 'block';
@@ -1242,4 +1248,3 @@ async function retryImportWithVision(id) {
     showToast('切换解析接口失败：' + e.message);
   }
 }
-

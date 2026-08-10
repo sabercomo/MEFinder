@@ -548,18 +548,50 @@ function configuredVisionProviders() {
   });
 }
 
-// 导入页“其他视觉 API”选择器：与设置页同一套 .app-select + 厂商 logo（visionAvatarHtml），
-// 不再用原生 <select>。选中值存在容器的 data-value 上，selectedVisionProviderId 读它。
+var importVisionProviderQuery = '';
+
+function importVisionProviderSearchText(provider) {
+  return [provider.name, provider.model, provider.api_base, visionHostLabel(provider.api_base)]
+    .map(function(value) { return String(value || '').toLowerCase(); })
+    .join(' ');
+}
+
+function renderImportVisionProviderOptions() {
+  var menu = document.getElementById('import-vision-provider-options');
+  var container = document.getElementById('import-vision-provider');
+  if (!menu || !container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var query = importVisionProviderQuery.trim().toLowerCase();
+  var filtered = query
+    ? providers.filter(function(provider) { return importVisionProviderSearchText(provider).indexOf(query) >= 0; })
+    : providers;
+  var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
+  var search = providers.length > 8
+    ? '<div class="import-vision-search-wrap"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>'
+      + '<input class="import-vision-search" id="import-vision-provider-filter" type="search" autocomplete="off" aria-label="搜索 API 或模型" placeholder="搜索 API、模型或 endpoint…" value="' + esc(importVisionProviderQuery) + '" oninput="filterImportVisionProviders(this.value)" onkeydown="importVisionSearchKeydown(event)"></div>'
+    : '';
+  var options = filtered.map(function(provider) {
+    var selected = provider.id === current;
+    return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')" onkeydown="importVisionOptionKeydown(event)">'
+      + visionAvatarHtml(provider, 'vision-avatar-sm')
+      + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
+      + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
+      + (selected ? check : '') + '</button>';
+  }).join('');
+  if (!providers.length) options = '<div class="document-options-empty">请先在设置中配置</div>';
+  else if (!filtered.length) options = '<div class="document-options-empty">没有匹配的 API 或模型</div>';
+  menu.innerHTML = search + '<div class="import-vision-option-list" id="import-vision-provider-list" role="listbox" aria-label="已配置的 API 与模型">' + options + '</div>';
+  positionImportVisionMenu();
+}
+
 function syncImportVisionProviders() {
   var container = document.getElementById('import-vision-provider');
   var options = document.getElementById('import-vision-provider-options');
-  var option = document.getElementById('vision-parse-option');
-  var radio = option ? option.querySelector('input[name="pdf-parse-mode"]') : null;
-  if (!container || !options || !option || !radio) return;
+  if (!container || !options) return;
   var providers = configuredVisionProviders();
   var trigger = container.querySelector('.app-select-trigger');
   if (!providers.length) {
-    options.innerHTML = '<div class="document-options-empty">请先在设置中配置</div>';
     container.dataset.value = '';
   } else {
     var current = container.dataset.value || '';
@@ -568,47 +600,39 @@ function syncImportVisionProviders() {
       current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : providers[0].id;
     }
     container.dataset.value = current;
-    var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
-    options.innerHTML = providers.map(function(provider) {
-      var selected = provider.id === current;
-      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')">'
-        + visionAvatarHtml(provider, 'vision-avatar-sm')
-        + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + '</span>'
-        + '<span class="import-vision-opt-model">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
-        + (selected ? check : '') + '</button>';
-    }).join('');
   }
   var configLink = document.getElementById('vision-parse-config-link');
   if (configLink) configLink.hidden = providers.length > 0;
-  radio.disabled = providers.length === 0;
   if (trigger) trigger.disabled = providers.length === 0;
-  option.classList.toggle('is-disabled', providers.length === 0);
   container.classList.toggle('is-disabled', providers.length === 0);
-  if (!providers.length && radio.checked) {
-    var auto = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
-    if (auto) auto.checked = true;
-  }
+  renderImportVisionProviderOptions();
   updateImportVisionProviderLabel();
 }
 
-// 打开下拉即视作选择“其他视觉 API”这一档，与旧原生 select 的 onchange 行为一致。
-function toggleImportVisionProvider(event) {
-  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
-  if (radio && !radio.disabled) radio.checked = true;
-  toggleAppSelect(event, 'import-vision-provider');
+async function toggleImportVisionProvider(event) {
+  await toggleAppSelect(event, 'import-vision-provider');
+  var container = document.getElementById('import-vision-provider');
+  if (!container || !container.classList.contains('is-open')) return;
+  importVisionProviderQuery = '';
+  renderImportVisionProviderOptions();
+  requestAnimationFrame(function() {
+    positionImportVisionMenu();
+    if (configuredVisionProviders().length > 8) {
+      var input = document.getElementById('import-vision-provider-filter');
+      if (input) input.focus();
+    }
+  });
 }
 
 function selectImportVisionProvider(event, providerId) {
   if (event) event.stopPropagation();
   var container = document.getElementById('import-vision-provider');
   if (container) container.dataset.value = providerId;
-  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
-  if (radio && !radio.disabled) radio.checked = true;
-  document.querySelectorAll('#import-vision-provider-options .app-select-option').forEach(function(opt) {
-    opt.classList.toggle('is-selected', opt.dataset.value === providerId);
-  });
+  importVisionProviderQuery = '';
   updateImportVisionProviderLabel();
   closeAppSelects();
+  renderImportVisionProviderOptions();
+  if (typeof renderImportQueue === 'function') renderImportQueue();
 }
 
 function updateImportVisionProviderLabel() {
@@ -623,6 +647,97 @@ function updateImportVisionProviderLabel() {
   }
   label.innerHTML = visionAvatarHtml(provider, 'vision-avatar-sm')
     + '<span class="import-vision-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>';
+}
+
+function filterImportVisionProviders(value) {
+  importVisionProviderQuery = String(value || '');
+  renderImportVisionProviderOptions();
+  var input = document.getElementById('import-vision-provider-filter');
+  if (input) {
+    input.focus();
+    var end = input.value.length;
+    input.setSelectionRange(end, end);
+  }
+}
+
+function importVisionVisibleOptions() {
+  return Array.from(document.querySelectorAll('#import-vision-provider-list .import-vision-option'));
+}
+
+function focusImportVisionOption(index) {
+  var options = importVisionVisibleOptions();
+  if (!options.length) return;
+  var target = options[(index + options.length) % options.length];
+  target.focus();
+  target.scrollIntoView({block: 'nearest'});
+}
+
+async function importVisionTriggerKeydown(event) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  event.stopPropagation();
+  var container = document.getElementById('import-vision-provider');
+  if (!container || !container.classList.contains('is-open')) await toggleImportVisionProvider(event);
+  if (configuredVisionProviders().length > 8) return;
+  var options = importVisionVisibleOptions();
+  var selected = options.findIndex(function(option) { return option.classList.contains('is-selected'); });
+  focusImportVisionOption(event.key === 'ArrowUp' ? (selected >= 0 ? selected : options.length) - 1 : selected >= 0 ? selected : 0);
+}
+
+function importVisionSearchKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAppSelects();
+    var trigger = document.querySelector('#import-vision-provider .app-select-trigger');
+    if (trigger) trigger.focus();
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    focusImportVisionOption(0);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    focusImportVisionOption(importVisionVisibleOptions().length - 1);
+  }
+}
+
+function importVisionOptionKeydown(event) {
+  var options = importVisionVisibleOptions();
+  var index = options.indexOf(event.currentTarget);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    focusImportVisionOption(index + (event.key === 'ArrowDown' ? 1 : -1));
+  } else if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault();
+    focusImportVisionOption(event.key === 'Home' ? 0 : options.length - 1);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAppSelects();
+    var trigger = document.querySelector('#import-vision-provider .app-select-trigger');
+    if (trigger) trigger.focus();
+  }
+}
+
+function positionImportVisionMenu() {
+  var container = document.getElementById('import-vision-provider');
+  var menu = document.getElementById('import-vision-provider-options');
+  var trigger = container ? container.querySelector('.app-select-trigger') : null;
+  if (!container || !menu || !trigger || !container.classList.contains('is-open')) return;
+  var rect = trigger.getBoundingClientRect();
+  var viewportWidth = window.innerWidth;
+  var viewportHeight = window.innerHeight;
+  var margin = 12;
+  var gap = 7;
+  var width = Math.min(720, Math.max(rect.width, Math.min(440, viewportWidth - margin * 2)), viewportWidth - margin * 2);
+  menu.style.width = Math.max(0, width) + 'px';
+  menu.style.left = Math.max(margin, Math.min(rect.left, viewportWidth - margin - width)) + 'px';
+  var height = Math.min(menu.scrollHeight, 360, viewportHeight - margin * 2);
+  var below = viewportHeight - rect.bottom - gap - margin;
+  var above = rect.top - gap - margin;
+  var opensUp = below < height && above > below;
+  var top = opensUp ? Math.max(margin, rect.top - gap - height) : Math.min(rect.bottom + gap, viewportHeight - margin - height);
+  menu.style.top = Math.max(margin, top) + 'px';
+  menu.dataset.placement = opensUp ? 'top' : 'bottom';
 }
 
 function renderVisionProviders() {
@@ -969,4 +1084,3 @@ async function setVisionAutoFallback(enabled) {
     showToast('保存自动切换设置失败：' + e.message);
   }
 }
-

@@ -72,10 +72,127 @@ function renderLibraryStats() {
     else current.page_pending += 1;
     if (bibliographicMissingFields(sourceBibliographicMetadata(item)).length > 0) current.bibliographic += 1;
   });
-  container.innerHTML = statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('calibrated','页码已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+  // W1：拆成「待处理」行动组（重）+「参考量」组（轻），一眼看出现在该处理什么。
+  container.innerHTML = '<div class="stat-group stat-group--pending"><span class="stat-group__label">待处理</span>'
     + statusStatButton('page_pending','页码待处理',current.page_pending,'warning','notice',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter');
+    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter')
+    + '</div><span class="library-controls-spacer"></span>'
+    + '<div class="stat-group stat-group--reference">'
+    + statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+    + '</div>';
+}
+
+// 主流范式（Notion / Linear / Zotero）：三个筛选收进一个「筛选」按钮 + 弹层分面；
+// 只有正在生效的筛选才作为可删 chip 露出来，按钮带数字角标。渲染由 renderLibraryList 触发。
+function libDocTypeLabel(v) {
+  return v === 'book' ? '著作' : v === 'journal_article' ? '期刊论文'
+    : v === 'thesis' ? '学位论文' : v === 'unknown' ? '未识别' : '全部类型';
+}
+
+// 当前生效的（非「全部」）筛选，按「类型 → 语言 → 文件」次序，供角标与 chips 使用。
+function libFilterActiveList() {
+  var out = [];
+  if (libDocTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libDocTypeFilter)});
+  if (libLangFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libLangFilter)});
+  if (libTypeFilter !== 'all') out.push({kind:'type', label:libTypeFilter === 'word' ? 'Word' : 'PDF'});
+  return out;
+}
+
+function renderLibraryFilterBar() {
+  var allCount = libSources.length;
+  var wordCount = libSources.filter(function(s){ return s.source_type === 'word'; }).length;
+  var pdfCount = libSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
+  var chineseCount = libSources.filter(function(s){ return (s.language || 'chinese') === 'chinese'; }).length;
+  var foreignCount = allCount - chineseCount;
+  var journalCount = libSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
+  var thesisCount = libSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
+  // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
+  var bookCount = libSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
+  var unknownCount = libSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
+
+  var doctypeOpts = [
+    {v:'all', label:'全部类型', n:allCount},
+    {v:'book', label:'著作', n:bookCount},
+    {v:'journal_article', label:'期刊论文', n:journalCount},
+    {v:'thesis', label:'学位论文', n:thesisCount}
+  ];
+  if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
+
+  // 语言：默认语言那一档排在另一档之前，让主语言文献靠前（沿用旧 order 主次）。
+  var other = libDefaultLanguage === 'chinese' ? 'foreign' : 'chinese';
+  var langOpts = [
+    {v:'all', label:'全部语言', n:allCount},
+    {v:libDefaultLanguage, label:libLangChipLabel(libDefaultLanguage), n:libDefaultLanguage === 'chinese' ? chineseCount : foreignCount},
+    {v:other, label:libLangChipLabel(other), n:other === 'chinese' ? chineseCount : foreignCount}
+  ];
+
+  var typeOpts = [
+    {v:'all', label:'全部', n:allCount},
+    {v:'word', label:'Word', n:wordCount},
+    {v:'pdf', label:'PDF', n:pdfCount}
+  ];
+
+  renderLibraryFacet('filter-opts-doctype', doctypeOpts, libDocTypeFilter, 'doctype');
+  renderLibraryFacet('filter-opts-lang', langOpts, libLangFilter, 'lang');
+  renderLibraryFacet('filter-opts-type', typeOpts, libTypeFilter, 'type');
+
+  var active = libFilterActiveList();
+  var badge = document.getElementById('library-filter-badge');
+  if (badge) { badge.textContent = String(active.length); badge.hidden = active.length === 0; }
+  var container = document.getElementById('library-filter');
+  if (container) container.classList.toggle('has-active', active.length > 0);
+  var chips = document.getElementById('library-filter-chips');
+  if (chips) {
+    chips.innerHTML = active.map(function(a){
+      return '<button class="library-filter-chip" type="button" title="移除筛选：' + esc(a.label) + '" aria-label="移除筛选：' + esc(a.label) + '" onclick="removeLibFacet(event,\'' + a.kind + '\')">'
+        + '<span>' + esc(a.label) + '</span>'
+        + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
+    }).join('');
+  }
+}
+
+function renderLibraryFacet(containerId, options, active, kind) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = options.map(function(o){
+    return '<button class="filter-opt' + (o.v === active ? ' is-on' : '') + '" type="button" role="option" aria-selected="' + (o.v === active) + '" data-value="' + o.v + '" onclick="setLibFacet(event,\'' + kind + '\',\'' + o.v + '\')">'
+      + '<span>' + esc(o.label) + '</span><span class="filter-opt-n">' + o.n + '</span></button>';
+  }).join('');
+}
+
+// 选中某个分面：立即生效并重绘（弹层保持打开，可连续多选，Notion 式）。
+async function setLibFacet(event, kind, value) {
+  if (event) event.stopPropagation();
+  if (!await guardLeaveDetail()) return;
+  if (kind === 'doctype') libDocTypeFilter = value;
+  else if (kind === 'lang') libLangFilter = value;
+  else if (kind === 'type') {
+    libTypeFilter = value;
+    if (libTypeFilter === 'word' && libStatusFilter !== 'all') { libStatusFilter = 'all'; renderLibraryStats(); }
+  }
+  closeLibDrawer();
+  renderLibraryList();
+}
+
+// 移除单个生效筛选（点 chip 的 ✕），把该分面复位到「全部」。
+async function removeLibFacet(event, kind) {
+  if (event) event.stopPropagation();
+  if (!await guardLeaveDetail()) return;
+  if (kind === 'doctype') libDocTypeFilter = 'all';
+  else if (kind === 'lang') libLangFilter = 'all';
+  else if (kind === 'type') libTypeFilter = 'all';
+  closeLibDrawer();
+  renderLibraryList();
+}
+
+// 切换排序方向（升/降），合并排序控件里的方向按钮。
+function toggleLibrarySortDirection() {
+  libSortDirection = libSortDirection === 'asc' ? 'desc' : 'asc';
+  try { localStorage.setItem('meFinderLibrarySortDirection', libSortDirection); } catch (_) {}
+  syncLibrarySortControls();
+  closeAppSelects();
+  renderLibraryList();
 }
 
 async function applyLibStatusFilter(status) {
@@ -83,35 +200,10 @@ async function applyLibStatusFilter(status) {
   var requested = status || 'all';
   libStatusFilter = requested === libStatusFilter ? 'all' : requested;
   if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
-    libTypeFilter = 'all';
-    document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.type === 'all');
-    });
+    libTypeFilter = 'all';  // 筛选按钮/chips 由 renderLibraryFilterBar 随列表重绘刷新
   }
   closeLibDrawer();
   renderLibraryStats();
-  renderLibraryList();
-}
-
-async function setLibFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libTypeFilter = btn.dataset.type;
-  if (libTypeFilter === 'word' && libStatusFilter !== 'all') {
-    libStatusFilter = 'all';
-    renderLibraryStats();
-  }
-  document.querySelectorAll('#lib-type-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
-  renderLibraryList();
-}
-
-async function setLibLangFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libLangFilter = btn.dataset.lang;
-  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
   renderLibraryList();
 }
 
@@ -138,19 +230,7 @@ function syncLibDefaultLanguageControl() {
   });
 }
 
-// 文字系统事实（'chinese' / 'foreign'）→ 语言筛选条上的显示标签。
-// 标签始终是「中文 / 外文」；默认语言不改标签文字，只改两档的排列主次
-// （见 renderLibraryList 里对 style.order 的设置）。
-async function setLibDocTypeFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libDocTypeFilter = btn.dataset.doctype;
-  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
-  renderLibraryList();
-}
-
-// 清空所有筛选与搜索，回到全部（空态「清除全部筛选」用）。
+// 清空所有筛选与搜索，回到全部（空态「清除全部筛选」、筛选弹层「清除全部」用）。
 function clearLibraryFilters() {
   libTypeFilter = 'all';
   libLangFilter = 'all';
@@ -158,9 +238,6 @@ function clearLibraryFilters() {
   libStatusFilter = 'all';
   var search = document.getElementById('lib-search');
   if (search) search.value = '';
-  document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.type === 'all'); });
-  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.lang === 'all'); });
-  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.doctype === 'all'); });
   renderLibraryStats();
   renderLibraryList();
 }
@@ -209,15 +286,18 @@ function setLibrarySortOption(event, control, value) {
 function syncLibrarySortControls() {
   var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',source_type:'来源类型',status:'校准状态',desc:'降序',asc:'升序'};
   var fieldLabel = document.getElementById('library-sort-field-label');
-  var directionLabel = document.getElementById('library-sort-direction-label');
   if (fieldLabel) fieldLabel.textContent = labels[libSortField] || labels.imported_at;
-  if (directionLabel) directionLabel.textContent = labels[libSortDirection] || labels.desc;
   document.querySelectorAll('#library-sort-field-select .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === libSortField);
   });
-  document.querySelectorAll('#library-sort-direction-select .app-select-option').forEach(function(option) {
-    option.classList.toggle('is-selected', option.dataset.value === libSortDirection);
-  });
+  // 方向合并成一个可点按钮：文案随升/降切换，箭头方向靠 .is-asc 翻转。
+  var dirBtn = document.getElementById('library-sort-dir');
+  var dirLabel = document.getElementById('library-sort-dir-label');
+  if (dirLabel) dirLabel.textContent = labels[libSortDirection] || labels.desc;
+  if (dirBtn) {
+    dirBtn.classList.toggle('is-asc', libSortDirection === 'asc');
+    dirBtn.setAttribute('aria-label', libSortDirection === 'asc' ? '升序，点击改为降序' : '降序，点击改为升序');
+  }
 }
 
 function compareLibraryDates(a, b) {
@@ -406,38 +486,8 @@ function renderLibraryList() {
       libDeleteSelection.delete(sourceId);
     }
   });
-  const allCount = libSources.length;
-  const wordCount = libSources.filter(s => s.source_type === 'word').length;
-  const pdfCount = libSources.filter(s => s.source_type === 'pdf').length;
-  document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(btn) {
-    var t = btn.dataset.type;
-    var c = t === 'all' ? allCount : t === 'word' ? wordCount : pdfCount;
-    var label = t === 'all' ? '全部' : t === 'word' ? 'Word' : 'PDF';
-    btn.textContent = label + ' (' + c + ')';
-  });
-  const chineseCount = libSources.filter(s => (s.language || 'chinese') === 'chinese').length;
-  const foreignCount = libSources.length - chineseCount;
-  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(btn) {
-    var lang = btn.dataset.lang;
-    var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
-    var label = lang === 'all' ? '全部语言' : libLangChipLabel(lang);
-    btn.textContent = label + ' (' + count + ')';
-    // 默认语言那一档排在「全部语言」之后、另一档之前，让主语言文献靠前。
-    btn.style.order = lang === 'all' ? '0' : (lang === libDefaultLanguage ? '1' : '2');
-  });
-  const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
-  const thesisCount = libSources.filter(s => libraryDocType(s) === 'thesis').length;
-  // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
-  const bookCount = libSources.filter(s => s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book').length;
-  const unknownCount = libSources.filter(s => s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s))).length;
-  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(btn) {
-    var dt = btn.dataset.doctype;
-    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : dt === 'thesis' ? thesisCount : dt === 'unknown' ? unknownCount : bookCount;
-    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : dt === 'thesis' ? '学位论文' : dt === 'unknown' ? '未识别' : '著作';
-    btn.textContent = label + ' (' + count + ')';
-    // 没有未识别文献时隐藏该档，避免长期占位。
-    if (dt === 'unknown') btn.style.display = unknownCount > 0 ? '' : 'none';
-  });
+  // 筛选按钮角标 + 生效 chips + 弹层三组分面（含实时计数），一处渲染。
+  renderLibraryFilterBar();
 
   libraryRenderToken += 1;
   if (sources.length === 0) {

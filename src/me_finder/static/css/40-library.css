@@ -76,20 +76,56 @@
   min-width: 0;
   flex-wrap: wrap;
 }
-.library-filter-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.library-filter-controls .segmented-control { flex: 0 0 auto; margin-top: 0; }
-.library-controls-line .view-switch { flex: 0 0 auto; }
-/* Toolbar stacks two rows: filters + 补全书目 (pinned right), then view + sort. */
+/* W1 工具栏（Notion / Linear / Zotero 范式）：统计分组一行 + 控件一行。
+   控件行：全选 · 筛选按钮 · 生效 chips —spacer— 视图 · 合并排序 · 联网补全 · 补全书目。 */
 #library-toolbar-line { display: flex; flex-direction: column; gap: 12px; }
-.library-controls-line-tools { justify-content: flex-start; }
+.library-controls-line .view-switch { flex: 0 0 auto; }
 .library-metadata-btn { flex: 0 0 auto; }
+.library-controls-spacer { flex: 1 1 auto; min-width: 8px; }
+
+/* 统计：左「待处理」组重、右「参考量」组轻。 */
+.library-stats-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.library-stats-row .stat-group { display: flex; align-items: center; gap: 7px; }
+.stat-group__label { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--text-tertiary); white-space: nowrap; }
+.stat-group--reference .status-stat { font-weight: 500; }
+
+/* 筛选：一个按钮 + 弹层分面 + 生效 chips（复用 .app-select 的开合/外点关闭）。 */
+.library-filter { flex: 0 0 auto; }
+.library-filter-btn { min-width: 0; gap: 7px; justify-content: flex-start; }
+.library-filter-icon { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-tertiary); }
+.library-filter.is-open .library-filter-icon { transform: none; }
+.library-filter.has-active .library-filter-btn { border-color: var(--accent); color: var(--accent); }
+.library-filter.has-active .library-filter-icon { color: var(--accent); }
+.library-filter-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-contrast); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.library-filter-badge[hidden] { display: none; }
+.library-filter-pop { left: 0; right: auto; width: 320px; max-width: calc(100vw - 48px); padding: 13px 14px; }
+.filter-facet + .filter-facet { margin-top: 13px; }
+.filter-facet-label { font-size: 11px; font-weight: 700; letter-spacing: .03em; color: var(--text-tertiary); margin-bottom: 7px; }
+.filter-facet-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-opt { display: inline-flex; align-items: center; gap: 6px; height: 29px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border-default); background: var(--surface-secondary); color: var(--text-secondary); font: inherit; font-size: 12.5px; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
+.filter-opt:hover { background: var(--surface-hover); color: var(--text-primary); }
+.filter-opt-n { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
+.filter-opt.is-on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 650; }
+.filter-opt.is-on .filter-opt-n { color: var(--accent); }
+.filter-pop-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--border-subtle); }
+.filter-pop-clear, .filter-pop-done { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.filter-pop-clear { color: var(--text-secondary); }
+.filter-pop-clear:hover, .filter-pop-done:hover { background: var(--surface-hover); }
+.library-filter-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.library-filter-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 5px 0 11px; border-radius: 8px; border: 1px solid var(--info-border); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.library-filter-chip svg { width: 13px; height: 13px; padding: 2px; border-radius: 4px; box-sizing: content-box; }
+.library-filter-chip:hover svg { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* 合并排序：字段下拉 + 方向切换按钮，包在一个 pill 里（不裁剪，否则会切掉字段菜单）。 */
+.library-sort { display: inline-flex; align-items: stretch; flex: 0 0 auto; height: 36px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-primary); }
+.library-sort.is-focus, .library-sort:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.library-sort .library-sort-field-select .app-select-trigger { height: 100%; border: 0; border-radius: 8px 0 0 8px; box-shadow: none; background: transparent; min-width: 0; }
+.library-sort-icon { width: 14px; height: 14px; flex: 0 0 auto; color: var(--text-tertiary); }
+.library-sort-field-select.is-open .app-select-trigger .library-sort-icon { transform: none; }
+.library-sort-dir { display: inline-flex; align-items: center; gap: 3px; height: 100%; padding: 0 11px; border: 0; border-left: 1px solid var(--border-default); border-radius: 0 7px 7px 0; background: var(--surface-secondary); color: var(--accent); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.library-sort-dir:hover { background: var(--surface-hover); }
+.library-sort-dir-arrow { width: 14px; height: 14px; transition: transform 150ms ease; }
+.library-sort-dir.is-asc .library-sort-dir-arrow { transform: rotate(180deg); }
 /* Contextual action bar (Gmail/Drive pattern): while any document is selected
    it replaces the toolbar row, so selection needs no persistent mode button. */
 #page-library.library-selecting #library-toolbar-line { display: none; }
@@ -342,7 +378,6 @@
   #page-library .page-header-row { flex-wrap: wrap; }
   #page-library .page-header-row > :first-child { flex: 1 1 220px; min-width: 200px; }
   #page-library .page-header-meta { flex: 1 1 560px; min-width: 0; }
-  #page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }
 }
 @media (max-width: 720px) {
   #page-library .page-header { padding: 20px 18px 0; }
@@ -350,7 +385,6 @@
   #page-library .page-header-row > :first-child,
   #page-library .page-header-meta { flex-basis: auto; width: 100%; min-width: 0; }
   .library-controls-row { margin-top: 20px; }
-  .library-sort-controls { flex-wrap: wrap; }
 }
 
 /* ── Library drawer ───────────────────────────────────────── */

@@ -179,9 +179,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="page-title">文献库</div>
             <div class="page-subtitle">管理已导入的文献及其索引状态</div>
           </div>
-          <div class="page-header-meta">
-            <div class="calibration-header-stats" id="library-stats"></div>
-          </div>
+          <div class="page-header-meta"></div>
         </div>
         <div class="library-search-wrap">
           <span class="library-search-icon">
@@ -191,49 +189,56 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </div>
         <div class="library-controls-row">
           <div id="library-toolbar-line">
+            <div class="library-stats-row" id="library-stats"></div>
             <div class="library-controls-line">
               <button class="lib-select-all" id="lib-select-all" type="button" role="checkbox" aria-checked="false" aria-label="全选当前筛选结果" title="全选当前筛选结果" onclick="toggleSelectVisibleLibraryDocuments()">
                 <svg class="lib-select-all-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
                 <span class="lib-select-all-dash" aria-hidden="true"></span>
               </button>
-              <div class="library-filter-controls">
-                <div class="segmented-control" id="lib-type-control">
-                  <button class="seg-btn active" data-type="all" onclick="setLibFilter(this)">全部</button>
-                  <button class="seg-btn" data-type="word" onclick="setLibFilter(this)">Word</button>
-                  <button class="seg-btn" data-type="pdf" onclick="setLibFilter(this)">PDF</button>
-                </div>
-                <div class="segmented-control" id="lib-lang-control">
-                  <button class="seg-btn active" data-lang="all" onclick="setLibLangFilter(this)">全部语言</button>
-                  <button class="seg-btn" data-lang="chinese" onclick="setLibLangFilter(this)">中文</button>
-                  <button class="seg-btn" data-lang="foreign" onclick="setLibLangFilter(this)">外文</button>
-                </div>
-                <div class="segmented-control" id="lib-doctype-control">
-                  <button class="seg-btn active" data-doctype="all" onclick="setLibDocTypeFilter(this)">全部类型</button>
-                  <button class="seg-btn" data-doctype="book" onclick="setLibDocTypeFilter(this)">著作</button>
-                  <button class="seg-btn" data-doctype="journal_article" onclick="setLibDocTypeFilter(this)">期刊论文</button>
-                  <button class="seg-btn" data-doctype="thesis" onclick="setLibDocTypeFilter(this)">学位论文</button>
-                  <button class="seg-btn" data-doctype="unknown" style="display:none" onclick="setLibDocTypeFilter(this)">未识别</button>
+              <div class="app-select library-filter" id="library-filter">
+                <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
+                  <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
+                  <span>筛选</span>
+                  <span class="library-filter-badge" id="library-filter-badge" hidden>0</span>
+                </button>
+                <div class="app-select-menu library-filter-pop" role="dialog" aria-label="筛选文献">
+                  <div class="filter-facet">
+                    <div class="filter-facet-label">文献类型</div>
+                    <div class="filter-facet-opts" id="filter-opts-doctype" role="listbox" aria-label="文献类型"></div>
+                  </div>
+                  <div class="filter-facet">
+                    <div class="filter-facet-label">语言</div>
+                    <div class="filter-facet-opts" id="filter-opts-lang" role="listbox" aria-label="语言"></div>
+                  </div>
+                  <div class="filter-facet">
+                    <div class="filter-facet-label">文件</div>
+                    <div class="filter-facet-opts" id="filter-opts-type" role="listbox" aria-label="文件类型"></div>
+                  </div>
+                  <div class="filter-pop-foot">
+                    <button type="button" class="filter-pop-clear" onclick="clearLibraryFilters()">清除全部</button>
+                    <button type="button" class="filter-pop-done" onclick="closeAppSelects()">完成</button>
+                  </div>
                 </div>
               </div>
-              <button class="action-btn library-metadata-btn" type="button" id="batch-cnki-btn" title="联网补全期刊信息" onclick="runCnkiBatchButton()">联网补全</button>
-              <button class="action-btn library-metadata-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
-            </div>
-            <div class="library-controls-line library-controls-line-tools">
+              <div class="library-filter-chips" id="library-filter-chips"></div>
+              <span class="library-controls-spacer"></span>
               <div class="view-switch" role="group" aria-label="文献库显示方式">
                 <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
                 <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
               </div>
-              <div class="library-sort-controls"><span class="library-sort-label">排序</span>
-              <div class="app-select library-sort-field-select" id="library-sort-field-select">
-                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-field-select')"><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button><button class="app-select-option" type="button" data-value="status" onclick="setLibrarySortOption(event,'field','status')">校准状态</button></div>
+              <div class="library-sort" id="library-sort">
+                <div class="app-select library-sort-field-select" id="library-sort-field-select">
+                  <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-field-select')"><svg class="library-sort-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M4 10h6M4 14h3"/></svg><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                  <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button><button class="app-select-option" type="button" data-value="status" onclick="setLibrarySortOption(event,'field','status')">校准状态</button></div>
+                </div>
+                <button class="library-sort-dir" id="library-sort-dir" type="button" title="切换升序 / 降序" aria-label="降序，点击改为升序" onclick="toggleLibrarySortDirection()">
+                  <span id="library-sort-dir-label">降序</span>
+                  <svg class="library-sort-dir-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M6 12l4 4 4-4"/></svg>
+                </button>
               </div>
-              <div class="app-select library-sort-direction-select" id="library-sort-direction-select">
-                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-direction-select')"><span class="app-select-value" id="library-sort-direction-label">降序</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="desc" onclick="setLibrarySortOption(event,'direction','desc')">降序</button><button class="app-select-option" type="button" data-value="asc" onclick="setLibrarySortOption(event,'direction','asc')">升序</button></div>
-              </div>
+              <button class="action-btn library-metadata-btn" type="button" id="batch-cnki-btn" title="联网补全期刊信息" onclick="runCnkiBatchButton()">联网补全</button>
+              <button class="action-btn library-metadata-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
             </div>
-          </div>
         </div>
           <div class="library-selection-bar" id="library-selection-bar" role="toolbar" aria-label="批量操作" aria-live="polite" hidden>
             <button class="library-selection-cancel" type="button" aria-label="取消选择" title="取消选择" onclick="clearLibrarySelection()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
@@ -340,17 +345,16 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="page-header-row">
           <div>
             <div class="page-title">文献导入</div>
-            <div class="page-subtitle">导入 PDF 或 DOCX 文献到本地索引</div>
+            <div class="page-subtitle">导入 PDF 或 DOCX 文献到本地索引；PDF 默认自动解析，也可直接指定强制方式</div>
           </div>
         </div>
       </div>
       <div class="import-content">
-        <div class="import-intro">拖入或点击选择 PDF / DOCX 即可导入；也可扫描整个文件夹批量挑选。原始文件不会被移动或删除，导入时复制到应用语料目录。</div>
-        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="选择要导入的 PDF 或 DOCX 文件" onclick="document.getElementById('file-input').click()">
           <div class="drop-zone-icon">
             <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
           </div>
-          <div class="drop-zone-text">拖放文件到此处，或点击选择</div>
+          <div class="drop-zone-text">拖放 PDF / DOCX 到此处，或点击选择</div>
           <div class="drop-zone-hint">支持单个或多个文件同时导入</div>
           <div class="drop-zone-formats">
             <span class="format-tag">PDF</span>
@@ -358,31 +362,42 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </div>
         </div>
         <input type="file" id="file-input" accept=".pdf,.docx" multiple style="display:none" onchange="handleFileSelect(this.files)">
-        <details class="pdf-parse-details">
-          <summary class="pdf-parse-summary">PDF 解析方式 · 默认自动选择（大多数情况无需更改，点此展开）</summary>
+        <div class="pdf-parse-section">
+          <div class="pdf-parse-heading">
+            <span class="pdf-parse-heading-title">PDF 解析方式</span>
+            <span class="pdf-parse-heading-hint">默认自动，多数文献无需更改</span>
+          </div>
           <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
             <label class="pdf-parse-option">
               <input type="radio" name="pdf-parse-mode" value="auto" checked>
-              <span><strong>自动选择（默认）</strong><small>原生 PDF 快速解析；没有可靠文字层时自动使用 MinerU。适合绝大多数文献</small></span>
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>自动选择</strong><span class="pdf-parse-tag pdf-parse-tag-default">默认</span></span>
+                <small>原生快速解析；文字层不可靠时自动转 MinerU，适合绝大多数文献</small>
+              </span>
             </label>
-            <label class="pdf-parse-option pdf-parse-option-online">
+            <label class="pdf-parse-option">
               <input type="radio" name="pdf-parse-mode" value="mineru">
-              <span><strong>MinerU 在线解析（免费）</strong><small>强制上传 PDF 并进行 OCR，适合乱码、断字或复杂排版</small></span>
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>强制 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-free">免费</span></span>
+                <small>强制上传并 OCR，适合乱码、断字或复杂排版的扫描件</small>
+              </span>
             </label>
-            <label class="pdf-parse-option pdf-parse-option-paid" id="vision-parse-option">
+            <label class="pdf-parse-option pdf-parse-option-vision" id="vision-parse-option">
               <input type="radio" name="pdf-parse-mode" value="vision">
-              <span>
-                <strong>其他视觉 API</strong>
-                <small>使用设置中保存的 OpenAI 兼容视觉模型逐页解析，可能产生调用费用</small>
-                <div class="app-select import-vision-select" id="import-vision-provider" data-value="" onclick="event.stopPropagation()">
-                  <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="选择其他解析 API" onclick="toggleImportVisionProvider(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                  <div class="app-select-menu import-vision-menu" role="listbox" id="import-vision-provider-options"></div>
-                </div>
-                <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>其他视觉 API</strong></span>
+                <small>用已配置的视觉模型逐页强制解析</small>
+                <span class="pdf-parse-provider" onclick="event.stopPropagation()">
+                  <div class="app-select import-vision-select" id="import-vision-provider" data-value="">
+                    <button class="app-select-trigger" type="button" aria-haspopup="dialog" aria-controls="import-vision-provider-list" aria-expanded="false" aria-label="选择视觉解析 API" onclick="toggleImportVisionProvider(event)" onkeydown="importVisionTriggerKeydown(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                    <div class="app-select-menu import-vision-menu" role="dialog" aria-label="视觉解析 API 与模型" id="import-vision-provider-options"></div>
+                  </div>
+                  <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
+                </span>
               </span>
             </label>
           </div>
-        </details>
+        </div>
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>
@@ -510,7 +525,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span id="vision-editor-avatar" class="vision-avatar vision-avatar-lg" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg></span>
                 <div class="vision-editor-titles">
                   <strong id="vision-editor-title">添加解析接口</strong>
-                  <small>兼容 OpenAI Chat Completions 的视觉模型或中转站</small>
+                  <small>兼容 OpenAI Responses / Chat Completions 的视觉模型或中转站</small>
                 </div>
                 <label class="ui-switch" title="启用后可在导入页选择这个接口">
                   <input id="vision-provider-enabled" type="checkbox" checked>
@@ -527,7 +542,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" onclick="toggleVisionBaseList(event)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div id="vision-base-pop" class="vision-model-pop" hidden></div>
                   </div>
-                  <small>从列表选择会自动填写地址和名称；也可以粘贴任意兼容 OpenAI Chat Completions 的地址</small>
+                  <small>从列表选择会自动填写地址和名称；也可以粘贴兼容 OpenAI Responses / Chat Completions 的地址</small>
                 </div>
                 <label class="settings-label" for="vision-api-key">API Key</label>
                 <div class="settings-control">

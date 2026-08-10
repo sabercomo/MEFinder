@@ -70,6 +70,11 @@ document.addEventListener('input', function(event) {
     if (!combo || !combo.querySelector('#vision-api-base')) closeVisionBasePop();
   });
 })();
+(function initImportVisionMenuPositioning() {
+  var scroller = document.querySelector('#page-import .import-content');
+  if (scroller) scroller.addEventListener('scroll', positionImportVisionMenu, {passive: true});
+  window.addEventListener('resize', positionImportVisionMenu);
+})();
 configureDesktopPlatformOptions();
 setupScanDirectoryControls();
 setupLibraryDragSelection();

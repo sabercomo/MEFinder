@@ -576,7 +576,11 @@
   border-color: var(--accent);
 }
 .action-btn.primary:hover { opacity: 0.85; }
-.detail-menu-trigger { min-width: 88px; }
+.detail-format-trigger {
+  min-width: 116px;
+  justify-content: space-between;
+  gap: 10px;
+}
 .detail-more-trigger {
   width: 38px;
   min-width: 38px;
@@ -584,30 +588,19 @@
   font-size: 20px;
   letter-spacing: 0.06em;
 }
-.detail-action-menu {
+.detail-format-menu,
+.detail-more-menu {
   top: auto;
-  right: auto;
   bottom: calc(100% + 7px);
+}
+.detail-format-menu {
+  right: auto;
   left: 0;
-  width: 220px;
+  width: 180px;
 }
 .detail-more-menu { right: 0; left: auto; width: 188px; }
-.detail-menu-section { display: block; padding: 4px; }
-.detail-menu-label {
-  display: block;
-  padding: 3px 5px 6px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.4;
-}
 .detail-citation-style-options { display: grid; gap: 2px; }
 .detail-citation-style-options .app-select-option { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
-.detail-action-menu-divider {
-  display: block;
-  height: 1px;
-  margin: 5px 4px;
-  background: var(--divider);
-}
 .detail-action-option { font-size: 13px; }
 
 @media (max-width: 1100px) {
