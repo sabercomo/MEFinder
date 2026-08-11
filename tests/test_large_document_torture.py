@@ -166,9 +166,9 @@ class LargeDocumentTortureTests(unittest.TestCase):
                 self.assertEqual(report.slice_count, expected_slices)
                 self.assertEqual(covered, list(range(1, total_pages + 1)))
                 self.assertTrue(report.coverage_complete)
-                self.assertFalse(report.budget_insufficient)
+                self.assertFalse(report.credentials_unavailable)
 
-    def test_7000_page_eight_credential_plan_stays_within_budget(self):
+    def test_7000_page_eight_credential_plan_balances_without_quota(self):
         specs = load_credential_specs(FIXTURES / "torture_credentials_8.json")
         report = build_dry_run_report(
             provider_id="synthetic",
@@ -179,7 +179,7 @@ class LargeDocumentTortureTests(unittest.TestCase):
         )
         self.assertEqual(report.slice_count, 35)
         self.assertEqual(report.unassigned_pages, 0)
-        self.assertFalse(report.budget_insufficient)
+        self.assertFalse(report.credentials_unavailable)
         self.assertEqual(sum(report.pages_by_credential.values()), 7000)
         self.assertEqual(
             sorted(report.pages_by_credential.values()),
@@ -250,6 +250,25 @@ class LargeDocumentTortureTests(unittest.TestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(ValueError, "references"):
+            load_credential_specs(path)
+
+    def test_credential_file_rejects_obsolete_page_budget(self):
+        path = self.root / "obsolete-budget.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "credentials": [
+                        {
+                            "id": "mineru-1",
+                            "secret_ref": "env:MINERU_TOKEN_1",
+                            "daily_page_budget": 1000,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "not a quota"):
             load_credential_specs(path)
 
     def test_slice_17_rate_limit_and_slice_23_permanent_failure_are_explainable(self):

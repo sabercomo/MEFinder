@@ -20,7 +20,6 @@ class CredentialPoolUnavailable(RuntimeError):
 @dataclass(frozen=True)
 class CredentialLease:
     credential: ParserCredential
-    page_count: int
 
 
 @dataclass(frozen=True)
@@ -46,26 +45,24 @@ class CredentialPool:
         self.provider_max_concurrency = max(1, int(provider_max_concurrency))
         self.rate_limit_cooldown_seconds = max(1, int(rate_limit_cooldown_seconds))
 
-    def acquire(self, page_count: int) -> CredentialLease:
+    def acquire(self) -> CredentialLease:
         """Reserve one credential for a not-yet-submitted slice."""
 
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
-        today = now.date().isoformat()
+        completed_pages = self.ledger.completed_page_counts(self.provider_id)
         records = sorted(
             self.ledger.list_credentials(self.provider_id),
             key=lambda item: (
-                item.pages_used_today if item.usage_date == today else 0,
                 item.current_in_flight,
+                completed_pages.get(item.id, 0),
                 item.id,
             ),
         )
         for record in records:
             reserved = self.ledger.try_reserve_credential(
                 record.id,
-                page_count=page_count,
                 provider_max_concurrency=self.provider_max_concurrency,
-                today=today,
                 now_iso=now_iso,
             )
             if reserved is None:
@@ -75,12 +72,7 @@ class CredentialPool:
                 if not secret:
                     raise ValueError("credential secret reference resolved empty")
             except Exception:
-                self.ledger.release_credential(
-                    reserved.id,
-                    reserved_pages=page_count,
-                    refund_budget=True,
-                    today=today,
-                )
+                self.ledger.release_credential(reserved.id)
                 self.ledger.update_credential_health(
                     reserved.id,
                     health_status="secret_unavailable",
@@ -92,11 +84,9 @@ class CredentialPool:
                     secret=secret,
                     metadata={"display_name": reserved.display_name},
                 ),
-                page_count=page_count,
             )
         raise CredentialPoolUnavailable(
-            "all configured parser credentials are disabled, cooling down, busy, "
-            "or over their configured budget"
+            "all configured parser credentials are disabled, cooling down, or busy"
         )
 
     def credential_for_affinity(self, credential_id: Optional[str]) -> ParserCredential:
@@ -122,12 +112,7 @@ class CredentialPool:
         )
 
     def release_unsubmitted(self, lease: CredentialLease) -> None:
-        self.ledger.release_credential(
-            lease.credential.credential_id,
-            reserved_pages=lease.page_count,
-            refund_budget=True,
-            today=datetime.now(timezone.utc).date().isoformat(),
-        )
+        self.ledger.release_credential(lease.credential.credential_id)
 
     def finish_remote(self, credential_id: Optional[str]) -> None:
         if credential_id:
@@ -167,31 +152,20 @@ class CredentialPool:
             self.ledger.set_credential_in_flight(record.id, active.get(record.id, 0))
 
     def plan_distribution(self, page_counts: Sequence[int]) -> CredentialPlan:
-        """Pure dry-run assignment; it never resolves secrets or mutates usage."""
+        """Balance a dry-run plan without treating page counts as quotas."""
 
-        today = datetime.now(timezone.utc).date().isoformat()
         records = [
             item
             for item in self.ledger.list_credentials(self.provider_id)
             if item.is_enabled and item.health_status not in {"unauthorized", "disabled"}
         ]
-        used = {
-            item.id: item.pages_used_today if item.usage_date == today else 0
-            for item in records
-        }
         planned = {item.id: 0 for item in records}
         by_id = {item.id: item for item in records}
         assignments: List[Optional[str]] = []
         unassigned = 0
         for raw_pages in page_counts:
             pages = max(0, int(raw_pages))
-            candidates = [
-                item
-                for item in records
-                if item.daily_page_budget is None
-                or used[item.id] + planned[item.id] + pages
-                <= item.daily_page_budget
-            ]
+            candidates = list(records)
             if not candidates:
                 assignments.append(None)
                 unassigned += pages
@@ -199,7 +173,6 @@ class CredentialPool:
             selected = min(
                 candidates,
                 key=lambda item: (
-                    used[item.id] + planned[item.id],
                     planned[item.id],
                     item.id,
                 ),

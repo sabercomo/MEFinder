@@ -62,7 +62,7 @@ manifest 中的稳定字段包括：
 
 ## SQLite job ledger
 
-任务状态放在独立的 `parser_jobs.sqlite3`，不放在可原子重建的搜索 index 数据库中。SQLite `PRAGMA user_version` 递增迁移；当前版本是 2。
+任务状态放在独立的 `parser_jobs.sqlite3`，不放在可原子重建的搜索 index 数据库中。SQLite `PRAGMA user_version` 递增迁移；当前版本是 3。
 
 ### v1
 
@@ -81,32 +81,32 @@ manifest 中的稳定字段包括：
 - status，attempt count，last error
 - normalized result path/hash，timestamps
 
-### v2
+### v2 / v3
 
 添加 `parser_credentials`：
 
 - `id/provider_id/display_name/secret_ref`
-- enabled，用户配置的 daily page budget，可选 concurrency override
-- current in-flight，today usage，cooldown
+- enabled，可选 concurrency override，current in-flight，cooldown
 - last 401/429，health status，timestamps
 
-迁移是 additive 的；v1 ledger 会保留原 job/slice 记录并新建 credential 表。数据库版本高于当前程序支持时会明确拒绝打开，避免旧程序破坏新 schema。
+v2 曾误把 MinerU priority pages 当成每日预算；v3 清空并停止使用 `daily_page_budget/pages_used_today/usage_date`。三列仅作为旧 SQLite 的兼容占位保留，不再属于应用层契约。v1 ledger 会保留原 job/slice 记录并新建 credential 表。数据库版本高于当前程序支持时会明确拒绝打开，避免旧程序破坏新 schema。
 
 Document 状态：`preparing/queued/running/waiting/retryable_failure/permanent_failure/cancelled/validated/published`。Slice 状态另包含 `submitted/completed`。
 
 ## CredentialPool
 
-CredentialPool 支持 N 个用户明确配置且已授权的 credential，并同时考虑 enabled、用户预算、provider/用户并发、cooldown 和健康状态。
+CredentialPool 支持 N 个用户明确配置且已授权的 credential，并同时考虑 enabled、provider/用户并发、cooldown 和健康状态。已成功解析的本地累计页数只用于同等条件下的公平调度，不是额度。
 
-MinerU Cloud 的业务假设是“一个 credential 对应一个独立 MinerU 账号”，不对多 Token 做账号分组或共享预算。`MinerUAccountService` 可保存 N 个独立账号；默认每账号本地每日预算为 1000 页，也可逐账号修改。Token 存在权限为 `0600` 的本地私密配置中，job ledger 只保存 `mineru-account:<id>` 引用。安全 summary 只返回 MEFinder 本地已提交页数、剩余本地预算、in-flight 和健康状态，不返回 Token。
+MinerU Cloud 的业务假设是“一个 credential 对应一个独立 MinerU 账号”，不对多 Token 做账号分组。MinerU 的“优先解析 1000 页”不是每日配额：系统没有 1000 页硬门槛，不会在达到 1000 页时停用或强制切换账号。`MinerUAccountService` 可保存 N 个独立账号。Token 存在权限为 `0600` 的本地私密配置中，job ledger 只保存 `mineru-account:<id>` 引用。账号配置 summary 只返回配置、in-flight 和健康状态，不返回 Token 或页数统计。
 
 - 只将 `secret_ref` 写入 SQLite，运行时由 resolver 解决真实 secret。
 - 401 会标记未授权并停用；429 进入 cooldown。
 - 未创建远程 task 的 slice 可换 credential。
 - `remote_task_id -> credential_id` 持久化；poll/result 一直使用原 credential。只有 provider 明确返回 remote task missing 才允许清除 affinity 并重提。
-- 不读取、抓取或同步 MinerU 官网用量；页数均明确标记为 MEFinder 本地调度统计。
+- 不读取、抓取或同步 MinerU 官网用量。
+- `usage_statistics()` 在独立统计区返回逐凭据成功解析的书数、页数、书名和 1-based 原书页码范围；数据由 completed slice attribution 聚合，不参与额度判断。
 
-8000 页验收场景：当 capability 是 200 页/片，配置 8 个独立账号且每账号预算 1000 页时，系统生成 40 个实体 slice，每账号提交 5 片/1000 页，最终覆盖严格为 `1..8000`。
+验收包含单个账号连续解析 1200 页，证明 1000 页不会触发 cutoff；8000 页/8 账号场景仍验证 40 个实体 slice、远程任务 credential affinity、逐账号书页归属和最终严格覆盖 `1..8000`，但不把 1000 作为额度规则。
 
 credential JSON 只允许引用：
 
@@ -117,14 +117,13 @@ credential JSON 只允许引用：
       "id": "mineru-1",
       "display_name": "MinerU 1",
       "secret_ref": "env:MINERU_TOKEN_1",
-      "daily_page_budget": 1000,
       "max_concurrency": 2
     }
   ]
 }
 ```
 
-manual runner 当前只解决 `env:NAME`；正式应用可注入 keychain/credential manager resolver。配置文件如出现 `token`、`secret` 或 `api_key` 明文字段会被拒绝。
+manual runner 当前只解决 `env:NAME`；正式应用可注入 keychain/credential manager resolver。配置文件如出现 `token`、`secret` 或 `api_key` 明文字段会被拒绝；出现废弃的 `daily_page_budget` 也会被拒绝并说明 priority pages 不是 quota。
 
 ## Provider support
 
@@ -155,7 +154,7 @@ python3 tools/large_document_torture.py \
   --credentials tests/fixtures/torture_credentials_8.json
 ```
 
-输出包含总页数/字节数、capability、每片范围和估算字节、估算上传/临时磁盘、credential 分配/页数/预算缺口、完整覆盖和流式内存 probe。`--dry-run` 不构建 provider，不解决 secret，不调用 API。
+输出包含总页数/字节数、capability、每片范围和估算字节、估算上传/临时磁盘、credential 分配/页数/是否无可用凭据、完整覆盖和流式内存 probe。`--dry-run` 不构建 provider，不解决 secret，不调用 API。
 
 小型真实 PDF 的 opt-in benchmark 必须显式使用 `--execute`：
 

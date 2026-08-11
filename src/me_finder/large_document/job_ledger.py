@@ -12,7 +12,7 @@ from typing import Dict, Iterable, List, Optional
 from .slicing import SliceDescriptor
 
 
-LEDGER_SCHEMA_VERSION = 2
+LEDGER_SCHEMA_VERSION = 3
 DOCUMENT_STATUSES = frozenset(
     {
         "preparing",
@@ -119,6 +119,15 @@ CREATE INDEX IF NOT EXISTS idx_parser_credentials_provider
 ON parser_credentials(provider_id, enabled, health_status);
 """
 
+# MinerU's "priority parsing pages" are not an account quota.  Keep the three
+# v2 columns in place so an existing SQLite file can be upgraded without a
+# destructive table rebuild, but erase their obsolete scheduler state and stop
+# exposing or reading them in application code.
+SCHEMA_V3 = """
+UPDATE parser_credentials
+SET daily_page_budget = NULL, pages_used_today = 0, usage_date = NULL;
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -179,11 +188,8 @@ class CredentialRecord:
     display_name: str
     secret_ref: str
     enabled: int
-    daily_page_budget: Optional[int]
     max_concurrency_override: Optional[int]
     current_in_flight: int
-    pages_used_today: int
-    usage_date: Optional[str]
     cooldown_until: Optional[str]
     last_401_at: Optional[str]
     last_429_at: Optional[str]
@@ -194,6 +200,26 @@ class CredentialRecord:
     @property
     def is_enabled(self) -> bool:
         return bool(self.enabled)
+
+
+@dataclass(frozen=True)
+class CredentialPageAttribution:
+    """One successfully normalized slice attributed to its credential."""
+
+    credential_id: str
+    provider_id: str
+    display_name: str
+    document_job_id: str
+    document_id: str
+    source_file_id: str
+    source_path: str
+    page_start: int
+    page_end: int
+    completed_at: str
+
+    @property
+    def page_count(self) -> int:
+        return self.page_end - self.page_start + 1
 
 
 _DOCUMENT_UPDATE_FIELDS = frozenset(
@@ -253,6 +279,10 @@ class JobLedger:
             if version < 2:
                 connection.executescript(SCHEMA_V2)
                 connection.execute("PRAGMA user_version = 2")
+                version = 2
+            if version < 3:
+                connection.executescript(SCHEMA_V3)
+                connection.execute("PRAGMA user_version = 3")
             connection.commit()
 
     def create_document_job(
@@ -449,11 +479,8 @@ class JobLedger:
         display_name: str,
         secret_ref: str,
         enabled: bool = True,
-        daily_page_budget: Optional[int] = None,
         max_concurrency_override: Optional[int] = None,
     ) -> CredentialRecord:
-        if daily_page_budget is not None and daily_page_budget < 0:
-            raise ValueError("daily_page_budget cannot be negative")
         if max_concurrency_override is not None and max_concurrency_override < 1:
             raise ValueError("max_concurrency_override must be positive")
         now = _now()
@@ -462,14 +489,13 @@ class JobLedger:
                 """
                 INSERT INTO parser_credentials(
                     id, provider_id, display_name, secret_ref, enabled,
-                    daily_page_budget, max_concurrency_override, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    max_concurrency_override, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     provider_id = excluded.provider_id,
                     display_name = excluded.display_name,
                     secret_ref = excluded.secret_ref,
                     enabled = excluded.enabled,
-                    daily_page_budget = excluded.daily_page_budget,
                     max_concurrency_override = excluded.max_concurrency_override,
                     updated_at = excluded.updated_at
                 """,
@@ -479,7 +505,6 @@ class JobLedger:
                     display_name,
                     secret_ref,
                     1 if enabled else 0,
-                    daily_page_budget,
                     max_concurrency_override,
                     now,
                     now,
@@ -508,12 +533,10 @@ class JobLedger:
         self,
         credential_id: str,
         *,
-        page_count: int,
         provider_max_concurrency: int,
-        today: str,
         now_iso: str,
     ) -> Optional[CredentialRecord]:
-        """Atomically reserve concurrency and budget for one not-yet-submitted slice."""
+        """Atomically reserve one concurrency slot for a new remote task."""
 
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -524,17 +547,12 @@ class JobLedger:
                 connection.rollback()
                 return None
             record = _credential_from_row(row)
-            used = record.pages_used_today if record.usage_date == today else 0
             concurrency = record.max_concurrency_override or provider_max_concurrency
             eligible = bool(
                 record.is_enabled
                 and record.health_status not in {"unauthorized", "disabled"}
                 and (not record.cooldown_until or record.cooldown_until <= now_iso)
                 and record.current_in_flight < concurrency
-                and (
-                    record.daily_page_budget is None
-                    or used + page_count <= record.daily_page_budget
-                )
             )
             if not eligible:
                 connection.rollback()
@@ -542,11 +560,10 @@ class JobLedger:
             connection.execute(
                 """
                 UPDATE parser_credentials
-                SET current_in_flight = current_in_flight + 1,
-                    pages_used_today = ?, usage_date = ?, updated_at = ?
+                SET current_in_flight = current_in_flight + 1, updated_at = ?
                 WHERE id = ?
                 """,
-                (used + page_count, today, now_iso, credential_id),
+                (now_iso, credential_id),
             )
             connection.commit()
         return self.get_credential(credential_id)
@@ -554,10 +571,6 @@ class JobLedger:
     def release_credential(
         self,
         credential_id: str,
-        *,
-        reserved_pages: int = 0,
-        refund_budget: bool = False,
-        today: Optional[str] = None,
     ) -> CredentialRecord:
         now = _now()
         with self._connect() as connection:
@@ -568,17 +581,13 @@ class JobLedger:
             if row is None:
                 connection.rollback()
                 raise KeyError(credential_id)
-            record = _credential_from_row(row)
-            used = record.pages_used_today
-            if refund_budget and (today is None or record.usage_date == today):
-                used = max(0, used - max(0, int(reserved_pages)))
             connection.execute(
                 """
                 UPDATE parser_credentials
                 SET current_in_flight = MAX(0, current_in_flight - 1),
-                    pages_used_today = ?, updated_at = ? WHERE id = ?
+                    updated_at = ? WHERE id = ?
                 """,
-                (used, now, credential_id),
+                (now, credential_id),
             )
             connection.commit()
         return self.get_credential(credential_id)
@@ -656,6 +665,60 @@ class JobLedger:
             ).fetchall()
         return {str(row[0]): int(row[1]) for row in rows}
 
+    def completed_page_counts(self, provider_id: str) -> Dict[str, int]:
+        """Return successful local page totals used only for fair scheduling."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT credential_id, SUM(page_end - page_start + 1)
+                FROM slice_jobs
+                WHERE provider_id = ? AND credential_id IS NOT NULL
+                  AND status = 'completed'
+                GROUP BY credential_id
+                """,
+                (provider_id,),
+            ).fetchall()
+        return {str(row[0]): int(row[1]) for row in rows}
+
+    def list_credential_page_attributions(
+        self, provider_id: str
+    ) -> List[CredentialPageAttribution]:
+        """List successful book/page attribution without reading any secret."""
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT sj.credential_id, sj.provider_id,
+                       COALESCE(pc.display_name, sj.credential_id) AS display_name,
+                       dj.id AS document_job_id, dj.document_id, dj.source_file_id,
+                       dj.source_path, sj.page_start, sj.page_end,
+                       sj.updated_at AS completed_at
+                FROM slice_jobs AS sj
+                JOIN document_jobs AS dj ON dj.id = sj.document_job_id
+                LEFT JOIN parser_credentials AS pc ON pc.id = sj.credential_id
+                WHERE sj.provider_id = ? AND sj.credential_id IS NOT NULL
+                  AND sj.status = 'completed'
+                ORDER BY sj.credential_id, dj.created_at, sj.page_start
+                """,
+                (provider_id,),
+            ).fetchall()
+        return [
+            CredentialPageAttribution(
+                credential_id=str(row["credential_id"]),
+                provider_id=str(row["provider_id"]),
+                display_name=str(row["display_name"]),
+                document_job_id=str(row["document_job_id"]),
+                document_id=str(row["document_id"]),
+                source_file_id=str(row["source_file_id"]),
+                source_path=str(row["source_path"]),
+                page_start=int(row["page_start"]),
+                page_end=int(row["page_end"]),
+                completed_at=str(row["completed_at"]),
+            )
+            for row in rows
+        ]
+
 
 def _document_from_row(row: sqlite3.Row) -> DocumentJob:
     return DocumentJob(**{key: row[key] for key in row.keys()})
@@ -666,4 +729,22 @@ def _slice_from_row(row: sqlite3.Row) -> SliceJob:
 
 
 def _credential_from_row(row: sqlite3.Row) -> CredentialRecord:
-    return CredentialRecord(**{key: row[key] for key in row.keys()})
+    return CredentialRecord(
+        id=str(row["id"]),
+        provider_id=str(row["provider_id"]),
+        display_name=str(row["display_name"]),
+        secret_ref=str(row["secret_ref"]),
+        enabled=int(row["enabled"]),
+        max_concurrency_override=(
+            int(row["max_concurrency_override"])
+            if row["max_concurrency_override"] is not None
+            else None
+        ),
+        current_in_flight=int(row["current_in_flight"]),
+        cooldown_until=row["cooldown_until"],
+        last_401_at=row["last_401_at"],
+        last_429_at=row["last_429_at"],
+        health_status=str(row["health_status"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )

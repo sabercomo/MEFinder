@@ -333,7 +333,7 @@ class LargeDocumentJobEngine:
             return
         current_attempt = slice_job.attempt_count + 1
         lease = (
-            self.credential_pool.acquire(slice_job.page_count)
+            self.credential_pool.acquire()
             if self.credential_pool is not None
             else None
         )

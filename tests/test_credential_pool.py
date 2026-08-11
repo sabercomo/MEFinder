@@ -9,7 +9,7 @@ from src.me_finder.large_document.credential_pool import (
     redact_secrets,
 )
 from src.me_finder.large_document.engine import LargeDocumentJobEngine
-from src.me_finder.large_document.job_ledger import JobLedger, SCHEMA_V1
+from src.me_finder.large_document.job_ledger import JobLedger, SCHEMA_V1, SCHEMA_V2
 from src.me_finder.large_document.slicing import PhysicalPDFSlicer
 from src.me_finder.parser_provider import (
     NormalizedPage,
@@ -92,7 +92,7 @@ class CredentialPoolTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def add_credential(self, index, *, budget=None, enabled=True):
+    def add_credential(self, index, *, enabled=True):
         credential_id = f"credential-{index}"
         secret_ref = f"keychain:{credential_id}"
         self.secrets[secret_ref] = f"secret-token-{index}"
@@ -102,7 +102,6 @@ class CredentialPoolTests(unittest.TestCase):
             display_name=f"MinerU {index}",
             secret_ref=secret_ref,
             enabled=enabled,
-            daily_page_budget=budget,
         )
 
     def pool(self):
@@ -129,11 +128,44 @@ class CredentialPoolTests(unittest.TestCase):
             secret_ref="keychain:one",
         )
         with sqlite3.connect(path) as check:
-            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 2)
-            self.assertEqual(check.execute("SELECT COUNT(*) FROM parser_credentials").fetchone()[0], 1)
+            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(
+                check.execute(
+                    "SELECT COUNT(*) FROM parser_credentials"
+                ).fetchone()[0],
+                1,
+            )
+
+    def test_v2_budget_state_is_cleared_when_migrating_to_v3(self) -> None:
+        path = self.root / "v2.sqlite3"
+        connection = sqlite3.connect(path)
+        connection.executescript(SCHEMA_V1)
+        connection.executescript(SCHEMA_V2)
+        connection.execute(
+            """
+            INSERT INTO parser_credentials(
+                id, provider_id, display_name, secret_ref, daily_page_budget,
+                pages_used_today, usage_date, created_at, updated_at
+            ) VALUES ('one', 'mineru-cloud', 'One', 'keychain:one', 1000,
+                      1000, '2026-08-10', 'now', 'now')
+            """
+        )
+        connection.execute("PRAGMA user_version = 2")
+        connection.commit()
+        connection.close()
+
+        migrated = JobLedger(path)
+        self.assertEqual(migrated.get_credential("one").display_name, "One")
+        with sqlite3.connect(path) as check:
+            legacy = check.execute(
+                "SELECT daily_page_budget, pages_used_today, usage_date "
+                "FROM parser_credentials WHERE id = 'one'"
+            ).fetchone()
+            self.assertEqual(legacy, (None, 0, None))
+            self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_one_credential_completes_a_normal_job(self) -> None:
-        self.add_credential(1, budget=10)
+        self.add_credential(1)
         source = self.root / "source.pdf"
         source.write_bytes(b"pdf")
         provider = AffinityProvider(asynchronous=False)
@@ -148,43 +180,47 @@ class CredentialPoolTests(unittest.TestCase):
         job = engine.prepare(source_path=source, source_file_id="pdf-1", document_id="doc")
         self.assertEqual(engine.run_once(job.id).status, "validated")
         record = self.ledger.get_credential("credential-1")
-        self.assertEqual(record.pages_used_today, 2)
         self.assertEqual(record.current_in_flight, 0)
+        self.assertEqual(
+            self.ledger.completed_page_counts("mineru-cloud"),
+            {"credential-1": 2},
+        )
 
-    def test_eight_credentials_plan_7000_pages_without_exceeding_budget(self) -> None:
+    def test_eight_credentials_balance_7000_pages_without_a_quota(self) -> None:
         for index in range(1, 9):
-            self.add_credential(index, budget=1000)
+            self.add_credential(index)
         plan = self.pool().plan_distribution([200] * 35)
         self.assertEqual(sum(plan.pages_by_credential.values()), 7000)
         self.assertEqual(plan.unassigned_pages, 0)
-        self.assertTrue(all(pages <= 1000 for pages in plan.pages_by_credential.values()))
-        self.assertEqual(sorted(plan.pages_by_credential.values()), [800, 800, 800, 800, 800, 1000, 1000, 1000])
+        planned_pages = list(plan.pages_by_credential.values())
+        self.assertLessEqual(max(planned_pages) - min(planned_pages), 200)
 
-    def test_budget_exhaustion_never_overassigns(self) -> None:
-        self.add_credential(1, budget=300)
-        plan = self.pool().plan_distribution([200, 200])
-        self.assertEqual(plan.assignments, ["credential-1", None])
-        self.assertEqual(plan.unassigned_pages, 200)
+    def test_one_credential_plan_can_exceed_1000_pages(self) -> None:
+        self.add_credential(1)
+        plan = self.pool().plan_distribution([200] * 40)
+        self.assertEqual(plan.assignments, ["credential-1"] * 40)
+        self.assertEqual(plan.pages_by_credential, {"credential-1": 8000})
+        self.assertEqual(plan.unassigned_pages, 0)
 
     def test_429_cools_down_credential_and_routes_new_work_elsewhere(self) -> None:
         self.add_credential(1)
         self.add_credential(2)
         pool = self.pool()
-        lease = pool.acquire(100)
+        lease = pool.acquire()
         self.assertEqual(lease.credential.credential_id, "credential-1")
         error = ParserProviderError(
             "HTTP 429", provider_id="mineru-cloud", retryable=True, rate_limited=True
         )
         pool.record_error("credential-1", error)
         pool.release_unsubmitted(lease)
-        replacement = pool.acquire(100)
+        replacement = pool.acquire()
         self.assertEqual(replacement.credential.credential_id, "credential-2")
         self.assertEqual(self.ledger.get_credential("credential-1").health_status, "cooldown")
 
     def test_401_disables_credential(self) -> None:
         self.add_credential(1)
         pool = self.pool()
-        lease = pool.acquire(10)
+        lease = pool.acquire()
         pool.record_error(
             "credential-1",
             ParserProviderError(
@@ -198,7 +234,7 @@ class CredentialPoolTests(unittest.TestCase):
         self.assertFalse(record.is_enabled)
         self.assertEqual(record.health_status, "unauthorized")
         with self.assertRaises(CredentialPoolUnavailable):
-            pool.acquire(1)
+            pool.acquire()
 
     def test_remote_task_is_always_polled_with_original_credential_after_restart(self) -> None:
         self.add_credential(1)
@@ -237,9 +273,9 @@ class CredentialPoolTests(unittest.TestCase):
         self.add_credential(1, enabled=False)
         pool = self.pool()
         with self.assertRaises(CredentialPoolUnavailable):
-            pool.acquire(1)
+            pool.acquire()
         pool.recover("credential-1")
-        self.assertEqual(pool.acquire(1).credential.credential_id, "credential-1")
+        self.assertEqual(pool.acquire().credential.credential_id, "credential-1")
 
     def test_all_credentials_unavailable_leaves_job_waiting_without_loss(self) -> None:
         self.add_credential(1, enabled=False)
@@ -262,7 +298,7 @@ class CredentialPoolTests(unittest.TestCase):
 
     def test_secrets_never_enter_ledger_repr_or_redacted_output(self) -> None:
         self.add_credential(1)
-        lease = self.pool().acquire(1)
+        lease = self.pool().acquire()
         secret = lease.credential.secret
         self.assertNotIn(secret, repr(lease.credential))
         self.assertNotIn(secret.encode(), (self.root / "jobs.sqlite3").read_bytes())

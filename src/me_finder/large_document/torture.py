@@ -49,7 +49,7 @@ class DryRunReport:
     estimated_temp_disk_bytes: int
     pages_by_credential: Dict[str, int]
     unassigned_pages: int
-    budget_insufficient: bool
+    credentials_unavailable: bool
     coverage_complete: bool
     coverage_first_page: int
     coverage_last_page: int
@@ -112,7 +112,7 @@ def build_dry_run_report(
         estimated_temp_disk_bytes=source_bytes + temp_overhead,
         pages_by_credential=pages_by_credential,
         unassigned_pages=unassigned,
-        budget_insufficient=unassigned > 0,
+        credentials_unavailable=unassigned > 0,
         coverage_complete=ordered[0][0] == 1 and ordered[-1][1] == total_pages,
         coverage_first_page=ordered[0][0],
         coverage_last_page=ordered[-1][1],
@@ -123,14 +123,6 @@ def _plan_credentials(
     page_counts: Sequence[int], specs: Sequence[Mapping[str, object]]
 ) -> tuple[List[Optional[str]], Dict[str, int], int]:
     planned = {str(item["id"]): 0 for item in specs}
-    budgets = {
-        str(item["id"]): (
-            int(item["daily_page_budget"])
-            if item.get("daily_page_budget") is not None
-            else None
-        )
-        for item in specs
-    }
     enabled = {
         str(item["id"])
         for item in specs
@@ -143,8 +135,6 @@ def _plan_credentials(
         candidates = [
             credential_id
             for credential_id in enabled
-            if budgets[credential_id] is None
-            or planned[credential_id] + pages <= budgets[credential_id]
         ]
         if not candidates:
             assignments.append(None)
@@ -169,6 +159,10 @@ def load_credential_specs(path: Optional[Path]) -> List[Dict[str, object]]:
             raise ValueError("each credential requires id and secret_ref")
         if any(key in raw for key in ("token", "secret", "api_key")):
             raise ValueError("credential files must contain references, not plaintext secrets")
+        if "daily_page_budget" in raw:
+            raise ValueError(
+                "daily_page_budget is obsolete; MinerU priority pages are not a quota"
+            )
         specs.append(dict(raw))
     return specs
 
@@ -346,11 +340,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 display_name=str(item.get("display_name") or item["id"]),
                 secret_ref=str(item["secret_ref"]),
                 enabled=bool(item.get("enabled", True)),
-                daily_page_budget=(
-                    int(item["daily_page_budget"])
-                    if item.get("daily_page_budget") is not None
-                    else None
-                ),
                 max_concurrency_override=(
                     int(item["max_concurrency"])
                     if item.get("max_concurrency") is not None

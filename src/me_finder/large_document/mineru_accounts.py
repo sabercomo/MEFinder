@@ -9,7 +9,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from ..mineru_api import MinerUError, normalize_mineru_token
 from .credential_pool import CredentialPool
@@ -20,7 +20,6 @@ MINERU_CLOUD_PROVIDER_ID = "mineru-cloud"
 MINERU_ACCOUNT_CONFIG_VERSION = 1
 MINERU_ACCOUNT_SECRET_PREFIX = "mineru-account:"
 DEFAULT_MINERU_ACCOUNT_CONFIG_PATH = Path("config/mineru_accounts.local.json")
-DEFAULT_MINERU_DAILY_PAGE_BUDGET = 1000
 _ACCOUNT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
@@ -34,9 +33,6 @@ class MinerUAccountSummary:
     display_name: str
     enabled: bool
     configured: bool
-    daily_page_budget: Optional[int]
-    local_pages_used_today: int
-    local_pages_remaining_today: Optional[int]
     current_in_flight: int
     max_concurrency_override: Optional[int]
     health_status: str
@@ -51,6 +47,39 @@ class MinerUAccountSummary:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class MinerUBookUsage:
+    document_job_id: str
+    document_id: str
+    source_file_id: str
+    source_file_name: str
+    parsed_page_count: int
+    page_ranges: Tuple[Tuple[int, int], ...]
+    completed_at: str
+
+
+@dataclass(frozen=True)
+class MinerUCredentialUsageStatistics:
+    account_id: str
+    display_name: str
+    parsed_book_count: int
+    parsed_page_count: int
+    books: Tuple[MinerUBookUsage, ...]
+
+
+@dataclass(frozen=True)
+class MinerUUsageStatistics:
+    provider_id: str
+    parsed_book_count: int
+    parsed_page_count: int
+    credentials: Tuple[MinerUCredentialUsageStatistics, ...]
+
+    def to_dict(self) -> Dict[str, object]:
+        """Return a separate, secret-free settings statistics payload."""
+
+        return asdict(self)
+
+
 def resolve_mineru_accounts_path(root: Optional[Path] = None) -> Path:
     override = os.environ.get("ME_FINDER_MINERU_ACCOUNTS_CONFIG", "").strip()
     if override:
@@ -61,7 +90,7 @@ def resolve_mineru_accounts_path(root: Optional[Path] = None) -> Path:
 
 
 class MinerUAccountService:
-    """Save N independent accounts and expose their local scheduler usage."""
+    """Save N independent accounts and expose separate local attribution stats."""
 
     def __init__(self, *, ledger: JobLedger, config_path: Path) -> None:
         self.ledger = ledger
@@ -74,14 +103,13 @@ class MinerUAccountService:
         display_name: str,
         token: Optional[str] = None,
         enabled: bool = True,
-        daily_page_budget: Optional[int] = DEFAULT_MINERU_DAILY_PAGE_BUDGET,
         max_concurrency_override: Optional[int] = None,
         expires_at: Optional[str] = None,
     ) -> MinerUAccountSummary:
         """Create or update one independent MinerU account.
 
         An empty token on an existing account preserves the stored token, which
-        lets a settings screen edit the label or budget without redisplaying a
+        lets a settings screen edit the label without redisplaying a
         secret.  New accounts always require a token.
         """
 
@@ -89,8 +117,6 @@ class MinerUAccountService:
         normalized_name = str(display_name or "").strip()
         if not normalized_name or len(normalized_name) > 120:
             raise MinerUAccountConfigError("账号名称必须为 1–120 个字符。")
-        if daily_page_budget is not None and int(daily_page_budget) < 0:
-            raise MinerUAccountConfigError("每日页数预算不能为负数。")
         if (
             max_concurrency_override is not None
             and int(max_concurrency_override) < 1
@@ -131,11 +157,6 @@ class MinerUAccountService:
                 display_name=normalized_name,
                 secret_ref=f"{MINERU_ACCOUNT_SECRET_PREFIX}{normalized_id}",
                 enabled=bool(enabled),
-                daily_page_budget=(
-                    int(daily_page_budget)
-                    if daily_page_budget is not None
-                    else None
-                ),
                 max_concurrency_override=(
                     int(max_concurrency_override)
                     if max_concurrency_override is not None
@@ -158,7 +179,6 @@ class MinerUAccountService:
     def list_accounts(self) -> list[MinerUAccountSummary]:
         private = self._load_private_config()
         secret_accounts = private["accounts"]
-        today = datetime.now(timezone.utc).date().isoformat()
         summaries = []
         for record in self.ledger.list_credentials(MINERU_CLOUD_PROVIDER_ID):
             secret = secret_accounts.get(record.id)
@@ -168,21 +188,12 @@ class MinerUAccountService:
                 if isinstance(secret, dict)
                 else None
             )
-            used = record.pages_used_today if record.usage_date == today else 0
-            remaining = (
-                max(0, record.daily_page_budget - used)
-                if record.daily_page_budget is not None
-                else None
-            )
             summaries.append(
                 MinerUAccountSummary(
                     account_id=record.id,
                     display_name=record.display_name,
                     enabled=record.is_enabled,
                     configured=configured,
-                    daily_page_budget=record.daily_page_budget,
-                    local_pages_used_today=used,
-                    local_pages_remaining_today=remaining,
                     current_in_flight=record.current_in_flight,
                     max_concurrency_override=record.max_concurrency_override,
                     health_status=record.health_status,
@@ -193,6 +204,97 @@ class MinerUAccountService:
                 )
             )
         return summaries
+
+    def usage_statistics(self) -> MinerUUsageStatistics:
+        """Aggregate successful local book/page attribution by credential.
+
+        This is deliberately separate from account configuration.  It neither
+        reads MinerU's website nor participates in credential eligibility.
+        """
+
+        records = self.ledger.list_credentials(MINERU_CLOUD_PROVIDER_ID)
+        grouped: Dict[str, Dict[str, object]] = {
+            record.id: {
+                "display_name": record.display_name,
+                "books": {},
+            }
+            for record in records
+        }
+        for item in self.ledger.list_credential_page_attributions(
+            MINERU_CLOUD_PROVIDER_ID
+        ):
+            credential = grouped.setdefault(
+                item.credential_id,
+                {"display_name": item.display_name, "books": {}},
+            )
+            books = credential["books"]
+            if not isinstance(books, dict):
+                raise RuntimeError("invalid local credential statistics state")
+            book = books.setdefault(
+                item.document_job_id,
+                {
+                    "document_id": item.document_id,
+                    "source_file_id": item.source_file_id,
+                    "source_file_name": Path(item.source_path).name,
+                    "ranges": [],
+                    "completed_at": item.completed_at,
+                },
+            )
+            ranges = book["ranges"]
+            if not isinstance(ranges, list):
+                raise RuntimeError("invalid local book statistics state")
+            ranges.append((item.page_start, item.page_end))
+            book["completed_at"] = max(
+                str(book["completed_at"]), item.completed_at
+            )
+
+        credentials: List[MinerUCredentialUsageStatistics] = []
+        all_document_jobs = set()
+        for account_id in sorted(grouped):
+            group = grouped[account_id]
+            raw_books = group["books"]
+            if not isinstance(raw_books, dict):
+                raise RuntimeError("invalid local credential statistics state")
+            books: List[MinerUBookUsage] = []
+            for document_job_id, raw_book in raw_books.items():
+                ranges = _merge_page_ranges(raw_book["ranges"])
+                parsed_pages = sum(end - start + 1 for start, end in ranges)
+                books.append(
+                    MinerUBookUsage(
+                        document_job_id=str(document_job_id),
+                        document_id=str(raw_book["document_id"]),
+                        source_file_id=str(raw_book["source_file_id"]),
+                        source_file_name=str(raw_book["source_file_name"]),
+                        parsed_page_count=parsed_pages,
+                        page_ranges=ranges,
+                        completed_at=str(raw_book["completed_at"]),
+                    )
+                )
+                all_document_jobs.add(str(document_job_id))
+            ordered_books = tuple(
+                sorted(
+                    books,
+                    key=lambda item: (item.completed_at, item.document_job_id),
+                    reverse=True,
+                )
+            )
+            credentials.append(
+                MinerUCredentialUsageStatistics(
+                    account_id=account_id,
+                    display_name=str(group["display_name"]),
+                    parsed_book_count=len(ordered_books),
+                    parsed_page_count=sum(
+                        item.parsed_page_count for item in ordered_books
+                    ),
+                    books=ordered_books,
+                )
+            )
+        return MinerUUsageStatistics(
+            provider_id=MINERU_CLOUD_PROVIDER_ID,
+            parsed_book_count=len(all_document_jobs),
+            parsed_page_count=sum(item.parsed_page_count for item in credentials),
+            credentials=tuple(credentials),
+        )
 
     def resolve_secret(self, secret_ref: str) -> str:
         reference = str(secret_ref or "")
@@ -292,3 +394,15 @@ def _normalize_expiry(value: Optional[str]) -> Optional[str]:
     except ValueError as exc:
         raise MinerUAccountConfigError("到期日期请使用 YYYY-MM-DD 格式。") from exc
     return expires_at
+
+
+def _merge_page_ranges(
+    ranges: List[Tuple[int, int]],
+) -> Tuple[Tuple[int, int], ...]:
+    merged: List[List[int]] = []
+    for start, end in sorted((int(start), int(end)) for start, end in ranges):
+        if not merged or start > merged[-1][1] + 1:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return tuple((start, end) for start, end in merged)

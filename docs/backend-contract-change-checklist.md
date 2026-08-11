@@ -1,6 +1,6 @@
 # MEFinder 0.4.x 后端契约变更清单
 
-> 交接范围：`5154306` → `bd3e8b7`
+> 交接范围：`5154306` → 当前后端分支
 >
 > 用途：前端、HTTP API 和最终集成线的单一事实源。
 >
@@ -37,6 +37,7 @@
 | `list_accounts()` | 列出 N 个独立账号 | `list[MinerUAccountSummary]` |
 | `resolve_secret(secret_ref)` | 仅供后端调度器解决 Token | raw Token，不得向 UI 暴露 |
 | `create_pool(...)` | 用已保存账号构造 CredentialPool | `CredentialPool` |
+| `usage_statistics()` | 获取独立于账号配置的本地成功解析统计 | `MinerUUsageStatistics` |
 
 `save_account` 输入字段：
 
@@ -46,7 +47,6 @@
 | `display_name` | `string` | 必填 | 1–120 字符 |
 | `token` | `string?` | 新账号必填 | 接受 raw Token 或 `Bearer ...`；更新时空值保留旧 Token |
 | `enabled` | `boolean` | `true` | 是否参与调度 |
-| `daily_page_budget` | `integer?` | `1000` | 每个独立账号的 MEFinder 本地每日预算；`null` 表示不设本地上限 |
 | `max_concurrency_override` | `integer?` | `null` | 正数；空值使用 provider capability |
 | `expires_at` | `YYYY-MM-DD?` | `null` | 空白表示未设置；更新时未传保留原值 |
 
@@ -56,9 +56,6 @@
 - `display_name`
 - `enabled`
 - `configured`
-- `daily_page_budget`
-- `local_pages_used_today`
-- `local_pages_remaining_today`
 - `current_in_flight`
 - `max_concurrency_override`
 - `health_status`
@@ -67,7 +64,15 @@
 - `last_429_at`
 - `expires_at`
 
-明确不返回：`token`、`secret`、`secret_ref`、MinerU 官网用量。`local_pages_*` 只是 MEFinder 本地调度统计。每个 credential 对应一个独立 MinerU 账号，不存在账号分组或共享 1000 页预算。
+明确不返回：`token`、`secret`、`secret_ref`、MinerU 官网用量。每个 credential 对应一个独立 MinerU 账号。MinerU 的“优先解析 1000 页”不是每日配额，后端不设置 1000 页门槛，也不会因累计到 1000 页自动切换账号。
+
+本地统计使用独立对象，不混入账号配置摘要：
+
+- `MinerUUsageStatistics`: `provider_id`, `parsed_book_count`, `parsed_page_count`, `credentials`
+- `MinerUCredentialUsageStatistics`: `account_id`, `display_name`, `parsed_book_count`, `parsed_page_count`, `books`
+- `MinerUBookUsage`: `document_job_id`, `document_id`, `source_file_id`, `source_file_name`, `parsed_page_count`, `page_ranges`, `completed_at`
+
+统计只计算已成功完成并通过归一化覆盖检查的 slice。`page_ranges` 使用 1-based 原书物理页码。整书由多个账号共同完成时，全局书数只计一个 document job，各账号分别显示自己完成的页数和范围。它是 MEFinder 本地归属统计，不是 MinerU 官网计费或优先页用量。
 
 ### 2.2 大文档任务
 
@@ -193,13 +198,13 @@ dry-run 输出字段：
 - `provider`, `total_pages`, `source_bytes`, `capabilities`
 - `slice_count`, `slices[]`
 - `estimated_upload_bytes`, `estimated_temp_disk_bytes`
-- `pages_by_credential`, `unassigned_pages`, `budget_insufficient`
+- `pages_by_credential`, `unassigned_pages`, `credentials_unavailable`
 - `coverage_complete`, `coverage_first_page`, `coverage_last_page`
 - `memory_probe`
 
 ## 3. 数据库字段变更
 
-新增独立 SQLite ledger：建议路径 `data/parser_jobs.sqlite3`；当前 `PRAGMA user_version = 2`。它不属于可重建的搜索 index DB。
+新增独立 SQLite ledger：建议路径 `data/parser_jobs.sqlite3`；当前 `PRAGMA user_version = 3`。它不属于可重建的搜索 index DB。
 
 ### v1 `document_jobs`
 
@@ -209,11 +214,11 @@ dry-run 输出字段：
 
 `id, document_job_id, page_start, page_end, global_page_offset, slice_path, slice_sha256, size_bytes, provider_id, credential_id, remote_task_id, status, attempt_count, last_error, result_path, result_sha256, created_at, updated_at`
 
-### v2 `parser_credentials`
+### v2 `parser_credentials`（经 v3 修正规则）
 
 `id, provider_id, display_name, secret_ref, enabled, daily_page_budget, max_concurrency_override, current_in_flight, pages_used_today, usage_date, cooldown_until, last_401_at, last_429_at, health_status, created_at, updated_at`
 
-迁移是 additive：v1 → v2 仅添加 `parser_credentials`，不删除原任务数据。
+v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usage_date` 三列仅作为废弃的物理占位保留，迁移时分别清为 `NULL/0/NULL`，应用层不再读写或暴露。逐凭据统计由 `document_jobs + completed slice_jobs.credential_id` 实时聚合，不需要访问 secret，也不新增官网用量表。
 
 ## 4. 错误码与错误分类
 
@@ -277,6 +282,8 @@ dry-run 输出字段：
 
 这些异常当前只是 Python 应用层契约，尚无稳定 HTTP error code。
 
+手动 runner 的 credential JSON 若仍包含 `daily_page_budget`，会抛出 `ValueError`，明确提示 priority pages 不是 quota，避免旧配置产生“仍会限额”的误解。
+
 ## 5. 已改动的旧行为（非 HTTP 契约）
 
 - MinerU 上传从 `Path.read_bytes()` 改为 file-like 流式 body。
@@ -287,11 +294,17 @@ dry-run 输出字段：
 - `VisionProviderConfig.api_key` 不再出现在 dataclass repr。
 - 同一 published job 对同一 destination 重试时为幂等返回。
 - 旧的单 MinerU Token 配置与现有普通 PDF 路径未删除。
+- CredentialPool 只按 enabled、健康状态、cooldown、并发占用和本地成功页数做公平选择；成功页数只用于同等条件下的负载均衡，不构成上限。
+- `CredentialPool.acquire(page_count)` 改为 `CredentialPool.acquire()`；`CredentialLease.page_count` 已删除，因为调度不再预扣页数。
 
 ## 6. 删除清单
 
 - 删除 HTTP 端点：无
-- 删除 request/response 字段：无
+- 删除 HTTP request/response 字段：无
+- 删除应用层 `save_account` 输入字段：`daily_page_budget`
+- 删除应用层 `MinerUAccountSummary` 字段：`daily_page_budget`, `local_pages_used_today`, `local_pages_remaining_today`
+- 删除应用层 `CredentialLease` 字段：`page_count`
+- 删除 dry-run 输出字段：`budget_insufficient`（替换为 `credentials_unavailable`）
 - 删除 SQLite 表/字段：无
 - 删除旧 MinerU 单 Token 路径：无
 - 删除旧 resume 逻辑：无
@@ -299,7 +312,8 @@ dry-run 输出字段：
 ## 7. 前端/集成线必须遵守
 
 - 不得向浏览器返回 Token 或 `secret_ref`。
-- 不得将 `local_pages_used_today` 标成 MinerU 官网真实用量。
+- 账号配置区不得显示或提交“每日 1000 页预算”。
+- 本地解析统计必须放在独立统计区，并明确不是 MinerU 官网用量或计费数据。
 - 不得在 HTTP adapter 里写死 1000/200/50 等 provider 限制；必须读 capability/config。
 - 不得在所有 slice validated 前显示为“整书已发布”。
 - 前端只使用 1-based `physical_pdf_page`，不自行重算 global offset。
