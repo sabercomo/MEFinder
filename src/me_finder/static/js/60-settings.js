@@ -57,6 +57,9 @@ function showSettingsCategory(sectionId) {
   });
   var content = document.querySelector('.settings-content');
   if (content) content.scrollTop = 0;
+  if (sectionId === 'statistics-settings' && typeof loadMineruStatistics === 'function') {
+    loadMineruStatistics();
+  }
 }
 
 // Fall back to the first platform-visible category when the active one is hidden
@@ -865,4 +868,3 @@ async function setTheme(theme) {
 }
 
 renderThemeOptions();
-

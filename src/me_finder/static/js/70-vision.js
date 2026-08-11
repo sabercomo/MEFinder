@@ -104,8 +104,10 @@ function mineruPageRangesLabel(ranges) {
 function renderMineruStatistics() {
   var books = Number(mineruStatistics.parsed_book_count || 0);
   var pages = Number(mineruStatistics.parsed_page_count || 0);
-  document.getElementById('mineru-stat-books').textContent = books.toLocaleString();
-  document.getElementById('mineru-stat-pages').textContent = pages.toLocaleString();
+  var bookCount = document.getElementById('mineru-stat-books');
+  var pageCount = document.getElementById('mineru-stat-pages');
+  if (bookCount) bookCount.textContent = books.toLocaleString();
+  if (pageCount) pageCount.textContent = pages.toLocaleString();
   var list = document.getElementById('mineru-statistics-list');
   if (!list) return;
   var credentials = Array.isArray(mineruStatistics.credentials) ? mineruStatistics.credentials : [];
@@ -119,6 +121,31 @@ function renderMineruStatistics() {
     }).join('');
     return '<details class="mineru-stat-account"><summary><span><strong>' + esc(item.display_name || item.account_id) + '</strong><small>' + Number(item.parsed_book_count || 0).toLocaleString() + ' 本书</small></span><b>' + Number(item.parsed_page_count || 0).toLocaleString() + ' 页</b></summary><div class="mineru-stat-books">' + bookRows + '</div></details>';
   }).join('');
+}
+
+async function loadMineruStatistics() {
+  var status = document.getElementById('mineru-statistics-status');
+  if (status) {
+    status.className = 'settings-status';
+    status.textContent = '刷新中…';
+  }
+  try {
+    var response = await fetch('/api/mineru-statistics');
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+    mineruStatistics = data || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
+    renderMineruStatistics();
+    if (status) {
+      status.className = 'settings-status ready';
+      status.textContent = '已刷新';
+    }
+  } catch (error) {
+    if (status) {
+      status.className = 'settings-status warning';
+      status.textContent = '读取失败';
+    }
+    showToast('读取本地解析统计失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
+  }
 }
 
 async function exportBackup() {

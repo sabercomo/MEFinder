@@ -384,5 +384,6 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 - 前端只使用 1-based `physical_pdf_page`，不自行重算 global offset。
 - 远程 task 的 poll/result 必须保持原 `credential_id` affinity。
 - 设置页只调用 `/api/mineru-accounts*` 新端点；旧 `/api/mineru-config*` 仅用于兼容。
+- 本地解析统计位于设置左侧独立一级“统计”面板，不与 MinerU 账号编辑混排。
 - 文献详情的单书导出只提交 `source_id`，不在前端聚合或下载全部页文本。
 - 需要程序化区分新错误类型时，先新增稳定 `error.code` 并更新本清单，不得直接解析现有 message。

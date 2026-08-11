@@ -410,6 +410,7 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "mineru-api-settings": "mineru-api-body",
+            "statistics-settings": "statistics-settings-body",
             "vision-api-settings": "vision-api-body",
             "citation-format-settings": "citation-format-body",
             "bib-completion-settings": "bib-completion-body",

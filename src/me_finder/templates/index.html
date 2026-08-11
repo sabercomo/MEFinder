@@ -462,6 +462,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <nav class="settings-nav" role="tablist" aria-label="设置分类">
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>统计</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" onclick="showSettingsCategory('citation-format-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" onclick="showSettingsCategory('bib-completion-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span></button>
@@ -549,17 +550,25 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </div>
             </div>
-            <div class="mineru-statistics-card">
-              <div class="mineru-statistics-head">
-                <div><strong>本地解析统计</strong><small>按成功完成的任务统计，不是 MinerU 官网用量或计费数据</small></div>
-                <button class="action-btn" type="button" onclick="loadMineruConfig()">刷新统计</button>
-              </div>
-              <div class="mineru-statistics-summary">
-                <div><span id="mineru-stat-books">0</span><small>本书</small></div>
-                <div><span id="mineru-stat-pages">0</span><small>页</small></div>
-              </div>
-              <div id="mineru-statistics-list" class="mineru-statistics-list"></div>
             </div>
+          </section>
+          <section class="settings-section" id="statistics-settings" role="tabpanel">
+            <div class="settings-section-head">
+              <span class="settings-section-heading-copy"><span class="settings-section-title">解析统计</span><span class="settings-section-note">查看各 MinerU 账号在本机完成的书目与页码范围</span></span>
+              <span id="mineru-statistics-status" class="settings-status">本地记录</span>
+              <button class="action-btn" type="button" onclick="loadMineruStatistics()">刷新统计</button>
+            </div>
+            <div class="settings-collapse-body" id="statistics-settings-body">
+              <div class="mineru-statistics-card mineru-statistics-page-card">
+                <div class="mineru-statistics-head">
+                  <div><strong>MinerU Cloud</strong><small>只统计成功且通过整书覆盖校验的任务，不是 MinerU 官网用量或计费数据</small></div>
+                </div>
+                <div class="mineru-statistics-summary">
+                  <div><span id="mineru-stat-books">0</span><small>本书</small></div>
+                  <div><span id="mineru-stat-pages">0</span><small>页</small></div>
+                </div>
+                <div id="mineru-statistics-list" class="mineru-statistics-list"></div>
+              </div>
             </div>
           </section>
           <section class="settings-section" id="vision-api-settings" role="tabpanel">

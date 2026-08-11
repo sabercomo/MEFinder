@@ -372,10 +372,19 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="mineru-account-list"', HTML)
         self.assertIn('id="mineru-account-name"', HTML)
         self.assertIn('id="mineru-statistics-list"', HTML)
+        self.assertIn('data-target="statistics-settings"', HTML)
+        self.assertIn("showSettingsCategory('statistics-settings')", HTML)
+        mineru_start = HTML.index('id="mineru-api-settings"')
+        statistics_start = HTML.index('id="statistics-settings"', mineru_start)
+        vision_start = HTML.index('id="vision-api-settings"', statistics_start)
+        self.assertNotIn('id="mineru-statistics-list"', HTML[mineru_start:statistics_start])
+        self.assertIn('id="mineru-statistics-list"', HTML[statistics_start:vision_start])
         self.assertNotIn('id="mineru-access-key-id"', HTML)
         self.assertNotIn('id="mineru-secret-access-key"', HTML)
         self.assertIn("fetch('/api/mineru-accounts'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
+        self.assertIn("fetch('/api/mineru-statistics'", HTML)
+        self.assertIn("async function loadMineruStatistics()", HTML)
         self.assertIn("不是 MinerU 官网用量或计费数据", HTML)
         self.assertIn("def ensure_mineru_accounts()", WEB_SOURCE)
         self.assertNotIn("access_key_id: document.getElementById", HTML)
@@ -468,6 +477,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "macos-update-settings",
             "data-location-settings",
             "mineru-api-settings",
+            "statistics-settings",
             "vision-api-settings",
             "citation-format-settings",
             "bib-completion-settings",

@@ -56,7 +56,8 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .settings-section.active { display: block; }
 #mineru-api-settings.active,
-#vision-api-settings.active { max-width: 880px; }
+#vision-api-settings.active,
+#statistics-settings.active { max-width: 880px; }
 #appearance-card.active {
   width: 100%;
   max-width: 1120px;
@@ -798,6 +799,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   border-radius: 14px;
   background: var(--surface-elevated);
 }
+.mineru-statistics-page-card { margin-top: 14px; }
 .mineru-statistics-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .mineru-statistics-head > div { min-width: 0; display: grid; gap: 3px; }
 .mineru-statistics-head strong { color: var(--text-primary); font-size: 13px; }
