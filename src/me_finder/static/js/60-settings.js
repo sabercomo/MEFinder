@@ -477,8 +477,7 @@ async function setPdfOpenMode(mode) {
     currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
     preferencesLoaded = true;
     renderPdfOpenMode();
-    var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
-    showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用' + systemName + '打开');
+    // Visible success: the radio已经跳过去了，无需再弹 Toast。只在失败时提示。
   } catch (e) {
     currentPdfOpenMode = previousMode;
     renderPdfOpenMode();
@@ -670,7 +669,7 @@ async function setAutoUpdate(enabled) {
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
     autoUpdateEnabled = data.auto_update === true;
     document.getElementById('auto-update-enabled').checked = autoUpdateEnabled;
-    showToast(autoUpdateEnabled ? '已开启自动检查并下载更新' : '已关闭自动更新');
+    // Visible success: the switch itself已是反馈，无需 Toast。
     if (autoUpdateEnabled) {
       updateAutoStarted = true;
       checkForUpdates(true);
@@ -858,8 +857,7 @@ async function setTheme(theme) {
     if (revision !== themeRevision) return;
     preferencesLoaded = true;
     applyTheme(persistedTheme);
-    var selected = THEME_OPTIONS.find(function(option) { return option.id === theme; });
-    showToast('已切换到' + (selected ? selected.name : '所选主题'));
+    // Visible success: the whole UI已经换了主题，无需再弹 Toast。
   } catch (e) {
     if (revision !== themeRevision) return;
     applyTheme(persistedTheme);

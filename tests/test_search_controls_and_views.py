@@ -377,14 +377,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="parser-stat-books"', HTML)
         self.assertIn('data-target="statistics-settings"', HTML)
         self.assertIn("showSettingsCategory('statistics-settings')", HTML)
-        self.assertLess(
-            HTML.index('data-target="appearance-card"'),
-            HTML.index('data-target="statistics-settings"'),
-        )
-        self.assertLess(
-            HTML.index('data-target="statistics-settings"'),
-            HTML.index('data-target="data-location-settings"'),
-        )
+        mineru_nav = HTML.index('data-target="mineru-api-settings"')
+        vision_nav = HTML.index('data-target="vision-api-settings"')
+        statistics_nav = HTML.index('data-target="statistics-settings"')
+        citation_nav = HTML.index('data-target="citation-format-settings"')
+        self.assertLess(mineru_nav, vision_nav)
+        self.assertLess(vision_nav, statistics_nav)
+        self.assertLess(statistics_nav, citation_nav)
         mineru_start = HTML.index('id="mineru-api-settings"')
         statistics_start = HTML.index('id="statistics-settings"', mineru_start)
         vision_start = HTML.index('id="vision-api-settings"', statistics_start)

@@ -182,6 +182,9 @@ async function runSearch() {
   statusEl.textContent = '检索中…';
   listEl.innerHTML = '';
   selectedIndex = -1;
+  // Collapse back to the single full-canvas view until rows come back.
+  var areaEl = searchResultsArea();
+  if (areaEl) areaEl.classList.remove('has-results');
   showEmptyDetail();
 
   try {
@@ -204,6 +207,8 @@ async function runSearch() {
       return;
     }
 
+    // Rows exist — reveal the list + detail two-pane layout.
+    if (areaEl) areaEl.classList.add('has-results');
     listEl.innerHTML = searchResults.map((item, i) => resultRowHTML(item, i)).join('');
     selectResult(0, false);
   } catch (err) {

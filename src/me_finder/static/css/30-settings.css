@@ -1,4 +1,7 @@
-/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 · genre: modern-minimal · tone: focused desktop utility · palette: existing MEFinder accent tokens · macrostructure: Workbench · contrast: pass (40–41) · nav/footer: existing application chrome · slop: pass (42–49) · mobile: pass (34, 49–57) */
+/* Settings styles · genre: modern-minimal · tone: focused desktop utility.
+   Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
+   clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
+   Left anchor: all categories share an 880px left-aligned column. */
 .settings-page-content {
   flex: 1;
   min-height: 0;
@@ -16,6 +19,21 @@
   gap: 2px;
   overflow-y: auto;
 }
+/* Group headings split the 11 categories into 四组: 阅读 · 解析 · 引用 · 应用.
+   Not折叠, just a scan anchor. First group's label rides plat-desktop so it
+   hides with PDF 阅读 on non-desktop shells. */
+.settings-nav-group {
+  padding: 4px 11px 3px;
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  color: var(--text-tertiary);
+}
+.settings-nav-group:first-child { margin-top: 0; }
+.settings-nav-group.plat-desktop { display: none; }
+html[data-desktop-shell="macos"] .settings-nav-group.plat-desktop,
+html[data-desktop-shell="win32"] .settings-nav-group.plat-desktop { display: block; }
 .settings-nav-item {
   display: flex;
   align-items: center;
@@ -33,7 +51,7 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .settings-nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
-.settings-nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.settings-nav-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .settings-nav-icon { flex: 0 0 auto; width: 17px; height: 17px; }
 /* Platform-only entries hide when the current desktop shell does not apply. */
 .settings-nav-item.plat-desktop,
@@ -51,17 +69,16 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .settings-section {
   display: none;
-  max-width: 640px;
-  margin: 0 auto;
+  /* One stable left anchor for every category: left-aligned (margin:0, not
+     0 auto) with a single 880px cap. Switching categories no longer shifts
+     the heading left/right — it used to jump 120px between 640/880/1120. */
+  max-width: 880px;
+  margin: 0;
 }
 .settings-section.active { display: block; }
-#mineru-api-settings.active,
-#vision-api-settings.active,
-#statistics-settings.active { max-width: 880px; }
-#appearance-card.active {
-  width: 100%;
-  max-width: 1120px;
-}
+/* Appearance's theme grid wants more room; widen only the RIGHT edge so the
+   left anchor stays put with all the other categories. */
+#appearance-card.active { max-width: 1120px; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -500,7 +517,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   height: 34px;
   box-sizing: border-box;
   padding: 0 11px;
-  border: 1px solid var(--divider);
+  border: 1px solid var(--border-control);
   border-radius: 8px;
   background: var(--input-bg);
   color: var(--text-primary);
@@ -508,7 +525,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   outline: none;
 }
 .settings-input:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.settings-input::placeholder { color: var(--text-tertiary); }
+.settings-input::placeholder { color: var(--text-decorative); }
 .settings-toggle { flex: 0 0 auto; height: 34px; padding: 0 14px; white-space: nowrap; }
 .settings-advanced { border-top: 1px solid var(--border-subtle); padding-top: 14px; }
 .settings-advanced > summary {

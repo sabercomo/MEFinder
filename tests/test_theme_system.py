@@ -209,7 +209,11 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
         self.assertRegex(
             HTML,
-            r"#appearance-card\.active\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*1120px",
+            r"\.settings-section\s*\{[^}]*max-width:\s*880px;[^}]*margin:\s*0;",
+        )
+        self.assertRegex(
+            HTML,
+            r"#appearance-card\.active\s*\{[^}]*max-width:\s*1120px",
         )
         self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
         self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")

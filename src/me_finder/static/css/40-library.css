@@ -224,18 +224,21 @@
   height: 17px;
   flex: 0 0 17px;
   margin: 0;
-  accent-color: var(--danger);
+  accent-color: var(--accent);
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
+  /* Always present and tappable — no hover required. Touch devices have no
+     hover, so the old opacity:0/pointer-events:none made rows unselectable
+     there. Resting state is quiet (empty box at .55); it firms up on
+     hover/focus/selection. */
+  opacity: .55;
+  pointer-events: auto;
   transition: opacity var(--transition-fast);
 }
-/* Reveal on hover, once checked, or whenever a selection is in progress —
-   so selection starts with a single click and needs no mode toggle. */
 .library-entry:hover .library-delete-check,
 .library-entry.delete-selected .library-delete-check,
 .library-delete-check:focus-visible,
-#page-library.library-selecting .library-delete-check { opacity: 1; pointer-events: auto; }
+.library-delete-check:checked,
+#page-library.library-selecting .library-delete-check { opacity: 1; }
 .library-delete-check:disabled { cursor: not-allowed; opacity: .38; }
 .library-row.delete-selected {
   background: var(--danger-soft);
