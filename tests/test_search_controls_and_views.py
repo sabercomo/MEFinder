@@ -374,6 +374,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="mineru-statistics-list"', HTML)
         self.assertIn('data-target="statistics-settings"', HTML)
         self.assertIn("showSettingsCategory('statistics-settings')", HTML)
+        self.assertLess(
+            HTML.index('data-target="appearance-card"'),
+            HTML.index('data-target="statistics-settings"'),
+        )
+        self.assertLess(
+            HTML.index('data-target="statistics-settings"'),
+            HTML.index('data-target="data-location-settings"'),
+        )
         mineru_start = HTML.index('id="mineru-api-settings"')
         statistics_start = HTML.index('id="statistics-settings"', mineru_start)
         vision_start = HTML.index('id="vision-api-settings"', statistics_start)
