@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Version = "",
     [string]$PythonExe = ""
 )
@@ -90,7 +90,7 @@ try {
 
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $StagePath "config\pdf_imports.json")
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $StagePath "config\mineru_api.local.example.json")
-    Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
+    Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination (Join-Path $StagePath "README.txt")
     Copy-Item -LiteralPath "portable_first_run.cmd" -Destination (Join-Path $StagePath "0-首次启动-程序打不开时运行.cmd")
     $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath

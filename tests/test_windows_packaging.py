@@ -38,6 +38,17 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("_internal", launcher)
         self.assertIn("Start-Process", launcher)
 
+    def test_portable_build_includes_plain_text_user_guide(self) -> None:
+        guide = Path("PORTABLE_README.txt")
+
+        self.assertTrue(guide.is_file())
+        self.assertIn('"PORTABLE_README.txt"', self.portable_script)
+        self.assertIn('"README.txt"', self.portable_script)
+        self.assertNotIn('"README.md"', self.portable_script)
+        content = guide.read_text(encoding="utf-8-sig")
+        self.assertIn("Get-FileHash -Algorithm SHA256", content)
+        self.assertIn("保护历史记录", content)
+
     def test_installer_wizard_is_localized_and_branded(self) -> None:
         # 简体中文与英文双语可选；启动时的语言对话框负责切换。
         self.assertIn(
