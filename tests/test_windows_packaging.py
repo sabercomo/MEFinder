@@ -29,6 +29,15 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn('[string]$PythonExe = ""', self.portable_script)
         self.assertIn("& $pythonCommand @pythonLauncherArgs -m PyInstaller", self.portable_script)
 
+    def test_portable_build_includes_windows_unblock_fallback(self) -> None:
+        launcher = Path("portable_first_run.cmd").read_text(encoding="utf-8-sig")
+
+        self.assertIn("portable_first_run.cmd", self.portable_script)
+        self.assertIn("0-首次启动-程序打不开时运行.cmd", self.portable_script)
+        self.assertIn("Unblock-File", launcher)
+        self.assertIn("_internal", launcher)
+        self.assertIn("Start-Process", launcher)
+
     def test_installer_wizard_is_localized_and_branded(self) -> None:
         # 简体中文与英文双语可选；启动时的语言对话框负责切换。
         self.assertIn(

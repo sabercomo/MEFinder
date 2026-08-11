@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import types
 import unittest
@@ -14,6 +15,69 @@ from tools.create_portable_zip import create_portable_zip
 
 
 class DesktopPortableTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "NTFS alternate streams are Windows-only")
+    def test_windows_portable_removes_python_runtime_internet_zone(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            (bundle / desktop.PORTABLE_MARKER).touch()
+            runtime = bundle / desktop.WINDOWS_PYTHON_RUNTIME_DLL
+            runtime.parent.mkdir(parents=True)
+            runtime.write_bytes(b"test runtime")
+            zone_stream = Path(f"{runtime}:Zone.Identifier")
+            zone_stream.write_text("[ZoneTransfer]\nZoneId=3\n", encoding="ascii")
+
+            with (
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+            ):
+                self.assertEqual(desktop.prepare_windows_portable_runtime(bundle), 1)
+
+            self.assertFalse(zone_stream.exists())
+
+    def test_windows_portable_unblocks_runtime_before_importing_webview(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            (bundle / desktop.PORTABLE_MARKER).touch()
+            runtime = bundle / desktop.WINDOWS_PYTHON_RUNTIME_DLL
+            helper = bundle / "_internal" / "clr_loader" / "ClrLoader.dll"
+            runtime.parent.mkdir(parents=True)
+            helper.parent.mkdir(parents=True)
+            runtime.touch()
+            helper.touch()
+            removed = []
+
+            with (
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+                mock.patch.object(
+                    desktop,
+                    "_remove_windows_download_mark",
+                    side_effect=lambda path: removed.append(path) or True,
+                ),
+            ):
+                self.assertEqual(desktop.prepare_windows_portable_runtime(bundle), 2)
+
+            self.assertCountEqual(removed, [runtime, helper])
+
+        main_source = Path("desktop.py").read_text(encoding="utf-8").split(
+            "def main() -> None:", 1
+        )[1]
+        self.assertLess(
+            main_source.index("prepare_windows_portable_runtime(bundle_root)"),
+            main_source.index("import webview"),
+        )
+
+    def test_windows_portable_reports_a_quarantined_python_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            (bundle / desktop.PORTABLE_MARKER).touch()
+            with (
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Python.Runtime.dll 缺失"):
+                    desktop.prepare_windows_portable_runtime(bundle)
+
     def test_windows_main_window_uses_html_titlebar_and_scoped_drag_region(self) -> None:
         class Event:
             def __init__(self) -> None:

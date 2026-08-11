@@ -34,6 +34,8 @@ APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = "portable.flag"
 INSTALLED_MARKER = "installed.flag"
 DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
+WINDOWS_PYTHON_RUNTIME_DLL = Path("_internal/pythonnet/runtime/Python.Runtime.dll")
+WINDOWS_RUNTIME_SUFFIXES = frozenset({".dll", ".exe", ".pyd"})
 MACOS_TITLEBAR_HEIGHT = 28.0
 MACOS_TRAFFIC_LIGHT_SAFE_WIDTH = 82.0
 
@@ -238,6 +240,62 @@ def python_launcher() -> str:
 
 def is_portable_bundle(bundle_root: Path) -> bool:
     return bool(getattr(sys, "frozen", False) and (Path(bundle_root) / PORTABLE_MARKER).is_file())
+
+
+def _remove_windows_download_mark(path: Path) -> bool:
+    """Remove the Mark-of-the-Web stream from one extracted payload file."""
+
+    try:
+        os.remove(f"{path}:Zone.Identifier")
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def prepare_windows_portable_runtime(bundle_root: Path) -> int:
+    """Make downloaded portable runtime binaries loadable before pywebview starts.
+
+    Explorer can propagate a ZIP's Internet Zone marker to extracted files. The
+    main executable may then be allowed by the user while .NET still refuses to
+    load ``Python.Runtime.dll``. Only packaged executable payloads are touched;
+    portable user data and non-Windows builds are left unchanged.
+    """
+
+    bundle_root = Path(bundle_root)
+    if sys.platform != "win32" or not is_portable_bundle(bundle_root):
+        return 0
+
+    python_runtime = bundle_root / WINDOWS_PYTHON_RUNTIME_DLL
+    if not python_runtime.is_file():
+        raise RuntimeError(
+            "Windows 运行组件 Python.Runtime.dll 缺失，可能被安全软件隔离。"
+            "请删除当前程序目录，重新完整解压便携版 ZIP，并检查 Windows 安全中心的保护历史记录。"
+        )
+
+    internal_root = bundle_root / "_internal"
+    payloads = list(bundle_root.glob("*.exe"))
+    if internal_root.is_dir():
+        payloads.extend(
+            path
+            for path in internal_root.rglob("*")
+            if path.is_file() and path.suffix.lower() in WINDOWS_RUNTIME_SUFFIXES
+        )
+
+    removed = 0
+    failures: list[tuple[Path, OSError]] = []
+    for path in payloads:
+        try:
+            removed += int(_remove_windows_download_mark(path))
+        except OSError as exc:
+            failures.append((path, exc))
+
+    if failures:
+        path, exc = failures[0]
+        raise RuntimeError(
+            "Windows 阻止了便携版运行组件，且程序无法自动解除阻止："
+            f"{path}（{exc}）。请运行包内的 0-首次启动-程序打不开时运行.cmd。"
+        ) from exc
+    return removed
 
 
 def installation_kind(bundle_root: Path) -> str:
@@ -513,11 +571,13 @@ def setup_logging(root: Path) -> None:
 
 
 def main() -> None:
+    bundle_root = app_root()
+    unblocked_payloads = prepare_windows_portable_runtime(bundle_root)
+
     import webview
 
     from src.me_finder.app_context import AppContext
 
-    bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
     app_data_root = (
@@ -551,6 +611,11 @@ def main() -> None:
     theme = read_preferences(preferences_path)["theme"]
     setup_logging(root)
     logging.info("app root: %s", root)
+    if unblocked_payloads:
+        logging.info(
+            "removed Windows download marks from %d portable runtime files",
+            unblocked_payloads,
+        )
     if root != bundle_root:
         logging.info("bundle root: %s", bundle_root)
 
