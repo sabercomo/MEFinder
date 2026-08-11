@@ -45,6 +45,7 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertTrue(options["shadow"])
         self.assertTrue(options["resizable"])
         self.assertTrue(options["text_select"])
+        self.assertEqual(options["min_size"], (960, 640))
         self.assertIs(options["js_api"], controller)
         self.assertIs(controller._window, window)
         self.assertFalse(hasattr(controller, "window"))
@@ -74,6 +75,7 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertNotIn("frameless", options)
         self.assertNotIn("js_api", options)
         self.assertTrue(options["text_select"])
+        self.assertEqual(options["min_size"], (960, 640))
         self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
 
     def test_scan_directory_picker_enables_native_multiple_selection(self) -> None:

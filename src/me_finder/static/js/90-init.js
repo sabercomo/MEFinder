@@ -18,6 +18,14 @@ document.addEventListener('click', function(event) {
 document.addEventListener('input', function(event) {
   if (event.target && event.target.closest && event.target.closest('#bibliographic-editor')) bibEditorDirty = true;
 });
+// 需要显式保存的设置区块（MinerU / 视觉接口）：改动即提示尚未保存（C-02）。
+// 保存/重载会各自把提示文案覆盖回去，自然清除。
+document.addEventListener('input', function(event) {
+  var t = event.target;
+  if (!t || !t.closest) return;
+  if (t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint');
+  else if (t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint');
+});
 (function initVisionEditor() {
   var base = document.getElementById('vision-api-base');
   var key = document.getElementById('vision-api-key');
@@ -62,9 +70,15 @@ document.addEventListener('input', function(event) {
     if (!combo || !combo.querySelector('#vision-api-base')) closeVisionBasePop();
   });
 })();
+(function initImportVisionMenuPositioning() {
+  var scroller = document.querySelector('#page-import .import-content');
+  if (scroller) scroller.addEventListener('scroll', positionImportVisionMenu, {passive: true});
+  window.addEventListener('resize', positionImportVisionMenu);
+})();
 configureDesktopPlatformOptions();
 setupScanDirectoryControls();
 setupLibraryDragSelection();
+setupLibraryKeyboardNav();
 setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();

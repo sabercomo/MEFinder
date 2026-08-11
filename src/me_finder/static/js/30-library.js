@@ -72,10 +72,127 @@ function renderLibraryStats() {
     else current.page_pending += 1;
     if (bibliographicMissingFields(sourceBibliographicMetadata(item)).length > 0) current.bibliographic += 1;
   });
-  container.innerHTML = statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('calibrated','页码已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+  // W1：拆成「待处理」行动组（重）+「参考量」组（轻），一眼看出现在该处理什么。
+  container.innerHTML = '<div class="stat-group stat-group--pending"><span class="stat-group__label">待处理</span>'
     + statusStatButton('page_pending','页码待处理',current.page_pending,'warning','notice',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter');
+    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter')
+    + '</div><span class="library-controls-spacer"></span>'
+    + '<div class="stat-group stat-group--reference">'
+    + statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+    + '</div>';
+}
+
+// 主流范式（Notion / Linear / Zotero）：三个筛选收进一个「筛选」按钮 + 弹层分面；
+// 只有正在生效的筛选才作为可删 chip 露出来，按钮带数字角标。渲染由 renderLibraryList 触发。
+function libDocTypeLabel(v) {
+  return v === 'book' ? '著作' : v === 'journal_article' ? '期刊论文'
+    : v === 'thesis' ? '学位论文' : v === 'unknown' ? '未识别' : '全部类型';
+}
+
+// 当前生效的（非「全部」）筛选，按「类型 → 语言 → 文件」次序，供角标与 chips 使用。
+function libFilterActiveList() {
+  var out = [];
+  if (libDocTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libDocTypeFilter)});
+  if (libLangFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libLangFilter)});
+  if (libTypeFilter !== 'all') out.push({kind:'type', label:libTypeFilter === 'word' ? 'Word' : 'PDF'});
+  return out;
+}
+
+function renderLibraryFilterBar() {
+  var allCount = libSources.length;
+  var wordCount = libSources.filter(function(s){ return s.source_type === 'word'; }).length;
+  var pdfCount = libSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
+  var chineseCount = libSources.filter(function(s){ return (s.language || 'chinese') === 'chinese'; }).length;
+  var foreignCount = allCount - chineseCount;
+  var journalCount = libSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
+  var thesisCount = libSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
+  // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
+  var bookCount = libSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
+  var unknownCount = libSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
+
+  var doctypeOpts = [
+    {v:'all', label:'全部类型', n:allCount},
+    {v:'book', label:'著作', n:bookCount},
+    {v:'journal_article', label:'期刊论文', n:journalCount},
+    {v:'thesis', label:'学位论文', n:thesisCount}
+  ];
+  if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
+
+  // 语言：默认语言那一档排在另一档之前，让主语言文献靠前（沿用旧 order 主次）。
+  var other = libDefaultLanguage === 'chinese' ? 'foreign' : 'chinese';
+  var langOpts = [
+    {v:'all', label:'全部语言', n:allCount},
+    {v:libDefaultLanguage, label:libLangChipLabel(libDefaultLanguage), n:libDefaultLanguage === 'chinese' ? chineseCount : foreignCount},
+    {v:other, label:libLangChipLabel(other), n:other === 'chinese' ? chineseCount : foreignCount}
+  ];
+
+  var typeOpts = [
+    {v:'all', label:'全部', n:allCount},
+    {v:'word', label:'Word', n:wordCount},
+    {v:'pdf', label:'PDF', n:pdfCount}
+  ];
+
+  renderLibraryFacet('filter-opts-doctype', doctypeOpts, libDocTypeFilter, 'doctype');
+  renderLibraryFacet('filter-opts-lang', langOpts, libLangFilter, 'lang');
+  renderLibraryFacet('filter-opts-type', typeOpts, libTypeFilter, 'type');
+
+  var active = libFilterActiveList();
+  var badge = document.getElementById('library-filter-badge');
+  if (badge) { badge.textContent = String(active.length); badge.hidden = active.length === 0; }
+  var container = document.getElementById('library-filter');
+  if (container) container.classList.toggle('has-active', active.length > 0);
+  var chips = document.getElementById('library-filter-chips');
+  if (chips) {
+    chips.innerHTML = active.map(function(a){
+      return '<button class="library-filter-chip" type="button" title="移除筛选：' + esc(a.label) + '" aria-label="移除筛选：' + esc(a.label) + '" onclick="removeLibFacet(event,\'' + a.kind + '\')">'
+        + '<span>' + esc(a.label) + '</span>'
+        + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
+    }).join('');
+  }
+}
+
+function renderLibraryFacet(containerId, options, active, kind) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = options.map(function(o){
+    return '<button class="filter-opt' + (o.v === active ? ' is-on' : '') + '" type="button" role="option" aria-selected="' + (o.v === active) + '" data-value="' + o.v + '" onclick="setLibFacet(event,\'' + kind + '\',\'' + o.v + '\')">'
+      + '<span>' + esc(o.label) + '</span><span class="filter-opt-n">' + o.n + '</span></button>';
+  }).join('');
+}
+
+// 选中某个分面：立即生效并重绘（弹层保持打开，可连续多选，Notion 式）。
+async function setLibFacet(event, kind, value) {
+  if (event) event.stopPropagation();
+  if (!await guardLeaveDetail()) return;
+  if (kind === 'doctype') libDocTypeFilter = value;
+  else if (kind === 'lang') libLangFilter = value;
+  else if (kind === 'type') {
+    libTypeFilter = value;
+    if (libTypeFilter === 'word' && libStatusFilter !== 'all') { libStatusFilter = 'all'; renderLibraryStats(); }
+  }
+  closeLibDrawer();
+  renderLibraryList();
+}
+
+// 移除单个生效筛选（点 chip 的 ✕），把该分面复位到「全部」。
+async function removeLibFacet(event, kind) {
+  if (event) event.stopPropagation();
+  if (!await guardLeaveDetail()) return;
+  if (kind === 'doctype') libDocTypeFilter = 'all';
+  else if (kind === 'lang') libLangFilter = 'all';
+  else if (kind === 'type') libTypeFilter = 'all';
+  closeLibDrawer();
+  renderLibraryList();
+}
+
+// 切换排序方向（升/降），合并排序控件里的方向按钮。
+function toggleLibrarySortDirection() {
+  libSortDirection = libSortDirection === 'asc' ? 'desc' : 'asc';
+  try { localStorage.setItem('meFinderLibrarySortDirection', libSortDirection); } catch (_) {}
+  syncLibrarySortControls();
+  closeAppSelects();
+  renderLibraryList();
 }
 
 async function applyLibStatusFilter(status) {
@@ -83,35 +200,10 @@ async function applyLibStatusFilter(status) {
   var requested = status || 'all';
   libStatusFilter = requested === libStatusFilter ? 'all' : requested;
   if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
-    libTypeFilter = 'all';
-    document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.type === 'all');
-    });
+    libTypeFilter = 'all';  // 筛选按钮/chips 由 renderLibraryFilterBar 随列表重绘刷新
   }
   closeLibDrawer();
   renderLibraryStats();
-  renderLibraryList();
-}
-
-async function setLibFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libTypeFilter = btn.dataset.type;
-  if (libTypeFilter === 'word' && libStatusFilter !== 'all') {
-    libStatusFilter = 'all';
-    renderLibraryStats();
-  }
-  document.querySelectorAll('#lib-type-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
-  renderLibraryList();
-}
-
-async function setLibLangFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libLangFilter = btn.dataset.lang;
-  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
   renderLibraryList();
 }
 
@@ -127,6 +219,7 @@ function setLibDefaultLanguage(btn) {
   if (value === libDefaultLanguage) return;
   libDefaultLanguage = value;
   try { localStorage.setItem('meFinderLibDefaultLanguage', value); } catch (_) {}
+  persistDisplayPreference('lib_default_language', value);  // 随数据备份/迁移（C-01）
   syncLibDefaultLanguageControl();
   renderLibraryList();  // 重绘以刷新语言筛选条的标签与「本国/外文」归属
 }
@@ -137,15 +230,15 @@ function syncLibDefaultLanguageControl() {
   });
 }
 
-// 文字系统事实（'chinese' / 'foreign'）→ 语言筛选条上的显示标签。
-// 标签始终是「中文 / 外文」；默认语言不改标签文字，只改两档的排列主次
-// （见 renderLibraryList 里对 style.order 的设置）。
-async function setLibDocTypeFilter(btn) {
-  if (!await guardLeaveDetail()) return;
-  libDocTypeFilter = btn.dataset.doctype;
-  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  closeLibDrawer();
+// 清空所有筛选与搜索，回到全部（空态「清除全部筛选」、筛选弹层「清除全部」用）。
+function clearLibraryFilters() {
+  libTypeFilter = 'all';
+  libLangFilter = 'all';
+  libDocTypeFilter = 'all';
+  libStatusFilter = 'all';
+  var search = document.getElementById('lib-search');
+  if (search) search.value = '';
+  renderLibraryStats();
   renderLibraryList();
 }
 
@@ -193,15 +286,18 @@ function setLibrarySortOption(event, control, value) {
 function syncLibrarySortControls() {
   var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',source_type:'来源类型',status:'校准状态',desc:'降序',asc:'升序'};
   var fieldLabel = document.getElementById('library-sort-field-label');
-  var directionLabel = document.getElementById('library-sort-direction-label');
   if (fieldLabel) fieldLabel.textContent = labels[libSortField] || labels.imported_at;
-  if (directionLabel) directionLabel.textContent = labels[libSortDirection] || labels.desc;
   document.querySelectorAll('#library-sort-field-select .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === libSortField);
   });
-  document.querySelectorAll('#library-sort-direction-select .app-select-option').forEach(function(option) {
-    option.classList.toggle('is-selected', option.dataset.value === libSortDirection);
-  });
+  // 方向合并成一个可点按钮：文案随升/降切换，箭头方向靠 .is-asc 翻转。
+  var dirBtn = document.getElementById('library-sort-dir');
+  var dirLabel = document.getElementById('library-sort-dir-label');
+  if (dirLabel) dirLabel.textContent = labels[libSortDirection] || labels.desc;
+  if (dirBtn) {
+    dirBtn.classList.toggle('is-asc', libSortDirection === 'asc');
+    dirBtn.setAttribute('aria-label', libSortDirection === 'asc' ? '升序，点击改为降序' : '降序，点击改为升序');
+  }
 }
 
 function compareLibraryDates(a, b) {
@@ -221,7 +317,13 @@ function getFilteredSources() {
   if (libLangFilter !== 'all') {
     sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
   }
-  if (libDocTypeFilter !== 'all') {
+  if (libDocTypeFilter === 'unknown') {
+    // 未识别：从未跑过书目识别的 PDF（类型只是默认回落成 book，并非真的判定过）。
+    sources = sources.filter(s => s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)));
+  } else if (libDocTypeFilter === 'book') {
+    // 著作：仅已确认类型的图书 PDF；不再把 Word 文集和未识别 PDF 混进来。
+    sources = sources.filter(s => s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book');
+  } else if (libDocTypeFilter !== 'all') {
     sources = sources.filter(s => libraryDocType(s) === libDocTypeFilter);
   }
   if (libStatusFilter === 'pdf_all') {
@@ -283,6 +385,7 @@ function updateLibraryDeleteControls() {
     selectVisibleButton.textContent = allSelected ? '取消全选' : '全选当前';
     selectVisibleButton.disabled = selectable.length === 0;
   }
+  syncLibrarySelectAll();
 }
 
 function syncLibraryDeleteSelectionUI() {
@@ -326,6 +429,43 @@ function toggleSelectVisibleLibraryDocuments() {
   syncLibraryDeleteSelectionUI();
 }
 
+// 列表键盘导航（L-11）：↑↓ 移动焦点，Enter 打开详情，空格切换勾选，Home/End 跳首尾。
+function handleLibraryListKeydown(event) {
+  var target = event.target && event.target.closest ? event.target.closest('.library-entry') : null;
+  if (!target) return;
+  var entries = Array.prototype.slice.call(document.querySelectorAll('#library-list .library-entry'));
+  var idx = entries.indexOf(target);
+  if (event.key === 'ArrowDown') { event.preventDefault(); if (entries[idx + 1]) entries[idx + 1].focus(); }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); if (entries[idx - 1]) entries[idx - 1].focus(); }
+  else if (event.key === 'Home') { event.preventDefault(); if (entries[0]) entries[0].focus(); }
+  else if (event.key === 'End') { event.preventDefault(); if (entries.length) entries[entries.length - 1].focus(); }
+  else if (event.key === 'Enter') { event.preventDefault(); selectLibDoc(target.dataset.id); }
+  else if (event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); toggleLibraryDeleteSelection(target.dataset.id); }
+}
+
+function setupLibraryKeyboardNav() {
+  var list = document.getElementById('library-list');
+  if (!list || list.dataset.keyboardReady === '1') return;
+  list.dataset.keyboardReady = '1';
+  list.addEventListener('keydown', handleLibraryListKeydown);
+}
+
+// 常驻全选（L-09）：工具栏三态复选框——空 / 半选 / 全选当前筛选结果，
+// 既是全选入口，也是「这里可多选」的可发现锚点。
+function syncLibrarySelectAll() {
+  var box = document.getElementById('lib-select-all');
+  if (!box) return;
+  var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
+  var selectedVisible = selectable.filter(function(item) { return libDeleteSelection.has(item.source_file_id); });
+  var state = selectable.length === 0 ? 'empty'
+    : selectedVisible.length === 0 ? 'empty'
+    : selectedVisible.length === selectable.length ? 'all' : 'some';
+  box.classList.toggle('is-all', state === 'all');
+  box.classList.toggle('is-some', state === 'some');
+  box.setAttribute('aria-checked', state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false');
+  box.disabled = selectable.length === 0;
+}
+
 function handleLibraryEntryClick(event, sourceId) {
   if (suppressLibrarySelectionClick) {
     event.preventDefault();
@@ -346,38 +486,15 @@ function renderLibraryList() {
       libDeleteSelection.delete(sourceId);
     }
   });
-  const allCount = libSources.length;
-  const wordCount = libSources.filter(s => s.source_type === 'word').length;
-  const pdfCount = libSources.filter(s => s.source_type === 'pdf').length;
-  document.querySelectorAll('#lib-type-control .seg-btn').forEach(function(btn) {
-    var t = btn.dataset.type;
-    var c = t === 'all' ? allCount : t === 'word' ? wordCount : pdfCount;
-    var label = t === 'all' ? '全部' : t === 'word' ? 'Word' : 'PDF';
-    btn.textContent = label + ' (' + c + ')';
-  });
-  const chineseCount = libSources.filter(s => (s.language || 'chinese') === 'chinese').length;
-  const foreignCount = libSources.length - chineseCount;
-  document.querySelectorAll('#lib-lang-control .seg-btn').forEach(function(btn) {
-    var lang = btn.dataset.lang;
-    var count = lang === 'all' ? allCount : lang === 'chinese' ? chineseCount : foreignCount;
-    var label = lang === 'all' ? '全部语言' : libLangChipLabel(lang);
-    btn.textContent = label + ' (' + count + ')';
-    // 默认语言那一档排在「全部语言」之后、另一档之前，让主语言文献靠前。
-    btn.style.order = lang === 'all' ? '0' : (lang === libDefaultLanguage ? '1' : '2');
-  });
-  const journalCount = libSources.filter(s => libraryDocType(s) === 'journal_article').length;
-  const thesisCount = libSources.filter(s => libraryDocType(s) === 'thesis').length;
-  const bookCount = allCount - journalCount - thesisCount;
-  document.querySelectorAll('#lib-doctype-control .seg-btn').forEach(function(btn) {
-    var dt = btn.dataset.doctype;
-    var count = dt === 'all' ? allCount : dt === 'journal_article' ? journalCount : dt === 'thesis' ? thesisCount : bookCount;
-    var label = dt === 'all' ? '全部类型' : dt === 'journal_article' ? '期刊论文' : dt === 'thesis' ? '学位论文' : '著作';
-    btn.textContent = label + ' (' + count + ')';
-  });
+  // 筛选按钮角标 + 生效 chips + 弹层三组分面（含实时计数），一处渲染。
+  renderLibraryFilterBar();
 
   libraryRenderToken += 1;
   if (sources.length === 0) {
-    listEl.innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">未找到匹配文献</div></div>';
+    // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
+    listEl.innerHTML = libSources.length === 0
+      ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF 或 DOCX 后即可检索、校准页码、补全书目</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
+      : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
     updateLibraryDeleteControls();
     return;
   }
@@ -450,7 +567,7 @@ function libraryEntryHTML(src) {
   if (libViewMode === 'grid') {
     var imported = formatCalDate(src.imported_at || src.last_modified);
     var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
-    return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+    return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
       + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div>' + selectionControl + '</div>'
       + '<div class="library-card-title">' + thesisIcon + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
       + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
@@ -458,7 +575,7 @@ function libraryEntryHTML(src) {
       + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
       + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
   }
-  return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+  return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
     + selectionControl
     + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
     + '<span class="library-row-title">' + thesisIcon + esc(title) + '</span>'
@@ -473,9 +590,108 @@ function libraryEntryHTML(src) {
     + '</div>';
 }
 
+// 详情抽屉按插槽渲染，不再堆进一个巨型 innerHTML：
+//   #library-drawer-content = 上一条/下一条 + 标题 + 徽章 + 书目区（读/写态）
+//   #library-drawer-calibration（模板静态卡片，介于两个插槽之间）= 页码校准
+//   #library-drawer-extra = 收录文献 + 文件信息 + 主操作栏
+// 区块顺序落为：书目 → 页码校准 → 收录文献 → 文件信息 → 主操作。
+function drawerNavHTML(sourceId) {
+  var list = getFilteredSources();
+  var idx = list.findIndex(function(s) { return s.source_file_id === sourceId; });
+  if (idx < 0 || list.length <= 1) return '';
+  var prevId = idx > 0 ? list[idx - 1].source_file_id : '';
+  var nextId = idx < list.length - 1 ? list[idx + 1].source_file_id : '';
+  function btn(id, label, arrow) {
+    return '<button class="drawer-nav-btn" type="button" aria-label="' + label + '"'
+      + (id ? ' onclick="selectLibDoc(\'' + esc(id) + '\')"' : ' disabled') + '>' + arrow + '</button>';
+  }
+  return '<div class="drawer-nav">' + btn(prevId, '上一条文献', '‹')
+    + '<span class="drawer-nav-pos" aria-live="polite">' + (idx + 1) + ' / ' + list.length + '</span>'
+    + btn(nextId, '下一条文献', '›') + '</div>';
+}
+
+function drawerStatusPill(src) {
+  if (src.source_type !== 'pdf') return '';
+  var status = calTransientStatus[src.source_file_id] || src.status;
+  var group = calibrationStatusGroup(status);
+  return '<span class="cal-status-badge status-chip status-chip--' + statusSemanticVariant(group) + ' ' + group + '">'
+    + statusChipIcon(group) + esc(calibrationStatusLabel(status)) + '</span>';
+}
+
+// 收录文献：不再内层滚动（L-14），随抽屉整体滚动，避免滚轮被内层吞掉。
+function drawerWorksHTML(works) {
+  if (!works.length) return '';
+  return '<div class="drawer-section-title">收录文献 (' + works.length + ')</div>'
+    + '<div class="drawer-works-list">'
+    + works.map(function(w) {
+      var meta = [];
+      if (w.author_label) meta.push(w.author_label);
+      if (w.date_label) meta.push(w.date_label);
+      if (w.toc_page_start) meta.push('p.' + w.toc_page_start + (w.toc_page_end ? '–' + w.toc_page_end : ''));
+      return '<div class="drawer-work-item"><div class="drawer-work-title">' + esc(w.title) + '</div>'
+        + (meta.length ? '<div class="drawer-work-meta">' + esc(meta.join(' · ')) + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+}
+
+function drawerFileInfoHTML(src, vol) {
+  var info = '';
+  info += drawerInfoRow('文件类型', src.source_type === 'pdf' ? 'PDF 文档' : 'Word 文档');
+  info += drawerInfoRow('文件名', src.file_name);
+  info += drawerInfoRow('大小', formatFileSize(src.size_bytes));
+  if (src.source_type === 'pdf' && src.pdf_profile) {
+    info += drawerInfoRow('PDF 页数', src.pdf_profile.pdf_page_count + ' 页');
+    info += drawerInfoRow('PDF 类型', pdfTypeLabel(src.pdf_profile.detected_pdf_type));
+    info += drawerInfoRow('页码状态', mappingStatusLabel(src.pdf_profile.mapping_status));
+    if (src.pdf_profile.auto_page_mapping) {
+      var autoMap = src.pdf_profile.auto_page_mapping;
+      info += drawerInfoRow('自动页码映射', autoMap.method === 'manual_override'
+        ? '保留人工映射'
+        : '应用 ' + (autoMap.applied_segment_count || 0) + ' 个自动段，候选 ' + (autoMap.candidate_count || 0) + ' 个');
+      if (autoMap.applied_segments && autoMap.applied_segments.length) info += drawerInfoRow('自动映射区间', autoMap.applied_segments.map(autoMappingSegmentText).join('；'));
+      if (autoMap.exception_pages && autoMap.exception_pages.length) info += drawerInfoRow('异常页面', autoMap.exception_pages.length + ' 页');
+    }
+  }
+  if (src.last_modified) info += drawerInfoRow('修改日期', src.last_modified.split('T')[0]);
+  if (vol && vol.version_info) info += drawerInfoRow('版本', vol.version_info);
+  return '<div class="drawer-collapse" id="drawer-file-info">'
+    + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
+    + '<span class="drawer-section-title">文件信息</span>'
+    + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
+    + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
+    + '</button>'
+    + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
+    + '</div>';
+}
+
+// 主操作栏收敛为「打开原文」+ ⋯（重新解析 / 接受自动映射 / 检查异常 / 移除）。
+// 「自动检测页码 / 编辑区间」不再在这里重复——页码校准卡片是唯一入口（L-04）。
+function drawerMainActionsHTML(src) {
+  var sid = esc(src.source_file_id);
+  var moreSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+  var items = '';
+  if (src.source_type === 'pdf') {
+    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
+    var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
+    items += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' onclick="bibCloseMenus();submitMineruReparse(\'' + sid + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
+    var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
+    if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
+    if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
+    items += '<div class="bib-menu-sep"></div>';
+  }
+  items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
+  return '<div class="drawer-actions">'
+    + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + sid + '\', null)">打开原文</button>' : '')
+    + '<span class="drawer-actions-spacer"></span>'
+    + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
+    + '<span class="bib-menu bib-menu-end" id="drawer-more-menu" role="menu">' + items + '</span></span>'
+    + '</div>';
+}
+
 async function selectLibDoc(sourceId) {
   // 切到别的文献前拦一道未保存修改；同一文献的重选（识别/保存后刷新）不打扰。
-  if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;
+  var switchingDoc = sourceId !== libSelectedId;
+  if (switchingDoc && !await guardLeaveDetail()) return;
+  if (switchingDoc) bibEditMode[sourceId] = false;  // 新文献默认查看态
   libSelectedId = sourceId;
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) {
     row.classList.toggle('selected', row.dataset.id === sourceId);
@@ -496,107 +712,36 @@ async function selectLibDoc(sourceId) {
   var title = vol ? vol.display_title : (src.file_name || sourceId);
   var corpusTitle = vol ? (vol.corpus_title || '') : '';
 
-  var info = '';
-  info += drawerInfoRow('文件类型', src.source_type === 'pdf' ? 'PDF 文档' : 'Word 文档');
-  info += drawerInfoRow('文件名', src.file_name);
-  info += drawerInfoRow('大小', formatFileSize(src.size_bytes));
-  if (src.source_type === 'pdf' && src.pdf_profile) {
-    info += drawerInfoRow('PDF 页数', src.pdf_profile.pdf_page_count + ' 页');
-    info += drawerInfoRow('PDF 类型', pdfTypeLabel(src.pdf_profile.detected_pdf_type));
-    info += drawerInfoRow('页码状态', mappingStatusLabel(src.pdf_profile.mapping_status));
-    if (src.pdf_profile.auto_page_mapping) {
-      var autoMap = src.pdf_profile.auto_page_mapping;
-      var autoText = autoMap.method === 'manual_override'
-        ? '保留人工映射'
-        : '应用 ' + (autoMap.applied_segment_count || 0) + ' 个自动段，候选 ' + (autoMap.candidate_count || 0) + ' 个';
-      info += drawerInfoRow('自动页码映射', autoText);
-      if (autoMap.applied_segments && autoMap.applied_segments.length) {
-        info += drawerInfoRow('自动映射区间', autoMap.applied_segments.map(autoMappingSegmentText).join('；'));
-      }
-      if (autoMap.exception_pages && autoMap.exception_pages.length) {
-        info += drawerInfoRow('异常页面', autoMap.exception_pages.length + ' 页');
-      }
-    }
-  }
-  if (src.last_modified) {
-    info += drawerInfoRow('修改日期', src.last_modified.split('T')[0]);
-  }
-  if (vol && vol.version_info) {
-    info += drawerInfoRow('版本', vol.version_info);
-  }
-
-  var worksHTML = '';
-  if (works.length > 0) {
-    worksHTML = '<div class="drawer-section-title">收录文献 (' + works.length + ')</div>'
-      + '<div class="drawer-works-list">'
-      + works.map(function(w) {
-        var meta = [];
-        if (w.author_label) meta.push(w.author_label);
-        if (w.date_label) meta.push(w.date_label);
-        if (w.toc_page_start) meta.push('p.' + w.toc_page_start + (w.toc_page_end ? '–' + w.toc_page_end : ''));
-        return '<div class="drawer-work-item">'
-          + '<div class="drawer-work-title">' + esc(w.title) + '</div>'
-          + (meta.length ? '<div class="drawer-work-meta">' + esc(meta.join(' · ')) + '</div>' : '')
-          + '</div>';
-      }).join('')
-      + '</div>';
-  }
-
   var bibliographicHTML = '';
   if (src.source_type === 'pdf') {
-    // 选中即以当前元数据初始化字段缓存；此后切类型只在缓存里保留隐藏字段，
-    // 不会丢。保存或重新选中文献会刷新这份缓存。
+    // 选中即以当前元数据初始化字段缓存；切类型只在缓存里保留隐藏字段，不会丢。
     bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));
-    bibliographicHTML = bibliographicEditorHTML(src);
+    bibliographicHTML = renderBibliographicSection(src);
   }
 
-  var autoActions = '';
-  if (src.source_type === 'pdf') {
-    autoActions += '<button class="action-btn primary" onclick="openCalibrationAndDetect(\'' + esc(src.source_file_id) + '\')">自动检测页码</button>';
-  }
-  if (src.source_type === 'pdf') {
-    var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
-    var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
-    autoActions += '<button class="action-btn" id="mineru-reparse-btn"' + (ocrRunning ? ' disabled' : '') + ' onclick="submitMineruReparse(\'' + esc(src.source_file_id) + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
-  }
-  if (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.auto_page_mapping) {
-    var autoMapForActions = src.pdf_profile.auto_page_mapping;
-    if (autoMapForActions.applied_segments && autoMapForActions.applied_segments.length) {
-      autoActions += '<button class="action-btn" onclick="acceptAutoMapping(\'' + esc(src.source_file_id) + '\')">接受自动映射</button>';
-    }
-    if (autoMapForActions.exception_pages && autoMapForActions.exception_pages.length) {
-      autoActions += '<button class="action-btn" onclick="showAutoMappingExceptions(\'' + esc(src.source_file_id) + '\')">检查异常</button>';
-    }
-    autoActions += '<button class="action-btn" onclick="openCalibrationForSource(\'' + esc(src.source_file_id) + '\')">编辑区间</button>';
-  }
-
-  var fileInfoHTML = '<div class="drawer-collapse" id="drawer-file-info">'
-    + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
-    + '<span class="drawer-section-title">文件信息</span>'
-    + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
-    + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
-    + '</button>'
-    + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
-    + '</div>';
-
-  var el = document.getElementById('library-drawer-content');
-  el.innerHTML = '<div class="drawer-title">' + esc(title) + '</div>'
+  var content = document.getElementById('library-drawer-content');
+  content.innerHTML = drawerNavHTML(sourceId)
+    + '<div class="drawer-title" tabindex="-1">' + esc(title) + '</div>'
     + (corpusTitle ? '<div class="drawer-subtitle">' + esc(corpusTitle) + '</div>' : '')
     + '<div class="detail-pills" style="margin-top:12px">'
     + '<span class="detail-pill">' + (src.source_type === 'pdf' ? 'PDF' : 'Word') + '</span>'
     + (vol && vol.primary_structure ? '<span class="detail-pill">' + structureLabel(vol.primary_structure) + '</span>' : '')
+    + drawerStatusPill(src)
     + '</div>'
-    + fileInfoHTML
-    + bibliographicHTML
-    + worksHTML
-    + '<div class="drawer-actions">'
-    + autoActions
-    + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(src.source_file_id) + '\', null)">打开原文</button>' : '')
-    + '</div>';
+    + bibliographicHTML;
+
+  var extra = document.getElementById('library-drawer-extra');
+  if (extra) extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);
+
   document.getElementById('library-drawer').classList.add('open');
   var body = document.querySelector('#page-library .library-body');
   if (body) body.classList.add('detail-open');
   renderDrawerCalibration(src);
+  // 新开详情时把焦点移到标题，便于读屏播报；同一文献刷新不夺焦点。
+  if (switchingDoc) {
+    var titleEl = content.querySelector('.drawer-title');
+    if (titleEl) titleEl.focus();
+  }
 }
 
 function renderDrawerCalibrationSummary(src) {

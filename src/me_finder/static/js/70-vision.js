@@ -153,7 +153,6 @@ async function testMineruConnection() {
 
 /* ═══ Optional OpenAI-compatible vision providers ═══ */
 var VISION_BRAND_RULES = [
-  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com'},
   {re: /dashscope|aliyuncs/i, name: '通义千问', color: '#615CED', icon: 'qwen-color.svg', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
   {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', iconBg: '#101319', base: 'https://api.moonshot.cn/v1'},
   {re: /bigmodel|zhipu/i, name: '智谱 GLM', color: '#3859FF', icon: 'zhipu-color.svg', base: 'https://open.bigmodel.cn/api/paas/v4'},
@@ -170,7 +169,8 @@ var VISION_BRAND_RULES = [
   {re: /(^|\W)x\.ai|grok/i, name: 'Grok', color: '#1D1F23', icon: 'grok.svg', base: 'https://api.x.ai/v1'},
   {re: /mistral/i, name: 'Mistral', color: '#FA520F', icon: 'mistral-color.svg', base: 'https://api.mistral.ai/v1'},
   {re: /groq/i, name: 'Groq', color: '#F55036', icon: 'groq.svg', base: 'https://api.groq.com/openai/v1'},
-  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'}
+  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'},
+  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com', unsupported: true}
 ];
 var VISION_AVATAR_PALETTE = ['#1677FF', '#7B5EC7', '#C9446A', '#B85C2B', '#637A50', '#0E8A8A', '#B0499B', '#4D6BFE'];
 var VISION_PLUS_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
@@ -273,6 +273,7 @@ function renderVisionBasePop() {
           + '" data-base="' + esc(rule.base) + '">'
           + visionAvatarHtml({api_base: rule.base, name: rule.name}, 'vision-avatar-sm')
           + '<span class="vision-base-name">' + esc(rule.name) + '</span>'
+          + (rule.unsupported ? '<span class="vision-model-badge capability-unsupported">不支持图片</span>' : '')
           + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
           + '</div>';
       }).join('');
@@ -357,8 +358,33 @@ function visionModelFiltered() {
   if (exactMatch) return visionModelOptions;
   return visionModelOptions.filter(function(item) {
     return item.id.toLowerCase().indexOf(query) >= 0
-      || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
+      || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0
+      || String(item.capability_label || '').toLowerCase().indexOf(query) >= 0;
   });
+}
+
+function visionModelCapability(item) {
+  var capability = String((item || {}).capability || '');
+  if (capability === 'ocr') return 'ocr';
+  if (capability === 'vision' || capability === 'omni') return 'vision';
+  if (capability === 'text' || capability === 'unsupported') return 'text';
+  return item && item.likely_vision ? 'vision' : 'text';
+}
+
+function visionModelPriority(item) {
+  var priority = Number((item || {}).capability_priority);
+  if (Number.isFinite(priority)) return priority;
+  var fallback = {ocr: 0, vision: 100, text: 900};
+  return fallback[visionModelCapability(item)];
+}
+
+function visionModelBadgeHTML(item) {
+  var label = String((item || {}).capability_label || '');
+  var capability = visionModelCapability(item);
+  if (capability === 'vision') label = '支持图片';
+  else if (capability === 'text') label = '不支持图片';
+  else if (!label) label = 'OCR 专用';
+  return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
 }
 
 function renderVisionModelPop() {
@@ -371,22 +397,28 @@ function renderVisionModelPop() {
     hideVisionPop(pop, input);
     return;
   }
-  var owners = [];
-  var byOwner = {};
+  var groups = [
+    {key: 'ocr', label: 'OCR 专用 · 优先'},
+    {key: 'vision', label: '支持图片'},
+    {key: 'text', label: '不支持图片'}
+  ];
+  var byCapability = {};
   items.forEach(function(item) {
-    var owner = String(item.owned_by || '其他');
-    if (!byOwner[owner]) { byOwner[owner] = []; owners.push(owner); }
-    byOwner[owner].push(item);
+    var capability = visionModelCapability(item);
+    if (!byCapability[capability]) byCapability[capability] = [];
+    byCapability[capability].push(item);
   });
-  var html = owners.map(function(owner) {
-    return '<div class="vision-model-group">' + esc(owner) + '</div>'
-      + byOwner[owner].map(function(item) {
+  var html = groups.filter(function(group) {
+    return byCapability[group.key] && byCapability[group.key].length;
+  }).map(function(group) {
+    return '<div class="vision-model-group">' + esc(group.label) + '</div>'
+      + byCapability[group.key].map(function(item) {
           var index = visionModelFlat.length;
           visionModelFlat.push(item);
           return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
             + '" data-model="' + esc(item.id) + '">'
             + '<span class="vision-model-id">' + esc(item.id) + '</span>'
-            + (item.likely_vision ? '<span class="vision-model-badge">可能支持图片</span>' : '')
+            + visionModelBadgeHTML(item)
             + '</div>';
         }).join('');
   }).join('');
@@ -454,6 +486,9 @@ function resetVisionModelButton() {
 function renderVisionModelOptions(models) {
   visionModelOptions = (models || []).filter(function(item) {
     return item && typeof item.id === 'string' && item.id.trim();
+  }).slice().sort(function(a, b) {
+    return visionModelPriority(a) - visionModelPriority(b)
+      || a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
   });
   visionModelActiveIndex = -1;
   renderVisionModelPop();
@@ -510,7 +545,7 @@ async function fetchVisionModels(options) {
     if (requestSerial !== visionModelRequestSerial) return;
     renderVisionModelOptions(data.models || []);
     setVisionModelHint(
-      '已获取 ' + visionModelOptions.length + ' 个模型。点击输入框选择；“可能支持图片”仅为名称提示',
+      '已获取 ' + visionModelOptions.length + ' 个模型。OCR 专用模型已优先排列；请选择支持图片输入的模型',
       'is-ready'
     );
     if (!silent) {
@@ -548,18 +583,129 @@ function configuredVisionProviders() {
   });
 }
 
-// 导入页“其他视觉 API”选择器：与设置页同一套 .app-select + 厂商 logo（visionAvatarHtml），
-// 不再用原生 <select>。选中值存在容器的 data-value 上，selectedVisionProviderId 读它。
+var importVisionProviderQuery = '';
+
+function selectedImportRecoveryProviderId() {
+  var container = document.getElementById('import-recovery-provider');
+  return container ? (container.dataset.value || '') : '';
+}
+
+function renderImportRecoveryProviderOptions() {
+  var list = document.getElementById('import-recovery-provider-list');
+  var container = document.getElementById('import-recovery-provider');
+  if (!list || !container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
+  list.innerHTML = providers.map(function(provider) {
+    var selected = provider.id === current;
+    return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportRecoveryProvider(event,\'' + esc(provider.id) + '\')">'
+      + visionAvatarHtml(provider, 'vision-avatar-sm')
+      + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
+      + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
+      + (selected ? check : '') + '</button>';
+  }).join('') || '<div class="document-options-empty">请先在设置中配置</div>';
+}
+
+function updateImportRecoveryProviderLabel() {
+  var container = document.getElementById('import-recovery-provider');
+  var label = document.getElementById('import-recovery-provider-label');
+  if (!container || !label) return;
+  var providers = configuredVisionProviders();
+  var provider = providers.find(function(item) { return item.id === (container.dataset.value || ''); });
+  if (!provider) {
+    label.textContent = providers.length ? '选择解析接口' : '请先在设置中配置';
+    return;
+  }
+  label.innerHTML = visionAvatarHtml(provider, 'vision-avatar-sm')
+    + '<span class="import-vision-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>';
+}
+
+function syncImportRecoveryProvider() {
+  var container = document.getElementById('import-recovery-provider');
+  if (!container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var recoveryJob = Array.isArray(importQueue) ? importQueue.find(function(item) {
+    return item && item.status === 'error' && item.type === 'pdf'
+      && item.failureStage !== 'index' && item.retryProviderId;
+  }) : null;
+  var preferred = (recoveryJob && recoveryJob.retryProviderId) || visionConfig.default_provider_id || '';
+  var panel = document.getElementById('import-recovery-panel');
+  var preferFailedJob = panel && !panel.hidden && container.dataset.userSelected !== 'true';
+  if (preferFailedJob && providers.some(function(provider) { return provider.id === preferred; })) {
+    current = preferred;
+  } else if (!providers.some(function(provider) { return provider.id === current; })) {
+    current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : (providers[0] || {}).id || '';
+  }
+  container.dataset.value = current;
+  var trigger = container.querySelector('.app-select-trigger');
+  if (trigger) trigger.disabled = providers.length === 0;
+  container.classList.toggle('is-disabled', providers.length === 0);
+  renderImportRecoveryProviderOptions();
+  updateImportRecoveryProviderLabel();
+}
+
+function toggleImportRecoveryProvider(event) {
+  toggleAppSelect(event, 'import-recovery-provider');
+  renderImportRecoveryProviderOptions();
+}
+
+function selectImportRecoveryProvider(event, providerId) {
+  if (event) event.stopPropagation();
+  var container = document.getElementById('import-recovery-provider');
+  if (container) {
+    container.dataset.value = providerId;
+    container.dataset.userSelected = 'true';
+  }
+  updateImportRecoveryProviderLabel();
+  renderImportRecoveryProviderOptions();
+  closeAppSelects();
+  if (typeof renderImportQueue === 'function') renderImportQueue();
+}
+
+function importVisionProviderSearchText(provider) {
+  return [provider.name, provider.model, provider.api_base, visionHostLabel(provider.api_base)]
+    .map(function(value) { return String(value || '').toLowerCase(); })
+    .join(' ');
+}
+
+function renderImportVisionProviderOptions() {
+  var menu = document.getElementById('import-vision-provider-options');
+  var container = document.getElementById('import-vision-provider');
+  if (!menu || !container) return;
+  var providers = configuredVisionProviders();
+  var current = container.dataset.value || '';
+  var query = importVisionProviderQuery.trim().toLowerCase();
+  var filtered = query
+    ? providers.filter(function(provider) { return importVisionProviderSearchText(provider).indexOf(query) >= 0; })
+    : providers;
+  var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
+  var search = providers.length > 8
+    ? '<div class="import-vision-search-wrap"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>'
+      + '<input class="import-vision-search" id="import-vision-provider-filter" type="search" autocomplete="off" aria-label="搜索 API 或模型" placeholder="搜索 API、模型或 endpoint…" value="' + esc(importVisionProviderQuery) + '" oninput="filterImportVisionProviders(this.value)" onkeydown="importVisionSearchKeydown(event)"></div>'
+    : '';
+  var options = filtered.map(function(provider) {
+    var selected = provider.id === current;
+    return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')" onkeydown="importVisionOptionKeydown(event)">'
+      + visionAvatarHtml(provider, 'vision-avatar-sm')
+      + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
+      + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
+      + (selected ? check : '') + '</button>';
+  }).join('');
+  if (!providers.length) options = '<div class="document-options-empty">请先在设置中配置</div>';
+  else if (!filtered.length) options = '<div class="document-options-empty">没有匹配的 API 或模型</div>';
+  menu.innerHTML = search + '<div class="import-vision-option-list" id="import-vision-provider-list" role="listbox" aria-label="已配置的 API 与模型">' + options + '</div>';
+  positionImportVisionMenu();
+}
+
 function syncImportVisionProviders() {
   var container = document.getElementById('import-vision-provider');
   var options = document.getElementById('import-vision-provider-options');
-  var option = document.getElementById('vision-parse-option');
-  var radio = option ? option.querySelector('input[name="pdf-parse-mode"]') : null;
-  if (!container || !options || !option || !radio) return;
+  if (!container || !options) return;
   var providers = configuredVisionProviders();
   var trigger = container.querySelector('.app-select-trigger');
   if (!providers.length) {
-    options.innerHTML = '<div class="document-options-empty">请先在设置中配置</div>';
     container.dataset.value = '';
   } else {
     var current = container.dataset.value || '';
@@ -568,47 +714,40 @@ function syncImportVisionProviders() {
       current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : providers[0].id;
     }
     container.dataset.value = current;
-    var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
-    options.innerHTML = providers.map(function(provider) {
-      var selected = provider.id === current;
-      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')">'
-        + visionAvatarHtml(provider, 'vision-avatar-sm')
-        + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + '</span>'
-        + '<span class="import-vision-opt-model">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
-        + (selected ? check : '') + '</button>';
-    }).join('');
   }
   var configLink = document.getElementById('vision-parse-config-link');
   if (configLink) configLink.hidden = providers.length > 0;
-  radio.disabled = providers.length === 0;
   if (trigger) trigger.disabled = providers.length === 0;
-  option.classList.toggle('is-disabled', providers.length === 0);
   container.classList.toggle('is-disabled', providers.length === 0);
-  if (!providers.length && radio.checked) {
-    var auto = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
-    if (auto) auto.checked = true;
-  }
+  renderImportVisionProviderOptions();
   updateImportVisionProviderLabel();
+  syncImportRecoveryProvider();
 }
 
-// 打开下拉即视作选择“其他视觉 API”这一档，与旧原生 select 的 onchange 行为一致。
-function toggleImportVisionProvider(event) {
-  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
-  if (radio && !radio.disabled) radio.checked = true;
-  toggleAppSelect(event, 'import-vision-provider');
+async function toggleImportVisionProvider(event) {
+  await toggleAppSelect(event, 'import-vision-provider');
+  var container = document.getElementById('import-vision-provider');
+  if (!container || !container.classList.contains('is-open')) return;
+  importVisionProviderQuery = '';
+  renderImportVisionProviderOptions();
+  requestAnimationFrame(function() {
+    positionImportVisionMenu();
+    if (configuredVisionProviders().length > 8) {
+      var input = document.getElementById('import-vision-provider-filter');
+      if (input) input.focus();
+    }
+  });
 }
 
 function selectImportVisionProvider(event, providerId) {
   if (event) event.stopPropagation();
   var container = document.getElementById('import-vision-provider');
   if (container) container.dataset.value = providerId;
-  var radio = document.querySelector('input[name="pdf-parse-mode"][value="vision"]');
-  if (radio && !radio.disabled) radio.checked = true;
-  document.querySelectorAll('#import-vision-provider-options .app-select-option').forEach(function(opt) {
-    opt.classList.toggle('is-selected', opt.dataset.value === providerId);
-  });
+  importVisionProviderQuery = '';
   updateImportVisionProviderLabel();
   closeAppSelects();
+  renderImportVisionProviderOptions();
+  if (typeof renderImportQueue === 'function') renderImportQueue();
 }
 
 function updateImportVisionProviderLabel() {
@@ -623,6 +762,125 @@ function updateImportVisionProviderLabel() {
   }
   label.innerHTML = visionAvatarHtml(provider, 'vision-avatar-sm')
     + '<span class="import-vision-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>';
+}
+
+function filterImportVisionProviders(value) {
+  importVisionProviderQuery = String(value || '');
+  renderImportVisionProviderOptions();
+  var input = document.getElementById('import-vision-provider-filter');
+  if (input) {
+    input.focus();
+    var end = input.value.length;
+    input.setSelectionRange(end, end);
+  }
+}
+
+function importVisionVisibleOptions() {
+  return Array.from(document.querySelectorAll('#import-vision-provider-list .import-vision-option'));
+}
+
+function focusImportVisionOption(index) {
+  var options = importVisionVisibleOptions();
+  if (!options.length) return;
+  var target = options[(index + options.length) % options.length];
+  target.focus();
+  target.scrollIntoView({block: 'nearest'});
+}
+
+async function importVisionTriggerKeydown(event) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  event.stopPropagation();
+  var container = document.getElementById('import-vision-provider');
+  if (!container || !container.classList.contains('is-open')) await toggleImportVisionProvider(event);
+  if (configuredVisionProviders().length > 8) return;
+  var options = importVisionVisibleOptions();
+  var selected = options.findIndex(function(option) { return option.classList.contains('is-selected'); });
+  focusImportVisionOption(event.key === 'ArrowUp' ? (selected >= 0 ? selected : options.length) - 1 : selected >= 0 ? selected : 0);
+}
+
+function importVisionSearchKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAppSelects();
+    var trigger = document.querySelector('#import-vision-provider .app-select-trigger');
+    if (trigger) trigger.focus();
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    focusImportVisionOption(0);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    focusImportVisionOption(importVisionVisibleOptions().length - 1);
+  }
+}
+
+function importVisionOptionKeydown(event) {
+  var options = importVisionVisibleOptions();
+  var index = options.indexOf(event.currentTarget);
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    focusImportVisionOption(index + (event.key === 'ArrowDown' ? 1 : -1));
+  } else if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault();
+    focusImportVisionOption(event.key === 'Home' ? 0 : options.length - 1);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAppSelects();
+    var trigger = document.querySelector('#import-vision-provider .app-select-trigger');
+    if (trigger) trigger.focus();
+  }
+}
+
+function positionImportVisionMenu() {
+  var container = document.getElementById('import-vision-provider');
+  var menu = document.getElementById('import-vision-provider-options');
+  var trigger = container ? container.querySelector('.app-select-trigger') : null;
+  if (!container || !menu || !trigger || !container.classList.contains('is-open')) return;
+  var rect = trigger.getBoundingClientRect();
+  var viewportWidth = window.innerWidth;
+  var viewportHeight = window.innerHeight;
+  var margin = 12;
+  var gap = 7;
+  var width = Math.min(720, Math.max(rect.width, Math.min(440, viewportWidth - margin * 2)), viewportWidth - margin * 2);
+  menu.style.width = Math.max(0, width) + 'px';
+  menu.style.left = Math.max(margin, Math.min(rect.left, viewportWidth - margin - width)) + 'px';
+  var height = Math.min(menu.scrollHeight, 360, viewportHeight - margin * 2);
+  var below = viewportHeight - rect.bottom - gap - margin;
+  var above = rect.top - gap - margin;
+  var opensUp = below < height && above > below;
+  var top = opensUp ? Math.max(margin, rect.top - gap - height) : Math.min(rect.bottom + gap, viewportHeight - margin - height);
+  menu.style.top = Math.max(margin, top) + 'px';
+  menu.dataset.placement = opensUp ? 'top' : 'bottom';
+}
+
+// Signature of the fields that决定连通性；一旦地址或模型变了，上次测连结果作废。
+function visionProviderSig(provider) {
+  return (provider.api_base || '') + '|' + (provider.model || '');
+}
+
+// Only ever返回 'ok' after a real 测试连接 succeeded for the current config.
+function visionVerifiedState(provider) {
+  var r = visionTestResults[provider.id];
+  if (!r || r.sig !== visionProviderSig(provider)) return null;
+  return r.ok ? 'ok' : 'failed';
+}
+
+function recordVisionTestResult(provider, ok) {
+  if (!provider) return;
+  visionTestResults[provider.id] = {sig: visionProviderSig(provider), ok: !!ok};
+}
+
+// Returns {label, cls} for the card badge. 绿色“已连通”只在真实测连成功后出现，
+// 填完三个框但未验证的接口显示中性的“待测试”，避免像旧版那样误报“可用”。
+function visionProviderBadge(provider) {
+  if (!provider.enabled) return {label: '已停用', cls: ' muted'};
+  if (!provider.configured) return {label: '缺少密钥', cls: ' warning'};
+  var verified = visionVerifiedState(provider);
+  if (verified === 'ok') return {label: '已连通', cls: ''};
+  if (verified === 'failed') return {label: '连接失败', cls: ' warning'};
+  return {label: '待测试', cls: ' pending'};
 }
 
 function renderVisionProviders() {
@@ -642,13 +900,14 @@ function renderVisionProviders() {
       list.innerHTML = '<div class="vision-provider-empty">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
         + '<strong>尚未添加其他解析接口</strong>'
-        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问、DeepSeek 等视觉模型</span>'
+        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问等视觉模型</span>'
         + '</div>';
     } else {
       var editingId = (document.getElementById('vision-provider-id') || {}).value || '';
       list.innerHTML = visionConfig.providers.map(function(provider) {
-        var state = provider.configured && provider.enabled ? '可用' : provider.enabled ? '缺少密钥' : '已停用';
-        var stateClass = provider.configured && provider.enabled ? '' : provider.enabled ? ' warning' : ' muted';
+        var badge = visionProviderBadge(provider);
+        var state = badge.label;
+        var stateClass = badge.cls;
         return '<div class="vision-provider-card' + (editingId === provider.id ? ' selected' : '')
           + '" role="button" tabindex="0" title="点击编辑这个接口"'
           + ' onclick="editVisionProvider(\'' + provider.id + '\')"'
@@ -930,8 +1189,12 @@ async function testVisionProvider(providerId) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
+    recordVisionTestResult(provider, true);
+    renderVisionProviders();
     showToast(provider.name + ' 视觉连接成功 · ' + data.latency_ms + ' ms');
   } catch (e) {
+    recordVisionTestResult(provider, false);
+    renderVisionProviders();
     showToast(provider.name + ' 连接失败：' + e.message);
   }
 }
@@ -969,4 +1232,3 @@ async function setVisionAutoFallback(enabled) {
     showToast('保存自动切换设置失败：' + e.message);
   }
 }
-

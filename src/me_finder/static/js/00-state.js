@@ -76,6 +76,9 @@ let appDialogPreviousFocus = null;
 let mineruConfigLoaded = false;
 let visionConfigLoaded = false;
 let visionConfig = {providers: [], default_provider_id: null, auto_fallback_from_mineru: false};
+// Per-provider live connectivity, keyed by id: {sig, ok}. Kept in memory only —
+// a reload honestly resets接口到“待测试”，因为“可用”须以真实测连为准。
+let visionTestResults = {};
 let visionModelOptions = [];
 let visionModelRequestSerial = 0;
 let preferencesLoaded = false;

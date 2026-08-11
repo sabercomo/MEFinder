@@ -1,100 +1,21 @@
-/* ── Import page ──────────────────────────────────────────── */
+/* Hallmark · genre: modern-minimal · tone: utilitarian · palette: existing accent blue
+   · macrostructure: Workbench · pre-emit critique: P5 H5 E5 S5 R5 V4
+   · contrast: pass (40–41) · slop: pass (42–49) */
 .import-content {
   flex: 1;
   overflow-y: auto;
   padding: 0 32px 32px;
 }
-.pdf-parse-mode {
-  display: grid;
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 10px;
-  margin-top: 20px;
-}
-.pdf-parse-mode-title {
-  display: flex;
-  align-items: center;
-  padding-right: 6px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-.pdf-parse-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--divider);
-  border-radius: var(--widget-radius);
-  background: var(--surface);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-.pdf-parse-option:hover {
-  border-color: var(--accent);
-  background: var(--accent-light);
-}
-.pdf-parse-option input {
-  margin: 2px 0 0;
-  accent-color: var(--accent);
-  flex: 0 0 auto;
-}
-.pdf-parse-option span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-.pdf-parse-option strong {
-  color: var(--text-primary);
-  font-size: 13px;
-}
-.pdf-parse-option small {
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.pdf-parse-option.is-disabled { opacity: 0.55; cursor: not-allowed; }
-.pdf-parse-option.is-disabled .pdf-provider-config-link { pointer-events: auto; }
-.pdf-provider-config-link {
-  margin-top: 5px;
-  color: var(--accent);
-  font-size: 12px;
-  text-decoration: none;
-}
-.pdf-provider-config-link:hover { text-decoration: underline; }
-@media (max-width: 1150px) {
-  .pdf-parse-mode { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .pdf-parse-mode-title { grid-column: 1 / -1; padding-right: 0; }
-}
-@media (max-width: 800px) {
-  .pdf-parse-mode { grid-template-columns: 1fr; }
-}
-/* 导入页“其他视觉 API”选择器：复用 .app-select，与设置页厂商列表同一套 logo。 */
-.import-vision-select { display: block; width: 100%; margin-top: 6px; }
-.import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border-radius: 7px; font-size: 12px; }
-.import-vision-select.is-disabled { opacity: .55; pointer-events: none; }
-.import-vision-select .app-select-value { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.import-vision-select .app-select-value .vision-avatar,
-.import-vision-option .vision-avatar { width: 22px; height: 22px; border-radius: 6px; }
-.import-vision-select .app-select-value .vision-avatar.has-icon img,
-.import-vision-option .vision-avatar.has-icon img { width: 15px; height: 15px; }
-.import-vision-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-vision-menu { width: min(340px, calc(100vw - 48px)); padding: 6px; }
-.import-vision-option { display: flex; align-items: center; gap: 9px; height: auto; padding: 8px 10px; }
-.import-vision-option .import-vision-opt { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
-.import-vision-option .import-vision-opt-name { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-vision-option.is-selected .import-vision-opt-name { color: var(--accent); }
-.import-vision-option .import-vision-opt-model { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-vision-option .app-select-check { margin-left: auto; color: var(--accent); }
+/* 恢复 0.3.8 的大面积拖放区；三模式解析器常驻其上，auto 默认选中。 */
 .drop-zone {
+  display: grid;
+  place-items: center;
+  align-content: center;
   margin-top: 20px;
+  padding: 36px 32px;
   border: 2px dashed var(--divider);
   border-radius: var(--card-radius);
   background: var(--surface);
-  padding: 56px 40px;
   text-align: center;
   cursor: pointer;
   transition: border-color var(--transition-fast), background var(--transition-fast);
@@ -103,16 +24,15 @@
   border-color: var(--accent);
   background: var(--accent-light);
 }
-.drop-zone-icon {
-  font-size: 48px;
-  opacity: 0.25;
-  margin-bottom: 16px;
-}
+.drop-zone:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.drop-zone:active { background: var(--accent-soft); }
+.drop-zone-icon { height: 36px; margin-bottom: 10px; color: var(--text-tertiary); opacity: .42; }
+.drop-zone-icon svg { width: 36px; height: 36px; }
 .drop-zone-text {
-  font-size: 16px;
+  margin-bottom: 4px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 6px;
 }
 .drop-zone-hint {
   font-size: 13px;
@@ -122,7 +42,7 @@
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 10px;
 }
 .format-tag {
   font-size: 12px;
@@ -133,7 +53,7 @@
   color: var(--text-secondary);
 }
 .import-queue {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 .import-queue-title {
   font-size: 14px;
@@ -163,20 +83,103 @@
   border-color: var(--danger);
 }
 .import-queue-cancel-all:hover { background: var(--danger-soft); }
-.scan-section { margin-top: 24px; }
+.scan-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--divider); }
 .scan-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
 .scan-section-head .import-queue-title { margin-bottom: 0; }
 .scan-section-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .scan-section-hint {
-  margin: 6px 0 14px;
+  margin: 4px 0 12px;
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
+}
+/* PDF 解析方式：沿用 0.4.0 的三模式逻辑，压缩卡片后放在拖放区上方。 */
+.pdf-parse-section { margin-top: 20px; }
+.pdf-parse-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; }
+.pdf-parse-heading-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pdf-parse-heading-hint { font-size: 11px; color: var(--text-tertiary); }
+.pdf-parse-mode {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+}
+.pdf-parse-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--divider);
+  border-radius: var(--widget-radius);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.pdf-parse-option:hover { border-color: var(--accent); background: var(--accent-light); }
+.pdf-parse-option:has(input:checked) { border-color: var(--accent); border-width: 2px; padding: 7px 9px; background: var(--accent-light); }
+.pdf-parse-option input { margin: 2px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
+.pdf-parse-card { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.pdf-parse-card-head { display: flex; align-items: center; gap: 7px; }
+.pdf-parse-option strong { color: var(--text-primary); font-size: 12px; font-weight: 600; }
+.pdf-parse-option:has(input:checked) strong { color: var(--accent); }
+.pdf-parse-option small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
+.pdf-parse-tag { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.pdf-parse-tag-default { color: var(--accent); background: var(--accent-soft); }
+.pdf-parse-tag-free { color: var(--success); background: var(--success-soft); }
+.pdf-parse-provider { display: block; margin-top: 2px; }
+.pdf-parse-option.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.pdf-parse-option.is-disabled .pdf-provider-config-link { pointer-events: auto; }
+.pdf-provider-config-link { display: inline-block; margin-top: 3px; color: var(--accent); font-size: 11px; text-decoration: none; }
+.pdf-provider-config-link[hidden] { display: none; }
+.pdf-provider-config-link:hover { text-decoration: underline; }
+.import-vision-select { display: block; width: 100%; min-width: 0; }
+.import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 28px; padding: 0 8px; border-radius: 7px; font-size: 10px; }
+.import-vision-select.is-disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
+.import-vision-select .app-select-trigger:active { background: var(--surface-hover); }
+.import-vision-select .app-select-trigger:disabled { cursor: not-allowed; }
+.import-vision-select .app-select-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.import-vision-select .app-select-value .vision-avatar { width: 20px; height: 20px; border-radius: 6px; }
+.import-vision-option .vision-avatar { width: 22px; height: 22px; border-radius: 6px; }
+.import-vision-select .app-select-value .vision-avatar.has-icon img { width: 14px; height: 14px; }
+.import-vision-option .vision-avatar.has-icon img { width: 15px; height: 15px; }
+.import-vision-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  top: 0;
+  right: auto;
+  left: 0;
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  padding: 8px;
+  overflow: hidden;
+}
+.import-vision-search-wrap { position: relative; margin-bottom: 8px; }
+.import-vision-search-wrap svg { position: absolute; top: 50%; left: 12px; width: 14px; height: 14px; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+.import-vision-search { width: 100%; height: 36px; padding: 0 12px 0 36px; border: 1px solid var(--border-default); border-radius: 8px; outline: none; background: var(--input-bg); color: var(--text-primary); font-size: 12px; }
+.import-vision-search:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.import-vision-option-list { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.import-vision-option { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: auto; min-height: 48px; padding: 8px 12px; }
+.import-vision-option:focus-visible { outline: none; background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--accent); }
+.import-vision-option:active { background: var(--accent-soft); }
+.import-vision-option .import-vision-opt { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.35; }
+.import-vision-option .import-vision-opt-name { color: var(--text-primary); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-option.is-selected .import-vision-opt-name { color: var(--accent); }
+.import-vision-option .import-vision-opt-model { color: var(--text-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-vision-option .app-select-check { margin-left: auto; color: var(--accent); }
+@media (max-width: 800px) {
+  .import-content { padding-right: 16px; padding-left: 16px; }
+  .drop-zone { min-height: 112px; padding: 24px 18px; }
+  .pdf-parse-mode { grid-template-columns: 1fr; }
+  .scan-section-head { align-items: flex-start; flex-direction: column; }
+  .scan-section-actions { width: 100%; }
+  .scan-dir-add { flex: 1 1 220px; width: auto; }
 }
 .scan-subhead {
   color: var(--text-primary);
@@ -232,7 +235,7 @@
 #scan-results.is-drag-selecting .scan-row { cursor: crosshair; user-select: none; }
 .scan-selection-marquee {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-dropdown);
   border: 1px solid var(--accent);
   border-radius: 2px;
   background: var(--accent-soft);
@@ -433,6 +436,35 @@
 .import-item-status.error { color: var(--error); }
 .import-item-status.done { color: var(--success); }
 .import-item-status.paused { color: var(--warning); }
+.import-recovery-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, .8fr) minmax(360px, 1.2fr);
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--widget-radius);
+  background: var(--warning-soft);
+}
+.import-recovery-panel[hidden] { display: none; }
+.import-recovery-copy { display: grid; gap: 4px; min-width: 0; }
+.import-recovery-copy strong { color: var(--text-primary); font-size: 13px; }
+.import-recovery-copy span { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+.import-recovery-provider { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.import-recovery-label { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.import-recovery-select { flex: 1 1 auto; min-width: 180px; }
+.import-recovery-select .app-select-trigger { width: 100%; min-width: 0; }
+.import-recovery-select .app-select-value { display: flex; align-items: center; gap: 8px; }
+.import-recovery-select .vision-avatar { width: 22px; height: 22px; border-radius: 6px; }
+.import-recovery-select .vision-avatar.has-icon img { width: 15px; height: 15px; }
+.import-recovery-menu { right: 0; left: 0; width: 100%; min-width: 280px; max-height: 300px; overflow-y: auto; }
+.import-recovery-settings { flex: 0 0 auto; }
+@media (max-width: 900px) {
+  .import-recovery-panel { grid-template-columns: 1fr; gap: 10px; }
+  .import-recovery-provider { align-items: stretch; flex-wrap: wrap; }
+  .import-recovery-label { flex-basis: 100%; }
+}
 .import-item-retry {
   display: flex;
   align-items: center;
@@ -440,4 +472,3 @@
   margin-top: 9px;
 }
 .import-item-retry .action-btn { height: 30px; padding: 0 10px; font-size: 11px; }
-

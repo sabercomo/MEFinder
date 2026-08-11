@@ -855,6 +855,19 @@ def save_import_config(path: Path, data: Dict[str, object]) -> None:
 
 
 @contextmanager
+def import_config_lock() -> Iterator[None]:
+    """Hold the process-wide PDF import config transaction lock.
+
+    Most callers should use :func:`locked_import_config`.  This lower-level
+    context is for operations such as backup restore that must keep the config
+    stable across several files and a subsequent index rebuild.
+    """
+
+    with _IMPORT_CONFIG_LOCK:
+        yield
+
+
+@contextmanager
 def locked_import_config(path: Path) -> Iterator[Dict[str, object]]:
     """Load a config while holding its shared read-modify-write lock.
 
@@ -868,7 +881,7 @@ def locked_import_config(path: Path) -> Iterator[Dict[str, object]]:
     roll back while the lock is still held.
     """
 
-    with _IMPORT_CONFIG_LOCK:
+    with import_config_lock():
         yield load_import_config(Path(path))
 
 
@@ -1278,14 +1291,24 @@ def indexed_word_source_count(database_path: Path) -> int:
     return int(row[0]) if row else 0
 
 
-def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = None) -> Dict[str, object]:
+def rebuild_local_index(
+    root: Path,
+    on_progress: Optional[ProgressCallback] = None,
+    *,
+    database_path: Optional[Path] = None,
+) -> Dict[str, object]:
     root = Path(root)
+    resolved_database_path = (
+        Path(database_path)
+        if database_path is not None
+        else root / "data" / "index.sqlite3"
+    )
     corpus_dir = root / "corpus" / "raw_docx"
     if not corpus_dir.exists():
         # Public builds ship without Word corpus; PDF-only indexing is normal there.
         # Refuse only when Word documents are indexed, since rebuilding without the
         # originals would silently drop them from search.
-        if indexed_word_source_count(root / "data" / "index.sqlite3"):
+        if indexed_word_source_count(resolved_database_path):
             raise MinerUError(
                 "找不到 Word 原始语料目录 corpus\\raw_docx，但索引中仍有 Word 文献。"
                 "为避免它们从索引中消失，本次没有重建；请恢复该目录后重试。"
@@ -1303,7 +1326,7 @@ def rebuild_local_index(root: Path, on_progress: Optional[ProgressCallback] = No
     return build_index(
         corpus_dir=corpus_dir,
         index_path=root / "data" / "index.json",
-        database_path=root / "data" / "index.sqlite3",
+        database_path=resolved_database_path,
         include_pdf=True,
         pdf_corpus_dir=root / "corpus" / "raw_pdf",
         pdf_config_path=pdf_config_path,

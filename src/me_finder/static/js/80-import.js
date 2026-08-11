@@ -6,12 +6,30 @@ function visionRetryProviderFor(q) {
   // 索引阶段失败不给切换（重解析救不了重建索引错误）。中断态不再一律屏蔽：
   // 后端 public_import_job 会按当前配置回填 canRetryVision，配了接口才显式放行。
   if (q.failureStage === 'index') return null;
-  if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed) return null;
+  if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed && !q.visionFailed) return null;
   var providers = configuredVisionProviders();
-  var preferredId = q.retryProviderId || '';
+  var selectedRecoveryId = typeof selectedImportRecoveryProviderId === 'function'
+    ? selectedImportRecoveryProviderId()
+    : '';
+  var preferredId = selectedRecoveryId || q.retryProviderId || '';
   return providers.find(function(provider) {
     return provider.id === preferredId;
   }) || providers[0] || null;
+}
+
+function importQueueNeedsRecoverySelector() {
+  return importQueue.some(function(q) {
+    return q && q.type === 'pdf' && q.status === 'error' && q.failureStage !== 'index'
+      && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed);
+  });
+}
+
+function syncImportRecoveryPanel() {
+  var panel = document.getElementById('import-recovery-panel');
+  if (!panel) return;
+  var shouldShow = importQueueNeedsRecoverySelector();
+  panel.hidden = !shouldShow;
+  if (shouldShow && typeof syncImportRecoveryProvider === 'function') syncImportRecoveryProvider();
 }
 
 function initDropZone() {
@@ -23,6 +41,11 @@ function initDropZone() {
   });
   zone.addEventListener('dragleave', function() {
     zone.classList.remove('dragover');
+  });
+  zone.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    zone.click();
   });
   zone.addEventListener('drop', function(e) {
     e.preventDefault();
@@ -173,6 +196,7 @@ function setOnlineAutoMatchThreshold(pct) {
   value = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, value));
   onlineMetadataAutoMatchThreshold = value / 100;
   try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(value)); } catch (_) {}
+  persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);  // 随数据备份/迁移（C-01）
   syncOnlineAutoMatchControl();
 }
 
@@ -832,9 +856,12 @@ function renderImportQueue() {
   var itemsEl = document.getElementById('import-items');
   if (importQueue.length === 0) {
     queueEl.style.display = 'none';
+    syncImportRecoveryPanel();
+    syncResumeAllButton();
     return;
   }
   queueEl.style.display = 'block';
+  syncImportRecoveryPanel();
   itemsEl.innerHTML = importQueue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : 'word';
     var retryProvider = visionRetryProviderFor(q);
@@ -854,6 +881,10 @@ function renderImportQueue() {
     if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
         + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
+      if (q.type === 'pdf' && q.route === 'vision' && q.failureStage !== 'index') {
+        retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
+          + q.id + '\')">改用 MinerU（免费）</button>';
+      }
       if (q.status === 'error' && retryProvider) {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
           + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
@@ -862,9 +893,12 @@ function renderImportQueue() {
     } else if (q.status === 'error' && retryProvider) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
         + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
+        + (q.type === 'pdf' && q.route === 'vision'
+          ? '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
+            + q.id + '\')">改用 MinerU（免费）</button>' : '')
         + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
     } else if (q.status === 'error'
-        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed)) {
+        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
     }
     return '<div class="import-item" data-id="' + q.id + '">'
@@ -956,6 +990,13 @@ async function cancelAllImports() {
 async function removeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
+  if (q && q.jobId && q.status === 'processing' && !options.skipConfirm) {
+    var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+    if (!await showAppConfirm(
+      '将停止 ' + serviceName + ' 后台解析；当前请求完成后不会再提交新页面',
+      {title:'停止并移除任务？', confirmText:'停止任务', tone:'danger'}
+    )) return false;
+  }
   if (q && q.uploadId) {
     var activeUploadId = q.uploadId;
     q.uploadId = null;
@@ -969,7 +1010,7 @@ async function removeImport(id, options) {
       console.warn('cancel chunked upload failed:', cancelError);
     }
   }
-  if (q && q.jobId && (q.status === 'paused' || q.status === 'error')) {
+  if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
     try {
       var resp = await fetch('/api/import-resume-dismiss', {
         method: 'POST',
@@ -978,6 +1019,9 @@ async function removeImport(id, options) {
       });
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
+      if (data.state === 'cancelling' && !options.silent) {
+        showToast('已停止继续提交页面；当前请求结束后即可重新导入', 'success');
+      }
     } catch (e) {
       if (!options.silent) showToast('移除导入任务失败：' + e.message);
       return false;
@@ -1095,6 +1139,7 @@ function pollImportJob(id) {
       if (data.provider_id) q.providerId = data.provider_id;
       if (data.provider_name) q.providerName = data.provider_name;
       q.mineruFailed = !!data.mineru_failed;
+      q.visionFailed = !!data.vision_failed;
       q.mineruInterrupted = !!data.mineru_interrupted;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
       else if (data.phase === 'vision_processing') q.route = 'vision';
@@ -1109,11 +1154,13 @@ function pollImportJob(id) {
       if (data.status === 'completed') {
         q.status = 'done';
         q.message = data.message || '导入完成，已自动更新索引';
+        if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
         invalidateLibraryCatalog();
         ensureSearchDocuments(true).then(updateSearchDocumentLabel);
       } else if (data.status === 'failed') {
         q.status = 'error';
         q.message = data.message || '导入失败';
+        if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
         q.failureStage = data.failure_stage || null;
         q.canResume = !!data.can_resume;
         q.canRetryVision = !!data.can_retry_with_provider;
@@ -1131,6 +1178,7 @@ function pollImportJob(id) {
     .catch(function(err) {
       q.status = 'error';
       q.message = err.message || '读取导入状态失败';
+      if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
       renderImportQueue();
     });
 }
@@ -1163,6 +1211,7 @@ async function loadResumableImports() {
         retryProviderName: job.retry_provider_name || job.provider_name || null,
         needsProviderConfig: !!job.needs_provider_config,
         mineruFailed: !!job.mineru_failed,
+        visionFailed: !!job.vision_failed,
         mineruInterrupted: !!job.mineru_interrupted,
         fromJournal: true
       });
@@ -1235,6 +1284,7 @@ async function retryImportWithVision(id) {
     q.message = '正在切换到 ' + q.providerName + '…';
     q.canRetryVision = false;
     q.needsProviderConfig = false;
+    q.visionFailed = false;
     renderImportQueue();
     pollImportJob(q.id);
   } catch (e) {
@@ -1242,3 +1292,34 @@ async function retryImportWithVision(id) {
   }
 }
 
+async function retryImportWithMinerU(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (!q || !q.jobId || q.type !== 'pdf') return;
+  if (!await showAppConfirm(
+    '将保留原文件，停止使用当前视觉 API，改由免费 MinerU 解析',
+    {title:'改用 MinerU？', confirmText:'改用 MinerU'}
+  )) return;
+  try {
+    var resp = await fetch('/api/import-retry-mineru', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: q.jobId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '切换 MinerU 失败');
+    q.jobId = data.job_id;
+    q.status = 'processing';
+    q.route = 'mineru';
+    q.providerId = null;
+    q.providerName = null;
+    q.step = 2;
+    q.message = '正在切换到 MinerU，不需要重新上传文件…';
+    q.canResume = false;
+    q.canRetryVision = false;
+    q.visionFailed = false;
+    renderImportQueue();
+    pollImportJob(q.id);
+  } catch (e) {
+    showToast('切换 MinerU 失败：' + e.message);
+  }
+}

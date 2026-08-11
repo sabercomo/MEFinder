@@ -205,7 +205,7 @@ async function runSearch() {
     }
 
     listEl.innerHTML = searchResults.map((item, i) => resultRowHTML(item, i)).join('');
-    selectResult(0);
+    selectResult(0, false);
   } catch (err) {
     if (seq !== searchSeq) return;
     statusEl.textContent = '检索失败：' + err.message;
@@ -237,7 +237,24 @@ function resultRowHTML(item, index) {
     + '</div>';
 }
 
-function selectResult(index) {
+function searchResultsArea() {
+  return document.querySelector('#page-search .results-area');
+}
+
+function showSearchResultsList() {
+  closeAppSelects();
+  const area = searchResultsArea();
+  if (area) area.classList.remove('is-detail-open');
+  const row = document.querySelector('.result-row[data-index="' + selectedIndex + '"]');
+  if (row) row.scrollIntoView({block: 'nearest'});
+}
+
+function showSearchResultDetail() {
+  const area = searchResultsArea();
+  if (area) area.classList.add('is-detail-open');
+}
+
+function selectResult(index, openNarrowDetail) {
   if (index < 0 || index >= searchResults.length) return;
   selectedIndex = index;
   document.querySelectorAll('.result-row').forEach((row, i) => {
@@ -245,6 +262,7 @@ function selectResult(index) {
   });
   const item = searchResults[index];
   showDetail(item);
+  if (openNarrowDetail !== false) showSearchResultDetail();
 
   const row = document.querySelector('.result-row[data-index="' + index + '"]');
   if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
@@ -333,11 +351,12 @@ function showDetail(item) {
   }
 
   const citationStyleLabel = citationStyleDisplayLabel(citationStyle);
-  const citationIncomplete = item.citation_formats && enabledCitationStyles.some(function(style) {
-    return item.citation_formats[style + '_status'] !== 'complete';
-  });
+  const detailMenuChevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
 
   panel.innerHTML = '<div class="detail-card">'
+    + '<div class="detail-mobile-toolbar">'
+    + '<button class="detail-back-button" type="button" onclick="showSearchResultsList()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-5 5 5 5"/><path d="M7 10h8"/></svg><span>返回结果列表</span></button>'
+    + '</div>'
     + '<div class="detail-scroll">'
     + '<div class="detail-header">'
     + '<div class="detail-title">' + title + '</div>'
@@ -348,6 +367,7 @@ function showDetail(item) {
     + '<span class="detail-pill">' + page + '</span>'
     + '</div>'
     + pageDetail
+    + citationAvailabilityMarkup(item)
     + '</div>'
     + '<div class="detail-body">'
     + contextBefore
@@ -356,18 +376,15 @@ function showDetail(item) {
     + '</div>'
     + '</div>'
     + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
-    + '<button class="action-btn" onclick="copySelectedOriginal()">复制原文</button>'
-    + '<span class="citation-copy-group">'
-    + '<span class="app-select citation-style-control" id="citation-style-control">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'citation-style-control\')"><span class="app-select-value" id="citation-style-label">' + citationStyleLabel + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<span class="app-select-menu" role="listbox">' + citationStyleMenuMarkup() + '</span>'
+    + '<span class="app-select detail-format-control" id="detail-format-control">'
+    + '<button class="action-btn app-select-trigger detail-format-trigger" type="button" aria-label="选择出处格式" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-format-control\')"><span id="detail-citation-style-label">' + citationStyleLabel + '</span>' + detailMenuChevron + '</button>'
+    + '<span class="app-select-menu detail-format-menu" role="menu" aria-label="出处格式">'
+    + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
     + '</span>'
-    + '<button class="action-btn" onclick="copySelectedCitation()">复制出处</button>'
     + '</span>'
-    + '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">复制原文与出处</button>'
-    + (citationIncomplete && item.source_type === 'pdf' ? '<button class="action-btn" onclick="openMetadataForSource(\'' + esc(item.source_file_id) + '\')">补全书目信息</button>' : '')
-    + (item.source_file_id ? '<button class="action-btn" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
-    + (item.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
+    + '<button class="action-btn" type="button" onclick="copySelectedCitation()">复制出处</button>'
+    + (item.source_file_id ? '<button class="action-btn" type="button" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
+    + (item.source_file_id ? '<button class="action-btn primary" type="button" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
     + '</div>'
     + '</div>';
 
@@ -398,6 +415,7 @@ function showEmptyDetail() {
     detailContextResizeObserver.disconnect();
     detailContextResizeObserver = null;
   }
+  showSearchResultsList();
   document.getElementById('detail-panel').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><rect x="8" y="6" width="32" height="36" rx="3"/><line x1="16" y1="16" x2="32" y2="16"/><line x1="16" y1="22" x2="32" y2="22"/><line x1="16" y1="28" x2="28" y2="28"/></svg></div><div class="empty-state-text">选择一条结果查看详情</div></div>';
 }
 
@@ -525,11 +543,12 @@ function citationStyleMenuMarkup() {
 function selectCitationStyle(event, style) {
   event.stopPropagation();
   setCitationStyle(style, true);
-  var label = document.getElementById('citation-style-label');
+  var label = document.getElementById('detail-citation-style-label') || document.getElementById('citation-style-label');
   if (label) label.textContent = citationStyleDisplayLabel(citationStyle);
   document.querySelectorAll('#citation-style-control .app-select-option').forEach(function(option) {
     option.classList.toggle('is-selected', option.dataset.value === citationStyle);
   });
+  updateDetailCitationAvailability();
   closeAppSelects();
 }
 
@@ -543,6 +562,21 @@ function citationIsComplete(item) {
   return formats[citationStyle + '_status'] === 'complete';
 }
 
+function citationAvailabilityMarkup(item) {
+  const hidden = citationIsComplete(item) ? ' hidden' : '';
+  return '<div class="detail-citation-status" id="detail-citation-status" role="status"' + hidden + '>'
+    + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.25"/><path d="M10 14h.01"/></svg>'
+    + '<span><strong>出处信息不完整</strong><span>暂不可生成完整引文；仍可查看正文和打开原文。</span></span>'
+    + '</div>';
+}
+
+function updateDetailCitationAvailability() {
+  const status = document.getElementById('detail-citation-status');
+  const item = selectedResult();
+  if (!status || !item) return;
+  status.hidden = citationIsComplete(item);
+}
+
 function showCitationMetadataError(item) {
   const formats = item && item.citation_formats ? item.citation_formats : {};
   const missing = formats[citationStyle + '_missing_fields'] || [];
@@ -550,26 +584,11 @@ function showCitationMetadataError(item) {
   showToast('无法复制：缺少' + missing.map(function(x){return labels[x] || x;}).join('、'));
 }
 
-function copySelectedOriginal() {
-  const item = selectedResult();
-  if (!item) return;
-  copyText(item.paragraph_text || '');
-}
-
 function copySelectedCitation() {
   const item = selectedResult();
   if (!item) return;
   if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }
   copyText(citationForItem(item));
-}
-
-function copySelectedOriginalAndCitation() {
-  const item = selectedResult();
-  if (!item) return;
-  if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }
-  const original = item.paragraph_text || '';
-  const citation = citationForItem(item);
-  copyText(original + (citation ? '\n\n' + citation : ''));
 }
 
 function copyText(text) {
@@ -611,4 +630,3 @@ async function openSelectedStructuredReader() {
     showToast(error && error.message ? error.message : '结构化文本打开失败', 'danger');
   }
 }
-

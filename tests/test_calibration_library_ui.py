@@ -282,7 +282,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
         self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('calibrated','页码已校准'", HTML)
+        self.assertIn("statusStatButton('calibrated','已校准'", HTML)
         self.assertIn("statusStatButton('page_pending','页码待处理'", HTML)
         self.assertIn("statusStatButton('bibliographic','书目待补全'", HTML)
         self.assertNotIn("statusStatButton('pending','待校准'", HTML)
@@ -331,15 +331,158 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 关闭按钮走带确认的入口，程序化 closeLibDrawer 仍可静默关闭。
         self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
         # 切到别的文献前拦截；同一文献重选不打扰。
-        self.assertIn("if (sourceId !== libSelectedId && !await guardLeaveDetail()) return;", HTML)
-        # 顶部状态筛选与三条筛选条离开详情前都拦截。
+        self.assertIn("var switchingDoc = sourceId !== libSelectedId;", HTML)
+        self.assertIn("if (switchingDoc && !await guardLeaveDetail()) return;", HTML)
+        # 顶部状态筛选、筛选弹层选档、移除 chip 离开详情前都拦截。
         self.assertIn("async function applyLibStatusFilter(status)", HTML)
-        self.assertIn("async function setLibFilter(btn)", HTML)
-        self.assertIn("async function setLibDocTypeFilter(btn)", HTML)
+        self.assertIn("async function setLibFacet(event, kind, value)", HTML)
+        self.assertIn("async function removeLibFacet(event, kind)", HTML)
         # 任一字段输入即置脏。
         self.assertIn("event.target.closest('#bibliographic-editor')) bibEditorDirty = true;", HTML)
-        # 保存成功后清脏。
-        self.assertIn("bibEditorDirty = false;\n    delete bibEditorTypeOverride[sourceId];", HTML)
+        # 保存成功后清脏并回到查看态。
+        self.assertIn("bibEditorDirty = false;\n    bibEditMode[sourceId] = false;", HTML)
+
+    def test_detail_drawer_splits_read_edit_and_reorders_regions(self) -> None:
+        """Phase 3 详情外壳：查看/编辑态分离、插槽渲染、区块重排、操作收敛、上一条/下一条。"""
+
+        # 书目区查看态默认，点「编辑」进编辑态；共用宿主 #bib-host 就地切换。
+        self.assertIn("function bibliographicReadHTML(src)", HTML)
+        self.assertIn("function renderBibliographicSection(src)", HTML)
+        self.assertIn("function enterBibEdit(sourceId, focusFieldId)", HTML)
+        self.assertIn("function exitBibEdit(sourceId)", HTML)
+        # 查看态点任意字段即进入编辑并聚焦该字段——无独立「编辑」按钮。
+        self.assertIn('role="button" tabindex="0" title="点击编辑" onclick="', HTML)
+        # 无用的「识别依据」已整体删除（页码识别依据属校准，保留）。
+        self.assertNotIn("function showBibliographicEvidence(", HTML)
+        self.assertNotIn(">识别依据</button>", HTML)
+        self.assertNotIn("bibMenuAction(event,'evidence'", HTML)
+        self.assertIn("bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src)", HTML)
+        self.assertIn('id="bib-host"', HTML)
+        # 编辑态页脚显式保存 + 取消，保存文案区分于校准保存。
+        self.assertIn(">取消</button>", HTML)
+        self.assertIn(">保存书目信息</button>", HTML)
+        # 插槽渲染：内容槽（书目）在校准卡片之前，extra 槽（收录/文件/操作）在其后。
+        self.assertIn('id="library-drawer-extra"', HTML)
+        self.assertIn("var extra = document.getElementById('library-drawer-extra');", HTML)
+        self.assertIn("extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);", HTML)
+        # 上一条 / 下一条。
+        self.assertIn("function drawerNavHTML(sourceId)", HTML)
+        # 主操作收敛为「打开原文」+ ⋯；页码相关不再在此重复。
+        self.assertIn("function drawerMainActionsHTML(src)", HTML)
+        self.assertIn('id="drawer-more-menu"', HTML)
+        self.assertNotIn("openCalibrationAndDetect(\\'' + esc(src.source_file_id) + '\\')\">自动检测页码", HTML)
+        # 收录文献不再内层滚动。
+        works_rule = HTML.split('.drawer-works-list {', 1)[1].split('}', 1)[0]
+        self.assertNotIn('max-height: 300px', works_rule)
+        # 详情抽屉带 ARIA。
+        self.assertIn('id="library-drawer" role="complementary" aria-label="文献详情"', HTML)
+
+    def test_library_empty_states_and_positive_doctype_counts(self) -> None:
+        """L-13 三态空状态 + L-15 著作正向计数与未识别档。"""
+
+        # 三态空状态：库空 → 去导入；筛选无果 → 清除筛选。
+        self.assertIn("libSources.length === 0", HTML)
+        self.assertIn("文献库还是空的", HTML)
+        self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
+        self.assertIn("当前筛选没有匹配文献", HTML)
+        self.assertIn("function clearLibraryFilters()", HTML)
+        self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
+        self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
+        # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
+        self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
+        self.assertIn("!isBibliographicTypeConfirmed(sourceBibliographicMetadata(s))", HTML)
+        self.assertIn("if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount})", HTML)
+
+    def test_keyboard_focus_visibility_and_reduced_motion(self) -> None:
+        """Phase 5：常用可交互元素有键盘焦点环；尊重系统减弱动态效果。"""
+
+        self.assertIn(".action-btn:focus-visible", HTML)
+        self.assertIn(".sidebar-item:focus-visible", HTML)
+        self.assertIn(".settings-nav-item:focus-visible", HTML)
+        focus_block = HTML.split(".action-btn:focus-visible", 1)[1].split("}", 1)[0]
+        self.assertIn("box-shadow: var(--focus-ring)", focus_block)
+        # 全局 reduced-motion，不再只作用于 toast。
+        self.assertRegex(
+            HTML,
+            r"@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after",
+        )
+
+    def test_search_to_library_has_a_return_path(self) -> None:
+        """S-03：从检索结果跳去补书目后，可一键返回搜索结果。"""
+
+        self.assertIn('id="library-return-banner"', HTML)
+        self.assertIn("function returnToSearch()", HTML)
+        self.assertIn('onclick="returnToSearch()"', HTML)
+        # 跳转时点亮横幅；任何 navigateTo 先清掉。
+        self.assertIn("if (banner) banner.hidden = false;", HTML)
+        self.assertIn("if (returnBanner) returnBanner.hidden = true;", HTML)
+
+    def test_default_language_and_auto_match_persist_to_backend(self) -> None:
+        """C-01：文献默认语言与联网自动匹配阈值走 /api/preferences，随数据备份/迁移。"""
+
+        self.assertIn("persistDisplayPreference('lib_default_language', value);", HTML)
+        self.assertIn("persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);", HTML)
+        # 加载时以后端为准。
+        self.assertIn("data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign'", HTML)
+        self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)
+
+    def test_global_layering_tokens_and_escape_stack(self) -> None:
+        """G-03 统一 z-index token；G-02 统一 Esc 栈。"""
+
+        # 层级 token 定义与套用。
+        self.assertIn("--z-dropdown: 100;", HTML)
+        self.assertIn("--z-modal: 400;", HTML)
+        self.assertIn("--z-toast: 500;", HTML)
+        self.assertIn("z-index: var(--z-titlebar);", HTML)
+        self.assertIn("z-index: var(--z-modal);", HTML)
+        self.assertIn("z-index: var(--z-toast);", HTML)
+        self.assertIn("z-index: var(--z-dropdown);", HTML)
+        # 框选 marquee 不再用 9999 盖过一切（注释除外，规则里不得再出现）。
+        self.assertNotIn("z-index: 9999;", HTML)
+        # Esc 栈：从下拉 → 弹窗 → 选择态 → 抽屉逐层。
+        self.assertIn("document.querySelector('.app-select.is-open, .bib-menu.open')", HTML)
+        self.assertIn("libDeleteSelection.size > 0) {\n    event.preventDefault();\n    clearLibrarySelection();", HTML)
+        self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
+
+    def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
+        """L-07 列表:详情比例 + 自适应详情宽度；L-09 常驻三态全选；L-11 列表键盘导航。"""
+
+        # L-07
+        self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", HTML)
+        self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
+        # L-09
+        self.assertIn('id="lib-select-all"', HTML)
+        self.assertIn('role="checkbox"', HTML)
+        self.assertIn("function syncLibrarySelectAll()", HTML)
+        self.assertIn("syncLibrarySelectAll();", HTML)
+        self.assertIn(".lib-select-all.is-all", HTML)
+        self.assertIn(".lib-select-all.is-some .lib-select-all-dash { display: block; }", HTML)
+        # L-11
+        self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
+        self.assertIn('" tabindex="0" role="option" data-id="', HTML)
+        self.assertIn("function handleLibraryListKeydown(event)", HTML)
+        self.assertIn("function setupLibraryKeyboardNav()", HTML)
+        self.assertIn("setupLibraryKeyboardNav();", HTML)
+        self.assertIn(".library-entry:focus-visible", HTML)
+
+    def test_calibration_has_one_level_preview_before_expert_table(self) -> None:
+        """Phase 3b：页码校准两级深度。默认只出解释+自动检测+预览；7 列专家表收起。"""
+
+        self.assertIn('class="cal-intro"', HTML)
+        self.assertIn('id="cal-expert" style="display:none"', HTML)
+        self.assertIn("function setCalExpertVisible(show)", HTML)
+        # 已有分段直接展开专家表；否则收起。
+        self.assertIn("setCalExpertVisible(calSegments.length > 0);", HTML)
+        # 手动调整 / 载入自动结果 / 检测失败都展开专家表。
+        self.assertIn('onclick="scrollToManualMapping()">手动调整</button>', HTML)
+        self.assertIn("setCalExpertVisible(true);  // 「手动设置」", HTML)
+        self.assertIn("setCalExpertVisible(true);  // 检测失败", HTML)
+        self.assertIn("setCalExpertVisible(true);  // 载入自动结果", HTML)
+        # 专家表结构仍在 #cal-expert 内（自动检测预览在其外）。
+        expert = HTML.split('id="cal-expert"', 1)[1].split('cal-danger-zone', 1)[0]
+        self.assertIn('id="cal-segments-body"', expert)
+        self.assertIn('id="cal-preview-input"', expert)
+        self.assertNotIn('id="cal-auto-preview"', expert)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
         self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
@@ -444,18 +587,19 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
     def test_library_header_and_controls_reflow_in_narrow_windows(self) -> None:
         controls_rule = HTML.split('.library-controls-row {', 1)[1].split('}', 1)[0]
         line_rule = HTML.split('.library-controls-line {', 1)[1].split('}', 1)[0]
-        filters_rule = HTML.split('.library-filter-controls {', 1)[1].split('}', 1)[0]
+        spacer_rule = HTML.split('.library-controls-spacer {', 1)[1].split('}', 1)[0]
+        stats_rule = HTML.split('.library-stats-row {', 1)[1].split('}', 1)[0]
         self.assertIn('flex-direction: column;', controls_rule)
         self.assertIn('align-items: stretch;', controls_rule)
-        # Each line spreads its left/right groups to opposite edges and wraps.
-        self.assertIn('justify-content: space-between;', line_rule)
+        # The single control line wraps; left/right groups split via a flexible spacer.
         self.assertIn('flex-wrap: wrap;', line_rule)
         self.assertIn('width: 100%;', line_rule)
-        # Filters grow and wrap internally so the view switch stays pinned right.
-        self.assertIn('flex: 1 1 auto;', filters_rule)
+        # The spacer grows so view + sort + 补全 stay pinned right of the filter button.
+        self.assertIn('flex: 1 1 auto;', spacer_rule)
+        # Stats split into 待处理 / 参考量 groups and wrap on narrow widths.
+        self.assertIn('flex-wrap: wrap;', stats_rule)
         self.assertIn('@media (max-width: 1100px)', HTML)
         self.assertIn('#page-library .page-header-row { flex-wrap: wrap; }', HTML)
-        self.assertIn('#page-library .calibration-header-stats { width: 100%; justify-content: flex-start; }', HTML)
 
     def test_library_supports_click_and_drag_multi_selection_for_pdf_and_word_removal(self) -> None:
         for element_id in (

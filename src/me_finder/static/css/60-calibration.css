@@ -71,6 +71,16 @@
 .cal-danger-zone { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--divider); }
 .danger-outline { color: var(--danger); border-color: var(--danger); }
 .danger-outline:hover { background: var(--danger-soft); }
+.cal-intro {
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid var(--cal-border, var(--calibration-card-border));
+  border-radius: 10px;
+  background: var(--calibration-card-bg);
+  color: var(--calibration-card-text);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
 .cal-section {
   margin-top: 24px;
 }
@@ -171,7 +181,7 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 40;
+  z-index: var(--z-dropdown);
   min-width: 188px;
   padding: 6px;
   background: var(--surface);

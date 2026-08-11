@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Iterable, List, Sequence, Tuple
+from difflib import SequenceMatcher
+from typing import List, Sequence, Tuple
 
 
 QUOTE_TRANSLATION = str.maketrans(
@@ -110,6 +111,253 @@ def punctuationless_text(text: str) -> str:
     return "".join(ch for ch in normalized if not is_ignored_punctuation(ch))
 
 
+SourceSpan = Tuple[int, int]
+
+
+def _span_union(spans: Sequence[SourceSpan], fallback: SourceSpan) -> SourceSpan:
+    if not spans:
+        return fallback
+    return min(span[0] for span in spans), max(span[1] for span in spans)
+
+
+def _reconcile_transformation(
+    source_text: str,
+    source_spans: Sequence[SourceSpan],
+    target_text: str,
+    fallback: SourceSpan,
+) -> Tuple[List[str], List[SourceSpan]]:
+    """Align a Unicode transformation with the source ranges it consumed.
+
+    Most NFKC transformations are one-character substitutions or expansions.
+    Cross-character composition (``e`` + COMBINING ACUTE -> ``é`` and Hangul
+    Jamo -> a syllable) is the exception.  SequenceMatcher is only used for
+    those short normalization segments; replacement output receives the union
+    of the source range that produced it.
+    """
+
+    if source_text == target_text:
+        return list(target_text), list(source_spans)
+    matcher = SequenceMatcher(None, source_text, target_text, autojunk=False)
+    characters: List[str] = []
+    spans: List[SourceSpan] = []
+    for tag, source_start, source_end, target_start, target_end in matcher.get_opcodes():
+        if tag == "equal":
+            characters.extend(target_text[target_start:target_end])
+            spans.extend(source_spans[source_start:source_end])
+            continue
+        if tag == "delete":
+            continue
+        nearby = list(source_spans[source_start:source_end])
+        if not nearby and source_start:
+            nearby = [source_spans[source_start - 1]]
+        if not nearby and source_end < len(source_spans):
+            nearby = [source_spans[source_end]]
+        span = _span_union(nearby, fallback)
+        replacement = target_text[target_start:target_end]
+        characters.extend(replacement)
+        spans.extend([span] * len(replacement))
+    return characters, spans
+
+
+def _is_hangul_leading(ch: str) -> bool:
+    value = ord(ch)
+    return 0x1100 <= value <= 0x115F or 0xA960 <= value <= 0xA97C
+
+
+def _is_hangul_vowel(ch: str) -> bool:
+    value = ord(ch)
+    return 0x1160 <= value <= 0x11A7 or 0xD7B0 <= value <= 0xD7C6
+
+
+def _is_hangul_trailing(ch: str) -> bool:
+    value = ord(ch)
+    return 0x11A8 <= value <= 0x11FF or 0xD7CB <= value <= 0xD7FB
+
+
+def _is_hangul_lv_syllable(ch: str) -> bool:
+    value = ord(ch)
+    return 0xAC00 <= value <= 0xD7A3 and (value - 0xAC00) % 28 == 0
+
+
+def _can_continue_normalization_segment(segment: str, following: str) -> bool:
+    if unicodedata.combining(following):
+        return True
+    left = unicodedata.normalize("NFKC", segment)
+    right = unicodedata.normalize("NFKC", following)
+    if not left or not right:
+        return False
+    return (
+        _is_hangul_leading(left[-1]) and _is_hangul_vowel(right[0])
+    ) or (
+        _is_hangul_lv_syllable(left[-1]) and _is_hangul_trailing(right[0])
+    )
+
+
+def _nfkc_with_spans(
+    characters: Sequence[str], source_spans: Sequence[SourceSpan]
+) -> Tuple[List[str], List[SourceSpan]]:
+    """Apply full-string NFKC without losing source ranges."""
+
+    normalized_characters: List[str] = []
+    normalized_spans: List[SourceSpan] = []
+    segment_start = 0
+    while segment_start < len(characters):
+        segment_end = segment_start + 1
+        segment_text = characters[segment_start]
+        while segment_end < len(characters) and _can_continue_normalization_segment(
+            segment_text, characters[segment_end]
+        ):
+            segment_text += characters[segment_end]
+            segment_end += 1
+
+        provisional_characters: List[str] = []
+        provisional_spans: List[SourceSpan] = []
+        for ch, span in zip(
+            characters[segment_start:segment_end],
+            source_spans[segment_start:segment_end],
+        ):
+            chunk = unicodedata.normalize("NFKC", ch)
+            provisional_characters.extend(chunk)
+            provisional_spans.extend([span] * len(chunk))
+        target = unicodedata.normalize("NFKC", segment_text)
+        fallback = _span_union(
+            source_spans[segment_start:segment_end],
+            source_spans[segment_start],
+        )
+        reconciled_characters, reconciled_spans = _reconcile_transformation(
+            "".join(provisional_characters),
+            provisional_spans,
+            target,
+            fallback,
+        )
+        normalized_characters.extend(reconciled_characters)
+        normalized_spans.extend(reconciled_spans)
+        segment_start = segment_end
+
+    # This should only be needed for an exotic Unicode normalization boundary.
+    # Preserve correctness first, while retaining the precise provisional map
+    # for the overwhelmingly common path above.
+    target = unicodedata.normalize("NFKC", "".join(characters))
+    if "".join(normalized_characters) != target:
+        fallback = _span_union(source_spans, (0, 0))
+        return _reconcile_transformation(
+            "".join(normalized_characters), normalized_spans, target, fallback
+        )
+    return normalized_characters, normalized_spans
+
+
+def _collapse_whitespace_with_spans(
+    characters: Sequence[str], source_spans: Sequence[SourceSpan]
+) -> Tuple[List[str], List[SourceSpan]]:
+    """Collapse and trim whitespace while preserving its complete source run."""
+
+    collapsed: List[str] = []
+    collapsed_spans: List[SourceSpan] = []
+    pending_space_spans: List[SourceSpan] = []
+    for ch, source_span in zip(characters, source_spans):
+        if ch.isspace():
+            if collapsed:
+                pending_space_spans.append(source_span)
+            continue
+        if pending_space_spans:
+            collapsed.append(" ")
+            collapsed_spans.append(
+                _span_union(pending_space_spans, pending_space_spans[0])
+            )
+            pending_space_spans = []
+        collapsed.append(ch)
+        collapsed_spans.append(source_span)
+    return collapsed, collapsed_spans
+
+
+def _lower_with_spans(
+    characters: Sequence[str], source_spans: Sequence[SourceSpan]
+) -> Tuple[List[str], List[SourceSpan]]:
+    source_text = "".join(characters)
+    target = source_text.lower()
+    provisional_characters: List[str] = []
+    provisional_spans: List[SourceSpan] = []
+    for ch, span in zip(characters, source_spans):
+        lowered = ch.lower()
+        provisional_characters.extend(lowered)
+        provisional_spans.extend([span] * len(lowered))
+    if len(provisional_characters) == len(target):
+        # Context-sensitive lowercasing (notably Greek final sigma) changes a
+        # code point but not which source code point produced that position.
+        return list(target), provisional_spans
+    return _reconcile_transformation(
+        "".join(provisional_characters),
+        provisional_spans,
+        target,
+        _span_union(source_spans, (0, 0)),
+    )
+
+
+def _source_units(text: str, pdf_hyphenation: bool) -> Tuple[List[str], List[SourceSpan]]:
+    raw = text or ""
+    if not pdf_hyphenation:
+        return list(raw), [(index, index + 1) for index in range(len(raw))]
+
+    characters: List[str] = []
+    spans: List[SourceSpan] = []
+    cursor = 0
+    for match in re.finditer(r"([A-Za-z])-\s+([A-Za-z])", raw):
+        for index in range(cursor, match.start()):
+            characters.append(raw[index])
+            spans.append((index, index + 1))
+        for group in (1, 2):
+            index = match.start(group)
+            characters.append(raw[index])
+            spans.append((index, index + 1))
+        cursor = match.end()
+    for index in range(cursor, len(raw)):
+        characters.append(raw[index])
+        spans.append((index, index + 1))
+    return characters, spans
+
+
+def normalize_with_spans(
+    text: str, mode: str, *, pdf_hyphenation: bool = False
+) -> Tuple[str, List[SourceSpan]]:
+    """Return normalized text and half-open source spans for every output char.
+
+    ``mode`` can be ``normalized``, ``compact``, or ``plain``.  PDF mode also
+    mirrors the indexer's dehyphenation of line-broken Latin words.  Half-open
+    spans are necessary because Unicode composition can consume multiple source
+    code points and compatibility normalization can expand one source code point
+    into several output characters.
+    """
+
+    if mode not in {"normalized", "compact", "plain"}:
+        raise ValueError(f"Unsupported normalization mode: {mode}")
+    characters, spans = _source_units(text or "", pdf_hyphenation)
+    characters, spans = _nfkc_with_spans(characters, spans)
+
+    translated_characters: List[str] = []
+    translated_spans: List[SourceSpan] = []
+    for ch, span in zip(characters, spans):
+        if is_invisible_format(ch):
+            continue
+        translated = ch.translate(QUOTE_TRANSLATION).translate(PUNCT_TRANSLATION)
+        translated_characters.extend(translated)
+        translated_spans.extend([span] * len(translated))
+
+    characters, spans = _collapse_whitespace_with_spans(
+        translated_characters, translated_spans
+    )
+    characters, spans = _lower_with_spans(characters, spans)
+    if mode in {"compact", "plain"}:
+        filtered = [
+            (ch, span)
+            for ch, span in zip(characters, spans)
+            if not ch.isspace()
+            and not (mode == "plain" and is_ignored_punctuation(ch))
+        ]
+        characters = [item[0] for item in filtered]
+        spans = [item[1] for item in filtered]
+    return "".join(characters), spans
+
+
 def normalize_with_map(text: str, mode: str) -> Tuple[str, List[int]]:
     """Return normalized text and a map from normalized chars to source indices.
 
@@ -118,23 +366,15 @@ def normalize_with_map(text: str, mode: str) -> Tuple[str, List[int]]:
     highlighting.
     """
 
-    out: List[str] = []
-    mapping: List[int] = []
-    for source_index, original in enumerate(text or ""):
-        chunk = unicodedata.normalize("NFKC", original)
-        chunk = strip_invisible_format(chunk)
-        chunk = chunk.translate(QUOTE_TRANSLATION).translate(PUNCT_TRANSLATION)
-        for ch in chunk.lower():
-            if mode in {"compact", "plain"} and ch.isspace():
-                continue
-            if mode == "plain" and is_ignored_punctuation(ch):
-                continue
-            out.append(ch)
-            mapping.append(source_index)
-    if mode == "normalized":
-        normalized = re.sub(r"\s+", " ", "".join(out)).strip()
-        return normalized, mapping
-    return "".join(out), mapping
+    normalized, spans = normalize_with_spans(text, mode)
+    return normalized, [span[0] for span in spans]
+
+
+def normalize_pdf_text(text: str) -> str:
+    normalized, _ = normalize_with_spans(
+        text, "normalized", pdf_hyphenation=True
+    )
+    return normalized
 
 
 def char_ngrams(text: str, n: int = 2) -> List[str]:

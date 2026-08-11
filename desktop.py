@@ -467,7 +467,7 @@ def create_main_window(webview_module, theme: str):
         "html": loading_html(theme, sys.platform),
         "width": 1500,
         "height": 860,
-        "min_size": (900, 600),
+        "min_size": (960, 640),
         "resizable": True,
         "text_select": True,
         "background_color": palette["app_bg"],
@@ -515,6 +515,8 @@ def setup_logging(root: Path) -> None:
 def main() -> None:
     import webview
 
+    from src.me_finder.app_context import AppContext
+
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)
@@ -528,7 +530,6 @@ def main() -> None:
         if sys.platform == "darwin" and app_data_root is not None
         else None
     )
-    os.chdir(root)
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(mineru_config_path)
@@ -588,8 +589,11 @@ def main() -> None:
             on_install_started=close_for_update,
         )
 
+    state_lock = threading.Lock()
     state = {
         "server": None,
+        "handler": None,
+        "closing": False,
         "pdf_viewer": pdf_viewer,
         "update_service": update_service,
     }
@@ -627,56 +631,119 @@ def main() -> None:
         return choose_folders(Path.home() / "Documents", allow_multiple=True)
 
     def start_backend(win) -> None:
+        handler = None
+        server = None
+        server_started = False
         try:
+            with state_lock:
+                if state["closing"]:
+                    return
             index_path = root / "data" / "index.sqlite3"
             if not index_path.exists():
                 logging.error("index not found: %s", index_path)
-                win.load_html(error_html(
-                    "未找到索引数据库 data/index.sqlite3",
-                    "请把 index.sqlite3 放到：\n%s\n\n"
-                    "索引数据库可在项目目录用命令生成：\n"
-                    "%s -m src.me_finder build-index" % (index_path, python_launcher()),
-                    theme,
-                    sys.platform,
-                ))
+                with state_lock:
+                    closing = bool(state["closing"])
+                if not closing:
+                    win.load_html(error_html(
+                        "未找到索引数据库 data/index.sqlite3",
+                        "请把 index.sqlite3 放到：\n%s\n\n"
+                        "索引数据库可在项目目录用命令生成：\n"
+                        "%s -m src.me_finder build-index" % (index_path, python_launcher()),
+                        theme,
+                        sys.platform,
+                    ))
                 return
             logging.info("loading index from %s", index_path)
-            from http.server import ThreadingHTTPServer
-
-            from src.me_finder.web import make_handler
+            from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
 
             handler = make_handler(
                 index_path,
+                app_context=AppContext.create(
+                    root,
+                    index_path=index_path,
+                    app_data_root=app_data_root,
+                    default_app_data_root=default_app_data_root,
+                ),
                 native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
                 native_scan_directory_chooser=choose_scan_directories,
-                app_data_root=app_data_root,
-                default_app_data_root=default_app_data_root,
             )
-            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-            state["server"] = server
+            server = ManagedThreadingHTTPServer(("127.0.0.1", 0), handler)
             port = int(server.server_address[1])
-            threading.Thread(target=server.serve_forever, daemon=True).start()
+            server_thread = threading.Thread(
+                target=server.serve_forever,
+                daemon=True,
+            )
+            # BaseServer.shutdown() blocks until serve_forever() has entered
+            # its loop.  Publish the pair only after Thread.start succeeds,
+            # while serializing with the close path so an immediately closed
+            # WebView cannot leave behind a late-starting backend.
+            with state_lock:
+                if state["closing"]:
+                    handler.begin_shutdown()
+                else:
+                    server_thread.start()
+                    server_started = True
+                    state["handler"] = handler
+                    state["server"] = server
+            if not server_started:
+                server.server_close()
+                handler.close_runtime()
+                return
             url = "http://127.0.0.1:%d/" % port
             logging.info("backend ready at %s", url)
-            win.load_url(url)
+            with state_lock:
+                closing = bool(state["closing"])
+            if not closing:
+                win.load_url(url)
         except Exception:
             logging.exception("backend failed to start")
-            win.load_html(
-                error_html(
-                    "后台启动失败",
-                    traceback.format_exc(),
-                    theme,
-                    sys.platform,
+            if not server_started:
+                if handler is not None:
+                    handler.begin_shutdown()
+                if server is not None:
+                    server.server_close()
+                if handler is not None:
+                    handler.close_runtime()
+            with state_lock:
+                closing = bool(state["closing"])
+            if not closing:
+                win.load_html(
+                    error_html(
+                        "后台启动失败",
+                        traceback.format_exc(),
+                        theme,
+                        sys.platform,
+                    )
                 )
-            )
 
     webview.start(start_backend, window, storage_path=webview_storage_path(root, portable))
-    server = state["server"]
+    with state_lock:
+        state["closing"] = True
+        server = state["server"]
+        handler = state["handler"]
+    if handler is not None:
+        handler.begin_shutdown()
     if server is not None:
         server.shutdown()
+        server.server_close()
+    handlers_stopped = (
+        server is None or server.wait_for_handlers(timeout=2.0)
+    )
+    if handler is not None:
+        # A half-open request must not block Windows/WebView2 shutdown forever,
+        # but a config+SQLite mutation that already started must reach either
+        # commit or rollback before the process is allowed to disappear.
+        handler.wait_for_durable_operations()
+    if not handlers_stopped and server is not None:
+        handlers_stopped = server.wait_for_handlers(timeout=2.0)
+    if not handlers_stopped:
+        logging.warning("active backend requests did not finish before desktop exit")
+    if handler is not None and handlers_stopped:
+        if not handler.close_runtime():
+            logging.warning("backend workers did not finish before desktop exit")
     logging.info("window closed, exiting")
 
 

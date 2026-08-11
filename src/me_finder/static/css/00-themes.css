@@ -63,6 +63,14 @@
   --input-height: 56px;
   --transition-fast: 160ms ease;
   --transition-normal: 220ms ease;
+  /* 统一层级 token（G-03）：内容 < sticky < 下拉/菜单/框选 < 抽屉 < 标题栏 < 弹窗 < toast。
+     此前散落的 2/6/40/60/70/200/300/350/360/400/9999 缺体系，框选 9999 会盖过弹窗。 */
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-drawer: 200;
+  --z-titlebar: 250;
+  --z-modal: 400;
+  --z-toast: 500;
   color-scheme: light;
 }
 

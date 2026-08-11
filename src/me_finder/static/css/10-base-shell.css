@@ -23,7 +23,7 @@ html[data-desktop-shell="macos"] {
 html[data-desktop-shell="macos"] .macos-titlebar {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 200;
+  z-index: var(--z-titlebar);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,7 +65,7 @@ html[data-desktop-shell="win32"] {
 html[data-desktop-shell="win32"] .windows-titlebar {
   position: fixed;
   inset: 0 0 auto 0;
-  z-index: 200;
+  z-index: var(--z-titlebar);
   display: flex;
   align-items: stretch;
   height: var(--windows-titlebar-height);
@@ -337,3 +337,34 @@ html.sidebar-collapsed { --sidebar-width: 64px; }
   background: var(--success);
 }
 
+
+/* ── Keyboard focus visibility & reduced motion (Phase 5, a11y) ──────────── */
+/* 补齐最常用可交互元素的键盘焦点环——此前 .action-btn 等无 :focus-visible，
+   纯键盘操作看不到焦点。已自带焦点样式的元素（app-select、列表项等）不在此列。 */
+.action-btn:focus-visible,
+.seg-btn:focus-visible,
+.sidebar-item:focus-visible,
+.sidebar-collapse-btn:focus-visible,
+.icon-btn:focus-visible,
+.drawer-close:focus-visible,
+.drawer-nav-btn:focus-visible,
+.import-item-remove:focus-visible,
+.type-seg button:focus-visible,
+.source-type-btn:focus-visible,
+.pdf-parse-summary:focus-visible,
+.bib-menu-item:focus-visible,
+.settings-nav-item:focus-visible,
+.search-submit:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--accent);
+}
+/* 尊重系统「减弱动态效果」：整体收敛过渡与动画，仅保留极短时长避免闪跳。 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

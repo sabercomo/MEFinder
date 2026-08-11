@@ -8,6 +8,9 @@ from src.me_finder.web import HTML
 
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+SEARCH_SERVICE_SOURCE = Path(
+    "src/me_finder/application/search_service.py"
+).read_text(encoding="utf-8")
 
 
 class SearchControlsAndViewsTests(unittest.TestCase):
@@ -26,7 +29,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_primary_search_and_library_dropdowns_use_application_menus(self) -> None:
         self.assertIn('id="library-sort-field-select"', HTML)
-        self.assertIn('id="library-sort-direction-select"', HTML)
+        # 排序方向合并成一个可点按钮（升/降切换），不再是独立下拉。
+        self.assertIn('id="library-sort-dir"', HTML)
+        self.assertIn('onclick="toggleLibrarySortDirection()"', HTML)
+        self.assertIn("function toggleLibrarySortDirection()", HTML)
         self.assertIn("setLibrarySortOption(event,'field','title')", HTML)
         self.assertIn("setLibrarySortOption(event,'field','source_type')", HTML)
         self.assertIn("setLibrarySortOption(event,'field','status')", HTML)
@@ -75,38 +81,46 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
         self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
-        combined_copy_action = (
-            '<button class="action-btn" onclick="copySelectedOriginalAndCitation()">'
-            "复制原文与出处</button>"
-        )
-        self.assertIn(combined_copy_action, detail_source)
+        primary_open_action = '<button class="action-btn primary" type="button" onclick="openSource('
+        self.assertIn(primary_open_action, detail_source)
+        self.assertIn('id="detail-format-control"', detail_source)
+        self.assertIn('aria-label="选择出处格式"', detail_source)
+        self.assertIn('aria-haspopup="menu"', detail_source)
+        self.assertIn('role="menu" aria-label="出处格式"', detail_source)
+        format_control = detail_source.index('id="detail-format-control"')
+        copy_action = detail_source.index('onclick="copySelectedCitation()">复制出处</button>')
+        structured_action = detail_source.index('onclick="openSelectedStructuredReader()">查看结构化文本</button>')
+        open_action = detail_source.index(primary_open_action)
+        self.assertLess(format_control, copy_action)
+        self.assertLess(copy_action, structured_action)
+        self.assertLess(structured_action, open_action)
+        self.assertIn('id="citation-style-control"', detail_source)
+        self.assertIn("citationStyleMenuMarkup()", detail_source)
+        self.assertNotIn('id="detail-copy-control"', detail_source)
+        self.assertNotIn("复制原文", detail_source)
+        self.assertNotIn("复制原文与出处", detail_source)
         self.assertNotIn('id="detail-more-control"', detail_source)
-        self.assertNotIn('aria-haspopup="menu"', detail_source)
-        self.assertNotIn('role="menuitem"', detail_source)
+        self.assertNotIn('aria-label="更多操作" title="更多操作"', detail_source)
+        self.assertNotIn("补全书目信息", detail_source)
         self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
         self.assertIn(
             "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
             detail_source,
         )
-        structured_reader_action = (
-            '<button class="action-btn" onclick="openSelectedStructuredReader()">'
-            "查看结构化文本</button>"
-        )
-        self.assertIn(structured_reader_action, detail_source)
-        self.assertNotIn(
-            'role="menuitem" onclick="openSelectedStructuredReader()',
-            detail_source,
-        )
-        self.assertLess(
-            detail_source.index(combined_copy_action),
-            detail_source.index(structured_reader_action),
-        )
-        self.assertLess(
-            detail_source.index(structured_reader_action),
-            detail_source.index('class="action-btn primary"'),
-        )
-        self.assertNotIn(".detail-more-control", HTML)
-        self.assertNotIn(".detail-more-trigger", HTML)
+        self.assertNotIn("function runSearchDetailAction(event, action)", HTML)
+        self.assertNotIn("if (action === 'copy-original')", HTML)
+        self.assertNotIn("if (action === 'copy-citation')", HTML)
+        self.assertNotIn("if (action === 'copy-combined')", HTML)
+        self.assertNotIn("function copySelectedOriginal()", HTML)
+        self.assertNotIn("function copySelectedOriginalAndCitation()", HTML)
+        self.assertIn("function copySelectedCitation()", HTML)
+        self.assertIn("copyText(citationForItem(item));", HTML)
+        self.assertIn("if (label) label.textContent = citationStyleDisplayLabel(citationStyle);", HTML)
+        self.assertIn("function openSelectedStructuredReader()", HTML)
+        self.assertIn("async function openSource(sourceId, page)", HTML)
+        self.assertIn("async function openMetadataForSource(sourceId)", HTML)
+        self.assertIn(".detail-format-trigger", HTML)
+        self.assertIn(".detail-format-menu", HTML)
         actions_css = re.search(r"\.detail-actions\s*\{([^}]*)\}", HTML)
         self.assertIsNotNone(actions_css)
         self.assertNotIn("box-shadow", actions_css.group(1))
@@ -118,32 +132,88 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("e.target.id !== 'query'", keydown_source)
         self.assertIn("'button, input, textarea, select, summary, a[href]", HTML)
 
+    def test_narrow_search_layout_opens_one_detail_with_a_list_return(self) -> None:
+        self.assertIn("selectResult(0, false)", HTML)
+        self.assertIn("function selectResult(index, openNarrowDetail)", HTML)
+        self.assertIn("if (openNarrowDetail !== false) showSearchResultDetail();", HTML)
+        self.assertIn("function showSearchResultDetail()", HTML)
+        self.assertIn("area.classList.add('is-detail-open')", HTML)
+        self.assertIn("function showSearchResultsList()", HTML)
+        self.assertIn("area.classList.remove('is-detail-open')", HTML)
+        self.assertIn('onclick="showSearchResultsList()"', HTML)
+        self.assertIn("返回结果列表", HTML)
+        self.assertIn("@media (max-width: 959px)", HTML)
+        self.assertIn(".results-area.is-detail-open > .results-list-pane { display: none; }", HTML)
+        self.assertRegex(
+            HTML,
+            r"\.results-area\.is-detail-open\s*>\s*\.results-detail-pane\s*\{[^}]*display:\s*block",
+        )
+        self.assertRegex(HTML, r"\.detail-mobile-toolbar\s*\{\s*display:\s*none")
+
+        row_start = HTML.index("function resultRowHTML(item, index)")
+        row_end = HTML.index("function searchResultsArea()", row_start)
+        row_source = HTML[row_start:row_end]
+        self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
+        self.assertLess(row_source.index("result-match-type"), row_source.index("result-title"))
+
+    def test_search_detail_warns_before_incomplete_citation_copy(self) -> None:
+        detail_start = HTML.index("function showDetail(item)")
+        detail_end = HTML.index("function showEmptyDetail()", detail_start)
+        detail_source = HTML[detail_start:detail_end]
+        self.assertIn("citationAvailabilityMarkup(item)", detail_source)
+        self.assertLess(
+            detail_source.index("citationAvailabilityMarkup(item)"),
+            detail_source.index('<div class="detail-body">'),
+        )
+
+        availability_start = HTML.index("function citationAvailabilityMarkup(item)")
+        availability_end = HTML.index("function updateDetailCitationAvailability()", availability_start)
+        availability_source = HTML[availability_start:availability_end]
+        self.assertIn("citationIsComplete(item)", availability_source)
+        self.assertNotIn("_status']", availability_source)
+        self.assertIn("出处信息不完整", availability_source)
+        self.assertIn("暂不可生成完整引文；仍可查看正文和打开原文。", availability_source)
+        self.assertIn("role=\"status\"", availability_source)
+        self.assertIn("status.hidden = citationIsComplete(item)", HTML)
+        self.assertIn("updateDetailCitationAvailability();", HTML)
+        self.assertIn(".detail-citation-status[hidden] { display: none !important; }", HTML)
+
+        self.assertIn("if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }", HTML)
+        self.assertEqual(
+            HTML.count("if (!citationIsComplete(item)) { showCitationMetadataError(item); return; }"),
+            1,
+        )
+        self.assertIn("return formats[citationStyle] || formats.chinese || formats.gb || item.copy_text || '';", HTML)
+
     def test_library_filters_by_language_alongside_file_type(self) -> None:
-        self.assertIn('id="lib-lang-control"', HTML)
-        self.assertIn('data-lang="chinese"', HTML)
-        self.assertIn('data-lang="foreign"', HTML)
-        self.assertIn("function setLibLangFilter(btn)", HTML)
+        # 语言与文件类型是筛选弹层里的两组分面（不再是平铺分段控件）。
+        self.assertIn('id="filter-opts-lang"', HTML)
+        self.assertIn('id="filter-opts-type"', HTML)
+        self.assertIn("else if (kind === 'lang') libLangFilter = value;", HTML)
         self.assertIn("(s.language || 'chinese') === libLangFilter", HTML)
 
     def test_library_filters_by_document_type(self) -> None:
-        self.assertIn('id="lib-doctype-control"', HTML)
-        self.assertIn('data-doctype="book"', HTML)
-        self.assertIn('data-doctype="journal_article"', HTML)
-        self.assertIn('data-doctype="thesis"', HTML)
+        self.assertIn('id="filter-opts-doctype"', HTML)
+        self.assertIn("{v:'book', label:'著作'", HTML)
+        self.assertIn("{v:'journal_article', label:'期刊论文'", HTML)
+        self.assertIn("{v:'thesis', label:'学位论文'", HTML)
         self.assertLess(
-            HTML.index('data-doctype="journal_article"'),
-            HTML.index('data-doctype="thesis"'),
+            HTML.index("{v:'journal_article', label:'期刊论文'"),
+            HTML.index("{v:'thesis', label:'学位论文'"),
         )
-        self.assertIn("function setLibDocTypeFilter(btn)", HTML)
+        self.assertIn("if (kind === 'doctype') libDocTypeFilter = value;", HTML)
         self.assertIn("function libraryDocType(source)", HTML)
         self.assertIn("libraryDocType(s) === libDocTypeFilter", HTML)
 
-    def test_library_filter_groups_stay_together_before_toolbar(self) -> None:
-        filters_start = HTML.index('class="library-filter-controls"')
-        toolbar_start = HTML.index('class="view-switch"', filters_start)
-        filters = HTML[filters_start:toolbar_start]
-        self.assertLess(filters.index('id="lib-type-control"'), filters.index('id="lib-lang-control"'))
-        self.assertLess(filters.index('id="lib-lang-control"'), filters.index('id="lib-doctype-control"'))
+    def test_library_filter_lives_in_one_button_before_the_toolbar(self) -> None:
+        # 三个筛选收进一个「筛选」按钮，位于视图切换/排序之前（Notion / Linear 范式）。
+        filter_btn = HTML.index('id="library-filter"')
+        view_switch = HTML.index('class="view-switch"', filter_btn)
+        self.assertLess(filter_btn, view_switch)
+        # 弹层分面按 文献类型 → 语言 → 文件 排列。
+        pop = HTML[filter_btn:view_switch]
+        self.assertLess(pop.index('id="filter-opts-doctype"'), pop.index('id="filter-opts-lang"'))
+        self.assertLess(pop.index('id="filter-opts-lang"'), pop.index('id="filter-opts-type"'))
 
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
@@ -153,22 +223,35 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             'display_file_name=str(record.get("file_name") or "")',
             WEB_SOURCE,
         )
-        self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
+        self.assertIn("job.get(\"source_file_id\") == sid", WEB_SOURCE)
+        self.assertIn(
+            'job.get("status") in {"processing", "cancelling"}',
+            WEB_SOURCE,
+        )
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
-        self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertIn("importQueue.push(queueItem)", HTML)
+        self.assertIn("navigateTo('import')", HTML)
+        self.assertIn("pollImportJob(queueItem.id)", HTML)
+        self.assertIn("queue.scrollIntoView({behavior: 'smooth', block: 'start'})", HTML)
         self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
         self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
         self.assertIn("将把这份 PDF 上传到 MinerU 在线服务重新解析", HTML)
 
-    def test_import_page_can_force_native_pdf_through_mineru(self) -> None:
-        self.assertIn('name="pdf-parse-mode" value="auto" checked', HTML)
-        self.assertIn('name="pdf-parse-mode" value="mineru"', HTML)
+    def test_import_page_offers_three_parse_modes_with_auto_default(self) -> None:
+        # 三种解析方式常驻可见，auto 默认选中；用户可主动强制 MinerU 或视觉 API。
+        self.assertIn('name="pdf-parse-mode"', HTML)
+        self.assertIn('value="auto" checked', HTML)
+        self.assertIn('value="mineru"', HTML)
+        self.assertIn('value="vision"', HTML)
         self.assertIn("function selectedPdfParseMode()", HTML)
         self.assertIn("parse_mode: q.parseMode || 'auto'", HTML)
+        self.assertIn("parseMode: ext === '.pdf' ? pdfParseMode : null", HTML)
         self.assertIn("/api/import-upload/start", HTML)
         self.assertIn("q.file.slice(offset, end)", HTML)
         self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
+        self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
         self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
         self.assertIn('payload.get("pdf_parse_mode") or "auto"', WEB_SOURCE)
         self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
@@ -221,17 +304,53 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotIn("failed.forEach(function(err) { console.warn('import-local failed:', err.path, err.error); });\n    await runDirectoryScan();", HTML)
 
+    def test_explicit_save_settings_show_unsaved_hint(self) -> None:
+        """C-02：需显式保存的设置区块（MinerU / 视觉接口）改动即提示尚未保存。"""
+
+        self.assertIn("function markSettingsSectionDirty(hintId)", HTML)
+        self.assertIn("有未保存的修改，记得点保存", HTML)
+        self.assertIn("t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint')", HTML)
+        self.assertIn("t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint')", HTML)
+
+    def test_parse_modes_sit_above_dropzone_with_progressive_failure_recovery(self) -> None:
+        """恢复 0.3.8 层级，并只在失败后渐进显示视觉 API 恢复区。"""
+
+        self.assertNotIn('class="import-intro">', HTML)
+        drop = HTML.index('id="drop-zone"')
+        modes = HTML.index('class="pdf-parse-section"')
+        scan = HTML.index('id="scan-section"')
+        queue = HTML.index('id="import-queue"')
+        self.assertLess(modes, drop)
+        self.assertLess(drop, scan)
+        self.assertLess(scan, queue)
+        self.assertIn("padding: 36px 32px;", HTML)
+        self.assertIn("height: 28px; padding: 0 8px", HTML)
+        self.assertIn('id="import-recovery-panel" hidden', HTML)
+        self.assertIn('id="import-recovery-provider"', HTML)
+        self.assertIn("function importQueueNeedsRecoverySelector()", HTML)
+        self.assertIn("panel.hidden = !shouldShow", HTML)
+        self.assertIn("q.status === 'error'", HTML)
+        self.assertNotIn('class="pdf-parse-details"', HTML)
+        # I-02：扫描只列出文件、不直接导入。
+        self.assertIn("扫描只列出文件、不直接导入", HTML)
+
     def test_optional_vision_api_and_mineru_fallback_are_wired(self) -> None:
         mineru_section = HTML.index('<span class="settings-section-title">MinerU API</span>')
         vision_section = HTML.index('<span class="settings-section-title">其他解析 API</span>')
         self.assertLess(mineru_section, vision_section)
-        self.assertIn('name="pdf-parse-mode" value="vision"', HTML)
         self.assertIn('id="import-vision-provider"', HTML)
+        self.assertIn('id="import-vision-provider-options"', HTML)
         self.assertIn('id="vision-auto-fallback"', HTML)
         self.assertIn("function loadVisionProviders()", HTML)
         self.assertIn("function retryImportWithVision(id)", HTML)
         self.assertIn("function visionRetryProviderFor(q)", HTML)
         self.assertIn("var provider = visionRetryProviderFor(q);", HTML)
+        self.assertIn("function filterImportVisionProviders(value)", HTML)
+        self.assertIn("function importVisionSearchKeydown(event)", HTML)
+        self.assertIn("function positionImportVisionMenu()", HTML)
+        self.assertIn("providers.length > 8", HTML)
+        self.assertIn("max-height: min(360px, calc(100vh - 24px))", HTML)
+        self.assertIn("position: fixed", HTML)
         self.assertIn("q.mineruFailed = !!data.mineru_failed;", HTML)
         self.assertIn("mineruFailed: !!job.mineru_failed", HTML)
         render_start = HTML.index("function renderVisionProviders()")
@@ -288,6 +407,28 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/vision-providers/models'", HTML)
         self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
         self.assertIn("manual_entry_allowed", WEB_SOURCE)
+        self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
+        self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
+        self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
+        self.assertNotIn("{key: 'omni', label: '全模态'}", HTML)
+        self.assertNotIn("{key: 'vision', label: '通用视觉'}", HTML)
+        self.assertIn("function visionModelPriority(item)", HTML)
+        self.assertIn("capability-unsupported", HTML)
+        self.assertNotIn("可能支持图片", HTML)
+
+        brand_start = HTML.index("var VISION_BRAND_RULES = [")
+        brand_end = HTML.index("];", brand_start)
+        brand_rules = HTML[brand_start:brand_end]
+        self.assertGreater(
+            brand_rules.index("{re: /deepseek/i"),
+            brand_rules.index("{re: /together/i"),
+        )
+        self.assertIn("base: 'https://api.deepseek.com', unsupported: true", brand_rules)
+        self.assertIn(
+            'vision-model-badge capability-unsupported">不支持图片',
+            HTML,
+        )
+        self.assertNotIn("通义千问、DeepSeek 等视觉模型", HTML)
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('id="backup-settings"', HTML)
@@ -435,7 +576,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("fetch('/api/sources')", HTML)
         self.assertIn("var bib = source.bibliographic || source.bibliographic_metadata || {}", HTML)
         self.assertIn('source_file_id: searchDocumentId || null', HTML)
-        self.assertIn('payload.get("source_file_id")', WEB_SOURCE)
+        self.assertIn('payload.get("source_file_id")', SEARCH_SERVICE_SOURCE)
 
     def test_library_has_persistent_list_and_card_views(self) -> None:
         self.assertIn('aria-label="文献库显示方式"', HTML)
