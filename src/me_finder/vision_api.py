@@ -504,6 +504,7 @@ def _vision_model_capability(
         "qwen2.5-vl",
         "qwen3-vl",
         "qwen3.5-",
+        "qwen3.8-",
         "qvq",
         "internvl",
         "minicpm-v",

@@ -556,6 +556,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                         {"id": "qwen-long", "owned_by": "qwen"},
                         {"id": "qwen3-omni-flash", "owned_by": "qwen"},
                         {"id": "qwen3-vl-flash", "owned_by": "qwen"},
+                        {"id": "qwen3.8-max", "owned_by": "qwen"},
                         {"id": "qwen-vl-ocr-2025-11-20", "owned_by": "qwen"},
                         {"id": "qwen-vl-ocr-latest", "owned_by": "qwen"},
                         {"id": "qwen3.5-ocr", "owned_by": "qwen"},
@@ -587,7 +588,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 )
 
             self.assertFalse(path.exists())
-            self.assertEqual(result["count"], 11)
+            self.assertEqual(result["count"], 12)
             self.assertEqual(
                 [item["id"] for item in result["models"]],
                 [
@@ -597,6 +598,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                     "vendor-document-ocr",
                     "qwen3-vl-plus",
                     "qwen3-vl-flash",
+                    "qwen3.8-max",
                     "vendor-multimodal-model",
                     "qwen3-omni-flash",
                     "qwen-long",
@@ -616,6 +618,10 @@ class VisionAPIConfigTests(unittest.TestCase):
             self.assertEqual(
                 by_id["qwen3-vl-flash"]["capability_label"],
                 "通用视觉 · 快速",
+            )
+            self.assertEqual(
+                by_id["qwen3.8-max"]["capability_label"],
+                "通用视觉",
             )
             self.assertEqual(
                 by_id["qwen3-omni-flash"]["capability_label"],
@@ -797,6 +803,49 @@ class VisionAPIConfigTests(unittest.TestCase):
 
 
 class VisionAPIParserTests(unittest.TestCase):
+    def test_relative_mineru_manifest_resolves_from_runtime_root(self) -> None:
+        with TemporaryDirectory() as tmp, TemporaryDirectory() as other:
+            root = Path(tmp)
+            relative_manifest = Path(
+                "corpus/processed/mineru/manifests/segments-source.json"
+            )
+            relative_result = Path(
+                "corpus/processed/mineru/results/segment-source"
+            )
+            manifest_path = root / relative_manifest
+            manifest_path.parent.mkdir(parents=True)
+            (root / relative_result).mkdir(parents=True)
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "api": "precision",
+                        "segments": [
+                            {
+                                "data_id": "source-p1-1",
+                                "page_ranges": "1-1",
+                                "result_dir": relative_result.as_posix(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(other)
+                segments = load_mineru_segments(
+                    {"mineru": {"manifest": relative_manifest.as_posix()}},
+                    root=root,
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(len(segments), 1)
+            self.assertEqual(
+                Path(str(segments[0]["result_dir"])),
+                root / relative_result,
+            )
+
     def test_parser_writes_page_results_and_attaches_generic_manifest(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)

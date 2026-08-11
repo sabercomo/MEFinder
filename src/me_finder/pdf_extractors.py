@@ -160,7 +160,7 @@ def extract_pdf_source(
     original_file_name = Path(
         str(config.get("original_file_name") or path.name)
     ).name or path.name
-    structured_segments = load_mineru_segments(config)
+    structured_segments = load_mineru_segments(config, root=root)
     profile = mineru_profile(path, structured_segments) if structured_segments else detect_pdf_type(path)
     source_file = source_file_record(
         path,
@@ -528,7 +528,11 @@ def write_parsed_pdf_snapshot(
     )
 
 
-def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
+def load_mineru_segments(
+    config: Dict[str, object],
+    *,
+    root: Optional[Path] = None,
+) -> List[Dict[str, object]]:
     parser_results = (
         config.get("parser_results")
         or config.get("mineru")
@@ -537,13 +541,16 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
     if not isinstance(parser_results, dict):
         return []
     segments: List[Dict[str, object]] = []
-    manifest_path = parser_results.get("manifest")
-    if manifest_path:
-        manifest = json.loads(Path(str(manifest_path)).read_text(encoding="utf-8-sig"))
+    raw_manifest_path = parser_results.get("manifest")
+    if raw_manifest_path:
+        manifest_path = Path(str(raw_manifest_path))
+        if root is not None and not manifest_path.is_absolute():
+            manifest_path = Path(root) / manifest_path
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         manifest_resume = (
             dict(parser_results.get("resume"))
             if isinstance(parser_results.get("resume"), dict)
-            else resume_summary(manifest, manifest_path=Path(str(manifest_path)))
+            else resume_summary(manifest, manifest_path=manifest_path)
         )
         for segment in manifest.get("segments", []):
             if not isinstance(segment, dict):
@@ -558,6 +565,11 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item.setdefault("provider_name", manifest.get("provider_name"))
             item.setdefault("model", manifest.get("model"))
             item.setdefault("import_resume", manifest_resume)
+            raw_result_dir = str(item.get("result_dir") or "").strip()
+            if root is not None and raw_result_dir:
+                result_dir = Path(raw_result_dir)
+                if not result_dir.is_absolute():
+                    item["result_dir"] = str(Path(root) / result_dir)
             segments.append(item)
     for segment in parser_results.get("segments", []):
         if isinstance(segment, dict):
@@ -566,6 +578,11 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item.setdefault("provider_id", parser_results.get("provider_id"))
             item.setdefault("provider_name", parser_results.get("provider_name"))
             item.setdefault("model", parser_results.get("model"))
+            raw_result_dir = str(item.get("result_dir") or "").strip()
+            if root is not None and raw_result_dir:
+                result_dir = Path(raw_result_dir)
+                if not result_dir.is_absolute():
+                    item["result_dir"] = str(Path(root) / result_dir)
             segments.append(item)
     return [segment for segment in segments if segment.get("result_dir")]
 

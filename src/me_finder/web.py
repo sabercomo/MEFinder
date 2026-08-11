@@ -1050,6 +1050,7 @@ def make_handler(
             phase="index_failed",
             failure_stage="index",
             can_resume=True,
+            vision_failed=False,
             mineru_failed=False,
             mineru_interrupted=False,
             can_retry_with_provider=False,
@@ -1123,8 +1124,8 @@ def make_handler(
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
     ) -> bool:
+        use_vision = bool(is_pdf and vision_provider_id)
         try:
-            use_vision = bool(is_pdf and vision_provider_id)
             use_mineru = is_pdf and not use_vision and (
                 force_mineru or str(profile.get("detected_pdf_type")) != "native_text"
             )
@@ -1277,6 +1278,7 @@ def make_handler(
                                 f"{fallback_name} 后仍失败：{fallback_exc}"
                             ),
                             fallback_error=str(fallback_exc),
+                            vision_failed=True,
                             can_retry_with_provider=True,
                             retry_provider_id=fallback_id,
                             retry_provider_name=fallback_name,
@@ -1292,11 +1294,52 @@ def make_handler(
                 )
             return True
         except Exception as exc:
+            if use_vision:
+                try:
+                    summary = vision_config_summary(resolve_vision_config_path(root))
+                except (OSError, ValueError, VisionAPIError):
+                    summary = {"providers": []}
+                providers = [
+                    item
+                    for item in summary.get("providers", [])
+                    if isinstance(item, dict)
+                    and item.get("enabled")
+                    and item.get("configured")
+                ]
+                current_provider_id = str(vision_provider_id or "")
+                retry_provider = next(
+                    (
+                        item
+                        for item in providers
+                        if str(item.get("id") or "") != current_provider_id
+                    ),
+                    providers[0] if providers else None,
+                )
+                update_import_job(
+                    job_id,
+                    status="failed",
+                    phase="failed",
+                    message=str(exc),
+                    vision_failed=True,
+                    mineru_failed=False,
+                    mineru_interrupted=False,
+                    can_retry_with_provider=bool(retry_provider),
+                    retry_provider_id=(
+                        retry_provider.get("id") if retry_provider else None
+                    ),
+                    retry_provider_name=(
+                        retry_provider.get("name") if retry_provider else None
+                    ),
+                    needs_provider_config=not bool(retry_provider),
+                    original_error=str(exc),
+                )
+                return False
             update_import_job(
                 job_id,
                 status="failed",
                 phase="failed",
                 message=str(exc),
+                vision_failed=False,
                 mineru_failed=False,
                 mineru_interrupted=False,
                 can_retry_with_provider=False,
@@ -1419,6 +1462,7 @@ def make_handler(
                 "force_mineru": bool(force_mineru),
                 "provider_id": vision_provider_id,
                 "provider_name": provider_name,
+                "vision_failed": False,
             }
             context = {
                 "target": Path(target),
@@ -1586,6 +1630,7 @@ def make_handler(
             phase="queue_failed",
             failure_stage="queue",
             can_resume=True,
+            vision_failed=False,
             mineru_failed=False,
             mineru_interrupted=False,
             can_retry_with_provider=False,
@@ -1638,13 +1683,11 @@ def make_handler(
     ) -> bool:
         """Authorize an EXPLICIT, user-initiated paid provider retry.
 
-        A permanent MinerU failure qualifies, and — per the user's decision —
-        so does a transient interruption: a stuck task should not be a dead end,
-        so the user may manually switch when a provider is configured. This
-        gate only governs explicit retries (the "改用 X" button / /api/import-retry);
-        it never enables *automatic* fallback, which stays forbidden on
-        interruption (the failure handler returns before any auto-switch).
-        Index-stage failures never qualify: re-parsing can't fix a rebuild error.
+        MinerU failures and visual-provider failures qualify. A transient
+        interruption also qualifies: a stuck PDF task should not be a dead end,
+        so the user may explicitly switch when another provider is configured.
+        This gate never enables automatic fallback. Index-stage failures never
+        qualify because re-parsing cannot fix a rebuild error.
         """
 
         return bool(
@@ -1656,6 +1699,13 @@ def make_handler(
             )
             and (
                 job.get("mineru_failed")
+                or job.get("vision_failed")
+                # Upgrade jobs saved by v0.4.0 builds that did not persist the
+                # explicit flag for a failed visual-provider parse.
+                or (
+                    str(job.get("parse_route") or "") == "vision"
+                    and str(job.get("phase") or "") == "failed"
+                )
                 or job.get("needs_provider_config")
                 or job.get("can_retry_with_provider")
                 or job.get("mineru_interrupted")
@@ -1665,15 +1715,22 @@ def make_handler(
     def public_import_job(job: Dict[str, object]) -> Dict[str, object]:
         """Return current retry choices without mutating the saved job.
 
-        A MinerU failure can happen before any alternate provider exists.  The
+        A parser failure can happen before any alternate provider exists. The
         user may then configure one from the error card, so retry availability
-        must be derived from the current provider config instead of the
-        historical failure snapshot.
+        is derived from current provider config, not the historical snapshot.
         """
 
         public_job = dict(job)
-        is_mineru_failure = is_provider_retry_eligible(public_job)
-        if not is_mineru_failure:
+        is_legacy_vision_failure = bool(
+            str(public_job.get("status") or "") == "failed"
+            and str(public_job.get("parse_route") or "") == "vision"
+            and str(public_job.get("phase") or "") == "failed"
+            and str(public_job.get("failure_stage") or "") != "index"
+        )
+        if is_legacy_vision_failure:
+            public_job["vision_failed"] = True
+        is_parser_failure = is_provider_retry_eligible(public_job)
+        if not is_parser_failure:
             if str(public_job.get("status") or "") == "failed" and (
                 str(public_job.get("failure_stage") or "") == "index"
                 or public_job.get("mineru_interrupted")
@@ -1707,6 +1764,21 @@ def make_handler(
             ),
             providers[0] if providers else None,
         )
+        if public_job.get("vision_failed"):
+            current_provider_id = str(public_job.get("provider_id") or "")
+            alternate_provider = next(
+                (
+                    item
+                    for item in providers
+                    if str(item.get("id") or "") != current_provider_id
+                ),
+                None,
+            )
+            if alternate_provider and (
+                provider is None
+                or str(provider.get("id") or "") == current_provider_id
+            ):
+                provider = alternate_provider
         public_job.update(
             can_retry_with_provider=bool(provider),
             retry_provider_id=provider.get("id") if provider else None,
@@ -1802,6 +1874,7 @@ def make_handler(
                     "phase": next_phase,
                     "can_resume": False,
                     "message": next_message,
+                    "vision_failed": False,
                     "mineru_failed": False,
                     "mineru_interrupted": False,
                     "can_retry_with_provider": False,
@@ -1816,6 +1889,7 @@ def make_handler(
             "phase": next_phase,
             "can_resume": False,
             "message": next_message,
+            "vision_failed": False,
             "mineru_failed": False,
             "mineru_interrupted": False,
             "can_retry_with_provider": False,
@@ -3620,8 +3694,8 @@ def make_handler(
                     self._send_json(
                         {
                             "error": (
-                                "该任务不是可切换接口的 MinerU 解析失败；"
-                                "索引失败、断点中断和 Word 导入不能改走付费视觉 API。"
+                                "该任务不是可切换接口的 PDF 解析失败；"
+                                "索引失败和 Word 导入不能改走视觉解析 API。"
                             )
                         },
                         status=400,

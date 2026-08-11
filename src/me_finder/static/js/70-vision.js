@@ -627,8 +627,16 @@ function syncImportRecoveryProvider() {
   if (!container) return;
   var providers = configuredVisionProviders();
   var current = container.dataset.value || '';
-  var preferred = visionConfig.default_provider_id || '';
-  if (!providers.some(function(provider) { return provider.id === current; })) {
+  var recoveryJob = Array.isArray(importQueue) ? importQueue.find(function(item) {
+    return item && item.status === 'error' && item.type === 'pdf'
+      && item.failureStage !== 'index' && item.retryProviderId;
+  }) : null;
+  var preferred = (recoveryJob && recoveryJob.retryProviderId) || visionConfig.default_provider_id || '';
+  var panel = document.getElementById('import-recovery-panel');
+  var preferFailedJob = panel && !panel.hidden && container.dataset.userSelected !== 'true';
+  if (preferFailedJob && providers.some(function(provider) { return provider.id === preferred; })) {
+    current = preferred;
+  } else if (!providers.some(function(provider) { return provider.id === current; })) {
     current = providers.some(function(provider) { return provider.id === preferred; }) ? preferred : (providers[0] || {}).id || '';
   }
   container.dataset.value = current;
@@ -647,7 +655,10 @@ function toggleImportRecoveryProvider(event) {
 function selectImportRecoveryProvider(event, providerId) {
   if (event) event.stopPropagation();
   var container = document.getElementById('import-recovery-provider');
-  if (container) container.dataset.value = providerId;
+  if (container) {
+    container.dataset.value = providerId;
+    container.dataset.userSelected = 'true';
+  }
   updateImportRecoveryProviderLabel();
   renderImportRecoveryProviderOptions();
   closeAppSelects();

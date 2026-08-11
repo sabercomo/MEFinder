@@ -6,7 +6,7 @@ function visionRetryProviderFor(q) {
   // 索引阶段失败不给切换（重解析救不了重建索引错误）。中断态不再一律屏蔽：
   // 后端 public_import_job 会按当前配置回填 canRetryVision，配了接口才显式放行。
   if (q.failureStage === 'index') return null;
-  if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed) return null;
+  if (!q.canRetryVision && !q.needsProviderConfig && !q.mineruFailed && !q.visionFailed) return null;
   var providers = configuredVisionProviders();
   var selectedRecoveryId = typeof selectedImportRecoveryProviderId === 'function'
     ? selectedImportRecoveryProviderId()
@@ -20,7 +20,7 @@ function visionRetryProviderFor(q) {
 function importQueueNeedsRecoverySelector() {
   return importQueue.some(function(q) {
     return q && q.type === 'pdf' && q.status === 'error' && q.failureStage !== 'index'
-      && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed);
+      && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed);
   });
 }
 
@@ -891,7 +891,7 @@ function renderImportQueue() {
         + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
         + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
     } else if (q.status === 'error'
-        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed)) {
+        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
     }
     return '<div class="import-item" data-id="' + q.id + '">'
@@ -1122,6 +1122,7 @@ function pollImportJob(id) {
       if (data.provider_id) q.providerId = data.provider_id;
       if (data.provider_name) q.providerName = data.provider_name;
       q.mineruFailed = !!data.mineru_failed;
+      q.visionFailed = !!data.vision_failed;
       q.mineruInterrupted = !!data.mineru_interrupted;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
       else if (data.phase === 'vision_processing') q.route = 'vision';
@@ -1193,6 +1194,7 @@ async function loadResumableImports() {
         retryProviderName: job.retry_provider_name || job.provider_name || null,
         needsProviderConfig: !!job.needs_provider_config,
         mineruFailed: !!job.mineru_failed,
+        visionFailed: !!job.vision_failed,
         mineruInterrupted: !!job.mineru_interrupted,
         fromJournal: true
       });
@@ -1265,6 +1267,7 @@ async function retryImportWithVision(id) {
     q.message = '正在切换到 ' + q.providerName + '…';
     q.canRetryVision = false;
     q.needsProviderConfig = false;
+    q.visionFailed = false;
     renderImportQueue();
     pollImportJob(q.id);
   } catch (e) {
