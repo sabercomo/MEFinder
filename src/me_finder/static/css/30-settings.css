@@ -696,6 +696,145 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .ui-switch input:checked ~ .ui-switch-track::after { transform: translateX(14px); }
 .ui-switch input:disabled ~ .ui-switch-track { opacity: 0.45; cursor: not-allowed; }
 .ui-switch input:focus-visible ~ .ui-switch-track { box-shadow: var(--focus-ring); }
+.mineru-global-config {
+  display: grid;
+  grid-template-columns: 90px minmax(220px, 360px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+}
+.mineru-global-config .settings-label { padding: 0; text-align: left; font-weight: 600; }
+.mineru-global-config small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-account-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+.mineru-account-list { display: grid; gap: 8px; }
+.mineru-account-empty {
+  display: grid;
+  gap: 5px;
+  padding: 24px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 13px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+.mineru-account-empty strong { color: var(--text-secondary); font-size: 13px; }
+.mineru-account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--divider);
+  border-radius: 11px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.mineru-account-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-card-hover); }
+.mineru-account-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.mineru-account-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: #111111;
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 750;
+}
+.mineru-account-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mineru-account-copy strong,
+.mineru-account-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mineru-account-copy strong { font-size: 12px; }
+.mineru-account-copy small { color: var(--text-tertiary); font-size: 10px; }
+.mineru-account-state {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+.mineru-account-state.ready { color: var(--success); background: var(--success-soft); }
+.mineru-editor-card {
+  min-width: 0;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+}
+.mineru-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mineru-editor-head > div { min-width: 0; display: grid; gap: 3px; }
+.mineru-editor-head strong { color: var(--text-primary); font-size: 13px; }
+.mineru-editor-head small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-editor-grid { grid-template-columns: 108px minmax(0, 1fr); margin-top: 14px; }
+.mineru-statistics-card {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--divider);
+  border-radius: 14px;
+  background: var(--surface-elevated);
+}
+.mineru-statistics-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.mineru-statistics-head > div { min-width: 0; display: grid; gap: 3px; }
+.mineru-statistics-head strong { color: var(--text-primary); font-size: 13px; }
+.mineru-statistics-head small { color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
+.mineru-statistics-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 13px; }
+.mineru-statistics-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  background: var(--surface-secondary);
+}
+.mineru-statistics-summary span { color: var(--text-primary); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mineru-statistics-summary small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-statistics-list { display: grid; gap: 8px; margin-top: 12px; }
+.mineru-statistics-empty { padding: 14px; color: var(--text-tertiary); font-size: 11px; text-align: center; }
+.mineru-stat-account { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 11px; background: var(--surface-primary); }
+.mineru-stat-account > summary { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.mineru-stat-account > summary::-webkit-details-marker { display: none; }
+.mineru-stat-account > summary span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mineru-stat-account > summary strong { color: var(--text-primary); font-size: 12px; }
+.mineru-stat-account > summary small { color: var(--text-tertiary); font-size: 10px; }
+.mineru-stat-account > summary b { color: var(--accent); font-size: 12px; font-weight: 650; }
+.mineru-stat-books { display: grid; border-top: 1px solid var(--border-subtle); }
+.mineru-stat-book { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-top: 1px solid var(--border-subtle); }
+.mineru-stat-book:first-child { border-top: none; }
+.mineru-stat-book > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mineru-stat-book strong { overflow: hidden; color: var(--text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.mineru-stat-book small { color: var(--text-tertiary); font-size: 10px; }
+.mineru-stat-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+@media (max-width: 760px) {
+  .mineru-global-config { grid-template-columns: 1fr; }
+  .mineru-account-layout { grid-template-columns: 1fr; }
+  .mineru-editor-grid { grid-template-columns: 1fr; }
+  .mineru-editor-grid .settings-label { padding-top: 0; text-align: left; }
+}
 .vision-editor-card {
   border: 1px solid var(--divider);
   border-radius: 14px;

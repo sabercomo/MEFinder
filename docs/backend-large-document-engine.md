@@ -1,4 +1,4 @@
-# MEFinder 0.4.x 大文档解析后端
+# MEFinder 0.4.2 大文档解析引擎
 
 本文档描述可由未来 HTTP API、桌面端命令或后台 worker 调用的稳定应用层。它不包含前端设置页、FastAPI、Uvicorn 或本地 MinerU 模型依赖。
 

@@ -1,27 +1,40 @@
 /* ═══ MinerU API settings ═══ */
+var mineruAccounts = [];
+var mineruStatistics = {parsed_book_count:0, parsed_page_count:0, credentials:[]};
+var mineruSelectedAccountId = '';
+
 async function loadMineruConfig() {
   var status = document.getElementById('mineru-config-status');
   if (!status) return;
   status.className = 'settings-status';
   status.textContent = '读取中…';
   try {
-    var resp = await fetch('/api/mineru-config');
+    var resp = await fetch('/api/mineru-accounts');
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    mineruAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+    mineruAccounts.sort(function(left, right) {
+      return String(left.display_name || left.account_id || '').localeCompare(
+        String(right.display_name || right.account_id || ''),
+        'zh-CN',
+        {numeric:true, sensitivity:'base'}
+      );
+    });
+    mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
     document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
-    document.getElementById('mineru-expires-at').value = data.expires_at || '';
-    document.getElementById('mineru-token').value = '';
-    if (data.configured) {
-      var expiryStatus = data.expiry_status || 'ok';
-      var variant = (expiryStatus === 'expired' || expiryStatus === 'invalid') ? 'warning'
-        : (expiryStatus === 'expires_today' || expiryStatus === 'unset') ? 'warning' : 'ready';
-      status.className = 'settings-status ' + variant;
-      status.textContent = '已配置' + (data.expiry_label ? ' · ' + data.expiry_label : '');
+    renderMineruAccountList();
+    renderMineruStatistics();
+    var selected = mineruAccounts.find(function(item) { return item.account_id === mineruSelectedAccountId; });
+    if (!selected && mineruAccounts.length) selected = mineruAccounts[0];
+    if (selected) selectMineruAccount(selected.account_id);
+    else startAddMineruAccount();
+    var enabledCount = mineruAccounts.filter(function(item) { return item.enabled && item.configured; }).length;
+    if (enabledCount) {
+      status.className = 'settings-status ready';
+      status.textContent = '已配置 ' + enabledCount + ' 个可用账号';
     } else {
       status.className = 'settings-status warning';
-      status.textContent = data.has_legacy_access_keys
-        ? '旧 AK/SK 无法鉴权，请填写 API Token'
-        : '尚未配置 API Token';
+      status.textContent = mineruAccounts.length ? '账号均未启用' : '尚未添加账号';
     }
     mineruConfigLoaded = true;
   } catch (e) {
@@ -29,6 +42,83 @@ async function loadMineruConfig() {
     status.textContent = '读取失败';
     showToast('读取 MinerU 配置失败：' + e.message);
   }
+}
+
+function renderMineruAccountList() {
+  var list = document.getElementById('mineru-account-list');
+  if (!list) return;
+  if (!mineruAccounts.length) {
+    list.innerHTML = '<div class="mineru-account-empty"><strong>还没有账号</strong><small>点击“添加账号”保存第一个 MinerU Token</small></div>';
+    return;
+  }
+  list.innerHTML = mineruAccounts.map(function(item) {
+    var selected = item.account_id === mineruSelectedAccountId ? ' selected' : '';
+    var state = !item.configured ? '缺少 Token' : !item.enabled ? '已停用'
+      : item.health_status === 'unauthorized' ? '认证失效'
+      : item.health_status === 'cooldown' ? '冷却中' : '可用';
+    var stateClass = item.enabled && item.configured && item.health_status === 'healthy' ? 'ready' : 'warning';
+    return '<button class="mineru-account-item' + selected + '" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">' +
+      '<span class="mineru-account-avatar">M</span><span class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + esc(item.account_id) + '</small></span>' +
+      '<span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span></button>';
+  }).join('');
+}
+
+function startAddMineruAccount() {
+  mineruSelectedAccountId = '';
+  var id = document.getElementById('mineru-account-id');
+  var name = document.getElementById('mineru-account-name');
+  var token = document.getElementById('mineru-token');
+  var expiry = document.getElementById('mineru-expires-at');
+  if (id) id.value = '';
+  if (name) name.value = 'MinerU 账号 ' + (mineruAccounts.length + 1);
+  if (token) token.value = '';
+  if (expiry) expiry.value = '';
+  document.getElementById('mineru-account-enabled').checked = true;
+  document.getElementById('mineru-editor-title').textContent = '添加 MinerU 账号';
+  document.getElementById('mineru-test-btn').disabled = true;
+  renderMineruAccountList();
+}
+
+function selectMineruAccount(accountId) {
+  var item = mineruAccounts.find(function(account) { return account.account_id === accountId; });
+  if (!item) return;
+  mineruSelectedAccountId = item.account_id;
+  document.getElementById('mineru-account-id').value = item.account_id;
+  document.getElementById('mineru-account-name').value = item.display_name || '';
+  document.getElementById('mineru-token').value = '';
+  document.getElementById('mineru-expires-at').value = item.expires_at || '';
+  document.getElementById('mineru-account-enabled').checked = !!item.enabled;
+  document.getElementById('mineru-editor-title').textContent = '编辑 ' + item.display_name;
+  document.getElementById('mineru-test-btn').disabled = !item.configured;
+  renderMineruAccountList();
+}
+
+function mineruPageRangesLabel(ranges) {
+  if (!Array.isArray(ranges) || !ranges.length) return '—';
+  return ranges.map(function(range) {
+    if (!Array.isArray(range) || range.length < 2) return '';
+    return Number(range[0]).toLocaleString() + '–' + Number(range[1]).toLocaleString();
+  }).filter(Boolean).join('、');
+}
+
+function renderMineruStatistics() {
+  var books = Number(mineruStatistics.parsed_book_count || 0);
+  var pages = Number(mineruStatistics.parsed_page_count || 0);
+  document.getElementById('mineru-stat-books').textContent = books.toLocaleString();
+  document.getElementById('mineru-stat-pages').textContent = pages.toLocaleString();
+  var list = document.getElementById('mineru-statistics-list');
+  if (!list) return;
+  var credentials = Array.isArray(mineruStatistics.credentials) ? mineruStatistics.credentials : [];
+  if (!credentials.some(function(item) { return Number(item.parsed_page_count || 0) > 0; })) {
+    list.innerHTML = '<div class="mineru-statistics-empty">完成 MinerU 解析后，这里会显示每个账号解析过的书和页码范围。</div>';
+    return;
+  }
+  list.innerHTML = credentials.filter(function(item) { return Number(item.parsed_page_count || 0) > 0; }).map(function(item) {
+    var bookRows = (Array.isArray(item.books) ? item.books : []).map(function(book) {
+      return '<div class="mineru-stat-book"><span><strong>' + esc(book.source_file_name || book.document_id || '未命名文献') + '</strong><small>原书页 ' + esc(mineruPageRangesLabel(book.page_ranges)) + '</small></span><b>' + Number(book.parsed_page_count || 0).toLocaleString() + ' 页</b></div>';
+    }).join('');
+    return '<details class="mineru-stat-account"><summary><span><strong>' + esc(item.display_name || item.account_id) + '</strong><small>' + Number(item.parsed_book_count || 0).toLocaleString() + ' 本书</small></span><b>' + Number(item.parsed_page_count || 0).toLocaleString() + ' 页</b></summary><div class="mineru-stat-books">' + bookRows + '</div></details>';
+  }).join('');
 }
 
 async function exportBackup() {
@@ -95,29 +185,29 @@ function toggleMineruSecret(inputId, buttonId) {
 
 async function saveMineruConfig() {
   var hint = document.getElementById('mineru-save-hint');
+  var accountId = document.getElementById('mineru-account-id').value.trim();
   var payload = {
+    account_id: accountId || null,
+    display_name: document.getElementById('mineru-account-name').value.trim(),
     token: document.getElementById('mineru-token').value.trim(),
     api_base: document.getElementById('mineru-api-base').value.trim(),
-    expires_at: document.getElementById('mineru-expires-at').value
+    expires_at: document.getElementById('mineru-expires-at').value,
+    enabled: document.getElementById('mineru-account-enabled').checked
   };
+  if (!payload.display_name) { showToast('请填写 MinerU 账号名称'); return; }
+  if (!accountId && !payload.token) { showToast('新增账号必须填写 Token'); return; }
   hint.textContent = '正在保存…';
   try {
-    var resp = await fetch('/api/mineru-config', {
+    var resp = await fetch('/api/mineru-accounts', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    if (!data.configured) {
-      hint.textContent = '尚未填写有效 Token';
-      showToast('请粘贴 MinerU API 管理页面创建的 Token');
-      mineruConfigLoaded = false;
-      await loadMineruConfig();
-      return;
-    }
+    mineruSelectedAccountId = data.saved_account_id || accountId;
     hint.textContent = '已保存到本机';
-    showToast('MinerU API 配置已保存');
+    showToast(accountId ? 'MinerU 账号已更新' : 'MinerU 账号已添加');
     mineruConfigLoaded = false;
     await loadMineruConfig();
   } catch (e) {
@@ -129,7 +219,9 @@ async function saveMineruConfig() {
 async function testMineruConnection() {
   var hint = document.getElementById('mineru-save-hint');
   var btn = document.getElementById('mineru-test-btn');
+  var accountId = document.getElementById('mineru-account-id').value.trim();
   var token = document.getElementById('mineru-token').value.trim();
+  if (!accountId) { showToast('请先保存这个 MinerU 账号'); return; }
   if (token) {
     showToast('测试使用已保存的 Token，请先点“保存 API 配置”再测试');
     return;
@@ -138,7 +230,11 @@ async function testMineruConnection() {
   if (hint) hint.textContent = '正在测试连接…';
   showToast('正在测试 MinerU 连接…');
   try {
-    var resp = await fetch('/api/mineru-config/test', {method: 'POST'});
+    var resp = await fetch('/api/mineru-accounts/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({account_id: accountId})
+    });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
     if (hint) hint.textContent = '连接正常 · ' + data.latency_ms + ' ms';

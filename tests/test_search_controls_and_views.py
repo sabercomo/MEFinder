@@ -367,11 +367,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             WEB_SOURCE,
         )
 
-    def test_mineru_settings_require_api_token_instead_of_legacy_access_keys(self) -> None:
+    def test_mineru_settings_support_independent_token_accounts(self) -> None:
         self.assertIn('id="mineru-token"', HTML)
+        self.assertIn('id="mineru-account-list"', HTML)
+        self.assertIn('id="mineru-account-name"', HTML)
+        self.assertIn('id="mineru-statistics-list"', HTML)
         self.assertNotIn('id="mineru-access-key-id"', HTML)
         self.assertNotIn('id="mineru-secret-access-key"', HTML)
-        self.assertIn("data.has_legacy_access_keys", HTML)
+        self.assertIn("fetch('/api/mineru-accounts'", HTML)
+        self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
+        self.assertIn("不是 MinerU 官网用量或计费数据", HTML)
+        self.assertIn("def ensure_mineru_accounts()", WEB_SOURCE)
         self.assertNotIn("access_key_id: document.getElementById", HTML)
         self.assertNotIn("secret_access_key: document.getElementById", HTML)
 

@@ -1,28 +1,84 @@
-# MEFinder 0.4.x 后端契约变更清单
+# MEFinder 0.4.2 契约变更清单
 
-> 交接范围：`5154306` → 当前后端分支
+> 交接范围：v0.4.0 → `0.4.2`
 >
-> 用途：前端、HTTP API 和最终集成线的单一事实源。
->
-> 重要：本文同时区分“已实现的应用层契约”和“尚未实现的 HTTP 契约”。
+> 用途：前端、HTTP API 和后端的单一事实源。
 
 ## 1. HTTP 端点变更
 
 | 类型 | 数量 | 结论 |
 |---|---:|---|
-| 新增 HTTP 端点 | 0 | 未添加 `/api/v1` 或其他 web route |
-| 修改 HTTP 端点 | 0 | 现有 request/response 字段和 HTTP status 未改 |
+| 新增 HTTP 端点 | 5 | MinerU 多账号读写、单账号测试、本地统计、单书导出 |
+| 修改 HTTP 端点 | 0 | v0.4.0 已有路由的 request/response 保持兼容 |
 | 删除 HTTP 端点 | 0 | 无 |
-| FastAPI/Uvicorn | 0 | 未引入 |
+| FastAPI/Uvicorn | 0 | 未引入，继续使用现有 HTTP handler |
 
-`src/me_finder/web.py` 相对 checkpoint 字节级未变。因此，前端现在不得假设以下路由已存在：
+### 1.1 `GET /api/mineru-accounts`
 
-- 多 MinerU 账号的 list/create/update/delete route
-- 大文档 job create/status/resume/cancel route
-- 单书 export route
-- provider list/capability route
+用途：设置页一次取回全局 API 地址、安全账号摘要和本地统计。首次读取时，如果 v0.4.0 已存在单 Token 配置而多账号配置为空，则非破坏性迁移为 `mineru-default`。
 
-这些均属于后续 HTTP adapter 工作，不是本分支已交付端点。
+200 response：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `configured` | `boolean` | 至少一个账号已配置且启用 |
+| `api_base` | `string` | 所有 MinerU 账号共用的服务地址 |
+| `accounts` | `MinerUAccountSummary[]` | 不含 Token/secret reference 的账号列表 |
+| `statistics` | `MinerUUsageStatistics` | 本地成功解析归属统计 |
+
+### 1.2 `POST /api/mineru-accounts`
+
+用途：新增或更新一个独立 MinerU 账号。
+
+JSON request：
+
+| 字段 | 类型 | 必填/默认 | 契约 |
+|---|---|---|---|
+| `account_id` | `string?` | 新建可缺省 | 更新时作为稳定 ID |
+| `display_name` | `string` | 必填 | 1–120 字符 |
+| `token` | `string?` | 新建必填 | 更新时空字符串保留已存 Token |
+| `enabled` | `boolean` | `true` | 是否参与新任务调度 |
+| `expires_at` | `YYYY-MM-DD` 或空字符串 | 可选 | 空字符串清除本地到期日 |
+| `max_concurrency_override` | `integer?` | `null` | 正数；当前 UI 不展示该高级项 |
+| `api_base` | `URL?` | 可选 | 非空时更新全局服务地址 |
+
+200 response 与 `GET /api/mineru-accounts` 相同，另增 `saved_account_id: string`。响应不返回 Token。
+
+### 1.3 `POST /api/mineru-accounts/test`
+
+request：`{"account_id": "..."}`。后端只解决并测试该账号已保存的 Token。
+
+200 response 字段：`ok`, `latency_ms`, `api_base`, `account_id`。
+
+### 1.4 `GET /api/mineru-statistics`
+
+用途：独立刷新本地解析统计。200 response 是 `MinerUUsageStatistics`，字段见 2.1。
+
+### 1.5 `POST /api/document/export`
+
+用途：将当前索引中的一份 PDF 流式导出为 `mefinder.document.v1` Zip64 容器。
+
+request：`{"source_id": "..."}`。
+
+200 response 字段：
+
+- `ok`
+- `source_file_id`
+- `schema_version`（固定 `mefinder.document.v1`）
+- `path`（本机导出文件绝对路径）
+- `size_bytes`
+- `page_count`
+- `warning_count`
+- `missing_ranges`
+
+导出目标为应用数据目录下的 `exports/`，后缀 `.mefinder.zip`。后端从 SQLite 逐页读取，写入 `<target>.partial`，成功后原子更名；不向浏览器返回整书文本。当前 HTTP/UI 仅支持已建立页级索引的 PDF，Word 返回 400。
+
+### 1.6 兼容路由和未暴露路由
+
+- v0.4.0 的 `GET/POST /api/mineru-config` 与 `POST /api/mineru-config/test` 保留，便于旧客户端/旧配置迁移。
+- 没有新增账号 DELETE 端点；设置页可停用账号。
+- `LargeDocumentJobEngine` 已接入现有 PDF 导入流，没有单独暴露 job create/status/resume/cancel HTTP 端点。断点继续由现有导入任务端点驱动。
+- provider capability 暂未暴露为 HTTP 端点。
 
 ## 2. 新增应用层调用入口
 
@@ -175,6 +231,8 @@ book.mefinder.zip
 
 写入期间仅存在 `<target>.partial`，全部成功后才原子 rename。
 
+0.4.2 新增 `export_indexed_pdf(...)` 应用服务，把当前 SQLite `source_files + pdf_pages + pdf_import_runs + audit_issues` 投影到上述协议；文献详情菜单通过 `POST /api/document/export` 调用。
+
 ### 2.5 Torture/manual runner
 
 新入口：`tools/large_document_torture.py`
@@ -222,11 +280,17 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 
 ## 4. 错误码与错误分类
 
-### 4.1 HTTP 错误码
+### 4.1 HTTP 状态码与 error body
 
-本分支新增/修改/删除的 HTTP 错误码：**0**。
+| HTTP status | 适用情况 |
+|---:|---|
+| `200` | 读取、保存或连接测试成功 |
+| `400` | JSON 不是对象、字段/网址/Token 无效、账号/文献不存在、不支持的单书导出，或连接测试被 MinerU 拒绝 |
+| `413` | 请求超过现有 JSON body 大小上限 |
+| `500` | 本地配置/数据库无法写入等服务端故障 |
+| `503` | 应用已进入关闭流程，拒绝新 POST |
 
-应用层异常尚未映射为稳定 HTTP error body。后续 HTTP adapter 不得让前端解析英文/中文 message 来判断错误；需要先定义独立的 machine-readable `error.code`。
+当前为了与 v0.4.0 前端保持一致，错误 body 仍为 `{"error": "可读消息"}`，**未新增 machine-readable `error.code`**。前端只展示 message，不通过解析中英文文案决定程序分支。
 
 ### 4.2 Coverage validator 机器码
 
@@ -293,7 +357,8 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 - `SimplePDF` 对超过 128 MiB 的文件不再做整文件内存 fallback。
 - `VisionProviderConfig.api_key` 不再出现在 dataclass repr。
 - 同一 published job 对同一 destination 重试时为幂等返回。
-- 旧的单 MinerU Token 配置与现有普通 PDF 路径未删除。
+- 旧的单 MinerU Token 配置与兼容 HTTP 路由未删除；打开 MinerU 设置时会自动迁移为第一个账号。
+- 存在多账号配置时，现有 PDF 导入转入 0.4.2 大文档引擎：生成真实子 PDF，按凭据保持远程 task affinity，完成全页覆盖校验后再写入现有索引契约。
 - CredentialPool 只按 enabled、健康状态、cooldown、并发占用和本地成功页数做公平选择；成功页数只用于同等条件下的负载均衡，不构成上限。
 - `CredentialPool.acquire(page_count)` 改为 `CredentialPool.acquire()`；`CredentialLease.page_count` 已删除，因为调度不再预扣页数。
 
@@ -306,10 +371,10 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 - 删除应用层 `CredentialLease` 字段：`page_count`
 - 删除 dry-run 输出字段：`budget_insufficient`（替换为 `credentials_unavailable`）
 - 删除 SQLite 表/字段：无
-- 删除旧 MinerU 单 Token 路径：无
+- 删除旧 MinerU 单 Token 路径：无（保留兼容，设置页使用新多账号端点）
 - 删除旧 resume 逻辑：无
 
-## 7. 前端/集成线必须遵守
+## 7. 前后端集成约束
 
 - 不得向浏览器返回 Token 或 `secret_ref`。
 - 账号配置区不得显示或提交“每日 1000 页预算”。
@@ -318,4 +383,6 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 - 不得在所有 slice validated 前显示为“整书已发布”。
 - 前端只使用 1-based `physical_pdf_page`，不自行重算 global offset。
 - 远程 task 的 poll/result 必须保持原 `credential_id` affinity。
-- 正式 HTTP 对接前，需另行冻结 route、request schema、response schema 和 `error.code → HTTP status` 映射。
+- 设置页只调用 `/api/mineru-accounts*` 新端点；旧 `/api/mineru-config*` 仅用于兼容。
+- 文献详情的单书导出只提交 `source_id`，不在前端聚合或下载全部页文本。
+- 需要程序化区分新错误类型时，先新增稳定 `error.code` 并更新本清单，不得直接解析现有 message。

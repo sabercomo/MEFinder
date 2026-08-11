@@ -599,6 +599,22 @@ def test_mineru_connection(
             allow_parser_fallback=True,
         )
     config = load_mineru_config(config_path)
+    return test_mineru_credential(config.token, api_base=config.api_base)
+
+
+def test_mineru_credential(
+    token: object,
+    *,
+    api_base: str = DEFAULT_MINERU_API_BASE,
+) -> Dict[str, object]:
+    """Test one resolved account Token without writing it to a temp config."""
+
+    normalized_token = normalize_mineru_token(token)
+    base = str(api_base or DEFAULT_MINERU_API_BASE).strip().rstrip("/")
+    parsed = urlparse(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise MinerUError("API 地址必须是以 http:// 或 https:// 开头的网址。")
+    config = MinerUConfig(token=normalized_token, api_base=base)
     client = MinerUClient(config)
     started = time.perf_counter()
     response = client.apply_upload_urls(

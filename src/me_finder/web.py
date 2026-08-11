@@ -49,11 +49,21 @@ from .journal_metadata_lookup import (
     lookup_cnki_journal,
 )
 from .mineru_api import (
+    DEFAULT_MINERU_API_BASE,
     MinerUError,
+    load_mineru_config,
     mineru_config_summary,
+    normalize_mineru_token,
+    read_mineru_config_data,
     resolve_mineru_config_path,
     save_mineru_config,
     test_mineru_connection,
+    test_mineru_credential,
+)
+from .large_document.job_ledger import JobLedger
+from .large_document.mineru_accounts import (
+    MinerUAccountService,
+    resolve_mineru_accounts_path,
 )
 from .macos_update import check_macos_update
 from .vision_api import (
@@ -74,6 +84,8 @@ from .calibration_library import (
     summarize_library,
 )
 from .document_deletion import DocumentDeletionService
+from .document_export import DocumentExportError
+from .document_export_service import export_indexed_pdf
 from .pdf_extractors import extract_pdf_source
 from .pdf_page_mapping import normalize_manual_mapping_segments
 from .pdf_import_service import (
@@ -563,6 +575,50 @@ def make_handler(
     calibration_active_sources: set[str] = set()
     search_service = SearchService()
     durable_operations = DurableOperationGate()
+    mineru_job_ledger = JobLedger(root / "data" / "parser_jobs.sqlite3")
+    mineru_account_service = MinerUAccountService(
+        ledger=mineru_job_ledger,
+        config_path=resolve_mineru_accounts_path(root),
+    )
+
+    def ensure_mineru_accounts() -> List[object]:
+        """One-time, non-destructive upgrade from the v0.4.0 single Token."""
+
+        accounts = mineru_account_service.list_accounts()
+        if accounts:
+            return list(accounts)
+        legacy_path = resolve_mineru_config_path(root)
+        try:
+            legacy = read_mineru_config_data(legacy_path)
+            config = load_mineru_config(legacy_path)
+            token = normalize_mineru_token(config.token)
+        except (MinerUError, OSError, json.JSONDecodeError):
+            return []
+        mineru_account_service.save_account(
+            account_id="mineru-default",
+            display_name="MinerU 账号 1",
+            token=token,
+            enabled=True,
+            expires_at=str(legacy.get("expires_at") or "") or None,
+        )
+        return list(mineru_account_service.list_accounts())
+
+    def mineru_accounts_payload() -> Dict[str, object]:
+        accounts = ensure_mineru_accounts()
+        statistics = mineru_account_service.usage_statistics()
+        global_config = read_mineru_config_data(resolve_mineru_config_path(root))
+        return {
+            "configured": any(
+                bool(getattr(item, "configured", False))
+                and bool(getattr(item, "enabled", False))
+                for item in accounts
+            ),
+            "api_base": str(
+                global_config.get("api_base") or DEFAULT_MINERU_API_BASE
+            ).rstrip("/"),
+            "accounts": [item.to_dict() for item in accounts],
+            "statistics": statistics.to_dict(),
+        }
 
     def infer_import_failure_stage(
         job: Dict[str, object],
@@ -3016,6 +3072,20 @@ def make_handler(
                 with runtime_lock:
                     self._send_json(runtime["index_metadata"])
                 return
+            if parsed.path == "/api/mineru-accounts":
+                try:
+                    self._send_json(mineru_accounts_payload())
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, 400)
+                return
+            if parsed.path == "/api/mineru-statistics":
+                try:
+                    self._send_json(
+                        mineru_account_service.usage_statistics().to_dict()
+                    )
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, 400)
+                return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)
                 try:
@@ -3946,6 +4016,32 @@ def make_handler(
                 except (OSError, ValueError) as exc:
                     self._send_json({"error": f"导出备份失败：{exc}"}, status=500)
                 return
+            if parsed.path == "/api/document/export":
+                if not isinstance(payload, dict):
+                    self._send_json(
+                        {"error": "单书导出请求必须是 JSON 对象。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    result = export_indexed_pdf(
+                        database_path=index_path,
+                        runtime_root=root,
+                        source_file_id=str(payload.get("source_id") or ""),
+                        output_dir=backup_app_data_root() / "exports",
+                    )
+                except DocumentExportError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                except (OSError, sqlite3.Error):
+                    logging.exception("single-document export failed")
+                    self._send_json(
+                        {"error": "单书导出失败，请检查应用数据目录和可用磁盘空间。"},
+                        status=500,
+                    )
+                    return
+                self._send_json(result)
+                return
             if parsed.path == "/api/backup/import":
                 source_path = str(payload.get("path") or "").strip()
                 if not source_path:
@@ -4127,6 +4223,98 @@ def make_handler(
                         )
                 jobs = [dict(item["response"]) for item in prepared_items]
                 self._send_json({"ok": True, "jobs": jobs, "errors": import_errors})
+                return
+            if parsed.path == "/api/mineru-accounts":
+                if not isinstance(payload, dict):
+                    self._send_json(
+                        {"error": "MinerU 账号请求必须是 JSON 对象。"},
+                        400,
+                    )
+                    return
+                try:
+                    if "enabled" in payload and not isinstance(
+                        payload["enabled"], bool
+                    ):
+                        raise MinerUError("enabled 必须是布尔值。")
+                    raw_api_base = str(payload.get("api_base") or "").strip()
+                    if raw_api_base:
+                        parsed_base = urlparse(raw_api_base)
+                        if (
+                            parsed_base.scheme not in {"http", "https"}
+                            or not parsed_base.netloc
+                        ):
+                            raise MinerUError(
+                                "API 地址必须是以 http:// 或 https:// 开头的网址。"
+                            )
+                    summary = mineru_account_service.save_account(
+                        account_id=(
+                            str(payload.get("account_id") or "").strip() or None
+                        ),
+                        display_name=str(payload.get("display_name") or ""),
+                        token=(
+                            str(payload.get("token"))
+                            if payload.get("token") is not None
+                            else None
+                        ),
+                        enabled=bool(payload.get("enabled", True)),
+                        max_concurrency_override=(
+                            int(payload["max_concurrency_override"])
+                            if payload.get("max_concurrency_override") is not None
+                            else None
+                        ),
+                        expires_at=(
+                            str(payload.get("expires_at") or "")
+                            if "expires_at" in payload
+                            else None
+                        ),
+                    )
+                    if raw_api_base:
+                        save_mineru_config(
+                            {"api_base": raw_api_base},
+                            resolve_mineru_config_path(root),
+                        )
+                    response = mineru_accounts_payload()
+                    response["saved_account_id"] = summary.account_id
+                    self._send_json(response)
+                except (MinerUError, ValueError) as exc:
+                    self._send_json({"error": str(exc)}, 400)
+                except (OSError, json.JSONDecodeError, sqlite3.Error):
+                    logging.exception("MinerU account configuration save failed")
+                    self._send_json(
+                        {"error": "MinerU 账号配置无法保存，请检查应用数据目录。"},
+                        500,
+                    )
+                return
+            if parsed.path == "/api/mineru-accounts/test":
+                if not isinstance(payload, dict):
+                    self._send_json(
+                        {"error": "MinerU 连接测试请求必须是 JSON 对象。"},
+                        400,
+                    )
+                    return
+                try:
+                    account_id = str(payload.get("account_id") or "").strip()
+                    if not account_id:
+                        raise MinerUError("请选择要测试的 MinerU 账号。")
+                    record = mineru_account_service.get_account(account_id)
+                    if not record.configured:
+                        raise MinerUError("该 MinerU 账号尚未保存有效 Token。")
+                    global_config = read_mineru_config_data(
+                        resolve_mineru_config_path(root)
+                    )
+                    result = test_mineru_credential(
+                        mineru_account_service.resolve_secret(
+                            f"mineru-account:{account_id}"
+                        ),
+                        api_base=str(
+                            global_config.get("api_base")
+                            or DEFAULT_MINERU_API_BASE
+                        ),
+                    )
+                    result["account_id"] = account_id
+                    self._send_json(result)
+                except (MinerUError, KeyError) as exc:
+                    self._send_json({"error": str(exc)}, 400)
                 return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)

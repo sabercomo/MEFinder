@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -95,6 +96,7 @@ class MinerUAccountService:
     def __init__(self, *, ledger: JobLedger, config_path: Path) -> None:
         self.ledger = ledger
         self.config_path = Path(config_path)
+        self._lock = threading.RLock()
 
     def save_account(
         self,
@@ -113,61 +115,62 @@ class MinerUAccountService:
         secret.  New accounts always require a token.
         """
 
-        normalized_id = _normalize_account_id(account_id)
-        normalized_name = str(display_name or "").strip()
-        if not normalized_name or len(normalized_name) > 120:
-            raise MinerUAccountConfigError("账号名称必须为 1–120 个字符。")
-        if (
-            max_concurrency_override is not None
-            and int(max_concurrency_override) < 1
-        ):
-            raise MinerUAccountConfigError("账号并发数必须大于 0。")
-        original = self._load_private_config()
-        accounts = dict(original["accounts"])
-        existing = accounts.get(normalized_id)
-        if existing is not None and not isinstance(existing, dict):
-            raise MinerUAccountConfigError("本地 MinerU 账号配置已损坏。")
-        normalized_expiry = (
-            str(existing.get("expires_at") or "") or None
-            if expires_at is None and isinstance(existing, dict)
-            else _normalize_expiry(expires_at)
-        )
-        raw_token = str(token or "").strip()
-        if raw_token:
-            stored_token = normalize_mineru_token(raw_token)
-        elif isinstance(existing, dict) and existing.get("token"):
-            stored_token = normalize_mineru_token(existing["token"])
-        else:
-            raise MinerUAccountConfigError("新增 MinerU 账号必须填写 Token。")
-
-        accounts[normalized_id] = {
-            "token": stored_token,
-            "expires_at": normalized_expiry,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        updated = {
-            "schema_version": MINERU_ACCOUNT_CONFIG_VERSION,
-            "accounts": accounts,
-        }
-        self._write_private_config(updated)
-        try:
-            self.ledger.upsert_credential(
-                credential_id=normalized_id,
-                provider_id=MINERU_CLOUD_PROVIDER_ID,
-                display_name=normalized_name,
-                secret_ref=f"{MINERU_ACCOUNT_SECRET_PREFIX}{normalized_id}",
-                enabled=bool(enabled),
-                max_concurrency_override=(
-                    int(max_concurrency_override)
-                    if max_concurrency_override is not None
-                    else None
-                ),
+        with self._lock:
+            normalized_id = _normalize_account_id(account_id)
+            normalized_name = str(display_name or "").strip()
+            if not normalized_name or len(normalized_name) > 120:
+                raise MinerUAccountConfigError("账号名称必须为 1–120 个字符。")
+            if (
+                max_concurrency_override is not None
+                and int(max_concurrency_override) < 1
+            ):
+                raise MinerUAccountConfigError("账号并发数必须大于 0。")
+            original = self._load_private_config()
+            accounts = dict(original["accounts"])
+            existing = accounts.get(normalized_id)
+            if existing is not None and not isinstance(existing, dict):
+                raise MinerUAccountConfigError("本地 MinerU 账号配置已损坏。")
+            normalized_expiry = (
+                str(existing.get("expires_at") or "") or None
+                if expires_at is None and isinstance(existing, dict)
+                else _normalize_expiry(expires_at)
             )
-        except Exception:
-            # Do not leave a secret that the credential ledger never accepted.
-            self._write_private_config(original)
-            raise
-        return self.get_account(normalized_id)
+            raw_token = str(token or "").strip()
+            if raw_token:
+                stored_token = normalize_mineru_token(raw_token)
+            elif isinstance(existing, dict) and existing.get("token"):
+                stored_token = normalize_mineru_token(existing["token"])
+            else:
+                raise MinerUAccountConfigError("新增 MinerU 账号必须填写 Token。")
+
+            accounts[normalized_id] = {
+                "token": stored_token,
+                "expires_at": normalized_expiry,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            updated = {
+                "schema_version": MINERU_ACCOUNT_CONFIG_VERSION,
+                "accounts": accounts,
+            }
+            self._write_private_config(updated)
+            try:
+                self.ledger.upsert_credential(
+                    credential_id=normalized_id,
+                    provider_id=MINERU_CLOUD_PROVIDER_ID,
+                    display_name=normalized_name,
+                    secret_ref=f"{MINERU_ACCOUNT_SECRET_PREFIX}{normalized_id}",
+                    enabled=bool(enabled),
+                    max_concurrency_override=(
+                        int(max_concurrency_override)
+                        if max_concurrency_override is not None
+                        else None
+                    ),
+                )
+            except Exception:
+                # Do not leave a secret that the credential ledger never accepted.
+                self._write_private_config(original)
+                raise
+            return self.get_account(normalized_id)
 
     def get_account(self, account_id: str) -> MinerUAccountSummary:
         normalized_id = _normalize_account_id(account_id)
@@ -177,33 +180,34 @@ class MinerUAccountService:
         raise KeyError(normalized_id)
 
     def list_accounts(self) -> list[MinerUAccountSummary]:
-        private = self._load_private_config()
-        secret_accounts = private["accounts"]
-        summaries = []
-        for record in self.ledger.list_credentials(MINERU_CLOUD_PROVIDER_ID):
-            secret = secret_accounts.get(record.id)
-            configured = bool(isinstance(secret, dict) and secret.get("token"))
-            expires_at = (
-                str(secret.get("expires_at") or "") or None
-                if isinstance(secret, dict)
-                else None
-            )
-            summaries.append(
-                MinerUAccountSummary(
-                    account_id=record.id,
-                    display_name=record.display_name,
-                    enabled=record.is_enabled,
-                    configured=configured,
-                    current_in_flight=record.current_in_flight,
-                    max_concurrency_override=record.max_concurrency_override,
-                    health_status=record.health_status,
-                    cooldown_until=record.cooldown_until,
-                    last_401_at=record.last_401_at,
-                    last_429_at=record.last_429_at,
-                    expires_at=expires_at,
+        with self._lock:
+            private = self._load_private_config()
+            secret_accounts = private["accounts"]
+            summaries = []
+            for record in self.ledger.list_credentials(MINERU_CLOUD_PROVIDER_ID):
+                secret = secret_accounts.get(record.id)
+                configured = bool(isinstance(secret, dict) and secret.get("token"))
+                expires_at = (
+                    str(secret.get("expires_at") or "") or None
+                    if isinstance(secret, dict)
+                    else None
                 )
-            )
-        return summaries
+                summaries.append(
+                    MinerUAccountSummary(
+                        account_id=record.id,
+                        display_name=record.display_name,
+                        enabled=record.is_enabled,
+                        configured=configured,
+                        current_in_flight=record.current_in_flight,
+                        max_concurrency_override=record.max_concurrency_override,
+                        health_status=record.health_status,
+                        cooldown_until=record.cooldown_until,
+                        last_401_at=record.last_401_at,
+                        last_429_at=record.last_429_at,
+                        expires_at=expires_at,
+                    )
+                )
+            return summaries
 
     def usage_statistics(self) -> MinerUUsageStatistics:
         """Aggregate successful local book/page attribution by credential.
@@ -303,13 +307,14 @@ class MinerUAccountService:
         account_id = _normalize_account_id(
             reference[len(MINERU_ACCOUNT_SECRET_PREFIX) :]
         )
-        private = self._load_private_config()
-        account = private["accounts"].get(account_id)
-        if not isinstance(account, dict) or not account.get("token"):
-            raise MinerUAccountConfigError(
-                f"MinerU account {account_id} has no configured token."
-            )
-        return normalize_mineru_token(account["token"])
+        with self._lock:
+            private = self._load_private_config()
+            account = private["accounts"].get(account_id)
+            if not isinstance(account, dict) or not account.get("token"):
+                raise MinerUAccountConfigError(
+                    f"MinerU account {account_id} has no configured token."
+                )
+            return normalize_mineru_token(account["token"])
 
     def create_pool(
         self,

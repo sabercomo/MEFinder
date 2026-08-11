@@ -699,6 +699,7 @@ class JobLedger:
                 LEFT JOIN parser_credentials AS pc ON pc.id = sj.credential_id
                 WHERE sj.provider_id = ? AND sj.credential_id IS NOT NULL
                   AND sj.status = 'completed'
+                  AND dj.status IN ('validated', 'published')
                 ORDER BY sj.credential_id, dj.created_at, sj.page_start
                 """,
                 (provider_id,),

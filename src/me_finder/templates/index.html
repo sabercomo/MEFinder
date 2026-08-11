@@ -496,32 +496,69 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">每个 Token 对应一个独立账号，可同时保存多个</span></span>
             <span id="mineru-config-status" class="settings-status">读取中…</span>
+            <button class="action-btn vision-add-btn" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
-            <div class="settings-grid">
-            <label class="settings-label" for="mineru-token">API Token</label>
-            <div class="settings-control">
-              <div class="settings-input-row">
-                <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 MinerU API Token">
-                <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
-              </div>
-              <small>可粘贴原始 Token，或完整的 <code>Authorization: Bearer &lt;Token&gt;</code>；留空表示保留当前已保存的 Token</small>
-            </div>
-            <label class="settings-label" for="mineru-api-base">API 地址</label>
-            <div class="settings-control settings-control-inline">
+            <div class="mineru-global-config">
+              <label class="settings-label" for="mineru-api-base">API 地址</label>
               <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
-              <label class="settings-inline-label" for="mineru-expires-at">Token 到期日期</label>
-              <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
+              <small>全部 MinerU 账号共用该服务地址</small>
             </div>
-            <span class="settings-label"></span>
-            <div class="settings-control settings-actions">
-              <button class="action-btn primary" type="button" onclick="saveMineruConfig()">保存 API 配置</button>
-              <button class="action-btn" id="mineru-test-btn" type="button" onclick="testMineruConnection()">测试连接</button>
-              <button class="action-btn" type="button" onclick="loadMineruConfig()">重新读取</button>
-              <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机</span>
+            <div class="mineru-account-layout">
+              <div id="mineru-account-list" class="mineru-account-list" aria-label="MinerU 账号列表"></div>
+              <div class="mineru-editor-card" id="mineru-editor-card">
+                <div class="mineru-editor-head">
+                  <div>
+                    <strong id="mineru-editor-title">添加 MinerU 账号</strong>
+                    <small>Token 只保存在本机，不会返回浏览器</small>
+                  </div>
+                  <label class="ui-switch" title="停用后不再分配新的解析任务">
+                    <input id="mineru-account-enabled" type="checkbox" checked>
+                    <span class="ui-switch-track" aria-hidden="true"></span>
+                    <span class="ui-switch-text">启用</span>
+                  </label>
+                </div>
+                <input id="mineru-account-id" type="hidden">
+                <div class="settings-grid mineru-editor-grid">
+                  <label class="settings-label" for="mineru-account-name">账号名称</label>
+                  <div class="settings-control">
+                    <input id="mineru-account-name" class="settings-input" type="text" maxlength="120" placeholder="例如：MinerU 账号 1">
+                    <small>仅用于本地列表和解析统计中区分账号</small>
+                  </div>
+                  <label class="settings-label" for="mineru-token">API Token</label>
+                  <div class="settings-control">
+                    <div class="settings-input-row">
+                      <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 MinerU API Token">
+                      <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
+                    </div>
+                    <small>可粘贴原始 Token 或完整 Bearer 值；编辑时留空会保留原 Token</small>
+                  </div>
+                  <label class="settings-label" for="mineru-expires-at">到期日期</label>
+                  <div class="settings-control settings-control-inline">
+                    <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
+                    <small>仅作本地提醒，不参与页数调度</small>
+                  </div>
+                  <span class="settings-label"></span>
+                  <div class="settings-control settings-actions">
+                    <button class="action-btn primary" type="button" onclick="saveMineruConfig()">保存账号</button>
+                    <button class="action-btn" id="mineru-test-btn" type="button" onclick="testMineruConnection()">测试此账号</button>
+                    <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机</span>
+                  </div>
+                </div>
+              </div>
             </div>
+            <div class="mineru-statistics-card">
+              <div class="mineru-statistics-head">
+                <div><strong>本地解析统计</strong><small>按成功完成的任务统计，不是 MinerU 官网用量或计费数据</small></div>
+                <button class="action-btn" type="button" onclick="loadMineruConfig()">刷新统计</button>
+              </div>
+              <div class="mineru-statistics-summary">
+                <div><span id="mineru-stat-books">0</span><small>本书</small></div>
+                <div><span id="mineru-stat-pages">0</span><small>页</small></div>
+              </div>
+              <div id="mineru-statistics-list" class="mineru-statistics-list"></div>
             </div>
             </div>
           </section>
