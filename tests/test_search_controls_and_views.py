@@ -223,7 +223,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             'display_file_name=str(record.get("file_name") or "")',
             WEB_SOURCE,
         )
-        self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
+        self.assertIn("job.get(\"source_file_id\") == sid", WEB_SOURCE)
+        self.assertIn(
+            'job.get("status") in {"processing", "cancelling"}',
+            WEB_SOURCE,
+        )
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
         self.assertIn("importQueue.push(queueItem)", HTML)
@@ -404,12 +408,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
         self.assertIn("manual_entry_allowed", WEB_SOURCE)
         self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
-        self.assertIn("{key: 'vision', label: '通用视觉'}", HTML)
-        self.assertIn("{key: 'omni', label: '全模态'}", HTML)
-        self.assertIn(
-            "{key: 'unsupported', label: '不支持图片 · DeepSeek'}",
-            HTML,
-        )
+        self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
+        self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
+        self.assertNotIn("{key: 'omni', label: '全模态'}", HTML)
+        self.assertNotIn("{key: 'vision', label: '通用视觉'}", HTML)
         self.assertIn("function visionModelPriority(item)", HTML)
         self.assertIn("capability-unsupported", HTML)
         self.assertNotIn("可能支持图片", HTML)

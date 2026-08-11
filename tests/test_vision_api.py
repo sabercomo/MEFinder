@@ -557,6 +557,12 @@ class VisionAPIConfigTests(unittest.TestCase):
                         {"id": "qwen3-omni-flash", "owned_by": "qwen"},
                         {"id": "qwen3-vl-flash", "owned_by": "qwen"},
                         {"id": "qwen3.8-max", "owned_by": "qwen"},
+                        {"id": "qwen3.7-plus", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max-2026-06-08", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max-2026-07-01", "owned_by": "qwen"},
+                        {"id": "qwen3.6-flash", "owned_by": "qwen"},
+                        {"id": "qwen3.6-max-preview", "owned_by": "qwen"},
                         {"id": "qwen-vl-ocr-2025-11-20", "owned_by": "qwen"},
                         {"id": "qwen-vl-ocr-latest", "owned_by": "qwen"},
                         {"id": "qwen3.5-ocr", "owned_by": "qwen"},
@@ -588,7 +594,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 )
 
             self.assertFalse(path.exists())
-            self.assertEqual(result["count"], 12)
+            self.assertEqual(result["count"], 18)
             self.assertEqual(
                 [item["id"] for item in result["models"]],
                 [
@@ -597,13 +603,19 @@ class VisionAPIConfigTests(unittest.TestCase):
                     "qwen-vl-ocr-2025-11-20",
                     "vendor-document-ocr",
                     "qwen3-vl-plus",
+                    "qwen3.7-plus",
+                    "qwen3-omni-flash",
                     "qwen3-vl-flash",
+                    "qwen3.6-flash",
+                    "qwen3.7-max-2026-06-08",
+                    "qwen3.7-max-2026-07-01",
                     "qwen3.8-max",
                     "vendor-multimodal-model",
-                    "qwen3-omni-flash",
-                    "qwen-long",
-                    "text-model",
                     "deepseek-v4-flash",
+                    "qwen-long",
+                    "qwen3.6-max-preview",
+                    "qwen3.7-max",
+                    "text-model",
                 ],
             )
             by_id = {item["id"]: item for item in result["models"]}
@@ -617,17 +629,33 @@ class VisionAPIConfigTests(unittest.TestCase):
             )
             self.assertEqual(
                 by_id["qwen3-vl-flash"]["capability_label"],
-                "通用视觉 · 快速",
+                "支持图片",
             )
             self.assertEqual(
                 by_id["qwen3.8-max"]["capability_label"],
-                "通用视觉",
+                "支持图片",
             )
             self.assertEqual(
                 by_id["qwen3-omni-flash"]["capability_label"],
-                "全模态",
+                "支持图片",
+            )
+            self.assertTrue(by_id["qwen3.7-plus"]["likely_vision"])
+            self.assertTrue(
+                by_id["qwen3.7-max-2026-06-08"]["likely_vision"]
+            )
+            self.assertTrue(
+                by_id["qwen3.7-max-2026-07-01"]["likely_vision"]
+            )
+            self.assertFalse(by_id["qwen3.7-max"]["likely_vision"])
+            self.assertTrue(by_id["qwen3.6-flash"]["likely_vision"])
+            self.assertFalse(
+                by_id["qwen3.6-max-preview"]["likely_vision"]
             )
             self.assertEqual(by_id["qwen-long"]["capability"], "text")
+            self.assertEqual(
+                by_id["qwen-long"]["capability_label"],
+                "不支持图片",
+            )
             self.assertFalse(by_id["qwen-long"]["likely_vision"])
             self.assertEqual(
                 by_id["deepseek-v4-flash"]["capability_label"],

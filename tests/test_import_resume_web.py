@@ -191,6 +191,28 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn("function removeImport(id, options)", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
+    def test_active_queue_remove_stops_backend_parser(self) -> None:
+        self.assertIn("class ImportJobCancelled(RuntimeError):", WEB_SOURCE)
+        self.assertIn("cancelled_import_jobs.add(job_id)", WEB_SOURCE)
+        self.assertIn('status="cancelling"', WEB_SOURCE)
+        self.assertIn("ensure_import_not_cancelled(job_id)", WEB_SOURCE)
+        self.assertIn("finish_cancelled_import_job(job_id)", WEB_SOURCE)
+        self.assertIn("q.status === 'processing'", APP_SOURCE)
+        self.assertIn("当前请求完成后不会再提交新页面", APP_SOURCE)
+        self.assertIn(
+            "['processing', 'paused', 'error'].indexOf(q.status) >= 0",
+            APP_SOURCE,
+        )
+
+    def test_interrupted_vision_job_can_switch_to_mineru_without_upload(self) -> None:
+        self.assertIn('parsed.path == "/api/import-retry-mineru"', WEB_SOURCE)
+        self.assertIn("force_mineru=True", WEB_SOURCE)
+        self.assertIn("validated_import_target(previous_job_id, context)", WEB_SOURCE)
+        self.assertIn("function retryImportWithMinerU(id)", APP_SOURCE)
+        self.assertIn("改用 MinerU（免费）", APP_SOURCE)
+        self.assertIn("不需要重新上传文件", APP_SOURCE)
+        self.assertIn("fetch('/api/import-retry-mineru'", APP_SOURCE)
+
     def test_transient_mineru_interruption_respects_auto_switch_setting(self) -> None:
         # Auto-switch is now governed solely by the user's setting; a transient
         # interruption no longer hard-blocks it. But without the setting on, the

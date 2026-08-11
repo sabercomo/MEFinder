@@ -123,6 +123,10 @@ MAX_JSON_REQUEST_BYTES = 1024 * 1024
 SOURCE_STREAM_CHUNK_BYTES = 1024 * 1024
 
 
+class ImportJobCancelled(RuntimeError):
+    """Raised cooperatively after the user stops a background import."""
+
+
 class ManagedThreadingHTTPServer(ThreadingHTTPServer):
     """Threading server with an observable, bounded request drain.
 
@@ -553,6 +557,7 @@ def make_handler(
     import_task_queue = ImportTaskQueue(worker_count=2)
     import_job_journal = ImportJobJournal(root / DEFAULT_IMPORT_JOB_DIR)
     chunked_uploads = ChunkedUploadStore(root / "corpus" / ".upload-staging")
+    cancelled_import_jobs: set[str] = set()
     deleting_import_sources: set[str] = set()
     pending_import_sources: set[str] = set()
     calibration_active_sources: set[str] = set()
@@ -584,6 +589,12 @@ def make_handler(
         return None
 
     for saved_job in import_job_journal.load_startup_jobs():
+        if str(saved_job.get("status") or "") == "cancelling":
+            # The process ended while an explicit cancellation was draining.
+            # No worker can still own it after restart, so finish the dismissal
+            # instead of leaving an invisible task that blocks re-import.
+            import_job_journal.delete_job(str(saved_job.get("job_id") or ""))
+            continue
         saved_context = saved_job.get("context")
         if not isinstance(saved_context, dict):
             continue
@@ -663,6 +674,9 @@ def make_handler(
             pass
 
     def progress_import_job(job_id: str, update: Dict[str, object]) -> None:
+        with import_jobs_lock:
+            if job_id in cancelled_import_jobs:
+                raise ImportJobCancelled("用户已停止导入任务。")
         phase = str(update.get("phase") or "")
         message = "正在处理…"
         if phase == "mineru_processing":
@@ -676,6 +690,20 @@ def make_handler(
         elif phase == "rebuilding_index":
             message = "正在重建本地 SQLite 索引…"
         update_import_job(job_id, phase=phase, message=message, progress=update)
+
+    def ensure_import_not_cancelled(job_id: str) -> None:
+        with import_jobs_lock:
+            if job_id in cancelled_import_jobs:
+                raise ImportJobCancelled("用户已停止导入任务。")
+
+    def finish_cancelled_import_job(job_id: str) -> None:
+        """Remove a cooperatively stopped task after its worker lets go."""
+
+        with import_jobs_lock:
+            cancelled_import_jobs.discard(job_id)
+            import_jobs.pop(job_id, None)
+            import_job_contexts.pop(job_id, None)
+        import_job_journal.delete_job(job_id)
 
     def switch_import_job_route(
         job_id: str,
@@ -803,7 +831,10 @@ def make_handler(
             active = set(calibration_active_sources)
         with import_jobs_lock:
             for job in import_jobs.values():
-                if job.get("status") == "processing" and job.get("source_file_id"):
+                if (
+                    job.get("status") in {"processing", "cancelling"}
+                    and job.get("source_file_id")
+                ):
                     active.add(str(job["source_file_id"]))
         return sources, volumes, works, config.get("documents", []), active
 
@@ -1161,6 +1192,8 @@ def make_handler(
                         source_file_id,
                         on_progress=lambda update: progress_import_job(job_id, update),
                     )
+                except ImportJobCancelled:
+                    raise
                 except Exception as mineru_exc:
                     # A transient interruption (network timeout / non-fallback
                     # MinerUError) keeps a resumable checkpoint; a permanent failure
@@ -1268,6 +1301,8 @@ def make_handler(
                             fallback_id,
                             on_progress=lambda update: progress_import_job(job_id, update),
                         )
+                    except ImportJobCancelled:
+                        raise
                     except Exception as fallback_exc:
                         update_import_job(
                             job_id,
@@ -1293,6 +1328,8 @@ def make_handler(
                     parse_route="native",
                 )
             return True
+        except ImportJobCancelled:
+            raise
         except Exception as exc:
             if use_vision:
                 try:
@@ -1358,22 +1395,29 @@ def make_handler(
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
     ) -> None:
-        if not prepare_import_job(
-            job_id,
-            target,
-            source_file_id,
-            profile,
-            is_pdf,
-            force_mineru,
-            vision_provider_id,
-        ):
-            return
         try:
+            ensure_import_not_cancelled(job_id)
+            prepared = prepare_import_job(
+                job_id,
+                target,
+                source_file_id,
+                profile,
+                is_pdf,
+                force_mineru,
+                vision_provider_id,
+            )
+            ensure_import_not_cancelled(job_id)
+            if not prepared:
+                return
             if is_pdf:
                 index_registered_pdf(job_id, source_file_id)
             else:
                 rebuild_runtime_index(job_id)
+            ensure_import_not_cancelled(job_id)
             finalize_import_job(job_id, source_file_id, is_pdf)
+            ensure_import_not_cancelled(job_id)
+        except ImportJobCancelled:
+            finish_cancelled_import_job(job_id)
         except Exception as exc:
             fail_import_at_index(
                 job_id,
@@ -1438,7 +1482,7 @@ def make_handler(
                     other
                     for other in import_jobs.values()
                     if other.get("source_file_id") == source_file_id
-                    and other.get("status") == "processing"
+                    and other.get("status") in {"processing", "cancelling"}
                 ),
                 None,
             )
@@ -1503,7 +1547,7 @@ def make_handler(
             raise MinerUError("同一文献正在准备导入。")
         if any(
             job.get("source_file_id") == source_file_id
-            and job.get("status") == "processing"
+            and job.get("status") in {"processing", "cancelling"}
             for job in import_jobs.values()
         ):
             raise MinerUError("同一文献已有解析任务正在运行。")
@@ -1848,7 +1892,7 @@ def make_handler(
                     for other_id, other in import_jobs.items()
                     if other_id != job_id
                     and other.get("source_file_id") == source_file_id
-                    and other.get("status") == "processing"
+                    and other.get("status") in {"processing", "cancelling"}
                 ),
                 None,
             )
@@ -1930,20 +1974,35 @@ def make_handler(
             ) from exc
         return restored
 
-    def dismiss_import_job(job_id: str) -> None:
-        """Forget a paused/failed task after the user explicitly dismisses it."""
+    def dismiss_import_job(job_id: str) -> str:
+        """Dismiss an idle task or cooperatively stop an active parser."""
 
         with import_jobs_lock:
             job = import_jobs.get(job_id)
             if job is None:
                 # A completed task may already have removed its journal.
                 import_job_journal.delete_job(job_id)
-                return
-            if str(job.get("status") or "") == "processing":
-                raise MinerUError("正在运行的导入任务不能移除。")
+                return "dismissed"
+            if str(job.get("status") or "") in {"processing", "cancelling"}:
+                cancelled_import_jobs.add(job_id)
+                job.update(
+                    status="cancelling",
+                    phase="cancelling",
+                    can_resume=False,
+                    message="正在停止后台解析，不会再提交新的页面…",
+                )
+                import_job_journal.update_job(
+                    job_id,
+                    status="cancelling",
+                    phase="cancelling",
+                    can_resume=False,
+                    message="正在停止后台解析，不会再提交新的页面…",
+                )
+                return "cancelling"
             import_job_journal.delete_job(job_id)
             import_jobs.pop(job_id, None)
             import_job_contexts.pop(job_id, None)
+            return "dismissed"
 
     def start_native_import_batch(
         items: List[Dict[str, object]],
@@ -3576,7 +3635,7 @@ def make_handler(
                         # state that no import/rebuild can still mutate.
                         with import_jobs_lock:
                             has_active_job = any(
-                                job.get("status") == "processing"
+                                job.get("status") in {"processing", "cancelling"}
                                 for job in import_jobs.values()
                             )
                         if has_active_job:
@@ -3633,7 +3692,8 @@ def make_handler(
                         running = next(
                             (
                                 job for job in import_jobs.values()
-                                if job.get("source_file_id") == sid and job.get("status") == "processing"
+                                if job.get("source_file_id") == sid
+                                and job.get("status") in {"processing", "cancelling"}
                             ),
                             None,
                         )
@@ -3667,6 +3727,54 @@ def make_handler(
                     "already_running": False,
                     "detected_pdf_type": profile.get("detected_pdf_type"),
                 })
+                return
+            if parsed.path == "/api/import-retry-mineru":
+                previous_job_id = str(payload.get("job_id") or "").strip()
+                if not previous_job_id:
+                    self._send_json({"error": "缺少原导入任务。"}, status=400)
+                    return
+                with import_jobs_lock:
+                    previous_job = import_jobs.get(previous_job_id)
+                    saved_context = import_job_contexts.get(previous_job_id)
+                    context = dict(saved_context) if saved_context else None
+                if not previous_job or not context:
+                    self._send_json({"error": "原导入任务不存在。"}, status=404)
+                    return
+                if (
+                    str(previous_job.get("status") or "")
+                    not in {"paused", "failed"}
+                    or not bool(context.get("is_pdf"))
+                    or str(previous_job.get("parse_route") or "") != "vision"
+                    or str(previous_job.get("failure_stage") or "") == "index"
+                ):
+                    self._send_json(
+                        {"error": "只有已中断的视觉解析任务可以改用 MinerU。"},
+                        status=400,
+                    )
+                    return
+                try:
+                    target = validated_import_target(previous_job_id, context)
+                    job_id = start_import_job(
+                        target,
+                        dict(context["profile"]),
+                        str(context["source_file_id"]),
+                        True,
+                        force_mineru=True,
+                        display_file_name=str(
+                            previous_job.get("file_name") or ""
+                        ),
+                    )
+                    dismiss_import_job(previous_job_id)
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                self._send_json(
+                    {
+                        "ok": True,
+                        "job_id": job_id,
+                        "parse_route": "mineru",
+                    }
+                )
                 return
             if parsed.path == "/api/import-retry":
                 previous_job_id = str(payload.get("job_id") or "").strip()
@@ -3771,11 +3879,17 @@ def make_handler(
                     self._send_json({"error": "缺少待移除的导入任务。"}, status=400)
                     return
                 try:
-                    dismiss_import_job(job_id)
+                    dismiss_state = dismiss_import_job(job_id)
                 except (MinerUError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
-                self._send_json({"ok": True, "job_id": job_id})
+                self._send_json(
+                    {
+                        "ok": True,
+                        "job_id": job_id,
+                        "state": dismiss_state,
+                    }
+                )
                 return
             if parsed.path == "/api/bibliographic-metadata/batch-detect":
                 with import_jobs_lock:

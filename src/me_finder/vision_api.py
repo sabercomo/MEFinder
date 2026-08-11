@@ -450,22 +450,36 @@ def _vision_model_capability(
 ) -> Dict[str, object]:
     """Classify model-list entries for the visual-parser picker.
 
-    The catalog is advisory UI metadata, not an invocation allow-list. Unknown
-    models remain selectable, while explicit OCR/vision/omni families are
-    promoted and known DeepSeek text models are kept at the bottom.
+    The catalog is advisory UI metadata, not an invocation allow-list.  Keep
+    the labels deliberately simple for non-technical users: OCR models are
+    promoted, everything else is either able or unable to accept page images.
     """
 
     normalized = model_id.strip().lower()
     basename = normalized.rsplit("/", 1)[-1]
+    qwen37_max_snapshot = re.fullmatch(
+        r"qwen3\.7-max-(20\d{2}-\d{2}-\d{2})",
+        basename,
+    )
+    qwen37_max_has_vision = bool(
+        qwen37_max_snapshot
+        and qwen37_max_snapshot.group(1) >= "2026-06-08"
+    )
 
-    # DeepSeek's currently exposed chat/reasoning models do not accept the page
-    # images sent by this parser. Keep this override before generic "ocr" or
-    # provider-supplied modality hints so relay aliases cannot imply support.
-    if "deepseek" in normalized:
+    # These model families are explicitly text-only.  Keep the override before
+    # provider-supplied modality hints so a relay cannot accidentally advertise
+    # image support for a text endpoint.
+    text_only = (
+        "deepseek" in normalized
+        or (basename.startswith("qwen3.7-max") and not qwen37_max_has_vision)
+        or basename == "qwen3.6-max-preview"
+        or basename.startswith("qwen3-max")
+    )
+    if text_only:
         return {
-            "capability": "unsupported",
+            "capability": "text",
             "capability_label": "不支持图片",
-            "capability_priority": 1000,
+            "capability_priority": 900,
             "likely_vision": False,
         }
 
@@ -489,14 +503,6 @@ def _vision_model_capability(
             "likely_vision": True,
         }
 
-    if "omni" in basename:
-        return {
-            "capability": "omni",
-            "capability_label": "全模态",
-            "capability_priority": 200,
-            "likely_vision": True,
-        }
-
     vision_hints = (
         "vision",
         "qwen-vl",
@@ -504,7 +510,13 @@ def _vision_model_capability(
         "qwen2.5-vl",
         "qwen3-vl",
         "qwen3.5-",
+        "qwen3.6-plus",
+        "qwen3.6-flash",
+        "qwen3.6-35b-a3b",
+        "qwen3.7-plus",
+        "qwen3.7-max-2026-06-08",
         "qwen3.8-",
+        "omni",
         "qvq",
         "internvl",
         "minicpm-v",
@@ -532,21 +544,21 @@ def _vision_model_capability(
         "gpt-4.1",
         "gpt-5",
     )
-    if _model_has_image_input(item) or any(
+    if qwen37_max_has_vision or _model_has_image_input(item) or any(
         hint in normalized for hint in vision_hints
     ):
         fast = "flash" in basename
         plus = "plus" in basename
         return {
             "capability": "vision",
-            "capability_label": "通用视觉 · 快速" if fast else "通用视觉",
+            "capability_label": "支持图片",
             "capability_priority": 110 if fast else 100 if plus else 120,
             "likely_vision": True,
         }
 
     return {
         "capability": "text",
-        "capability_label": "",
+        "capability_label": "不支持图片",
         "capability_priority": 900,
         "likely_vision": False,
     }

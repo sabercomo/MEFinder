@@ -881,6 +881,10 @@ function renderImportQueue() {
     if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
         + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
+      if (q.type === 'pdf' && q.route === 'vision' && q.failureStage !== 'index') {
+        retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
+          + q.id + '\')">改用 MinerU（免费）</button>';
+      }
       if (q.status === 'error' && retryProvider) {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
           + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
@@ -889,6 +893,9 @@ function renderImportQueue() {
     } else if (q.status === 'error' && retryProvider) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
         + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
+        + (q.type === 'pdf' && q.route === 'vision'
+          ? '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
+            + q.id + '\')">改用 MinerU（免费）</button>' : '')
         + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
     } else if (q.status === 'error'
         && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
@@ -983,6 +990,13 @@ async function cancelAllImports() {
 async function removeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
+  if (q && q.jobId && q.status === 'processing' && !options.skipConfirm) {
+    var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+    if (!await showAppConfirm(
+      '将停止 ' + serviceName + ' 后台解析；当前请求完成后不会再提交新页面',
+      {title:'停止并移除任务？', confirmText:'停止任务', tone:'danger'}
+    )) return false;
+  }
   if (q && q.uploadId) {
     var activeUploadId = q.uploadId;
     q.uploadId = null;
@@ -996,7 +1010,7 @@ async function removeImport(id, options) {
       console.warn('cancel chunked upload failed:', cancelError);
     }
   }
-  if (q && q.jobId && (q.status === 'paused' || q.status === 'error')) {
+  if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
     try {
       var resp = await fetch('/api/import-resume-dismiss', {
         method: 'POST',
@@ -1005,6 +1019,9 @@ async function removeImport(id, options) {
       });
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
+      if (data.state === 'cancelling' && !options.silent) {
+        showToast('已停止继续提交页面；当前请求结束后即可重新导入', 'success');
+      }
     } catch (e) {
       if (!options.silent) showToast('移除导入任务失败：' + e.message);
       return false;
@@ -1272,5 +1289,37 @@ async function retryImportWithVision(id) {
     pollImportJob(q.id);
   } catch (e) {
     showToast('切换解析接口失败：' + e.message);
+  }
+}
+
+async function retryImportWithMinerU(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (!q || !q.jobId || q.type !== 'pdf') return;
+  if (!await showAppConfirm(
+    '将保留原文件，停止使用当前视觉 API，改由免费 MinerU 解析',
+    {title:'改用 MinerU？', confirmText:'改用 MinerU'}
+  )) return;
+  try {
+    var resp = await fetch('/api/import-retry-mineru', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: q.jobId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '切换 MinerU 失败');
+    q.jobId = data.job_id;
+    q.status = 'processing';
+    q.route = 'mineru';
+    q.providerId = null;
+    q.providerName = null;
+    q.step = 2;
+    q.message = '正在切换到 MinerU，不需要重新上传文件…';
+    q.canResume = false;
+    q.canRetryVision = false;
+    q.visionFailed = false;
+    renderImportQueue();
+    pollImportJob(q.id);
+  } catch (e) {
+    showToast('切换 MinerU 失败：' + e.message);
   }
 }

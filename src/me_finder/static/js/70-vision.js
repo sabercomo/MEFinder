@@ -365,24 +365,25 @@ function visionModelFiltered() {
 
 function visionModelCapability(item) {
   var capability = String((item || {}).capability || '');
-  if (['ocr', 'vision', 'omni', 'text', 'unsupported'].indexOf(capability) >= 0) {
-    return capability;
-  }
+  if (capability === 'ocr') return 'ocr';
+  if (capability === 'vision' || capability === 'omni') return 'vision';
+  if (capability === 'text' || capability === 'unsupported') return 'text';
   return item && item.likely_vision ? 'vision' : 'text';
 }
 
 function visionModelPriority(item) {
   var priority = Number((item || {}).capability_priority);
   if (Number.isFinite(priority)) return priority;
-  var fallback = {ocr: 0, vision: 100, omni: 200, text: 900, unsupported: 1000};
+  var fallback = {ocr: 0, vision: 100, text: 900};
   return fallback[visionModelCapability(item)];
 }
 
 function visionModelBadgeHTML(item) {
   var label = String((item || {}).capability_label || '');
-  if (!label && item && item.likely_vision) label = '通用视觉';
-  if (!label) return '';
   var capability = visionModelCapability(item);
+  if (capability === 'vision') label = '支持图片';
+  else if (capability === 'text') label = '不支持图片';
+  else if (!label) label = 'OCR 专用';
   return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
 }
 
@@ -398,10 +399,8 @@ function renderVisionModelPop() {
   }
   var groups = [
     {key: 'ocr', label: 'OCR 专用 · 优先'},
-    {key: 'vision', label: '通用视觉'},
-    {key: 'omni', label: '全模态'},
-    {key: 'text', label: '其他模型'},
-    {key: 'unsupported', label: '不支持图片 · DeepSeek'}
+    {key: 'vision', label: '支持图片'},
+    {key: 'text', label: '不支持图片'}
   ];
   var byCapability = {};
   items.forEach(function(item) {

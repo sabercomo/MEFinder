@@ -798,6 +798,10 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   background: var(--success-soft);
   color: var(--success);
 }
+.vision-model-badge.capability-text {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
 .vision-model-badge.capability-omni {
   background: var(--info-soft);
   color: var(--info);
