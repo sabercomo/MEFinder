@@ -74,6 +74,15 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertIn(f"MEFinder v{__version__}", HTML)
         self.assertIn(f"v{__version__}", HTML)
 
+    def test_mineru_brand_asset_is_packaged(self):
+        """MinerU 账号与统计页共用官方矢量标识，打包时不能漏掉。"""
+
+        logo = _PACKAGE_DIR / "static" / "brands" / "mineru.svg"
+        self.assertTrue(logo.is_file())
+        content = logo.read_text(encoding="utf-8")
+        self.assertIn('viewBox="0 0 24 24"', content)
+        self.assertIn("fill-rule=\"evenodd\"", content)
+
     def test_every_asset_body_reaches_the_document(self):
         """每个资源的首尾实质内容都必须出现在产物里。"""
 
@@ -254,9 +263,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
     BASELINE_SHA256 = (
-        "fd31c1529c92c14132bc97aa3185b8acdd0628ac959dd01da73e794808f6525c"
+        "2f8a038d70969a73d2d8765a429d2a7e302f9f48d874831693198179ec49cd97"
     )
-    BASELINE_BYTES = 665201
+    BASELINE_BYTES = 684060
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

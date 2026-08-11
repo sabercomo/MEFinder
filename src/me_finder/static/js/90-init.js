@@ -23,8 +23,13 @@ document.addEventListener('input', function(event) {
 document.addEventListener('input', function(event) {
   var t = event.target;
   if (!t || !t.closest) return;
-  if (t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint');
-  else if (t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint');
+  if (t.closest('#mineru-api-settings')) {
+    var mineruStatus = document.getElementById('mineru-config-status');
+    if (mineruStatus) {
+      mineruStatus.className = 'settings-status warning';
+      mineruStatus.textContent = '有未保存的修改';
+    }
+  } else if (t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint');
 });
 (function initVisionEditor() {
   var base = document.getElementById('vision-api-base');
@@ -76,6 +81,7 @@ document.addEventListener('input', function(event) {
   window.addEventListener('resize', positionImportVisionMenu);
 })();
 configureDesktopPlatformOptions();
+bindMineruAccountDialogDismissal();
 setupScanDirectoryControls();
 setupLibraryDragSelection();
 setupLibraryKeyboardNav();

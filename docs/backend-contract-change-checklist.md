@@ -8,7 +8,7 @@
 
 | 类型 | 数量 | 结论 |
 |---|---:|---|
-| 新增 HTTP 端点 | 5 | MinerU 多账号读写、单账号测试、本地统计、单书导出 |
+| 新增 HTTP 端点 | 7 | MinerU 多账号读写、服务地址、单账号测试、MinerU/全局本地统计、单书导出 |
 | 修改 HTTP 端点 | 0 | v0.4.0 已有路由的 request/response 保持兼容 |
 | 删除 HTTP 端点 | 0 | 无 |
 | FastAPI/Uvicorn | 0 | 未引入，继续使用现有 HTTP handler |
@@ -54,7 +54,32 @@ request：`{"account_id": "..."}`。后端只解决并测试该账号已保存�
 
 用途：独立刷新本地解析统计。200 response 是 `MinerUUsageStatistics`，字段见 2.1。
 
-### 1.5 `POST /api/document/export`
+### 1.5 `POST /api/mineru-accounts/service`
+
+用途：不打开任何账号编辑器，独立保存所有 MinerU 账号共用的服务地址。
+
+request：`{"api_base": "https://mineru.net"}`。`api_base` 必须是有 host 的 HTTP(S) URL。200 response 与 `GET /api/mineru-accounts` 相同。
+
+### 1.6 `GET /api/parser-statistics`
+
+用途：获取 provider-neutral 的当前文献库解析统计。全局和 provider 合计只统计 SQLite 中已产生 `pdf_pages` 的 PDF；MinerU 账号归属由本地 job ledger 补充，且只保留当前索引内的书。不请求任何第三方用量或计费接口。
+
+200 response：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `scope` | `"current_index"` | 统计口径固定为当前本地索引 |
+| `generated_at` | ISO-8601 string | 生成时间 |
+| `total.parsed_book_count` | `integer` | 已有页级结果的 PDF 数 |
+| `total.parsed_page_count` | `integer` | `pdf_pages` 总数 |
+| `total.provider_count` | `integer` | 实际产生结果的解析服务/本地解析器数 |
+| `providers` | `ParserProviderStatistics[]` | 按 provider 分组，MinerU 优先，其他按页数降序 |
+
+`ParserProviderStatistics` 字段：`provider_id`, `provider_name`, `provider_kind` (`api|local`), `parsed_book_count`, `parsed_page_count`, `books`；MinerU 组额外包含 `credentials`。
+
+`books[]` 字段：`source_file_id`, `document_id`, `title`, `file_name`, `parsed_page_count`, `parser`, `model`, `completed_at`。
+
+### 1.7 `POST /api/document/export`
 
 用途：将当前索引中的一份 PDF 流式导出为 `mefinder.document.v1` Zip64 容器。
 
@@ -73,7 +98,7 @@ request：`{"source_id": "..."}`。
 
 导出目标为应用数据目录下的 `exports/`，后缀 `.mefinder.zip`。后端从 SQLite 逐页读取，写入 `<target>.partial`，成功后原子更名；不向浏览器返回整书文本。当前 HTTP/UI 仅支持已建立页级索引的 PDF，Word 返回 400。
 
-### 1.6 兼容路由和未暴露路由
+### 1.8 兼容路由和未暴露路由
 
 - v0.4.0 的 `GET/POST /api/mineru-config` 与 `POST /api/mineru-config/test` 保留，便于旧客户端/旧配置迁移。
 - 没有新增账号 DELETE 端点；设置页可停用账号。
@@ -378,12 +403,13 @@ v3 不重建表，以兼容旧 ledger；`daily_page_budget/pages_used_today/usag
 
 - 不得向浏览器返回 Token 或 `secret_ref`。
 - 账号配置区不得显示或提交“每日 1000 页预算”。
-- 本地解析统计必须放在独立统计区，并明确不是 MinerU 官网用量或计费数据。
+- 本地解析统计必须放在独立统计区：先显示当前文献库总览，再按实际 provider 显示 MinerU、其他视觉 API 或本地解析器。
+- MinerU 账号归属必须明确是本地记录，不是 MinerU 官网用量或计费数据。
 - 不得在 HTTP adapter 里写死 1000/200/50 等 provider 限制；必须读 capability/config。
 - 不得在所有 slice validated 前显示为“整书已发布”。
 - 前端只使用 1-based `physical_pdf_page`，不自行重算 global offset。
 - 远程 task 的 poll/result 必须保持原 `credential_id` affinity。
-- 设置页只调用 `/api/mineru-accounts*` 新端点；旧 `/api/mineru-config*` 仅用于兼容。
+- 设置页只调用 `/api/mineru-accounts*` 和 `/api/parser-statistics` 新端点；旧 `/api/mineru-config*` 仅用于兼容。
 - 本地解析统计位于设置左侧独立一级“统计”面板，不与 MinerU 账号编辑混排。
 - 文献详情的单书导出只提交 `source_id`，不在前端聚合或下载全部页文本。
 - 需要程序化区分新错误类型时，先新增稳定 `error.code` 并更新本清单，不得直接解析现有 message。

@@ -1,4 +1,4 @@
-/* ── Settings ───────────────────────────────────────────────── */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V5 · genre: modern-minimal · tone: focused desktop utility · palette: existing MEFinder accent tokens · macrostructure: Workbench · contrast: pass (40–41) · nav/footer: existing application chrome · slop: pass (42–49) · mobile: pass (34, 49–57) */
 .settings-page-content {
   flex: 1;
   min-height: 0;
@@ -697,55 +697,87 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .ui-switch input:checked ~ .ui-switch-track::after { transform: translateX(14px); }
 .ui-switch input:disabled ~ .ui-switch-track { opacity: 0.45; cursor: not-allowed; }
 .ui-switch input:focus-visible ~ .ui-switch-track { box-shadow: var(--focus-ring); }
-.mineru-global-config {
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.mineru-add-account { white-space: nowrap; }
+.mineru-add-account svg { width: 16px; height: 16px; }
+.mineru-service-settings {
   display: grid;
-  grid-template-columns: 90px minmax(220px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(150px, 0.55fr) minmax(360px, 1.45fr);
   align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--surface-secondary);
+  gap: 24px;
+  margin-top: 16px;
+  padding: 18px 0;
+  border-block: 1px solid var(--border-subtle);
 }
-.mineru-global-config .settings-label { padding: 0; text-align: left; font-weight: 600; }
-.mineru-global-config small { color: var(--text-tertiary); font-size: 11px; }
-.mineru-account-layout {
-  display: grid;
-  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
-  gap: 14px;
-  margin-top: 14px;
-  align-items: start;
+.mineru-service-copy,
+.mineru-table-heading > div,
+.parser-stat-section-head > div { display: grid; gap: 4px; min-width: 0; }
+.mineru-service-copy strong,
+.mineru-table-heading strong,
+.parser-stat-section-head strong { color: var(--text-primary); font-size: 13px; }
+.mineru-service-copy small,
+.mineru-table-heading small,
+.parser-stat-section-head small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.mineru-service-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mineru-service-control .settings-input { min-width: 0; height: 42px; }
+.mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; white-space: nowrap; }
+.mineru-account-management { margin-top: 26px; }
+.mineru-table-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 10px;
 }
-.mineru-account-list { display: grid; gap: 8px; }
+.mineru-table-heading > span { color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mineru-account-list { min-width: 0; }
 .mineru-account-empty {
   display: grid;
-  gap: 5px;
-  padding: 24px 16px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 13px;
+  justify-items: start;
+  gap: 6px;
+  padding: 34px 4px;
+  border-block: 1px solid var(--border-subtle);
   color: var(--text-tertiary);
-  font-size: 12px;
-  text-align: center;
-}
-.mineru-account-empty strong { color: var(--text-secondary); font-size: 13px; }
-.mineru-account-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  padding: 10px 11px;
-  border: 1px solid var(--divider);
-  border-radius: 11px;
-  background: var(--surface-elevated);
-  color: var(--text-primary);
-  cursor: pointer;
   text-align: left;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-.mineru-account-item:hover { border-color: var(--border-strong); box-shadow: var(--shadow-card-hover); }
-.mineru-account-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.mineru-account-empty strong { color: var(--text-primary); font-size: 13px; }
+.mineru-account-empty small { max-width: 52ch; font-size: 11px; line-height: 1.55; }
+.mineru-account-empty .action-btn { margin-top: 8px; }
+.mineru-account-table-scroll { overflow-x: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface-primary); }
+.mineru-account-table,
+.parser-book-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mineru-account-table th,
+.mineru-account-table td,
+.parser-book-table th,
+.parser-book-table td { text-align: left; vertical-align: middle; }
+.mineru-account-table th {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+}
+.mineru-account-table th:first-child { width: 27%; }
+.mineru-account-table th:nth-child(2) { width: 22%; }
+.mineru-account-table th:nth-child(3) { width: 15%; }
+.mineru-account-table th:nth-child(4) { width: 20%; }
+.mineru-account-table th:last-child { width: 16%; }
+.mineru-account-table td { padding: 11px 12px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 11px; }
+.mineru-account-table tbody tr:first-child td { border-top: none; }
+.mineru-account-identity,
+.mineru-account-status-cell,
+.mineru-row-actions { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .mineru-account-avatar {
   flex: 0 0 auto;
   display: grid;
@@ -753,15 +785,22 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  background: #111111;
-  color: #FFFFFF;
-  font-size: 14px;
-  font-weight: 750;
+  border: 1px solid var(--divider);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+.mineru-brand-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url('/static/brands/mineru.svg') center / contain no-repeat;
+  mask: url('/static/brands/mineru.svg') center / contain no-repeat;
 }
 .mineru-account-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .mineru-account-copy strong,
 .mineru-account-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mineru-account-copy strong { font-size: 12px; }
+.mineru-account-copy strong { color: var(--text-primary); font-size: 12px; }
 .mineru-account-copy small { color: var(--text-tertiary); font-size: 10px; }
 .mineru-account-state {
   flex: 0 0 auto;
@@ -773,69 +812,204 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   font-weight: 650;
 }
 .mineru-account-state.ready { color: var(--success); background: var(--success-soft); }
-.mineru-editor-card {
-  min-width: 0;
-  padding: 16px 18px 18px;
-  border: 1px solid var(--divider);
-  border-radius: 14px;
-  background: var(--surface-elevated);
+.mineru-row-switch { min-width: 44px; min-height: 44px; justify-content: center; }
+.mineru-table-date,
+.mineru-table-usage { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mineru-row-actions { justify-content: flex-end; gap: 12px; }
+.mineru-text-action {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
 }
-.mineru-editor-head {
+.mineru-text-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.mineru-text-action:focus-visible,
+.mineru-dialog-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .mineru-account-table tbody tr:hover { background: var(--surface-hover); }
+  .mineru-text-action:hover { color: var(--accent-hover); }
+}
+.mineru-account-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(520px, calc(100% - 32px));
+  max-width: none;
+  max-height: min(82dvh, 680px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  background: var(--dialog-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-popover);
+}
+.mineru-account-dialog::backdrop { background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.mineru-account-form { padding: 20px; }
+.mineru-dialog-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding-bottom: 13px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
 }
-.mineru-editor-head > div { min-width: 0; display: grid; gap: 3px; }
-.mineru-editor-head strong { color: var(--text-primary); font-size: 13px; }
-.mineru-editor-head small { color: var(--text-tertiary); font-size: 11px; }
-.mineru-editor-grid { grid-template-columns: 108px minmax(0, 1fr); margin-top: 14px; }
-.mineru-statistics-card {
-  margin-top: 18px;
-  padding: 16px;
-  border: 1px solid var(--divider);
-  border-radius: 14px;
-  background: var(--surface-elevated);
+.mineru-dialog-head > div { min-width: 0; display: grid; gap: 3px; }
+.mineru-dialog-head strong { font-size: 15px; }
+.mineru-dialog-head small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
 }
-.mineru-statistics-page-card { margin-top: 14px; }
-.mineru-statistics-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.mineru-statistics-head > div { min-width: 0; display: grid; gap: 3px; }
-.mineru-statistics-head strong { color: var(--text-primary); font-size: 13px; }
-.mineru-statistics-head small { color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
-.mineru-statistics-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 13px; }
-.mineru-statistics-summary > div {
+.mineru-dialog-close svg { width: 18px; height: 18px; }
+.mineru-dialog-fields { display: grid; gap: 15px; padding-top: 17px; }
+.mineru-field { display: grid; gap: 6px; }
+.mineru-field > span { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.mineru-field > span em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }
+.mineru-field > small,
+.mineru-enabled-row small { color: var(--text-tertiary); font-size: 10px; line-height: 1.45; }
+.mineru-field .settings-input { height: 44px; }
+.mineru-enabled-row {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 11px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--surface-secondary);
 }
-.mineru-statistics-summary span { color: var(--text-primary); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.mineru-statistics-summary small { color: var(--text-tertiary); font-size: 11px; }
-.mineru-statistics-list { display: grid; gap: 8px; margin-top: 12px; }
-.mineru-statistics-empty { padding: 14px; color: var(--text-tertiary); font-size: 11px; text-align: center; }
-.mineru-stat-account { overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 11px; background: var(--surface-primary); }
-.mineru-stat-account > summary { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
-.mineru-stat-account > summary::-webkit-details-marker { display: none; }
-.mineru-stat-account > summary span { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.mineru-stat-account > summary strong { color: var(--text-primary); font-size: 12px; }
-.mineru-stat-account > summary small { color: var(--text-tertiary); font-size: 10px; }
-.mineru-stat-account > summary b { color: var(--accent); font-size: 12px; font-weight: 650; }
-.mineru-stat-books { display: grid; border-top: 1px solid var(--border-subtle); }
-.mineru-stat-book { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-top: 1px solid var(--border-subtle); }
-.mineru-stat-book:first-child { border-top: none; }
-.mineru-stat-book > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.mineru-stat-book strong { overflow: hidden; color: var(--text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.mineru-stat-book small { color: var(--text-tertiary); font-size: 10px; }
-.mineru-stat-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.mineru-enabled-row > span:first-child { display: grid; gap: 3px; }
+.mineru-enabled-row strong { font-size: 11px; }
+.mineru-dialog-error { margin: 12px 0 0; color: var(--danger); font-size: 11px; line-height: 1.45; }
+.mineru-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; }
+.parser-overview { margin-top: 18px; }
+.parser-stat-section-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.parser-overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 13px 0 0;
+  border-block: 1px solid var(--divider);
+}
+.parser-overview-metrics > div {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 6px;
+  padding: 18px 20px;
+  border-inline-start: 1px solid var(--border-subtle);
+}
+.parser-overview-metrics > div:first-child { border-inline-start: 0; }
+.parser-overview-metrics dt { grid-column: 1 / -1; margin-bottom: 8px; color: var(--text-tertiary); font-size: 10px; }
+.parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 28px; font-weight: 720; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.parser-overview-metrics span { color: var(--text-tertiary); font-size: 11px; }
+.parser-provider-breakdown { margin-top: 30px; }
+.parser-provider-columns,
+.parser-provider-group > summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 100px 110px 24px;
+  align-items: center;
+  gap: 12px;
+}
+.parser-provider-columns { margin-top: 12px; padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text-tertiary); font-size: 10px; }
+.parser-provider-columns span:nth-child(2),
+.parser-provider-columns span:nth-child(3) { text-align: right; }
+.parser-provider-group { border-bottom: 1px solid var(--divider); }
+.parser-provider-group > summary { min-height: 64px; padding: 8px 12px; cursor: pointer; list-style: none; }
+.parser-provider-group > summary::-webkit-details-marker { display: none; }
+.parser-provider-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.parser-provider-identity > span:last-child { min-width: 0; display: grid; gap: 2px; }
+.parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-provider-identity small { color: var(--text-tertiary); font-size: 10px; }
+.parser-provider-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+.parser-provider-mark.mineru { border: 1px solid var(--divider); background: var(--surface-primary); color: var(--text-primary); }
+.parser-provider-mark .mineru-brand-glyph { width: 22px; height: 22px; }
+.parser-provider-number { color: var(--text-tertiary); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.parser-provider-number b { color: var(--text-primary); font-size: 12px; }
+.parser-provider-chevron { width: 17px; height: 17px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
+.parser-provider-group[open] > summary .parser-provider-chevron { transform: rotate(180deg); }
+.parser-provider-detail { padding: 6px 12px 18px 55px; }
+.parser-detail-label { margin: 4px 0 8px; color: var(--text-secondary); font-size: 10px; font-weight: 650; }
+.parser-detail-label small { margin-inline-start: 6px; color: var(--text-tertiary); font-weight: 400; }
+.parser-book-table-scroll { overflow-x: auto; }
+.parser-book-table th { padding: 7px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 10px; font-weight: 600; }
+.parser-book-table th:first-child { width: 48%; }
+.parser-book-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.parser-book-table th:last-child,
+.parser-book-table td:last-child { text-align: right; white-space: nowrap; }
+.parser-book-title { display: grid; gap: 2px; min-width: 0; }
+.parser-book-title strong,
+.parser-book-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parser-book-title strong { color: var(--text-secondary); font-size: 10px; }
+.parser-book-title small { color: var(--text-tertiary); font-size: 10px; }
+.mineru-attribution-label { margin-top: 18px; }
+.parser-credential-list { border-top: 1px solid var(--border-subtle); }
+.parser-credential-account { border-bottom: 1px solid var(--border-subtle); }
+.parser-credential-account > summary { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 5px 10px; cursor: pointer; list-style: none; }
+.parser-credential-account > summary::-webkit-details-marker { display: none; }
+.parser-credential-account > summary > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.parser-credential-account > summary strong { color: var(--text-secondary); font-size: 10px; }
+.parser-credential-account > summary small { color: var(--text-tertiary); font-size: 10px; }
+.parser-credential-account > summary b { color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.parser-credential-account > summary svg { width: 15px; height: 15px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
+.parser-credential-account[open] > summary svg { transform: rotate(180deg); }
+.parser-credential-books { padding: 0 10px 8px 20px; }
+.parser-credential-book { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border-subtle); }
+.parser-credential-book > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.parser-credential-book strong { overflow: hidden; color: var(--text-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-credential-book small { color: var(--text-tertiary); font-size: 10px; }
+.parser-credential-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.parser-credential-empty { padding: 12px 10px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 10px; }
+.parser-statistics-empty { display: grid; gap: 5px; padding: 30px 12px; border-bottom: 1px solid var(--divider); }
+.parser-statistics-empty strong { color: var(--text-primary); font-size: 12px; }
+.parser-statistics-empty small { max-width: 60ch; color: var(--text-tertiary); font-size: 10px; line-height: 1.55; }
 @media (max-width: 760px) {
-  .mineru-global-config { grid-template-columns: 1fr; }
-  .mineru-account-layout { grid-template-columns: 1fr; }
-  .mineru-editor-grid { grid-template-columns: 1fr; }
-  .mineru-editor-grid .settings-label { padding-top: 0; text-align: left; }
+  .mineru-service-settings { grid-template-columns: 1fr; gap: 10px; }
+  .mineru-service-control { align-items: stretch; flex-direction: column; }
+  .mineru-account-table,
+  .mineru-account-table tbody,
+  .mineru-account-table tr,
+  .mineru-account-table td { display: block; width: 100%; box-sizing: border-box; }
+  .mineru-account-table thead { display: none; }
+  .mineru-account-table tr { padding: 10px 12px; border-top: 1px solid var(--border-subtle); }
+  .mineru-account-table tr:first-child { border-top: 0; }
+  .mineru-account-table td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border: 0; }
+  .mineru-account-table td::before { content: attr(data-label); flex: 0 0 auto; color: var(--text-tertiary); font-size: 10px; }
+  .mineru-account-table td:first-child { justify-content: flex-start; }
+  .mineru-account-table td:first-child::before { display: none; }
+  .mineru-account-identity { flex: 1; }
+  .parser-overview-metrics { grid-template-columns: 1fr; }
+  .parser-overview-metrics > div { border-inline-start: 0; border-top: 1px solid var(--border-subtle); }
+  .parser-overview-metrics > div:first-child { border-top: 0; }
+  .parser-provider-columns { display: none; }
+  .parser-provider-group > summary { grid-template-columns: minmax(0, 1fr) auto 20px; margin-top: 8px; }
+  .parser-provider-number:first-of-type { display: none; }
+  .parser-provider-detail { padding-inline-start: 12px; }
+  .parser-detail-label small { display: block; margin: 3px 0 0; }
 }
 .vision-editor-card {
   border: 1px solid var(--divider);

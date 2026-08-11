@@ -497,78 +497,45 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">每个 Token 对应一个独立账号，可同时保存多个</span></span>
-            <span id="mineru-config-status" class="settings-status">读取中…</span>
-            <button class="action-btn vision-add-btn" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">管理独立账号与本机 Token</span></span>
+              <span id="mineru-config-status" class="settings-status">读取中…</span>
+              <button class="action-btn primary mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
-            <div class="mineru-global-config">
-              <label class="settings-label" for="mineru-api-base">API 地址</label>
-              <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
-              <small>全部 MinerU 账号共用该服务地址</small>
-            </div>
-            <div class="mineru-account-layout">
-              <div id="mineru-account-list" class="mineru-account-list" aria-label="MinerU 账号列表"></div>
-              <div class="mineru-editor-card" id="mineru-editor-card">
-                <div class="mineru-editor-head">
-                  <div>
-                    <strong id="mineru-editor-title">添加 MinerU 账号</strong>
-                    <small>Token 只保存在本机，不会返回浏览器</small>
-                  </div>
-                  <label class="ui-switch" title="停用后不再分配新的解析任务">
-                    <input id="mineru-account-enabled" type="checkbox" checked>
-                    <span class="ui-switch-track" aria-hidden="true"></span>
-                    <span class="ui-switch-text">启用</span>
-                  </label>
+              <section class="mineru-service-settings" aria-labelledby="mineru-service-title">
+                <div class="mineru-service-copy"><strong id="mineru-service-title">服务地址</strong><small>所有 MinerU 账号共用该地址</small></div>
+                <div class="mineru-service-control">
+                  <label class="visually-hidden" for="mineru-api-base">MinerU API 地址</label>
+                  <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
+                  <button id="mineru-service-save" class="action-btn" type="button" onclick="saveMineruServiceAddress()">保存地址</button>
                 </div>
-                <input id="mineru-account-id" type="hidden">
-                <div class="settings-grid mineru-editor-grid">
-                  <label class="settings-label" for="mineru-account-name">账号名称</label>
-                  <div class="settings-control">
-                    <input id="mineru-account-name" class="settings-input" type="text" maxlength="120" placeholder="例如：MinerU 账号 1">
-                    <small>仅用于本地列表和解析统计中区分账号</small>
-                  </div>
-                  <label class="settings-label" for="mineru-token">API Token</label>
-                  <div class="settings-control">
-                    <div class="settings-input-row">
-                      <input id="mineru-token" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 MinerU API Token">
-                      <button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button>
-                    </div>
-                    <small>可粘贴原始 Token 或完整 Bearer 值；编辑时留空会保留原 Token</small>
-                  </div>
-                  <label class="settings-label" for="mineru-expires-at">到期日期</label>
-                  <div class="settings-control settings-control-inline">
-                    <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
-                    <small>仅作本地提醒，不参与页数调度</small>
-                  </div>
-                  <span class="settings-label"></span>
-                  <div class="settings-control settings-actions">
-                    <button class="action-btn primary" type="button" onclick="saveMineruConfig()">保存账号</button>
-                    <button class="action-btn" id="mineru-test-btn" type="button" onclick="testMineruConnection()">测试此账号</button>
-                    <span id="mineru-save-hint" class="settings-hint">密钥只保存在本机</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+              </section>
+              <section class="mineru-account-management" aria-labelledby="mineru-account-table-title">
+                <div class="mineru-table-heading"><div><strong id="mineru-account-table-title">账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
+                <div id="mineru-account-list" class="mineru-account-list" aria-live="polite"></div>
+              </section>
             </div>
           </section>
           <section class="settings-section" id="statistics-settings" role="tabpanel">
             <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">解析统计</span><span class="settings-section-note">查看各 MinerU 账号在本机完成的书目与页码范围</span></span>
-              <span id="mineru-statistics-status" class="settings-status">本地记录</span>
-              <button class="action-btn" type="button" onclick="loadMineruStatistics()">刷新统计</button>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">解析统计</span><span class="settings-section-note">当前文献库的页级解析来源</span></span>
+              <span id="parser-statistics-status" class="settings-status">本地记录</span>
+              <button class="action-btn" type="button" onclick="loadParserStatistics()">刷新</button>
             </div>
             <div class="settings-collapse-body" id="statistics-settings-body">
-              <div class="mineru-statistics-card mineru-statistics-page-card">
-                <div class="mineru-statistics-head">
-                  <div><strong>MinerU Cloud</strong><small>只统计成功且通过整书覆盖校验的任务，不是 MinerU 官网用量或计费数据</small></div>
-                </div>
-                <div class="mineru-statistics-summary">
-                  <div><span id="mineru-stat-books">0</span><small>本书</small></div>
-                  <div><span id="mineru-stat-pages">0</span><small>页</small></div>
-                </div>
-                <div id="mineru-statistics-list" class="mineru-statistics-list"></div>
-              </div>
+              <section class="parser-overview" aria-labelledby="parser-overview-title">
+                <div class="parser-stat-section-head"><div><strong id="parser-overview-title">总览</strong><small>统计当前文献库中已产生页级结果的 PDF</small></div></div>
+                <dl class="parser-overview-metrics">
+                  <div><dt>文献</dt><dd id="parser-stat-books">0</dd><span>本</span></div>
+                  <div><dt>解析页</dt><dd id="parser-stat-pages">0</dd><span>页</span></div>
+                  <div><dt>解析服务</dt><dd id="parser-stat-providers">0</dd><span>个</span></div>
+                </dl>
+              </section>
+              <section class="parser-provider-breakdown" aria-labelledby="parser-provider-title">
+                <div class="parser-stat-section-head"><div><strong id="parser-provider-title">按解析服务</strong><small>展开后可查看哪些书由该服务解析；MinerU 额外显示本地账号归属</small></div></div>
+                <div class="parser-provider-columns" aria-hidden="true"><span>解析服务</span><span>文献</span><span>页数</span><span></span></div>
+                <div id="parser-provider-list" class="parser-provider-list" aria-live="polite"></div>
+              </section>
             </div>
           </section>
           <section class="settings-section" id="vision-api-settings" role="tabpanel">
@@ -819,6 +786,24 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
 
   </div><!-- /main-area -->
 </div><!-- /app-shell -->
+
+<dialog id="mineru-account-dialog" class="mineru-account-dialog" aria-labelledby="mineru-editor-title">
+  <form class="mineru-account-form" method="dialog" onsubmit="saveMineruConfig(event)">
+    <div class="mineru-dialog-head">
+      <div><strong id="mineru-editor-title">添加 MinerU 账号</strong><small>Token 只保存在本机应用数据中</small></div>
+      <button class="mineru-dialog-close" type="button" aria-label="关闭" onclick="closeMineruAccountDialog()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+    </div>
+    <input id="mineru-account-id" type="hidden">
+    <div class="mineru-dialog-fields">
+      <label class="mineru-field" for="mineru-account-name"><span>账号名称</span><input id="mineru-account-name" class="settings-input" type="text" maxlength="120" autocomplete="off" placeholder="例如：工作账号"><small>仅用于本地账号列表和解析统计</small></label>
+      <label class="mineru-field" for="mineru-token"><span>API Token</span><div class="settings-input-row"><input id="mineru-token" class="settings-input" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token"><button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button></div><small id="mineru-token-help">新账号必填；可粘贴原始 Token 或完整 Bearer 值</small></label>
+      <label class="mineru-field" for="mineru-expires-at"><span>到期日期 <em>可选</em></span><input id="mineru-expires-at" class="settings-input settings-input-date" type="date"><small>仅作本地提醒，不影响解析调度</small></label>
+      <label class="mineru-enabled-row" for="mineru-account-enabled"><span><strong>启用账号</strong><small>停用后不再分配新的解析任务</small></span><span class="ui-switch"><input id="mineru-account-enabled" type="checkbox" checked><span class="ui-switch-track" aria-hidden="true"></span></span></label>
+    </div>
+    <p id="mineru-dialog-error" class="mineru-dialog-error" role="alert" aria-live="polite" hidden></p>
+    <div class="mineru-dialog-actions"><button class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button><button id="mineru-account-save" class="action-btn primary" type="submit">添加账号</button></div>
+  </form>
+</dialog>
 
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="app-dialog-backdrop" class="app-dialog-backdrop" aria-hidden="true" onclick="appDialogBackdropClick(event)">

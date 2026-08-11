@@ -57,8 +57,8 @@ function showSettingsCategory(sectionId) {
   });
   var content = document.querySelector('.settings-content');
   if (content) content.scrollTop = 0;
-  if (sectionId === 'statistics-settings' && typeof loadMineruStatistics === 'function') {
-    loadMineruStatistics();
+  if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
+    loadParserStatistics();
   }
 }
 

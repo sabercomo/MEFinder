@@ -19,10 +19,10 @@ from src.me_finder.web import make_handler
 
 class MinerUAccountsWebTests(unittest.TestCase):
     @contextmanager
-    def _runtime(self, root: Path):
+    def _runtime(self, root: Path, index: dict[str, object] | None = None):
         context = AppContext.create(root, index_path=Path("data/index.sqlite3"))
         context.paths.config_root.mkdir(parents=True, exist_ok=True)
-        build_database({"metadata": {}}, context.paths.index_path)
+        build_database(index or {"metadata": {}}, context.paths.index_path)
         handler = make_handler(context.paths.index_path, app_context=context)
         handler.log_message = lambda *_args: None
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -263,6 +263,68 @@ class MinerUAccountsWebTests(unittest.TestCase):
             test_credential.assert_called_once_with(
                 "selected-private-token", api_base="https://example.test"
             )
+
+    def test_service_address_is_saved_independently_from_account_editor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self._runtime(root) as (server, _handler):
+                status, payload = self._request(
+                    server,
+                    "POST",
+                    "/api/mineru-accounts/service",
+                    {"api_base": "https://mineru.example.test/v4"},
+                )
+
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["api_base"], "https://mineru.example.test/v4")
+            saved = json.loads(
+                (root / "config" / "mineru_api.local.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                saved["api_base"], "https://mineru.example.test/v4"
+            )
+
+    def test_provider_neutral_statistics_endpoint_includes_other_api(self) -> None:
+        index = {
+            "metadata": {},
+            "source_files": [
+                {
+                    "source_file_id": "vision-book",
+                    "source_type": "pdf",
+                    "document_id": "document-vision-book",
+                    "file_name": "其他 API.pdf",
+                    "display_title": "其他 API 之书",
+                    "pdf_profile": {
+                        "parser": "openai_compatible",
+                        "provider_id": "provider-other",
+                        "provider_name": "其他视觉 API",
+                    },
+                }
+            ],
+            "pdf_pages": [
+                {
+                    "source_file_id": "vision-book",
+                    "pdf_page_index": index,
+                    "text_raw": f"page-{index}",
+                    "parser": "openai_compatible",
+                }
+                for index in range(4)
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self._runtime(root, index) as (server, _handler):
+                status, payload = self._request(
+                    server, "GET", "/api/parser-statistics"
+                )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["total"]["parsed_book_count"], 1)
+        self.assertEqual(payload["total"]["parsed_page_count"], 4)
+        self.assertEqual(payload["providers"][0]["provider_id"], "provider-other")
+        self.assertEqual(payload["providers"][0]["books"][0]["title"], "其他 API 之书")
 
 
 if __name__ == "__main__":

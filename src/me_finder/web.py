@@ -65,6 +65,7 @@ from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
 )
+from .parser_statistics import build_parser_statistics
 from .macos_update import check_macos_update
 from .vision_api import (
     VisionAPIError,
@@ -3086,6 +3087,23 @@ def make_handler(
                 except Exception as exc:
                     self._send_json({"error": str(exc)}, 400)
                 return
+            if parsed.path == "/api/parser-statistics":
+                try:
+                    self._send_json(
+                        build_parser_statistics(
+                            index_path,
+                            mineru_statistics=(
+                                mineru_account_service.usage_statistics()
+                            ),
+                        )
+                    )
+                except Exception:
+                    logging.exception("Local parser statistics read failed")
+                    self._send_json(
+                        {"error": "本地解析统计无法读取，请稍后重试。"},
+                        500,
+                    )
+                return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)
                 try:
@@ -4315,6 +4333,37 @@ def make_handler(
                     self._send_json(result)
                 except (MinerUError, KeyError) as exc:
                     self._send_json({"error": str(exc)}, 400)
+                return
+            if parsed.path == "/api/mineru-accounts/service":
+                if not isinstance(payload, dict):
+                    self._send_json(
+                        {"error": "MinerU 服务设置请求必须是 JSON 对象。"},
+                        400,
+                    )
+                    return
+                try:
+                    raw_api_base = str(payload.get("api_base") or "").strip()
+                    parsed_base = urlparse(raw_api_base)
+                    if (
+                        parsed_base.scheme not in {"http", "https"}
+                        or not parsed_base.netloc
+                    ):
+                        raise MinerUError(
+                            "API 地址必须是以 http:// 或 https:// 开头的网址。"
+                        )
+                    save_mineru_config(
+                        {"api_base": raw_api_base},
+                        resolve_mineru_config_path(root),
+                    )
+                    self._send_json(mineru_accounts_payload())
+                except MinerUError as exc:
+                    self._send_json({"error": str(exc)}, 400)
+                except (OSError, json.JSONDecodeError):
+                    logging.exception("MinerU service address save failed")
+                    self._send_json(
+                        {"error": "MinerU 服务地址无法保存。"},
+                        500,
+                    )
                 return
             if parsed.path == "/api/mineru-config":
                 config_path = resolve_mineru_config_path(root)
