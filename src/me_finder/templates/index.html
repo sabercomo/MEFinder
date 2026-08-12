@@ -761,10 +761,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-grid">
             <span class="settings-label">导出</span>
             <div class="settings-control">
-              <div class="settings-actions backup-export-actions">
+              <div class="settings-actions">
                 <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-                <span class="settings-hint" id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</span>
               </div>
+              <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
             </div>
             <span class="settings-label">导入</span>
             <div class="settings-control">
