@@ -280,6 +280,12 @@ class ThemeMarkupTests(unittest.TestCase):
 
         self.assertIn('id="data-location-settings"', HTML)
         self.assertIn('id="data-location-body"', HTML)
+        self.assertIn('class="settings-nav-item cap-data-location"', HTML)
+        self.assertIn("dataset.dataLocationAvailable = 'true'", HTML)
+        self.assertIn(
+            'html[data-data-location-available="true"] .settings-nav-item.cap-data-location',
+            HTML,
+        )
         self.assertIn(
             "showSettingsCategory('data-location-settings')",
             HTML,

@@ -1,5 +1,5 @@
 /* ── One dialog primitive ──────────────────────────────────────
-   The confirm (app-dialog), remove (remove-modal) and CNKI-candidate
+   The confirmation (app-dialog), remove (remove-modal) and CNKI-candidate
    (cnki-batch) dialogs share ONE backdrop + box base; only width, radius,
    tone and the content area differ. Behaviour is already unified elsewhere:
    the Esc stack in 10-shell.js closes them innermost-first, and each backdrop

@@ -232,21 +232,28 @@ async function exportBackup() {
 }
 
 async function importBackup() {
-  var input = document.getElementById('backup-import-path');
-  var path = (input.value || '').trim();
-  if (!path) { showToast('请先填写备份文件路径'); return; }
-  if (!await showAppConfirm(
-    '导入将覆盖当前的页码映射与书目信息，并重建索引',
-    {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
-  )) return;
+  var button = document.getElementById('backup-import-choose');
+  if (button && button.disabled) return;
+  if (button) { button.disabled = true; button.textContent = '正在选择…'; }
   try {
-    var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: path})});
+    var chooseResp = await fetch('/api/backup/import/choose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+    var chosen = await chooseResp.json();
+    if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
+    if (chosen.cancelled) return;
+    if (!await showAppConfirm(
+      '将从“' + (chosen.name || '所选备份') + '”恢复，并覆盖当前的页码映射与书目信息。',
+      {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
+    )) return;
+    if (button) button.textContent = '正在导入…';
+    var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: chosen.path})});
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
     showToast('已恢复备份，正在重建索引…');
     pollBackupRestore(data.job_id);
   } catch (e) {
     showToast('导入备份失败：' + e.message);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '选择备份并恢复'; }
   }
 }
 

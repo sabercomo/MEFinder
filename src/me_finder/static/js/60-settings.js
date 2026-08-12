@@ -312,7 +312,14 @@ async function loadDataLocation() {
   try {
     var resp = await fetch('/api/data-location', {cache: 'no-store'});
     var data = await resp.json();
+    if (resp.status === 404 || data.available === false) {
+      delete document.documentElement.dataset.dataLocationAvailable;
+      dataLocationLoaded = true;
+      ensureVisibleSettingsCategory();
+      return;
+    }
     if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    document.documentElement.dataset.dataLocationAvailable = 'true';
     if (errorBox) errorBox.hidden = true;
     renderDataLocation(data);
     dataLocationLoaded = true;

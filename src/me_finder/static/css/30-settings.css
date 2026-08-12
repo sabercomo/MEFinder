@@ -56,11 +56,13 @@ html[data-desktop-shell="win32"] .settings-nav-group.plat-desktop { display: blo
 /* Platform-only entries hide when the current desktop shell does not apply. */
 .settings-nav-item.plat-desktop,
 .settings-nav-item.plat-macos,
-.settings-nav-item.plat-win { display: none; }
+.settings-nav-item.plat-win,
+.settings-nav-item.cap-data-location { display: none; }
 html[data-desktop-shell="macos"] .settings-nav-item.plat-desktop,
 html[data-desktop-shell="macos"] .settings-nav-item.plat-macos,
 html[data-desktop-shell="win32"] .settings-nav-item.plat-desktop,
 html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
+html[data-data-location-available="true"] .settings-nav-item.cap-data-location { display: flex; }
 .settings-content {
   flex: 1;
   min-width: 0;
@@ -189,7 +191,8 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   html[data-desktop-shell="macos"] .settings-nav-item.plat-desktop,
   html[data-desktop-shell="macos"] .settings-nav-item.plat-macos,
   html[data-desktop-shell="win32"] .settings-nav-item.plat-desktop,
-  html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: inline-flex; }
+  html[data-desktop-shell="win32"] .settings-nav-item.plat-win,
+  html[data-data-location-available="true"] .settings-nav-item.cap-data-location { display: inline-flex; }
   .settings-content { padding: 22px 18px 40px; }
   .settings-section, .settings-section.active,
   #mineru-api-settings.active, #vision-api-settings.active { max-width: none; }
