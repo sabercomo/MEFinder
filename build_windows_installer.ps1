@@ -99,6 +99,10 @@ try {
         tests.test_anchor_metadata `
         tests.test_api_fallback_recovery `
         tests.test_backup_service `
+        tests.test_backup_file_picker `
+        tests.test_data_location `
+        tests.test_desktop_shell_controller `
+        tests.test_scan_directory_picker `
         tests.test_batch_document_removal `
         tests.test_citations `
         tests.test_cnki_citation `

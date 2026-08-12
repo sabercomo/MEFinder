@@ -108,6 +108,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_anchor_metadata \
   tests.test_api_fallback_recovery \
   tests.test_backup_service \
+  tests.test_backup_file_picker \
   tests.test_batch_document_removal \
   tests.test_batch_directory_import \
   tests.test_calibration_library_ui \
@@ -121,6 +122,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_data_location \
   tests.test_database_resilience \
   tests.test_desktop_portable \
+  tests.test_desktop_shell_controller \
   tests.test_directory_scan \
   tests.test_fts_search_scalability \
   tests.test_import_config_concurrency \

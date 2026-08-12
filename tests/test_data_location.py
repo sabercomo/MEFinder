@@ -22,8 +22,10 @@ from src.me_finder.data_location import (
     DataLocationError,
     data_location_summary,
     default_macos_data_root,
+    default_windows_data_root,
     migrate_data_root,
     proposed_data_root,
+    read_data_root,
     read_macos_data_root,
 )
 from src.me_finder.web import make_handler
@@ -81,7 +83,7 @@ def _request_json(
         connection.close()
 
 
-def _make_web_runtime(base: Path):
+def _make_web_runtime(base: Path, *, native_directory_chooser=None):
     app_data = base / "current" / "MEFinder"
     runtime = app_data / "runtime"
     index_path = runtime / "data" / "index.sqlite3"
@@ -121,7 +123,11 @@ def _make_web_runtime(base: Path):
         app_data_root=app_data,
         default_app_data_root=app_data,
     )
-    handler = make_handler(index_path, app_context=context)
+    handler = make_handler(
+        index_path,
+        app_context=context,
+        native_directory_chooser=native_directory_chooser,
+    )
     handler.log_message = lambda *_args: None
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -158,6 +164,30 @@ class DataLocationTests(unittest.TestCase):
             )
 
             self.assertEqual(read_macos_data_root(home), default)
+
+    def test_windows_stable_pointer_overrides_the_installer_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            default = default_windows_data_root(
+                base / "home",
+                local_app_data=base / "LocalAppData",
+            )
+            installed = base / "installer-choice"
+            custom = base / "external" / "MEFinder"
+
+            self.assertEqual(
+                read_data_root(default, fallback_root=installed),
+                installed,
+            )
+            default.mkdir(parents=True)
+            (default / DATA_ROOT_MARKER).write_text(
+                str(custom) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                read_data_root(default, fallback_root=installed),
+                custom.resolve(),
+            )
 
     def test_selected_parent_gets_a_mefinder_child(self) -> None:
         # 「绝对路径」的写法依平台而异：Windows 要有盘符，POSIX 用挂载点。
@@ -220,6 +250,21 @@ class DataLocationTests(unittest.TestCase):
                 str(target.resolve()),
             )
             self.assertFalse(any(target.parent.glob(".MEFinder.migration-*")))
+
+    def test_migration_pointer_is_used_on_the_next_windows_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            current = base / "installer-choice"
+            default = base / "LocalAppData" / "MEFinder"
+            target = base / "external" / "MEFinder"
+            _create_current_data_root(current)
+
+            migrate_data_root(current, target, default)
+
+            self.assertEqual(
+                read_data_root(default, fallback_root=current),
+                target.resolve(),
+            )
 
     def test_migration_refuses_nonempty_or_nested_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -345,6 +390,52 @@ class DataLocationTests(unittest.TestCase):
                 "请重启应用",
                 str(sealed_response[0][1].get("error")),
             )
+
+    def test_windows_desktop_exposes_summary_and_native_picker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            selected = base / "external"
+            selected.mkdir()
+            with patch.dict(
+                os.environ,
+                {"ME_FINDER_DESKTOP_SHELL": "win32"},
+            ):
+                app_data, _runtime, handler, server, server_thread = (
+                    _make_web_runtime(
+                        base,
+                        native_directory_chooser=lambda: selected,
+                    )
+                )
+                try:
+                    server_thread.start()
+                    status, summary = _request_json(
+                        server,
+                        "GET",
+                        "/api/data-location",
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertTrue(summary["available"])
+                    self.assertEqual(
+                        summary["current_path"],
+                        str(app_data.resolve()),
+                    )
+
+                    status, chosen = _request_json(
+                        server,
+                        "POST",
+                        "/api/data-location/choose",
+                        {},
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertEqual(
+                        chosen["target_path"],
+                        str(selected.resolve() / "MEFinder"),
+                    )
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    handler.close_runtime()
+                    server_thread.join(timeout=2)
 
     def test_web_migration_rejects_active_job_inside_consistency_region(
         self,

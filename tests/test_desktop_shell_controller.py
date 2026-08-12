@@ -120,7 +120,7 @@ class DesktopShellControllerTests(unittest.TestCase):
         )
         self.check_macos_update.assert_called_once_with("0.4.2")
 
-    def test_data_location_is_available_only_for_configured_macos_shell(self) -> None:
+    def test_data_location_is_available_for_configured_desktop_shells(self) -> None:
         current = Path("/current/MEFinder")
         default = Path("/default/MEFinder")
 
@@ -130,16 +130,39 @@ class DesktopShellControllerTests(unittest.TestCase):
         self.assertEqual(payload["current_path"], str(current.resolve()))
         self.assertEqual(payload["default_path"], str(default.resolve()))
         self.assertTrue(payload["is_custom"])
+        windows_status, windows_payload = self._controller(
+            desktop_shell="win32"
+        ).data_location()
+        self.assertEqual(windows_status, 200)
+        self.assertEqual(windows_payload["current_path"], str(current.resolve()))
         self.assertEqual(
-            self._controller(desktop_shell="win32").data_location(),
+            self._controller(desktop_shell="").data_location(),
             (
                 404,
                 {
                     "available": False,
-                    "error": "数据位置选择仅适用于已打包的 macOS 应用。",
+                    "error": "数据位置选择仅适用于已打包的桌面应用。",
                 },
             ),
         )
+
+    def test_portable_windows_keeps_data_location_disabled(self) -> None:
+        controller = self._controller(
+            desktop_shell="win32",
+            app_data_root=None,
+            default_app_data_root=None,
+            native_directory_chooser=lambda: Path("C:/unused"),
+        )
+
+        self.assertEqual(controller.data_location()[0], 404)
+        self.assertEqual(controller.choose_data_location()[0], 400)
+        self.assertEqual(
+            controller.migrate_data_location(
+                {"target_path": "C:/external/MEFinder"}
+            )[0],
+            400,
+        )
+        self.migrate_data_root.assert_not_called()
 
     def test_scan_directory_picker_deduplicates_existing_folders(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -216,6 +239,80 @@ class DesktopShellControllerTests(unittest.TestCase):
             ).choose_data_location(),
             (200, {"ok": True, "cancelled": True}),
         )
+
+    def test_backup_picker_validates_selection_and_reports_cancel(self) -> None:
+        with TemporaryDirectory() as temporary:
+            backup = Path(temporary) / "MEFinder-backup.zip"
+            backup.write_bytes(b"PK")
+            controller = self._controller(
+                native_backup_file_chooser=lambda: backup
+            )
+
+            self.assertEqual(
+                controller.choose_backup_file(),
+                (
+                    200,
+                    {
+                        "ok": True,
+                        "cancelled": False,
+                        "path": str(backup),
+                        "name": backup.name,
+                    },
+                ),
+            )
+
+        self.assertEqual(
+            self._controller(
+                native_backup_file_chooser=lambda: None
+            ).choose_backup_file(),
+            (200, {"ok": True, "cancelled": True}),
+        )
+        self.assertEqual(
+            self._controller(
+                native_backup_file_chooser=None
+            ).choose_backup_file(),
+            (400, {"error": "当前运行方式不支持选择备份文件。"}),
+        )
+
+    def test_backup_picker_rejects_invalid_files_and_maps_native_errors(self) -> None:
+        with TemporaryDirectory() as temporary:
+            text = Path(temporary) / "backup.txt"
+            text.write_text("not a backup", encoding="utf-8")
+            self.assertEqual(
+                self._controller(
+                    native_backup_file_chooser=lambda: text
+                ).choose_backup_file(),
+                (400, {"error": "请选择 .zip 备份文件。"}),
+            )
+            self.assertEqual(
+                self._controller(
+                    native_backup_file_chooser=lambda: Path(temporary) / "missing.zip"
+                ).choose_backup_file(),
+                (400, {"error": "所选路径不是文件。"}),
+            )
+
+        chooser = mock.Mock(side_effect=RuntimeError("窗口尚未就绪"))
+        self.assertEqual(
+            self._controller(
+                native_backup_file_chooser=chooser
+            ).choose_backup_file(),
+            (500, {"error": "打开备份文件选择器失败：窗口尚未就绪"}),
+        )
+
+        with mock.patch.object(
+            Path,
+            "is_file",
+            side_effect=OSError("network share unavailable"),
+        ):
+            self.assertEqual(
+                self._controller(
+                    native_backup_file_chooser=lambda: Path("Z:/backup.zip")
+                ).choose_backup_file(),
+                (
+                    500,
+                    {"error": "读取所选备份文件失败：network share unavailable"},
+                ),
+            )
 
     def test_migration_closes_admission_before_rechecking_uploads_and_jobs(
         self,

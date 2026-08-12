@@ -14,6 +14,7 @@ from .mineru_api import MinerUError
 
 ShellResponse = Tuple[int, Dict[str, object]]
 NativeDirectoryChooser = Callable[[], Optional[Union[str, Path]]]
+NativeBackupFileChooser = Callable[[], Optional[Union[str, Path]]]
 NativeScanDirectoryChooser = Callable[
     [], Optional[Union[str, Path, Sequence[Union[str, Path]]]]
 ]
@@ -62,6 +63,7 @@ class DesktopShellController:
         update_service: Optional[UpdateServicePort] = None,
         native_directory_chooser: Optional[NativeDirectoryChooser] = None,
         native_scan_directory_chooser: Optional[NativeScanDirectoryChooser] = None,
+        native_backup_file_chooser: Optional[NativeBackupFileChooser] = None,
         app_data_root: Optional[Path] = None,
         default_app_data_root: Optional[Path] = None,
     ) -> None:
@@ -79,6 +81,7 @@ class DesktopShellController:
         self._update_service = update_service
         self._native_directory_chooser = native_directory_chooser
         self._native_scan_directory_chooser = native_scan_directory_chooser
+        self._native_backup_file_chooser = native_backup_file_chooser
         self._app_data_root = app_data_root
         self._default_app_data_root = default_app_data_root
 
@@ -103,13 +106,13 @@ class DesktopShellController:
 
     def data_location(self) -> ShellResponse:
         if (
-            self._desktop_shell != "macos"
+            self._desktop_shell not in {"macos", "win32"}
             or self._app_data_root is None
             or self._default_app_data_root is None
         ):
             return 404, {
                 "available": False,
-                "error": "数据位置选择仅适用于已打包的 macOS 应用。",
+                "error": "数据位置选择仅适用于已打包的桌面应用。",
             }
         return 200, data_location_summary(
             self._app_data_root,
@@ -185,6 +188,31 @@ class DesktopShellController:
             "cancelled": False,
             "selected_folder": str(selected_folder),
             "target_path": str(target),
+        }
+
+    def choose_backup_file(self) -> ShellResponse:
+        if self._native_backup_file_chooser is None:
+            return 400, {"error": "当前运行方式不支持选择备份文件。"}
+        try:
+            selected_file = self._native_backup_file_chooser()
+        except (OSError, RuntimeError) as exc:
+            return 500, {"error": f"打开备份文件选择器失败：{exc}"}
+        if not selected_file:
+            return 200, {"ok": True, "cancelled": True}
+        path = Path(str(selected_file))
+        try:
+            is_file = path.is_file()
+        except OSError as exc:
+            return 500, {"error": f"读取所选备份文件失败：{exc}"}
+        if not is_file:
+            return 400, {"error": "所选路径不是文件。"}
+        if path.suffix.lower() != ".zip":
+            return 400, {"error": "请选择 .zip 备份文件。"}
+        return 200, {
+            "ok": True,
+            "cancelled": False,
+            "path": str(path),
+            "name": path.name,
         }
 
     def migrate_data_location(

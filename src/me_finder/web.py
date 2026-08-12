@@ -381,6 +381,7 @@ NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
 NativeThemeSetter = Callable[[str], None]
 NativeDirectoryChooser = Callable[[], Optional[str]]
 NativeScanDirectoryChooser = Callable[[], Optional[Union[str, Sequence[str]]]]
+NativeBackupFileChooser = Callable[[], Optional[str]]
 
 
 def open_pdf_with_platform(
@@ -553,6 +554,7 @@ def make_handler(
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
     native_scan_directory_chooser: NativeScanDirectoryChooser | None = None,
+    native_backup_file_chooser: NativeBackupFileChooser | None = None,
     app_data_root: Path | None = None,
     default_app_data_root: Path | None = None,
 ):
@@ -993,6 +995,7 @@ def make_handler(
         update_service=update_service,
         native_directory_chooser=native_directory_chooser,
         native_scan_directory_chooser=native_scan_directory_chooser,
+        native_backup_file_chooser=native_backup_file_chooser,
         app_data_root=app_data_root,
         default_app_data_root=default_app_data_root,
     )
@@ -1009,6 +1012,9 @@ def make_handler(
         "/api/update/install": desktop_shell_controller.install_update,
         "/api/scan-directories/choose": (
             lambda _payload: desktop_shell_controller.choose_scan_directories()
+        ),
+        "/api/backup/import/choose": (
+            lambda _payload: desktop_shell_controller.choose_backup_file()
         ),
         "/api/data-location/choose": (
             lambda _payload: desktop_shell_controller.choose_data_location()

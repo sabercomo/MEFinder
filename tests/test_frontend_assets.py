@@ -263,7 +263,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
     BASELINE_SHA256 = (
-        "315ed9657110adafaebebb77a4f75ce6cc0e8e37d55b0a126dd0a04261771c70"
+        "19ebb352f0d727ef31bb60e0634e7f6f2fac23169d6967d412d6ee3ce807c920"
     )
     BASELINE_BYTES = 687357
 

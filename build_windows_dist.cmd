@@ -67,6 +67,10 @@ if errorlevel 1 exit /b 1
   tests.test_import_resume_vision ^
   tests.test_import_resume_web ^
   tests.test_backup_service ^
+  tests.test_backup_file_picker ^
+  tests.test_data_location ^
+  tests.test_desktop_shell_controller ^
+  tests.test_scan_directory_picker ^
   tests.test_portable_index_rebuild ^
   tests.test_windows_desktop ^
   tests.test_update_service ^
