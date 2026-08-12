@@ -208,6 +208,13 @@ class ChunkedUploadStore:
             self._unlink(session.temp_path)
             return True
 
+    def active_session_count(self) -> int:
+        """Return live upload sessions after expiring abandoned ones."""
+
+        with self._lock:
+            self._cleanup_expired_sessions_locked()
+            return len(self._sessions)
+
     def close(self) -> None:
         with self._lock:
             sessions = list(self._sessions.values())

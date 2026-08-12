@@ -8,6 +8,27 @@ from src.me_finder.web import HTML
 
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+ORCHESTRATOR_SOURCE = Path(
+    "src/me_finder/application/import_orchestrator.py"
+).read_text(encoding="utf-8")
+PARSER_EXECUTOR_SOURCE = Path(
+    "src/me_finder/application/import_parser_executor.py"
+).read_text(encoding="utf-8")
+DOCUMENT_IMPORT_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/document_import_coordinator.py"
+).read_text(encoding="utf-8")
+IMPORT_JOB_CONTROLLER_SOURCE = Path(
+    "src/me_finder/import_job_controller.py"
+).read_text(encoding="utf-8")
+DOCUMENT_QUERY_SOURCE = Path(
+    "src/me_finder/application/document_query_service.py"
+).read_text(encoding="utf-8")
+PARSER_SETTINGS_CONTROLLER_SOURCE = Path(
+    "src/me_finder/parser_settings_controller.py"
+).read_text(encoding="utf-8")
+METADATA_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/bibliographic_metadata_coordinator.py"
+).read_text(encoding="utf-8")
 SEARCH_SERVICE_SOURCE = Path(
     "src/me_finder/application/search_service.py"
 ).read_text(encoding="utf-8")
@@ -218,15 +239,19 @@ class SearchControlsAndViewsTests(unittest.TestCase):
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertNotIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
-        self.assertIn("force_mineru=True,", WEB_SOURCE)
+        self.assertIn("force_mineru=True,", IMPORT_JOB_CONTROLLER_SOURCE)
         self.assertIn(
             'display_file_name=str(record.get("file_name") or "")',
-            WEB_SOURCE,
+            IMPORT_JOB_CONTROLLER_SOURCE,
         )
-        self.assertIn("job.get(\"source_file_id\") == sid", WEB_SOURCE)
+        self.assertIn("self._source_record(source_file_id)", IMPORT_JOB_CONTROLLER_SOURCE)
         self.assertIn(
-            'job.get("status") in {"processing", "cancelling"}',
-            WEB_SOURCE,
+            "self._imports.active_job_for_source(source_file_id)",
+            IMPORT_JOB_CONTROLLER_SOURCE,
+        )
+        self.assertIn(
+            "self._imports.start_import_job(",
+            IMPORT_JOB_CONTROLLER_SOURCE,
         )
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
@@ -253,26 +278,38 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
         self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
         self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
-        self.assertIn('payload.get("pdf_parse_mode") or "auto"', WEB_SOURCE)
-        self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
-        self.assertIn('"parse_route": parse_route', WEB_SOURCE)
+        self.assertIn('payload.get("pdf_parse_mode", "auto")', WEB_SOURCE)
+        self.assertIn(
+            'force_mineru = is_pdf and pdf_parse_mode == "mineru"',
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            '"parse_route": parse_route',
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
 
     def test_directory_batch_import_is_bounded_and_isolates_pdf_index_writes(self) -> None:
         self.assertIn("ImportTaskQueue(worker_count=2)", WEB_SOURCE)
-        self.assertIn("def start_native_import_batch(", WEB_SOURCE)
-        self.assertIn("def start_remote_import_batch(", WEB_SOURCE)
-        self.assertIn("def index_registered_pdf(", WEB_SOURCE)
-        self.assertIn("replace_source_in_database(", WEB_SOURCE)
-        self.assertIn("fail_import_at_index(job_id, exc, parsed=True)", WEB_SOURCE)
+        self.assertIn("def start_native_import_batch(", ORCHESTRATOR_SOURCE)
+        self.assertIn("def start_remote_import_batch(", ORCHESTRATOR_SOURCE)
+        self.assertIn("def index_registered_pdf(", ORCHESTRATOR_SOURCE)
+        self.assertIn("self._index_runtime.replace_source(", ORCHESTRATOR_SOURCE)
         self.assertIn(
-            "native_pdf_job_ids = start_native_import_batch(",
-            WEB_SOURCE,
+            "self.fail_import_at_index(job_id, exc, parsed=True)",
+            ORCHESTRATOR_SOURCE,
         )
         self.assertIn(
-            "word_job_ids = start_native_import_batch(word_items)",
-            WEB_SOURCE,
+            "native_pdf_job_ids = self._jobs.start_native_import_batch(",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
         )
-        self.assertIn("remote_job_ids = start_remote_import_batch(remote_items)", WEB_SOURCE)
+        self.assertIn(
+            "word_job_ids = self._jobs.start_native_import_batch(word_items)",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "remote_job_ids = self._jobs.start_remote_import_batch(",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
         self.assertNotIn("for raw in raw_paths[:50]", WEB_SOURCE)
         self.assertIn("一次最多批量导入 50 个文件，请分批选择。", WEB_SOURCE)
         self.assertIn("const SCAN_IMPORT_BATCH_LIMIT = 50", HTML)
@@ -359,12 +396,19 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/import-retry'", HTML)
         self.assertIn('"X-Vision-Provider-ID"', WEB_SOURCE)
         self.assertIn('"/api/vision-providers"', WEB_SOURCE)
-        self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
-        self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
-        self.assertIn("fallback = providers[0] if providers else None", WEB_SOURCE)
+        self.assertIn(
+            'summary.get("auto_fallback_from_mineru")', PARSER_EXECUTOR_SOURCE
+        )
+        self.assertIn(
+            "can_retry_with_provider=bool(fallback)", PARSER_EXECUTOR_SOURCE
+        )
+        self.assertIn(
+            "fallback = providers[0] if providers else None",
+            PARSER_EXECUTOR_SOURCE,
+        )
         self.assertNotIn(
             'default_id = str(summary.get("default_provider_id") or "")',
-            WEB_SOURCE,
+            PARSER_EXECUTOR_SOURCE,
         )
 
     def test_mineru_settings_support_independent_token_accounts(self) -> None:
@@ -398,7 +442,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("async function loadParserStatistics()", HTML)
         self.assertIn("不是官网用量或计费数据", HTML)
         self.assertIn("按解析服务", HTML)
-        self.assertIn("def ensure_mineru_accounts()", WEB_SOURCE)
+        self.assertIn(
+            "def migrate_legacy_mineru_account(self)",
+            PARSER_SETTINGS_CONTROLLER_SOURCE,
+        )
+        self.assertIn(
+            "parser_settings_controller.migrate_legacy_mineru_account()",
+            WEB_SOURCE,
+        )
         self.assertNotIn("access_key_id: document.getElementById", HTML)
         self.assertNotIn("secret_access_key: document.getElementById", HTML)
 
@@ -433,7 +484,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function fetchVisionModels(options)", HTML)
         self.assertIn("fetch('/api/vision-providers/models'", HTML)
         self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
-        self.assertIn("manual_entry_allowed", WEB_SOURCE)
+        self.assertIn(
+            "manual_entry_allowed", PARSER_SETTINGS_CONTROLLER_SOURCE
+        )
         self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
         self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
         self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
@@ -506,9 +559,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function runBatchMetadataDetection()", HTML)
         self.assertIn("fetch('/api/bibliographic-metadata/batch-detect'", HTML)
         self.assertIn('"/api/bibliographic-metadata/batch-detect"', WEB_SOURCE)
-        self.assertIn("def batch_metadata_candidates()", WEB_SOURCE)
-        self.assertIn('if source == "manual":', WEB_SOURCE)
-        self.assertIn("batchmeta-", WEB_SOURCE)
+        self.assertIn(
+            "self._queries.batch_metadata_candidates(",
+            METADATA_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "def batch_metadata_candidates(", DOCUMENT_QUERY_SOURCE
+        )
+        self.assertIn('if source == "manual":', DOCUMENT_QUERY_SOURCE)
+        self.assertIn("batchmeta-", METADATA_COORDINATOR_SOURCE)
 
     def test_online_metadata_auto_match_threshold_defaults_to_90_percent(self) -> None:
         self.assertIn("const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;", HTML)
@@ -564,7 +623,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("消耗 MinerU 配额", HTML)
         self.assertIn('"/api/scan-directories"', WEB_SOURCE)
         self.assertIn('"/api/import-local"', WEB_SOURCE)
-        self.assertIn("不在已配置的文献目录内", WEB_SOURCE)
+        self.assertIn(
+            "不在已配置的文献目录内",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
 
     def test_drawer_file_info_collapses_and_editor_is_type_aware(self) -> None:
         self.assertIn('id="drawer-file-info"', HTML)
@@ -590,8 +652,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("docType === 'thesis' && field === 'publisher' ? '学校'", HTML)
 
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
-        self.assertIn('phase="metadata_recognition"', WEB_SOURCE)
-        self.assertIn('persist_bibliographic_metadata(source_file_id, metadata)', WEB_SOURCE)
+        self.assertIn('phase="metadata_recognition"', ORCHESTRATOR_SOURCE)
+        self.assertIn(
+            "self._persist_metadata(source_file_id, metadata)",
+            ORCHESTRATOR_SOURCE,
+        )
         self.assertIn("if (field === 'isbn'", HTML)
         self.assertIn('bibliographic-missing', HTML)
 

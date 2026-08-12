@@ -141,6 +141,9 @@ class MinerUAccountsWebTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with self._runtime(root) as (server, _handler):
+                self.assertTrue(
+                    (config_dir / "mineru_accounts.local.json").is_file()
+                )
                 status, payload = self._request(
                     server, "GET", "/api/mineru-accounts"
                 )
@@ -160,6 +163,21 @@ class MinerUAccountsWebTests(unittest.TestCase):
                 "legacy-private-token",
             )
             self.assertTrue(legacy_path.is_file())
+
+    def test_startup_account_failure_is_deferred_to_get(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with patch(
+                "src.me_finder.web.MinerUAccountService.list_accounts",
+                side_effect=OSError("account config unavailable"),
+            ):
+                with self._runtime(root) as (server, _handler):
+                    status, payload = self._request(
+                        server, "GET", "/api/mineru-accounts"
+                    )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(payload, {"error": "account config unavailable"})
 
     def test_statistics_endpoint_attributes_original_page_ranges(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

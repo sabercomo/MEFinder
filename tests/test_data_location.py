@@ -241,7 +241,7 @@ class DataLocationTests(unittest.TestCase):
             with self.assertRaisesRegex(DataLocationError, "内部"):
                 migrate_data_root(current, nested, current)
 
-    def test_web_migration_holds_durable_and_rebuild_region(self) -> None:
+    def test_web_migration_blocks_writes_and_seals_old_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             _app_data, _runtime, handler, server, server_thread = (
@@ -253,6 +253,7 @@ class DataLocationTests(unittest.TestCase):
             metadata_write_started = threading.Event()
             migration_response: list[tuple[int, dict[str, object]]] = []
             metadata_response: list[tuple[int, dict[str, object]]] = []
+            sealed_response: list[tuple[int, dict[str, object]]] = []
 
             def blocked_migration(*_args, **_kwargs):
                 migration_started.set()
@@ -307,11 +308,28 @@ class DataLocationTests(unittest.TestCase):
                         handler.wait_for_durable_operations(timeout=0.01)
                     )
                     metadata_thread.start()
-                    self.assertFalse(metadata_write_started.wait(timeout=0.05))
+                    metadata_thread.join(timeout=1)
+                    self.assertFalse(metadata_thread.is_alive())
+                    self.assertFalse(metadata_write_started.is_set())
+                    self.assertEqual(metadata_response[0][0], 409)
+                    self.assertIn(
+                        "正在迁移",
+                        str(metadata_response[0][1].get("error")),
+                    )
                     release_migration.set()
                     migrate_thread.join(timeout=2)
-                    metadata_thread.join(timeout=2)
-                    self.assertTrue(metadata_write_started.is_set())
+                    sealed_response.append(
+                        _request_json(
+                            server,
+                            "POST",
+                            "/api/bibliographic-metadata/save",
+                            {
+                                "source_id": "pdf-one",
+                                "metadata": {"title": "Still old"},
+                            },
+                        )
+                    )
+                    self.assertFalse(metadata_write_started.is_set())
             finally:
                 release_migration.set()
                 server.shutdown()
@@ -322,7 +340,11 @@ class DataLocationTests(unittest.TestCase):
                 metadata_thread.join(timeout=2)
 
             self.assertEqual(migration_response[0][0], 200)
-            self.assertEqual(metadata_response[0][0], 200)
+            self.assertEqual(sealed_response[0][0], 409)
+            self.assertIn(
+                "请重启应用",
+                str(sealed_response[0][1].get("error")),
+            )
 
     def test_web_migration_rejects_active_job_inside_consistency_region(
         self,
@@ -405,6 +427,74 @@ class DataLocationTests(unittest.TestCase):
                 server_thread.join(timeout=2)
 
             self.assertTrue((runtime / "data" / "index.sqlite3").exists())
+
+    def test_web_migration_rejects_active_upload_and_reopens_admission(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            _app_data, _runtime, handler, server, server_thread = (
+                _make_web_runtime(base)
+            )
+            target = base / "target" / "MEFinder"
+            try:
+                server_thread.start()
+                status, started = _request_json(
+                    server,
+                    "POST",
+                    "/api/import-upload/start",
+                    {
+                        "file_name": "pending.pdf",
+                        "size": 10,
+                        "parse_mode": "auto",
+                        "provider_id": "",
+                    },
+                )
+                self.assertEqual(status, 200)
+
+                with patch("src.me_finder.web.migrate_data_root") as migrate:
+                    status, response = _request_json(
+                        server,
+                        "POST",
+                        "/api/data-location/migrate",
+                        {"target_path": str(target)},
+                    )
+                    migrate.assert_not_called()
+                self.assertEqual(status, 409)
+                self.assertIn("文件正在上传", str(response.get("error")))
+
+                status, cancelled = _request_json(
+                    server,
+                    "POST",
+                    "/api/import-upload/cancel",
+                    {"upload_id": str(started["upload_id"])},
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(cancelled["cancelled"])
+
+                migration_result = {
+                    "ok": True,
+                    "target_path": str(target),
+                    "restart_required": True,
+                }
+                with patch(
+                    "src.me_finder.web.migrate_data_root",
+                    return_value=migration_result,
+                ) as migrate:
+                    status, response = _request_json(
+                        server,
+                        "POST",
+                        "/api/data-location/migrate",
+                        {"target_path": str(target)},
+                    )
+                    migrate.assert_called_once()
+                self.assertEqual(status, 200)
+                self.assertEqual(response, migration_result)
+            finally:
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                server_thread.join(timeout=2)
 
 
 if __name__ == "__main__":

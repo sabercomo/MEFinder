@@ -15,6 +15,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 import src.me_finder.web as web
 from src.me_finder.database import build_database
+from src.me_finder.structured_reader_controller import StructuredReaderController
 
 
 def _reader_index() -> dict[str, object]:
@@ -198,16 +199,6 @@ class StructuredReaderWebTests(unittest.TestCase):
                 exc.code,
                 json.loads(exc.read().decode("utf-8")),
             )
-
-    @staticmethod
-    def _closure_value(function, name: str):
-        cells = dict(
-            zip(
-                function.__code__.co_freevars,
-                function.__closure__ or (),
-            )
-        )
-        return cells[name].cell_contents
 
     def test_pdf_and_word_windows_are_served_over_real_http(self) -> None:
         with self._server() as (base_url, _handler):
@@ -401,11 +392,7 @@ class StructuredReaderWebTests(unittest.TestCase):
         self,
     ) -> None:
         with self._server() as (base_url, handler):
-            runtime = self._closure_value(
-                handler._get_document_pages,
-                "runtime",
-            )
-            runtime["rebuilding"] = True
+            handler.index_runtime.suspend()
             rebuilding_status, rebuilding = self._get_json(
                 base_url,
                 "/api/document/pages?source_id=pdf-http",
@@ -419,7 +406,7 @@ class StructuredReaderWebTests(unittest.TestCase):
                     "end_anchor_id": "pdf-http-PAGE-000003",
                 },
             )
-            runtime["rebuilding"] = False
+            handler.index_runtime.reopen()
 
             with patch(
                 "src.me_finder.web.get_document_window",
@@ -460,9 +447,9 @@ class StructuredReaderWebTests(unittest.TestCase):
 
     def test_route_table_and_embedded_reader_assets_are_wired(self) -> None:
         with self._server() as (_base_url, handler):
-            self.assertEqual(
-                handler._GET_ROUTE_TABLE["/api/document/pages"],
-                "_get_document_pages",
+            self.assertIsInstance(
+                handler.structured_reader_controller,
+                StructuredReaderController,
             )
 
         package_dir = Path(web.__file__).resolve().parent

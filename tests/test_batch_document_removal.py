@@ -498,11 +498,10 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
 class BatchRemovalWiringTests(unittest.TestCase):
     def test_web_exposes_the_batch_endpoint(self) -> None:
         source = Path("src/me_finder/web.py").read_text(encoding="utf-8")
-        self.assertIn('if parsed.path == "/api/documents/remove-batch":', source)
-        self.assertIn(".remove_many(", source)
-        self.assertIn('payload.get("internal_copy_source_ids")', source)
-        # 一次批量只重新载入一次搜索索引。
-        self.assertEqual(source.count('if parsed.path == "/api/documents/remove-batch":'), 1)
+        route = '"/api/documents/remove-batch": ('
+        self.assertIn(route, source)
+        self.assertIn("document_lifecycle_controller.remove_batch", source)
+        self.assertEqual(source.count(route), 1)
 
     def test_frontend_sends_one_request_and_can_stop_waiting(self) -> None:
         self.assertIn("fetch('/api/documents/remove-batch'", HTML)

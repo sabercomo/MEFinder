@@ -67,6 +67,7 @@ class ImportJobJournal:
         total_pages: int = 0,
         completed_pages: Optional[Sequence[object]] = None,
         failed_pages: Optional[Sequence[object]] = None,
+        replaces_job_id: Optional[str] = None,
     ) -> Dict[str, object]:
         """Persist one serializable job description and its retry context.
 
@@ -108,8 +109,69 @@ class ImportJobJournal:
             if field in job:
                 record[field] = job[field]
         with self._lock:
+            if replaces_job_id:
+                predecessor_id = str(replaces_job_id)
+                predecessor = self._load_path(
+                    self._job_path(predecessor_id),
+                    quarantine=False,
+                )
+                lineage_id = str(
+                    (predecessor or {}).get("replacement_lineage_id")
+                    or predecessor_id
+                )
+                record["replaces_job_id"] = predecessor_id
+                record["replacement_lineage_id"] = lineage_id
+                record["replacement_generation"] = 1 + max(
+                    (
+                        int(candidate.get("replacement_generation") or 0)
+                        for candidate in self.list_jobs()
+                        if (
+                            str(
+                                candidate.get("replacement_lineage_id")
+                                or candidate.get("job_id")
+                                or ""
+                            )
+                            == lineage_id
+                        )
+                    ),
+                    default=0,
+                )
             atomic_write_json(path, record)
         return dict(record)
+
+    def commit_retry_replacement(
+        self,
+        *,
+        lineage_id: str,
+        replacement_job_id: str,
+        predecessor_job_id: str,
+    ) -> None:
+        """Delete stale lineage members, then commit by deleting predecessor."""
+
+        lineage = str(lineage_id).strip()
+        if not _SAFE_JOB_ID.fullmatch(lineage):
+            raise ValueError("invalid retry lineage id")
+        replacement_id = str(replacement_job_id).strip()
+        predecessor_id = str(predecessor_job_id).strip()
+        replacement_path = self._job_path(replacement_id)
+        predecessor_path = self._job_path(predecessor_id)
+        with self._lock:
+            if not replacement_path.is_file():
+                raise KeyError(replacement_id)
+            if not predecessor_path.is_file():
+                raise KeyError(predecessor_id)
+            sibling_ids = [
+                str(record["job_id"])
+                for record in self.list_jobs()
+                if str(record.get("replacement_lineage_id") or "") == lineage
+                and str(record.get("job_id") or "")
+                not in {replacement_id, predecessor_id}
+            ]
+            for sibling_id in sibling_ids:
+                if not self.delete_job(sibling_id):
+                    raise KeyError(sibling_id)
+            if not self.delete_job(predecessor_id):
+                raise KeyError(predecessor_id)
 
     def update_job(self, job_id: str, **updates: object) -> Dict[str, object]:
         """Atomically merge top-level updates into an existing job record."""
@@ -191,18 +253,27 @@ class ImportJobJournal:
             path.unlink()
             return True
 
-    def load_startup_jobs(self) -> List[Dict[str, object]]:
+    def load_startup_jobs(
+        self,
+        *,
+        skip_job_ids: Sequence[str] = (),
+    ) -> List[Dict[str, object]]:
         """Restore display state without submitting jobs or performing I/O.
 
         Jobs interrupted while queued or processing become ``paused``.  A
         missing target becomes a terminal failure.  This method deliberately
         has no reference to :class:`ImportTaskQueue`, so loading state can
         never trigger an upload by accident.
+
+        Skipped jobs are excluded before target checks or journal updates.
         """
 
         restored: List[Dict[str, object]] = []
+        skipped = {str(job_id) for job_id in skip_job_ids}
         with self._lock:
             for record in self.list_jobs():
+                if str(record.get("job_id") or "") in skipped:
+                    continue
                 context = record.get("context")
                 target_text = (
                     str(context.get("target") or "")
@@ -285,6 +356,9 @@ class ImportJobJournal:
             return None
         job_id = str(record.get("job_id") or "").strip()
         context = record.get("context")
+        replaces_job_id = record.get("replaces_job_id")
+        replacement_lineage_id = record.get("replacement_lineage_id")
+        replacement_generation = record.get("replacement_generation")
         valid_schema = bool(
             record.get("job_log_spec_version") == JOB_LOG_SPEC_VERSION
             and _SAFE_JOB_ID.fullmatch(job_id)
@@ -305,6 +379,26 @@ class ImportJobJournal:
             and isinstance(context.get("profile"), Mapping)
             and isinstance(context.get("is_pdf"), bool)
             and isinstance(context.get("force_mineru"), bool)
+            and (
+                (
+                    replaces_job_id is None
+                    and replacement_lineage_id is None
+                    and replacement_generation is None
+                )
+                or (
+                    isinstance(replaces_job_id, str)
+                    and bool(_SAFE_JOB_ID.fullmatch(replaces_job_id))
+                    and replaces_job_id != job_id
+                    and isinstance(replacement_lineage_id, str)
+                    and bool(
+                        _SAFE_JOB_ID.fullmatch(replacement_lineage_id)
+                    )
+                    and replacement_lineage_id != job_id
+                    and isinstance(replacement_generation, int)
+                    and not isinstance(replacement_generation, bool)
+                    and replacement_generation > 0
+                )
+            )
         )
         if not valid_schema:
             if quarantine:
