@@ -723,6 +723,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span id="data-location-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="data-location-body">
+            <div class="data-location-error" id="data-location-error" hidden>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 2.8 17h14.4L10 2.5Z"/><path d="M10 8v4M10 15h.01"/></svg>
+              <div class="data-location-error-copy">
+                <strong>读不到当前数据位置</strong>
+                <span id="data-location-error-reason">读取失败</span>
+              </div>
+              <button class="action-btn data-location-error-retry" type="button" onclick="loadDataLocation()">重新读取</button>
+            </div>
             <div class="data-location-card">
               <span class="data-location-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><path d="M7.5 15.5h9"/></svg></span>
               <div class="data-location-copy">

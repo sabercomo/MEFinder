@@ -306,18 +306,24 @@ function renderDataLocation(data) {
 
 async function loadDataLocation() {
   if (!document.getElementById('data-location-settings')) return;
+  var errorBox = document.getElementById('data-location-error');
+  var badge = document.getElementById('data-location-status');
+  if (badge) { badge.className = 'settings-status'; badge.textContent = '读取中…'; }
   try {
     var resp = await fetch('/api/data-location', {cache: 'no-store'});
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    if (errorBox) errorBox.hidden = true;
     renderDataLocation(data);
     dataLocationLoaded = true;
   } catch (e) {
-    var badge = document.getElementById('data-location-status');
-    if (badge) {
-      badge.className = 'settings-status warning';
-      badge.textContent = '读取失败';
-    }
+    // No more dead end: surface the reason in the content area with a retry.
+    if (badge) { badge.className = 'settings-status warning'; badge.textContent = '读取失败'; }
+    var reason = document.getElementById('data-location-error-reason');
+    if (reason) reason.textContent = e.message || '读取失败';
+    if (errorBox) errorBox.hidden = false;
+    var current = document.getElementById('data-location-current');
+    if (current) current.textContent = '—';
   }
 }
 

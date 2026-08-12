@@ -474,6 +474,24 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   font-size: 12px;
   font-weight: 650;
 }
+/* Read-failure state: reason + retry, instead of a dead-end badge (m3). */
+.data-location-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--widget-radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.data-location-error[hidden] { display: none; }
+.data-location-error > svg { flex: 0 0 auto; width: 20px; height: 20px; }
+.data-location-error-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.data-location-error-copy strong { font-size: 13px; }
+.data-location-error-copy span { font-size: 12px; color: var(--text-secondary); }
+.data-location-error-retry { flex: 0 0 auto; }
 .data-location-warning {
   display: flex;
   align-items: flex-start;
