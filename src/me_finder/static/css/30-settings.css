@@ -757,31 +757,10 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .mineru-account-management { margin-top: 22px; }
 /* Lightweight account switcher (chips) + a plain settings form — replaces the
    old table + modal dialog. One simple form; pick which account with a chip. */
-.mineru-account-switch-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.mineru-account-switch-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
-.mineru-account-switch { display: flex; flex-wrap: wrap; gap: 6px; }
-.mineru-account-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 11px;
-  border: 1px solid var(--border-control);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
-}
-.mineru-account-chip:hover { background: var(--surface-hover); }
-.mineru-account-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
-.mineru-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; background: var(--text-decorative); }
-.mineru-chip-dot.ok { background: var(--success); }
-.mineru-chip-dot.warn { background: var(--warning); }
-.mineru-account-form { margin-top: 12px; }
-.mineru-enable-inline { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+/* Account list = the original table; edit expands the inline editor panel
+   below (no modal). Editor folds away via [hidden]. */
+.mineru-editor-card { margin-top: 16px; }
+.mineru-editor-card[hidden] { display: none; }
 /* .action-btn sets display:flex, which beats the UA [hidden]{display:none};
    restore it so hidden action buttons (测试连接 etc.) actually hide. */
 .action-btn[hidden] { display: none; }
@@ -1043,6 +1022,10 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 @media (max-width: 760px) {
   .mineru-service-settings { grid-template-columns: 1fr; gap: 10px; }
   .mineru-service-control { align-items: stretch; flex-direction: column; }
+  /* In column mode the address input's flex-basis:300px lands on the main
+     (vertical) axis and balloons the field to 300px tall — pin it back. */
+  .mineru-service-control .settings-input,
+  .mineru-service-control .settings-input-address { flex: 0 0 auto; width: 100%; }
   .mineru-account-table,
   .mineru-account-table tbody,
   .mineru-account-table tr,

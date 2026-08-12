@@ -503,7 +503,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span></span>
               <span id="mineru-config-status" class="settings-status">读取中…</span>
-              <button class="action-btn mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
+              <button class="action-btn primary mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
               <section class="mineru-service-settings" aria-labelledby="mineru-service-title">
@@ -515,9 +515,9 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </section>
               <section class="mineru-account-management">
-                <div class="vision-provider-layout">
-                  <div id="mineru-account-list" class="vision-provider-list"></div>
-                  <div class="vision-editor-card" id="mineru-editor-card">
+                <div class="mineru-table-heading"><div><strong>账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
+                <div id="mineru-account-list" class="mineru-account-list" aria-live="polite"></div>
+                <div class="vision-editor-card mineru-editor-card" id="mineru-editor-card" hidden>
                     <div class="vision-editor-head">
                       <span class="vision-avatar vision-avatar-lg" aria-hidden="true"><span class="mineru-brand-glyph"></span></span>
                       <div class="vision-editor-titles">
@@ -542,7 +542,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <div class="settings-control settings-actions">
                         <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
                         <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
-                        <button id="mineru-account-cancel" class="action-btn" type="button" hidden onclick="startAddMineruAccount()">取消编辑</button>
+                        <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
                         <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
                       </div>
                     </div>
