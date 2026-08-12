@@ -79,6 +79,8 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 正式发布包均位于 [GitHub Releases](https://github.com/sabercomo/MEFinder/releases/latest)，普通用户不需要安装 Python。
 
+代码签名、团队角色和隐私说明见 [Code signing policy](#code-signing-policy)。
+
 | 平台 | 版本 | 发布包 |
 | --- | --- | --- |
 | **Windows** | 安装版（推荐） | `MEFinder-v<版本>-windows-setup.exe` |
@@ -172,6 +174,28 @@ python3 -m unittest discover
 - [Windows 构建与发布](docs/WINDOWS_BUILD.md)
 - [macOS 构建与发布](docs/MACOS_BUILD.md)
 - [版本记录](docs/RELEASE_NOTES.md)
+
+## 许可证
+
+MEFinder 自有代码依据 GNU Affero General Public License Version 3 only
+发布（`SPDX-License-Identifier: AGPL-3.0-only`）。完整条款见 [LICENSE](LICENSE)，
+发行包内第三方组件的许可证见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。
+
+## Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation
+
+### Team roles
+
+- Committers and reviewers: sabercomo
+- Approvers: sabercomo
+
+### Privacy
+
+- 本地搜索、索引和页码映射等功能默认只在用户本机进行。
+- 只有用户主动配置并调用 MinerU、视觉 API 或其他联网功能时，相关数据才会发送到用户所选择的第三方服务。
+- API credentials 存储在本地，不随发行包分发。
+- 第三方服务受各自隐私政策约束。
 
 ---
 

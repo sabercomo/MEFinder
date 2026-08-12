@@ -177,6 +177,21 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $DistPath "config") | Out-Null
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $DistPath "config\pdf_imports.json") -Force
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $DistPath "config\mineru_api.local.example.json") -Force
+    Copy-Item -LiteralPath "LICENSE" -Destination (Join-Path $DistPath "LICENSE") -Force
+    Copy-Item -LiteralPath "THIRD_PARTY_NOTICES.txt" -Destination (Join-Path $DistPath "THIRD_PARTY_NOTICES.txt") -Force
+    Copy-Item -LiteralPath "THIRD_PARTY_LICENSES" -Destination (Join-Path $DistPath "THIRD_PARTY_LICENSES") -Recurse -Force
+    $pythonLicenseOutput = & $pythonCommand @pythonLauncherArgs -c "from pathlib import Path; import sys; print(Path(sys.base_prefix) / 'LICENSE.txt')"
+    if ($LASTEXITCODE -ne 0) { throw "Could not locate the selected Python runtime license." }
+    $pythonLicensePath = ($pythonLicenseOutput | Out-String).Trim()
+    if (-not (Test-Path -LiteralPath $pythonLicensePath -PathType Leaf)) {
+        throw "Selected Python runtime license was not found: $pythonLicensePath"
+    }
+    Copy-Item -LiteralPath $pythonLicensePath -Destination (Join-Path $DistPath "THIRD_PARTY_LICENSES\Python-runtime-LICENSE.txt") -Force
+    foreach ($licensePath in @("LICENSE", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES\Python-runtime-LICENSE.txt")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $DistPath $licensePath))) {
+            throw "Required license material is missing from the installer payload: $licensePath"
+        }
+    }
     $blankIndexPath = Join-Path $DistPath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }

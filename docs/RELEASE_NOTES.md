@@ -1,3 +1,7 @@
+代码签名、团队角色和隐私说明见 [Code signing policy](../README.md#code-signing-policy)。
+
+---
+
 # 文献原句定位器 v0.3.9
 
 > 本条目以 v0.3.8 为基线。

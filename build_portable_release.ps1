@@ -53,7 +53,7 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_chunked_upload tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_database_resilience tests.test_desktop_portable tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_search_occurrence_identity tests.test_search_service tests.test_api_request_limits tests.test_source_streaming tests.test_app_context tests.test_database_page_anchors tests.test_index_publication_guard tests.test_normalization tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system tests.test_frontend_assets tests.test_frontend_pure_logic
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_chunked_upload tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_database_resilience tests.test_desktop_portable tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_search_occurrence_identity tests.test_search_service tests.test_api_request_limits tests.test_source_streaming tests.test_app_context tests.test_database_page_anchors tests.test_index_publication_guard tests.test_normalization tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system tests.test_frontend_assets tests.test_frontend_pure_logic tests.test_windows_packaging
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -90,6 +90,21 @@ try {
 
     Copy-Item -LiteralPath "config\pdf_imports.empty.json" -Destination (Join-Path $StagePath "config\pdf_imports.json")
     Copy-Item -LiteralPath "config\mineru_api.local.example.json" -Destination (Join-Path $StagePath "config\mineru_api.local.example.json")
+    Copy-Item -LiteralPath "LICENSE" -Destination (Join-Path $StagePath "LICENSE") -Force
+    Copy-Item -LiteralPath "THIRD_PARTY_NOTICES.txt" -Destination (Join-Path $StagePath "THIRD_PARTY_NOTICES.txt") -Force
+    Copy-Item -LiteralPath "THIRD_PARTY_LICENSES" -Destination (Join-Path $StagePath "THIRD_PARTY_LICENSES") -Recurse -Force
+    $pythonLicenseOutput = & $pythonCommand @pythonLauncherArgs -c "from pathlib import Path; import sys; print(Path(sys.base_prefix) / 'LICENSE.txt')"
+    if ($LASTEXITCODE -ne 0) { throw "Could not locate the selected Python runtime license." }
+    $pythonLicensePath = ($pythonLicenseOutput | Out-String).Trim()
+    if (-not (Test-Path -LiteralPath $pythonLicensePath -PathType Leaf)) {
+        throw "Selected Python runtime license was not found: $pythonLicensePath"
+    }
+    Copy-Item -LiteralPath $pythonLicensePath -Destination (Join-Path $StagePath "THIRD_PARTY_LICENSES\Python-runtime-LICENSE.txt") -Force
+    foreach ($licensePath in @("LICENSE", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES\Python-runtime-LICENSE.txt")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $StagePath $licensePath))) {
+            throw "Required license material is missing from the portable payload: $licensePath"
+        }
+    }
     Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
     $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
@@ -122,6 +137,8 @@ try {
 
     & $pythonCommand @pythonLauncherArgs -m tools.create_portable_zip $StagePath $ZipPath
     if ($LASTEXITCODE -ne 0) { throw "Portable ZIP creation failed." }
+    & $pythonCommand @pythonLauncherArgs -c "import sys, zipfile; names=set(zipfile.ZipFile(sys.argv[1]).namelist()); root=sys.argv[2] + '/'; required={root + 'LICENSE', root + 'THIRD_PARTY_NOTICES.txt'}; raise SystemExit(0 if required <= names and any(name.startswith(root + 'THIRD_PARTY_LICENSES/') for name in names) else 1)" $ZipPath $PackageName
+    if ($LASTEXITCODE -ne 0) { throw "Portable ZIP does not contain the required license materials." }
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
     Set-Content -LiteralPath $HashPath -Encoding Ascii -Value "$hash  $PackageName.zip"
 

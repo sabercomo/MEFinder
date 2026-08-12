@@ -1,0 +1,257 @@
+MEFinder Third-Party Notices
+============================
+
+MEFinder is licensed under the GNU Affero General Public License Version 3
+only. SPDX-License-Identifier: AGPL-3.0-only. See LICENSE for the complete
+license text. This file records the principal third-party software distributed
+in the official Windows and macOS release packages. Each component remains
+under its own license.
+
+PyMuPDF 1.26.5 / MuPDF 1.26.10
+------------------------------
+Copyright (C) Artifex Software, Inc. and contributors.
+Source: https://github.com/pymupdf/PyMuPDF/tree/1.26.5
+Source: https://mupdf.com/releases/archive/mupdf-1.26.10-source.tar.gz
+License used by MEFinder: GNU Affero General Public License Version 3
+(AGPL-3.0).
+
+MEFinder uses and distributes PyMuPDF and MuPDF solely under the open-source
+AGPLv3 option. MEFinder does not use the Artifex commercial license. The full
+AGPLv3 text is provided in LICENSE.
+
+pywebview 6.2.1
+---------------
+Copyright (c) 2014-2017, Roman Sirokov
+License: BSD-3-Clause
+Source: https://github.com/r0x0r/pywebview/tree/6.2.1
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Microsoft Edge WebView2 SDK 1.0.3856.49 (Windows only)
+-----------------------------------------------------
+Copyright (c) Microsoft Corporation.
+License: BSD-3-Clause
+Source and license: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3856.49
+
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+PyInstaller 6.21.0
+------------------
+Copyright (c) 2010-2023, PyInstaller Development Team
+Copyright (c) 2005-2009, Giovanni Bajo
+Based on previous work under copyright (c) 2002 McMillan Enterprises, Inc.
+License: GPL-2.0-or-later WITH Bootloader-exception; embedded run-time hooks
+are Apache-2.0.
+Source: https://github.com/pyinstaller/pyinstaller/tree/v6.21.0
+
+PyInstaller is licensed under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+Bootloader Exception: In addition to the permissions in the GNU General Public
+License, the authors give you unlimited permission to link or embed compiled
+bootloader and related files into combinations with other programs, and to
+distribute those combinations without any restriction coming from the use of
+those files. The General Public License restrictions apply in other respects;
+for example, they cover modification of the files, and distribution when not
+linked into a combined executable.
+
+Python and incorporated software
+--------------------------------
+Copyright notices are retained in the bundled Python runtime license.
+License: Python Software Foundation License Version 2 (PSF-2.0).
+Source and complete license/acknowledgements:
+https://docs.python.org/3.12/license.html
+
+The audited Windows release contains Python 3.12.13 and OpenSSL 3.5.5. The
+bundled CPython runtime also incorporates software under additional compatible
+licenses, including OpenSSL (Apache-2.0 for 3.x), libffi (MIT), expat (MIT),
+zlib (Zlib), bzip2 (bzip2-1.0.6), liblzma/XZ (public domain), SQLite (public
+domain), and mpdecimal (BSD-2-Clause). Each build includes the selected
+interpreter's own LICENSE.txt as THIRD_PARTY_LICENSES/Python-runtime-LICENSE.txt;
+the audited Windows copy is also retained as Python-3.12.13-LICENSE.txt.
+
+Python.NET 3.1.0
+----------------
+Copyright (c) 2006-2021 the contributors of the Python.NET project
+License: MIT
+Source: https://github.com/pythonnet/pythonnet/tree/v3.1.0
+
+clr-loader 0.3.1
+----------------
+Copyright (c) 2019-2026 Benedikt Reinartz
+License: MIT
+Source: https://github.com/pythonnet/clr-loader/tree/v0.3.1
+
+Bottle 0.13.4
+-------------
+Copyright (c) 2009-2024, Marcel Hellkamp
+License: MIT
+Source: https://github.com/bottlepy/bottle/tree/0.13.4
+
+proxy_tools 0.1.0
+-----------------
+Copyright (c) 2013 Armin Ronacher; adapted by Jonathan Tushman in 2014
+License: MIT (package metadata); source files identify code derived from
+Werkzeug under its BSD license
+Source: https://github.com/jtushman/proxy_tools/tree/0.1.0
+
+cffi 2.1.0
+----------
+Copyright (c) cffi contributors
+License: MIT-0
+Source: https://github.com/python-cffi/cffi/tree/v2.1.0
+
+pycparser 3.0
+-------------
+Copyright (c) 2008-2022, Eli Bendersky
+License: BSD-3-Clause
+Source: https://github.com/eliben/pycparser/tree/release_v3.0
+
+packaging 26.2
+--------------
+Copyright (c) Donald Stufft and individual contributors
+License: Apache-2.0 OR BSD-2-Clause
+Source: https://github.com/pypa/packaging/tree/26.2
+
+setuptools 83.0.0 and vendored dependencies
+-------------------------------------------
+Copyright (c) setuptools contributors
+License: MIT; vendored dependencies retain their own permissive licenses.
+Source: https://github.com/pypa/setuptools/tree/v83.0.0
+
+The distributed setuptools package includes vendored copies of autocommand,
+backports.tarfile, importlib_metadata, jaraco.context, jaraco.functools,
+jaraco.text, more_itertools, packaging, platformdirs, tomli, wheel, and zipp.
+Their exact license notices are distributed in THIRD_PARTY_LICENSES. The set
+currently includes LGPL-3.0-or-later (autocommand), Apache-2.0
+(importlib_metadata), Apache-2.0 OR BSD-2-Clause (packaging), and MIT
+(backports.tarfile, jaraco.*, more_itertools, platformdirs, tomli, wheel and
+zipp). The complete autocommand LGPLv3 text is provided in its vendored
+license file. LGPLv3 is compatible with MEFinder's AGPLv3 distribution.
+
+typing_extensions 4.16.0
+------------------------
+Copyright (c) Python Software Foundation and contributors
+License: PSF-2.0
+Source: https://github.com/python/typing_extensions/tree/4.16.0
+
+PyObjC 11.1 (macOS only)
+------------------------
+Copyright (c) PyObjC contributors
+License: MIT
+Source: https://github.com/ronaldoussoren/pyobjc/tree/v11.1
+
+Inno Setup 7.0.2 (Windows installer only)
+-----------------------------------------
+Copyright (c) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (c) 2000-2026 Martijn Laan. All rights reserved.
+License: Inno Setup License
+Source and license: https://jrsoftware.org/files/is/license.txt
+
+Inno Setup is provided "as-is," without any express or implied warranty.
+Permission is granted to use it for any purpose, including commercial
+applications, and to alter and redistribute it subject to its published
+license conditions. Inno Setup is used to produce the Windows installer.
+
+Microsoft .NET libraries (Windows only)
+---------------------------------------
+Copyright (c) .NET Foundation and Contributors
+License: MIT
+Source: https://github.com/dotnet/runtime
+
+The Python.NET runtime payload includes Microsoft.CSharp 4.7.0,
+System.Reflection.Emit 4.7.0, System.Reflection.Emit.ILGeneration 4.7.0,
+System.Buffers 4.6.1, System.IO.Hashing 10.0.8, System.Memory 4.6.3,
+System.Numerics.Vectors 4.6.1, and System.Runtime.CompilerServices.Unsafe
+6.1.2. The Common MIT License Text below applies.
+
+Microsoft Visual C++ Runtime and Windows system libraries (Windows only)
+----------------------------------------------------------------------
+The release contains Microsoft redistributable runtime libraries and uses
+Windows system libraries. These remain governed by the applicable Microsoft
+license terms and are not relicensed under the MEFinder AGPL license.
+
+Lobe Icons
+----------
+Copyright (c) LobeHub
+License: MIT
+Source: https://github.com/lobehub/lobe-icons
+
+The MIT-licensed provider SVG assets are distributed with MEFinder. Product
+names and logos may also be trademarks of their respective owners; the MIT
+license does not grant trademark rights.
+
+Common MIT License Text
+-----------------------
+The following text applies to the MIT-licensed components above except where
+an upstream notice supplies a more specific copyright line:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Additional complete license texts are distributed in THIRD_PARTY_LICENSES.
+Corresponding source for these exact versions is available from the source
+links above. Official MEFinder source releases are available at
+https://github.com/sabercomo/MEFinder/releases.
