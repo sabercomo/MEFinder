@@ -478,6 +478,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("btn.setAttribute('aria-selected', on ? 'true' : 'false')", show_block)
         self.assertIn("function ensureVisibleSettingsCategory()", HTML)
         self.assertIn(".settings-section.active { display: block; }", HTML)
+        self.assertIn("#statistics-settings.active { max-width: none; }", HTML)
+        self.assertIn(".parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 32px;", HTML)
+        self.assertIn(".parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 14px;", HTML)
 
     def test_update_heading_uses_one_baseline_for_title_and_note(self) -> None:
         heading_rule = re.search(

@@ -98,38 +98,57 @@
   font-size: 12px;
   line-height: 1.5;
 }
-/* PDF 解析方式：沿用 0.4.0 的三模式逻辑，压缩卡片后放在拖放区上方。 */
+/* PDF 解析方式：三种业务路径保留，但视觉上收成一组连续设置行。 */
 .pdf-parse-section { margin-top: 20px; }
 .pdf-parse-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; }
-.pdf-parse-heading-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.pdf-parse-heading-hint { font-size: 11px; color: var(--text-tertiary); }
+.pdf-parse-heading-title { font-size: 14px; font-weight: 650; color: var(--text-primary); }
+.pdf-parse-heading-hint { font-size: 12px; color: var(--text-tertiary); }
 .pdf-parse-mode {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface);
 }
 .pdf-parse-option {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--divider);
-  border-radius: var(--widget-radius);
-  background: var(--surface);
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition: background-color var(--transition-fast);
 }
-.pdf-parse-option:hover { border-color: var(--accent); background: var(--accent-light); }
-.pdf-parse-option:has(input:checked) { border-color: var(--accent); border-width: 2px; padding: 7px 9px; background: var(--accent-light); }
-.pdf-parse-option input { margin: 2px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
-.pdf-parse-card { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
-.pdf-parse-card-head { display: flex; align-items: center; gap: 7px; }
-.pdf-parse-option strong { color: var(--text-primary); font-size: 12px; font-weight: 600; }
+.pdf-parse-option:first-child { border-top: 0; border-radius: 12px 12px 0 0; }
+.pdf-parse-option:last-child { border-radius: 0 0 12px 12px; }
+@media (hover: hover) and (pointer: fine) {
+  .pdf-parse-option:hover { background: var(--surface-hover); }
+}
+.pdf-parse-option:has(input:checked) { background: var(--accent-light); }
+.pdf-parse-option:active { background: var(--surface-selected); }
+.pdf-parse-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pdf-parse-option input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
+.pdf-parse-card { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
+.pdf-parse-card-head { display: flex; align-items: center; gap: 8px; }
+.pdf-parse-option-vision .pdf-parse-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.55fr);
+  grid-template-areas: "heading provider" "description provider";
+  column-gap: 24px;
+  align-items: center;
+}
+.pdf-parse-option-vision .pdf-parse-card-head { grid-area: heading; align-self: end; }
+.pdf-parse-option-vision .pdf-parse-card > small { grid-area: description; align-self: start; }
+.pdf-parse-option-vision .pdf-parse-provider { grid-area: provider; margin-top: 0; }
+.pdf-parse-option strong { color: var(--text-primary); font-size: 14px; font-weight: 650; }
 .pdf-parse-option:has(input:checked) strong { color: var(--accent); }
-.pdf-parse-option small { color: var(--text-tertiary); font-size: 10px; line-height: 1.4; }
-.pdf-parse-tag { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.pdf-parse-option small { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.pdf-parse-tag { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; line-height: 1; white-space: nowrap; }
 .pdf-parse-tag-default { color: var(--accent); background: var(--accent-soft); }
 .pdf-parse-tag-free { color: var(--success); background: var(--success-soft); }
 .pdf-parse-provider { display: block; margin-top: 2px; }
@@ -139,7 +158,7 @@
 .pdf-provider-config-link[hidden] { display: none; }
 .pdf-provider-config-link:hover { text-decoration: underline; }
 .import-vision-select { display: block; width: 100%; min-width: 0; }
-.import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 28px; padding: 0 8px; border-radius: 7px; font-size: 10px; }
+.import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 36px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
 .import-vision-select.is-disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
 .import-vision-select .app-select-trigger:active { background: var(--surface-hover); }
 .import-vision-select .app-select-trigger:disabled { cursor: not-allowed; }
@@ -176,7 +195,8 @@
 @media (max-width: 800px) {
   .import-content { padding-right: 16px; padding-left: 16px; }
   .drop-zone { min-height: 112px; padding: 24px 18px; }
-  .pdf-parse-mode { grid-template-columns: 1fr; }
+  .pdf-parse-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .pdf-parse-option-vision .pdf-parse-card { display: flex; }
   .scan-section-head { align-items: flex-start; flex-direction: column; }
   .scan-section-actions { width: 100%; }
   .scan-dir-add { flex: 1 1 220px; width: auto; }

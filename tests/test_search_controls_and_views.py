@@ -287,6 +287,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             '"parse_route": parse_route',
             DOCUMENT_IMPORT_COORDINATOR_SOURCE,
         )
+        parse_css_start = HTML.index("/* PDF 解析方式：")
+        parse_css_end = HTML.index(".import-vision-select", parse_css_start)
+        parse_css = HTML[parse_css_start:parse_css_end]
+        self.assertNotIn("grid-template-columns: repeat(3", parse_css)
+        self.assertIn(".pdf-parse-mode {\n  display: flex;\n  flex-direction: column;", HTML)
+        self.assertIn(".pdf-parse-option-vision .pdf-parse-card", HTML)
+        self.assertIn(".pdf-parse-option strong { color: var(--text-primary); font-size: 14px;", HTML)
 
     def test_directory_batch_import_is_bounded_and_isolates_pdf_index_writes(self) -> None:
         self.assertIn("ImportTaskQueue(worker_count=2)", WEB_SOURCE)
@@ -361,7 +368,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertLess(drop, scan)
         self.assertLess(scan, queue)
         self.assertIn("padding: 36px 32px;", HTML)
-        self.assertIn("height: 28px; padding: 0 8px", HTML)
+        self.assertIn("height: 36px; padding: 0 12px", HTML)
         self.assertIn('id="import-recovery-panel" hidden', HTML)
         self.assertIn('id="import-recovery-provider"', HTML)
         self.assertIn("function importQueueNeedsRecoverySelector()", HTML)
@@ -419,6 +426,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('class="mineru-account-table"', HTML)
         self.assertIn("function showMineruEditor()", HTML)
         self.assertIn("function hideMineruEditor()", HTML)
+        self.assertIn('id="mineru-add-account"', HTML)
+        self.assertIn("addButton.hidden = !mineruAccounts.length", HTML)
+        self.assertIn("if (!mineruAccounts.length) startAddMineruAccount(false);", HTML)
+        self.assertIn("firstAccount ? '配置 MinerU API' : '添加 MinerU 账号'", HTML)
+        self.assertIn("document.getElementById('mineru-account-cancel').hidden = firstAccount", HTML)
         self.assertIn('id="parser-provider-list"', HTML)
         self.assertIn('id="parser-stat-books"', HTML)
         self.assertIn('data-target="statistics-settings"', HTML)
@@ -524,6 +536,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="backup-import-path"', HTML)
         self.assertIn("function exportBackup()", HTML)
         self.assertIn("function importBackup()", HTML)
+        self.assertIn('class="settings-actions backup-export-actions"', HTML)
+        self.assertIn("仅备份页码、书目和偏好，不含 PDF", HTML)
+        self.assertIn(".backup-export-actions .settings-hint { margin-inline-start: 0; }", HTML)
         self.assertIn("fetch('/api/backup/export'", HTML)
         self.assertIn("fetch('/api/backup/import/choose'", HTML)
         self.assertIn("fetch('/api/backup/import'", HTML)

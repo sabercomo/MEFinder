@@ -1,4 +1,5 @@
-/* Settings styles · genre: modern-minimal · tone: focused desktop utility.
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · tone: focused desktop utility
+   · palette: existing theme tokens · pre-emit critique: P5 H5 E5 S5 R5 V4.
    Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
    clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
    Left anchor: all categories share an 880px left-aligned column. */
@@ -81,6 +82,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 /* Appearance's theme grid wants more room; widen only the RIGHT edge so the
    left anchor stays put with all the other categories. */
 #appearance-card.active { max-width: 1120px; }
+#statistics-settings.active { max-width: none; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -570,6 +572,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .settings-advanced-body { display: grid; gap: 14px; margin-top: 14px; }
 .settings-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .settings-hint { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
+.backup-export-actions .settings-hint { margin-inline-start: 0; }
 .settings-check {
   display: inline-flex;
   align-items: center;
@@ -951,6 +954,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; }
 .parser-overview { margin-top: 18px; }
 .parser-stat-section-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.parser-stat-section-head strong { font-size: 14px; }
+.parser-stat-section-head small { font-size: 12px; }
 .parser-overview-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -966,9 +971,9 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   border-inline-start: 1px solid var(--border-subtle);
 }
 .parser-overview-metrics > div:first-child { border-inline-start: 0; }
-.parser-overview-metrics dt { grid-column: 1 / -1; margin-bottom: 8px; color: var(--text-tertiary); font-size: 10px; }
-.parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 28px; font-weight: 720; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
-.parser-overview-metrics span { color: var(--text-tertiary); font-size: 11px; }
+.parser-overview-metrics dt { grid-column: 1 / -1; margin-bottom: 8px; color: var(--text-tertiary); font-size: 12px; }
+.parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 720; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.parser-overview-metrics span { color: var(--text-tertiary); font-size: 13px; }
 .parser-provider-breakdown { margin-top: 30px; }
 .parser-provider-columns,
 .parser-provider-group > summary {
@@ -977,16 +982,16 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   align-items: center;
   gap: 12px;
 }
-.parser-provider-columns { margin-top: 12px; padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text-tertiary); font-size: 10px; }
+.parser-provider-columns { margin-top: 12px; padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text-tertiary); font-size: 12px; }
 .parser-provider-columns span:nth-child(2),
 .parser-provider-columns span:nth-child(3) { text-align: right; }
 .parser-provider-group { border-bottom: 1px solid var(--divider); }
-.parser-provider-group > summary { min-height: 64px; padding: 8px 12px; cursor: pointer; list-style: none; }
+.parser-provider-group > summary { min-height: 72px; padding: 8px 12px; cursor: pointer; list-style: none; }
 .parser-provider-group > summary::-webkit-details-marker { display: none; }
 .parser-provider-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .parser-provider-identity > span:last-child { min-width: 0; display: grid; gap: 2px; }
-.parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.parser-provider-identity small { color: var(--text-tertiary); font-size: 10px; }
+.parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-provider-identity small { color: var(--text-tertiary); font-size: 12px; }
 .parser-provider-mark {
   display: grid;
   flex: 0 0 auto;
@@ -1001,42 +1006,42 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .parser-provider-mark.mineru { border: 1px solid var(--divider); background: var(--surface-primary); color: var(--text-primary); }
 .parser-provider-mark .mineru-brand-glyph { width: 22px; height: 22px; }
-.parser-provider-number { color: var(--text-tertiary); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.parser-provider-number b { color: var(--text-primary); font-size: 12px; }
+.parser-provider-number { color: var(--text-tertiary); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.parser-provider-number b { color: var(--text-primary); font-size: 14px; }
 .parser-provider-chevron { width: 17px; height: 17px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
 .parser-provider-group[open] > summary .parser-provider-chevron { transform: rotate(180deg); }
 .parser-provider-detail { padding: 6px 12px 18px 55px; }
-.parser-detail-label { margin: 4px 0 8px; color: var(--text-secondary); font-size: 10px; font-weight: 650; }
-.parser-detail-label small { margin-inline-start: 6px; color: var(--text-tertiary); font-weight: 400; }
+.parser-detail-label { margin: 4px 0 8px; color: var(--text-secondary); font-size: 12px; font-weight: 650; }
+.parser-detail-label small { margin-inline-start: 6px; color: var(--text-tertiary); font-size: 11px; font-weight: 400; }
 .parser-book-table-scroll { overflow-x: auto; }
-.parser-book-table th { padding: 7px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 10px; font-weight: 600; }
+.parser-book-table th { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 12px; font-weight: 600; }
 .parser-book-table th:first-child { width: 48%; }
-.parser-book-table td { padding: 9px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.parser-book-table td { padding: 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .parser-book-table th:last-child,
 .parser-book-table td:last-child { text-align: right; white-space: nowrap; }
 .parser-book-title { display: grid; gap: 2px; min-width: 0; }
 .parser-book-title strong,
 .parser-book-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.parser-book-title strong { color: var(--text-secondary); font-size: 10px; }
-.parser-book-title small { color: var(--text-tertiary); font-size: 10px; }
+.parser-book-title strong { color: var(--text-secondary); font-size: 12px; }
+.parser-book-title small { color: var(--text-tertiary); font-size: 11px; }
 .mineru-attribution-label { margin-top: 18px; }
 .parser-credential-list { border-top: 1px solid var(--border-subtle); }
 .parser-credential-account { border-bottom: 1px solid var(--border-subtle); }
 .parser-credential-account > summary { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 5px 10px; cursor: pointer; list-style: none; }
 .parser-credential-account > summary::-webkit-details-marker { display: none; }
 .parser-credential-account > summary > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.parser-credential-account > summary strong { color: var(--text-secondary); font-size: 10px; }
-.parser-credential-account > summary small { color: var(--text-tertiary); font-size: 10px; }
-.parser-credential-account > summary b { color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.parser-credential-account > summary strong { color: var(--text-secondary); font-size: 12px; }
+.parser-credential-account > summary small { color: var(--text-tertiary); font-size: 11px; }
+.parser-credential-account > summary b { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .parser-credential-account > summary svg { width: 15px; height: 15px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
 .parser-credential-account[open] > summary svg { transform: rotate(180deg); }
 .parser-credential-books { padding: 0 10px 8px 20px; }
 .parser-credential-book { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border-subtle); }
 .parser-credential-book > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.parser-credential-book strong { overflow: hidden; color: var(--text-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.parser-credential-book small { color: var(--text-tertiary); font-size: 10px; }
-.parser-credential-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
-.parser-credential-empty { padding: 12px 10px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 10px; }
+.parser-credential-book strong { overflow: hidden; color: var(--text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-credential-book small { color: var(--text-tertiary); font-size: 11px; }
+.parser-credential-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.parser-credential-empty { padding: 12px 10px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 12px; }
 .parser-statistics-empty { display: grid; gap: 5px; padding: 30px 12px; border-bottom: 1px solid var(--divider); }
 .parser-statistics-empty strong { color: var(--text-primary); font-size: 12px; }
 .parser-statistics-empty small { max-width: 60ch; color: var(--text-tertiary); font-size: 10px; line-height: 1.55; }

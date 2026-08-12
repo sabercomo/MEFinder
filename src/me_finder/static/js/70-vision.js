@@ -24,6 +24,9 @@ async function loadMineruConfig() {
     mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
     document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
     renderMineruAccountList();
+    var addButton = document.getElementById('mineru-add-account');
+    if (addButton) addButton.hidden = !mineruAccounts.length;
+    if (!mineruAccounts.length) startAddMineruAccount(false);
     var enabledCount = mineruAccounts.filter(function(item) { return item.enabled && item.configured; }).length;
     if (enabledCount) {
       status.className = 'settings-status ready';
@@ -91,19 +94,21 @@ function mineruEditorPrep() {
   var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
 }
 
-function startAddMineruAccount() {
+function startAddMineruAccount(shouldFocus) {
+  var firstAccount = mineruAccounts.length === 0;
   mineruSelectedAccountId = '';
   document.getElementById('mineru-account-id').value = '';
-  document.getElementById('mineru-account-name').value = 'MinerU 账号 ' + (mineruAccounts.length + 1);
+  document.getElementById('mineru-account-name').value = firstAccount ? 'MinerU 账号' : 'MinerU 账号 ' + (mineruAccounts.length + 1);
   document.getElementById('mineru-token').value = '';
   document.getElementById('mineru-expires-at').value = '';
   document.getElementById('mineru-account-enabled').checked = true;
-  document.getElementById('mineru-editor-title').textContent = '添加 MinerU 账号';
+  document.getElementById('mineru-editor-title').textContent = firstAccount ? '配置 MinerU API' : '添加 MinerU 账号';
   document.getElementById('mineru-token-help').textContent = '新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机';
-  document.getElementById('mineru-account-save').textContent = '保存账号';
+  document.getElementById('mineru-account-save').textContent = firstAccount ? '保存配置' : '保存账号';
+  document.getElementById('mineru-account-cancel').hidden = firstAccount;
   mineruEditorPrep();
   showMineruEditor();
-  setTimeout(function() { var n = document.getElementById('mineru-account-name'); if (n) n.focus(); }, 0);
+  if (shouldFocus !== false) setTimeout(function() { var n = document.getElementById('mineru-account-name'); if (n) n.focus(); }, 0);
 }
 
 function selectMineruAccount(accountId) {
@@ -118,6 +123,7 @@ function selectMineruAccount(accountId) {
   document.getElementById('mineru-editor-title').textContent = '编辑 ' + item.display_name;
   document.getElementById('mineru-token-help').textContent = '留空会保留已保存的 Token';
   document.getElementById('mineru-account-save').textContent = '保存更改';
+  document.getElementById('mineru-account-cancel').hidden = false;
   mineruEditorPrep();
   showMineruEditor();
 }
@@ -226,7 +232,7 @@ async function exportBackup() {
     if (hint) hint.textContent = '已导出到：' + data.path;
     showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
   } catch (e) {
-    if (hint) hint.textContent = '生成一个包含页码映射、书目信息和偏好的小体积 zip';
+    if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
     showToast('导出备份失败：' + e.message);
   }
 }
@@ -299,7 +305,7 @@ async function saveMineruConfig(event) {
   };
   if (!payload.display_name) { mineruDialogError('请填写账号名称。'); return; }
   if (!accountId && !payload.token) { mineruDialogError('新账号必须填写 API Token。'); return; }
-  var idleLabel = accountId ? '保存更改' : '添加账号';
+  var idleLabel = accountId ? '保存更改' : (mineruAccounts.length ? '添加账号' : '保存配置');
   saveButton.disabled = true;
   saveButton.textContent = '保存中…';
   try {

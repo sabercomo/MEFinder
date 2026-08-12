@@ -503,7 +503,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span></span>
               <span id="mineru-config-status" class="settings-status">读取中…</span>
-              <button class="action-btn primary mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
+              <button class="action-btn primary mineru-add-account" id="mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
               <section class="mineru-service-settings" aria-labelledby="mineru-service-title">
@@ -761,9 +761,9 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-grid">
             <span class="settings-label">导出</span>
             <div class="settings-control">
-              <div class="settings-actions">
+              <div class="settings-actions backup-export-actions">
                 <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-                <span class="settings-hint" id="backup-export-hint">生成一个包含页码映射、书目信息和偏好的小体积 zip</span>
+                <span class="settings-hint" id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</span>
               </div>
             </div>
             <span class="settings-label">导入</span>
