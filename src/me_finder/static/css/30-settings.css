@@ -214,60 +214,66 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--border-default);
 }
+/* System-settings single-select list, not two floating cards (m2). One
+   connected container, compact rows, radio dot on the right. */
 .pdf-open-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
   margin-top: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-primary);
   transition: opacity var(--transition-fast);
 }
 .pdf-open-options.is-busy { opacity: .62; pointer-events: none; }
 .pdf-open-option {
   position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 11px;
-  min-height: 76px;
+  min-height: 52px;
   box-sizing: border-box;
-  padding: 13px 14px;
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.pdf-open-option:hover { border-color: var(--border-strong); background: var(--surface-hover); }
-.pdf-open-option:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.pdf-open-option.selected { border-color: var(--accent); background: var(--surface-selected); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pdf-open-option:first-of-type { border-top: 0; }
+.pdf-open-option:hover { background: var(--surface-hover); }
+.pdf-open-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
+.pdf-open-option.selected { background: var(--surface-selected); }
 .pdf-open-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pdf-open-option-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   color: var(--text-secondary);
   background: var(--surface-secondary);
   border: 1px solid var(--border-subtle);
 }
 .pdf-open-option.selected .pdf-open-option-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
-.pdf-open-option-icon svg { width: 21px; height: 21px; }
-.pdf-open-option-copy { min-width: 0; display: grid; gap: 5px; }
-.pdf-open-option-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 650; }
-.pdf-open-option-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-style: normal; font-weight: 600; }
-.pdf-open-option-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.pdf-open-option-icon svg { width: 17px; height: 17px; }
+.pdf-open-option-copy { min-width: 0; display: grid; gap: 3px; }
+.pdf-open-option-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 620; }
+.pdf-open-option-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent-text); background: var(--accent-soft); font-size: 11px; font-style: normal; font-weight: 600; }
+.pdf-open-option-copy small { color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
 .pdf-open-option-check {
   width: 15px;
   height: 15px;
   box-sizing: border-box;
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--border-control);
   border-radius: 50%;
   background: var(--surface-primary);
 }
 .pdf-open-option.selected .pdf-open-option-check { border: 4px solid var(--accent); }
-@media (max-width: 760px) { .pdf-open-options { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .pdf-open-options { max-width: none; } }
 .citation-format-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -748,7 +754,37 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .mineru-service-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mineru-service-control .settings-input { min-width: 0; height: 42px; }
 .mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; white-space: nowrap; }
-.mineru-account-management { margin-top: 26px; }
+.mineru-account-management { margin-top: 22px; }
+/* Lightweight account switcher (chips) + a plain settings form — replaces the
+   old table + modal dialog. One simple form; pick which account with a chip. */
+.mineru-account-switch-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mineru-account-switch-label { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.mineru-account-switch { display: flex; flex-wrap: wrap; gap: 6px; }
+.mineru-account-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+.mineru-account-chip:hover { background: var(--surface-hover); }
+.mineru-account-chip.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.mineru-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; background: var(--text-decorative); }
+.mineru-chip-dot.ok { background: var(--success); }
+.mineru-chip-dot.warn { background: var(--warning); }
+.mineru-account-form { margin-top: 12px; }
+.mineru-enable-inline { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+/* .action-btn sets display:flex, which beats the UA [hidden]{display:none};
+   restore it so hidden action buttons (测试连接 etc.) actually hide. */
+.action-btn[hidden] { display: none; }
 .mineru-table-heading {
   display: flex;
   align-items: end;
