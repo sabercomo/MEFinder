@@ -16,6 +16,7 @@ from typing import Dict, List, Mapping, Optional, Sequence
 from .import_resume import (
     ResumeManifestError,
     atomic_write_json,
+    fsync_directory,
     load_json_object,
     quarantine_corrupt_manifest,
     sha256_file,
@@ -251,6 +252,7 @@ class ImportJobJournal:
             if not path.exists():
                 return False
             path.unlink()
+            fsync_directory(path.parent)
             return True
 
     def load_startup_jobs(

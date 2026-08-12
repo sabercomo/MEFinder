@@ -7,6 +7,7 @@ from src.me_finder.application.document_query_service import (
     DocumentQueryError,
 )
 from src.me_finder.import_job_controller import ImportJobController
+from src.me_finder.import_resume import ResumeManifestError
 from src.me_finder.mineru_api import MinerUError
 from src.me_finder.vision_api import VisionAPIError
 
@@ -376,12 +377,18 @@ class ImportJobControllerTests(unittest.TestCase):
 
     def test_retry_durable_swap_failure_has_stable_500_response(self) -> None:
         self._vision_retry_inputs()
-        self.imports.errors["start_retry"] = OSError("journal read-only")
-
-        self.assertEqual(
-            self.controller.retry_with_mineru({"job_id": "old-job"}),
-            (500, {"error": "创建重试任务失败：journal read-only"}),
-        )
+        for error in (
+            OSError("journal read-only"),
+            ResumeManifestError("前任务清单损坏"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.imports.errors["start_retry"] = error
+                self.assertEqual(
+                    self.controller.retry_with_mineru(
+                        {"job_id": "old-job"}
+                    ),
+                    (500, {"error": f"创建重试任务失败：{error}"}),
+                )
 
     def test_provider_retry_rejects_missing_ineligible_and_unavailable(self) -> None:
         for payload in (
@@ -533,6 +540,33 @@ class ImportJobControllerTests(unittest.TestCase):
         )
         self.assertFalse(any(call[0] == "dismiss" for call in self.imports.calls))
 
+    def test_provider_retry_maps_corrupt_journal_to_500(self) -> None:
+        self._vision_retry_inputs()
+        self.vision_result = {
+            "providers": [
+                {
+                    "id": "provider-one",
+                    "enabled": True,
+                    "configured": True,
+                }
+            ]
+        }
+        for error in (
+            OSError("journal read-only"),
+            ResumeManifestError("前任务清单损坏"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.imports.errors["start_retry"] = error
+                self.assertEqual(
+                    self.controller.retry_with_provider(
+                        {
+                            "job_id": "old-job",
+                            "provider_id": "provider-one",
+                        }
+                    ),
+                    (500, {"error": f"创建重试任务失败：{error}"}),
+                )
+
     def test_resume_and_dismiss_preserve_fields_and_errors(self) -> None:
         for operation, message in (
             (self.controller.resume, "缺少待继续的导入任务。"),
@@ -585,6 +619,48 @@ class ImportJobControllerTests(unittest.TestCase):
             self.controller.dismiss({"job_id": "active-one"}),
             (400, {"error": "任务不存在。"}),
         )
+
+    def test_resume_maps_durable_failures_to_stable_500_response(self) -> None:
+        errors = (
+            KeyError("missing-journal"),
+            OSError("journal read-only"),
+            ValueError("journal update invalid"),
+            ResumeManifestError("导入任务清单损坏"),
+        )
+        for error in errors:
+            with self.subTest(error=type(error).__name__):
+                self.imports.errors["resume"] = error
+                status, payload = self.controller.resume(
+                    {"job_id": "resume-one"}
+                )
+                self.assertEqual(status, 500)
+                self.assertEqual(
+                    payload,
+                    {"error": f"继续导入任务失败：{error}"},
+                )
+
+    def test_dismiss_separates_invalid_input_from_durable_failures(self) -> None:
+        self.imports.errors["dismiss"] = ValueError("invalid import job id")
+        self.assertEqual(
+            self.controller.dismiss({"job_id": "bad/id"}),
+            (400, {"error": "invalid import job id"}),
+        )
+
+        for error in (
+            KeyError("missing-journal"),
+            OSError("journal read-only"),
+            ResumeManifestError("导入任务清单损坏"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.imports.errors["dismiss"] = error
+                status, payload = self.controller.dismiss(
+                    {"job_id": "dismiss-one"}
+                )
+                self.assertEqual(status, 500)
+                self.assertEqual(
+                    payload,
+                    {"error": f"移除导入任务失败：{error}"},
+                )
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ from src.me_finder.database import (
     replace_source_in_database as real_replace_source,
 )
 from src.me_finder.import_queue import ImportQueueFullError
+from src.me_finder.import_resume import ResumeManifestError
 from src.me_finder.web import make_handler
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
@@ -503,6 +504,250 @@ class SinglePDFReservationTests(unittest.TestCase):
         )
         with self._open(request) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def test_import_boundary_io_failures_are_json_500_responses(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "runtime"
+            previous_cwd = Path.cwd()
+            handler = None
+            server = None
+            try:
+                os.chdir(root.parent)
+                root.mkdir()
+                os.chdir(root)
+                handler, server = self._runtime(root)
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                cases = (
+                    (
+                        "resume_import_job",
+                        "/api/import-resume",
+                        "继续导入任务失败：journal read-only",
+                    ),
+                    (
+                        "dismiss_import_job",
+                        "/api/import-resume-dismiss",
+                        "移除导入任务失败：journal read-only",
+                    ),
+                )
+                for method_name, route, expected_error in cases:
+                    with self.subTest(route=route), patch.object(
+                        handler.import_orchestrator,
+                        method_name,
+                        side_effect=OSError("journal read-only"),
+                    ):
+                        with self.assertRaises(HTTPError) as caught:
+                            self._post_json(
+                                base_url,
+                                route,
+                                {"job_id": "job-one"},
+                            )
+                        self.assertEqual(caught.exception.code, 500)
+                        self.assertEqual(
+                            caught.exception.headers.get_content_type(),
+                            "application/json",
+                        )
+                        self.assertEqual(
+                            json.loads(
+                                caught.exception.read().decode("utf-8")
+                            ),
+                            {"error": expected_error},
+                        )
+
+                retry_job = {
+                    "job_id": "old-job",
+                    "status": "failed",
+                    "parse_route": "vision",
+                    "failure_stage": "parse",
+                    "file_name": "paper.pdf",
+                }
+                retry_context = {
+                    "target": "/runtime/paper.pdf",
+                    "source_file_id": "pdf-one",
+                    "profile": {"detected_pdf_type": "scanned"},
+                    "is_pdf": True,
+                }
+                for route, payload in (
+                    (
+                        "/api/import-retry-mineru",
+                        {"job_id": "old-job"},
+                    ),
+                    (
+                        "/api/import-retry",
+                        {
+                            "job_id": "old-job",
+                            "provider_id": "provider-one",
+                        },
+                    ),
+                ):
+                    for retry_error in (
+                        OSError("journal read-only"),
+                        ResumeManifestError("前任务清单损坏"),
+                    ):
+                        with self.subTest(
+                            route=route,
+                            error=type(retry_error).__name__,
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "job_and_context",
+                            return_value=(retry_job, retry_context),
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "is_provider_retry_eligible",
+                            return_value=True,
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "validated_import_target",
+                            return_value=Path("/runtime/paper.pdf"),
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "start_retry_import_job",
+                            side_effect=retry_error,
+                        ), patch.object(
+                            handler.import_job_controller,
+                            "_vision_summary",
+                            return_value={
+                                "providers": [
+                                    {
+                                        "id": "provider-one",
+                                        "name": "Provider One",
+                                        "enabled": True,
+                                        "configured": True,
+                                    }
+                                ]
+                            },
+                        ):
+                            with self.assertRaises(
+                                HTTPError
+                            ) as retry_response:
+                                self._post_json(base_url, route, payload)
+                            self.assertEqual(
+                                retry_response.exception.code,
+                                500,
+                            )
+                            self.assertEqual(
+                                retry_response.exception.headers.get_content_type(),
+                                "application/json",
+                            )
+                            self.assertEqual(
+                                json.loads(
+                                    retry_response.exception.read().decode(
+                                        "utf-8"
+                                    )
+                                ),
+                                {
+                                    "error": (
+                                        "创建重试任务失败："
+                                        f"{retry_error}"
+                                    )
+                                },
+                            )
+
+                with patch.object(
+                    handler.document_imports,
+                    "import_stream",
+                    side_effect=OSError("journal read-only"),
+                ):
+                    raw_request = Request(
+                        base_url + "/api/import",
+                        data=self.PDF_BYTES,
+                        headers={
+                            "Content-Type": "application/pdf",
+                            "X-File-Name": "paper.pdf",
+                        },
+                        method="POST",
+                    )
+                    with self.assertRaises(HTTPError) as raw_response:
+                        self._open(raw_request)
+                self.assertEqual(raw_response.exception.code, 500)
+                self.assertEqual(
+                    json.loads(
+                        raw_response.exception.read().decode("utf-8")
+                    ),
+                    {"error": "导入失败，请查看 desktop.log。"},
+                )
+
+                for method_name, route in (
+                    (
+                        "finish_chunked",
+                        "/api/import-upload/finish",
+                    ),
+                    ("import_local", "/api/import-local"),
+                ):
+                    with self.subTest(route=route), patch.object(
+                        handler.document_imports,
+                        method_name,
+                        side_effect=OSError("journal read-only"),
+                    ):
+                        payload = (
+                            {"upload_id": "upload-one"}
+                            if method_name == "finish_chunked"
+                            else {"paths": ["/library/paper.pdf"]}
+                        )
+                        with self.assertRaises(HTTPError) as response:
+                            self._post_json(base_url, route, payload)
+                        self.assertEqual(response.exception.code, 500)
+                        self.assertEqual(
+                            response.exception.headers.get_content_type(),
+                            "application/json",
+                        )
+                        self.assertEqual(
+                            json.loads(
+                                response.exception.read().decode("utf-8")
+                            ),
+                            {"error": "导入失败，请查看 desktop.log。"},
+                        )
+
+                invalid_raw = Request(
+                    base_url + "/api/import",
+                    data=self.PDF_BYTES,
+                    headers={
+                        "Content-Type": "application/pdf",
+                        "X-File-Name": "paper.pdf",
+                        "X-PDF-Parse-Mode": "invalid",
+                    },
+                    method="POST",
+                )
+                with self.assertRaises(HTTPError) as invalid_raw_response:
+                    self._open(invalid_raw)
+                self.assertEqual(invalid_raw_response.exception.code, 400)
+
+                with patch.object(
+                    handler.document_imports,
+                    "finish_chunked",
+                    side_effect=ValueError("invalid finish request"),
+                ):
+                    with self.assertRaises(HTTPError) as invalid_finish:
+                        self._post_json(
+                            base_url,
+                            "/api/import-upload/finish",
+                            {"upload_id": "upload-one"},
+                        )
+                self.assertEqual(invalid_finish.exception.code, 400)
+
+                for route, payload in (
+                    ("/api/import-local", {"paths": []}),
+                    ("/api/import-retry-mineru", {}),
+                    ("/api/import-retry", {}),
+                ):
+                    with self.subTest(invalid_route=route):
+                        with self.assertRaises(HTTPError) as invalid_response:
+                            self._post_json(base_url, route, payload)
+                        self.assertEqual(invalid_response.exception.code, 400)
+
+                with self.assertRaises(HTTPError) as invalid_local:
+                    self._post_json(base_url, "/api/import-local", [])
+                self.assertEqual(invalid_local.exception.code, 400)
+                self.assertEqual(
+                    json.loads(invalid_local.exception.read().decode("utf-8")),
+                    {"error": "本地导入请求必须是 JSON 对象。"},
+                )
+            finally:
+                if server is not None:
+                    server.shutdown()
+                    server.server_close()
+                if handler is not None:
+                    handler.close_runtime()
+                os.chdir(previous_cwd)
 
     def test_successful_upload_consumes_pending_reservation(self) -> None:
         with TemporaryDirectory() as temp_dir:

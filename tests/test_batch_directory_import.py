@@ -309,7 +309,11 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 ):
                     with self.assertRaises(HTTPError) as caught:
                         urlopen(request, timeout=5)
-                self.assertEqual(caught.exception.code, 400)
+                self.assertEqual(caught.exception.code, 500)
+                self.assertEqual(
+                    json.loads(caught.exception.read().decode("utf-8")),
+                    {"error": "导入失败，请查看 desktop.log。"},
+                )
                 raw_docx = root / "corpus" / "raw_docx"
                 deadline = time.monotonic() + 2
                 while (

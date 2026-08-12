@@ -1290,8 +1290,14 @@ def make_handler(
                         vision_provider_id=vision_provider_id,
                     )
                     self._send_json(result)
-                except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+                except (MinerUError, VisionAPIError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
+                except OSError:
+                    logging.exception("legacy import request failed")
+                    self._send_json(
+                        {"error": "导入失败，请查看 desktop.log。"},
+                        status=500,
+                    )
                 except Exception:
                     logging.exception("legacy import request failed")
                     self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
@@ -1417,8 +1423,14 @@ def make_handler(
                     self._send_json(result)
                 except ChunkedUploadError as exc:
                     self._send_json({"error": str(exc)}, status=exc.status)
-                except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+                except (MinerUError, VisionAPIError, ValueError) as exc:
                     self._send_json({"error": str(exc)}, status=400)
+                except OSError:
+                    logging.exception("chunked import finalization failed")
+                    self._send_json(
+                        {"error": "导入失败，请查看 desktop.log。"},
+                        status=500,
+                    )
                 except Exception:
                     logging.exception("chunked import finalization failed")
                     self._send_json(
@@ -1441,6 +1453,12 @@ def make_handler(
                 self._send_json(response, status=status)
                 return
             if parsed.path == "/api/import-local":
+                if not isinstance(payload, dict):
+                    self._send_json(
+                        {"error": "本地导入请求必须是 JSON 对象。"},
+                        status=400,
+                    )
+                    return
                 raw_paths = payload.get("paths")
                 if not isinstance(raw_paths, list) or not raw_paths:
                     self._send_json({"error": "没有选择要导入的文件。"}, status=400)
@@ -1461,17 +1479,27 @@ def make_handler(
                 except MinerUError as exc:
                     self._send_json({"error": str(exc)}, status=400)
                     return
-                preferences = read_preferences(resolve_preferences_path(root))
-                allowed_bases = [
-                    Path(item).resolve()
-                    for item in preferences.get("scan_directories") or []
-                ]
-                result = document_imports.import_local(
-                    raw_paths,
-                    allowed_bases,
-                    pdf_parse_mode=pdf_parse_mode,
-                    vision_provider_id=vision_provider_id,
-                )
+                try:
+                    preferences = read_preferences(
+                        resolve_preferences_path(root)
+                    )
+                    allowed_bases = [
+                        Path(item).resolve()
+                        for item in preferences.get("scan_directories") or []
+                    ]
+                    result = document_imports.import_local(
+                        raw_paths,
+                        allowed_bases,
+                        pdf_parse_mode=pdf_parse_mode,
+                        vision_provider_id=vision_provider_id,
+                    )
+                except OSError:
+                    logging.exception("local import request failed")
+                    self._send_json(
+                        {"error": "导入失败，请查看 desktop.log。"},
+                        status=500,
+                    )
+                    return
                 self._send_json(result)
                 return
             self._send(404, b"Not found", "text/plain; charset=utf-8")

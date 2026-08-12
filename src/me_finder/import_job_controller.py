@@ -8,6 +8,7 @@ from typing import Callable, Dict, Mapping, Optional, Tuple
 from .application.document_query_service import DocumentQueryError
 from .application.import_job_lifecycle import ImportJobRetrySwapFailed
 from .application.import_orchestrator import ImportOrchestrator
+from .import_resume import ResumeManifestError
 from .mineru_api import MinerUError
 from .vision_api import VisionAPIError
 
@@ -128,7 +129,13 @@ class ImportJobController:
             )
         except MinerUError as exc:
             return 400, {"error": str(exc)}
-        except (ImportJobRetrySwapFailed, KeyError, OSError, ValueError) as exc:
+        except (
+            ImportJobRetrySwapFailed,
+            KeyError,
+            OSError,
+            ValueError,
+            ResumeManifestError,
+        ) as exc:
             return 500, {"error": f"创建重试任务失败：{exc}"}
         return 200, {
             "ok": True,
@@ -199,7 +206,13 @@ class ImportJobController:
             )
         except (MinerUError, VisionAPIError) as exc:
             return 400, {"error": str(exc)}
-        except (ImportJobRetrySwapFailed, KeyError, OSError, ValueError) as exc:
+        except (
+            ImportJobRetrySwapFailed,
+            KeyError,
+            OSError,
+            ValueError,
+            ResumeManifestError,
+        ) as exc:
             return 500, {"error": f"创建重试任务失败：{exc}"}
         return 200, {
             "ok": True,
@@ -219,6 +232,8 @@ class ImportJobController:
             resumed = self._imports.resume_import_job(job_id)
         except MinerUError as exc:
             return 400, {"error": str(exc)}
+        except (KeyError, OSError, ValueError, ResumeManifestError) as exc:
+            return 500, {"error": f"继续导入任务失败：{exc}"}
         return 200, {
             "ok": True,
             "job_id": job_id,
@@ -237,6 +252,8 @@ class ImportJobController:
             dismiss_state = self._imports.dismiss_import_job(job_id)
         except (MinerUError, ValueError) as exc:
             return 400, {"error": str(exc)}
+        except (KeyError, OSError, ResumeManifestError) as exc:
+            return 500, {"error": f"移除导入任务失败：{exc}"}
         return 200, {
             "ok": True,
             "job_id": job_id,
