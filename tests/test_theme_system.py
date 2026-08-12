@@ -444,6 +444,33 @@ class ThemeMarkupTests(unittest.TestCase):
                 rf'class="settings-collapse-body" id="{body_id}">',
             )
 
+        settings_source = Path("src/me_finder/templates/index.html").read_text(
+            encoding="utf-8"
+        )
+        panels = [
+            (
+                settings_source.index(f'id="{section_id}" role="tabpanel"'),
+                section_id,
+            )
+            for section_id in sections
+        ]
+        panels.sort()
+        settings_end = settings_source.index(
+            '</div>\n      </div>\n    </div>', panels[-1][0]
+        )
+        for index, (panel_start, section_id) in enumerate(panels):
+            panel_end = (
+                panels[index + 1][0]
+                if index + 1 < len(panels)
+                else settings_end
+            )
+            panel = settings_source[panel_start:panel_end]
+            self.assertEqual(
+                panel.count("<div"),
+                panel.count("</div>"),
+                f"{section_id} 的 div 层级不平衡",
+            )
+
         show_start = HTML.index("function showSettingsCategory(sectionId)")
         show_end = HTML.index("function ensureVisibleSettingsCategory()", show_start)
         show_block = HTML[show_start:show_end]
