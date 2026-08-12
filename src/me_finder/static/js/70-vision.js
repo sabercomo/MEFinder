@@ -41,24 +41,24 @@ async function loadMineruConfig() {
 }
 
 function renderMineruAccountList() {
+  // Original table: 账号 / 状态 / 到期日期 / 本地解析 / 操作. Edit opens the inline
+  // editor panel below (no modal).
   var list = document.getElementById('mineru-account-list');
   if (!list) return;
   var count = document.getElementById('mineru-account-count');
   if (count) count.textContent = mineruAccounts.length.toLocaleString() + ' 个账号';
-  if (!mineruAccounts.length) {
-    list.innerHTML = '<div class="mineru-account-empty"><strong>还没有 MinerU 账号</strong><small>添加后，解析任务可以从已启用的独立账号中选择。</small><button class="action-btn primary" type="button" onclick="startAddMineruAccount()">添加账号</button></div>';
-    return;
-  }
+  if (!mineruAccounts.length) { list.innerHTML = ''; return; }
   var usageByAccount = {};
   (Array.isArray(mineruStatistics.credentials) ? mineruStatistics.credentials : []).forEach(function(item) {
     usageByAccount[item.account_id] = item;
   });
   var rows = mineruAccounts.map(function(item) {
     var usage = usageByAccount[item.account_id] || {};
+    var healthy = item.health_status === 'healthy' || !item.health_status;
     var state = !item.configured ? '缺少 Token' : !item.enabled ? '已停用'
       : item.health_status === 'unauthorized' ? '认证失效'
       : item.health_status === 'cooldown' ? '冷却中' : '可用';
-    var stateClass = item.enabled && item.configured && item.health_status === 'healthy' ? 'ready' : 'warning';
+    var stateClass = item.enabled && item.configured && healthy ? 'ready' : 'warning';
     var expires = item.expires_at ? esc(item.expires_at.replace(/-/g, '/')) : '—';
     var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
     return '<tr><td data-label="账号"><span class="mineru-account-identity"><span class="mineru-account-avatar" aria-hidden="true"><span class="mineru-brand-glyph"></span></span><span class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + (item.configured ? 'Token 已保存' : '需要 Token') + '</small></span></span></td>' +
@@ -70,6 +70,27 @@ function renderMineruAccountList() {
   list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table"><thead><tr><th>账号</th><th>状态</th><th>到期日期</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
+// The inline editor panel expands below the table on 添加账号 / 编辑, and folds
+// away on save / cancel — no modal.
+function showMineruEditor() {
+  var card = document.getElementById('mineru-editor-card');
+  if (card) { card.hidden = false; card.scrollIntoView({behavior: 'smooth', block: 'nearest'}); }
+}
+function hideMineruEditor() {
+  var card = document.getElementById('mineru-editor-card');
+  if (card) card.hidden = true;
+  mineruSelectedAccountId = '';
+}
+
+function mineruEditorPrep() {
+  var error = document.getElementById('mineru-dialog-error');
+  if (error) { error.hidden = true; error.textContent = ''; }
+  var token = document.getElementById('mineru-token'); if (token) token.type = 'password';
+  var toggle = document.getElementById('mineru-token-toggle'); if (toggle) toggle.textContent = '显示';
+  var editing = !!document.getElementById('mineru-account-id').value.trim();
+  var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
+}
+
 function startAddMineruAccount() {
   mineruSelectedAccountId = '';
   document.getElementById('mineru-account-id').value = '';
@@ -78,9 +99,11 @@ function startAddMineruAccount() {
   document.getElementById('mineru-expires-at').value = '';
   document.getElementById('mineru-account-enabled').checked = true;
   document.getElementById('mineru-editor-title').textContent = '添加 MinerU 账号';
-  document.getElementById('mineru-token-help').textContent = '新账号必填；可粘贴原始 Token 或完整 Bearer 值';
-  document.getElementById('mineru-account-save').textContent = '添加账号';
-  openMineruAccountDialog();
+  document.getElementById('mineru-token-help').textContent = '新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机';
+  document.getElementById('mineru-account-save').textContent = '保存账号';
+  mineruEditorPrep();
+  showMineruEditor();
+  setTimeout(function() { var n = document.getElementById('mineru-account-name'); if (n) n.focus(); }, 0);
 }
 
 function selectMineruAccount(accountId) {
@@ -95,23 +118,13 @@ function selectMineruAccount(accountId) {
   document.getElementById('mineru-editor-title').textContent = '编辑 ' + item.display_name;
   document.getElementById('mineru-token-help').textContent = '留空会保留已保存的 Token';
   document.getElementById('mineru-account-save').textContent = '保存更改';
-  openMineruAccountDialog();
+  mineruEditorPrep();
+  showMineruEditor();
 }
 
-function openMineruAccountDialog() {
-  var dialog = document.getElementById('mineru-account-dialog');
-  var error = document.getElementById('mineru-dialog-error');
-  if (error) { error.hidden = true; error.textContent = ''; }
-  document.getElementById('mineru-token').type = 'password';
-  document.getElementById('mineru-token-toggle').textContent = '显示';
-  if (dialog && !dialog.open) dialog.showModal();
-  setTimeout(function() { document.getElementById('mineru-account-name').focus(); }, 0);
-}
-
-function closeMineruAccountDialog() {
-  var dialog = document.getElementById('mineru-account-dialog');
-  if (dialog && dialog.open) dialog.close();
-}
+// Kept for existing call sites. Cancel/close just folds the inline editor away.
+function openMineruAccountDialog() { showMineruEditor(); }
+function closeMineruAccountDialog() { hideMineruEditor(); }
 
 function mineruDialogError(message) {
   var error = document.getElementById('mineru-dialog-error');
@@ -291,9 +304,9 @@ async function saveMineruConfig(event) {
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
     mineruSelectedAccountId = data.saved_account_id || accountId;
-    closeMineruAccountDialog();
     mineruConfigLoaded = false;
     await loadMineruConfig();
+    hideMineruEditor();
   } catch (e) {
     mineruDialogError('账号未保存。' + e.message);
   } finally {
@@ -360,7 +373,9 @@ async function toggleMineruAccountEnabled(input) {
 async function testMineruConnection(accountId, button) {
   if (!accountId) return;
   var status = document.getElementById('mineru-config-status');
-  if (button) { button.disabled = true; button.textContent = '测试中…'; }
+  // Button may be an icon or a text button — preserve its content.
+  var buttonHTML = button ? button.innerHTML : null;
+  if (button) { button.disabled = true; }
   if (status) { status.className = 'settings-status'; status.textContent = '测试连接中…'; }
   try {
     var resp = await fetch('/api/mineru-accounts/test', {
@@ -375,17 +390,13 @@ async function testMineruConnection(accountId, button) {
     if (status) { status.className = 'settings-status warning'; status.textContent = '连接失败'; }
     showToast('MinerU 连接失败：' + e.message, 'danger');
   } finally {
-    if (button) { button.disabled = false; button.textContent = '测试'; }
+    if (button) { button.disabled = false; if (buttonHTML !== null) button.innerHTML = buttonHTML; }
   }
 }
 
 function bindMineruAccountDialogDismissal() {
-  var dialog = document.getElementById('mineru-account-dialog');
-  if (!dialog || dialog.dataset.dismissBound === 'true') return;
-  dialog.dataset.dismissBound = 'true';
-  dialog.addEventListener('click', function(event) {
-    if (event.target === dialog) closeMineruAccountDialog();
-  });
+  // The MinerU editor is inline now (no modal). Kept as a no-op so the
+  // existing init call site stays valid.
 }
 
 /* ═══ Optional OpenAI-compatible vision providers ═══ */

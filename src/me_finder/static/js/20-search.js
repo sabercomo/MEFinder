@@ -51,10 +51,59 @@ async function toggleAppSelect(event, selectId) {
     renderSearchDocumentOptions();
     var input = document.getElementById('document-filter-query');
     if (input) { input.value = ''; requestAnimationFrame(function() { input.focus(); }); }
+  } else if (shouldOpen) {
+    // Keyboard entry point (N4): land on the selected/first option so ArrowUp/Down
+    // works immediately. focus-visible keeps the ring off for mouse users.
+    var firstOpt = select.querySelector('.app-select-option.is-selected')
+      || select.querySelector('.app-select-option');
+    if (firstOpt) requestAnimationFrame(function() { firstOpt.focus(); });
   }
 }
 
 async function toggleSearchSelect(event, selectId) { return toggleAppSelect(event, selectId); }
+
+/* ═══ Keyboard for custom .app-select listboxes (N4) ═══
+   Options are native <button>s, so Tab+Enter already activates them. The
+   role="listbox"/role="option" ARIA, however, promises arrow-key roving that
+   never existed. This document-level handler fulfils that contract for every
+   .app-select at once — Arrow/Home/End move the roving focus, Esc closes and
+   returns focus to the trigger. Menus with a search field keep native typing. */
+function appSelectOptionList(select) {
+  return Array.prototype.filter.call(
+    select.querySelectorAll('.app-select-option'),
+    function(o) { return o.offsetParent !== null && !o.disabled; }
+  );
+}
+document.addEventListener('keydown', function(e) {
+  var open = document.querySelector('.app-select.is-open');
+  if (!open) return;
+  var target = e.target;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+    if (e.key === 'Escape') {
+      closeAppSelects();
+      var t0 = open.querySelector('.app-select-trigger');
+      if (t0) t0.focus();
+    }
+    return;
+  }
+  if (!open.contains(target)) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeAppSelects();
+    var trig = open.querySelector('.app-select-trigger');
+    if (trig) trig.focus();
+    return;
+  }
+  var opts = appSelectOptionList(open);
+  if (!opts.length) return;
+  var cur = opts.indexOf(document.activeElement);
+  var next = null;
+  if (e.key === 'ArrowDown') next = cur < 0 ? 0 : Math.min(cur + 1, opts.length - 1);
+  else if (e.key === 'ArrowUp') next = cur < 0 ? opts.length - 1 : Math.max(cur - 1, 0);
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = opts.length - 1;
+  if (next !== null) { e.preventDefault(); opts[next].focus(); }
+});
 
 function setSearchLimit(event, limit) {
   event.stopPropagation();
@@ -182,9 +231,6 @@ async function runSearch() {
   statusEl.textContent = '检索中…';
   listEl.innerHTML = '';
   selectedIndex = -1;
-  // Collapse back to the single full-canvas view until rows come back.
-  var areaEl = searchResultsArea();
-  if (areaEl) areaEl.classList.remove('has-results');
   showEmptyDetail();
 
   try {
@@ -207,8 +253,6 @@ async function runSearch() {
       return;
     }
 
-    // Rows exist — reveal the list + detail two-pane layout.
-    if (areaEl) areaEl.classList.add('has-results');
     listEl.innerHTML = searchResults.map((item, i) => resultRowHTML(item, i)).join('');
     selectResult(0, false);
   } catch (err) {

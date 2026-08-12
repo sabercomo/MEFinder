@@ -248,15 +248,6 @@
   height: 100%;
   min-height: 0;
 }
-/* Before a search returns rows, show ONE full-canvas empty state — no split,
-   no dead vertical divider, no second "选择一条结果" placeholder. The list/detail
-   two-pane layout only appears once JS adds .has-results. */
-.results-area:not(.has-results) .results-list-pane {
-  width: 100%;
-  min-width: 0;
-  border-right: 0;
-}
-.results-area:not(.has-results) .results-detail-pane { display: none; }
 
 /* ── Status line ───────────────────────────────────────────── */
 .results-status {
@@ -665,9 +656,6 @@
 }
 .empty-state-icon { font-size: 40px; opacity: 0.4; }
 .empty-state-text { font-size: 15px; }
-.empty-state-hint { font-size: 13px; color: var(--text-tertiary); max-width: 34em; }
-/* Full-canvas pre-search invitation — larger headline, real entry points. */
-.search-empty-hero .empty-state-text { font-size: 17px; font-weight: 600; color: var(--text-primary); }
-.search-empty-actions { display: flex; gap: 10px; margin-top: 6px; }
+.empty-state-hint { font-size: 13px; }
 
 /* ── Placeholder pages ─────────────────────────────────────── */

@@ -149,16 +149,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="results-list-pane">
           <div class="results-status" id="results-status" style="display:none"></div>
           <div id="results-list">
-            <div class="empty-state search-empty-hero">
+            <div class="empty-state">
               <div class="empty-state-icon">
-                <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><circle cx="20" cy="20" r="14"/><line x1="30" y1="30" x2="42" y2="42"/></svg>
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><circle cx="20" cy="20" r="14"/><line x1="30" y1="30" x2="42" y2="42"/></svg>
               </div>
-              <div class="empty-state-text">粘贴一段引文，定位它在哪本书第几页</div>
-              <div class="empty-state-hint">支持精确匹配和模糊检索；页码取自校准后的引用页</div>
-              <div class="search-empty-actions">
-                <button class="action-btn primary" type="button" onclick="navigateTo('import')">导入文献</button>
-                <button class="action-btn" type="button" onclick="navigateTo('library')">查看文献库</button>
-              </div>
+              <div class="empty-state-text">输入引文开始检索</div>
+              <div class="empty-state-hint">支持精确匹配和模糊检索</div>
             </div>
           </div>
         </div>
@@ -505,7 +501,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">
             <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">管理独立账号与本机 Token</span></span>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span></span>
               <span id="mineru-config-status" class="settings-status">读取中…</span>
               <button class="action-btn primary mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
@@ -518,9 +514,40 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <button id="mineru-service-save" class="action-btn" type="button" onclick="saveMineruServiceAddress()">保存地址</button>
                 </div>
               </section>
-              <section class="mineru-account-management" aria-labelledby="mineru-account-table-title">
-                <div class="mineru-table-heading"><div><strong id="mineru-account-table-title">账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
+              <section class="mineru-account-management">
+                <div class="mineru-table-heading"><div><strong>账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
                 <div id="mineru-account-list" class="mineru-account-list" aria-live="polite"></div>
+                <div class="vision-editor-card mineru-editor-card" id="mineru-editor-card" hidden>
+                    <div class="vision-editor-head">
+                      <span class="vision-avatar vision-avatar-lg" aria-hidden="true"><span class="mineru-brand-glyph"></span></span>
+                      <div class="vision-editor-titles">
+                        <strong id="mineru-editor-title">添加 MinerU 账号</strong>
+                        <small>Token 只保存在本机应用数据中</small>
+                      </div>
+                      <label class="ui-switch" title="停用后不再分配新的解析任务">
+                        <input id="mineru-account-enabled" type="checkbox" checked>
+                        <span class="ui-switch-track" aria-hidden="true"></span>
+                        <span class="ui-switch-text">启用</span>
+                      </label>
+                    </div>
+                    <div class="settings-grid vision-provider-editor">
+                      <input id="mineru-account-id" type="hidden">
+                      <label class="settings-label" for="mineru-account-name">账号名称</label>
+                      <div class="settings-control"><input id="mineru-account-name" class="settings-input" type="text" maxlength="120" autocomplete="off" placeholder="例如：工作账号"><small>仅用于本地账号列表和解析统计</small></div>
+                      <label class="settings-label" for="mineru-token">API Token</label>
+                      <div class="settings-control"><div class="settings-input-row"><input id="mineru-token" class="settings-input" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token"><button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button></div><small id="mineru-token-help">新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机</small></div>
+                      <label class="settings-label" for="mineru-expires-at">到期日期</label>
+                      <div class="settings-control"><input id="mineru-expires-at" class="settings-input settings-input-date" type="date"><small>仅作本地提醒，不影响解析调度</small></div>
+                      <span class="settings-label"></span>
+                      <div class="settings-control settings-actions">
+                        <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
+                        <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
+                        <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
+                        <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </section>
             </div>
           </section>
@@ -696,6 +723,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span id="data-location-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="data-location-body">
+            <div class="data-location-error" id="data-location-error" hidden>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 2.8 17h14.4L10 2.5Z"/><path d="M10 8v4M10 15h.01"/></svg>
+              <div class="data-location-error-copy">
+                <strong>读不到当前数据位置</strong>
+                <span id="data-location-error-reason">读取失败</span>
+              </div>
+              <button class="action-btn data-location-error-retry" type="button" onclick="loadDataLocation()">重新读取</button>
+            </div>
             <div class="data-location-card">
               <span class="data-location-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><path d="M7.5 15.5h9"/></svg></span>
               <div class="data-location-copy">
@@ -795,23 +830,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
   </div><!-- /main-area -->
 </div><!-- /app-shell -->
 
-<dialog id="mineru-account-dialog" class="mineru-account-dialog" aria-labelledby="mineru-editor-title">
-  <form class="mineru-account-form" method="dialog" onsubmit="saveMineruConfig(event)">
-    <div class="mineru-dialog-head">
-      <div><strong id="mineru-editor-title">添加 MinerU 账号</strong><small>Token 只保存在本机应用数据中</small></div>
-      <button class="mineru-dialog-close" type="button" aria-label="关闭" onclick="closeMineruAccountDialog()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
-    </div>
-    <input id="mineru-account-id" type="hidden">
-    <div class="mineru-dialog-fields">
-      <label class="mineru-field" for="mineru-account-name"><span>账号名称</span><input id="mineru-account-name" class="settings-input" type="text" maxlength="120" autocomplete="off" placeholder="例如：工作账号"><small>仅用于本地账号列表和解析统计</small></label>
-      <label class="mineru-field" for="mineru-token"><span>API Token</span><div class="settings-input-row"><input id="mineru-token" class="settings-input" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token"><button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button></div><small id="mineru-token-help">新账号必填；可粘贴原始 Token 或完整 Bearer 值</small></label>
-      <label class="mineru-field" for="mineru-expires-at"><span>到期日期 <em>可选</em></span><input id="mineru-expires-at" class="settings-input settings-input-date" type="date"><small>仅作本地提醒，不影响解析调度</small></label>
-      <label class="mineru-enabled-row" for="mineru-account-enabled"><span><strong>启用账号</strong><small>停用后不再分配新的解析任务</small></span><span class="ui-switch"><input id="mineru-account-enabled" type="checkbox" checked><span class="ui-switch-track" aria-hidden="true"></span></span></label>
-    </div>
-    <p id="mineru-dialog-error" class="mineru-dialog-error" role="alert" aria-live="polite" hidden></p>
-    <div class="mineru-dialog-actions"><button class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button><button id="mineru-account-save" class="action-btn primary" type="submit">添加账号</button></div>
-  </form>
-</dialog>
 
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="app-dialog-backdrop" class="app-dialog-backdrop" aria-hidden="true" onclick="appDialogBackdropClick(event)">
