@@ -84,6 +84,9 @@ async function saveMineruLocalSettings() {
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '保存失败');
     renderMineruLocalSettings(data);
+    importQueue.filter(function(item) {
+      return item.jobId && (item.status === 'failed' || item.status === 'paused');
+    }).forEach(function(item) { pollImportJob(item.id); });
     if (hint) hint.textContent = data.enabled ? '已保存；在线 MinerU 失败后可手动切换' : '已关闭本地部署选项';
   } catch (error) {
     if (hint) hint.textContent = '未保存：' + error.message;

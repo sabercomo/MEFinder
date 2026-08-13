@@ -458,6 +458,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('本地部署（高级）', HTML)
         self.assertIn("fetch('/api/mineru-local'", HTML)
         self.assertIn("fetch('/api/mineru-local/test'", HTML)
+        self.assertIn("pollImportJob(item.id)", HTML)
         self.assertIn('切换到本地部署', HTML)
         self.assertIn("fetch('/api/parser-statistics'", HTML)
         self.assertIn("async function loadParserStatistics()", HTML)
