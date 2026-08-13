@@ -32,6 +32,7 @@ from .parser_provider import (
 
 
 MINERU_CLOUD_PROVIDER_ID = "mineru-cloud"
+MINERU_CLOUD_MAX_BYTES_PER_FILE = 200 * 1024 * 1024
 
 
 class MinerUCloudProvider(ParserProvider):
@@ -47,7 +48,7 @@ class MinerUCloudProvider(ParserProvider):
         client: Optional[MinerUClient] = None,
         client_factory: Callable[[MinerUConfig], MinerUClient] = MinerUClient,
         max_pages_per_file: int = 200,
-        max_bytes_per_file: Optional[int] = None,
+        max_bytes_per_file: Optional[int] = MINERU_CLOUD_MAX_BYTES_PER_FILE,
         max_concurrency: int = 1,
         supported_models: tuple[str, ...] = ("vlm",),
     ) -> None:

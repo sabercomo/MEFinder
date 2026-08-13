@@ -204,7 +204,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
                 io.BytesIO(b"x"),
                 pdf_parse_mode="vision",
             )
-        with self.assertRaisesRegex(MinerUError, "600 MB"):
+        with self.assertRaisesRegex(MinerUError, "文件为空"):
             self.coordinator.import_stream("paper.pdf", 0, io.BytesIO())
 
     def test_chunked_upload_lifecycle_preserves_payload_and_metadata(self) -> None:
@@ -266,14 +266,15 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
         self.assertFalse(self.coordinator.has_active_uploads())
         self.assertIn("upload_id", second)
 
-    def test_chunked_start_preserves_store_size_status(self) -> None:
-        with self.assertRaises(ChunkedUploadError) as raised:
-            self.coordinator.start_chunked(
-                "paper.pdf",
-                600 * 1024 * 1024 + 1,
-            )
-        self.assertEqual(raised.exception.status, 413)
-        self.assertEqual(str(raised.exception), "文件为空或超过 600 MB 限制。")
+    def test_chunked_start_allows_files_larger_than_3_5_gib(self) -> None:
+        total_size = 7 * 512 * 1024 * 1024
+        started = self.coordinator.start_chunked(
+            "paper.pdf",
+            total_size,
+        )
+
+        self.assertTrue(started["ok"])
+        self.assertEqual(started["total_size"], total_size)
 
     def test_finished_upload_is_cleaned_if_type_detection_fails(self) -> None:
         coordinator = DocumentImportCoordinator(

@@ -12,6 +12,7 @@ from src.me_finder.mineru_local_provider import (
     MinerULocalProvider,
 )
 from src.me_finder.mineru_provider import MinerUCloudProvider
+from src.me_finder.large_document.slicing import SlicePlanner
 from src.me_finder.parser_provider import (
     ParserProviderError,
     ParserRequest,
@@ -224,6 +225,20 @@ class MinerULocalProviderTests(unittest.TestCase):
         self.assertEqual(capability.max_bytes_per_file, 128 * 1024 * 1024)
         self.assertEqual(capability.max_concurrency, 3)
         self.assertTrue(capability.supports_stream_upload)
+
+    def test_default_capability_slices_a_3_5_gib_document(self) -> None:
+        capability = MinerULocalProvider(MinerULocalConfig()).capabilities()
+        ranges = SlicePlanner().plan(
+            total_pages=1000,
+            total_bytes=7 * 512 * 1024 * 1024,
+            capabilities=capability,
+        )
+
+        self.assertGreater(len(ranges), 1)
+        self.assertTrue(all(item.page_count <= 200 for item in ranges))
+        self.assertTrue(
+            all(item.estimated_bytes <= 200 * 1024 * 1024 for item in ranges)
+        )
 
 
 if __name__ == "__main__":

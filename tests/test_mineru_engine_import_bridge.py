@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from src.me_finder.database import build_database, replace_source_in_database
 from src.me_finder.large_document.job_ledger import JobLedger
 from src.me_finder.large_document.merge import write_normalized_result
 from src.me_finder.large_document.mineru_accounts import MinerUAccountService
@@ -20,6 +22,7 @@ from src.me_finder.pdf_import_service import (
     load_import_config,
     parse_pdf_with_mineru,
 )
+from src.me_finder.pdf_extractors import extract_pdf_source
 
 
 class MinerUEngineImportBridgeTests(unittest.TestCase):
@@ -151,6 +154,46 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             )
             self.assertEqual(local_manifest["provider_id"], "mineru-local")
             self.assertEqual(local_manifest["provider_name"], "本地 MinerU")
+
+            document = load_import_config(config_path)["documents"][0]
+            with (
+                patch(
+                    "src.me_finder.pdf_extractors.load_pymupdf",
+                    return_value=None,
+                ),
+                patch(
+                    "src.me_finder.pdf_extractors.PageMappingService.infer",
+                    return_value={
+                        "method": "uncalibrated",
+                        "selected_segments": [],
+                        "applied_segments": [],
+                        "failure_reasons": [],
+                    },
+                ),
+            ):
+                extracted = extract_pdf_source(source, root, document)
+            index_path = root / "data" / "index.sqlite3"
+            build_database({"metadata": {}}, index_path)
+            replace_source_in_database(
+                extracted,
+                index_path,
+                backup_existing=False,
+            )
+            with sqlite3.connect(index_path) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",
+                        (source_id,),
+                    ).fetchone()[0],
+                    4,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM paragraphs WHERE source_file_id = ?",
+                        (source_id,),
+                    ).fetchone()[0],
+                    4,
+                )
 
     def test_multi_account_config_switches_existing_import_to_engine(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

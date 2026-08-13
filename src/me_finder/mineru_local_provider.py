@@ -34,6 +34,8 @@ from .parser_provider import (
 
 MINERU_LOCAL_PROVIDER_ID = "mineru-local"
 MAX_LOCAL_JSON_RESPONSE_BYTES = 64 * 1024 * 1024
+DEFAULT_LOCAL_SLICE_MAX_PAGES = 200
+DEFAULT_LOCAL_SLICE_MAX_BYTES = 200 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -43,8 +45,8 @@ class MinerULocalConfig:
     parse_method: str = "auto"
     language: str = "ch"
     timeout_seconds: float = 300.0
-    max_pages_per_file: Optional[int] = None
-    max_bytes_per_file: Optional[int] = None
+    max_pages_per_file: Optional[int] = DEFAULT_LOCAL_SLICE_MAX_PAGES
+    max_bytes_per_file: Optional[int] = DEFAULT_LOCAL_SLICE_MAX_BYTES
     max_concurrency: int = 1
     return_content_list: bool = True
     return_middle_json: bool = True

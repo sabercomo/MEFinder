@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import BinaryIO, Dict, Mapping
 
 
-MAX_UPLOAD_BYTES = 600 * 1024 * 1024
 DEFAULT_CHUNK_BYTES = 4 * 1024 * 1024
 MAX_CHUNK_BYTES = 8 * 1024 * 1024
 STALE_UPLOAD_SECONDS = 6 * 60 * 60
@@ -58,13 +57,15 @@ class ChunkedUploadStore:
         self,
         directory: Path,
         *,
-        max_upload_bytes: int = MAX_UPLOAD_BYTES,
+        max_upload_bytes: int | None = None,
         chunk_bytes: int = DEFAULT_CHUNK_BYTES,
         max_chunk_bytes: int = MAX_CHUNK_BYTES,
         stale_after_seconds: int = STALE_UPLOAD_SECONDS,
     ) -> None:
         self.directory = Path(directory)
-        self.max_upload_bytes = int(max_upload_bytes)
+        self.max_upload_bytes = (
+            int(max_upload_bytes) if max_upload_bytes is not None else None
+        )
         self.chunk_bytes = int(chunk_bytes)
         self.max_chunk_bytes = int(max_chunk_bytes)
         self.stale_after_seconds = int(stale_after_seconds)
@@ -82,8 +83,13 @@ class ChunkedUploadStore:
         metadata: Mapping[str, str] | None = None,
     ) -> Dict[str, object]:
         total_size = int(total_size)
-        if total_size <= 0 or total_size > self.max_upload_bytes:
-            raise ChunkedUploadError("文件为空或超过 600 MB 限制。", status=413)
+        if total_size <= 0:
+            raise ChunkedUploadError("文件为空。", status=413)
+        if (
+            self.max_upload_bytes is not None
+            and total_size > self.max_upload_bytes
+        ):
+            raise ChunkedUploadError("文件超过允许的大小。", status=413)
         safe_name = Path(str(filename)).name
         if not safe_name or safe_name in {".", ".."}:
             raise ChunkedUploadError("无法识别文件名。")

@@ -165,6 +165,10 @@ class ParserProviderContractTests(unittest.TestCase):
     def test_mineru_cloud_matches_existing_submit_poll_fetch_behavior(self) -> None:
         client = FakeMinerUClient()
         provider = MinerUCloudProvider(client=client)
+        self.assertEqual(
+            provider.capabilities().max_bytes_per_file,
+            200 * 1024 * 1024,
+        )
         submission = provider.submit(self.request)
         self.assertEqual(submission.remote_task_id, "batch-1")
         self.assertEqual(client.applied[0][0]["name"], "slice.pdf")

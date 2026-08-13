@@ -335,8 +335,8 @@ class DocumentImportCoordinator:
         length: int,
         is_pdf: bool,
     ) -> Tuple[str, Path]:
-        if length <= 0 or length > 600 * 1024 * 1024:
-            raise MinerUError("文件为空或超过 600 MB 限制。")
+        if length <= 0:
+            raise MinerUError("文件为空。")
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
             raise MinerUError("无法识别文件名。")
