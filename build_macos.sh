@@ -90,7 +90,18 @@ finally:
 PY
 cp "config/pdf_imports.empty.json" "$MEFINDER_STAGE/config/pdf_imports.json"
 cp "config/mineru_api.local.example.json" "$MEFINDER_STAGE/config/mineru_api.local.example.json"
-MEFINDER_PYTHON_LICENSE="$($MEFINDER_PYTHON -c 'from pathlib import Path; import sys; print(Path(sys.base_prefix) / "LICENSE.txt")')"
+MEFINDER_PYTHON_LICENSE="$("$MEFINDER_PYTHON" - <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.base_prefix)
+candidates = (
+    root / "LICENSE.txt",
+    root / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "LICENSE.txt",
+)
+print(next((path for path in candidates if path.is_file()), candidates[0]))
+PY
+)"
 if [[ ! -f "$MEFINDER_PYTHON_LICENSE" ]]; then
   echo "Selected Python runtime license was not found: $MEFINDER_PYTHON_LICENSE" >&2
   exit 1

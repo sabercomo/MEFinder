@@ -125,6 +125,10 @@ class DesktopPortableTests(unittest.TestCase):
             spec_source,
         )
         self.assertIn("MEFINDER_PYTHON_LICENSE", build_source)
+        self.assertIn(
+            'root / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"',
+            build_source,
+        )
         self.assertIn("ZIP does not contain THIRD_PARTY_LICENSES", build_source)
         self.assertIn(
             '"$MEFINDER_DMG_MOUNT/THIRD_PARTY_LICENSES"',
