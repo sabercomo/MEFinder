@@ -30,6 +30,11 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("SPDX-License-Identifier: AGPL-3.0-only", notices)
         self.assertIn("does not use the Artifex commercial license", notices)
 
+    def test_readme_does_not_claim_unapproved_signpath_signing(self) -> None:
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("Free code signing provided by SignPath.io", readme)
+
     def test_windows_release_payloads_include_license_files(self) -> None:
         for filename in ("LICENSE", "THIRD_PARTY_NOTICES.txt"):
             self.assertIn(f'-LiteralPath "{filename}"', self.build_script)
