@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  如果 MEFinder 对你有帮助，欢迎点亮 ⭐ 支持我们！
+  如果 MEFinder 对你有帮助，欢迎点亮 ⭐ 支持我！
   <br>
   <a href="https://github.com/sabercomo/MEFinder/stargazers"><img src="https://img.shields.io/github/stars/sabercomo/MEFinder?style=social" alt="GitHub Stars"></a>
 </p>
