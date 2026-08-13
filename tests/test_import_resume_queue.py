@@ -19,6 +19,7 @@ class ImportJobJournalTests(unittest.TestCase):
         *,
         job_id: str = "import-one",
         status: str = "processing",
+        replaces_job_id: str | None = None,
     ) -> dict[str, object]:
         return journal.save_job(
             {
@@ -37,6 +38,7 @@ class ImportJobJournalTests(unittest.TestCase):
             total_pages=3,
             completed_pages=[1],
             failed_pages=[{"page": 2, "error": "temporary"}],
+            replaces_job_id=replaces_job_id,
         )
 
     def test_saves_serializable_job_context_and_progress(self) -> None:
@@ -120,6 +122,34 @@ class ImportJobJournalTests(unittest.TestCase):
                 journal.get_job("import-one")["context"]["provider_id"],
                 "vision-fallback",
             )
+
+    def test_retry_replacement_generations_are_monotonic_per_predecessor(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "paper.pdf"
+            target.write_bytes(b"%PDF-test")
+            journal = ImportJobJournal(root / "jobs")
+
+            first = self._save(
+                journal,
+                target,
+                job_id="retry-first",
+                replaces_job_id="retry-old",
+            )
+            second = self._save(
+                journal,
+                target,
+                job_id="retry-second",
+                replaces_job_id="retry-old",
+            )
+
+        self.assertEqual(first["replaces_job_id"], "retry-old")
+        self.assertEqual(first["replacement_lineage_id"], "retry-old")
+        self.assertEqual(first["replacement_generation"], 1)
+        self.assertEqual(second["replacement_lineage_id"], "retry-old")
+        self.assertEqual(second["replacement_generation"], 2)
 
     def test_startup_pauses_running_jobs_without_submitting_work(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

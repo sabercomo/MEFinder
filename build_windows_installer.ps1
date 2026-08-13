@@ -1,7 +1,8 @@
 param(
     [string]$Version = "",
     [string]$ISCCPath = "",
-    [string]$PythonExe = ""
+    [string]$PythonExe = "",
+    [string]$PackagerPythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,6 +62,12 @@ try {
         $pythonCommand = "py"
         $pythonLauncherArgs = @("-3")
     }
+    $packagerPythonCommand = if ($PackagerPythonExe) {
+        $PackagerPythonExe
+    } else {
+        $pythonCommand
+    }
+    $packagerPythonArgs = if ($PackagerPythonExe) { @() } else { $pythonLauncherArgs }
 
     $pythonInfoOutput = & $pythonCommand @pythonLauncherArgs -c "import struct, sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}|{struct.calcsize(chr(80)) * 8}')"
     if ($LASTEXITCODE -ne 0) { throw "Could not start the selected Python interpreter." }
@@ -99,6 +106,10 @@ try {
         tests.test_anchor_metadata `
         tests.test_api_fallback_recovery `
         tests.test_backup_service `
+        tests.test_backup_file_picker `
+        tests.test_data_location `
+        tests.test_desktop_shell_controller `
+        tests.test_scan_directory_picker `
         tests.test_batch_document_removal `
         tests.test_citations `
         tests.test_cnki_citation `
@@ -141,6 +152,15 @@ try {
         tests.test_import_resume_vision `
         tests.test_import_resume_web `
         tests.test_mineru_config `
+        tests.test_mineru_accounts `
+        tests.test_mineru_accounts_web `
+        tests.test_mineru_local_settings `
+        tests.test_mineru_local_provider `
+        tests.test_mineru_engine_import_bridge `
+        tests.test_parser_settings_controller `
+        tests.test_import_job_controller `
+        tests.test_import_parser_executor `
+        tests.test_import_orchestrator `
         tests.test_portable_index_rebuild `
         tests.test_windows_desktop `
         tests.test_update_service `
@@ -166,7 +186,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }
 
-    & $pythonCommand @pythonLauncherArgs -m PyInstaller desktop.spec --clean --noconfirm
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
     $appExecutables = @(Get-ChildItem -LiteralPath $DistPath -Filter "*.exe" -File)
     if ($appExecutables.Count -ne 1) {

@@ -663,7 +663,7 @@ function drawerFileInfoHTML(src, vol) {
     + '</div>';
 }
 
-// 主操作栏收敛为「打开原文」+ ⋯（重新解析 / 接受自动映射 / 检查异常 / 移除）。
+// 主操作栏收敛为「打开原文」+ ⋯（重新解析 / 导出 / 页码动作 / 移除）。
 // 「自动检测页码 / 编辑区间」不再在这里重复——页码校准卡片是唯一入口（L-04）。
 function drawerMainActionsHTML(src) {
   var sid = esc(src.source_file_id);
@@ -676,6 +676,7 @@ function drawerMainActionsHTML(src) {
     var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
     if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
     if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
+    items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档</button>';
     items += '<div class="bib-menu-sep"></div>';
   }
   items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
@@ -685,6 +686,24 @@ function drawerMainActionsHTML(src) {
     + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
     + '<span class="bib-menu bib-menu-end" id="drawer-more-menu" role="menu">' + items + '</span></span>'
     + '</div>';
+}
+
+async function exportLibraryDocument(sourceId) {
+  if (!sourceId) return;
+  showToast('正在导出这本 PDF…');
+  try {
+    var response = await fetch('/api/document/export', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source_id: sourceId})
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '导出失败');
+    showToast('已导出 ' + Number(data.page_count || 0).toLocaleString()
+      + ' 页到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
+  } catch (error) {
+    showToast('导出 MEFinder 文档失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
+  }
 }
 
 async function selectLibDoc(sourceId) {
@@ -792,4 +811,3 @@ function updateLibraryEntry(sourceId) {
     if (src && src.source_type === 'pdf') renderDrawerCalibrationSummary(src);
   }
 }
-

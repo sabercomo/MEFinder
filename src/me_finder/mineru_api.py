@@ -118,6 +118,15 @@ def _usable_token(value: object) -> bool:
     return bool(_validated_token(value))
 
 
+def normalize_mineru_token(value: object) -> str:
+    """Return one validated raw MinerU token without a Bearer prefix."""
+
+    token = _validated_token(value)
+    if not token:
+        raise MinerUError("请填写 MinerU API 管理页面创建的 Token。")
+    return token
+
+
 def _configured_token(data: Dict[str, object]) -> str:
     for field in ("token", "api_token", "bearer_token"):
         token = _validated_token(data.get(field))
@@ -260,6 +269,24 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
     return mineru_config_summary(path)
 
 
+def clear_legacy_mineru_token(
+    path: Path = DEFAULT_MINERU_CONFIG_PATH,
+) -> None:
+    """Remove obsolete single-account Token copies after account migration."""
+
+    path = Path(path)
+    if not path.is_file():
+        return
+    data = read_mineru_config_data(path)
+    changed = False
+    for field in ("token", "api_token", "bearer_token"):
+        if field in data:
+            data.pop(field)
+            changed = True
+    if changed:
+        atomic_write_json(path, data)
+
+
 def load_mineru_config(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> MinerUConfig:
     path = Path(path)
     if not path.exists():
@@ -328,11 +355,20 @@ class MinerUClient:
         return self._json_request("POST", "/api/v4/file-urls/batch", payload)
 
     def upload_file(self, upload_url: str, path: Path) -> int:
-        data = Path(path).read_bytes()
-        request = urllib.request.Request(upload_url, data=data, headers={"Content-Type": ""}, method="PUT")
+        path = Path(path)
         try:
-            with self.opener.open(request, timeout=180) as response:
-                return int(response.status)
+            with path.open("rb") as data:
+                request = urllib.request.Request(
+                    upload_url,
+                    data=data,
+                    headers={
+                        "Content-Type": "",
+                        "Content-Length": str(path.stat().st_size),
+                    },
+                    method="PUT",
+                )
+                with self.opener.open(request, timeout=180) as response:
+                    return int(response.status)
         except urllib.error.HTTPError as exc:
             raise MinerUError(
                 f"Upload failed: HTTP {exc.code}",
@@ -354,9 +390,19 @@ class MinerUClient:
     def download_url(self, url: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         request = urllib.request.Request(url, method="GET")
+        partial = output_path.with_name(output_path.name + ".partial")
         try:
-            with self.opener.open(request, timeout=300) as response:
-                output_path.write_bytes(response.read())
+            with self.opener.open(request, timeout=300) as response, partial.open(
+                "wb"
+            ) as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            partial.replace(output_path)
         except urllib.error.HTTPError as exc:
             raise MinerUError(f"Download failed: HTTP {exc.code}") from exc
 
@@ -488,11 +534,20 @@ class MinerUAgentClient:
         return self._json_request("POST", "/api/v1/agent/parse/file", payload)
 
     def upload_file(self, upload_url: str, path: Path) -> int:
-        data = Path(path).read_bytes()
-        request = urllib.request.Request(upload_url, data=data, headers={"Content-Type": ""}, method="PUT")
+        path = Path(path)
         try:
-            with self.opener.open(request, timeout=180) as response:
-                return int(response.status)
+            with path.open("rb") as data:
+                request = urllib.request.Request(
+                    upload_url,
+                    data=data,
+                    headers={
+                        "Content-Type": "",
+                        "Content-Length": str(path.stat().st_size),
+                    },
+                    method="PUT",
+                )
+                with self.opener.open(request, timeout=180) as response:
+                    return int(response.status)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")
             raise MinerUError(f"Agent upload failed: HTTP {exc.code}: {detail}") from exc
@@ -503,9 +558,19 @@ class MinerUAgentClient:
     def download_url(self, url: str, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         request = urllib.request.Request(url, method="GET")
+        partial = output_path.with_name(output_path.name + ".partial")
         try:
-            with self.opener.open(request, timeout=300) as response:
-                output_path.write_bytes(response.read())
+            with self.opener.open(request, timeout=300) as response, partial.open(
+                "wb"
+            ) as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            partial.replace(output_path)
         except urllib.error.HTTPError as exc:
             raise MinerUError(f"Agent download failed: HTTP {exc.code}") from exc
 
@@ -552,6 +617,22 @@ def test_mineru_connection(
             allow_parser_fallback=True,
         )
     config = load_mineru_config(config_path)
+    return test_mineru_credential(config.token, api_base=config.api_base)
+
+
+def test_mineru_credential(
+    token: object,
+    *,
+    api_base: str = DEFAULT_MINERU_API_BASE,
+) -> Dict[str, object]:
+    """Test one resolved account Token without writing it to a temp config."""
+
+    normalized_token = normalize_mineru_token(token)
+    base = str(api_base or DEFAULT_MINERU_API_BASE).strip().rstrip("/")
+    parsed = urlparse(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise MinerUError("API 地址必须是以 http:// 或 https:// 开头的网址。")
+    config = MinerUConfig(token=normalized_token, api_base=base)
     client = MinerUClient(config)
     started = time.perf_counter()
     response = client.apply_upload_urls(

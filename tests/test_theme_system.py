@@ -209,11 +209,33 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
         self.assertRegex(
             HTML,
-            r"#appearance-card\.active\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*1120px",
+            r"\.settings-section\s*\{[^}]*max-width:\s*none;[^}]*margin:\s*0;",
+        )
+        self.assertRegex(
+            HTML,
+            r"#appearance-card\.active\s*\{[^}]*max-width:\s*none",
         )
         self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
         self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
         self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*height:\s*140px")
+
+    def test_large_desktop_settings_trade_density_for_legibility(self) -> None:
+        self.assertIn(
+            "@media (min-width: 1500px) and (min-height: 800px)",
+            HTML,
+        )
+        self.assertRegex(
+            HTML,
+            re.compile(
+                r"@media \(min-width: 1500px\) and \(min-height: 800px\)\s*\{.*?"
+                r"\.settings-section,\s*#appearance-card\.active\s*\{[^}]*"
+                r"max-width:\s*none;[^}]*\}.*?"
+                r"\.settings-section-title\s*\{\s*font-size:\s*20px;\s*\}",
+                re.S,
+            ),
+        )
+        self.assertIn(".pdf-open-option-copy strong { font-size: 16px; }", HTML)
+        self.assertIn("#bib-completion-settings .auto-match-hint { font-size: 15px; }", HTML)
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(
@@ -276,6 +298,12 @@ class ThemeMarkupTests(unittest.TestCase):
 
         self.assertIn('id="data-location-settings"', HTML)
         self.assertIn('id="data-location-body"', HTML)
+        self.assertIn('class="settings-nav-item cap-data-location"', HTML)
+        self.assertIn("dataset.dataLocationAvailable = 'true'", HTML)
+        self.assertIn(
+            'html[data-data-location-available="true"] .settings-nav-item.cap-data-location',
+            HTML,
+        )
         self.assertIn(
             "showSettingsCategory('data-location-settings')",
             HTML,
@@ -410,6 +438,7 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "mineru-api-settings": "mineru-api-body",
+            "statistics-settings": "statistics-settings-body",
             "vision-api-settings": "vision-api-body",
             "citation-format-settings": "citation-format-body",
             "bib-completion-settings": "bib-completion-body",
@@ -433,6 +462,33 @@ class ThemeMarkupTests(unittest.TestCase):
                 rf'class="settings-collapse-body" id="{body_id}">',
             )
 
+        settings_source = Path("src/me_finder/templates/index.html").read_text(
+            encoding="utf-8"
+        )
+        panels = [
+            (
+                settings_source.index(f'id="{section_id}" role="tabpanel"'),
+                section_id,
+            )
+            for section_id in sections
+        ]
+        panels.sort()
+        settings_end = settings_source.index(
+            '</div>\n      </div>\n    </div>', panels[-1][0]
+        )
+        for index, (panel_start, section_id) in enumerate(panels):
+            panel_end = (
+                panels[index + 1][0]
+                if index + 1 < len(panels)
+                else settings_end
+            )
+            panel = settings_source[panel_start:panel_end]
+            self.assertEqual(
+                panel.count("<div"),
+                panel.count("</div>"),
+                f"{section_id} 的 div 层级不平衡",
+            )
+
         show_start = HTML.index("function showSettingsCategory(sectionId)")
         show_end = HTML.index("function ensureVisibleSettingsCategory()", show_start)
         show_block = HTML[show_start:show_end]
@@ -440,6 +496,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("btn.setAttribute('aria-selected', on ? 'true' : 'false')", show_block)
         self.assertIn("function ensureVisibleSettingsCategory()", HTML)
         self.assertIn(".settings-section.active { display: block; }", HTML)
+        self.assertIn("#statistics-settings.active { max-width: none; }", HTML)
+        self.assertIn(".parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 32px;", HTML)
+        self.assertIn(".parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 14px;", HTML)
 
     def test_update_heading_uses_one_baseline_for_title_and_note(self) -> None:
         heading_rule = re.search(

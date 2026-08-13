@@ -32,6 +32,7 @@ from .pdf_page_mapping import PageMapper, mapped_page_display
 PDF_TYPES = {"native_text", "scanned", "broken_text", "complex_layout"}
 CROSS_PAGE_TAIL_CHARS = 900
 CROSS_PAGE_HEAD_CHARS = 900
+SIMPLE_PDF_MAX_BYTES = 128 * 1024 * 1024
 
 _BIBLIOGRAPHIC_STATE_FIELDS = (
     "document_type",
@@ -160,7 +161,7 @@ def extract_pdf_source(
     original_file_name = Path(
         str(config.get("original_file_name") or path.name)
     ).name or path.name
-    structured_segments = load_mineru_segments(config)
+    structured_segments = load_mineru_segments(config, root=root)
     profile = mineru_profile(path, structured_segments) if structured_segments else detect_pdf_type(path)
     source_file = source_file_record(
         path,
@@ -516,19 +517,36 @@ def write_parsed_pdf_snapshot(
     pages: Sequence[Dict[str, object]],
 ) -> None:
     parsed_dir.mkdir(parents=True, exist_ok=True)
-    snapshot = {
-        "document_id": document_id,
-        "profile": profile,
-        "page_count": len(pages),
-        "pages": pages,
-    }
-    (parsed_dir / f"{document_id}.json").write_text(
-        json.dumps(snapshot, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    target = parsed_dir / f"{document_id}.json"
+    partial = target.with_name(target.name + ".partial")
+    encoder = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"))
+    with partial.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write("{")
+        stream.write('"document_id":')
+        for chunk in encoder.iterencode(document_id):
+            stream.write(chunk)
+        stream.write(',"profile":')
+        for chunk in encoder.iterencode(profile):
+            stream.write(chunk)
+        stream.write(f',"page_count":{len(pages)},"pages":[')
+        for index, page in enumerate(pages):
+            if index:
+                stream.write(",")
+            for chunk in encoder.iterencode(page):
+                stream.write(chunk)
+        stream.write("]}\n")
+        stream.flush()
+        import os
+
+        os.fsync(stream.fileno())
+    partial.replace(target)
 
 
-def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
+def load_mineru_segments(
+    config: Dict[str, object],
+    *,
+    root: Optional[Path] = None,
+) -> List[Dict[str, object]]:
     parser_results = (
         config.get("parser_results")
         or config.get("mineru")
@@ -537,13 +555,16 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
     if not isinstance(parser_results, dict):
         return []
     segments: List[Dict[str, object]] = []
-    manifest_path = parser_results.get("manifest")
-    if manifest_path:
-        manifest = json.loads(Path(str(manifest_path)).read_text(encoding="utf-8-sig"))
+    raw_manifest_path = parser_results.get("manifest")
+    if raw_manifest_path:
+        manifest_path = Path(str(raw_manifest_path))
+        if root is not None and not manifest_path.is_absolute():
+            manifest_path = Path(root) / manifest_path
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         manifest_resume = (
             dict(parser_results.get("resume"))
             if isinstance(parser_results.get("resume"), dict)
-            else resume_summary(manifest, manifest_path=Path(str(manifest_path)))
+            else resume_summary(manifest, manifest_path=manifest_path)
         )
         for segment in manifest.get("segments", []):
             if not isinstance(segment, dict):
@@ -558,6 +579,11 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item.setdefault("provider_name", manifest.get("provider_name"))
             item.setdefault("model", manifest.get("model"))
             item.setdefault("import_resume", manifest_resume)
+            raw_result_dir = str(item.get("result_dir") or "").strip()
+            if root is not None and raw_result_dir:
+                result_dir = Path(raw_result_dir)
+                if not result_dir.is_absolute():
+                    item["result_dir"] = str(Path(root) / result_dir)
             segments.append(item)
     for segment in parser_results.get("segments", []):
         if isinstance(segment, dict):
@@ -566,6 +592,11 @@ def load_mineru_segments(config: Dict[str, object]) -> List[Dict[str, object]]:
             item.setdefault("provider_id", parser_results.get("provider_id"))
             item.setdefault("provider_name", parser_results.get("provider_name"))
             item.setdefault("model", parser_results.get("model"))
+            raw_result_dir = str(item.get("result_dir") or "").strip()
+            if root is not None and raw_result_dir:
+                result_dir = Path(raw_result_dir)
+                if not result_dir.is_absolute():
+                    item["result_dir"] = str(Path(root) / result_dir)
             segments.append(item)
     return [segment for segment in segments if segment.get("result_dir")]
 
@@ -972,7 +1003,19 @@ def attach_page_block_offsets(
 
 
 def low_level_count(path: Path, needle: bytes) -> int:
-    return path.read_bytes().count(needle)
+    if not needle:
+        return 0
+    count = 0
+    overlap = b""
+    with Path(path).open("rb") as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            data = overlap + chunk
+            count += data.count(needle)
+            overlap = data[-(len(needle) - 1) :] if len(needle) > 1 else b""
+    return count
 
 
 def make_pdf_paragraphs(
@@ -1341,6 +1384,11 @@ class SimplePDF:
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
+        if self.path.stat().st_size > SIMPLE_PDF_MAX_BYTES:
+            raise PDFExtractionError(
+                "Large PDF fallback parsing requires PyMuPDF; refusing to load "
+                "the complete file into memory."
+            )
         self.data = self.path.read_bytes()
         self.objects = self._parse_objects()
 

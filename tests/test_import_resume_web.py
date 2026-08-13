@@ -22,9 +22,34 @@ from src.me_finder.database import (
     build_database,
     replace_source_in_database as real_replace_source,
 )
+from src.me_finder.import_queue import ImportQueueFullError
+from src.me_finder.import_resume import ResumeManifestError
 from src.me_finder.web import make_handler
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+ORCHESTRATOR_SOURCE = Path(
+    "src/me_finder/application/import_orchestrator.py"
+).read_text(encoding="utf-8")
+PARSER_EXECUTOR_SOURCE = Path(
+    "src/me_finder/application/import_parser_executor.py"
+).read_text(encoding="utf-8")
+JOB_STORE_SOURCE = Path(
+    "src/me_finder/application/import_job_store.py"
+).read_text(encoding="utf-8")
+IMPORT_JOB_LIFECYCLE_SOURCE = Path(
+    "src/me_finder/application/import_job_lifecycle.py"
+).read_text(encoding="utf-8")
+IMPORT_JOB_CONTROLLER_SOURCE = Path(
+    "src/me_finder/import_job_controller.py"
+).read_text(encoding="utf-8")
+DELETION_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/document_deletion_coordinator.py"
+).read_text(encoding="utf-8")
+DOCUMENT_IMPORT_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/document_import_coordinator.py"
+).read_text(encoding="utf-8")
+
+
 def _read_app_source() -> str:
     """app.js 已按功能拆分到 static/js/，按文件名排序拼接还原完整源码。"""
 
@@ -101,33 +126,37 @@ def fake_pdf_extraction(
 
 class ImportResumeWebWiringTests(unittest.TestCase):
     def test_startup_restores_paused_jobs_without_automatic_queue_submission(self) -> None:
-        startup_start = WEB_SOURCE.index(
-            "for saved_job in import_job_journal.load_startup_jobs():"
+        startup_start = IMPORT_JOB_LIFECYCLE_SOURCE.index(
+            "def restore_startup_jobs("
         )
-        startup_end = WEB_SOURCE.index(
-            "def update_import_job(", startup_start
+        startup_end = IMPORT_JOB_LIFECYCLE_SOURCE.index(
+            "def add_job(", startup_start
         )
-        startup_block = WEB_SOURCE[startup_start:startup_end]
+        startup_block = IMPORT_JOB_LIFECYCLE_SOURCE[startup_start:startup_end]
 
         self.assertIn("restored_job = {", startup_block)
-        self.assertIn(
-            "import_jobs[saved_job_id] = restored_job",
-            startup_block,
-        )
-        self.assertIn('import_job_contexts[saved_job_id] = {', startup_block)
-        self.assertNotIn("import_task_queue.submit", startup_block)
-        self.assertNotIn("queue_import_job(", startup_block)
+        self.assertIn("self._store.restore_job(", startup_block)
+        self.assertNotIn("self._task_queue.submit", startup_block)
+        self.assertNotIn("self.queue_import_job(", startup_block)
 
     def test_resume_requires_an_explicit_api_call_before_queueing(self) -> None:
-        self.assertIn('parsed.path == "/api/import-resumable"', WEB_SOURCE)
-        self.assertIn('parsed.path == "/api/import-resume"', WEB_SOURCE)
-        resume_start = WEB_SOURCE.index("def resume_import_job(")
-        resume_end = WEB_SOURCE.index(
-            "def start_native_import_batch(", resume_start
+        self.assertIn('"/api/import-resumable": (', WEB_SOURCE)
+        self.assertIn('"/api/import-resume": import_job_controller.resume', WEB_SOURCE)
+        resume_start = ORCHESTRATOR_SOURCE.index("def resume_import_job(")
+        resume_end = ORCHESTRATOR_SOURCE.index(
+            "def dismiss_import_job(", resume_start
         )
-        resume_block = WEB_SOURCE[resume_start:resume_end]
-        self.assertIn('str(job.get("status") or "") not in {"paused", "failed"}', resume_block)
-        self.assertIn("queue_import_job(", resume_block)
+        resume_block = ORCHESTRATOR_SOURCE[resume_start:resume_end]
+        self.assertIn("self._job_lifecycle.begin_resume(", resume_block)
+        self.assertIn(
+            "self._store.resume_candidate(job_id)",
+            IMPORT_JOB_LIFECYCLE_SOURCE,
+        )
+        self.assertIn(
+            'str(job.get("status") or "") not in {"paused", "failed"}',
+            JOB_STORE_SOURCE,
+        )
+        self.assertIn("self.queue_import_job(", resume_block)
         self.assertIn("function loadResumableImports()", APP_SOURCE)
         self.assertIn("function resumeImport(id, options)", APP_SOURCE)
         self.assertIn("可能产生费用", APP_SOURCE)
@@ -168,43 +197,97 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
     def test_resume_revalidates_identity_and_prevents_duplicate_workers(self) -> None:
-        resume_start = WEB_SOURCE.index("def resume_import_job(")
-        resume_end = WEB_SOURCE.index(
+        resume_start = ORCHESTRATOR_SOURCE.index("def resume_import_job(")
+        resume_end = ORCHESTRATOR_SOURCE.index(
             "def dismiss_import_job(", resume_start
         )
-        resume_block = WEB_SOURCE[resume_start:resume_end]
-        self.assertIn("validated_import_target(job_id, context)", resume_block)
-        self.assertIn("already_running", resume_block)
-        self.assertIn("sha256_file(target)", WEB_SOURCE)
-        self.assertIn("同一文献已有解析任务正在运行", WEB_SOURCE)
+        resume_block = ORCHESTRATOR_SOURCE[resume_start:resume_end]
+        self.assertIn(
+            "validate_target=self.validated_import_target",
+            resume_block,
+        )
+        self.assertIn(
+            "target = validate_target(job_id, context)",
+            IMPORT_JOB_LIFECYCLE_SOURCE,
+        )
+        self.assertIn(
+            "self._store.begin_resume(",
+            IMPORT_JOB_LIFECYCLE_SOURCE,
+        )
+        self.assertIn("self._hash_file(target)", IMPORT_JOB_LIFECYCLE_SOURCE)
+        self.assertIn(
+            "hash_file=lambda path: sha256_file(path)",
+            ORCHESTRATOR_SOURCE,
+        )
+        self.assertIn("同一文献已有解析任务正在运行", JOB_STORE_SOURCE)
 
     def test_fallback_route_and_explicit_dismiss_are_durable(self) -> None:
-        self.assertIn("def switch_import_job_route(", WEB_SOURCE)
+        self.assertIn("def switch_import_job_route(", ORCHESTRATOR_SOURCE)
         self.assertIn(
-            "switch_import_job_route(\n"
-            "                        job_id,\n"
-            '                        parse_route="vision",\n'
-            "                        force_mineru=False,",
+            "jobs.switch_import_job_route(\n"
+            "            job_id,\n"
+            '            parse_route="vision",\n'
+            "            force_mineru=False,",
+            PARSER_EXECUTOR_SOURCE,
+        )
+        self.assertIn("jobs=self", ORCHESTRATOR_SOURCE)
+        self.assertIn(
+            '"/api/import-resume-dismiss": import_job_controller.dismiss',
             WEB_SOURCE,
         )
-        self.assertIn('parsed.path == "/api/import-resume-dismiss"', WEB_SOURCE)
         self.assertIn("function removeImport(id, options)", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
+
+    def test_active_queue_remove_stops_backend_parser(self) -> None:
+        self.assertIn("class ImportJobCancelled(RuntimeError):", JOB_STORE_SOURCE)
+        self.assertIn("ImportJobCancelled,", ORCHESTRATOR_SOURCE)
+        self.assertIn("self._cancelled_job_ids.add(job_id)", JOB_STORE_SOURCE)
+        self.assertIn('status="cancelling"', JOB_STORE_SOURCE)
+        self.assertIn("self.ensure_import_not_cancelled(job_id)", ORCHESTRATOR_SOURCE)
+        self.assertIn("self.finish_cancelled_import_job(job_id)", ORCHESTRATOR_SOURCE)
+        self.assertIn("q.status === 'processing'", APP_SOURCE)
+        self.assertIn("当前请求完成后不会再提交新页面", APP_SOURCE)
+        self.assertIn(
+            "['processing', 'paused', 'error'].indexOf(q.status) >= 0",
+            APP_SOURCE,
+        )
+
+    def test_interrupted_vision_job_can_switch_to_mineru_without_upload(self) -> None:
+        self.assertIn(
+            '"/api/import-retry-mineru": import_job_controller.retry_with_mineru',
+            WEB_SOURCE,
+        )
+        self.assertIn("force_mineru=True", IMPORT_JOB_CONTROLLER_SOURCE)
+        self.assertIn(
+            "self._imports.validated_import_target(", IMPORT_JOB_CONTROLLER_SOURCE
+        )
+        self.assertIn(
+            "self._imports.start_retry_import_job(",
+            IMPORT_JOB_CONTROLLER_SOURCE,
+        )
+        self.assertIn("function retryImportWithMinerU(id)", APP_SOURCE)
+        self.assertIn("改用 MinerU（免费）", APP_SOURCE)
+        self.assertIn("不需要重新上传文件", APP_SOURCE)
+        self.assertIn("fetch('/api/import-retry-mineru'", APP_SOURCE)
 
     def test_transient_mineru_interruption_respects_auto_switch_setting(self) -> None:
         # Auto-switch is now governed solely by the user's setting; a transient
         # interruption no longer hard-blocks it. But without the setting on, the
         # checkpoint is kept and NO paid fallback ever starts automatically.
-        prepare_start = WEB_SOURCE.index("def prepare_import_job(")
-        prepare_end = WEB_SOURCE.index("def run_import_job(", prepare_start)
-        block = WEB_SOURCE[prepare_start:prepare_end]
+        failure_start = PARSER_EXECUTOR_SOURCE.index(
+            "def _handle_mineru_failure("
+        )
+        failure_end = PARSER_EXECUTOR_SOURCE.index(
+            "def _record_vision_failure(", failure_start
+        )
+        block = PARSER_EXECUTOR_SOURCE[failure_start:failure_end]
         # The single auto-switch gate is derived from the user's saved setting.
         self.assertIn("auto_fallback = bool(", block)
         self.assertIn('summary.get("auto_fallback_from_mineru")', block)
         # The decision NOT to auto-switch is reached before any route switch, so
         # an auto-switch can only happen past that gate.
         no_switch = block.index("if not auto_fallback:")
-        switch_route = block.index("switch_import_job_route(")
+        switch_route = block.index("jobs.switch_import_job_route(")
         self.assertLess(no_switch, switch_route)
         # With auto-switch off, a transient interruption keeps the checkpoint and
         # never spends on a paid provider on its own.
@@ -218,26 +301,26 @@ class ImportResumeWebWiringTests(unittest.TestCase):
     def test_paid_retry_endpoint_revalidates_mineru_failure_server_side(
         self,
     ) -> None:
-        retry_start = WEB_SOURCE.index(
-            'if parsed.path == "/api/import-retry":'
+        retry_start = IMPORT_JOB_CONTROLLER_SOURCE.index(
+            "def retry_with_provider("
         )
-        retry_end = WEB_SOURCE.index(
-            'if parsed.path == "/api/import-resume":',
+        retry_end = IMPORT_JOB_CONTROLLER_SOURCE.index(
+            "def resume(",
             retry_start,
         )
-        retry_block = WEB_SOURCE[retry_start:retry_end]
+        retry_block = IMPORT_JOB_CONTROLLER_SOURCE[retry_start:retry_end]
         self.assertIn(
-            "is_provider_retry_eligible(previous_job, context)",
+            "self._imports.is_provider_retry_eligible(",
             retry_block,
         )
-        eligibility_start = WEB_SOURCE.index(
+        eligibility_start = ORCHESTRATOR_SOURCE.index(
             "def is_provider_retry_eligible("
         )
-        eligibility_end = WEB_SOURCE.index(
+        eligibility_end = ORCHESTRATOR_SOURCE.index(
             "def public_import_job(",
             eligibility_start,
         )
-        eligibility = WEB_SOURCE[eligibility_start:eligibility_end]
+        eligibility = ORCHESTRATOR_SOURCE[eligibility_start:eligibility_end]
         self.assertIn('str(job.get("failure_stage") or "") != "index"', eligibility)
         self.assertIn('bool(context.get("is_pdf"))', eligibility)
         self.assertIn('job.get("mineru_failed")', eligibility)
@@ -248,65 +331,99 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn('job.get("mineru_interrupted")', eligibility)
 
     def test_document_removal_blocks_running_parser_and_clears_old_jobs(self) -> None:
-        removal_start = WEB_SOURCE.index(
-            'if parsed.path == "/api/documents/remove":'
-        )
-        removal_end = WEB_SOURCE.index(
-            'if parsed.path == "/api/bibliographic-metadata/detect":',
-            removal_start,
-        )
-        removal_block = WEB_SOURCE[removal_start:removal_end]
-        self.assertIn("status=409", removal_block)
-        self.assertIn("仍在解析中", removal_block)
-        self.assertIn("sid in deleting_import_sources", removal_block)
-        self.assertIn("sid in pending_import_sources", removal_block)
-        self.assertIn("deleting_import_sources.add(sid)", removal_block)
-        self.assertIn("with rebuild_lock:", removal_block)
-        self.assertIn("import_job_journal.delete_job", removal_block)
-        self.assertIn("import_job_contexts.pop", removal_block)
-        self.assertIn("finally:", removal_block)
-        self.assertIn("deleting_import_sources.discard(sid)", removal_block)
-
-    def test_pdf_registration_is_reserved_before_config_mutation(self) -> None:
-        helper_start = WEB_SOURCE.index("def register_pdf_for_import(")
-        helper_end = WEB_SOURCE.index(
-            "def release_import_reservation(", helper_start
-        )
-        helper_block = WEB_SOURCE[helper_start:helper_end]
-        self.assertIn("sha256_file(target)[:16]", helper_block)
-        self.assertIn("with rebuild_lock, import_jobs_lock:", helper_block)
-        reserve = helper_block.index(
-            "_reserve_import_source_locked(predicted_source_id)"
-        )
-        register = helper_block.index("document = register_pdf(")
-        self.assertLess(reserve, register)
-        self.assertIn("pending_import_sources.discard", helper_block)
-        self.assertIn("register_pdf_for_import(", WEB_SOURCE)
-        self.assertIn("original_file_name=source_path.name", WEB_SOURCE)
         self.assertIn(
-            "consume_reservation=bool(reserved_source_id)",
+            '"/api/documents/remove": document_lifecycle_controller.remove',
             WEB_SOURCE,
         )
-        self.assertIn("release_item_reservations(prepared_items)", WEB_SOURCE)
+        self.assertIn(
+            "self._jobs.begin_source_deletion(source_file_id)",
+            DELETION_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "with self._index_runtime.mutation():",
+            DELETION_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "warnings = self._jobs.purge_source_jobs(",
+            DELETION_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "self._jobs.end_source_deletion(source_file_id)",
+            DELETION_COORDINATOR_SOURCE,
+        )
+        self.assertIn("该文献仍在解析中", JOB_STORE_SOURCE)
+
+    def test_pdf_registration_is_reserved_before_config_mutation(self) -> None:
+        helper_start = ORCHESTRATOR_SOURCE.index("def register_pdf_for_import(")
+        helper_end = ORCHESTRATOR_SOURCE.index(
+            "def release_import_reservation(", helper_start
+        )
+        helper_block = ORCHESTRATOR_SOURCE[helper_start:helper_end]
+        self.assertIn("sha256_file(target)[:16]", helper_block)
+        self.assertIn(
+            "with self._index_runtime.mutation(), import_config_lock():",
+            helper_block,
+        )
+        config_lock = helper_block.index("import_config_lock():")
+        job_store_lock = helper_block.index("with self._job_store.atomic():")
+        reserve = helper_block.index(
+            "self._job_store.reserve_source(predicted_source_id)"
+        )
+        register = helper_block.index("document = register_pdf(")
+        self.assertLess(config_lock, job_store_lock)
+        self.assertLess(job_store_lock, reserve)
+        self.assertLess(reserve, register)
+        self.assertIn("self._job_store.replace_reservation(", helper_block)
+        self.assertIn("self._job_store.release_reservation(", helper_block)
+        self.assertIn(
+            "self._jobs.register_pdf_for_import(",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "original_file_name=source_path.name",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "consume_reservation=bool(reserved_source_id)",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "self._jobs.release_item_reservations(prepared_items)",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
 
     def test_delete_cleanup_failure_does_not_strand_source_reservation(self) -> None:
-        removal_start = WEB_SOURCE.index(
-            'if parsed.path == "/api/documents/remove":'
+        coordinator_start = DELETION_COORDINATOR_SOURCE.index(
+            "class DocumentDeletionCoordinator:"
         )
-        removal_end = WEB_SOURCE.index(
-            'if parsed.path == "/api/bibliographic-metadata/detect":',
-            removal_start,
+        removal_start = DELETION_COORDINATOR_SOURCE.index(
+            "def remove(", coordinator_start
         )
-        removal_block = WEB_SOURCE[removal_start:removal_end]
-        cleanup = removal_block.index(
-            "import_job_journal.delete_job(stale_job_id)"
+        removal_end = DELETION_COORDINATOR_SOURCE.index(
+            "def remove_many(", removal_start
         )
-        release = removal_block.rindex(
-            "deleting_import_sources.discard(sid)"
+        removal_block = DELETION_COORDINATOR_SOURCE[
+            removal_start:removal_end
+        ]
+        self.assertIn("return self._perform_removal(", removal_block)
+        self.assertIn("finally:", removal_block)
+        self.assertIn(
+            "self._jobs.end_source_deletion(source_file_id)", removal_block
         )
-        self.assertLess(cleanup, release)
-        self.assertIn("journal_cleanup_warnings", removal_block)
-        self.assertIn("logging.warning(", removal_block)
+        self.assertIn(
+            "warnings = self._jobs.purge_source_jobs(",
+            DELETION_COORDINATOR_SOURCE,
+        )
+        purge_start = IMPORT_JOB_LIFECYCLE_SOURCE.index(
+            "def purge_source_jobs("
+        )
+        purge_end = IMPORT_JOB_LIFECYCLE_SOURCE.index(
+            "def rollback_unqueued_batch(", purge_start
+        )
+        self.assertIn(
+            "logging.warning(",
+            IMPORT_JOB_LIFECYCLE_SOURCE[purge_start:purge_end],
+        )
 
 
 class SinglePDFReservationTests(unittest.TestCase):
@@ -388,6 +505,250 @@ class SinglePDFReservationTests(unittest.TestCase):
         with self._open(request) as response:
             return json.loads(response.read().decode("utf-8"))
 
+    def test_import_boundary_io_failures_are_json_500_responses(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "runtime"
+            previous_cwd = Path.cwd()
+            handler = None
+            server = None
+            try:
+                os.chdir(root.parent)
+                root.mkdir()
+                os.chdir(root)
+                handler, server = self._runtime(root)
+                base_url = f"http://127.0.0.1:{server.server_port}"
+                cases = (
+                    (
+                        "resume_import_job",
+                        "/api/import-resume",
+                        "继续导入任务失败：journal read-only",
+                    ),
+                    (
+                        "dismiss_import_job",
+                        "/api/import-resume-dismiss",
+                        "移除导入任务失败：journal read-only",
+                    ),
+                )
+                for method_name, route, expected_error in cases:
+                    with self.subTest(route=route), patch.object(
+                        handler.import_orchestrator,
+                        method_name,
+                        side_effect=OSError("journal read-only"),
+                    ):
+                        with self.assertRaises(HTTPError) as caught:
+                            self._post_json(
+                                base_url,
+                                route,
+                                {"job_id": "job-one"},
+                            )
+                        self.assertEqual(caught.exception.code, 500)
+                        self.assertEqual(
+                            caught.exception.headers.get_content_type(),
+                            "application/json",
+                        )
+                        self.assertEqual(
+                            json.loads(
+                                caught.exception.read().decode("utf-8")
+                            ),
+                            {"error": expected_error},
+                        )
+
+                retry_job = {
+                    "job_id": "old-job",
+                    "status": "failed",
+                    "parse_route": "vision",
+                    "failure_stage": "parse",
+                    "file_name": "paper.pdf",
+                }
+                retry_context = {
+                    "target": "/runtime/paper.pdf",
+                    "source_file_id": "pdf-one",
+                    "profile": {"detected_pdf_type": "scanned"},
+                    "is_pdf": True,
+                }
+                for route, payload in (
+                    (
+                        "/api/import-retry-mineru",
+                        {"job_id": "old-job"},
+                    ),
+                    (
+                        "/api/import-retry",
+                        {
+                            "job_id": "old-job",
+                            "provider_id": "provider-one",
+                        },
+                    ),
+                ):
+                    for retry_error in (
+                        OSError("journal read-only"),
+                        ResumeManifestError("前任务清单损坏"),
+                    ):
+                        with self.subTest(
+                            route=route,
+                            error=type(retry_error).__name__,
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "job_and_context",
+                            return_value=(retry_job, retry_context),
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "is_provider_retry_eligible",
+                            return_value=True,
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "validated_import_target",
+                            return_value=Path("/runtime/paper.pdf"),
+                        ), patch.object(
+                            handler.import_orchestrator,
+                            "start_retry_import_job",
+                            side_effect=retry_error,
+                        ), patch.object(
+                            handler.import_job_controller,
+                            "_vision_summary",
+                            return_value={
+                                "providers": [
+                                    {
+                                        "id": "provider-one",
+                                        "name": "Provider One",
+                                        "enabled": True,
+                                        "configured": True,
+                                    }
+                                ]
+                            },
+                        ):
+                            with self.assertRaises(
+                                HTTPError
+                            ) as retry_response:
+                                self._post_json(base_url, route, payload)
+                            self.assertEqual(
+                                retry_response.exception.code,
+                                500,
+                            )
+                            self.assertEqual(
+                                retry_response.exception.headers.get_content_type(),
+                                "application/json",
+                            )
+                            self.assertEqual(
+                                json.loads(
+                                    retry_response.exception.read().decode(
+                                        "utf-8"
+                                    )
+                                ),
+                                {
+                                    "error": (
+                                        "创建重试任务失败："
+                                        f"{retry_error}"
+                                    )
+                                },
+                            )
+
+                with patch.object(
+                    handler.document_imports,
+                    "import_stream",
+                    side_effect=OSError("journal read-only"),
+                ):
+                    raw_request = Request(
+                        base_url + "/api/import",
+                        data=self.PDF_BYTES,
+                        headers={
+                            "Content-Type": "application/pdf",
+                            "X-File-Name": "paper.pdf",
+                        },
+                        method="POST",
+                    )
+                    with self.assertRaises(HTTPError) as raw_response:
+                        self._open(raw_request)
+                self.assertEqual(raw_response.exception.code, 500)
+                self.assertEqual(
+                    json.loads(
+                        raw_response.exception.read().decode("utf-8")
+                    ),
+                    {"error": "导入失败，请查看 desktop.log。"},
+                )
+
+                for method_name, route in (
+                    (
+                        "finish_chunked",
+                        "/api/import-upload/finish",
+                    ),
+                    ("import_local", "/api/import-local"),
+                ):
+                    with self.subTest(route=route), patch.object(
+                        handler.document_imports,
+                        method_name,
+                        side_effect=OSError("journal read-only"),
+                    ):
+                        payload = (
+                            {"upload_id": "upload-one"}
+                            if method_name == "finish_chunked"
+                            else {"paths": ["/library/paper.pdf"]}
+                        )
+                        with self.assertRaises(HTTPError) as response:
+                            self._post_json(base_url, route, payload)
+                        self.assertEqual(response.exception.code, 500)
+                        self.assertEqual(
+                            response.exception.headers.get_content_type(),
+                            "application/json",
+                        )
+                        self.assertEqual(
+                            json.loads(
+                                response.exception.read().decode("utf-8")
+                            ),
+                            {"error": "导入失败，请查看 desktop.log。"},
+                        )
+
+                invalid_raw = Request(
+                    base_url + "/api/import",
+                    data=self.PDF_BYTES,
+                    headers={
+                        "Content-Type": "application/pdf",
+                        "X-File-Name": "paper.pdf",
+                        "X-PDF-Parse-Mode": "invalid",
+                    },
+                    method="POST",
+                )
+                with self.assertRaises(HTTPError) as invalid_raw_response:
+                    self._open(invalid_raw)
+                self.assertEqual(invalid_raw_response.exception.code, 400)
+
+                with patch.object(
+                    handler.document_imports,
+                    "finish_chunked",
+                    side_effect=ValueError("invalid finish request"),
+                ):
+                    with self.assertRaises(HTTPError) as invalid_finish:
+                        self._post_json(
+                            base_url,
+                            "/api/import-upload/finish",
+                            {"upload_id": "upload-one"},
+                        )
+                self.assertEqual(invalid_finish.exception.code, 400)
+
+                for route, payload in (
+                    ("/api/import-local", {"paths": []}),
+                    ("/api/import-retry-mineru", {}),
+                    ("/api/import-retry", {}),
+                ):
+                    with self.subTest(invalid_route=route):
+                        with self.assertRaises(HTTPError) as invalid_response:
+                            self._post_json(base_url, route, payload)
+                        self.assertEqual(invalid_response.exception.code, 400)
+
+                with self.assertRaises(HTTPError) as invalid_local:
+                    self._post_json(base_url, "/api/import-local", [])
+                self.assertEqual(invalid_local.exception.code, 400)
+                self.assertEqual(
+                    json.loads(invalid_local.exception.read().decode("utf-8")),
+                    {"error": "本地导入请求必须是 JSON 对象。"},
+                )
+            finally:
+                if server is not None:
+                    server.shutdown()
+                    server.server_close()
+                if handler is not None:
+                    handler.close_runtime()
+                os.chdir(previous_cwd)
+
     def test_successful_upload_consumes_pending_reservation(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "runtime"
@@ -454,7 +815,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                     },
                 ), patch(
                     "src.me_finder.import_queue.ImportTaskQueue.submit",
-                    side_effect=RuntimeError("queue unavailable"),
+                    side_effect=ImportQueueFullError("queue unavailable"),
                 ):
                     handler, server = self._runtime(root)
                     base_url = (

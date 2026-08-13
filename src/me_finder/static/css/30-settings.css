@@ -1,4 +1,9 @@
-/* ── Settings ───────────────────────────────────────────────── */
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · tone: focused desktop utility
+   · palette: existing theme tokens · pre-emit critique: P5 H5 E5 S5 R5 V4.
+   Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
+   clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
+   Left anchor: all categories share an 880px left-aligned column, expanding
+   to 1040px only when a desktop viewport has room for larger type. */
 .settings-page-content {
   flex: 1;
   min-height: 0;
@@ -16,6 +21,21 @@
   gap: 2px;
   overflow-y: auto;
 }
+/* Group headings split the 11 categories into 四组: 阅读 · 解析 · 引用 · 应用.
+   Not折叠, just a scan anchor. First group's label rides plat-desktop so it
+   hides with PDF 阅读 on non-desktop shells. */
+.settings-nav-group {
+  padding: 4px 11px 3px;
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  color: var(--text-tertiary);
+}
+.settings-nav-group:first-child { margin-top: 0; }
+.settings-nav-group.plat-desktop { display: none; }
+html[data-desktop-shell="macos"] .settings-nav-group.plat-desktop,
+html[data-desktop-shell="win32"] .settings-nav-group.plat-desktop { display: block; }
 .settings-nav-item {
   display: flex;
   align-items: center;
@@ -33,16 +53,18 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 .settings-nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
-.settings-nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.settings-nav-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .settings-nav-icon { flex: 0 0 auto; width: 17px; height: 17px; }
 /* Platform-only entries hide when the current desktop shell does not apply. */
 .settings-nav-item.plat-desktop,
 .settings-nav-item.plat-macos,
-.settings-nav-item.plat-win { display: none; }
+.settings-nav-item.plat-win,
+.settings-nav-item.cap-data-location { display: none; }
 html[data-desktop-shell="macos"] .settings-nav-item.plat-desktop,
 html[data-desktop-shell="macos"] .settings-nav-item.plat-macos,
 html[data-desktop-shell="win32"] .settings-nav-item.plat-desktop,
 html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
+html[data-data-location-available="true"] .settings-nav-item.cap-data-location { display: flex; }
 .settings-content {
   flex: 1;
   min-width: 0;
@@ -51,16 +73,14 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .settings-section {
   display: none;
-  max-width: 640px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0;
 }
 .settings-section.active { display: block; }
-#mineru-api-settings.active,
-#vision-api-settings.active { max-width: 880px; }
-#appearance-card.active {
-  width: 100%;
-  max-width: 1120px;
-}
+#appearance-card.active { max-width: none; }
+#statistics-settings.active { max-width: none; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -70,7 +90,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .settings-section-title {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
   line-height: 1.5;
   color: var(--text-primary);
@@ -131,7 +151,8 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   grid-template-columns: 150px minmax(0, 1fr);
   gap: 12px 16px;
   align-items: start;
-  max-width: 860px;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
 }
 .settings-label {
@@ -171,7 +192,8 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   html[data-desktop-shell="macos"] .settings-nav-item.plat-desktop,
   html[data-desktop-shell="macos"] .settings-nav-item.plat-macos,
   html[data-desktop-shell="win32"] .settings-nav-item.plat-desktop,
-  html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: inline-flex; }
+  html[data-desktop-shell="win32"] .settings-nav-item.plat-win,
+  html[data-data-location-available="true"] .settings-nav-item.cap-data-location { display: inline-flex; }
   .settings-content { padding: 22px 18px 40px; }
   .settings-section, .settings-section.active,
   #mineru-api-settings.active, #vision-api-settings.active { max-width: none; }
@@ -196,65 +218,73 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   background: var(--accent);
   box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--border-default);
 }
+/* System-settings single-select list, not two floating cards (m2). One
+   connected container, compact rows, radio dot on the right. */
 .pdf-open-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-primary);
   transition: opacity var(--transition-fast);
 }
 .pdf-open-options.is-busy { opacity: .62; pointer-events: none; }
 .pdf-open-option {
   position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
   align-items: center;
   gap: 11px;
-  min-height: 76px;
+  min-height: 52px;
   box-sizing: border-box;
-  padding: 13px 14px;
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
   background: var(--surface-primary);
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.pdf-open-option:hover { border-color: var(--border-strong); background: var(--surface-hover); }
-.pdf-open-option:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.pdf-open-option.selected { border-color: var(--accent); background: var(--surface-selected); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pdf-open-option:first-of-type { border-top: 0; }
+.pdf-open-option:hover { background: var(--surface-hover); }
+.pdf-open-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
+.pdf-open-option.selected { background: var(--surface-selected); }
 .pdf-open-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pdf-open-option-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   color: var(--text-secondary);
   background: var(--surface-secondary);
   border: 1px solid var(--border-subtle);
 }
 .pdf-open-option.selected .pdf-open-option-icon { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
-.pdf-open-option-icon svg { width: 21px; height: 21px; }
-.pdf-open-option-copy { min-width: 0; display: grid; gap: 5px; }
-.pdf-open-option-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 650; }
-.pdf-open-option-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-style: normal; font-weight: 600; }
-.pdf-open-option-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.pdf-open-option-icon svg { width: 17px; height: 17px; }
+.pdf-open-option-copy { min-width: 0; display: grid; gap: 3px; }
+.pdf-open-option-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 620; }
+.pdf-open-option-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent-text); background: var(--accent-soft); font-size: 11px; font-style: normal; font-weight: 600; }
+.pdf-open-option-copy small { color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
 .pdf-open-option-check {
   width: 15px;
   height: 15px;
   box-sizing: border-box;
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--border-control);
   border-radius: 50%;
   background: var(--surface-primary);
 }
 .pdf-open-option.selected .pdf-open-option-check { border: 4px solid var(--accent); }
-@media (max-width: 760px) { .pdf-open-options { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .pdf-open-options { max-width: none; } }
 .citation-format-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
   transition: opacity var(--transition-fast);
 }
@@ -450,6 +480,24 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   font-size: 12px;
   font-weight: 650;
 }
+/* Read-failure state: reason + retry, instead of a dead-end badge (m3). */
+.data-location-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--widget-radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.data-location-error[hidden] { display: none; }
+.data-location-error > svg { flex: 0 0 auto; width: 20px; height: 20px; }
+.data-location-error-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.data-location-error-copy strong { font-size: 13px; }
+.data-location-error-copy span { font-size: 12px; color: var(--text-secondary); }
+.data-location-error-retry { flex: 0 0 auto; }
 .data-location-warning {
   display: flex;
   align-items: flex-start;
@@ -499,7 +547,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   height: 34px;
   box-sizing: border-box;
   padding: 0 11px;
-  border: 1px solid var(--divider);
+  border: 1px solid var(--border-control);
   border-radius: 8px;
   background: var(--input-bg);
   color: var(--text-primary);
@@ -507,7 +555,7 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   outline: none;
 }
 .settings-input:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.settings-input::placeholder { color: var(--text-tertiary); }
+.settings-input::placeholder { color: var(--text-decorative); }
 .settings-toggle { flex: 0 0 auto; height: 34px; padding: 0 14px; white-space: nowrap; }
 .settings-advanced { border-top: 1px solid var(--border-subtle); padding-top: 14px; }
 .settings-advanced > summary {
@@ -643,6 +691,9 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 }
 .vision-provider-state.warning { background: var(--warning-soft); color: var(--warning); }
 .vision-provider-state.muted { background: var(--surface-hover); color: var(--text-tertiary); }
+.vision-provider-state.pending { background: var(--accent-soft); color: var(--accent); }
+.vision-table-identity .vision-avatar { width: 32px; height: 32px; border-radius: 9px; }
+.mineru-text-action.danger { color: var(--danger); }
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -695,6 +746,379 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 .ui-switch input:checked ~ .ui-switch-track::after { transform: translateX(14px); }
 .ui-switch input:disabled ~ .ui-switch-track { opacity: 0.45; cursor: not-allowed; }
 .ui-switch input:focus-visible ~ .ui-switch-track { box-shadow: var(--focus-ring); }
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.mineru-add-account { white-space: nowrap; }
+.mineru-add-account svg { width: 16px; height: 16px; }
+.mineru-service-settings {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(360px, 1.45fr);
+  align-items: center;
+  gap: 24px;
+  margin-top: 16px;
+  padding: 18px 0;
+  border-block: 1px solid var(--border-subtle);
+}
+.mineru-service-copy,
+.mineru-table-heading > div,
+.parser-stat-section-head > div { display: grid; gap: 4px; min-width: 0; }
+.mineru-service-copy strong,
+.mineru-table-heading strong,
+.parser-stat-section-head strong { color: var(--text-primary); font-size: 13px; }
+.mineru-service-copy small,
+.mineru-table-heading small,
+.parser-stat-section-head small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.mineru-service-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mineru-service-control .settings-input { flex: 1 1 auto; width: auto; min-width: 0; height: 42px; }
+.mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; padding-inline: 12px; white-space: nowrap; }
+.mineru-account-management { margin-top: 22px; }
+.mineru-local-settings {
+  margin-top: 24px;
+  border-top: 1px solid var(--divider);
+}
+.mineru-local-settings > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  cursor: pointer;
+  list-style: none;
+}
+.mineru-local-settings > summary::-webkit-details-marker { display: none; }
+.mineru-local-settings > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.mineru-local-summary-copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.mineru-local-summary-copy strong { color: var(--text-primary); font-size: 13px; }
+.mineru-local-summary-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.mineru-local-settings[open] > summary .settings-collapse-chevron { transform: rotate(180deg); }
+.mineru-local-body { padding: 2px 0 20px; }
+.mineru-local-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.mineru-local-notice svg { flex: 0 0 auto; width: 17px; height: 17px; margin-top: 1px; color: var(--accent); }
+.mineru-local-notice code { color: var(--text-primary); font-size: 10px; }
+.mineru-local-grid { margin-top: 16px; }
+.mineru-local-grid .settings-input { max-width: none; height: 42px; }
+.mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
+.mineru-local-enable-row { padding-top: 6px; }
+.mineru-local-enable-row > small { max-width: 62ch; }
+#bib-completion-settings .auto-match-setting { width: 100%; max-width: none; }
+/* Lightweight account switcher (chips) + a plain settings form — replaces the
+   old table + modal dialog. One simple form; pick which account with a chip. */
+/* Account list = the original table; edit expands the inline editor panel
+   below (no modal). Editor folds away via [hidden]. */
+.mineru-editor-card { margin-top: 16px; }
+.mineru-editor-card[hidden] { display: none; }
+/* .action-btn sets display:flex, which beats the UA [hidden]{display:none};
+   restore it so hidden action buttons (测试连接 etc.) actually hide. */
+.action-btn[hidden] { display: none; }
+.mineru-table-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 10px;
+}
+.mineru-table-heading > span { color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mineru-account-list { min-width: 0; }
+.mineru-account-empty {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 34px 4px;
+  border-block: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  text-align: left;
+}
+.mineru-account-empty strong { color: var(--text-primary); font-size: 13px; }
+.mineru-account-empty small { max-width: 52ch; font-size: 11px; line-height: 1.55; }
+.mineru-account-empty .action-btn { margin-top: 8px; }
+.mineru-account-table-scroll { overflow-x: auto; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface-primary); }
+.mineru-account-table,
+.parser-book-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mineru-account-table th,
+.mineru-account-table td,
+.parser-book-table th,
+.parser-book-table td { text-align: left; vertical-align: middle; }
+.mineru-account-table th {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+}
+.mineru-account-table th:first-child { width: 27%; }
+.mineru-account-table th:nth-child(2) { width: 22%; }
+.mineru-account-table th:nth-child(3) { width: 15%; }
+.mineru-account-table th:nth-child(4) { width: 20%; }
+.mineru-account-table th:last-child { width: 19%; }
+.vision-provider-table th:first-child { width: 36%; }
+.vision-provider-table th:nth-child(2) { width: 22%; }
+.vision-provider-table th:nth-child(3) { width: 22%; }
+.vision-provider-table th:last-child { width: 20%; }
+.mineru-account-table td { padding: 11px 12px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 11px; }
+.mineru-account-table tbody tr:first-child td { border-top: none; }
+.mineru-account-identity,
+.mineru-account-status-cell,
+.mineru-row-actions { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.mineru-account-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--divider);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+.mineru-brand-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: url('/static/brands/mineru.svg') center / contain no-repeat;
+  mask: url('/static/brands/mineru.svg') center / contain no-repeat;
+}
+.mineru-account-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mineru-account-copy strong,
+.mineru-account-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mineru-account-copy strong { color: var(--text-primary); font-size: 12px; }
+.mineru-account-copy small { color: var(--text-tertiary); font-size: 10px; }
+.mineru-account-state {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+.mineru-account-state.ready { color: var(--success); background: var(--success-soft); }
+.mineru-row-switch { min-width: 44px; min-height: 44px; justify-content: center; }
+.mineru-table-date,
+.mineru-table-usage { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mineru-row-actions { justify-content: flex-end; gap: 12px; }
+.mineru-text-action {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mineru-text-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.mineru-text-action:focus-visible,
+.mineru-dialog-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .mineru-account-table tbody tr:hover { background: var(--surface-hover); }
+  .mineru-text-action:hover { color: var(--accent-hover); }
+  .mineru-text-action.danger:hover { color: var(--danger); }
+}
+.mineru-account-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(520px, calc(100% - 32px));
+  max-width: none;
+  max-height: min(82dvh, 680px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  background: var(--dialog-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-popover);
+}
+.mineru-account-dialog::backdrop { background: var(--dialog-backdrop); backdrop-filter: blur(3px); }
+.mineru-account-form { padding: 20px; }
+.mineru-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mineru-dialog-head > div { min-width: 0; display: grid; gap: 3px; }
+.mineru-dialog-head strong { font-size: 15px; }
+.mineru-dialog-head small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.mineru-dialog-close svg { width: 18px; height: 18px; }
+.mineru-dialog-fields { display: grid; gap: 15px; padding-top: 17px; }
+.mineru-field { display: grid; gap: 6px; }
+.mineru-field > span { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.mineru-field > span em { color: var(--text-tertiary); font-style: normal; font-weight: 400; }
+.mineru-field > small,
+.mineru-enabled-row small { color: var(--text-tertiary); font-size: 10px; line-height: 1.45; }
+.mineru-field .settings-input { height: 44px; }
+.mineru-enabled-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-secondary);
+}
+.mineru-enabled-row > span:first-child { display: grid; gap: 3px; }
+.mineru-enabled-row strong { font-size: 11px; }
+.mineru-dialog-error { margin: 12px 0 0; color: var(--danger); font-size: 11px; line-height: 1.45; }
+.mineru-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; }
+.parser-overview { margin-top: 18px; }
+.parser-stat-section-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.parser-stat-section-head strong { font-size: 14px; }
+.parser-stat-section-head small { font-size: 12px; }
+.parser-overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 13px 0 0;
+  border-block: 1px solid var(--divider);
+}
+.parser-overview-metrics > div {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 6px;
+  padding: 18px 20px;
+  border-inline-start: 1px solid var(--border-subtle);
+}
+.parser-overview-metrics > div:first-child { border-inline-start: 0; }
+.parser-overview-metrics dt { grid-column: 1 / -1; margin-bottom: 8px; color: var(--text-tertiary); font-size: 12px; }
+.parser-overview-metrics dd { margin: 0; color: var(--text-primary); font-size: 32px; font-weight: 720; line-height: 1; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.parser-overview-metrics span { color: var(--text-tertiary); font-size: 13px; }
+.parser-provider-breakdown { margin-top: 30px; }
+.parser-provider-columns,
+.parser-provider-group > summary {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 100px 110px 24px;
+  align-items: center;
+  gap: 12px;
+}
+.parser-provider-columns { margin-top: 12px; padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text-tertiary); font-size: 12px; }
+.parser-provider-columns span:nth-child(2),
+.parser-provider-columns span:nth-child(3) { text-align: right; }
+.parser-provider-group { border-bottom: 1px solid var(--divider); }
+.parser-provider-group > summary { min-height: 72px; padding: 8px 12px; cursor: pointer; list-style: none; }
+.parser-provider-group > summary::-webkit-details-marker { display: none; }
+.parser-provider-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.parser-provider-identity > span:last-child { min-width: 0; display: grid; gap: 2px; }
+.parser-provider-identity strong { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-provider-identity small { color: var(--text-tertiary); font-size: 12px; }
+.parser-provider-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+.parser-provider-mark.mineru { border: 1px solid var(--divider); background: var(--surface-primary); color: var(--text-primary); }
+.parser-provider-mark .mineru-brand-glyph { width: 22px; height: 22px; }
+.parser-provider-number { color: var(--text-tertiary); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.parser-provider-number b { color: var(--text-primary); font-size: 14px; }
+.parser-provider-chevron { width: 17px; height: 17px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
+.parser-provider-group[open] > summary .parser-provider-chevron { transform: rotate(180deg); }
+.parser-provider-detail { padding: 6px 12px 18px 55px; }
+.parser-detail-label { margin: 4px 0 8px; color: var(--text-secondary); font-size: 12px; font-weight: 650; }
+.parser-detail-label small { margin-inline-start: 6px; color: var(--text-tertiary); font-size: 11px; font-weight: 400; }
+.parser-book-table-scroll { overflow-x: auto; }
+.parser-book-table th { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 12px; font-weight: 600; }
+.parser-book-table th:first-child { width: 48%; }
+.parser-book-table td { padding: 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.parser-book-table th:last-child,
+.parser-book-table td:last-child { text-align: right; white-space: nowrap; }
+.parser-book-title { display: grid; gap: 2px; min-width: 0; }
+.parser-book-title strong,
+.parser-book-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parser-book-title strong { color: var(--text-secondary); font-size: 12px; }
+.parser-book-title small { color: var(--text-tertiary); font-size: 11px; }
+.mineru-attribution-label { margin-top: 18px; }
+.parser-credential-list { border-top: 1px solid var(--border-subtle); }
+.parser-credential-account { border-bottom: 1px solid var(--border-subtle); }
+.parser-credential-account > summary { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 5px 10px; cursor: pointer; list-style: none; }
+.parser-credential-account > summary::-webkit-details-marker { display: none; }
+.parser-credential-account > summary > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.parser-credential-account > summary strong { color: var(--text-secondary); font-size: 12px; }
+.parser-credential-account > summary small { color: var(--text-tertiary); font-size: 11px; }
+.parser-credential-account > summary b { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.parser-credential-account > summary svg { width: 15px; height: 15px; color: var(--text-tertiary); transition: transform 160ms cubic-bezier(0.65, 0, 0.35, 1); }
+.parser-credential-account[open] > summary svg { transform: rotate(180deg); }
+.parser-credential-books { padding: 0 10px 8px 20px; }
+.parser-credential-book { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border-subtle); }
+.parser-credential-book > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.parser-credential-book strong { overflow: hidden; color: var(--text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.parser-credential-book small { color: var(--text-tertiary); font-size: 11px; }
+.parser-credential-book b { flex: 0 0 auto; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.parser-credential-empty { padding: 12px 10px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); font-size: 12px; }
+.parser-statistics-empty { display: grid; gap: 5px; padding: 30px 12px; border-bottom: 1px solid var(--divider); }
+.parser-statistics-empty strong { color: var(--text-primary); font-size: 12px; }
+.parser-statistics-empty small { max-width: 60ch; color: var(--text-tertiary); font-size: 10px; line-height: 1.55; }
+@media (max-width: 760px) {
+  .mineru-service-settings { grid-template-columns: 1fr; gap: 10px; }
+  .mineru-service-control { align-items: stretch; flex-direction: column; }
+  /* In column mode the address input's flex-basis:300px lands on the main
+     (vertical) axis and balloons the field to 300px tall — pin it back. */
+  .mineru-service-control .settings-input,
+  .mineru-service-control .settings-input-address { flex: 0 0 auto; width: 100%; }
+  .mineru-account-table,
+  .mineru-account-table tbody,
+  .mineru-account-table tr,
+  .mineru-account-table td { display: block; width: 100%; box-sizing: border-box; }
+  .mineru-account-table thead { display: none; }
+  .mineru-account-table tr { padding: 10px 12px; border-top: 1px solid var(--border-subtle); }
+  .mineru-account-table tr:first-child { border-top: 0; }
+  .mineru-account-table td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border: 0; }
+  .mineru-account-table td::before { content: attr(data-label); flex: 0 0 auto; color: var(--text-tertiary); font-size: 10px; }
+  .mineru-account-table td:first-child { justify-content: flex-start; }
+  .mineru-account-table td:first-child::before { display: none; }
+  .mineru-account-identity { flex: 1; }
+  .parser-overview-metrics { grid-template-columns: 1fr; }
+  .parser-overview-metrics > div { border-inline-start: 0; border-top: 1px solid var(--border-subtle); }
+  .parser-overview-metrics > div:first-child { border-top: 0; }
+  .parser-provider-columns { display: none; }
+  .parser-provider-group > summary { grid-template-columns: minmax(0, 1fr) auto 20px; margin-top: 8px; }
+  .parser-provider-number:first-of-type { display: none; }
+  .parser-provider-detail { padding-inline-start: 12px; }
+  .parser-detail-label small { display: block; margin: 3px 0 0; }
+}
 .vision-editor-card {
   border: 1px solid var(--divider);
   border-radius: 14px;
@@ -792,6 +1216,22 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
   color: var(--accent);
   font-size: 11px;
   font-weight: 600;
+}
+.vision-model-badge.capability-ocr {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.vision-model-badge.capability-text {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.vision-model-badge.capability-omni {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.vision-model-badge.capability-unsupported {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 .vision-model-hint { transition: color var(--transition-fast); }
 .vision-model-hint.is-loading { color: var(--accent); }
@@ -935,3 +1375,160 @@ html[data-desktop-shell="win32"] .settings-nav-item.plat-win { display: flex; }
 @container (min-width: 720px) { .theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 430px) { .theme-mini-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .theme-mini-doc-card:nth-child(3) { display: none; }}
 
+/* Large desktop windows have enough room to trade density for legibility.
+   This is viewport-driven instead of a fullscreen flag so maximized and
+   similarly spacious windows behave consistently across Windows DPI scales. */
+@media (min-width: 1500px) and (min-height: 800px) {
+  #page-settings > .page-header { padding: 34px 40px 0; }
+  #page-settings .page-title { font-size: 28px; }
+  #page-settings .page-subtitle { font-size: 16px; }
+
+  .settings-nav { width: 252px; padding: 22px 14px; gap: 3px; }
+  .settings-nav-group { padding: 5px 13px 4px; margin-top: 14px; font-size: 13px; }
+  .settings-nav-item { gap: 12px; padding: 11px 13px; font-size: 16px; }
+  .settings-nav-icon { width: 20px; height: 20px; }
+
+  .settings-content { padding: 36px 48px 56px; }
+  .settings-section,
+  #appearance-card.active { width: 100%; max-width: none; box-sizing: border-box; }
+  .settings-section-head { gap: 14px; min-height: 36px; }
+  .settings-section-heading-copy { gap: 14px; }
+  .settings-section-title { font-size: 20px; }
+  .settings-section-note { font-size: 15px; }
+  .settings-status { font-size: 14px; padding: 7px 13px; }
+
+  .settings-grid {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 14px 20px;
+    width: 100%;
+    max-width: none;
+    margin-top: 18px;
+  }
+  .settings-label { padding-top: 9px; font-size: 16px; }
+  .settings-inline-label,
+  .settings-field label,
+  .settings-advanced > summary { font-size: 16px; }
+  .settings-control > small,
+  .settings-field small,
+  .settings-hint { font-size: 14px; }
+  .settings-input { height: 42px; padding-inline: 14px; font-size: 16px; }
+  .settings-toggle { height: 42px; }
+  .settings-content .action-btn { min-height: 42px; font-size: 15px; }
+  .settings-check,
+  .ui-switch { font-size: 15px; }
+
+  .pdf-open-options { width: 100%; max-width: none; margin-top: 18px; }
+  .pdf-open-option {
+    grid-template-columns: 34px minmax(0, 1fr) 20px;
+    gap: 13px;
+    min-height: 64px;
+    padding: 12px 16px;
+  }
+  .pdf-open-option-icon { width: 34px; height: 34px; }
+  .pdf-open-option-icon svg { width: 20px; height: 20px; }
+  .pdf-open-option-copy strong { font-size: 16px; }
+  .pdf-open-option-copy strong em { font-size: 12px; }
+  .pdf-open-option-copy small { font-size: 15px; }
+  .pdf-open-option-check { width: 17px; height: 17px; }
+
+  .citation-format-options { width: 100%; max-width: none; margin-top: 18px; gap: 12px; }
+  .citation-format-option { min-height: 76px; padding: 14px 16px; }
+  .citation-format-copy strong { font-size: 16px; }
+  .citation-format-copy small { font-size: 14px; }
+
+  .software-update-card,
+  .macos-update-card,
+  .data-location-card { padding: 17px; }
+  .software-update-icon,
+  .macos-update-icon,
+  .data-location-icon { width: 44px; height: 44px; }
+  .software-update-copy strong,
+  .macos-update-copy strong,
+  .data-location-copy strong,
+  .data-location-error-copy strong { font-size: 16px; }
+  .software-update-copy small,
+  .macos-update-copy small,
+  .data-location-copy small,
+  .data-location-pending small,
+  .update-auto-copy small,
+  .data-location-warning { font-size: 14px; }
+  .data-location-copy code,
+  .data-location-pending code { font-size: 13px; }
+  .data-location-error-copy span,
+  .data-location-pending > div > span,
+  .update-auto-copy strong { font-size: 14px; }
+
+  #bib-completion-settings .auto-match-setting { width: 100%; max-width: none; margin-top: 22px; }
+  #bib-completion-settings .auto-match-label { font-size: 17px; }
+  #bib-completion-settings .auto-match-value { font-size: 26px; }
+  #bib-completion-settings .auto-match-scale { font-size: 14px; }
+  #bib-completion-settings .auto-match-hint { font-size: 15px; }
+  #bib-completion-settings .seg-btn { padding: 10px 20px; font-size: 15px; }
+
+  .vision-add-btn { height: 40px; font-size: 14px; }
+  .vision-provider-card { padding: 14px 16px; }
+  .vision-provider-card-name,
+  .vision-editor-titles strong,
+  .vision-provider-empty strong,
+  .vision-policy-copy strong { font-size: 15px; }
+  .vision-provider-card-model,
+  .vision-editor-titles small,
+  .vision-provider-empty,
+  .vision-policy-copy small,
+  .vision-model-group,
+  .vision-model-badge { font-size: 13px; }
+  .vision-model-item { font-size: 15px; }
+  .icon-btn { width: 36px; height: 36px; }
+
+  .mineru-service-settings {
+    grid-template-columns: minmax(170px, .55fr) minmax(420px, 1.45fr);
+    margin-top: 20px;
+    padding: 22px 0;
+  }
+  .mineru-service-control .settings-input,
+  .mineru-local-grid .settings-input { height: 46px; max-width: none; }
+  .mineru-service-control .action-btn { min-height: 46px; }
+  .mineru-service-copy strong,
+  .mineru-table-heading strong,
+  .mineru-local-summary-copy strong,
+  .mineru-account-empty strong { font-size: 15px; }
+  .mineru-service-copy small,
+  .mineru-table-heading small,
+  .mineru-local-summary-copy small,
+  .mineru-account-empty small,
+  .mineru-local-notice { font-size: 13px; }
+  .mineru-local-notice code { font-size: 12px; }
+  .mineru-table-heading > span { font-size: 13px; }
+  .mineru-account-table th { font-size: 12px; }
+  .mineru-account-table td { padding: 13px 14px; font-size: 13px; }
+  .mineru-account-copy strong { font-size: 14px; }
+  .mineru-account-copy small,
+  .mineru-account-state { font-size: 12px; }
+
+  .parser-stat-section-head strong,
+  .parser-provider-identity strong,
+  .parser-provider-number b { font-size: 16px; }
+  .parser-stat-section-head small,
+  .parser-overview-metrics dt,
+  .parser-provider-columns,
+  .parser-provider-identity small,
+  .parser-provider-number,
+  .parser-detail-label,
+  .parser-book-table th,
+  .parser-book-table td,
+  .parser-credential-account > summary strong,
+  .parser-credential-account > summary b,
+  .parser-credential-book strong,
+  .parser-credential-book b,
+  .parser-credential-empty { font-size: 14px; }
+  .parser-detail-label small,
+  .parser-book-title small,
+  .parser-credential-account > summary small,
+  .parser-credential-book small { font-size: 13px; }
+  .parser-overview-metrics dd { font-size: 36px; }
+  .parser-overview-metrics span { font-size: 15px; }
+
+  .theme-option-name { font-size: 16px; }
+  .theme-option-tone { font-size: 13px; }
+  .theme-option-description { font-size: 14px; }
+}

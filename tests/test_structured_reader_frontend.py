@@ -333,6 +333,14 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertNotIn("desktop-pdf-settings", READER_CSS)
         self.assertNotIn("currentPdfOpenMode", READER_JS)
 
+    def test_large_desktop_reader_increases_text_and_reading_measure(self) -> None:
+        self.assertIn(
+            "@media (min-width: 1500px) and (min-height: 800px)",
+            READER_CSS,
+        )
+        self.assertIn("width: min(900px, calc(100% - 64px));", READER_CSS)
+        self.assertIn("font-size: 18px; line-height: 1.92;", READER_CSS)
+
     def test_search_detail_exposes_reader_without_replacing_open_original(self) -> None:
         self.assertIn("查看结构化文本", APP_JS)
         self.assertIn("function openSelectedStructuredReader()", APP_JS)

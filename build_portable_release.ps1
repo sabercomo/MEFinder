@@ -1,6 +1,7 @@
 param(
     [string]$Version = "",
-    [string]$PythonExe = ""
+    [string]$PythonExe = "",
+    [string]$PackagerPythonExe = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +32,12 @@ try {
         $pythonCommand = "py"
         $pythonLauncherArgs = @("-3")
     }
+    $packagerPythonCommand = if ($PackagerPythonExe) {
+        $PackagerPythonExe
+    } else {
+        $pythonCommand
+    }
+    $packagerPythonArgs = if ($PackagerPythonExe) { @() } else { $pythonLauncherArgs }
 
     $sourceVersionOutput = & $pythonCommand @pythonLauncherArgs -c "from src.me_finder import __version__; print(__version__)"
     if ($LASTEXITCODE -ne 0) { throw "Could not read src.me_finder.__version__." }
@@ -53,7 +60,7 @@ try {
         throw "Unsafe release staging path: $stageFull"
     }
 
-    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_chunked_upload tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_database_resilience tests.test_desktop_portable tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_search_match_spans tests.test_search_occurrence_identity tests.test_search_service tests.test_api_request_limits tests.test_source_streaming tests.test_app_context tests.test_database_page_anchors tests.test_index_publication_guard tests.test_normalization tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system tests.test_frontend_assets tests.test_frontend_pure_logic tests.test_windows_packaging
+    & $pythonCommand @pythonLauncherArgs -m unittest tests.test_anchor_metadata tests.test_api_fallback_recovery tests.test_backup_service tests.test_backup_file_picker tests.test_batch_document_removal tests.test_calibration_library_ui tests.test_chunked_upload tests.test_citations tests.test_cnki_citation tests.test_journal_metadata_lookup tests.test_foreign_book_lookup tests.test_crossref_lookup tests.test_book_metadata_lookup tests.test_data_location tests.test_database_resilience tests.test_desktop_portable tests.test_desktop_shell_controller tests.test_fts_search_scalability tests.test_large_index_resilience tests.test_library_startup_performance tests.test_mineru_config tests.test_mineru_accounts tests.test_mineru_accounts_web tests.test_mineru_local_settings tests.test_mineru_local_provider tests.test_mineru_engine_import_bridge tests.test_parser_settings_controller tests.test_import_job_controller tests.test_import_parser_executor tests.test_import_orchestrator tests.test_pdf_import_config tests.test_import_config_concurrency tests.test_preferences_concurrency tests.test_long_filename_import tests.test_pdf_match_anchors tests.test_page_display tests.test_runtime_page_mapping tests.test_scan_directory_picker tests.test_search_match_spans tests.test_search_occurrence_identity tests.test_search_service tests.test_api_request_limits tests.test_source_streaming tests.test_app_context tests.test_database_page_anchors tests.test_index_publication_guard tests.test_normalization tests.test_vision_api tests.test_search_controls_and_views tests.test_structured_reader tests.test_structured_reader_frontend tests.test_structured_reader_web tests.test_batch_directory_import tests.test_directory_scan tests.test_import_queue tests.test_import_resume_mineru tests.test_import_resume_queue tests.test_import_resume_vision tests.test_import_resume_web tests.test_portable_index_rebuild tests.test_theme_system tests.test_frontend_assets tests.test_frontend_pure_logic tests.test_windows_packaging
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; release was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -69,7 +76,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }
 
-    & $pythonCommand @pythonLauncherArgs -m PyInstaller desktop.spec --clean --noconfirm
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
     New-Item -ItemType Directory -Force -Path $ReleaseRoot | Out-Null

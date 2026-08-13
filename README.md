@@ -11,6 +11,12 @@
 </p>
 
 <p align="center">
+  如果 MEFinder 对你有帮助，欢迎点亮 ⭐ 支持我们！
+  <br>
+  <a href="https://github.com/sabercomo/MEFinder/stargazers"><img src="https://img.shields.io/github/stars/sabercomo/MEFinder?style=social" alt="GitHub Stars"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/sabercomo/MEFinder/releases/latest">下载最新版</a>
   · <a href="#主要功能">主要功能</a>
   · <a href="#快速开始">快速开始</a>
@@ -79,8 +85,6 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 正式发布包均位于 [GitHub Releases](https://github.com/sabercomo/MEFinder/releases/latest)，普通用户不需要安装 Python。
 
-代码签名、团队角色和隐私说明见 [Code signing policy](#code-signing-policy)。
-
 | 平台 | 版本 | 发布包 |
 | --- | --- | --- |
 | **Windows** | 安装版（推荐） | `MEFinder-v<版本>-windows-setup.exe` |
@@ -130,7 +134,7 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 ## ⚠️ 已知限制
 
-- 单个导入文件上限为 **600 MB**；超大型 PDF 的导入速度和恢复能力仍在优化；
+- 浏览器按固定大小分块导入文件，不限制单个文件总大小；超大型 PDF 会按解析服务能力切片处理；
 - 纯扫描、乱码文本层和复杂排版 PDF 依赖 OCR / AI 解析，检索质量受上游结果影响；
 - 原书没有印刷页码时，可以定位 PDF 物理页，但不会生成不存在的书内页码；
 - DOCX 页码依赖文档分节和页面结构，导入后建议人工抽样核验；
@@ -181,16 +185,7 @@ MEFinder 自有代码依据 GNU Affero General Public License Version 3 only
 发布（`SPDX-License-Identifier: AGPL-3.0-only`）。完整条款见 [LICENSE](LICENSE)，
 发行包内第三方组件的许可证见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。
 
-## Code signing policy
-
-Free code signing provided by SignPath.io, certificate by SignPath Foundation
-
-### Team roles
-
-- Committers and reviewers: sabercomo
-- Approvers: sabercomo
-
-### Privacy
+## 隐私
 
 - 本地搜索、索引和页码映射等功能默认只在用户本机进行。
 - 只有用户主动配置并调用 MinerU、视觉 API 或其他联网功能时，相关数据才会发送到用户所选择的第三方服务。

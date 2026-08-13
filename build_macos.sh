@@ -90,12 +90,6 @@ finally:
 PY
 cp "config/pdf_imports.empty.json" "$MEFINDER_STAGE/config/pdf_imports.json"
 cp "config/mineru_api.local.example.json" "$MEFINDER_STAGE/config/mineru_api.local.example.json"
-MEFINDER_PYTHON_LICENSE="$($MEFINDER_PYTHON -c 'from pathlib import Path; import sys; print(Path(sys.base_prefix) / "LICENSE.txt")')"
-if [[ ! -f "$MEFINDER_PYTHON_LICENSE" ]]; then
-  echo "Selected Python runtime license was not found: $MEFINDER_PYTHON_LICENSE" >&2
-  exit 1
-fi
-cp "$MEFINDER_PYTHON_LICENSE" "$MEFINDER_STAGE/Python-runtime-LICENSE.txt"
 
 MEFINDER_ICONSET="$MEFINDER_STAGE/MEFinder.iconset"
 mkdir -p "$MEFINDER_ICONSET"
@@ -114,6 +108,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_anchor_metadata \
   tests.test_api_fallback_recovery \
   tests.test_backup_service \
+  tests.test_backup_file_picker \
   tests.test_batch_document_removal \
   tests.test_batch_directory_import \
   tests.test_calibration_library_ui \
@@ -127,6 +122,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_data_location \
   tests.test_database_resilience \
   tests.test_desktop_portable \
+  tests.test_desktop_shell_controller \
   tests.test_directory_scan \
   tests.test_fts_search_scalability \
   tests.test_import_config_concurrency \
@@ -137,6 +133,13 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_import_resume_vision \
   tests.test_import_resume_web \
   tests.test_mineru_config \
+  tests.test_mineru_local_settings \
+  tests.test_mineru_local_provider \
+  tests.test_mineru_engine_import_bridge \
+  tests.test_parser_settings_controller \
+  tests.test_import_job_controller \
+  tests.test_import_parser_executor \
+  tests.test_import_orchestrator \
   tests.test_macos_update \
   tests.test_macos_pdf_viewer \
   tests.test_large_index_resilience \
@@ -200,14 +203,6 @@ if ! find "$MEFINDER_BUILT_APP" -type f \
   exit 1
 fi
 
-MEFINDER_RESOURCES="$MEFINDER_BUILT_APP/Contents/Resources"
-if [[ ! -f "$MEFINDER_RESOURCES/LICENSE" ]] \
-  || [[ ! -f "$MEFINDER_RESOURCES/THIRD_PARTY_NOTICES.txt" ]] \
-  || [[ ! -d "$MEFINDER_RESOURCES/THIRD_PARTY_LICENSES" ]]; then
-  echo "Build failed: the app does not contain the required license files." >&2
-  exit 1
-fi
-
 if find "$MEFINDER_BUILT_APP" -type f \( \
   -name "mineru_api.local.json" -o \
   -name "vision_api.local.json" -o \
@@ -247,10 +242,6 @@ mkdir -p "$MEFINDER_DMG_STAGE" "$MEFINDER_DMG_MOUNT" "$(dirname "$MEFINDER_DMG_V
 ditto --norsrc --noextattr --noqtn --noacl \
   "$MEFINDER_BUILT_APP" \
   "$MEFINDER_DMG_STAGE/MEFinder.app"
-cp "LICENSE" "$MEFINDER_DMG_STAGE/LICENSE"
-cp "THIRD_PARTY_NOTICES.txt" "$MEFINDER_DMG_STAGE/THIRD_PARTY_NOTICES.txt"
-cp -R "THIRD_PARTY_LICENSES" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES"
-cp "$MEFINDER_PYTHON_LICENSE" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES/Python-runtime-LICENSE.txt"
 ln -s /Applications "$MEFINDER_DMG_STAGE/Applications"
 clean_app_metadata "$MEFINDER_DMG_STAGE/MEFinder.app"
 verify_app_signature "$MEFINDER_DMG_STAGE/MEFinder.app"
@@ -276,26 +267,6 @@ if [[ ! -L "$MEFINDER_DMG_MOUNT/Applications" ]] \
   exit 1
 fi
 verify_app_signature "$MEFINDER_DMG_MOUNT/MEFinder.app"
-for license_path in LICENSE THIRD_PARTY_NOTICES.txt; do
-  if [[ ! -f "$MEFINDER_DMG_MOUNT/$license_path" ]]; then
-    echo "Build failed: the DMG does not contain $license_path." >&2
-    exit 1
-  fi
-done
-if [[ ! -d "$MEFINDER_DMG_MOUNT/THIRD_PARTY_LICENSES" ]]; then
-  echo "Build failed: the DMG does not contain THIRD_PARTY_LICENSES." >&2
-  exit 1
-fi
-for license_path in LICENSE THIRD_PARTY_NOTICES.txt; do
-  if ! grep -Fxq "MEFinder.app/Contents/Resources/$license_path" <<<"$MEFINDER_ZIP_CONTENTS"; then
-    echo "Build failed: ZIP does not contain $license_path." >&2
-    exit 1
-  fi
-done
-if ! grep -Fq "MEFinder.app/Contents/Resources/THIRD_PARTY_LICENSES/" <<<"$MEFINDER_ZIP_CONTENTS"; then
-  echo "Build failed: ZIP does not contain THIRD_PARTY_LICENSES." >&2
-  exit 1
-fi
 
 # Simulate copying the app out of the mounted image and verify that the copied
 # application remains valid.

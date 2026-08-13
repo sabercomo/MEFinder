@@ -1,0 +1,23 @@
+[
+  {
+    "date": "2026-08-13",
+    "macrostructure": "Workbench",
+    "theme": "existing MEFinder theme system",
+    "enrichment": "none",
+    "brief": "Responsive large-window typography for settings and PDF reading"
+  },
+  {
+    "date": "2026-08-13",
+    "macrostructure": "Workbench",
+    "theme": "existing MEFinder theme system",
+    "enrichment": "none",
+    "brief": "Collapsed advanced MinerU Local setup with explicit opt-in and manual failure recovery"
+  },
+  {
+    "date": "2026-08-11",
+    "macrostructure": "Workbench",
+    "theme": "existing MEFinder theme system",
+    "enrichment": "none",
+    "brief": "Settings redesign for provider-neutral statistics and MinerU multi-account management"
+  }
+]

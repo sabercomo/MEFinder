@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 from src.me_finder import database as database_module
 from src.me_finder.database import build_database
 from src.me_finder.database import replace_source_in_database as real_replace_source
+from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.mineru_api import MinerUError
 from src.me_finder.pdf_import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
@@ -308,7 +309,11 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 ):
                     with self.assertRaises(HTTPError) as caught:
                         urlopen(request, timeout=5)
-                self.assertEqual(caught.exception.code, 400)
+                self.assertEqual(caught.exception.code, 500)
+                self.assertEqual(
+                    json.loads(caught.exception.read().decode("utf-8")),
+                    {"error": "导入失败，请查看 desktop.log。"},
+                )
                 raw_docx = root / "corpus" / "raw_docx"
                 deadline = time.monotonic() + 2
                 while (
@@ -503,7 +508,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 ),
                 patch(
                     "src.me_finder.import_queue.ImportTaskQueue.submit",
-                    side_effect=RuntimeError("queue unavailable"),
+                    side_effect=ImportQueueFullError("queue unavailable"),
                 ),
             ):
                 try:

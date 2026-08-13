@@ -26,6 +26,8 @@ from pathlib import Path
 from src.me_finder import __version__
 from src.me_finder.data_location import (
     default_macos_data_root,
+    default_windows_data_root,
+    read_data_root,
     read_macos_data_root,
 )
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
@@ -218,14 +220,22 @@ def local_app_data_root(home: Path | None = None) -> Path:
     configured_root = os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
     if configured_root:
         return Path(configured_root).expanduser().resolve()
-    override = installed_data_root_override()
-    if override is not None:
-        return override
+    if sys.platform == "win32":
+        installed_root = installed_data_root_override()
+        local_app_data = os.environ.get("LOCALAPPDATA") or None
+        if home is None and local_app_data is None and installed_root is not None:
+            return installed_root
+        default_root = default_windows_data_root(
+            home,
+            local_app_data=local_app_data,
+        )
+        return read_data_root(
+            default_root,
+            fallback_root=installed_root or default_root,
+        )
     user_home = Path(home) if home is not None else Path.home()
     if sys.platform == "darwin":
         return read_macos_data_root(user_home)
-    if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA") or user_home / "AppData" / "Local") / "MEFinder"
     xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
     if xdg_data_home:
         return Path(xdg_data_home).expanduser() / "MEFinder"
@@ -525,11 +535,17 @@ def main() -> None:
         if getattr(sys, "frozen", False) and not portable
         else None
     )
-    default_app_data_root = (
-        default_macos_data_root()
-        if sys.platform == "darwin" and app_data_root is not None
-        else None
-    )
+    default_app_data_root = None
+    if (
+        app_data_root is not None
+        and not os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
+    ):
+        if sys.platform == "darwin":
+            default_app_data_root = default_macos_data_root()
+        elif sys.platform == "win32":
+            default_app_data_root = default_windows_data_root(
+                local_app_data=os.environ.get("LOCALAPPDATA") or None,
+            )
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(mineru_config_path)
@@ -620,10 +636,26 @@ def main() -> None:
         return [str(folder) for folder in selection]
 
     def choose_data_directory() -> str | None:
-        if sys.platform != "darwin" or app_data_root is None:
+        if app_data_root is None:
             return None
         selection = choose_folders(app_data_root.parent)
         return selection[0] if selection else None
+
+    def choose_backup_file() -> str | None:
+        try:
+            selection = window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                directory=str(Path.home()),
+                allow_multiple=False,
+                file_types=("MEFinder 备份 (*.zip)",),
+            )
+        except webview.errors.WebViewException as exc:
+            raise RuntimeError(str(exc)) from exc
+        if not selection:
+            return None
+        if isinstance(selection, (str, Path)):
+            return str(selection)
+        return str(selection[0])
 
     def choose_scan_directories() -> list[str]:
         # Never start at the home folder: picking it is one click away there,
@@ -669,6 +701,7 @@ def main() -> None:
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
                 native_scan_directory_chooser=choose_scan_directories,
+                native_backup_file_chooser=choose_backup_file,
             )
             server = ManagedThreadingHTTPServer(("127.0.0.1", 0), handler)
             port = int(server.server_address[1])

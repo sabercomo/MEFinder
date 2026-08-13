@@ -1,4 +1,4 @@
-"""macOS application-data location selection and safe migration."""
+"""Desktop application-data location selection and safe migration."""
 
 from __future__ import annotations
 
@@ -22,25 +22,51 @@ def default_macos_data_root(home: Path | None = None) -> Path:
     return user_home / "Library" / "Application Support" / DATA_ROOT_FOLDER_NAME
 
 
+def default_windows_data_root(
+    home: Path | None = None,
+    *,
+    local_app_data: str | Path | None = None,
+) -> Path:
+    if local_app_data is not None:
+        base = Path(local_app_data).expanduser()
+    else:
+        user_home = Path(home) if home is not None else Path.home()
+        base = user_home / "AppData" / "Local"
+    return base / DATA_ROOT_FOLDER_NAME
+
+
 def data_root_marker_path(default_root: Path) -> Path:
     return Path(default_root) / DATA_ROOT_MARKER
 
 
-def read_macos_data_root(home: Path | None = None) -> Path:
-    """Read the stable pointer while retaining Application Support as fallback."""
+def read_data_root(
+    default_root: Path,
+    *,
+    fallback_root: Path | None = None,
+) -> Path:
+    """Read the stable pointer while retaining the platform fallback."""
 
-    default_root = default_macos_data_root(home)
+    default_root = Path(default_root).expanduser()
+    fallback = (
+        Path(fallback_root).expanduser()
+        if fallback_root is not None
+        else default_root
+    )
     marker = data_root_marker_path(default_root)
     try:
         configured = marker.read_text(encoding="utf-8").strip()
     except OSError:
-        return default_root
+        return fallback
     if not configured:
-        return default_root
+        return fallback
     candidate = Path(configured).expanduser()
     if not candidate.is_absolute():
-        return default_root
+        return fallback
     return candidate.resolve()
+
+
+def read_macos_data_root(home: Path | None = None) -> Path:
+    return read_data_root(default_macos_data_root(home))
 
 
 def proposed_data_root(selected_folder: str | Path) -> Path:

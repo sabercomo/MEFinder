@@ -168,11 +168,19 @@ class LibraryEndpointWiringTests(unittest.TestCase):
     def test_web_routes_expose_summary_and_detail(self) -> None:
         from pathlib import Path
 
-        source = Path("src/me_finder/web.py").read_text(encoding="utf-8")
-        self.assertIn('if requested_view == "summary":', source)
-        self.assertIn('payload = summarize_library(payload)', source)
-        self.assertIn('if parsed.path == "/api/library/document":', source)
-        self.assertIn("build_library_detail(library_data(), source_id)", source)
+        web_source = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+        controller_source = Path(
+            "src/me_finder/library_query_controller.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"/api/library": (', web_source)
+        self.assertIn('"/api/library/document": (', web_source)
+        self.assertIn('if requested_view == "summary":', controller_source)
+        self.assertIn(
+            "self._document_queries.library_summary(", controller_source
+        )
+        self.assertIn(
+            "self._document_queries.library_detail(", controller_source
+        )
 
 
 if __name__ == "__main__":

@@ -87,38 +87,30 @@ class DesktopPortableTests(unittest.TestCase):
             desktop_source,
         )
 
+    def test_backup_picker_uses_native_single_zip_selection(self) -> None:
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+
+        self.assertIn("def choose_backup_file()", desktop_source)
+        self.assertIn("webview.FileDialog.OPEN", desktop_source)
+        self.assertIn('file_types=("MEFinder 备份 (*.zip)",)', desktop_source)
+        self.assertIn(
+            "native_backup_file_chooser=choose_backup_file",
+            desktop_source,
+        )
+
     def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
         spec_source = Path("desktop_macos.spec").read_text(encoding="utf-8")
 
-        for filename in ("LICENSE", "THIRD_PARTY_NOTICES.txt"):
-            self.assertIn(f'("{filename}", ".")', spec_source)
-            self.assertIn(
-                f'cp "{filename}" "$MEFINDER_DMG_STAGE/{filename}"',
-                build_source,
-            )
-            self.assertIn(
-                f'! -f "$MEFINDER_RESOURCES/{filename}"',
-                build_source,
-            )
-        self.assertIn(
+        self.assertNotIn(
             '("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")',
             spec_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             'cp -R "THIRD_PARTY_LICENSES" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES"',
             build_source,
         )
-        self.assertIn(
-            '(str(stage_root / "Python-runtime-LICENSE.txt"), "THIRD_PARTY_LICENSES")',
-            spec_source,
-        )
-        self.assertIn("MEFINDER_PYTHON_LICENSE", build_source)
-        self.assertIn("ZIP does not contain THIRD_PARTY_LICENSES", build_source)
-        self.assertIn(
-            '"$MEFINDER_DMG_MOUNT/THIRD_PARTY_LICENSES"',
-            build_source,
-        )
+        self.assertNotIn("MEFINDER_PYTHON_LICENSE", build_source)
 
         self.assertIn('MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"', build_source)
         self.assertIn(
@@ -438,6 +430,37 @@ class DesktopPortableTests(unittest.TestCase):
                 mock.patch.object(desktop, "app_root", return_value=bundle),
             ):
                 self.assertEqual(desktop.local_app_data_root(), chosen.resolve())
+
+    def test_windows_stable_pointer_takes_priority_after_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bundle = base / "app"
+            bundle.mkdir()
+            installed = base / "installer-choice"
+            custom = base / "external" / "MEFinder"
+            local_app_data = base / "LocalAppData"
+            default = local_app_data / "MEFinder"
+            default.mkdir(parents=True)
+            (bundle / "data_root.txt").write_text(
+                str(installed), encoding="utf-8"
+            )
+            (default / "data_root.txt").write_text(
+                str(custom), encoding="utf-8"
+            )
+            with (
+                mock.patch.dict(
+                    desktop.os.environ,
+                    {"LOCALAPPDATA": str(local_app_data)},
+                    clear=True,
+                ),
+                mock.patch.object(desktop.sys, "platform", "win32"),
+                mock.patch.object(desktop.sys, "frozen", True, create=True),
+                mock.patch.object(desktop, "app_root", return_value=bundle),
+            ):
+                self.assertEqual(
+                    desktop.local_app_data_root(),
+                    custom.resolve(),
+                )
 
     def test_windows_installer_marker_is_ignored_for_portable_bundles(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

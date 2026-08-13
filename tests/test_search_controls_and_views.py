@@ -8,6 +8,27 @@ from src.me_finder.web import HTML
 
 
 WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+ORCHESTRATOR_SOURCE = Path(
+    "src/me_finder/application/import_orchestrator.py"
+).read_text(encoding="utf-8")
+PARSER_EXECUTOR_SOURCE = Path(
+    "src/me_finder/application/import_parser_executor.py"
+).read_text(encoding="utf-8")
+DOCUMENT_IMPORT_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/document_import_coordinator.py"
+).read_text(encoding="utf-8")
+IMPORT_JOB_CONTROLLER_SOURCE = Path(
+    "src/me_finder/import_job_controller.py"
+).read_text(encoding="utf-8")
+DOCUMENT_QUERY_SOURCE = Path(
+    "src/me_finder/application/document_query_service.py"
+).read_text(encoding="utf-8")
+PARSER_SETTINGS_CONTROLLER_SOURCE = Path(
+    "src/me_finder/parser_settings_controller.py"
+).read_text(encoding="utf-8")
+METADATA_COORDINATOR_SOURCE = Path(
+    "src/me_finder/application/bibliographic_metadata_coordinator.py"
+).read_text(encoding="utf-8")
 SEARCH_SERVICE_SOURCE = Path(
     "src/me_finder/application/search_service.py"
 ).read_text(encoding="utf-8")
@@ -99,20 +120,18 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="detail-copy-control"', detail_source)
         self.assertNotIn("复制原文", detail_source)
         self.assertNotIn("复制原文与出处", detail_source)
-        more_control = detail_source.index('id="detail-more-control"')
-        self.assertLess(open_action, more_control)
-        self.assertIn('aria-label="更多操作" title="更多操作"', detail_source)
-        self.assertIn("runSearchDetailAction(event,\\'complete-metadata\\')\">补全书目信息</button>", detail_source)
+        self.assertNotIn('id="detail-more-control"', detail_source)
+        self.assertNotIn('aria-label="更多操作" title="更多操作"', detail_source)
+        self.assertNotIn("补全书目信息", detail_source)
         self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
         self.assertIn(
             "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
             detail_source,
         )
-        self.assertIn("function runSearchDetailAction(event, action)", HTML)
+        self.assertNotIn("function runSearchDetailAction(event, action)", HTML)
         self.assertNotIn("if (action === 'copy-original')", HTML)
         self.assertNotIn("if (action === 'copy-citation')", HTML)
         self.assertNotIn("if (action === 'copy-combined')", HTML)
-        self.assertIn("if (item) openMetadataForSource(item.source_file_id || '');", HTML)
         self.assertNotIn("function copySelectedOriginal()", HTML)
         self.assertNotIn("function copySelectedOriginalAndCitation()", HTML)
         self.assertIn("function copySelectedCitation()", HTML)
@@ -220,14 +239,26 @@ class SearchControlsAndViewsTests(unittest.TestCase):
     def test_registered_pdf_can_be_resubmitted_to_mineru_from_the_drawer(self) -> None:
         self.assertIn('"/api/mineru-reparse"', WEB_SOURCE)
         self.assertNotIn("原生文本，本地解析即可，无需 MinerU OCR", WEB_SOURCE)
-        self.assertIn("force_mineru=True,", WEB_SOURCE)
+        self.assertIn("force_mineru=True,", IMPORT_JOB_CONTROLLER_SOURCE)
         self.assertIn(
             'display_file_name=str(record.get("file_name") or "")',
-            WEB_SOURCE,
+            IMPORT_JOB_CONTROLLER_SOURCE,
         )
-        self.assertIn("job.get(\"source_file_id\") == sid and job.get(\"status\") == \"processing\"", WEB_SOURCE)
+        self.assertIn("self._source_record(source_file_id)", IMPORT_JOB_CONTROLLER_SOURCE)
+        self.assertIn(
+            "self._imports.active_job_for_source(source_file_id)",
+            IMPORT_JOB_CONTROLLER_SOURCE,
+        )
+        self.assertIn(
+            "self._imports.start_import_job(",
+            IMPORT_JOB_CONTROLLER_SOURCE,
+        )
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
-        self.assertIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
+        self.assertIn("importQueue.push(queueItem)", HTML)
+        self.assertIn("navigateTo('import')", HTML)
+        self.assertIn("pollImportJob(queueItem.id)", HTML)
+        self.assertIn("queue.scrollIntoView({behavior: 'smooth', block: 'start'})", HTML)
         self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
         self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
@@ -247,26 +278,45 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
         self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
         self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
-        self.assertIn('payload.get("pdf_parse_mode") or "auto"', WEB_SOURCE)
-        self.assertIn('force_mineru = is_pdf and pdf_parse_mode == "mineru"', WEB_SOURCE)
-        self.assertIn('"parse_route": parse_route', WEB_SOURCE)
+        self.assertIn('payload.get("pdf_parse_mode", "auto")', WEB_SOURCE)
+        self.assertIn(
+            'force_mineru = is_pdf and pdf_parse_mode == "mineru"',
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            '"parse_route": parse_route',
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        parse_css_start = HTML.index("/* PDF 解析方式：")
+        parse_css_end = HTML.index(".import-vision-select", parse_css_start)
+        parse_css = HTML[parse_css_start:parse_css_end]
+        self.assertNotIn("grid-template-columns: repeat(3", parse_css)
+        self.assertIn(".pdf-parse-mode {\n  display: flex;\n  flex-direction: column;", HTML)
+        self.assertIn(".pdf-parse-option-vision .pdf-parse-card", HTML)
+        self.assertIn(".pdf-parse-option strong { color: var(--text-primary); font-size: 14px;", HTML)
 
     def test_directory_batch_import_is_bounded_and_isolates_pdf_index_writes(self) -> None:
         self.assertIn("ImportTaskQueue(worker_count=2)", WEB_SOURCE)
-        self.assertIn("def start_native_import_batch(", WEB_SOURCE)
-        self.assertIn("def start_remote_import_batch(", WEB_SOURCE)
-        self.assertIn("def index_registered_pdf(", WEB_SOURCE)
-        self.assertIn("replace_source_in_database(", WEB_SOURCE)
-        self.assertIn("fail_import_at_index(job_id, exc, parsed=True)", WEB_SOURCE)
+        self.assertIn("def start_native_import_batch(", ORCHESTRATOR_SOURCE)
+        self.assertIn("def start_remote_import_batch(", ORCHESTRATOR_SOURCE)
+        self.assertIn("def index_registered_pdf(", ORCHESTRATOR_SOURCE)
+        self.assertIn("self._index_runtime.replace_source(", ORCHESTRATOR_SOURCE)
         self.assertIn(
-            "native_pdf_job_ids = start_native_import_batch(",
-            WEB_SOURCE,
+            "self.fail_import_at_index(job_id, exc, parsed=True)",
+            ORCHESTRATOR_SOURCE,
         )
         self.assertIn(
-            "word_job_ids = start_native_import_batch(word_items)",
-            WEB_SOURCE,
+            "native_pdf_job_ids = self._jobs.start_native_import_batch(",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
         )
-        self.assertIn("remote_job_ids = start_remote_import_batch(remote_items)", WEB_SOURCE)
+        self.assertIn(
+            "word_job_ids = self._jobs.start_native_import_batch(word_items)",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "remote_job_ids = self._jobs.start_remote_import_batch(",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
         self.assertNotIn("for raw in raw_paths[:50]", WEB_SOURCE)
         self.assertIn("一次最多批量导入 50 个文件，请分批选择。", WEB_SOURCE)
         self.assertIn("const SCAN_IMPORT_BATCH_LIMIT = 50", HTML)
@@ -303,23 +353,27 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
         self.assertIn("function markSettingsSectionDirty(hintId)", HTML)
         self.assertIn("有未保存的修改，记得点保存", HTML)
-        self.assertIn("t.closest('#mineru-api-settings')) markSettingsSectionDirty('mineru-save-hint')", HTML)
+        self.assertIn("mineruStatus.textContent = '有未保存的修改'", HTML)
         self.assertIn("t.closest('#vision-editor-card')) markSettingsSectionDirty('vision-save-hint')", HTML)
 
-    def test_parse_modes_sit_below_dropzone_without_failure_recovery_panel(self) -> None:
-        """拖放区在前，三种解析方式常驻其下；不再有单独的失败恢复面板。"""
+    def test_parse_modes_sit_above_dropzone_with_progressive_failure_recovery(self) -> None:
+        """恢复 0.3.8 层级，并只在失败后渐进显示视觉 API 恢复区。"""
 
         self.assertNotIn('class="import-intro">', HTML)
         drop = HTML.index('id="drop-zone"')
         modes = HTML.index('class="pdf-parse-section"')
         scan = HTML.index('id="scan-section"')
         queue = HTML.index('id="import-queue"')
-        self.assertLess(drop, modes)
-        self.assertLess(modes, scan)
+        self.assertLess(modes, drop)
+        self.assertLess(drop, scan)
         self.assertLess(scan, queue)
-        # 失败恢复面板整体移除：第三种模式本就能主动指定视觉 API。
-        self.assertNotIn('id="import-recovery-panel"', HTML)
-        self.assertNotIn("function importQueueNeedsRecoverySelector()", HTML)
+        self.assertIn("padding: 36px 32px;", HTML)
+        self.assertIn("height: 36px; padding: 0 12px", HTML)
+        self.assertIn('id="import-recovery-panel" hidden', HTML)
+        self.assertIn('id="import-recovery-provider"', HTML)
+        self.assertIn("function importQueueNeedsRecoverySelector()", HTML)
+        self.assertIn("panel.hidden = !shouldShow", HTML)
+        self.assertIn("q.status === 'error'", HTML)
         self.assertNotIn('class="pdf-parse-details"', HTML)
         # I-02：扫描只列出文件、不直接导入。
         self.assertIn("扫描只列出文件、不直接导入", HTML)
@@ -349,19 +403,75 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/import-retry'", HTML)
         self.assertIn('"X-Vision-Provider-ID"', WEB_SOURCE)
         self.assertIn('"/api/vision-providers"', WEB_SOURCE)
-        self.assertIn('summary.get("auto_fallback_from_mineru")', WEB_SOURCE)
-        self.assertIn("can_retry_with_provider=bool(fallback)", WEB_SOURCE)
-        self.assertIn("fallback = providers[0] if providers else None", WEB_SOURCE)
+        self.assertIn(
+            'summary.get("auto_fallback_from_mineru")', PARSER_EXECUTOR_SOURCE
+        )
+        self.assertIn(
+            "can_retry_with_provider=bool(fallback)", PARSER_EXECUTOR_SOURCE
+        )
+        self.assertIn(
+            "fallback = providers[0] if providers else None",
+            PARSER_EXECUTOR_SOURCE,
+        )
         self.assertNotIn(
             'default_id = str(summary.get("default_provider_id") or "")',
-            WEB_SOURCE,
+            PARSER_EXECUTOR_SOURCE,
         )
 
-    def test_mineru_settings_require_api_token_instead_of_legacy_access_keys(self) -> None:
+    def test_mineru_settings_support_independent_token_accounts(self) -> None:
         self.assertIn('id="mineru-token"', HTML)
+        self.assertIn('id="mineru-account-list"', HTML)
+        self.assertIn('id="mineru-account-name"', HTML)
+        self.assertIn('id="mineru-editor-card"', HTML)
+        self.assertIn('class="mineru-account-table"', HTML)
+        self.assertIn("function showMineruEditor()", HTML)
+        self.assertIn("function hideMineruEditor()", HTML)
+        self.assertIn('id="mineru-add-account"', HTML)
+        self.assertIn("addButton.hidden = !mineruAccounts.length", HTML)
+        self.assertIn("if (!mineruAccounts.length) startAddMineruAccount(false);", HTML)
+        self.assertIn("firstAccount ? '配置 MinerU API' : '添加 MinerU 账号'", HTML)
+        self.assertIn("document.getElementById('mineru-account-cancel').hidden = firstAccount", HTML)
+        self.assertIn('id="parser-provider-list"', HTML)
+        self.assertIn('id="parser-stat-books"', HTML)
+        self.assertIn('data-target="statistics-settings"', HTML)
+        self.assertIn("showSettingsCategory('statistics-settings')", HTML)
+        mineru_nav = HTML.index('data-target="mineru-api-settings"')
+        vision_nav = HTML.index('data-target="vision-api-settings"')
+        statistics_nav = HTML.index('data-target="statistics-settings"')
+        citation_nav = HTML.index('data-target="citation-format-settings"')
+        self.assertLess(mineru_nav, vision_nav)
+        self.assertLess(vision_nav, statistics_nav)
+        self.assertLess(statistics_nav, citation_nav)
+        mineru_start = HTML.index('id="mineru-api-settings"')
+        statistics_start = HTML.index('id="statistics-settings"', mineru_start)
+        vision_start = HTML.index('id="vision-api-settings"', statistics_start)
+        self.assertNotIn('id="parser-provider-list"', HTML[mineru_start:statistics_start])
+        self.assertIn('id="parser-provider-list"', HTML[statistics_start:vision_start])
         self.assertNotIn('id="mineru-access-key-id"', HTML)
         self.assertNotIn('id="mineru-secret-access-key"', HTML)
-        self.assertIn("data.has_legacy_access_keys", HTML)
+        self.assertIn("fetch('/api/mineru-accounts'", HTML)
+        self.assertIn("fetch('/api/mineru-accounts/service'", HTML)
+        self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
+        self.assertIn("async function deleteMineruAccount(accountId)", HTML)
+        self.assertIn("onclick=\"deleteMineruAccount(this.dataset.accountId)\"", HTML)
+        self.assertIn('id="mineru-local-settings"', HTML)
+        self.assertIn('本地部署（高级）', HTML)
+        self.assertIn("fetch('/api/mineru-local'", HTML)
+        self.assertIn("fetch('/api/mineru-local/test'", HTML)
+        self.assertIn("pollImportJob(item.id)", HTML)
+        self.assertIn('切换到本地部署', HTML)
+        self.assertIn("fetch('/api/parser-statistics'", HTML)
+        self.assertIn("async function loadParserStatistics()", HTML)
+        self.assertIn("不是官网用量或计费数据", HTML)
+        self.assertIn("按解析服务", HTML)
+        self.assertIn(
+            "def migrate_legacy_mineru_account(self)",
+            PARSER_SETTINGS_CONTROLLER_SOURCE,
+        )
+        self.assertIn(
+            "parser_settings_controller.migrate_legacy_mineru_account()",
+            WEB_SOURCE,
+        )
         self.assertNotIn("access_key_id: document.getElementById", HTML)
         self.assertNotIn("secret_access_key: document.getElementById", HTML)
 
@@ -396,7 +506,31 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function fetchVisionModels(options)", HTML)
         self.assertIn("fetch('/api/vision-providers/models'", HTML)
         self.assertIn('"/api/vision-providers/models"', WEB_SOURCE)
-        self.assertIn("manual_entry_allowed", WEB_SOURCE)
+        self.assertIn(
+            "manual_entry_allowed", PARSER_SETTINGS_CONTROLLER_SOURCE
+        )
+        self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
+        self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
+        self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
+        self.assertNotIn("{key: 'omni', label: '全模态'}", HTML)
+        self.assertNotIn("{key: 'vision', label: '通用视觉'}", HTML)
+        self.assertIn("function visionModelPriority(item)", HTML)
+        self.assertIn("capability-unsupported", HTML)
+        self.assertNotIn("可能支持图片", HTML)
+
+        brand_start = HTML.index("var VISION_BRAND_RULES = [")
+        brand_end = HTML.index("];", brand_start)
+        brand_rules = HTML[brand_start:brand_end]
+        self.assertGreater(
+            brand_rules.index("{re: /deepseek/i"),
+            brand_rules.index("{re: /together/i"),
+        )
+        self.assertIn("base: 'https://api.deepseek.com', unsupported: true", brand_rules)
+        self.assertIn(
+            'vision-model-badge capability-unsupported">不支持图片',
+            HTML,
+        )
+        self.assertNotIn("通义千问、DeepSeek 等视觉模型", HTML)
 
     def test_backup_export_import_is_wired(self) -> None:
         self.assertIn('id="backup-settings"', HTML)
@@ -406,12 +540,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             HTML,
         )
         self.assertIn('onclick="exportBackup()"', HTML)
-        self.assertIn('id="backup-import-path"', HTML)
+        self.assertIn('id="backup-import-choose"', HTML)
+        self.assertNotIn('id="backup-import-path"', HTML)
         self.assertIn("function exportBackup()", HTML)
         self.assertIn("function importBackup()", HTML)
+        self.assertIn('<small id="backup-export-hint">', HTML)
+        self.assertIn("仅备份页码、书目和偏好，不含 PDF", HTML)
         self.assertIn("fetch('/api/backup/export'", HTML)
+        self.assertIn("fetch('/api/backup/import/choose'", HTML)
         self.assertIn("fetch('/api/backup/import'", HTML)
         self.assertIn('"/api/backup/export"', WEB_SOURCE)
+        self.assertIn('"/api/backup/import/choose"', WEB_SOURCE)
         self.assertIn('"/api/backup/import"', WEB_SOURCE)
         self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
 
@@ -430,6 +569,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "macos-update-settings",
             "data-location-settings",
             "mineru-api-settings",
+            "statistics-settings",
             "vision-api-settings",
             "citation-format-settings",
             "bib-completion-settings",
@@ -446,9 +586,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function runBatchMetadataDetection()", HTML)
         self.assertIn("fetch('/api/bibliographic-metadata/batch-detect'", HTML)
         self.assertIn('"/api/bibliographic-metadata/batch-detect"', WEB_SOURCE)
-        self.assertIn("def batch_metadata_candidates()", WEB_SOURCE)
-        self.assertIn('if source == "manual":', WEB_SOURCE)
-        self.assertIn("batchmeta-", WEB_SOURCE)
+        self.assertIn(
+            "self._queries.batch_metadata_candidates(",
+            METADATA_COORDINATOR_SOURCE,
+        )
+        self.assertIn(
+            "def batch_metadata_candidates(", DOCUMENT_QUERY_SOURCE
+        )
+        self.assertIn('if source == "manual":', DOCUMENT_QUERY_SOURCE)
+        self.assertIn("batchmeta-", METADATA_COORDINATOR_SOURCE)
 
     def test_online_metadata_auto_match_threshold_defaults_to_90_percent(self) -> None:
         self.assertIn("const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;", HTML)
@@ -504,7 +650,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("消耗 MinerU 配额", HTML)
         self.assertIn('"/api/scan-directories"', WEB_SOURCE)
         self.assertIn('"/api/import-local"', WEB_SOURCE)
-        self.assertIn("不在已配置的文献目录内", WEB_SOURCE)
+        self.assertIn(
+            "不在已配置的文献目录内",
+            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
+        )
 
     def test_drawer_file_info_collapses_and_editor_is_type_aware(self) -> None:
         self.assertIn('id="drawer-file-info"', HTML)
@@ -530,8 +679,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("docType === 'thesis' && field === 'publisher' ? '学校'", HTML)
 
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
-        self.assertIn('phase="metadata_recognition"', WEB_SOURCE)
-        self.assertIn('persist_bibliographic_metadata(source_file_id, metadata)', WEB_SOURCE)
+        self.assertIn('phase="metadata_recognition"', ORCHESTRATOR_SOURCE)
+        self.assertIn(
+            "self._persist_metadata(source_file_id, metadata)",
+            ORCHESTRATOR_SOURCE,
+        )
         self.assertIn("if (field === 'isbn'", HTML)
         self.assertIn('bibliographic-missing', HTML)
 

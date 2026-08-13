@@ -30,6 +30,11 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("SPDX-License-Identifier: AGPL-3.0-only", notices)
         self.assertIn("does not use the Artifex commercial license", notices)
 
+    def test_readme_does_not_claim_unapproved_signpath_signing(self) -> None:
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("Free code signing provided by SignPath.io", readme)
+
     def test_windows_release_payloads_include_license_files(self) -> None:
         for filename in ("LICENSE", "THIRD_PARTY_NOTICES.txt"):
             self.assertIn(f'-LiteralPath "{filename}"', self.build_script)
@@ -68,7 +73,11 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertNotIn('[string]$Version = "0.1.', self.build_script)
         self.assertNotIn('[string]$Version = "0.1.', self.portable_script)
         self.assertIn('[string]$PythonExe = ""', self.portable_script)
-        self.assertIn("& $pythonCommand @pythonLauncherArgs -m PyInstaller", self.portable_script)
+        self.assertIn('[string]$PackagerPythonExe = ""', self.portable_script)
+        self.assertIn(
+            "& $packagerPythonCommand @packagerPythonArgs -m PyInstaller",
+            self.portable_script,
+        )
 
     def test_installer_wizard_is_localized_and_branded(self) -> None:
         # 简体中文与英文双语可选；启动时的语言对话框负责切换。

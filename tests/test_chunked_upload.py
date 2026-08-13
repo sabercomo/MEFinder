@@ -75,6 +75,23 @@ class ChunkedUploadStoreTests(unittest.TestCase):
             store.close()
             self.assertEqual(list(staging.glob("*.part")), [])
 
+    def test_active_session_count_expires_abandoned_uploads(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            staging = Path(temp_dir) / "staging"
+            store = ChunkedUploadStore(
+                staging,
+                max_upload_bytes=32,
+                stale_after_seconds=1,
+            )
+            with patch("src.me_finder.chunked_upload.time.time", return_value=100):
+                store.start("paper.pdf", 6)
+                self.assertEqual(store.active_session_count(), 1)
+
+            with patch("src.me_finder.chunked_upload.time.time", return_value=102):
+                self.assertEqual(store.active_session_count(), 0)
+
+            self.assertEqual(list(staging.glob("*.part")), [])
+
 
 class ChunkedUploadHTTPTests(unittest.TestCase):
     @staticmethod

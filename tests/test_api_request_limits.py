@@ -20,10 +20,15 @@ from src.me_finder.web import (
     MAX_JSON_REQUEST_BYTES,
     ManagedThreadingHTTPServer,
     make_handler,
+    serve,
 )
 
 
 class ApiRequestLimitTests(unittest.TestCase):
+    def test_web_server_fails_fast_for_non_loopback_bind(self) -> None:
+        with self.assertRaisesRegex(ValueError, "只能绑定 loopback"):
+            serve("0.0.0.0", 0, Path("unused.sqlite3"))
+
     @contextmanager
     def _server(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,6 +91,200 @@ class ApiRequestLimitTests(unittest.TestCase):
 
         self.assertEqual(status, 413)
         self.assertEqual(payload["error"], "JSON 请求内容过大。")
+
+    def test_cross_origin_post_is_rejected_before_mutation(self) -> None:
+        body = json.dumps({"theme": "frost-blue"})
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request(
+                "POST",
+                "/api/preferences",
+                body=body,
+                headers={
+                    "Content-Type": "text/plain",
+                    "Content-Length": str(len(body.encode("utf-8"))),
+                    "Origin": "https://attacker.example",
+                },
+            )
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+            stored = json.loads(
+                build_opener(ProxyHandler({}))
+                .open(base_url + "/api/preferences", timeout=5)
+                .read()
+                .decode("utf-8")
+            )
+
+        self.assertEqual(status, 403)
+        self.assertEqual(payload["error"], "请求来源不受信任。")
+        self.assertEqual(stored["theme"], "midnight")
+
+    def test_json_post_rejects_simple_content_type(self) -> None:
+        body = b"{}"
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request(
+                "POST",
+                "/api/search",
+                body=body,
+                headers={
+                    "Content-Type": "text/plain",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+
+        self.assertEqual(status, 415)
+        self.assertEqual(
+            payload["error"],
+            "JSON 请求必须使用 application/json。",
+        )
+
+    def test_same_origin_json_post_is_allowed(self) -> None:
+        body = json.dumps({"query": "test"})
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request(
+                "POST",
+                "/api/search",
+                body=body,
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Content-Length": str(len(body.encode("utf-8"))),
+                    "Origin": base_url,
+                },
+            )
+            response = connection.getresponse()
+            status = response.status
+            response.read()
+            connection.close()
+
+        self.assertNotEqual(status, 403)
+        self.assertNotEqual(status, 415)
+
+    def test_non_loopback_host_is_rejected(self) -> None:
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request(
+                "GET",
+                "/api/preferences",
+                headers={"Host": f"attacker.example:{port}"},
+            )
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+
+        self.assertEqual(status, 421)
+        self.assertEqual(payload["error"], "请求目标不是当前本地服务。")
+
+    def test_absolute_request_target_must_match_host(self) -> None:
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.putrequest(
+                "GET",
+                "http://attacker.example/api/preferences",
+                skip_host=True,
+            )
+            connection.putheader("Host", f"127.0.0.1:{port}")
+            connection.endheaders()
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+
+        self.assertEqual(status, 421)
+        self.assertEqual(payload["error"], "请求目标不是当前本地服务。")
+
+    def test_missing_host_is_rejected(self) -> None:
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.putrequest("GET", "/api/preferences", skip_host=True)
+            connection.endheaders()
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"], "Host 请求头无效。")
+
+    def test_duplicate_host_is_rejected(self) -> None:
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.putrequest("GET", "/api/preferences", skip_host=True)
+            connection.putheader("Host", f"127.0.0.1:{port}")
+            connection.putheader("Host", f"127.0.0.1:{port}")
+            connection.endheaders()
+            response = connection.getresponse()
+            status = response.status
+            connection.close()
+
+        self.assertEqual(status, 400)
+
+    def test_null_origin_is_rejected(self) -> None:
+        with self._server() as base_url:
+            port = int(base_url.rsplit(":", 1)[1])
+            connection = HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request(
+                "POST",
+                "/api/search",
+                body=b"{}",
+                headers={
+                    "Content-Type": "application/json",
+                    "Content-Length": "2",
+                    "Origin": "null",
+                },
+            )
+            response = connection.getresponse()
+            status = response.status
+            payload = json.loads(response.read().decode("utf-8"))
+            connection.close()
+
+        self.assertEqual(status, 403)
+        self.assertEqual(payload["error"], "请求来源不受信任。")
+
+    def test_raw_upload_rejects_browser_safelisted_content_types(self) -> None:
+        for content_type in (
+            "text/plain",
+            "application/x-www-form-urlencoded",
+            "multipart/form-data; boundary=test",
+        ):
+            with self.subTest(content_type=content_type), self._server() as base_url:
+                port = int(base_url.rsplit(":", 1)[1])
+                connection = HTTPConnection("127.0.0.1", port, timeout=5)
+                connection.request(
+                    "POST",
+                    "/api/import",
+                    body=b"not a document",
+                    headers={
+                        "Content-Type": content_type,
+                        "Content-Length": "14",
+                        "X-File-Name": "document.pdf",
+                    },
+                )
+                response = connection.getresponse()
+                status = response.status
+                payload = json.loads(response.read().decode("utf-8"))
+                connection.close()
+
+            self.assertEqual(status, 415)
+            self.assertEqual(
+                payload["error"],
+                "不支持此上传 Content-Type。",
+            )
 
     def test_new_post_is_rejected_with_503_once_shutdown_begins(self) -> None:
         def post_search(port: int):

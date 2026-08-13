@@ -57,6 +57,9 @@ function showSettingsCategory(sectionId) {
   });
   var content = document.querySelector('.settings-content');
   if (content) content.scrollTop = 0;
+  if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
+    loadParserStatistics();
+  }
 }
 
 // Fall back to the first platform-visible category when the active one is hidden
@@ -303,18 +306,31 @@ function renderDataLocation(data) {
 
 async function loadDataLocation() {
   if (!document.getElementById('data-location-settings')) return;
+  var errorBox = document.getElementById('data-location-error');
+  var badge = document.getElementById('data-location-status');
+  if (badge) { badge.className = 'settings-status'; badge.textContent = '读取中…'; }
   try {
     var resp = await fetch('/api/data-location', {cache: 'no-store'});
     var data = await resp.json();
+    if (resp.status === 404 || data.available === false) {
+      delete document.documentElement.dataset.dataLocationAvailable;
+      dataLocationLoaded = true;
+      ensureVisibleSettingsCategory();
+      return;
+    }
     if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+    document.documentElement.dataset.dataLocationAvailable = 'true';
+    if (errorBox) errorBox.hidden = true;
     renderDataLocation(data);
     dataLocationLoaded = true;
   } catch (e) {
-    var badge = document.getElementById('data-location-status');
-    if (badge) {
-      badge.className = 'settings-status warning';
-      badge.textContent = '读取失败';
-    }
+    // No more dead end: surface the reason in the content area with a retry.
+    if (badge) { badge.className = 'settings-status warning'; badge.textContent = '读取失败'; }
+    var reason = document.getElementById('data-location-error-reason');
+    if (reason) reason.textContent = e.message || '读取失败';
+    if (errorBox) errorBox.hidden = false;
+    var current = document.getElementById('data-location-current');
+    if (current) current.textContent = '—';
   }
 }
 
@@ -474,8 +490,7 @@ async function setPdfOpenMode(mode) {
     currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
     preferencesLoaded = true;
     renderPdfOpenMode();
-    var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
-    showToast(currentPdfOpenMode === 'native' ? 'PDF 将在应用内打开并定位页码' : 'PDF 将使用' + systemName + '打开');
+    // Visible success: the radio已经跳过去了，无需再弹 Toast。只在失败时提示。
   } catch (e) {
     currentPdfOpenMode = previousMode;
     renderPdfOpenMode();
@@ -667,7 +682,7 @@ async function setAutoUpdate(enabled) {
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
     autoUpdateEnabled = data.auto_update === true;
     document.getElementById('auto-update-enabled').checked = autoUpdateEnabled;
-    showToast(autoUpdateEnabled ? '已开启自动检查并下载更新' : '已关闭自动更新');
+    // Visible success: the switch itself已是反馈，无需 Toast。
     if (autoUpdateEnabled) {
       updateAutoStarted = true;
       checkForUpdates(true);
@@ -855,8 +870,7 @@ async function setTheme(theme) {
     if (revision !== themeRevision) return;
     preferencesLoaded = true;
     applyTheme(persistedTheme);
-    var selected = THEME_OPTIONS.find(function(option) { return option.id === theme; });
-    showToast('已切换到' + (selected ? selected.name : '所选主题'));
+    // Visible success: the whole UI已经换了主题，无需再弹 Toast。
   } catch (e) {
     if (revision !== themeRevision) return;
     applyTheme(persistedTheme);
@@ -865,4 +879,3 @@ async function setTheme(theme) {
 }
 
 renderThemeOptions();
-

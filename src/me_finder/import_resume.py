@@ -55,11 +55,35 @@ def options_fingerprint(options: Mapping[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()[:16]
 
 
+def fsync_directory(directory: Path) -> None:
+    """Persist directory entries where directory descriptors are supported."""
+
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(Path(directory), flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _mkdir_durable(directory: Path) -> None:
+    missing = []
+    candidate = Path(directory)
+    while not candidate.exists():
+        missing.append(candidate)
+        candidate = candidate.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    for created in reversed(missing):
+        fsync_directory(created.parent)
+
+
 def atomic_write_json(path: Path, payload: Mapping[str, object]) -> Path:
     """Atomically replace one JSON file without exposing a half-written file."""
 
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _mkdir_durable(path.parent)
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as handle:
@@ -68,9 +92,11 @@ def atomic_write_json(path: Path, payload: Mapping[str, object]) -> Path:
             handle.flush()
             os.fsync(handle.fileno())
         temporary.replace(path)
+        fsync_directory(path.parent)
     finally:
         if temporary.exists():
             temporary.unlink()
+            fsync_directory(path.parent)
     return path
 
 
@@ -102,6 +128,7 @@ def quarantine_corrupt_manifest(path: Path) -> Optional[Path]:
         target = path.with_name(f"{path.name}.corrupt-{stamp}-{counter}")
         counter += 1
     path.replace(target)
+    fsync_directory(path.parent)
     return target
 
 

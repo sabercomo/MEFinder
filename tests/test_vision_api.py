@@ -552,6 +552,26 @@ class VisionAPIConfigTests(unittest.TestCase):
             opener = _FakeModelsOpener(
                 {
                     "data": [
+                        {"id": "deepseek-v4-flash", "owned_by": "deepseek"},
+                        {"id": "qwen-long", "owned_by": "qwen"},
+                        {"id": "qwen3-omni-flash", "owned_by": "qwen"},
+                        {"id": "qwen3-vl-flash", "owned_by": "qwen"},
+                        {"id": "qwen3.8-max", "owned_by": "qwen"},
+                        {"id": "qwen3.7-plus", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max-2026-06-08", "owned_by": "qwen"},
+                        {"id": "qwen3.7-max-2026-07-01", "owned_by": "qwen"},
+                        {"id": "qwen3.6-flash", "owned_by": "qwen"},
+                        {"id": "qwen3.6-max-preview", "owned_by": "qwen"},
+                        {"id": "qwen-vl-ocr-2025-11-20", "owned_by": "qwen"},
+                        {"id": "qwen-vl-ocr-latest", "owned_by": "qwen"},
+                        {"id": "qwen3.5-ocr", "owned_by": "qwen"},
+                        {"id": "vendor-document-ocr", "owned_by": "vendor"},
+                        {
+                            "id": "vendor-multimodal-model",
+                            "owned_by": "vendor",
+                            "input_modalities": ["text", "image"],
+                        },
                         {"id": "text-model", "owned_by": "relay"},
                         {"id": "qwen3-vl-plus", "owned_by": "qwen"},
                         {"id": "qwen3-vl-plus", "owned_by": "duplicate"},
@@ -574,10 +594,74 @@ class VisionAPIConfigTests(unittest.TestCase):
                 )
 
             self.assertFalse(path.exists())
-            self.assertEqual(result["count"], 2)
-            self.assertEqual(result["models"][0]["id"], "qwen3-vl-plus")
-            self.assertTrue(result["models"][0]["likely_vision"])
-            self.assertEqual(result["models"][1]["id"], "text-model")
+            self.assertEqual(result["count"], 18)
+            self.assertEqual(
+                [item["id"] for item in result["models"]],
+                [
+                    "qwen3.5-ocr",
+                    "qwen-vl-ocr-latest",
+                    "qwen-vl-ocr-2025-11-20",
+                    "vendor-document-ocr",
+                    "qwen3-vl-plus",
+                    "qwen3.7-plus",
+                    "qwen3-omni-flash",
+                    "qwen3-vl-flash",
+                    "qwen3.6-flash",
+                    "qwen3.7-max-2026-06-08",
+                    "qwen3.7-max-2026-07-01",
+                    "qwen3.8-max",
+                    "vendor-multimodal-model",
+                    "deepseek-v4-flash",
+                    "qwen-long",
+                    "qwen3.6-max-preview",
+                    "qwen3.7-max",
+                    "text-model",
+                ],
+            )
+            by_id = {item["id"]: item for item in result["models"]}
+            self.assertEqual(
+                by_id["qwen3.5-ocr"]["capability_label"],
+                "OCR专用 · 推荐",
+            )
+            self.assertEqual(
+                by_id["qwen-vl-ocr-2025-11-20"]["capability_label"],
+                "OCR专用 · 固定版本",
+            )
+            self.assertEqual(
+                by_id["qwen3-vl-flash"]["capability_label"],
+                "支持图片",
+            )
+            self.assertEqual(
+                by_id["qwen3.8-max"]["capability_label"],
+                "支持图片",
+            )
+            self.assertEqual(
+                by_id["qwen3-omni-flash"]["capability_label"],
+                "支持图片",
+            )
+            self.assertTrue(by_id["qwen3.7-plus"]["likely_vision"])
+            self.assertTrue(
+                by_id["qwen3.7-max-2026-06-08"]["likely_vision"]
+            )
+            self.assertTrue(
+                by_id["qwen3.7-max-2026-07-01"]["likely_vision"]
+            )
+            self.assertFalse(by_id["qwen3.7-max"]["likely_vision"])
+            self.assertTrue(by_id["qwen3.6-flash"]["likely_vision"])
+            self.assertFalse(
+                by_id["qwen3.6-max-preview"]["likely_vision"]
+            )
+            self.assertEqual(by_id["qwen-long"]["capability"], "text")
+            self.assertEqual(
+                by_id["qwen-long"]["capability_label"],
+                "不支持图片",
+            )
+            self.assertFalse(by_id["qwen-long"]["likely_vision"])
+            self.assertEqual(
+                by_id["deepseek-v4-flash"]["capability_label"],
+                "不支持图片",
+            )
+            self.assertFalse(by_id["deepseek-v4-flash"]["likely_vision"])
             self.assertEqual(opener.request.get_method(), "GET")
             self.assertEqual(
                 opener.request.full_url,
@@ -747,6 +831,49 @@ class VisionAPIConfigTests(unittest.TestCase):
 
 
 class VisionAPIParserTests(unittest.TestCase):
+    def test_relative_mineru_manifest_resolves_from_runtime_root(self) -> None:
+        with TemporaryDirectory() as tmp, TemporaryDirectory() as other:
+            root = Path(tmp)
+            relative_manifest = Path(
+                "corpus/processed/mineru/manifests/segments-source.json"
+            )
+            relative_result = Path(
+                "corpus/processed/mineru/results/segment-source"
+            )
+            manifest_path = root / relative_manifest
+            manifest_path.parent.mkdir(parents=True)
+            (root / relative_result).mkdir(parents=True)
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "api": "precision",
+                        "segments": [
+                            {
+                                "data_id": "source-p1-1",
+                                "page_ranges": "1-1",
+                                "result_dir": relative_result.as_posix(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(other)
+                segments = load_mineru_segments(
+                    {"mineru": {"manifest": relative_manifest.as_posix()}},
+                    root=root,
+                )
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(len(segments), 1)
+            self.assertEqual(
+                Path(str(segments[0]["result_dir"])),
+                root / relative_result,
+            )
+
     def test_parser_writes_page_results_and_attaches_generic_manifest(self) -> None:
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
