@@ -85,6 +85,7 @@ class ImportJobControllerTests(unittest.TestCase):
             "pdf_page_count": 12,
         }
         self.vision_result: dict[str, object] = {"providers": []}
+        self.local_mineru_result: dict[str, object] = {"enabled": False}
         self.dependency_errors: dict[str, Exception] = {}
         self.dependency_calls: list[tuple[object, ...]] = []
         self.controller = ImportJobController(
@@ -93,6 +94,7 @@ class ImportJobControllerTests(unittest.TestCase):
             source_path=self._source_path,
             detect_pdf=self._detect_pdf,
             vision_summary=self._vision_summary,
+            local_mineru_summary=lambda: self.local_mineru_result,
         )
 
     def _dependency(self, name: str, *args: object) -> None:
@@ -373,6 +375,46 @@ class ImportJobControllerTests(unittest.TestCase):
                 call[0] in {"start_retry", "dismiss"}
                 for call in self.imports.calls
             )
+        )
+
+    def test_local_mineru_retry_requires_opt_in_and_online_failure(self) -> None:
+        context = {
+            "target": self.imports.validated_target,
+            "source_file_id": "pdf-one",
+            "profile": {"detected_pdf_type": "scanned"},
+            "is_pdf": True,
+        }
+        self.imports.retry_inputs = (
+            {
+                "job_id": "old-job",
+                "status": "failed",
+                "parse_route": "mineru",
+                "mineru_failed": True,
+                "file_name": "论文.pdf",
+            },
+            context,
+        )
+        self.assertEqual(
+            self.controller.retry_with_local_mineru({"job_id": "old-job"}),
+            (400, {"error": "请先在设置中启用 MinerU 本地部署。"}),
+        )
+
+        self.local_mineru_result["enabled"] = True
+        status, result = self.controller.retry_with_local_mineru(
+            {"job_id": "old-job"}
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(result["provider_id"], "mineru-local")
+        start = next(call for call in self.imports.calls if call[0] == "start_retry")
+        self.assertTrue(start[2]["force_mineru"])
+        self.assertTrue(start[1][2]["mineru_local_retry"])
+
+        previous_job = self.imports.retry_inputs[0]
+        previous_job["provider_id"] = "mineru-local"
+        self.assertEqual(
+            self.controller.retry_with_local_mineru({"job_id": "old-job"}),
+            (400, {"error": "只有失败的在线 MinerU 任务可以切换到本地部署。"}),
         )
 
     def test_retry_durable_swap_failure_has_stable_500_response(self) -> None:

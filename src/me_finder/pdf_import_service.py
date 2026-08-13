@@ -36,6 +36,11 @@ from .mineru_api import (
     submit_local_pdf_segments,
 )
 from .mineru_provider import MinerUCloudProvider
+from .mineru_local_provider import (
+    MINERU_LOCAL_PROVIDER_ID,
+    MinerULocalProvider,
+)
+from .mineru_local_settings import load_mineru_local_config
 from .large_document.engine import LargeDocumentJobEngine
 from .large_document.job_ledger import JobLedger
 from .large_document.merge import iter_normalized_pages
@@ -1091,11 +1096,20 @@ def parse_pdf_with_mineru(
     on_progress: Optional[ProgressCallback] = None,
     poll_seconds: int = 20,
     timeout_minutes: int = 180,
+    use_local: bool = False,
 ) -> Dict[str, object]:
     """Submit all pages in <=200-page precision tasks and download results."""
 
     root = Path(root)
     pdf_path = Path(pdf_path)
+    if use_local:
+        return _parse_pdf_with_mineru_local(
+            root,
+            pdf_path,
+            source_file_id,
+            on_progress=on_progress,
+            timeout_minutes=timeout_minutes,
+        )
     accounts_path = resolve_mineru_accounts_path(root)
     if accounts_path.is_file():
         ledger = JobLedger(root / "data" / "parser_jobs.sqlite3")
@@ -1360,12 +1374,100 @@ def _parse_pdf_with_mineru_accounts(
     )
 
 
+def _parse_pdf_with_mineru_local(
+    root: Path,
+    pdf_path: Path,
+    source_file_id: str,
+    *,
+    on_progress: Optional[ProgressCallback],
+    timeout_minutes: int,
+) -> Dict[str, object]:
+    """Run an explicitly requested retry through the user's local service."""
+
+    config = load_mineru_local_config(resolve_mineru_config_path(root))
+    provider = MinerULocalProvider(config)
+    ledger = JobLedger(root / "data" / "parser_jobs.sqlite3")
+    engine = LargeDocumentJobEngine(
+        ledger=ledger,
+        provider=provider,
+        work_dir=root / "corpus" / "processed" / "parser_jobs",
+    )
+    job = engine.prepare(
+        source_path=pdf_path,
+        source_file_id=source_file_id,
+        document_id=source_file_id.upper().replace("-", "_"),
+        model=config.backend,
+        options={
+            "backend": config.backend,
+            "language": config.language,
+            "parse_method": config.parse_method,
+            "formula_enable": config.formula_enable,
+            "table_enable": config.table_enable,
+        },
+    )
+    deadline = time.time() + max(1, int(timeout_minutes)) * 60
+    while job.status not in {"validated", "permanent_failure", "cancelled"}:
+        if time.time() >= deadline:
+            raise MinerUError(
+                "本地 MinerU 解析超时，已保留任务进度。",
+                allow_parser_fallback=False,
+            )
+        job = engine.run_once(job.id)
+        if on_progress:
+            slices = ledger.list_slice_jobs(job.id)
+            on_progress(
+                {
+                    "phase": "mineru_processing",
+                    "provider_id": MINERU_LOCAL_PROVIDER_ID,
+                    "provider_name": "本地 MinerU",
+                    "message": "正在使用本地 MinerU 解析 PDF…",
+                    "completed": job.completed_slices,
+                    "total": job.total_slices,
+                    "total_pages": job.total_pages,
+                    "completed_pages": [
+                        page
+                        for item in slices
+                        if item.status == "completed"
+                        for page in range(item.page_start, item.page_end + 1)
+                    ],
+                    "failed_pages": [],
+                    "document_job_id": job.id,
+                }
+            )
+        if job.status in {"validated", "permanent_failure", "cancelled"}:
+            break
+        time.sleep(2)
+    if job.status != "validated":
+        failed = next(
+            (
+                item.last_error
+                for item in ledger.list_slice_jobs(job.id)
+                if item.last_error
+            ),
+            None,
+        )
+        raise MinerUError(
+            failed or job.error_summary or f"本地 MinerU 任务未完成：{job.status}",
+            allow_parser_fallback=False,
+        )
+    return _publish_mineru_engine_results(
+        root,
+        source_file_id,
+        ledger=ledger,
+        document_job_id=job.id,
+        provider_id=MINERU_LOCAL_PROVIDER_ID,
+        provider_name="本地 MinerU",
+    )
+
+
 def _publish_mineru_engine_results(
     root: Path,
     source_file_id: str,
     *,
     ledger: JobLedger,
     document_job_id: str,
+    provider_id: str = "mineru-cloud",
+    provider_name: str = "MinerU",
 ) -> Dict[str, object]:
     """Bridge validated normalized slices into the existing indexer contract."""
 
@@ -1373,7 +1475,12 @@ def _publish_mineru_engine_results(
     if job.status != "validated":
         raise MinerUError("只有通过完整页码校验的 MinerU 任务才能进入索引。")
     manifest_dir = root / DEFAULT_MINERU_MANIFEST_DIR
-    result_root = root / DEFAULT_MINERU_RESULT_DIR / f"engine-{source_file_id}"
+    result_directory = (
+        f"engine-{source_file_id}"
+        if provider_id == "mineru-cloud"
+        else f"engine-{provider_id}-{source_file_id}"
+    )
+    result_root = root / DEFAULT_MINERU_RESULT_DIR / result_directory
     segments: List[Dict[str, object]] = []
     for item in ledger.list_slice_jobs(job.id):
         if item.status != "completed" or not item.result_path:
@@ -1436,8 +1543,8 @@ def _publish_mineru_engine_results(
     manifest: Dict[str, object] = {
         "api": "precision",
         "parser": "mineru",
-        "provider_id": "mineru-cloud",
-        "provider_name": "MinerU",
+        "provider_id": provider_id,
+        "provider_name": provider_name,
         "model": job.parser_model or "vlm",
         "file_hash": job.source_sha256,
         "data_id_prefix": source_file_id,

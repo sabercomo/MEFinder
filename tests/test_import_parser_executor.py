@@ -173,6 +173,30 @@ class ImportParserExecutorTests(unittest.TestCase):
         self.assertEqual(jobs.progress[-1]["completed"], 2)
         self.assertIn("已选择 MinerU", str(jobs.updates[0]["message"]))
 
+    def test_local_retry_is_explicit_and_passes_local_flag(self) -> None:
+        mineru = mock.Mock()
+        jobs = _FakeJobs()
+        executor = self._executor(mineru=mineru)
+
+        succeeded = executor.execute(
+            "import-one",
+            self.target,
+            "pdf-one",
+            {
+                "detected_pdf_type": "scanned",
+                "mineru_local_retry": True,
+            },
+            True,
+            force_mineru=True,
+            jobs=jobs,
+        )
+
+        self.assertTrue(succeeded)
+        self.assertTrue(mineru.call_args.kwargs["use_local"])
+        self.assertEqual(jobs.job["provider_id"], "mineru-local")
+        self.assertEqual(jobs.job["provider_name"], "本地 MinerU")
+        self.assertIn("本地 MinerU", str(jobs.updates[0]["message"]))
+
     @mock.patch(
         "src.me_finder.application.import_parser_executor.vision_config_summary",
         return_value={

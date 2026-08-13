@@ -24,6 +24,13 @@ if errorlevel 1 exit /b 1
   tests.test_anchor_metadata ^
   tests.test_api_fallback_recovery ^
   tests.test_mineru_config ^
+  tests.test_mineru_local_settings ^
+  tests.test_mineru_local_provider ^
+  tests.test_mineru_engine_import_bridge ^
+  tests.test_parser_settings_controller ^
+  tests.test_import_job_controller ^
+  tests.test_import_parser_executor ^
+  tests.test_import_orchestrator ^
   tests.test_vision_api ^
   tests.test_citations ^
   tests.test_cnki_citation ^

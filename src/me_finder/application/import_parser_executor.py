@@ -79,6 +79,9 @@ class ImportParserExecutor:
                 force_mineru
                 or str(profile.get("detected_pdf_type")) != "native_text"
             )
+            use_local_mineru = bool(
+                use_mineru and profile.get("mineru_local_retry") is True
+            )
             if use_vision:
                 job = jobs.job_status(job_id)
                 provider_name = str(
@@ -106,6 +109,7 @@ class ImportParserExecutor:
                     target,
                     source_file_id,
                     force_mineru=force_mineru,
+                    use_local_mineru=use_local_mineru,
                     jobs=jobs,
                 )
                 if not succeeded:
@@ -151,9 +155,13 @@ class ImportParserExecutor:
         source_file_id: str,
         *,
         force_mineru: bool,
+        use_local_mineru: bool,
         jobs: ImportParserJobPort,
     ) -> bool:
         message = (
+            "正在将 PDF 提交到本地 MinerU…"
+            if use_local_mineru
+            else
             "已选择 MinerU 在线解析，正在上传 PDF…"
             if force_mineru
             else "文本层不可靠，正在自动提交 MinerU…"
@@ -163,20 +171,30 @@ class ImportParserExecutor:
             phase="mineru_submitting",
             message=message,
             parse_route="mineru",
+            provider_id="mineru-local" if use_local_mineru else None,
+            provider_name="本地 MinerU" if use_local_mineru else None,
         )
         try:
-            self._parse_with_mineru(
-                self._root,
-                target,
-                source_file_id,
-                on_progress=lambda update: jobs.progress_import_job(
+            options = {
+                "on_progress": lambda update: jobs.progress_import_job(
                     job_id,
                     update,
-                ),
+                )
+            }
+            if use_local_mineru:
+                options["use_local"] = True
+            self._parse_with_mineru(
+                self._root, target, source_file_id, **options
             )
         except ImportJobCancelled:
             raise
         except Exception as exc:
+            if use_local_mineru:
+                return self._handle_local_mineru_failure(
+                    job_id,
+                    exc=exc,
+                    jobs=jobs,
+                )
             return self._handle_mineru_failure(
                 job_id,
                 target,
@@ -185,6 +203,38 @@ class ImportParserExecutor:
                 jobs=jobs,
             )
         return True
+
+    def _handle_local_mineru_failure(
+        self,
+        job_id: str,
+        *,
+        exc: Exception,
+        jobs: ImportParserJobPort,
+    ) -> bool:
+        try:
+            summary = vision_config_summary(
+                resolve_vision_config_path(self._root)
+            )
+        except VisionAPIError:
+            summary = {"providers": []}
+        providers = self._configured_providers(summary)
+        fallback = providers[0] if providers else None
+        jobs.update_import_job(
+            job_id,
+            status="failed",
+            phase="failed",
+            message=f"本地 MinerU 解析失败：{exc}",
+            provider_id="mineru-local",
+            provider_name="本地 MinerU",
+            mineru_failed=True,
+            mineru_interrupted=False,
+            can_retry_with_provider=bool(fallback),
+            retry_provider_id=(fallback.get("id") if fallback else None),
+            retry_provider_name=(fallback.get("name") if fallback else None),
+            needs_provider_config=not bool(fallback),
+            original_error=str(exc),
+        )
+        return False
 
     def _handle_mineru_failure(
         self,

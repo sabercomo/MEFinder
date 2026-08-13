@@ -150,6 +150,38 @@ class ParserSettingsControllerTests(unittest.TestCase):
         self.assertEqual(
             controller.vision_providers(), (200, {"providers": []})
         )
+        self.assertFalse(accounts["local_deployment"]["enabled"])
+
+    def test_local_mineru_save_and_test_use_injected_boundaries(self) -> None:
+        save_local = Mock(
+            return_value={
+                "enabled": True,
+                "endpoint": "http://127.0.0.1:8000",
+                "backend": "pipeline",
+            }
+        )
+        test_local = Mock(return_value={"ok": True, "latency_ms": 8})
+        controller = self._controller(
+            save_mineru_local=save_local,
+            test_mineru_local=test_local,
+        )
+        payload = {
+            "enabled": True,
+            "endpoint": "http://127.0.0.1:8000",
+            "backend": "pipeline",
+        }
+
+        self.assertEqual(
+            controller.save_mineru_local_config(payload),
+            (200, {"ok": True, **save_local.return_value}),
+        )
+        self.assertEqual(
+            controller.test_mineru_local_config(payload),
+            (200, test_local.return_value),
+        )
+        expected_path = self.paths.runtime_root / "config/mineru.json"
+        save_local.assert_called_once_with(payload, expected_path)
+        test_local.assert_called_once_with(payload, expected_path)
 
     def test_read_errors_keep_existing_status_and_messages(self) -> None:
         broken_statistics = self._controller(

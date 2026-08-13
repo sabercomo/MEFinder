@@ -1,3 +1,5 @@
+/* Hallmark · component: structured reader · genre: modern-minimal
+   · theme: existing MEFinder tokens · pre-emit critique: P5 H5 E5 S5 R5 V4. */
 /* Optional structured-text reader. Native PDFKit/WebView2/system PDF readers
    remain independent and keep using the user's existing preference. */
 .mef-reader-open {
@@ -370,4 +372,40 @@
     padding: 18px;
     font-size: 15px;
   }
+}
+
+/* Large desktop reading mode: increase type and measure together instead of
+   zooming the whole app, which would also enlarge chrome and clip controls. */
+@media (min-width: 1500px) and (min-height: 800px) {
+  .mef-reader-panel {
+    width: min(1200px, calc(100vw - 96px));
+    height: min(1100px, calc(100vh - 64px));
+    margin: 32px auto;
+  }
+
+  .mef-reader-header { min-height: 80px; padding: 14px 24px; }
+  .mef-reader-eyebrow { font-size: 12px; }
+  .mef-reader-title { font-size: 18px; }
+  .mef-reader-current { max-width: 420px; padding: 8px 13px; font-size: 13px; }
+  .mef-reader-close { min-width: 72px; height: 38px; font-size: 14px; }
+  .mef-reader-citation-bar { min-height: 58px; padding: 10px 24px; }
+  .mef-reader-citation-context,
+  .mef-reader-citation-action,
+  .mef-reader-citation-clear,
+  .mef-reader-alert,
+  .mef-reader-loading { font-size: 13px; }
+  .mef-reader-citation-action,
+  .mef-reader-citation-clear { min-height: 36px; padding-inline: 14px; }
+  .mef-reader-alert { padding: 10px 24px; }
+
+  .mef-reader-content {
+    width: min(900px, calc(100% - 64px));
+    padding: 30px 0 88px;
+  }
+  .mef-reader-item { margin-bottom: 22px; }
+  .mef-reader-item-meta { min-height: 46px; padding: 12px 20px; }
+  .mef-reader-item-label { font-size: 14px; }
+  .mef-reader-item-note { font-size: 12px; }
+  .mef-reader-item-text { padding: 30px 34px 36px; font-size: 18px; line-height: 1.92; }
+  .mef-reader-item-text.is-empty { font-size: 14px; }
 }

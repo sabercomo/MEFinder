@@ -145,6 +145,13 @@ try {
         tests.test_import_resume_vision `
         tests.test_import_resume_web `
         tests.test_mineru_config `
+        tests.test_mineru_local_settings `
+        tests.test_mineru_local_provider `
+        tests.test_mineru_engine_import_bridge `
+        tests.test_parser_settings_controller `
+        tests.test_import_job_controller `
+        tests.test_import_parser_executor `
+        tests.test_import_orchestrator `
         tests.test_portable_index_rebuild `
         tests.test_windows_desktop `
         tests.test_update_service `

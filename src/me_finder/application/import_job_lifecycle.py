@@ -389,7 +389,16 @@ class ImportJobLifecycle:
             )
         elif phase == "rebuilding_index":
             message = "正在重建本地 SQLite 索引…"
-        update_job(job_id, phase=phase, message=message, progress=update)
+        updates: Dict[str, object] = {
+            "phase": phase,
+            "message": message,
+            "progress": update,
+        }
+        if update.get("provider_id"):
+            updates["provider_id"] = update["provider_id"]
+        if update.get("provider_name"):
+            updates["provider_name"] = update["provider_name"]
+        update_job(job_id, **updates)
 
     def ensure_not_cancelled(self, job_id: str) -> None:
         self._store.ensure_not_cancelled(job_id)

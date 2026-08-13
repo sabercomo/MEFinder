@@ -21,6 +21,12 @@ from .mineru_api import (
     resolve_mineru_config_path,
     save_mineru_config,
 )
+from .mineru_local_settings import (
+    mineru_local_config_summary,
+    save_mineru_local_config,
+    test_mineru_local_connection,
+)
+from .parser_provider import ParserProviderError
 from .parser_statistics import build_parser_statistics
 from .vision_api import (
     VisionAPIError,
@@ -55,6 +61,9 @@ class ParserSettingsController:
         normalize_mineru: Callable[[object], str] = normalize_mineru_token,
         summarize_mineru: JSONOperation = mineru_config_summary,
         save_mineru: JSONOperation = save_mineru_config,
+        summarize_mineru_local: JSONOperation = mineru_local_config_summary,
+        save_mineru_local: JSONOperation = save_mineru_local_config,
+        test_mineru_local: JSONOperation = test_mineru_local_connection,
         build_statistics: JSONOperation = build_parser_statistics,
         resolve_vision_config: PathResolver = resolve_vision_config_path,
         summarize_vision: JSONOperation = vision_config_summary,
@@ -74,6 +83,9 @@ class ParserSettingsController:
         self._normalize_mineru = normalize_mineru
         self._summarize_mineru = summarize_mineru
         self._save_mineru = save_mineru
+        self._summarize_mineru_local = summarize_mineru_local
+        self._save_mineru_local = save_mineru_local
+        self._test_mineru_local = test_mineru_local
         self._build_statistics = build_statistics
         self._resolve_vision_config = resolve_vision_config
         self._summarize_vision = summarize_vision
@@ -321,6 +333,35 @@ class ParserSettingsController:
             }
         return 200, result
 
+    def save_mineru_local_config(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "本地部署设置必须是 JSON 对象。"}
+        config_path = self._resolve_mineru_config(self._paths.runtime_root)
+        try:
+            summary = self._save_mineru_local(payload, config_path)
+        except (MinerUError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, json.JSONDecodeError):
+            logging.exception("MinerU Local configuration save failed")
+            return 500, {"error": "本地部署设置无法保存。"}
+        return 200, {"ok": True, **summary}
+
+    def test_mineru_local_config(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "本地部署连接测试必须是 JSON 对象。"}
+        config_path = self._resolve_mineru_config(self._paths.runtime_root)
+        try:
+            result = self._test_mineru_local(payload, config_path)
+        except (MinerUError, ParserProviderError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        return 200, result
+
     def update_vision_providers(
         self,
         payload: Mapping[str, object],
@@ -404,4 +445,7 @@ class ParserSettingsController:
             ).rstrip("/"),
             "accounts": [item.to_dict() for item in accounts],
             "statistics": statistics.to_dict(),
+            "local_deployment": self._summarize_mineru_local(
+                self._resolve_mineru_config(self._paths.runtime_root)
+            ),
         }

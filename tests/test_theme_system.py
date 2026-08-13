@@ -219,6 +219,23 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
         self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*height:\s*140px")
 
+    def test_large_desktop_settings_trade_density_for_legibility(self) -> None:
+        self.assertIn(
+            "@media (min-width: 1500px) and (min-height: 800px)",
+            HTML,
+        )
+        self.assertRegex(
+            HTML,
+            re.compile(
+                r"@media \(min-width: 1500px\) and \(min-height: 800px\)\s*\{.*?"
+                r"\.settings-section\s*\{\s*max-width:\s*1040px;\s*\}.*?"
+                r"\.settings-section-title\s*\{\s*font-size:\s*17px;\s*\}",
+                re.S,
+            ),
+        )
+        self.assertIn(".pdf-open-option-copy strong { font-size: 15px; }", HTML)
+        self.assertIn("#bib-completion-settings .auto-match-hint { font-size: 14px; }", HTML)
+
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(
             'class="settings-section desktop-pdf-settings active" id="pdf-reader-settings"',

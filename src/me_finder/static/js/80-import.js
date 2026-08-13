@@ -878,6 +878,9 @@ function renderImportQueue() {
     }).join('');
     var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : q.status === 'paused' ? ' paused' : '';
     var retryHTML = '';
+    var localMineruButton = q.status === 'error' && q.canRetryLocalMineru
+      ? '<button class="action-btn" type="button" onclick="retryImportWithLocalMinerU(\'' + q.id + '\')">切换到本地部署</button>'
+      : '';
     if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
         + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
@@ -889,6 +892,7 @@ function renderImportQueue() {
         retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
           + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
       }
+      retryHTML += localMineruButton;
       retryHTML += '<button class="action-btn" type="button" onclick="openVisionSettings()">解析设置</button></div>';
     } else if (q.status === 'error' && retryProvider) {
       retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
@@ -896,10 +900,12 @@ function renderImportQueue() {
         + (q.type === 'pdf' && q.route === 'vision'
           ? '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
             + q.id + '\')">改用 MinerU（免费）</button>' : '')
+        + localMineruButton
         + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
     } else if (q.status === 'error'
-        && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
-      retryHTML = '<div class="import-item-retry"><button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
+        && (q.canRetryLocalMineru || q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
+      retryHTML = '<div class="import-item-retry">' + localMineruButton
+        + '<button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
     }
     return '<div class="import-item" data-id="' + q.id + '">'
       + '<div class="import-item-header">'
@@ -1141,6 +1147,7 @@ function pollImportJob(id) {
       q.mineruFailed = !!data.mineru_failed;
       q.visionFailed = !!data.vision_failed;
       q.mineruInterrupted = !!data.mineru_interrupted;
+      q.canRetryLocalMineru = !!data.can_retry_with_local_mineru;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
       else if (data.phase === 'vision_processing') q.route = 'vision';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
@@ -1213,6 +1220,7 @@ async function loadResumableImports() {
         mineruFailed: !!job.mineru_failed,
         visionFailed: !!job.vision_failed,
         mineruInterrupted: !!job.mineru_interrupted,
+        canRetryLocalMineru: !!job.can_retry_with_local_mineru,
         fromJournal: true
       });
     });
@@ -1226,8 +1234,9 @@ async function resumeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || !q.canResume) return;
-  var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+  var serviceName = q.providerId === 'mineru-local' ? '本地 MinerU' : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
   if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
+      && q.providerId !== 'mineru-local'
       && !await showAppConfirm(
         '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用',
         {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
@@ -1321,5 +1330,38 @@ async function retryImportWithMinerU(id) {
     pollImportJob(q.id);
   } catch (e) {
     showToast('切换 MinerU 失败：' + e.message);
+  }
+}
+
+async function retryImportWithLocalMinerU(id) {
+  var q = importQueue.find(function(item) { return item.id === id; });
+  if (!q || !q.jobId || q.type !== 'pdf' || !q.canRetryLocalMineru) return;
+  if (!await showAppConfirm(
+    '将保留原文件，停止在线 MinerU 任务，改由你已运行的本地 MinerU 服务重新解析',
+    {title:'切换到本地部署？', confirmText:'切换到本地部署'}
+  )) return;
+  try {
+    var response = await fetch('/api/import-retry-mineru-local', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({job_id: q.jobId})
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '切换失败');
+    q.jobId = data.job_id;
+    q.status = 'processing';
+    q.route = 'mineru';
+    q.providerId = 'mineru-local';
+    q.providerName = '本地 MinerU';
+    q.step = 2;
+    q.message = '正在切换到本地 MinerU，不需要重新上传文件…';
+    q.canResume = false;
+    q.canRetryLocalMineru = false;
+    q.mineruFailed = false;
+    q.mineruInterrupted = false;
+    renderImportQueue();
+    pollImportJob(q.id);
+  } catch (error) {
+    showToast('切换到本地部署失败：' + error.message);
   }
 }

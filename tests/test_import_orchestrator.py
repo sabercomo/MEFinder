@@ -28,6 +28,7 @@ from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.import_resume import sha256_file
 from src.me_finder.lifecycle import DurableOperationGate
 from src.me_finder.mineru_api import MinerUError
+from src.me_finder.mineru_local_settings import save_mineru_local_config
 
 
 class _FakeIndexRuntime:
@@ -173,6 +174,38 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertEqual(
             [item["job_id"] for item in orchestrator.resumable_import_jobs()],
             ["import-restored"],
+        )
+
+    def test_online_mineru_failure_exposes_local_retry_only_after_opt_in(self) -> None:
+        orchestrator = self._orchestrator()
+        job = {
+            "job_id": "failed-mineru",
+            "status": "failed",
+            "phase": "failed",
+            "parse_route": "mineru",
+            "mineru_failed": True,
+        }
+
+        self.assertFalse(
+            orchestrator.public_import_job(job)["can_retry_with_local_mineru"]
+        )
+        save_mineru_local_config(
+            {
+                "enabled": True,
+                "endpoint": "http://127.0.0.1:8000",
+                "backend": "pipeline",
+            },
+            self.root / "config" / "mineru_api.local.json",
+        )
+
+        self.assertTrue(
+            orchestrator.public_import_job(job)["can_retry_with_local_mineru"]
+        )
+        local_failure = dict(job, provider_id="mineru-local")
+        self.assertFalse(
+            orchestrator.public_import_job(local_failure)[
+                "can_retry_with_local_mineru"
+            ]
         )
 
     def test_word_import_completes_through_injected_runtime(self) -> None:

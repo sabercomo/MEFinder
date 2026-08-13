@@ -220,18 +220,22 @@ def local_app_data_root(home: Path | None = None) -> Path:
     configured_root = os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
     if configured_root:
         return Path(configured_root).expanduser().resolve()
-    user_home = Path(home) if home is not None else Path.home()
-    if sys.platform == "darwin":
-        return read_macos_data_root(user_home)
     if sys.platform == "win32":
+        installed_root = installed_data_root_override()
+        local_app_data = os.environ.get("LOCALAPPDATA") or None
+        if home is None and local_app_data is None and installed_root is not None:
+            return installed_root
         default_root = default_windows_data_root(
-            user_home,
-            local_app_data=os.environ.get("LOCALAPPDATA") or None,
+            home,
+            local_app_data=local_app_data,
         )
         return read_data_root(
             default_root,
-            fallback_root=installed_data_root_override() or default_root,
+            fallback_root=installed_root or default_root,
         )
+    user_home = Path(home) if home is not None else Path.home()
+    if sys.platform == "darwin":
+        return read_macos_data_root(user_home)
     xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
     if xdg_data_home:
         return Path(xdg_data_home).expanduser() / "MEFinder"

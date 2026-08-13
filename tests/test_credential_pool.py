@@ -1,6 +1,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from src.me_finder.large_document.credential_pool import (
@@ -127,7 +128,7 @@ class CredentialPoolTests(unittest.TestCase):
             display_name="One",
             secret_ref="keychain:one",
         )
-        with sqlite3.connect(path) as check:
+        with closing(sqlite3.connect(path)) as check:
             self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], 3)
             self.assertEqual(
                 check.execute(
@@ -156,7 +157,7 @@ class CredentialPoolTests(unittest.TestCase):
 
         migrated = JobLedger(path)
         self.assertEqual(migrated.get_credential("one").display_name, "One")
-        with sqlite3.connect(path) as check:
+        with closing(sqlite3.connect(path)) as check:
             legacy = check.execute(
                 "SELECT daily_page_budget, pages_used_today, usage_date "
                 "FROM parser_credentials WHERE id = 'one'"

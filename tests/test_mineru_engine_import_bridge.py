@@ -110,6 +110,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             manifest_path = Path(result["manifest_path"])
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["total_pages"], 4)
+            self.assertEqual(manifest["provider_id"], "mineru-cloud")
             self.assertEqual(
                 [item["page_ranges"] for item in manifest["segments"]],
                 ["1-2", "3-4"],
@@ -136,6 +137,20 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             attachment = imported["documents"][0]["mineru"]
             self.assertEqual(attachment["resume"]["completed_page_count"], 4)
             self.assertFalse(Path(str(attachment["manifest"])).is_absolute())
+
+            local_result = _publish_mineru_engine_results(
+                root,
+                source_id,
+                ledger=ledger,
+                document_job_id=job.id,
+                provider_id="mineru-local",
+                provider_name="本地 MinerU",
+            )
+            local_manifest = json.loads(
+                Path(local_result["manifest_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(local_manifest["provider_id"], "mineru-local")
+            self.assertEqual(local_manifest["provider_name"], "本地 MinerU")
 
     def test_multi_account_config_switches_existing_import_to_engine(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

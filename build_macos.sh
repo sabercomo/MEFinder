@@ -133,6 +133,13 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_import_resume_vision \
   tests.test_import_resume_web \
   tests.test_mineru_config \
+  tests.test_mineru_local_settings \
+  tests.test_mineru_local_provider \
+  tests.test_mineru_engine_import_bridge \
+  tests.test_parser_settings_controller \
+  tests.test_import_job_controller \
+  tests.test_import_parser_executor \
+  tests.test_import_orchestrator \
   tests.test_macos_update \
   tests.test_macos_pdf_viewer \
   tests.test_large_index_resilience \

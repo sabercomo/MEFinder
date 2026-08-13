@@ -16,7 +16,9 @@ from ..import_queue import (
 )
 from ..import_resume import sha256_file
 from ..lifecycle import DurableOperationGate
-from ..mineru_api import MinerUError
+from ..mineru_api import MinerUError, resolve_mineru_config_path
+from ..mineru_local_settings import mineru_local_config_summary
+from ..mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
 from ..pdf_import_service import (
     import_config_lock,
     load_import_config,
@@ -813,6 +815,30 @@ class ImportOrchestrator:
 
     def public_import_job(self, job: Mapping[str, object]) -> Job:
         public_job = dict(job)
+        local_retry_candidate = bool(
+            str(public_job.get("status") or "") == "failed"
+            and str(public_job.get("failure_stage") or "") != "index"
+            and str(public_job.get("parse_route") or "") == "mineru"
+            and str(public_job.get("provider_id") or "")
+            != MINERU_LOCAL_PROVIDER_ID
+            and (
+                public_job.get("mineru_failed")
+                or public_job.get("mineru_interrupted")
+            )
+        )
+        local_enabled = False
+        if local_retry_candidate:
+            try:
+                local_enabled = bool(
+                    mineru_local_config_summary(
+                        resolve_mineru_config_path(self._root)
+                    ).get("enabled")
+                )
+            except (MinerUError, OSError, ValueError):
+                local_enabled = False
+        public_job["can_retry_with_local_mineru"] = bool(
+            local_retry_candidate and local_enabled
+        )
         is_legacy_vision_failure = bool(
             str(public_job.get("status") or "") == "failed"
             and str(public_job.get("parse_route") or "") == "vision"

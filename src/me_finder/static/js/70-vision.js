@@ -23,6 +23,7 @@ async function loadMineruConfig() {
     });
     mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
     document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
+    renderMineruLocalSettings(data.local_deployment || {});
     renderMineruAccountList();
     var addButton = document.getElementById('mineru-add-account');
     if (addButton) addButton.hidden = !mineruAccounts.length;
@@ -40,6 +41,80 @@ async function loadMineruConfig() {
     status.className = 'settings-status warning';
     status.textContent = '读取失败';
     showToast('读取 MinerU 配置失败：' + e.message);
+  }
+}
+
+function renderMineruLocalSettings(config) {
+  var endpoint = document.getElementById('mineru-local-endpoint');
+  var backend = document.getElementById('mineru-local-backend');
+  var enabled = document.getElementById('mineru-local-enabled');
+  if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
+  if (backend) backend.value = config.backend || 'pipeline';
+  if (enabled) enabled.checked = !!config.enabled;
+  updateMineruLocalStatus(!!config.enabled);
+}
+
+function updateMineruLocalStatus(enabled, label) {
+  var status = document.getElementById('mineru-local-status');
+  if (!status) return;
+  status.className = 'settings-status' + (enabled ? ' ready' : '');
+  status.textContent = label || (enabled ? '已启用' : '未启用');
+}
+
+function mineruLocalPayload() {
+  return {
+    endpoint: document.getElementById('mineru-local-endpoint').value.trim(),
+    backend: document.getElementById('mineru-local-backend').value.trim(),
+    enabled: document.getElementById('mineru-local-enabled').checked
+  };
+}
+
+async function saveMineruLocalSettings() {
+  var button = document.getElementById('mineru-local-save');
+  var hint = document.getElementById('mineru-local-hint');
+  button.disabled = true;
+  button.textContent = '保存中…';
+  if (hint) hint.textContent = '';
+  try {
+    var response = await fetch('/api/mineru-local', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(mineruLocalPayload())
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+    renderMineruLocalSettings(data);
+    if (hint) hint.textContent = data.enabled ? '已保存；在线 MinerU 失败后可手动切换' : '已关闭本地部署选项';
+  } catch (error) {
+    if (hint) hint.textContent = '未保存：' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '保存设置';
+  }
+}
+
+async function testMineruLocalConnection() {
+  var button = document.getElementById('mineru-local-test');
+  var hint = document.getElementById('mineru-local-hint');
+  button.disabled = true;
+  button.textContent = '检测中…';
+  if (hint) hint.textContent = '正在连接本地服务…';
+  try {
+    var response = await fetch('/api/mineru-local/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(mineruLocalPayload())
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '连接失败');
+    if (hint) hint.textContent = '连接成功 · ' + data.latency_ms + ' ms';
+  } catch (error) {
+    if (hint) hint.textContent = '连接失败：' + error.message;
+    var status = document.getElementById('mineru-local-status');
+    if (status) { status.className = 'settings-status warning'; status.textContent = '连接失败'; }
+  } finally {
+    button.disabled = false;
+    button.textContent = '检测连接';
   }
 }
 
@@ -189,10 +264,11 @@ function renderParserStatistics() {
     return aLocal - bLocal;
   });
   list.innerHTML = orderedProviders.map(function(provider, index) {
-    var isMineru = provider.provider_id === 'mineru-cloud';
+    var isMineru = provider.provider_id === 'mineru-cloud' || provider.provider_id === 'mineru-local';
+    var isCloudMineru = provider.provider_id === 'mineru-cloud';
     var kind = provider.provider_kind === 'local' ? '本地' : 'API';
     var details = renderParserProviderBooks(provider);
-    if (isMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
+    if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
     var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
     return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
   }).join('');
@@ -210,6 +286,7 @@ async function loadParserStatistics() {
     if (!response.ok || data.error) throw new Error(data.error || '读取失败');
     parserStatistics = data || {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
     renderParserStatistics();
+    renderVisionProviders();
     if (status) {
       status.className = 'settings-status ready';
       status.textContent = '已刷新';
@@ -1151,47 +1228,46 @@ function visionProviderBadge(provider) {
 
 function renderVisionProviders() {
   var list = document.getElementById('vision-provider-list');
+  var count = document.getElementById('vision-provider-count');
   var status = document.getElementById('vision-config-status');
   var autoFallback = document.getElementById('vision-auto-fallback');
   var fallbackSummary = document.getElementById('vision-fallback-summary');
   var readyProviders = configuredVisionProviders();
   var fallbackProvider = readyProviders[0] || null;
+  var providers = visionConfig.providers || [];
+  if (count) count.textContent = providers.length.toLocaleString() + ' 个接口';
   if (status) {
     var readyCount = readyProviders.length;
     status.className = 'settings-status ' + (readyCount ? 'ready' : 'warning');
     status.textContent = readyCount ? '已配置 ' + readyCount + ' 个接口' : '尚未配置';
   }
   if (list) {
-    if (!(visionConfig.providers || []).length) {
+    if (!providers.length) {
       list.innerHTML = '<div class="vision-provider-empty">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
         + '<strong>尚未添加其他解析接口</strong>'
         + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问等视觉模型</span>'
         + '</div>';
     } else {
-      var editingId = (document.getElementById('vision-provider-id') || {}).value || '';
-      list.innerHTML = visionConfig.providers.map(function(provider) {
+      var usageByProvider = {};
+      (Array.isArray(parserStatistics.providers) ? parserStatistics.providers : []).forEach(function(item) {
+        usageByProvider[item.provider_id] = item;
+      });
+      var rows = providers.map(function(provider) {
         var badge = visionProviderBadge(provider);
-        var state = badge.label;
-        var stateClass = badge.cls;
-        return '<div class="vision-provider-card' + (editingId === provider.id ? ' selected' : '')
-          + '" role="button" tabindex="0" title="点击编辑这个接口"'
-          + ' onclick="editVisionProvider(\'' + provider.id + '\')"'
-          + ' onkeydown="if(event.key===\'Enter\')editVisionProvider(\'' + provider.id + '\')">'
+        var usage = usageByProvider[provider.id] || {};
+        var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
+        return '<tr><td data-label="接口"><span class="mineru-account-identity vision-table-identity">'
           + visionAvatarHtml(provider)
-          + '<div class="vision-provider-card-main">'
-          + '<div class="vision-provider-card-name">' + esc(provider.name)
-          + '<span class="vision-provider-state' + stateClass + '">' + state + '</span></div>'
-          + '<div class="vision-provider-card-model" title="' + esc(provider.api_base) + '">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</div>'
-          + '</div>'
-          + '<div class="vision-provider-card-actions" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">'
-          + '<label class="ui-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
+          + '<span class="mineru-account-copy"><strong>' + esc(provider.name) + '</strong><small title="' + esc(provider.api_base) + '">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</small></span></span></td>'
+          + '<td data-label="状态"><span class="mineru-account-status-cell"><span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span>'
+          + '<label class="ui-switch mineru-row-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
           + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
-          + '<span class="ui-switch-track" aria-hidden="true"></span></label>'
-          + '<button class="icon-btn" type="button" title="发送测试图片，验证连通" aria-label="测试连接" onclick="testVisionProvider(\'' + provider.id + '\')">' + VISION_BOLT_SVG + '</button>'
-          + '<button class="icon-btn danger" type="button" title="删除接口" aria-label="删除接口" onclick="deleteVisionProvider(\'' + provider.id + '\')">' + VISION_TRASH_SVG + '</button>'
-          + '</div></div>';
+          + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label></span></td>'
+          + '<td data-label="本地解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>'
+          + '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">测试</button><button class="mineru-text-action" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button><button class="mineru-text-action danger" type="button" onclick="deleteVisionProvider(\'' + provider.id + '\')">删除</button></span></td></tr>';
       }).join('');
+      list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table vision-provider-table"><thead><tr><th>接口</th><th>状态</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
   }
   if (autoFallback) {

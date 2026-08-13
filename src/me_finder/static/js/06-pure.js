@@ -292,10 +292,11 @@ function importStepsFor(q) {
 function importRouteBadge(q) {
   if (q.type !== 'pdf' || !q.detectedType) return '';
   var mineru = q.route === 'mineru';
+  var localMineru = mineru && q.providerId === 'mineru-local';
   var vision = q.route === 'vision';
   return '<span class="import-route-badge ' + (mineru ? 'mineru' : vision ? 'vision' : 'native') + '">'
     + esc(pdfTypeLabel(q.detectedType))
-    + (mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : ' · 本地解析')
+    + (localMineru ? ' · 本地 MinerU' : mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : ' · 本地解析')
     + '</span>';
 }
 

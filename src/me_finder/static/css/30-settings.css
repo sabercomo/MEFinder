@@ -2,7 +2,8 @@
    · palette: existing theme tokens · pre-emit critique: P5 H5 E5 S5 R5 V4.
    Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
    clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
-   Left anchor: all categories share an 880px left-aligned column. */
+   Left anchor: all categories share an 880px left-aligned column, expanding
+   to 1040px only when a desktop viewport has room for larger type. */
 .settings-page-content {
   flex: 1;
   min-height: 0;
@@ -72,16 +73,13 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .settings-section {
   display: none;
-  /* One stable left anchor for every category: left-aligned (margin:0, not
-     0 auto) with a single 880px cap. Switching categories no longer shifts
-     the heading left/right — it used to jump 120px between 640/880/1120. */
-  max-width: 880px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
   margin: 0;
 }
 .settings-section.active { display: block; }
-/* Appearance's theme grid wants more room; widen only the RIGHT edge so the
-   left anchor stays put with all the other categories. */
-#appearance-card.active { max-width: 1120px; }
+#appearance-card.active { max-width: none; }
 #statistics-settings.active { max-width: none; }
 .settings-section-head {
   display: flex;
@@ -92,7 +90,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .settings-section-title {
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
   line-height: 1.5;
   color: var(--text-primary);
@@ -153,7 +151,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   grid-template-columns: 150px minmax(0, 1fr);
   gap: 12px 16px;
   align-items: start;
-  max-width: 860px;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
 }
 .settings-label {
@@ -224,7 +223,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .pdf-open-options {
   display: flex;
   flex-direction: column;
-  max-width: 560px;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
@@ -283,7 +283,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  max-width: 760px;
+  width: 100%;
+  max-width: none;
   margin-top: 14px;
   transition: opacity var(--transition-fast);
 }
@@ -691,6 +692,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .vision-provider-state.warning { background: var(--warning-soft); color: var(--warning); }
 .vision-provider-state.muted { background: var(--surface-hover); color: var(--text-tertiary); }
 .vision-provider-state.pending { background: var(--accent-soft); color: var(--accent); }
+.vision-table-identity .vision-avatar { width: 32px; height: 32px; border-radius: 9px; }
+.mineru-text-action.danger { color: var(--danger); }
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -775,9 +778,48 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-table-heading small,
 .parser-stat-section-head small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
 .mineru-service-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mineru-service-control .settings-input { min-width: 0; height: 42px; }
-.mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; white-space: nowrap; }
+.mineru-service-control .settings-input { flex: 1 1 auto; width: auto; min-width: 0; height: 42px; }
+.mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; padding-inline: 12px; white-space: nowrap; }
 .mineru-account-management { margin-top: 22px; }
+.mineru-local-settings {
+  margin-top: 24px;
+  border-top: 1px solid var(--divider);
+}
+.mineru-local-settings > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 68px;
+  cursor: pointer;
+  list-style: none;
+}
+.mineru-local-settings > summary::-webkit-details-marker { display: none; }
+.mineru-local-settings > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+.mineru-local-summary-copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.mineru-local-summary-copy strong { color: var(--text-primary); font-size: 13px; }
+.mineru-local-summary-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.mineru-local-settings[open] > summary .settings-collapse-chevron { transform: rotate(180deg); }
+.mineru-local-body { padding: 2px 0 20px; }
+.mineru-local-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.mineru-local-notice svg { flex: 0 0 auto; width: 17px; height: 17px; margin-top: 1px; color: var(--accent); }
+.mineru-local-notice code { color: var(--text-primary); font-size: 10px; }
+.mineru-local-grid { margin-top: 16px; }
+.mineru-local-grid .settings-input { max-width: none; height: 42px; }
+.mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
+.mineru-local-enable-row { padding-top: 6px; }
+.mineru-local-enable-row > small { max-width: 62ch; }
+#bib-completion-settings .auto-match-setting { width: 100%; max-width: none; }
 /* Lightweight account switcher (chips) + a plain settings form — replaces the
    old table + modal dialog. One simple form; pick which account with a chip. */
 /* Account list = the original table; edit expands the inline editor panel
@@ -828,6 +870,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-account-table th:nth-child(3) { width: 15%; }
 .mineru-account-table th:nth-child(4) { width: 20%; }
 .mineru-account-table th:last-child { width: 16%; }
+.vision-provider-table th:first-child { width: 36%; }
+.vision-provider-table th:nth-child(2) { width: 22%; }
+.vision-provider-table th:nth-child(3) { width: 22%; }
+.vision-provider-table th:last-child { width: 20%; }
 .mineru-account-table td { padding: 11px 12px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 11px; }
 .mineru-account-table tbody tr:first-child td { border-top: none; }
 .mineru-account-identity,
@@ -1327,3 +1373,161 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 @container (min-width: 640px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 720px) { .theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 430px) { .theme-mini-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .theme-mini-doc-card:nth-child(3) { display: none; }}
+
+/* Large desktop windows have enough room to trade density for legibility.
+   This is viewport-driven instead of a fullscreen flag so maximized and
+   similarly spacious windows behave consistently across Windows DPI scales. */
+@media (min-width: 1500px) and (min-height: 800px) {
+  #page-settings > .page-header { padding: 34px 40px 0; }
+  #page-settings .page-title { font-size: 28px; }
+  #page-settings .page-subtitle { font-size: 16px; }
+
+  .settings-nav { width: 252px; padding: 22px 14px; gap: 3px; }
+  .settings-nav-group { padding: 5px 13px 4px; margin-top: 14px; font-size: 13px; }
+  .settings-nav-item { gap: 12px; padding: 11px 13px; font-size: 16px; }
+  .settings-nav-icon { width: 20px; height: 20px; }
+
+  .settings-content { padding: 36px 48px 56px; }
+  .settings-section,
+  #appearance-card.active { width: 100%; max-width: none; box-sizing: border-box; }
+  .settings-section-head { gap: 14px; min-height: 36px; }
+  .settings-section-heading-copy { gap: 14px; }
+  .settings-section-title { font-size: 20px; }
+  .settings-section-note { font-size: 15px; }
+  .settings-status { font-size: 14px; padding: 7px 13px; }
+
+  .settings-grid {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 14px 20px;
+    width: 100%;
+    max-width: none;
+    margin-top: 18px;
+  }
+  .settings-label { padding-top: 9px; font-size: 16px; }
+  .settings-inline-label,
+  .settings-field label,
+  .settings-advanced > summary { font-size: 16px; }
+  .settings-control > small,
+  .settings-field small,
+  .settings-hint { font-size: 14px; }
+  .settings-input { height: 42px; padding-inline: 14px; font-size: 16px; }
+  .settings-toggle { height: 42px; }
+  .settings-content .action-btn { min-height: 42px; font-size: 15px; }
+  .settings-check,
+  .ui-switch { font-size: 15px; }
+
+  .pdf-open-options { width: 100%; max-width: none; margin-top: 18px; }
+  .pdf-open-option {
+    grid-template-columns: 34px minmax(0, 1fr) 20px;
+    gap: 13px;
+    min-height: 64px;
+    padding: 12px 16px;
+  }
+  .pdf-open-option-icon { width: 34px; height: 34px; }
+  .pdf-open-option-icon svg { width: 20px; height: 20px; }
+  .pdf-open-option-copy strong { font-size: 16px; }
+  .pdf-open-option-copy strong em { font-size: 12px; }
+  .pdf-open-option-copy small { font-size: 15px; }
+  .pdf-open-option-check { width: 17px; height: 17px; }
+
+  .citation-format-options { width: 100%; max-width: none; margin-top: 18px; gap: 12px; }
+  .citation-format-option { min-height: 76px; padding: 14px 16px; }
+  .citation-format-copy strong { font-size: 16px; }
+  .citation-format-copy small { font-size: 14px; }
+
+  .software-update-card,
+  .macos-update-card,
+  .data-location-card { padding: 17px; }
+  .software-update-icon,
+  .macos-update-icon,
+  .data-location-icon { width: 44px; height: 44px; }
+  .software-update-copy strong,
+  .macos-update-copy strong,
+  .data-location-copy strong,
+  .data-location-error-copy strong { font-size: 16px; }
+  .software-update-copy small,
+  .macos-update-copy small,
+  .data-location-copy small,
+  .data-location-pending small,
+  .update-auto-copy small,
+  .data-location-warning { font-size: 14px; }
+  .data-location-copy code,
+  .data-location-pending code { font-size: 13px; }
+  .data-location-error-copy span,
+  .data-location-pending > div > span,
+  .update-auto-copy strong { font-size: 14px; }
+
+  #bib-completion-settings .auto-match-setting { width: 100%; max-width: none; margin-top: 22px; }
+  #bib-completion-settings .auto-match-label { font-size: 17px; }
+  #bib-completion-settings .auto-match-value { font-size: 26px; }
+  #bib-completion-settings .auto-match-scale { font-size: 14px; }
+  #bib-completion-settings .auto-match-hint { font-size: 15px; }
+  #bib-completion-settings .seg-btn { padding: 10px 20px; font-size: 15px; }
+
+  .vision-add-btn { height: 40px; font-size: 14px; }
+  .vision-provider-card { padding: 14px 16px; }
+  .vision-provider-card-name,
+  .vision-editor-titles strong,
+  .vision-provider-empty strong,
+  .vision-policy-copy strong { font-size: 15px; }
+  .vision-provider-card-model,
+  .vision-editor-titles small,
+  .vision-provider-empty,
+  .vision-policy-copy small,
+  .vision-model-group,
+  .vision-model-badge { font-size: 13px; }
+  .vision-model-item { font-size: 15px; }
+  .icon-btn { width: 36px; height: 36px; }
+
+  .mineru-service-settings {
+    grid-template-columns: minmax(170px, .55fr) minmax(420px, 1.45fr);
+    margin-top: 20px;
+    padding: 22px 0;
+  }
+  .mineru-service-control .settings-input,
+  .mineru-local-grid .settings-input { height: 46px; max-width: none; }
+  .mineru-service-control .action-btn { min-height: 46px; }
+  .mineru-service-copy strong,
+  .mineru-table-heading strong,
+  .mineru-local-summary-copy strong,
+  .mineru-account-empty strong { font-size: 15px; }
+  .mineru-service-copy small,
+  .mineru-table-heading small,
+  .mineru-local-summary-copy small,
+  .mineru-account-empty small,
+  .mineru-local-notice { font-size: 13px; }
+  .mineru-local-notice code { font-size: 12px; }
+  .mineru-table-heading > span { font-size: 13px; }
+  .mineru-account-table th { font-size: 12px; }
+  .mineru-account-table td { padding: 13px 14px; font-size: 13px; }
+  .mineru-account-copy strong { font-size: 14px; }
+  .mineru-account-copy small,
+  .mineru-account-state { font-size: 12px; }
+
+  .parser-stat-section-head strong,
+  .parser-provider-identity strong,
+  .parser-provider-number b { font-size: 16px; }
+  .parser-stat-section-head small,
+  .parser-overview-metrics dt,
+  .parser-provider-columns,
+  .parser-provider-identity small,
+  .parser-provider-number,
+  .parser-detail-label,
+  .parser-book-table th,
+  .parser-book-table td,
+  .parser-credential-account > summary strong,
+  .parser-credential-account > summary b,
+  .parser-credential-book strong,
+  .parser-credential-book b,
+  .parser-credential-empty { font-size: 14px; }
+  .parser-detail-label small,
+  .parser-book-title small,
+  .parser-credential-account > summary small,
+  .parser-credential-book small { font-size: 13px; }
+  .parser-overview-metrics dd { font-size: 36px; }
+  .parser-overview-metrics span { font-size: 15px; }
+
+  .theme-option-name { font-size: 16px; }
+  .theme-option-tone { font-size: 13px; }
+  .theme-option-description { font-size: 14px; }
+}

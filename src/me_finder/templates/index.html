@@ -464,7 +464,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" onclick="showSettingsCategory('citation-format-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
@@ -548,6 +548,26 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                   </div>
               </section>
+              <details class="mineru-local-settings" id="mineru-local-settings">
+                <summary>
+                  <span class="mineru-local-summary-copy"><strong>本地部署（高级）</strong><small>仅供已自行部署 MinerU 服务的用户，在在线解析失败后手动切换</small></span>
+                  <span id="mineru-local-status" class="settings-status">未启用</span>
+                  <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                </summary>
+                <div class="mineru-local-body">
+                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>ME Finder 不会下载模型或启动服务。请先在本机运行兼容 <code>GET /health</code>、<code>POST /tasks</code> 的 MinerU 服务。</span></div>
+                  <div class="settings-grid mineru-local-grid">
+                    <label class="settings-label" for="mineru-local-endpoint">服务地址</label>
+                    <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>通常为 http://127.0.0.1:8000</small></div>
+                    <label class="settings-label" for="mineru-local-backend">解析后端</label>
+                    <div class="settings-control"><input id="mineru-local-backend" class="settings-input" type="text" value="pipeline" spellcheck="false"><small>传给本地 MinerU 服务的 backend 参数</small></div>
+                    <span class="settings-label">失败后切换</span>
+                    <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，在线 MinerU 失败卡片才会显示“切换到本地部署”；不会自动切换</small></div>
+                    <span class="settings-label"></span>
+                    <div class="settings-control settings-actions"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                  </div>
+                </div>
+              </details>
             </div>
           </section>
           <section class="settings-section" id="statistics-settings" role="tabpanel">
@@ -580,6 +600,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             <div class="settings-collapse-body" id="vision-api-body">
             <div class="vision-provider-layout">
+            <div class="mineru-table-heading"><div><strong>接口</strong><small>API Key 不会显示或返回到界面</small></div><span id="vision-provider-count">0 个接口</span></div>
             <div id="vision-provider-list" class="vision-provider-list"></div>
             <div class="vision-editor-card" id="vision-editor-card">
               <div class="vision-editor-head">
@@ -688,6 +709,15 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-collapse-body" id="bib-completion-body">
             <div class="auto-match-setting">
               <div class="auto-match-head">
+                <span class="auto-match-label">自动匹配阈值</span>
+                <span class="auto-match-value" id="online-auto-match-value">90%</span>
+              </div>
+              <input class="auto-match-range" id="online-auto-match-range" type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="setOnlineAutoMatchThreshold(this.value)">
+              <div class="auto-match-scale"><span>80%（更宽松）</span><span>100%（最严格）</span></div>
+              <small class="auto-match-hint">批量联网补全时，唯一候选的匹配分达到或超过此值才自动采用；低于此值只弹出候选列表，由你人工核对后选择。调低更省事，调高更稳妥。</small>
+            </div>
+            <div class="auto-match-setting">
+              <div class="auto-match-head">
                 <span class="auto-match-label">文献默认语言</span>
               </div>
               <div class="segmented-control" id="lib-default-lang-control">
@@ -695,15 +725,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <button class="seg-btn" type="button" data-deflang="foreign" onclick="setLibDefaultLanguage(this)">外文</button>
               </div>
               <small class="auto-match-hint">选「中文」时以中文文献为主，语言筛选条里「中文」排在前；选「外文」时以外文文献为主，「外文」排在前。只影响文献库语言筛选的主次顺序，不改变联网数据源的选择——中文期刊始终查知网。</small>
-            </div>
-            <div class="auto-match-setting">
-              <div class="auto-match-head">
-                <span class="auto-match-label">自动匹配阈值</span>
-                <span class="auto-match-value" id="online-auto-match-value">90%</span>
-              </div>
-              <input class="auto-match-range" id="online-auto-match-range" type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="setOnlineAutoMatchThreshold(this.value)">
-              <div class="auto-match-scale"><span>80%（更宽松）</span><span>100%（最严格）</span></div>
-              <small class="auto-match-hint">批量联网补全时，唯一候选的匹配分达到或超过此值才自动采用；低于此值只弹出候选列表，由你人工核对后选择。调低更省事，调高更稳妥。</small>
             </div>
             </div>
           </section>

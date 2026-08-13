@@ -76,6 +76,7 @@ from .mineru_api import (
     test_mineru_credential,
 )
 from .large_document.job_ledger import JobLedger
+from .mineru_local_settings import mineru_local_config_summary
 from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
@@ -136,6 +137,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/mineru-accounts",
         "/api/mineru-accounts/service",
         "/api/mineru-config",
+        "/api/mineru-local",
         "/api/vision-providers",
         "/api/import",
         "/api/import-upload/start",
@@ -144,6 +146,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/import-upload/finish",
         "/api/mineru-reparse",
         "/api/import-retry-mineru",
+        "/api/import-retry-mineru-local",
         "/api/import-retry",
         "/api/import-resume",
         "/api/import-resume-dismiss",
@@ -653,6 +656,11 @@ def make_handler(
         vision_summary=(
             lambda: vision_config_summary(resolve_vision_config_path(root))
         ),
+        local_mineru_summary=(
+            lambda: mineru_local_config_summary(
+                resolve_mineru_config_path(root)
+            )
+        ),
     )
     metadata_coordinator = BibliographicMetadataCoordinator(
         context.paths,
@@ -918,6 +926,12 @@ def make_handler(
         "/api/mineru-config/test": (
             lambda _payload: parser_settings_controller.test_mineru_config()
         ),
+        "/api/mineru-local": (
+            parser_settings_controller.save_mineru_local_config
+        ),
+        "/api/mineru-local/test": (
+            parser_settings_controller.test_mineru_local_config
+        ),
         "/api/vision-providers": (
             parser_settings_controller.update_vision_providers
         ),
@@ -961,6 +975,9 @@ def make_handler(
         ),
         "/api/mineru-reparse": import_job_controller.reparse_with_mineru,
         "/api/import-retry-mineru": import_job_controller.retry_with_mineru,
+        "/api/import-retry-mineru-local": (
+            import_job_controller.retry_with_local_mineru
+        ),
         "/api/import-retry": import_job_controller.retry_with_provider,
         "/api/import-resume": import_job_controller.resume,
         "/api/import-resume-dismiss": import_job_controller.dismiss,

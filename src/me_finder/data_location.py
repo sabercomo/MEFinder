@@ -27,12 +27,11 @@ def default_windows_data_root(
     *,
     local_app_data: str | Path | None = None,
 ) -> Path:
-    user_home = Path(home) if home is not None else Path.home()
-    base = (
-        Path(local_app_data).expanduser()
-        if local_app_data is not None
-        else user_home / "AppData" / "Local"
-    )
+    if local_app_data is not None:
+        base = Path(local_app_data).expanduser()
+    else:
+        user_home = Path(home) if home is not None else Path.home()
+        base = user_home / "AppData" / "Local"
     return base / DATA_ROOT_FOLDER_NAME
 
 

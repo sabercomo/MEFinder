@@ -177,7 +177,11 @@ def _provider_identity(
         profile.get("provider_name") or profile.get("parser_label") or ""
     ).strip()
     if explicit_id:
-        return explicit_id, explicit_name or explicit_id, "api"
+        return (
+            explicit_id,
+            explicit_name or explicit_id,
+            "local" if explicit_id == "mineru-local" else "api",
+        )
     if parser in {"mineru", "precision"}:
         return MINERU_PROVIDER_ID, explicit_name or "MinerU", "api"
     if parser == "openai_compatible":

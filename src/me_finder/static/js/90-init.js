@@ -23,7 +23,13 @@ document.addEventListener('input', function(event) {
 document.addEventListener('input', function(event) {
   var t = event.target;
   if (!t || !t.closest) return;
-  if (t.closest('#mineru-api-settings')) {
+  if (t.closest('#mineru-local-settings')) {
+    var localStatus = document.getElementById('mineru-local-status');
+    if (localStatus) {
+      localStatus.className = 'settings-status warning';
+      localStatus.textContent = '有未保存的修改';
+    }
+  } else if (t.closest('#mineru-api-settings')) {
     var mineruStatus = document.getElementById('mineru-config-status');
     if (mineruStatus) {
       mineruStatus.className = 'settings-status warning';
