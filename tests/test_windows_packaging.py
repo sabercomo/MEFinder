@@ -27,7 +27,11 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertNotIn('[string]$Version = "0.1.', self.build_script)
         self.assertNotIn('[string]$Version = "0.1.', self.portable_script)
         self.assertIn('[string]$PythonExe = ""', self.portable_script)
-        self.assertIn("& $pythonCommand @pythonLauncherArgs -m PyInstaller", self.portable_script)
+        self.assertIn('[string]$PackagerPythonExe = ""', self.portable_script)
+        self.assertIn(
+            "& $packagerPythonCommand @packagerPythonArgs -m PyInstaller",
+            self.portable_script,
+        )
 
     def test_installer_wizard_is_localized_and_branded(self) -> None:
         # 简体中文与英文双语可选；启动时的语言对话框负责切换。

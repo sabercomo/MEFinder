@@ -179,6 +179,36 @@ class MinerUAccountService:
                 return item
         raise KeyError(normalized_id)
 
+    def delete_account(self, account_id: str) -> None:
+        """Remove one idle account and its locally stored Token."""
+
+        normalized_id = _normalize_account_id(account_id)
+        with self._lock:
+            original = self._load_private_config()
+            accounts = dict(original["accounts"])
+            self.ledger.get_credential(normalized_id)
+            accounts.pop(normalized_id, None)
+            updated = {
+                "schema_version": MINERU_ACCOUNT_CONFIG_VERSION,
+                "accounts": accounts,
+            }
+            self._write_private_config(updated)
+            try:
+                deleted = self.ledger.delete_credential(
+                    normalized_id,
+                    MINERU_CLOUD_PROVIDER_ID,
+                )
+                if not deleted:
+                    raise MinerUAccountConfigError(
+                        "该账号仍有未完成的解析任务，完成或取消任务后才能删除。"
+                    )
+            except Exception:
+                self._write_private_config(original)
+                raise
+
+    def private_config_exists(self) -> bool:
+        return self.config_path.is_file()
+
     def list_accounts(self) -> list[MinerUAccountSummary]:
         with self._lock:
             private = self._load_private_config()

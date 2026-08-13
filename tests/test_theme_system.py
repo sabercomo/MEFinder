@@ -209,11 +209,11 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
         self.assertRegex(
             HTML,
-            r"\.settings-section\s*\{[^}]*max-width:\s*880px;[^}]*margin:\s*0;",
+            r"\.settings-section\s*\{[^}]*max-width:\s*none;[^}]*margin:\s*0;",
         )
         self.assertRegex(
             HTML,
-            r"#appearance-card\.active\s*\{[^}]*max-width:\s*1120px",
+            r"#appearance-card\.active\s*\{[^}]*max-width:\s*none",
         )
         self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
         self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
@@ -228,13 +228,14 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
             re.compile(
                 r"@media \(min-width: 1500px\) and \(min-height: 800px\)\s*\{.*?"
-                r"\.settings-section\s*\{\s*max-width:\s*1040px;\s*\}.*?"
-                r"\.settings-section-title\s*\{\s*font-size:\s*17px;\s*\}",
+                r"\.settings-section,\s*#appearance-card\.active\s*\{[^}]*"
+                r"max-width:\s*none;[^}]*\}.*?"
+                r"\.settings-section-title\s*\{\s*font-size:\s*20px;\s*\}",
                 re.S,
             ),
         )
-        self.assertIn(".pdf-open-option-copy strong { font-size: 15px; }", HTML)
-        self.assertIn("#bib-completion-settings .auto-match-hint { font-size: 14px; }", HTML)
+        self.assertIn(".pdf-open-option-copy strong { font-size: 16px; }", HTML)
+        self.assertIn("#bib-completion-settings .auto-match-hint { font-size: 15px; }", HTML)
 
     def test_macos_settings_offer_native_pdfkit_and_preview_modes(self) -> None:
         self.assertIn(

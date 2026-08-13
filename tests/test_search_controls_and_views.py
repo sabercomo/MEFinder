@@ -452,6 +452,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/mineru-accounts'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/service'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
+        self.assertIn("async function deleteMineruAccount(accountId)", HTML)
+        self.assertIn("onclick=\"deleteMineruAccount(this.dataset.accountId)\"", HTML)
         self.assertIn('id="mineru-local-settings"', HTML)
         self.assertIn('本地部署（高级）', HTML)
         self.assertIn("fetch('/api/mineru-local'", HTML)

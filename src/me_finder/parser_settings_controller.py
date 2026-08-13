@@ -14,6 +14,7 @@ from .large_document.mineru_accounts import MinerUAccountService
 from .mineru_api import (
     DEFAULT_MINERU_API_BASE,
     MinerUError,
+    clear_legacy_mineru_token,
     load_mineru_config,
     mineru_config_summary,
     normalize_mineru_token,
@@ -61,6 +62,7 @@ class ParserSettingsController:
         normalize_mineru: Callable[[object], str] = normalize_mineru_token,
         summarize_mineru: JSONOperation = mineru_config_summary,
         save_mineru: JSONOperation = save_mineru_config,
+        clear_legacy_mineru: Callable[[Path], None] = clear_legacy_mineru_token,
         summarize_mineru_local: JSONOperation = mineru_local_config_summary,
         save_mineru_local: JSONOperation = save_mineru_local_config,
         test_mineru_local: JSONOperation = test_mineru_local_connection,
@@ -83,6 +85,7 @@ class ParserSettingsController:
         self._normalize_mineru = normalize_mineru
         self._summarize_mineru = summarize_mineru
         self._save_mineru = save_mineru
+        self._clear_legacy_mineru = clear_legacy_mineru
         self._summarize_mineru_local = summarize_mineru_local
         self._save_mineru_local = save_mineru_local
         self._test_mineru_local = test_mineru_local
@@ -122,6 +125,14 @@ class ParserSettingsController:
             return
         self._legacy_migration_error = None
         if accounts:
+            try:
+                self._clear_legacy_mineru(
+                    self._resolve_mineru_config(self._paths.runtime_root)
+                )
+            except (MinerUError, OSError, json.JSONDecodeError) as exc:
+                self._legacy_migration_error = exc
+            return
+        if self._mineru_account_service.private_config_exists():
             return
         legacy_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
@@ -141,6 +152,7 @@ class ParserSettingsController:
                 enabled=True,
                 expires_at=str(legacy.get("expires_at") or "") or None,
             )
+            self._clear_legacy_mineru(legacy_path)
         except (
             MinerUError,
             OSError,
@@ -194,6 +206,8 @@ class ParserSettingsController:
     ) -> ParserSettingsResponse:
         if not isinstance(payload, dict):
             return 400, {"error": "MinerU 账号请求必须是 JSON 对象。"}
+        if payload.get("action") == "delete_account":
+            return self.delete_mineru_account(payload)
         try:
             if "enabled" in payload and not isinstance(
                 payload["enabled"], bool
@@ -245,6 +259,28 @@ class ParserSettingsController:
             logging.exception("MinerU account configuration save failed")
             return 500, {
                 "error": "MinerU 账号配置无法保存，请检查应用数据目录。"
+            }
+        return 200, response
+
+    def delete_mineru_account(
+        self,
+        payload: Mapping[str, object],
+    ) -> ParserSettingsResponse:
+        account_id = str(payload.get("account_id") or "").strip()
+        if not account_id:
+            return 400, {"error": "请选择要删除的 MinerU 账号。"}
+        try:
+            self._mineru_account_service.delete_account(account_id)
+            response = self._mineru_accounts_payload()
+            response["deleted_account_id"] = account_id
+        except KeyError:
+            return 404, {"error": "该 MinerU 账号不存在或已删除。"}
+        except (MinerUError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, json.JSONDecodeError, sqlite3.Error):
+            logging.exception("MinerU account deletion failed")
+            return 500, {
+                "error": "MinerU 账号无法删除，请检查应用数据目录。"
             }
         return 200, response
 

@@ -6,7 +6,10 @@ from pathlib import Path
 
 from src.me_finder.large_document.engine import LargeDocumentJobEngine
 from src.me_finder.large_document.job_ledger import JobLedger
-from src.me_finder.large_document.mineru_accounts import MinerUAccountService
+from src.me_finder.large_document.mineru_accounts import (
+    MinerUAccountConfigError,
+    MinerUAccountService,
+)
 from src.me_finder.large_document.slicing import PhysicalPDFSlicer
 from src.me_finder.parser_provider import (
     NormalizedPage,
@@ -151,6 +154,43 @@ class MinerUMultiAccountTests(unittest.TestCase):
             self.service.resolve_secret("mineru-account:account-1"),
             "original-token",
         )
+
+    def test_delete_account_removes_token_and_credential(self):
+        self.service.save_account(
+            account_id="account-1",
+            display_name="Account 1",
+            token="private-token",
+        )
+
+        self.service.delete_account("account-1")
+
+        self.assertEqual(self.service.list_accounts(), [])
+        private = json.loads(
+            self.service.config_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(private["accounts"], {})
+        with self.assertRaises(KeyError):
+            self.ledger.get_credential("account-1")
+
+    def test_delete_account_rejects_active_task_and_restores_token(self):
+        self.service.save_account(
+            account_id="account-1",
+            display_name="Account 1",
+            token="private-token",
+        )
+        self.ledger.set_credential_in_flight("account-1", 1)
+
+        with self.assertRaisesRegex(
+            MinerUAccountConfigError,
+            "仍有未完成的解析任务",
+        ):
+            self.service.delete_account("account-1")
+
+        self.assertEqual(
+            self.service.resolve_secret("mineru-account:account-1"),
+            "private-token",
+        )
+        self.assertEqual(len(self.service.list_accounts()), 1)
 
     def test_reserving_a_credential_does_not_count_as_successful_parsing(self):
         self.service.save_account(

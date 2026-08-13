@@ -869,7 +869,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-account-table th:nth-child(2) { width: 22%; }
 .mineru-account-table th:nth-child(3) { width: 15%; }
 .mineru-account-table th:nth-child(4) { width: 20%; }
-.mineru-account-table th:last-child { width: 16%; }
+.mineru-account-table th:last-child { width: 19%; }
 .vision-provider-table th:first-child { width: 36%; }
 .vision-provider-table th:nth-child(2) { width: 22%; }
 .vision-provider-table th:nth-child(3) { width: 22%; }
@@ -934,6 +934,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 @media (hover: hover) and (pointer: fine) {
   .mineru-account-table tbody tr:hover { background: var(--surface-hover); }
   .mineru-text-action:hover { color: var(--accent-hover); }
+  .mineru-text-action.danger:hover { color: var(--danger); }
 }
 .mineru-account-dialog {
   position: fixed;

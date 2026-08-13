@@ -16,6 +16,7 @@ from src.me_finder.mineru_api import (
     MinerUError,
     _SafeAuthorizationRedirectHandler,
     _expiry_summary,
+    clear_legacy_mineru_token,
     load_mineru_config,
     mineru_config_summary,
     read_mineru_config_data,
@@ -41,6 +42,27 @@ class _FakeResponse:
 
 
 class MinerUConfigTests(unittest.TestCase):
+    def test_clear_legacy_token_preserves_shared_service_settings(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "mineru.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "token": "private-token",
+                        "api_base": "https://mineru.example",
+                        "note": "keep",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            clear_legacy_mineru_token(path)
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertNotIn("token", saved)
+            self.assertEqual(saved["api_base"], "https://mineru.example")
+            self.assertEqual(saved["note"], "keep")
+
     def test_generic_local_error_does_not_authorize_paid_parser_fallback(
         self,
     ) -> None:

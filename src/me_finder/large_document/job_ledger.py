@@ -535,6 +535,38 @@ class JobLedger:
             ).fetchall()
         return [_credential_from_row(row) for row in rows]
 
+    def delete_credential(self, credential_id: str, provider_id: str) -> bool:
+        """Delete an idle credential while preserving historical attribution."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT provider_id, current_in_flight FROM parser_credentials "
+                "WHERE id = ?",
+                (credential_id,),
+            ).fetchone()
+            if row is None or str(row["provider_id"]) != provider_id:
+                raise KeyError(credential_id)
+            active_slice = connection.execute(
+                """
+                SELECT 1 FROM slice_jobs
+                WHERE credential_id = ?
+                  AND remote_task_id IS NOT NULL
+                  AND status IN (
+                    'running', 'submitted', 'waiting', 'retryable_failure'
+                  )
+                LIMIT 1
+                """,
+                (credential_id,),
+            ).fetchone()
+            if int(row["current_in_flight"]) > 0 or active_slice is not None:
+                return False
+            connection.execute(
+                "DELETE FROM parser_credentials WHERE id = ?",
+                (credential_id,),
+            )
+        return True
+
     def try_reserve_credential(
         self,
         credential_id: str,

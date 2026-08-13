@@ -282,6 +282,47 @@ class MinerUAccountsWebTests(unittest.TestCase):
                 "selected-private-token", api_base="https://example.test"
             )
 
+    def test_account_can_be_deleted_without_returning_its_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self._runtime(root) as (server, _handler):
+                status, _ = self._request(
+                    server,
+                    "POST",
+                    "/api/mineru-accounts",
+                    {
+                        "account_id": "selected",
+                        "display_name": "Selected",
+                        "token": "selected-private-token",
+                        "enabled": True,
+                    },
+                )
+                self.assertEqual(status, 200)
+
+                status, payload = self._request(
+                    server,
+                    "POST",
+                    "/api/mineru-accounts",
+                    {"action": "delete_account", "account_id": "selected"},
+                )
+
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["deleted_account_id"], "selected")
+            self.assertEqual(payload["accounts"], [])
+            self.assertNotIn("selected-private-token", json.dumps(payload))
+            private = json.loads(
+                (root / "config" / "mineru_accounts.local.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(private["accounts"], {})
+            with self._runtime(root) as (server, _handler):
+                restart_status, restarted = self._request(
+                    server, "GET", "/api/mineru-accounts"
+                )
+            self.assertEqual(restart_status, 200)
+            self.assertEqual(restarted["accounts"], [])
+
     def test_service_address_is_saved_independently_from_account_editor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

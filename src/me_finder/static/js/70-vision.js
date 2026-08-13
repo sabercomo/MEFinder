@@ -143,7 +143,7 @@ function renderMineruAccountList() {
       '<td data-label="状态"><span class="mineru-account-status-cell"><span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span><label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '"><input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '') + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label></span></td>' +
       '<td data-label="到期日期"><span class="mineru-table-date">' + expires + '</span></td>' +
       '<td data-label="本地解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>' +
-      '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">测试</button><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button></span></td></tr>';
+      '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">测试</button><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button><button class="mineru-text-action danger" type="button" data-account-id="' + esc(item.account_id) + '" onclick="deleteMineruAccount(this.dataset.accountId)">删除</button></span></td></tr>';
   }).join('');
   list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table"><thead><tr><th>账号</th><th>状态</th><th>到期日期</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
@@ -462,6 +462,29 @@ async function toggleMineruAccountEnabled(input) {
     item.enabled = previous;
     renderMineruAccountList();
     showToast('账号状态未保存：' + e.message, 'danger');
+  }
+}
+
+async function deleteMineruAccount(accountId) {
+  var item = mineruAccounts.find(function(account) { return account.account_id === accountId; });
+  if (!item || !await showAppConfirm(
+    '将删除 MinerU 账号“' + item.display_name + '”及其在本机保存的 Token。已完成的解析统计会保留。',
+    {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
+  )) return;
+  try {
+    var resp = await fetch('/api/mineru-accounts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'delete_account', account_id: accountId})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
+    if (mineruSelectedAccountId === accountId) hideMineruEditor();
+    mineruConfigLoaded = false;
+    await loadMineruConfig();
+    showToast('MinerU 账号已删除');
+  } catch (e) {
+    showToast('删除 MinerU 账号失败：' + e.message, 'danger');
   }
 }
 

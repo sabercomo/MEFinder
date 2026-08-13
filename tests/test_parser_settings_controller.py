@@ -45,6 +45,7 @@ class FakeAccountService:
         )
         self.saved = []
         self.statistics = FakeStatistics()
+        self.config_exists = False
 
     def list_accounts(self):
         return list(self.accounts)
@@ -53,6 +54,7 @@ class FakeAccountService:
         return self.statistics
 
     def save_account(self, **values):
+        self.config_exists = True
         self.saved.append(values)
         summary = FakeAccountSummary(values.get("account_id") or "created")
         existing = next(
@@ -66,6 +68,14 @@ class FakeAccountService:
         if existing is None:
             self.accounts.append(summary)
         return summary
+
+    def delete_account(self, account_id):
+        account = self.get_account(account_id)
+        self.accounts.remove(account)
+        self.config_exists = True
+
+    def private_config_exists(self):
+        return self.config_exists
 
     def get_account(self, account_id):
         account = next(
@@ -111,6 +121,7 @@ class ParserSettingsControllerTests(unittest.TestCase):
             },
             "summarize_mineru": lambda _path: {"configured": True},
             "save_mineru": Mock(return_value={"configured": True}),
+            "clear_legacy_mineru": Mock(),
             "build_statistics": Mock(return_value={"total": {"books": 2}}),
             "resolve_vision_config": lambda root: root / "config/vision.json",
             "summarize_vision": lambda _path: {"providers": []},
@@ -352,6 +363,31 @@ class ParserSettingsControllerTests(unittest.TestCase):
         self.test_credential.assert_called_once_with(
             "token-for:mineru-account:account-1",
             api_base="https://mineru.example/",
+        )
+
+    def test_delete_mineru_account_returns_refreshed_account_payload(self) -> None:
+        controller = self._controller()
+
+        status, payload = controller.save_mineru_account(
+            {"action": "delete_account", "account_id": "account-1"}
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["deleted_account_id"], "account-1")
+        self.assertEqual(payload["accounts"], [])
+
+    def test_delete_mineru_account_validates_identity(self) -> None:
+        controller = self._controller()
+
+        self.assertEqual(
+            controller.save_mineru_account({"action": "delete_account"}),
+            (400, {"error": "请选择要删除的 MinerU 账号。"}),
+        )
+        self.assertEqual(
+            controller.save_mineru_account(
+                {"action": "delete_account", "account_id": "missing"}
+            ),
+            (404, {"error": "该 MinerU 账号不存在或已删除。"}),
         )
 
     def test_mineru_account_boundary_validation_is_unchanged(self) -> None:

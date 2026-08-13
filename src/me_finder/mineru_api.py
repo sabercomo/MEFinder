@@ -269,6 +269,24 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
     return mineru_config_summary(path)
 
 
+def clear_legacy_mineru_token(
+    path: Path = DEFAULT_MINERU_CONFIG_PATH,
+) -> None:
+    """Remove obsolete single-account Token copies after account migration."""
+
+    path = Path(path)
+    if not path.is_file():
+        return
+    data = read_mineru_config_data(path)
+    changed = False
+    for field in ("token", "api_token", "bearer_token"):
+        if field in data:
+            data.pop(field)
+            changed = True
+    if changed:
+        atomic_write_json(path, data)
+
+
 def load_mineru_config(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> MinerUConfig:
     path = Path(path)
     if not path.exists():

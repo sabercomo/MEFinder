@@ -1118,22 +1118,26 @@ def parse_pdf_with_mineru(
             config_path=accounts_path,
         )
         accounts = account_service.list_accounts()
-        if accounts:
-            if not any(item.enabled and item.configured for item in accounts):
-                raise MinerUError(
-                    "已保存的 MinerU 账号全部停用或缺少 Token，请先在设置中启用账号。",
-                    allow_parser_fallback=True,
-                )
-            return _parse_pdf_with_mineru_accounts(
-                root,
-                pdf_path,
-                source_file_id,
-                ledger=ledger,
-                account_service=account_service,
-                on_progress=on_progress,
-                poll_seconds=poll_seconds,
-                timeout_minutes=timeout_minutes,
+        if not accounts:
+            raise MinerUError(
+                "尚未配置 MinerU 账号，请先在设置中添加账号。",
+                allow_parser_fallback=True,
             )
+        if not any(item.enabled and item.configured for item in accounts):
+            raise MinerUError(
+                "已保存的 MinerU 账号全部停用或缺少 Token，请先在设置中启用账号。",
+                allow_parser_fallback=True,
+            )
+        return _parse_pdf_with_mineru_accounts(
+            root,
+            pdf_path,
+            source_file_id,
+            ledger=ledger,
+            account_service=account_service,
+            on_progress=on_progress,
+            poll_seconds=poll_seconds,
+            timeout_minutes=timeout_minutes,
+        )
     config_path = resolve_mineru_config_path(root)
     state_dir = root / DEFAULT_MINERU_STATE_DIR
     manifest_dir = root / DEFAULT_MINERU_MANIFEST_DIR
