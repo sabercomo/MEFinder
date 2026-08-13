@@ -420,7 +420,7 @@ def extract_docx(path: Path, root: Path) -> Dict[str, object]:
             {
                 "severity": "warning",
                 "issue_type": "page_unverified",
-                "message": "DOCX 页码来自分节推断，需按 PAGE_NUMBER_STRATEGY.md 抽样验证后才能视为可靠原书页码。",
+                "message": "DOCX 页码来自分节推断，需抽样验证后才能视为可靠原书页码。",
                 "source_file_id": source["source_file_id"],
             }
         ],

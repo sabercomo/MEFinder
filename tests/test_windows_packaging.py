@@ -21,6 +21,47 @@ class WindowsPackagingTests(unittest.TestCase):
         )
         cls.spec = Path("desktop.spec").read_text(encoding="utf-8-sig")
 
+    def test_project_declares_agpl_3_only(self) -> None:
+        license_text = Path("LICENSE").read_text(encoding="utf-8")
+        notices = Path("THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
+
+        self.assertIn("GNU AFFERO GENERAL PUBLIC LICENSE", license_text)
+        self.assertIn("Version 3, 19 November 2007", license_text)
+        self.assertIn("SPDX-License-Identifier: AGPL-3.0-only", notices)
+        self.assertIn("does not use the Artifex commercial license", notices)
+
+    def test_windows_release_payloads_include_license_files(self) -> None:
+        for filename in ("LICENSE", "THIRD_PARTY_NOTICES.txt"):
+            self.assertIn(f'-LiteralPath "{filename}"', self.build_script)
+            self.assertIn(f'-LiteralPath "{filename}"', self.portable_script)
+            self.assertIn(f'Join-Path $DistPath "{filename}"', self.build_script)
+            self.assertIn(f'Join-Path $StagePath "{filename}"', self.portable_script)
+
+        self.assertIn(r'Source: "..\dist\MEFinder\*"', self.inno_script)
+        self.assertIn('-LiteralPath "THIRD_PARTY_LICENSES"', self.build_script)
+        self.assertIn('-LiteralPath "THIRD_PARTY_LICENSES"', self.portable_script)
+        self.assertIn("Required license material is missing", self.build_script)
+        self.assertIn("Required license material is missing", self.portable_script)
+        self.assertIn("Python-runtime-LICENSE.txt", self.build_script)
+        self.assertIn("Python-runtime-LICENSE.txt", self.portable_script)
+        self.assertIn("Portable ZIP does not contain the required license materials", self.portable_script)
+
+    def test_third_party_notice_has_complete_license_companions(self) -> None:
+        license_dir = Path("THIRD_PARTY_LICENSES")
+        for filename in (
+            "PyMuPDF-1.26.5-COPYING.txt",
+            "PyInstaller-6.21.0-COPYING.txt",
+            "Python-3.12.13-LICENSE.txt",
+            "pywebview-6.2.1-LICENSE.txt",
+            "Apache-2.0.txt",
+            "BSD-3-Clause.txt",
+            "MIT.txt",
+            "setuptools-vendored__autocommand-2.2.2.dist-info__LICENSE",
+        ):
+            path = license_dir / filename
+            self.assertTrue(path.is_file(), f"missing third-party license: {path}")
+            self.assertGreater(path.stat().st_size, 50)
+
     def test_installer_and_portable_versions_come_from_package(self) -> None:
         self.assertIn("from src.me_finder import __version__", self.build_script)
         self.assertIn("from src.me_finder import __version__", self.portable_script)

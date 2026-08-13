@@ -100,6 +100,36 @@ class DesktopPortableTests(unittest.TestCase):
 
     def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+        spec_source = Path("desktop_macos.spec").read_text(encoding="utf-8")
+
+        for filename in ("LICENSE", "THIRD_PARTY_NOTICES.txt"):
+            self.assertIn(f'("{filename}", ".")', spec_source)
+            self.assertIn(
+                f'cp "{filename}" "$MEFINDER_DMG_STAGE/{filename}"',
+                build_source,
+            )
+            self.assertIn(
+                f'! -f "$MEFINDER_RESOURCES/{filename}"',
+                build_source,
+            )
+        self.assertIn(
+            '("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")',
+            spec_source,
+        )
+        self.assertIn(
+            'cp -R "THIRD_PARTY_LICENSES" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES"',
+            build_source,
+        )
+        self.assertIn(
+            '(str(stage_root / "Python-runtime-LICENSE.txt"), "THIRD_PARTY_LICENSES")',
+            spec_source,
+        )
+        self.assertIn("MEFINDER_PYTHON_LICENSE", build_source)
+        self.assertIn("ZIP does not contain THIRD_PARTY_LICENSES", build_source)
+        self.assertIn(
+            '"$MEFINDER_DMG_MOUNT/THIRD_PARTY_LICENSES"',
+            build_source,
+        )
 
         self.assertIn('MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"', build_source)
         self.assertIn(

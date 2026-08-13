@@ -20,6 +20,7 @@ required_stage_files = (
     stage_root / "config" / "pdf_imports.json",
     stage_root / "config" / "mineru_api.local.example.json",
     stage_root / "app_icon.icns",
+    stage_root / "Python-runtime-LICENSE.txt",
 )
 missing_stage_files = [str(path) for path in required_stage_files if not path.is_file()]
 if missing_stage_files:
@@ -33,6 +34,10 @@ a = Analysis(
     pathex=[str(project_root)],
     binaries=[],
     datas=[
+        ("LICENSE", "."),
+        ("THIRD_PARTY_NOTICES.txt", "."),
+        ("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES"),
+        (str(stage_root / "Python-runtime-LICENSE.txt"), "THIRD_PARTY_LICENSES"),
         ("src/me_finder/templates", "src/me_finder/templates"),
         ("src/me_finder/static", "src/me_finder/static"),
         (str(stage_root / "data"), "data"),
