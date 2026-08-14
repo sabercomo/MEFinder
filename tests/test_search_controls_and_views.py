@@ -264,13 +264,21 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("src.pdf_profile.detected_pdf_type !== 'native_text'", HTML)
         self.assertIn("将把这份 PDF 上传到 MinerU 在线服务重新解析", HTML)
 
-    def test_import_page_offers_three_parse_modes_with_auto_default(self) -> None:
-        # 三种解析方式常驻可见，auto 默认选中；用户可主动强制 MinerU 或视觉 API。
+    def test_import_page_progressively_reveals_local_mineru_mode(self) -> None:
+        # 三种常用方式常驻；只有用户主动启用本地部署后才显示第四种方式。
         self.assertIn('name="pdf-parse-mode"', HTML)
         self.assertIn('value="auto" checked', HTML)
         self.assertIn('value="mineru"', HTML)
+        self.assertIn('id="mineru-local-parse-option" hidden', HTML)
+        self.assertIn('value="mineru-local"', HTML)
         self.assertIn('value="vision"', HTML)
         self.assertIn("function selectedPdfParseMode()", HTML)
+        self.assertIn("['auto','mineru','mineru-local','vision']", HTML)
+        self.assertIn("syncMineruLocalImportOption(!!config.enabled)", HTML)
+        self.assertIn("option.hidden = !enabled", HTML)
+        self.assertIn(".pdf-parse-option[hidden] { display: none; }", HTML)
+        self.assertIn("if (!enabled && input && input.checked)", HTML)
+        self.assertIn("if (!mineruConfigLoaded) loadMineruConfig()", HTML)
         self.assertIn("parse_mode: q.parseMode || 'auto'", HTML)
         self.assertIn("parseMode: ext === '.pdf' ? pdfParseMode : null", HTML)
         self.assertIn("/api/import-upload/start", HTML)
@@ -279,10 +287,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
         self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
         self.assertIn('payload.get("pdf_parse_mode", "auto")', WEB_SOURCE)
-        self.assertIn(
-            'force_mineru = is_pdf and pdf_parse_mode == "mineru"',
-            DOCUMENT_IMPORT_COORDINATOR_SOURCE,
-        )
+        self.assertIn('"mineru-local"', DOCUMENT_IMPORT_COORDINATOR_SOURCE)
+        self.assertIn('profile["mineru_local"] = True', DOCUMENT_IMPORT_COORDINATOR_SOURCE)
         self.assertIn(
             '"parse_route": parse_route',
             DOCUMENT_IMPORT_COORDINATOR_SOURCE,

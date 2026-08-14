@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -179,7 +180,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
                 index_path,
                 backup_existing=False,
             )
-            with sqlite3.connect(index_path) as connection:
+            with closing(sqlite3.connect(index_path)) as connection:
                 self.assertEqual(
                     connection.execute(
                         "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",

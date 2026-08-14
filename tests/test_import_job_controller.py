@@ -408,7 +408,7 @@ class ImportJobControllerTests(unittest.TestCase):
         self.assertEqual(result["provider_id"], "mineru-local")
         start = next(call for call in self.imports.calls if call[0] == "start_retry")
         self.assertTrue(start[2]["force_mineru"])
-        self.assertTrue(start[1][2]["mineru_local_retry"])
+        self.assertTrue(start[1][2]["mineru_local"])
 
         previous_job = self.imports.retry_inputs[0]
         previous_job["provider_id"] = "mineru-local"

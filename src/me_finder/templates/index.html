@@ -371,6 +371,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small>强制上传并 OCR，适合乱码、断字或复杂排版的扫描件</small>
               </span>
             </label>
+            <label class="pdf-parse-option" id="mineru-local-parse-option" hidden>
+              <input type="radio" name="pdf-parse-mode" value="mineru-local">
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>本地 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">高级</span></span>
+                <small>直接使用你在设置中启用的本地部署服务，不上传到 MinerU 在线服务</small>
+              </span>
+            </label>
             <label class="pdf-parse-option pdf-parse-option-vision" id="vision-parse-option">
               <input type="radio" name="pdf-parse-mode" value="vision">
               <span class="pdf-parse-card">
@@ -551,7 +558,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               </section>
               <details class="mineru-local-settings" id="mineru-local-settings">
                 <summary>
-                  <span class="mineru-local-summary-copy"><strong>本地部署（高级）</strong><small>仅供已自行部署 MinerU 服务的用户，在在线解析失败后手动切换</small></span>
+                  <span class="mineru-local-summary-copy"><strong>本地部署（高级）</strong><small>仅供已自行部署 MinerU 服务的用户；启用后可在导入时直接选择</small></span>
                   <span id="mineru-local-status" class="settings-status">未启用</span>
                   <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
                 </summary>
@@ -563,7 +570,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <label class="settings-label" for="mineru-local-backend">解析后端</label>
                     <div class="settings-control"><input id="mineru-local-backend" class="settings-input" type="text" value="pipeline" spellcheck="false"><small>传给本地 MinerU 服务的 backend 参数</small></div>
                     <span class="settings-label">失败后切换</span>
-                    <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，在线 MinerU 失败卡片才会显示“切换到本地部署”；不会自动切换</small></div>
+                    <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页会显示“本地 MinerU”；在线 MinerU 失败后也可手动切换，不会自动切换</small></div>
                     <span class="settings-label"></span>
                     <div class="settings-control settings-actions"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
                   </div>

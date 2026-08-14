@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterator, Mapping, Optional
@@ -43,7 +44,7 @@ def export_indexed_pdf(
     if not database.is_file():
         raise IndexedDocumentNotFound("当前文献索引不存在。")
 
-    with _connect(database) as connection:
+    with closing(_connect(database)) as connection:
         source = _payload_row(
             connection,
             "SELECT payload_json FROM source_files WHERE source_file_id = ?",

@@ -51,7 +51,19 @@ function renderMineruLocalSettings(config) {
   if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
   if (backend) backend.value = config.backend || 'pipeline';
   if (enabled) enabled.checked = !!config.enabled;
+  syncMineruLocalImportOption(!!config.enabled);
   updateMineruLocalStatus(!!config.enabled);
+}
+
+function syncMineruLocalImportOption(enabled) {
+  var option = document.getElementById('mineru-local-parse-option');
+  if (!option) return;
+  option.hidden = !enabled;
+  var input = option.querySelector('input[name="pdf-parse-mode"]');
+  if (!enabled && input && input.checked) {
+    var automatic = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
+    if (automatic) automatic.checked = true;
+  }
 }
 
 function updateMineruLocalStatus(enabled, label) {
@@ -87,7 +99,7 @@ async function saveMineruLocalSettings() {
     importQueue.filter(function(item) {
       return item.jobId && (item.status === 'failed' || item.status === 'paused');
     }).forEach(function(item) { pollImportJob(item.id); });
-    if (hint) hint.textContent = data.enabled ? '已保存；在线 MinerU 失败后可手动切换' : '已关闭本地部署选项';
+    if (hint) hint.textContent = data.enabled ? '已保存；导入时可直接选择“本地 MinerU”' : '已关闭本地部署选项';
   } catch (error) {
     if (hint) hint.textContent = '未保存：' + error.message;
   } finally {

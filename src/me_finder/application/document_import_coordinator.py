@@ -21,7 +21,8 @@ from typing import (
 from ..app_context import AppPaths
 from ..chunked_upload import ChunkedUploadStore
 from ..import_resume import sha256_file
-from ..mineru_api import MinerUError
+from ..mineru_api import MinerUError, resolve_mineru_config_path
+from ..mineru_local_settings import mineru_local_config_summary
 from ..pdf_import_service import (
     cleanup_stale_document_storage_files,
     copy_local_document,
@@ -138,7 +139,7 @@ class DocumentImportCoordinator:
             suffix = Path(filename).suffix.lower()
             if suffix not in {".pdf", ".docx"}:
                 raise MinerUError("只支持 PDF 或 DOCX 文件。")
-            mode, provider_id = self.validate_parse_options(
+            mode, provider_id = self._validated_parse_options(
                 pdf_parse_mode,
                 vision_provider_id,
             )
@@ -178,7 +179,7 @@ class DocumentImportCoordinator:
             suffix = Path(filename).suffix.lower()
             if suffix not in {".pdf", ".docx"}:
                 raise MinerUError("只支持 PDF 或 DOCX 文件。")
-            mode, provider_id = self.validate_parse_options(
+            mode, provider_id = self._validated_parse_options(
                 pdf_parse_mode,
                 vision_provider_id,
             )
@@ -255,7 +256,7 @@ class DocumentImportCoordinator:
             try:
                 metadata = dict(completed.metadata)
                 is_pdf = metadata.get("is_pdf") == "1"
-                mode, provider_id = self.validate_parse_options(
+                mode, provider_id = self._validated_parse_options(
                     metadata.get("parse_mode", "auto"),
                     metadata.get("provider_id", ""),
                 )
@@ -318,7 +319,7 @@ class DocumentImportCoordinator:
         vision_provider_id: object,
     ) -> Tuple[str, str]:
         mode = str(pdf_parse_mode or "auto").strip().lower()
-        if mode not in {"auto", "mineru", "vision"}:
+        if mode not in {"auto", "mineru", "mineru-local", "vision"}:
             raise MinerUError("PDF 解析方式无效。")
         provider_id = (
             str(vision_provider_id or "").strip()
@@ -327,6 +328,23 @@ class DocumentImportCoordinator:
         )
         if mode == "vision" and not provider_id:
             raise MinerUError("请选择一个其他解析 API。")
+        return mode, provider_id
+
+    def _validated_parse_options(
+        self,
+        pdf_parse_mode: object,
+        vision_provider_id: object,
+    ) -> Tuple[str, str]:
+        mode, provider_id = self.validate_parse_options(
+            pdf_parse_mode,
+            vision_provider_id,
+        )
+        if mode == "mineru-local":
+            summary = mineru_local_config_summary(
+                resolve_mineru_config_path(self._paths.runtime_root)
+            )
+            if not summary.get("enabled"):
+                raise MinerUError("请先在设置中启用 MinerU 本地部署。")
         return mode, provider_id
 
     def _upload_storage_details(
@@ -464,7 +482,13 @@ class DocumentImportCoordinator:
             else:
                 profile = {"detected_pdf_type": "docx"}
                 source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
-            force_mineru = is_pdf and pdf_parse_mode == "mineru"
+            use_local_mineru = is_pdf and pdf_parse_mode == "mineru-local"
+            if use_local_mineru:
+                profile["mineru_local"] = True
+            force_mineru = is_pdf and pdf_parse_mode in {
+                "mineru",
+                "mineru-local",
+            }
             job_id = self._jobs.start_import_job(
                 target,
                 profile,
@@ -503,7 +527,11 @@ class DocumentImportCoordinator:
                     profile.get("detected_pdf_type") if is_pdf else None
                 ),
                 "parse_route": parse_route,
-                "provider_id": vision_provider_id or None,
+                "provider_id": (
+                    "mineru-local"
+                    if use_local_mineru
+                    else vision_provider_id or None
+                ),
             }
         finally:
             if reserved_source_id:
@@ -518,7 +546,7 @@ class DocumentImportCoordinator:
         pdf_parse_mode: object,
         vision_provider_id: object,
     ) -> Dict[str, object]:
-        mode, provider_id = self.validate_parse_options(
+        mode, provider_id = self._validated_parse_options(
             pdf_parse_mode,
             vision_provider_id,
         )
@@ -570,7 +598,13 @@ class DocumentImportCoordinator:
                     statuses=("processing",),
                 ):
                     raise MinerUError("同一文献已有解析任务正在运行。")
-                force_mineru = is_pdf and mode == "mineru"
+                use_local_mineru = is_pdf and mode == "mineru-local"
+                if use_local_mineru:
+                    profile["mineru_local"] = True
+                force_mineru = is_pdf and mode in {
+                    "mineru",
+                    "mineru-local",
+                }
                 parse_route = None
                 if is_pdf:
                     parse_route = (
@@ -605,7 +639,11 @@ class DocumentImportCoordinator:
                             ),
                             "file_type": "pdf" if is_pdf else "docx",
                             "parse_route": parse_route,
-                            "provider_id": provider_id or None,
+                            "provider_id": (
+                                "mineru-local"
+                                if use_local_mineru
+                                else provider_id or None
+                            ),
                         },
                     }
                 )

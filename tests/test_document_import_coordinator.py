@@ -12,7 +12,8 @@ from src.me_finder.application.document_import_coordinator import (
 )
 from src.me_finder.chunked_upload import ChunkedUploadError, ChunkedUploadStore
 from src.me_finder.import_resume import sha256_file
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.mineru_api import MinerUError, resolve_mineru_config_path
+from src.me_finder.mineru_local_settings import save_mineru_local_config
 
 
 class FakeImportJobs:
@@ -132,6 +133,16 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
         self.coordinator.close()
         self.temp_dir.cleanup()
 
+    def enable_local_mineru(self) -> None:
+        save_mineru_local_config(
+            {
+                "enabled": True,
+                "endpoint": "http://127.0.0.1:8000",
+                "backend": "pipeline",
+            },
+            resolve_mineru_config_path(self.root),
+        )
+
     def test_stream_upload_is_stored_then_queued_with_existing_response(self) -> None:
         payload = b"%PDF-1.4\nbody\n%%EOF\n"
 
@@ -204,8 +215,33 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
                 io.BytesIO(b"x"),
                 pdf_parse_mode="vision",
             )
+        with self.assertRaisesRegex(MinerUError, "请先在设置中启用"):
+            self.coordinator.import_stream(
+                "paper.pdf",
+                1,
+                io.BytesIO(b"x"),
+                pdf_parse_mode="mineru-local",
+            )
         with self.assertRaisesRegex(MinerUError, "文件为空"):
             self.coordinator.import_stream("paper.pdf", 0, io.BytesIO())
+
+    def test_stream_can_start_directly_with_enabled_local_mineru(self) -> None:
+        self.enable_local_mineru()
+        payload = b"%PDF-1.4\nlocal\n%%EOF\n"
+
+        result = self.coordinator.import_stream(
+            "local.pdf",
+            len(payload),
+            io.BytesIO(payload),
+            pdf_parse_mode="mineru-local",
+        )
+
+        self.assertEqual(result["parse_route"], "mineru")
+        self.assertEqual(result["provider_id"], "mineru-local")
+        call = self.jobs.import_calls[0]
+        self.assertTrue(call["force_mineru"])
+        self.assertIsNone(call["vision_provider_id"])
+        self.assertTrue(call["profile"]["mineru_local"])
 
     def test_chunked_upload_lifecycle_preserves_payload_and_metadata(self) -> None:
         payload = b"%PDF-1.4\nchunked\n%%EOF\n"
@@ -436,6 +472,25 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
         self.assertIn("同一批次中已有内容相同", result["errors"][0]["error"])
         stored = list((self.paths.corpus_root / "raw_pdf").glob("*.pdf"))
         self.assertEqual(len(stored), 1)
+
+    def test_local_batch_can_start_directly_with_enabled_local_mineru(self) -> None:
+        self.enable_local_mineru()
+        scan_root = self.root / "local-library"
+        scan_root.mkdir()
+        source = scan_root / "local.pdf"
+        source.write_bytes(b"local-mineru")
+
+        result = self.coordinator.import_local(
+            [source],
+            [scan_root],
+            pdf_parse_mode="mineru-local",
+        )
+
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["jobs"][0]["provider_id"], "mineru-local")
+        item = self.jobs.remote_batches[0][0]
+        self.assertTrue(item["force_mineru"])
+        self.assertTrue(item["profile"]["mineru_local"])
 
     def test_local_processing_conflict_releases_pdf_and_keeps_other_jobs(self) -> None:
         scan_root = self.root / "library"

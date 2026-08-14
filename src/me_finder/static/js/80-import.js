@@ -767,7 +767,8 @@ async function importSelectedScanned() {
         step: 0,
         jobId: job.job_id,
         providerId: job.provider_id || null,
-        providerName: ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
+        providerName: job.provider_id === 'mineru-local' ? '本地 MinerU'
+          : ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
         message: '文件已复制，正在处理…'
       };
       if (job.file_type === 'pdf' && job.detected_pdf_type) {
@@ -776,6 +777,7 @@ async function importSelectedScanned() {
         q.step = 2;
         q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type)
           + (q.route === 'vision' ? '，将使用其他视觉 API'
+            : q.route === 'mineru' && q.providerId === 'mineru-local' ? '，将使用本地 MinerU'
             : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
       } else if (job.file_type !== 'pdf') {
         q.step = 1;
@@ -808,7 +810,7 @@ async function importSelectedScanned() {
 
 function selectedPdfParseMode() {
   var selected = document.querySelector('input[name="pdf-parse-mode"]:checked');
-  return selected && ['auto','mineru','vision'].indexOf(selected.value) >= 0 ? selected.value : 'auto';
+  return selected && ['auto','mineru','mineru-local','vision'].indexOf(selected.value) >= 0 ? selected.value : 'auto';
 }
 
 function selectedVisionProviderId() {
@@ -837,8 +839,10 @@ function handleFileSelect(files) {
       size: file.size,
       type: ext === '.pdf' ? 'pdf' : 'docx',
       parseMode: ext === '.pdf' ? pdfParseMode : null,
-      providerId: ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId : null,
-      providerName: ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name : null,
+      providerId: ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId
+        : ext === '.pdf' && pdfParseMode === 'mineru-local' ? 'mineru-local' : null,
+      providerName: ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name
+        : ext === '.pdf' && pdfParseMode === 'mineru-local' ? '本地 MinerU' : null,
       status: 'queued',
       step: 0,
       message: '等待处理'
@@ -1108,6 +1112,7 @@ async function uploadImport(id) {
       q.step = 2;
       q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
         + (q.route === 'vision' ? '，将使用其他视觉 API'
+          : q.route === 'mineru' && q.providerId === 'mineru-local' ? '，将使用本地 MinerU'
           : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
     } else {
       q.step = 1;

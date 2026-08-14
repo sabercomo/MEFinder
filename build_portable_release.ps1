@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Version = "",
     [string]$PythonExe = "",
     [string]$PackagerPythonExe = ""
@@ -112,7 +112,8 @@ try {
             throw "Required license material is missing from the portable payload: $licensePath"
         }
     }
-    Copy-Item -LiteralPath "PORTABLE_README.md" -Destination (Join-Path $StagePath "README.md")
+    Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination (Join-Path $StagePath "README.txt")
+    Copy-Item -LiteralPath "portable_first_run.cmd" -Destination (Join-Path $StagePath "0-首次启动-程序打不开时运行.cmd")
     $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
@@ -144,7 +145,7 @@ try {
 
     & $pythonCommand @pythonLauncherArgs -m tools.create_portable_zip $StagePath $ZipPath
     if ($LASTEXITCODE -ne 0) { throw "Portable ZIP creation failed." }
-    & $pythonCommand @pythonLauncherArgs -c "import sys, zipfile; names=set(zipfile.ZipFile(sys.argv[1]).namelist()); root=sys.argv[2] + '/'; required={root + 'LICENSE', root + 'THIRD_PARTY_NOTICES.txt'}; raise SystemExit(0 if required <= names and any(name.startswith(root + 'THIRD_PARTY_LICENSES/') for name in names) else 1)" $ZipPath $PackageName
+    $zipLicenseCheck = & $pythonCommand @pythonLauncherArgs -c "import sys, zipfile; names=set(zipfile.ZipFile(sys.argv[1]).namelist()); root=sys.argv[2] + '/'; required={root + 'LICENSE', root + 'THIRD_PARTY_NOTICES.txt'}; raise SystemExit(0 if required <= names and any(name.startswith(root + 'THIRD_PARTY_LICENSES/') for name in names) else 1)" $ZipPath $PackageName
     if ($LASTEXITCODE -ne 0) { throw "Portable ZIP does not contain the required license materials." }
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
     Set-Content -LiteralPath $HashPath -Encoding Ascii -Value "$hash  $PackageName.zip"
