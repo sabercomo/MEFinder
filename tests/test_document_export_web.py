@@ -192,6 +192,8 @@ class DocumentExportHTTPTests(unittest.TestCase):
         )
         self.assertIn("导出 MEFinder 文档", source)
         self.assertIn("function exportLibraryDocument(sourceId)", source)
+        self.assertIn("function exportSelectedLibraryDocuments()", source)
+        self.assertIn("function requestLibraryDocumentExport(sourceId)", source)
         self.assertIn("fetch('/api/document/export'", source)
 
 

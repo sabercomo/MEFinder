@@ -289,12 +289,20 @@ function bibToggleMenu(ev, id) {
   if (!menu) return;
   var willOpen = !menu.classList.contains('open');
   bibCloseMenus();
-  if (willOpen) menu.classList.add('open');
+  if (willOpen) {
+    menu.classList.add('open');
+    var trigger = menu.parentElement && menu.parentElement.querySelector('[aria-controls="' + id + '"]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+  }
 }
 
 function bibCloseMenus() {
   var open = document.querySelectorAll('.bib-menu.open');
-  for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
+  for (var i = 0; i < open.length; i++) {
+    open[i].classList.remove('open');
+    var trigger = open[i].parentElement && open[i].parentElement.querySelector('[aria-controls="' + open[i].id + '"]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  }
 }
 
 if (typeof document !== 'undefined' && !window.__bibMenuOutside) {
@@ -911,4 +919,3 @@ async function openCalibrationAndDetect(sourceId) {
   await openCalibrationForSource(sourceId);
   await runAutoDetection(sourceId);
 }
-

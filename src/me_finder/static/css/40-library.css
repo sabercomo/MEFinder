@@ -574,6 +574,13 @@
 }
 .drawer-actions .action-btn { flex: 0 0 auto; white-space: nowrap; }
 .drawer-actions-spacer { flex: 1 1 auto; }
+.bib-menu.drawer-actions-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  min-width: 176px;
+  padding: 4px;
+}
+.drawer-actions-menu .bib-menu-item { padding: 7px 9px; }
 
 /* 小号动作按钮，用于书目区头部/工具位。 */
 .action-btn.sm { height: 30px; padding: 0 11px; font-size: 12.5px; }
@@ -644,4 +651,3 @@
 @media (max-width: 560px) {
   .bib-read-grid { grid-template-columns: 1fr; }
 }
-

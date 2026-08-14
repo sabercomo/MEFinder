@@ -369,14 +369,26 @@ function updateLibraryDeleteControls() {
   var page = document.getElementById('page-library');
   var count = document.getElementById('library-selection-count');
   var removeButton = document.getElementById('library-remove-selected-btn');
+  var exportButton = document.getElementById('library-export-selected-btn');
   var selectVisibleButton = document.getElementById('library-select-visible-btn');
   var selectedCount = libDeleteSelection.size;
+  var selectedPdfCount = libSources.filter(function(item) {
+    return item.source_type === 'pdf' && libDeleteSelection.has(item.source_file_id);
+  }).length;
   var active = selectedCount > 0;
   // Selection alone drives the contextual action bar: no persistent mode toggle.
   if (page) page.classList.toggle('library-selecting', active);
   if (bar) bar.hidden = !active;
   if (count) count.textContent = '已选 ' + selectedCount + ' 项';
   if (removeButton) removeButton.disabled = selectedCount === 0;
+  if (exportButton) {
+    exportButton.disabled = libraryExportRunning || selectedPdfCount === 0;
+    if (!libraryExportRunning) {
+      exportButton.textContent = selectedPdfCount
+        ? '导出所选 PDF（' + selectedPdfCount + '）'
+        : '导出所选 PDF';
+    }
+  }
   if (selectVisibleButton) {
     var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
     var allSelected = selectable.length > 0 && selectable.every(function(item) {
@@ -683,8 +695,8 @@ function drawerMainActionsHTML(src) {
   return '<div class="drawer-actions">'
     + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + sid + '\', null)">打开原文</button>' : '')
     + '<span class="drawer-actions-spacer"></span>'
-    + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
-    + '<span class="bib-menu bib-menu-end" id="drawer-more-menu" role="menu">' + items + '</span></span>'
+    + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" aria-expanded="false" aria-controls="drawer-more-menu" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
+    + '<span class="bib-menu bib-menu-end drawer-actions-menu" id="drawer-more-menu" role="menu">' + items + '</span></span>'
     + '</div>';
 }
 
@@ -692,18 +704,67 @@ async function exportLibraryDocument(sourceId) {
   if (!sourceId) return;
   showToast('正在导出这本 PDF…');
   try {
-    var response = await fetch('/api/document/export', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({source_id: sourceId})
-    });
-    var data = await response.json();
-    if (!response.ok || data.error) throw new Error(data.error || '导出失败');
+    var data = await requestLibraryDocumentExport(sourceId);
     showToast('已导出 ' + Number(data.page_count || 0).toLocaleString()
       + ' 页到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
   } catch (error) {
     showToast('导出 MEFinder 文档失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
   }
+}
+
+async function requestLibraryDocumentExport(sourceId) {
+  var response = await fetch('/api/document/export', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({source_id: sourceId})
+  });
+  var data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || '导出失败');
+  return data;
+}
+
+async function exportSelectedLibraryDocuments() {
+  if (libraryExportRunning) return;
+  var items = libSources.filter(function(item) {
+    return item.source_type === 'pdf' && libDeleteSelection.has(item.source_file_id);
+  });
+  if (!items.length) {
+    showToast('所选文献中没有可导出的 PDF', 'warning');
+    return;
+  }
+
+  libraryExportRunning = true;
+  var exportButton = document.getElementById('library-export-selected-btn');
+  var exported = [];
+  var failures = [];
+  var skippedWordCount = libDeleteSelection.size - items.length;
+  updateLibraryDeleteControls();
+  try {
+    for (var index = 0; index < items.length; index += 1) {
+      exportButton.textContent = '正在导出 ' + (index + 1) + ' / ' + items.length;
+      try {
+        exported.push(await requestLibraryDocumentExport(items[index].source_file_id));
+      } catch (error) {
+        failures.push({
+          title: items[index].title || items[index].file_name || items[index].source_file_id,
+          message: error && error.message ? error.message : '未知错误'
+        });
+      }
+    }
+  } finally {
+    libraryExportRunning = false;
+    updateLibraryDeleteControls();
+  }
+
+  var skippedText = skippedWordCount ? '；已跳过 ' + skippedWordCount + ' 份 Word' : '';
+  if (failures.length) {
+    showToast('批量导出完成：成功 ' + exported.length + ' 本，失败 ' + failures.length + ' 本'
+      + skippedText + '。首个失败：' + failures[0].title + '：' + failures[0].message, 'warning');
+    return;
+  }
+  var outputDirectory = exported[0].path.replace(/[\\/][^\\/]+$/, '');
+  showToast('已导出 ' + exported.length + ' 本 PDF' + skippedText
+    + '，每本一个文档包。保存到：' + outputDirectory, 'success');
 }
 
 async function selectLibDoc(sourceId) {

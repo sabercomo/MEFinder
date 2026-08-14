@@ -56,6 +56,7 @@ let libDefaultLanguage = loadLibDefaultLanguage();
 let libStatusFilter = 'all';
 let libSelectedId = null;
 let libDeleteSelection = new Set();
+let libraryExportRunning = false;
 let libraryDragSelection = null;
 let suppressLibrarySelectionClick = false;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';

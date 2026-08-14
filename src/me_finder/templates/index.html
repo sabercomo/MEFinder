@@ -245,6 +245,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="library-selection-count" id="library-selection-count">已选 0 项</span>
             <span class="library-selection-spacer"></span>
             <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
+            <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选 PDF</button>
             <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
           </div>
         </div>

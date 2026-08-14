@@ -370,6 +370,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 主操作收敛为「打开原文」+ ⋯；页码相关不再在此重复。
         self.assertIn("function drawerMainActionsHTML(src)", HTML)
         self.assertIn('id="drawer-more-menu"', HTML)
+        self.assertIn('class="bib-menu bib-menu-end drawer-actions-menu"', HTML)
+        self.assertIn('aria-expanded="false" aria-controls="drawer-more-menu"', HTML)
+        drawer_menu_rule = HTML.split('.bib-menu.drawer-actions-menu {', 1)[1].split('}', 1)[0]
+        self.assertIn('top: auto;', drawer_menu_rule)
+        self.assertIn('bottom: calc(100% + 6px);', drawer_menu_rule)
         self.assertNotIn("openCalibrationAndDetect(\\'' + esc(src.source_file_id) + '\\')\">自动检测页码", HTML)
         # 收录文献不再内层滚动。
         works_rule = HTML.split('.drawer-works-list {', 1)[1].split('}', 1)[0]
@@ -605,15 +610,26 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         for element_id in (
             'id="library-selection-bar"',
             'id="library-selection-count"',
+            'id="library-export-selected-btn"',
             'id="library-remove-selected-btn"',
             'id="library-select-visible-btn"',
         ):
             self.assertIn(element_id, HTML)
+        self.assertIn(
+            'class="action-btn" type="button" id="library-export-selected-btn"',
+            HTML,
+        )
+        self.assertNotIn(
+            'class="action-btn primary" type="button" id="library-export-selected-btn"',
+            HTML,
+        )
         # No persistent mode toggle: the action bar appears once items are picked.
         self.assertNotIn('id="library-delete-mode-btn"', HTML)
         self.assertIn('function clearLibrarySelection()', HTML)
         self.assertIn('function toggleLibraryDeleteSelection(sourceId, force)', HTML)
         self.assertIn('function toggleSelectVisibleLibraryDocuments()', HTML)
+        self.assertIn('function exportSelectedLibraryDocuments()', HTML)
+        self.assertIn("item.source_type === 'pdf' && libDeleteSelection.has", HTML)
         self.assertIn('function setupLibraryDragSelection()', HTML)
         # marquee 建框收尾抽入 begin/endDragSelectionMarquee 共用助手后，类名经调用点传入。
         self.assertIn("beginDragSelectionMarquee(state, list, 'library-selection-marquee', event)", HTML)
