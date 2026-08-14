@@ -2,6 +2,9 @@ name: Windows release smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/v0.4.4-mcp
 
 permissions:
   contents: read
