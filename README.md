@@ -101,7 +101,8 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 ### macOS
 
-- 支持 macOS 14 或更高版本；
+- Apple Silicon（`arm64`）支持 macOS 14 或更高版本；
+- Intel（`x86_64`）支持 macOS 12 或更高版本；
 - 根据 Mac 芯片选择 Apple Silicon（`arm64`）或 Intel（`x86_64`）DMG；
 - 打开 DMG 后将 `MEFinder.app` 拖入 `Applications`；
 - 应用数据保存在 `~/Library/Application Support/MEFinder/`。

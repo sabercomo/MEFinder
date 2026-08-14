@@ -102,6 +102,14 @@ class DesktopPortableTests(unittest.TestCase):
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
         spec_source = Path("desktop_macos.spec").read_text(encoding="utf-8")
 
+        self.assertIn(
+            'minimum_system_version = "12.0" if target_arch == "x86_64" else "14.0"',
+            spec_source,
+        )
+        self.assertIn(
+            '"LSMinimumSystemVersion": minimum_system_version',
+            spec_source,
+        )
         self.assertNotIn(
             '("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")',
             spec_source,

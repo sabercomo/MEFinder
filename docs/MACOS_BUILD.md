@@ -7,7 +7,8 @@ Cocoa/WebKit 窗口封装，并由 PyInstaller 生成原生 `.app`。
 
 ## 环境
 
-- macOS 14 或更高版本（当前构建环境中的 Python 运行库最低要求为 14.0）；
+- Apple Silicon 发布包最低支持 macOS 14；
+- Intel 发布包最低支持 macOS 12；
 - Python 3.9 或更高版本；
 - Xcode Command Line Tools；
 - 构建机架构决定默认产物架构：Apple Silicon 为 `arm64`，Intel 为 `x86_64`。
