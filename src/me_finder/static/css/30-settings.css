@@ -1225,6 +1225,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   background: var(--danger-soft);
   color: var(--danger);
 }
+.vision-model-badge.capability-unknown {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
 .vision-model-badge.capability-omni {
   background: var(--info-soft);
   color: var(--info);

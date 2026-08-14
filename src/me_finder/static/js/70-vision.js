@@ -737,13 +737,14 @@ function visionModelCapability(item) {
   if (capability === 'ocr') return 'ocr';
   if (capability === 'vision' || capability === 'omni') return 'vision';
   if (capability === 'text' || capability === 'unsupported') return 'text';
-  return item && item.likely_vision ? 'vision' : 'text';
+  if (capability === 'unknown') return 'unknown';
+  return item && item.likely_vision ? 'vision' : 'unknown';
 }
 
 function visionModelPriority(item) {
   var priority = Number((item || {}).capability_priority);
   if (Number.isFinite(priority)) return priority;
-  var fallback = {ocr: 0, vision: 100, text: 900};
+  var fallback = {ocr: 0, vision: 100, unknown: 500, text: 900};
   return fallback[visionModelCapability(item)];
 }
 
@@ -752,6 +753,7 @@ function visionModelBadgeHTML(item) {
   var capability = visionModelCapability(item);
   if (capability === 'vision') label = '支持图片';
   else if (capability === 'text') label = '不支持图片';
+  else if (capability === 'unknown') label = '待确认 · 请测试';
   else if (!label) label = 'OCR 专用';
   return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
 }
@@ -769,6 +771,7 @@ function renderVisionModelPop() {
   var groups = [
     {key: 'ocr', label: 'OCR 专用 · 优先'},
     {key: 'vision', label: '支持图片'},
+    {key: 'unknown', label: '待确认 · 请测试'},
     {key: 'text', label: '不支持图片'}
   ];
   var byCapability = {};
@@ -914,7 +917,7 @@ async function fetchVisionModels(options) {
     if (requestSerial !== visionModelRequestSerial) return;
     renderVisionModelOptions(data.models || []);
     setVisionModelHint(
-      '已获取 ' + visionModelOptions.length + ' 个模型。OCR 专用模型已优先排列；请选择支持图片输入的模型',
+      '已获取 ' + visionModelOptions.length + ' 个模型。未确认型号可保存后发送测试图片验证',
       'is-ready'
     );
     if (!silent) {

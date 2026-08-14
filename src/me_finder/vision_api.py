@@ -452,7 +452,8 @@ def _vision_model_capability(
 
     The catalog is advisory UI metadata, not an invocation allow-list.  Keep
     the labels deliberately simple for non-technical users: OCR models are
-    promoted, everything else is either able or unable to accept page images.
+    promoted, documented capabilities are shown directly, and unknown models
+    stay unconfirmed until the real image connection test succeeds.
     """
 
     normalized = model_id.strip().lower()
@@ -465,23 +466,6 @@ def _vision_model_capability(
         qwen37_max_snapshot
         and qwen37_max_snapshot.group(1) >= "2026-06-08"
     )
-
-    # These model families are explicitly text-only.  Keep the override before
-    # provider-supplied modality hints so a relay cannot accidentally advertise
-    # image support for a text endpoint.
-    text_only = (
-        "deepseek" in normalized
-        or (basename.startswith("qwen3.7-max") and not qwen37_max_has_vision)
-        or basename == "qwen3.6-max-preview"
-        or basename.startswith("qwen3-max")
-    )
-    if text_only:
-        return {
-            "capability": "text",
-            "capability_label": "不支持图片",
-            "capability_priority": 900,
-            "likely_vision": False,
-        }
 
     if "ocr" in basename:
         if basename == "qwen3.5-ocr":
@@ -514,6 +498,7 @@ def _vision_model_capability(
         "qwen3.6-flash",
         "qwen3.6-35b-a3b",
         "qwen3.7-plus",
+        "qwen3.7-flash",
         "qwen3.7-max-2026-06-08",
         "qwen3.8-",
         "omni",
@@ -538,6 +523,11 @@ def _vision_model_capability(
         "ernie-vl",
         "minimax-vl",
         "moonshot-v1-vision",
+        "kimi-k2.5",
+        "kimi-k2.6",
+        "kimi-k2.7",
+        "kimi-k3",
+        "minimax-m3",
         "gemini",
         "claude",
         "gpt-4o",
@@ -556,10 +546,37 @@ def _vision_model_capability(
             "likely_vision": True,
         }
 
+    declared_modalities = item.get("input_modalities") or item.get("modalities")
+    text_only = (
+        (
+            isinstance(declared_modalities, list)
+            and bool(declared_modalities)
+            and not _model_has_image_input(item)
+        )
+        or "deepseek" in normalized
+        or (basename.startswith("qwen3.7-max") and not qwen37_max_has_vision)
+        or basename == "qwen3.6-max-preview"
+        or basename.startswith("qwen3-max")
+        or basename.startswith("qwen-long")
+        or basename in {"qwen-max", "qwen-plus", "qwen-turbo"}
+        or basename in {"kimi-k2-thinking", "moonshot-kimi-k2-instruct"}
+        or basename.startswith("kimi-k2-instruct")
+        or re.fullmatch(r"glm-(?:4\.[5-7]|5(?:\.[12])?)(?:-.+)?", basename)
+        or re.fullmatch(r"minimax-m2(?:\.[0-9]+)?(?:-.+)?", basename)
+        or basename.startswith("mimo-v2.5")
+    )
+    if text_only:
+        return {
+            "capability": "text",
+            "capability_label": "不支持图片",
+            "capability_priority": 900,
+            "likely_vision": False,
+        }
+
     return {
-        "capability": "text",
-        "capability_label": "不支持图片",
-        "capability_priority": 900,
+        "capability": "unknown",
+        "capability_label": "待确认 · 请测试",
+        "capability_priority": 500,
         "likely_vision": False,
     }
 

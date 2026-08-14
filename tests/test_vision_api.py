@@ -558,11 +558,19 @@ class VisionAPIConfigTests(unittest.TestCase):
                         {"id": "qwen3-vl-flash", "owned_by": "qwen"},
                         {"id": "qwen3.8-max", "owned_by": "qwen"},
                         {"id": "qwen3.7-plus", "owned_by": "qwen"},
+                        {"id": "qwen3.7-flash", "owned_by": "qwen"},
                         {"id": "qwen3.7-max", "owned_by": "qwen"},
                         {"id": "qwen3.7-max-2026-06-08", "owned_by": "qwen"},
                         {"id": "qwen3.7-max-2026-07-01", "owned_by": "qwen"},
                         {"id": "qwen3.6-flash", "owned_by": "qwen"},
                         {"id": "qwen3.6-max-preview", "owned_by": "qwen"},
+                        {"id": "kimi-k2.5", "owned_by": "moonshot"},
+                        {"id": "kimi-k2.6", "owned_by": "moonshot"},
+                        {"id": "kimi-k2.7-code", "owned_by": "moonshot"},
+                        {"id": "kimi/kimi-k3", "owned_by": "moonshot"},
+                        {"id": "MiniMax/MiniMax-M3", "owned_by": "minimax"},
+                        {"id": "glm-5.2", "owned_by": "zhipu"},
+                        {"id": "xiaomi/mimo-v2.5-pro", "owned_by": "xiaomi"},
                         {"id": "qwen-vl-ocr-2025-11-20", "owned_by": "qwen"},
                         {"id": "qwen-vl-ocr-latest", "owned_by": "qwen"},
                         {"id": "qwen3.5-ocr", "owned_by": "qwen"},
@@ -594,7 +602,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 )
 
             self.assertFalse(path.exists())
-            self.assertEqual(result["count"], 18)
+            self.assertEqual(result["count"], 26)
             self.assertEqual(
                 [item["id"] for item in result["models"]],
                 [
@@ -607,15 +615,23 @@ class VisionAPIConfigTests(unittest.TestCase):
                     "qwen3-omni-flash",
                     "qwen3-vl-flash",
                     "qwen3.6-flash",
+                    "qwen3.7-flash",
+                    "kimi-k2.5",
+                    "kimi-k2.6",
+                    "kimi-k2.7-code",
+                    "kimi/kimi-k3",
+                    "MiniMax/MiniMax-M3",
                     "qwen3.7-max-2026-06-08",
                     "qwen3.7-max-2026-07-01",
                     "qwen3.8-max",
                     "vendor-multimodal-model",
+                    "text-model",
                     "deepseek-v4-flash",
+                    "glm-5.2",
                     "qwen-long",
                     "qwen3.6-max-preview",
                     "qwen3.7-max",
-                    "text-model",
+                    "xiaomi/mimo-v2.5-pro",
                 ],
             )
             by_id = {item["id"]: item for item in result["models"]}
@@ -648,6 +664,12 @@ class VisionAPIConfigTests(unittest.TestCase):
             )
             self.assertFalse(by_id["qwen3.7-max"]["likely_vision"])
             self.assertTrue(by_id["qwen3.6-flash"]["likely_vision"])
+            self.assertTrue(by_id["qwen3.7-flash"]["likely_vision"])
+            self.assertTrue(by_id["kimi-k2.5"]["likely_vision"])
+            self.assertTrue(by_id["kimi-k2.6"]["likely_vision"])
+            self.assertTrue(by_id["kimi-k2.7-code"]["likely_vision"])
+            self.assertTrue(by_id["kimi/kimi-k3"]["likely_vision"])
+            self.assertTrue(by_id["MiniMax/MiniMax-M3"]["likely_vision"])
             self.assertFalse(
                 by_id["qwen3.6-max-preview"]["likely_vision"]
             )
@@ -657,6 +679,16 @@ class VisionAPIConfigTests(unittest.TestCase):
                 "不支持图片",
             )
             self.assertFalse(by_id["qwen-long"]["likely_vision"])
+            self.assertEqual(by_id["text-model"]["capability"], "unknown")
+            self.assertEqual(
+                by_id["text-model"]["capability_label"],
+                "待确认 · 请测试",
+            )
+            self.assertEqual(by_id["glm-5.2"]["capability"], "text")
+            self.assertEqual(
+                by_id["xiaomi/mimo-v2.5-pro"]["capability"],
+                "text",
+            )
             self.assertEqual(
                 by_id["deepseek-v4-flash"]["capability_label"],
                 "不支持图片",
