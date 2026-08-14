@@ -6,7 +6,7 @@
 
 MCP v1 的短连接边界已通过自动化并发验证：MCP 进程可以长期存在，但每次工具调用结束后不保留 `SearchEngine` 或 SQLite 句柄；索引替换后的下一次调用读取新快照；数据目录迁移只在完整副本校验成功后切换下一次调用的数据根。
 
-当前主机完成了 macOS 15.7.3 arm64 与 Rosetta x86_64 的完整 ad-hoc 发布验证。Windows 构建链、生命周期测试和手动触发的 Windows Server 2022 托管工作流已实现，但工作流尚未推送执行，当前主机也没有 Windows、PowerShell、Wine、Docker 或 Windows 交叉工具链，不能生成或运行 Windows PyInstaller 产物；Windows 10/11 x64 实机复验仍必须在消费者系统执行。Developer ID/hardened runtime 与 notarization 也必须在持有发布证书的 macOS 构建机复验。
+当前主机完成了 macOS 15.7.3 arm64 与 Rosetta x86_64 的完整 ad-hoc 发布验证。Windows 构建链、生命周期测试和手动触发的 Windows Server 2022 托管工作流已实现并推送到 0.4.4 开发分支，但尚未进入默认分支或执行；当前主机也没有 Windows、PowerShell、Wine、Docker 或 Windows 交叉工具链，不能生成或运行 Windows PyInstaller 产物。Windows 10/11 x64 实机复验仍必须在消费者系统执行。Developer ID/hardened runtime 与 notarization 也必须在持有发布证书的 macOS 构建机复验。
 
 ## 并发矩阵
 
@@ -65,7 +65,7 @@ Intel 依赖固定 `cryptography 46.0.3`，因为 50.0.0 不再提供适用于�
 - 解压绿色版、建立会话、移动目录后再次建立会话，并检查无残留 MCP 进程；
 - 上传安装包、绿色版及其 SHA-256 文件作为未签名 CI 产物。
 
-该工作流当前只存在于工作区，未获授权推送，因此没有可引用的远端运行记录。即使托管运行通过，也只补足 Windows Server 2022 自动门禁，不替代计划要求的 Windows 10/11 x64 消费者实机与代码签名验收。
+该工作流已推送到 `codex/v0.4.4-mcp` 开发分支，但尚未进入默认分支或执行，因此没有可引用的远端运行记录。即使托管运行通过，也只补足 Windows Server 2022 自动门禁，不替代计划要求的 Windows 10/11 x64 消费者实机与代码签名验收。
 
 ## 发布与回滚
 

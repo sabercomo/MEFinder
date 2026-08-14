@@ -4,7 +4,7 @@
 
 适用基线：MEFinder 0.4.x
 
-当前实施状态：v0.4.4 里程碑 0 至 5 已完成；里程碑 6、7 的代码、macOS arm64/x86_64 实物验证和 Windows Server 2022 托管门禁均已实现，托管工作流尚未推送执行，Windows 10/11 x64 消费者实机与正式签名门禁仍待执行；里程碑 8 的评估已完成，结论是保持 v1 只读并延期写工具。源码接入见 `docs/mcp-v1-codex-e2e-report.md`，发布与并发验证见 `docs/mcp-v1-concurrency-release-report.md`，写能力决策见 `docs/mcp-v2-decision.md`。
+当前实施状态：v0.4.4 里程碑 0 至 5 已完成；里程碑 6、7 的代码、macOS arm64/x86_64 实物验证和 Windows Server 2022 托管门禁均已实现，托管工作流已推送到 0.4.4 开发分支但尚未进入默认分支或执行，Windows 10/11 x64 消费者实机与正式签名门禁仍待执行；里程碑 8 的评估已完成，结论是保持 v1 只读并延期写工具。源码接入见 `docs/mcp-v1-codex-e2e-report.md`，发布与并发验证见 `docs/mcp-v1-concurrency-release-report.md`，写能力决策见 `docs/mcp-v2-decision.md`。
 
 ## 1. 最终目标
 
@@ -398,7 +398,7 @@ STDOUT 只允许 MCP 协议帧。日志写入 STDERR；发布版是否同时写�
 
 ### 里程碑 6：Windows 与 macOS sidecar 打包
 
-实施状态：代码完成；macOS arm64 与 x86_64 的 ZIP/DMG、签名、挂载、复制和真实 STDIO 冒烟通过。Windows 构建脚本、安装器/绿色版包含规则，以及安装、覆盖升级、桌面开关、卸载、绿色版移动的 Windows Server 2022 托管门禁已完成，但工作流尚未推送执行，且托管 Server 不能替代 Windows 10/11 x64 消费者实机。详见 `docs/mcp-v1-concurrency-release-report.md`。
+实施状态：代码完成；macOS arm64 与 x86_64 的 ZIP/DMG、签名、挂载、复制和真实 STDIO 冒烟通过。Windows 构建脚本、安装器/绿色版包含规则，以及安装、覆盖升级、桌面开关、卸载、绿色版移动的 Windows Server 2022 托管门禁已完成；工作流已推送到 0.4.4 开发分支但尚未进入默认分支或执行，且托管 Server 不能替代 Windows 10/11 x64 消费者实机。详见 `docs/mcp-v1-concurrency-release-report.md`。
 
 #### Windows 安装版
 
