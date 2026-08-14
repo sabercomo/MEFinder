@@ -203,6 +203,12 @@ if ! find "$MEFINDER_BUILT_APP" -type f \
   exit 1
 fi
 
+if ! find "$MEFINDER_BUILT_APP" -type f \
+  -path '*/certifi/cacert.pem' -print -quit | grep -q .; then
+  echo "Build failed: the app does not contain the HTTPS CA bundle." >&2
+  exit 1
+fi
+
 if find "$MEFINDER_BUILT_APP" -type f \( \
   -name "mineru_api.local.json" -o \
   -name "vision_api.local.json" -o \

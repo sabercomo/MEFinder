@@ -521,6 +521,16 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertIn("vision_api.local.json", desktop_source)
         self.assertIn('"vision_api.local.json"', release_source)
 
+    def test_desktop_uses_bundled_ca_certificates(self) -> None:
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+        build_source = Path("build_macos.sh").read_text(encoding="utf-8")
+        self.assertIn("import certifi", desktop_source)
+        self.assertIn(
+            'os.environ.setdefault("SSL_CERT_FILE", certifi.where())',
+            desktop_source,
+        )
+        self.assertIn("*/certifi/cacert.pem", build_source)
+
     def test_portable_marker_keeps_frozen_runtime_beside_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)

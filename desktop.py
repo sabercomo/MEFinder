@@ -523,10 +523,12 @@ def setup_logging(root: Path) -> None:
 
 
 def main() -> None:
+    import certifi
     import webview
 
     from src.me_finder.app_context import AppContext
 
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)

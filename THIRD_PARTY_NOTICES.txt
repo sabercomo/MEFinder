@@ -188,6 +188,12 @@ Copyright (c) PyObjC contributors
 License: MIT
 Source: https://github.com/ronaldoussoren/pyobjc/tree/v11.1
 
+certifi 2026.7.22
+-----------------
+Copyright (c) 2011-2026 Kenneth Reitz and contributors
+License: Mozilla Public License 2.0
+Source: https://github.com/certifi/python-certifi/tree/2026.07.22
+
 Inno Setup 7.0.2 (Windows installer only)
 -----------------------------------------
 Copyright (c) 1997-2026 Jordan Russell. All rights reserved.
