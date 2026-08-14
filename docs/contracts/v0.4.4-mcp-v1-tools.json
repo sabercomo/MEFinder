@@ -1,0 +1,427 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract": "mefinder.mcp.v1",
+  "schema_version": "1",
+  "release": "0.4.4",
+  "server": {
+    "name": "mefinder",
+    "instructions": "先用 locate_quote 定位原句；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+  },
+  "terminology": {
+    "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
+    "citation_page": "经现有页码规则确认、可用于引文的页码。",
+    "calibrated": "PDF 引用页码已校准或由现有规则验证。",
+    "verified": "Word 页码已由现有规则验证。",
+    "uncalibrated": "存在物理位置，但没有可安全引用的页码。",
+    "unavailable": "当前记录没有可用页码位置。"
+  },
+  "tools": [
+    {
+      "name": "list_documents",
+      "title": "列出本地文献",
+      "description": "按题名、作者、原始文件名或文献类型筛选 MEFinder 已导入文献，返回后续工具使用的稳定 source_file_id。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": ["string", "null"],
+            "default": null
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["all", "pdf", "word"],
+            "default": "all"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "total": {"type": "integer", "minimum": 0},
+          "has_more": {"type": "boolean"},
+          "documents": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/document"}
+          }
+        },
+        "required": ["schema_version", "total", "has_more", "documents"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "locate_quote",
+      "title": "定位文献原句",
+      "description": "在 MEFinder 本地索引中定位引文，返回原文、上下文、匹配方式以及物理页和引用页状态；不替调用方作最终语义裁决。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["auto", "exact", "compact", "punctuation", "fuzzy"],
+            "default": "auto"
+          },
+          "source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["all", "pdf", "word"],
+            "default": "all"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 5
+          }
+        },
+        "required": ["quote"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "query": {"type": "string"},
+          "total": {"type": "integer", "minimum": 0},
+          "total_is_exact": {"type": "boolean"},
+          "has_more": {"type": "boolean"},
+          "matches": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/match"}
+          }
+        },
+        "required": [
+          "schema_version",
+          "query",
+          "total",
+          "total_is_exact",
+          "has_more",
+          "matches"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "read_document_window",
+      "title": "读取文献窗口",
+      "description": "从 PDF 物理页或 Word 段落的自然位置读取一个有界文本窗口，并保留页码是否可引用的结构化状态。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 10
+          }
+        },
+        "required": ["source_file_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "source": {"$ref": "#/$defs/reader_source"},
+          "start": {"type": "integer", "minimum": 0},
+          "count": {"type": "integer", "minimum": 1, "maximum": 50},
+          "total": {"type": "integer", "minimum": 0},
+          "last_position": {"$ref": "#/$defs/nullable_nonnegative_integer"},
+          "has_more": {"type": "boolean"},
+          "previous_start": {"$ref": "#/$defs/nullable_nonnegative_integer"},
+          "next_start": {"$ref": "#/$defs/nullable_nonnegative_integer"},
+          "items": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/reader_item"}
+          }
+        },
+        "required": [
+          "schema_version",
+          "source",
+          "start",
+          "count",
+          "total",
+          "last_position",
+          "has_more",
+          "previous_start",
+          "next_start",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    }
+  ],
+  "errorSchema": {
+    "type": "object",
+    "properties": {
+      "schema_version": {"const": "1"},
+      "error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_input",
+              "index_not_found",
+              "index_unavailable",
+              "source_not_found",
+              "unsupported_source_type",
+              "internal_error"
+            ]
+          },
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"}
+        },
+        "required": ["code", "message", "retryable"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["schema_version", "error"],
+    "additionalProperties": false
+  },
+  "errors": [
+    {"code": "invalid_input", "retryable": false},
+    {"code": "index_not_found", "retryable": false},
+    {"code": "index_unavailable", "retryable": true},
+    {"code": "source_not_found", "retryable": false},
+    {"code": "unsupported_source_type", "retryable": false},
+    {"code": "internal_error", "retryable": false}
+  ],
+  "$defs": {
+    "nullable_string": {
+      "type": ["string", "null"]
+    },
+    "nullable_nonnegative_integer": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "context_item": {
+      "type": "object",
+      "properties": {
+        "paragraph_id": {"type": "string"},
+        "text": {"type": "string"}
+      },
+      "required": ["paragraph_id", "text"],
+      "additionalProperties": false
+    },
+    "document": {
+      "type": "object",
+      "properties": {
+        "source_file_id": {"type": "string"},
+        "source_type": {"type": "string", "enum": ["pdf", "word"]},
+        "title": {"$ref": "#/$defs/nullable_string"},
+        "author": {"$ref": "#/$defs/nullable_string"},
+        "original_file_name": {"$ref": "#/$defs/nullable_string"}
+      },
+      "required": [
+        "source_file_id",
+        "source_type",
+        "title",
+        "author",
+        "original_file_name"
+      ],
+      "additionalProperties": false
+    },
+    "physical_page": {
+      "type": "object",
+      "properties": {
+        "start_index": {"$ref": "#/$defs/nullable_nonnegative_integer"},
+        "end_index": {"$ref": "#/$defs/nullable_nonnegative_integer"},
+        "start_label": {"$ref": "#/$defs/nullable_string"},
+        "end_label": {"$ref": "#/$defs/nullable_string"}
+      },
+      "required": ["start_index", "end_index", "start_label", "end_label"],
+      "additionalProperties": false
+    },
+    "citation_page": {
+      "type": "object",
+      "properties": {
+        "start": {"$ref": "#/$defs/nullable_string"},
+        "end": {"$ref": "#/$defs/nullable_string"},
+        "status": {
+          "type": "string",
+          "enum": ["calibrated", "verified", "uncalibrated", "unavailable"]
+        }
+      },
+      "required": ["start", "end", "status"],
+      "additionalProperties": false
+    },
+    "page_mapping": {
+      "type": "object",
+      "properties": {
+        "method": {"$ref": "#/$defs/nullable_string"},
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "confidence_level": {"$ref": "#/$defs/nullable_string"},
+        "note": {"$ref": "#/$defs/nullable_string"}
+      },
+      "required": ["method", "confidence", "confidence_level", "note"],
+      "additionalProperties": false
+    },
+    "reader_cursor": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "enum": ["pdf_page", "word_paragraph"]
+        },
+        "start": {"type": "integer", "minimum": 0}
+      },
+      "required": ["unit", "start"],
+      "additionalProperties": false
+    },
+    "match": {
+      "type": "object",
+      "properties": {
+        "paragraph_id": {"type": "string"},
+        "source_file_id": {"type": "string"},
+        "source_type": {"type": "string", "enum": ["pdf", "word"]},
+        "document_title": {"$ref": "#/$defs/nullable_string"},
+        "work_title": {"$ref": "#/$defs/nullable_string"},
+        "author": {"$ref": "#/$defs/nullable_string"},
+        "matched_text": {"type": "string"},
+        "paragraph_text": {"type": "string"},
+        "context_before": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
+        "context_after": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
+        "match_type": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "normalized_exact",
+            "space_insensitive",
+            "punctuation_insensitive",
+            "fuzzy"
+          ]
+        },
+        "match_score": {"type": "number", "minimum": 0, "maximum": 1},
+        "physical_page": {"$ref": "#/$defs/physical_page"},
+        "citation_page": {"$ref": "#/$defs/citation_page"},
+        "page_mapping": {"$ref": "#/$defs/page_mapping"},
+        "reader": {"$ref": "#/$defs/reader_cursor"}
+      },
+      "required": [
+        "paragraph_id",
+        "source_file_id",
+        "source_type",
+        "document_title",
+        "work_title",
+        "author",
+        "matched_text",
+        "paragraph_text",
+        "context_before",
+        "context_after",
+        "match_type",
+        "match_score",
+        "physical_page",
+        "citation_page",
+        "page_mapping",
+        "reader"
+      ],
+      "additionalProperties": false
+    },
+    "reader_source": {
+      "type": "object",
+      "properties": {
+        "source_file_id": {"type": "string"},
+        "source_type": {"type": "string", "enum": ["pdf", "word"]},
+        "title": {"$ref": "#/$defs/nullable_string"},
+        "original_file_name": {"$ref": "#/$defs/nullable_string"}
+      },
+      "required": ["source_file_id", "source_type", "title", "original_file_name"],
+      "additionalProperties": false
+    },
+    "citation_formats": {
+      "type": "object",
+      "properties": {
+        "chinese": {"type": "string"},
+        "gb": {"type": "string"},
+        "page_verified": {"type": "boolean"},
+        "can_copy": {"type": "boolean"}
+      },
+      "required": ["chinese", "gb", "page_verified", "can_copy"],
+      "additionalProperties": false
+    },
+    "reader_item": {
+      "type": "object",
+      "properties": {
+        "item_type": {
+          "type": "string",
+          "enum": ["pdf_page", "word_paragraph"]
+        },
+        "anchor_id": {"$ref": "#/$defs/nullable_string"},
+        "position": {"type": "integer", "minimum": 0},
+        "text": {"type": "string"},
+        "is_empty": {"type": "boolean"},
+        "physical_page": {"$ref": "#/$defs/physical_page"},
+        "citation_page": {"$ref": "#/$defs/citation_page"},
+        "page_mapping": {"$ref": "#/$defs/page_mapping"},
+        "page_display": {"type": "string"},
+        "page_verified": {"type": "boolean"},
+        "citation_formats": {"$ref": "#/$defs/citation_formats"}
+      },
+      "required": [
+        "item_type",
+        "anchor_id",
+        "position",
+        "text",
+        "is_empty",
+        "physical_page",
+        "citation_page",
+        "page_mapping",
+        "page_display",
+        "page_verified",
+        "citation_formats"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

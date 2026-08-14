@@ -1,0 +1,163 @@
+name: Windows release smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-smoke:
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements-windows.txt
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: python -m pip install -r requirements-windows.txt
+
+      - name: Build installer and portable release
+        shell: pwsh
+        run: |
+          .\build_windows_installer.ps1 -PythonExe python -PackagerPythonExe python
+          .\build_portable_release.ps1 -PythonExe python -PackagerPythonExe python
+
+      - name: Verify install, upgrade, MCP lifecycle, and uninstall
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $oldRelease = Join-Path $env:RUNNER_TEMP "old-release"
+          New-Item -ItemType Directory -Force -Path $oldRelease | Out-Null
+          gh release download v0.4.3 `
+            --repo "${{ github.repository }}" `
+            --pattern "MEFinder-v0.4.3-windows-setup.exe" `
+            --dir $oldRelease
+
+          $oldInstaller = Join-Path $oldRelease "MEFinder-v0.4.3-windows-setup.exe"
+          $oldHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $oldInstaller).Hash.ToLowerInvariant()
+          if ($oldHash -ne "272801936eeade4c872963420b38fc8f9b8108b8c9a6f19e79e3243a8c61027d") {
+            throw "Unexpected v0.4.3 installer SHA-256: $oldHash"
+          }
+          $newInstaller = Resolve-Path "release\MEFinder-v0.4.4-windows-setup.exe"
+          $installRoot = Join-Path $env:LOCALAPPDATA "Programs\MEFinder"
+          $dataRoot = Join-Path $env:LOCALAPPDATA "MEFinder"
+          $runtimeRoot = Join-Path $dataRoot "runtime"
+          $sidecar = Join-Path $installRoot "MEFinderMCP.exe"
+          $desktop = Join-Path $installRoot "文献原句定位器.exe"
+
+          $oldProcess = Start-Process -FilePath $oldInstaller -Wait -PassThru `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
+          if ($oldProcess.ExitCode -ne 0) {
+            throw "v0.4.3 installer exited with $($oldProcess.ExitCode)."
+          }
+          Start-Sleep -Seconds 2
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+          if (-not (Test-Path -LiteralPath $desktop -PathType Leaf)) {
+            throw "v0.4.3 desktop executable was not installed."
+          }
+          if (Test-Path -LiteralPath $sidecar) {
+            throw "v0.4.3 unexpectedly contains the new MCP sidecar."
+          }
+
+          New-Item -ItemType Directory -Force -Path (Join-Path $runtimeRoot "data") | Out-Null
+          python -m tools.create_empty_index (Join-Path $runtimeRoot "data\index.sqlite3")
+          Set-Content -LiteralPath (Join-Path $dataRoot "upgrade-sentinel.txt") `
+            -Encoding UTF8 -Value "preserve across upgrade and uninstall"
+
+          $newProcess = Start-Process -FilePath $newInstaller -Wait -PassThru `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
+          if ($newProcess.ExitCode -ne 0) {
+            throw "v0.4.4 installer exited with $($newProcess.ExitCode)."
+          }
+          Start-Sleep -Seconds 2
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+          foreach ($required in @($desktop, $sidecar, (Join-Path $installRoot "installed.flag"))) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+              throw "Upgraded install is missing $required."
+            }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $dataRoot "upgrade-sentinel.txt") -PathType Leaf)) {
+            throw "Upgrade removed the existing application data."
+          }
+
+          python -m tools.smoke_mcp_sidecar $sidecar
+          $desktopProcess = Start-Process -FilePath $desktop -PassThru
+          Start-Sleep -Seconds 5
+          if ($desktopProcess.HasExited) {
+            throw "Desktop process exited before the open-app MCP smoke test."
+          }
+          python -m tools.smoke_mcp_sidecar $sidecar
+          Stop-Process -Id $desktopProcess.Id -Force
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase) } |
+            ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+
+          $uninstaller = Join-Path $installRoot "unins000.exe"
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+            throw "Inno Setup uninstaller was not installed."
+          }
+          $uninstallProcess = Start-Process -FilePath $uninstaller -Wait -PassThru `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+          if ($uninstallProcess.ExitCode -ne 0) {
+            throw "Uninstaller exited with $($uninstallProcess.ExitCode)."
+          }
+          if (Test-Path -LiteralPath $sidecar) {
+            throw "Uninstall left the MCP sidecar behind."
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $dataRoot "upgrade-sentinel.txt") -PathType Leaf)) {
+            throw "Uninstall removed user application data."
+          }
+
+      - name: Verify portable move and process cleanup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $portableStage = Join-Path $env:RUNNER_TEMP "portable"
+          $moved = Join-Path $env:RUNNER_TEMP "portable-moved"
+          Expand-Archive -LiteralPath "release\MEFinder-v0.4.4-windows-portable.zip" `
+            -DestinationPath $portableStage
+          $portableRoot = Get-ChildItem -LiteralPath $portableStage -Directory -Filter "MEFinder-v0.4.4-windows-portable" |
+            Select-Object -ExpandProperty FullName -First 1
+          if (-not $portableRoot) { throw "Portable archive root was not found." }
+          python -m tools.smoke_mcp_sidecar (Join-Path $portableRoot "MEFinderMCP.exe")
+          Move-Item -LiteralPath $portableRoot -Destination $moved
+          python -m tools.smoke_mcp_sidecar (Join-Path $moved "MEFinderMCP.exe")
+          $remaining = @(Get-CimInstance Win32_Process | Where-Object {
+            $_.Name -eq "MEFinderMCP.exe" -or
+            ($_.CommandLine -and $_.CommandLine.Contains("src.me_finder.mcp_server"))
+          })
+          if ($remaining.Count -ne 0) {
+            throw "MCP process cleanup failed: $($remaining.ProcessId -join ', ')."
+          }
+
+      - name: Upload unsigned Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEFinder-v0.4.4-windows-unsigned
+          if-no-files-found: error
+          path: |
+            release/MEFinder-v0.4.4-windows-setup.exe
+            release/MEFinder-v0.4.4-windows-setup.exe.sha256.txt
+            release/MEFinder-v0.4.4-windows-portable.zip
+            release/MEFinder-v0.4.4-windows-portable.zip.sha256.txt

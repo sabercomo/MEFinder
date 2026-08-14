@@ -131,6 +131,12 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 5. **复制出处**
    选择中文脚注、GB/T 7714、APA、MLA 或 Chicago，然后复制当前文献的规范出处。关键元数据或页码缺失时，程序会明确提示。
 
+### Codex MCP（0.4.4，可选只读集成）
+
+0.4.4 提供三个本地只读 MCP 工具，让 Codex 列出已导入文献、定位原句并继续读取命中上下文。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar；源码模式也可单独接入。桌面窗口无需保持开启。
+
+接入前请阅读 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。MEFinder MCP 进程本身不联网，但返回给 Codex 的命中原文和上下文会进入 Codex 对话及模型上下文。
+
 <a id="已知限制"></a>
 
 ## ⚠️ 已知限制

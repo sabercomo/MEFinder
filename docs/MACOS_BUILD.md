@@ -9,7 +9,7 @@ Cocoa/WebKit 窗口封装，并由 PyInstaller 生成原生 `.app`。
 
 - Apple Silicon 发布包最低支持 macOS 14；
 - Intel 发布包最低支持 macOS 12；
-- Python 3.9 或更高版本；
+- Python 3.10 或更高版本；
 - Xcode Command Line Tools；
 - 构建机架构决定默认产物架构：Apple Silicon 为 `arm64`，Intel 为 `x86_64`。
 
@@ -33,13 +33,14 @@ MEFINDER_PYTHON=.venv-macos/bin/python ./build_macos.sh
 1. 生成不含私人语料的空白 SQLite 索引；
 2. 从 SVG 生成 macOS `.icns` 图标；
 3. 运行桌面、PDFKit 与索引回归测试；
-4. 在系统临时目录中构建并签名 `MEFinder.app`；
-5. 检查包内包含 PDFKit 桥接模块，且没有 API 密钥、偏好设置或日志；
-6. 在系统临时目录中生成并验证 ZIP 与 DMG，避免“文稿”目录的 File Provider
+4. 在系统临时目录中构建桌面应用和独立 onefile `MEFinderMCP` sidecar；
+5. 把 sidecar 固定到 `MEFinder.app/Contents/MacOS/MEFinderMCP`，用真实 STDIO 客户端冒烟并随外层应用签名；
+6. 检查包内包含 PDFKit 桥接模块、许可证材料，且没有 API 密钥、偏好设置或日志；
+7. 在系统临时目录中生成并验证 ZIP 与 DMG，避免“文稿”目录的 File Provider
    给 `.app` 重新附加 Finder 元数据；
-7. 验证 DMG 中包含 `MEFinder.app` 和指向 `/Applications` 的快捷方式，挂载镜像后
+8. 验证 DMG 中包含 `MEFinder.app` 和指向 `/Applications` 的快捷方式，挂载镜像后
    再次严格校验应用签名；
-8. 生成以下发布文件：
+9. 生成以下发布文件：
 
 ```text
 release/MEFinder-v<版本>-macos-<架构>.dmg
@@ -69,6 +70,8 @@ MEFINDER_PYTHON=.venv-macos/bin/python \
 ```
 
 这只完成签名；正式外部分发仍需另外执行 Apple notarization 和 stapling。
+
+使用 Developer ID 时，脚本会对 sidecar 和外层 `.app` 都启用 hardened runtime 与可信时间戳，并在未签名副本、签名应用、ZIP 解包、DMG 挂载和 DMG 复制五个位置实际建立 MCP STDIO 会话。Codex 的稳定命令路径为 `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP`；覆盖替换应用后无需修改配置。
 
 ## 签名与扩展属性
 

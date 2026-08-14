@@ -8,7 +8,13 @@ from pathlib import Path
 from src.me_finder import __version__
 
 
-def render_windows_version_info(version: str = __version__) -> str:
+def render_windows_version_info(
+    version: str = __version__,
+    *,
+    file_description: str = "文献原句定位器",
+    internal_name: str = "MEFinder",
+    original_filename: str = "文献原句定位器.exe",
+) -> str:
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", str(version).strip())
     if match is None:
         raise ValueError("Windows file version must use numeric major.minor.patch form")
@@ -33,11 +39,11 @@ VSVersionInfo(
         u'080404B0',
         [
           StringStruct(u'CompanyName', u'sabercomo'),
-          StringStruct(u'FileDescription', u'文献原句定位器'),
+          StringStruct(u'FileDescription', u'{file_description}'),
           StringStruct(u'FileVersion', u'{text}'),
-          StringStruct(u'InternalName', u'MEFinder'),
+          StringStruct(u'InternalName', u'{internal_name}'),
           StringStruct(u'LegalCopyright', u'Copyright (C) 2026 sabercomo'),
-          StringStruct(u'OriginalFilename', u'文献原句定位器.exe'),
+          StringStruct(u'OriginalFilename', u'{original_filename}'),
           StringStruct(u'ProductName', u'MEFinder 文献原句定位器'),
           StringStruct(u'ProductVersion', u'{text}')
         ]
@@ -50,9 +56,14 @@ VSVersionInfo(
 
 
 def write_windows_version_info(
-    target: Path, version: str = __version__
+    target: Path,
+    version: str = __version__,
+    **metadata: str,
 ) -> Path:
     destination = Path(target)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(render_windows_version_info(version), encoding="utf-8")
+    destination.write_text(
+        render_windows_version_info(version, **metadata),
+        encoding="utf-8",
+    )
     return destination

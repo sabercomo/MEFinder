@@ -1,0 +1,431 @@
+"""Application entry point for local literature-verification use cases."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Callable, Mapping
+
+from ..runtime_location import runtime_root
+from .search_service import SearchRequest, SearchService
+
+
+RuntimeRootProvider = Callable[[], Path]
+SCHEMA_VERSION = "1"
+SOURCE_TYPES = {"all", "pdf", "word"}
+SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
+SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+
+
+class LiteratureVerificationService:
+    """Resolve the current index for each use case without retaining resources."""
+
+    def __init__(
+        self,
+        runtime_root_provider: RuntimeRootProvider = runtime_root,
+    ) -> None:
+        self._runtime_root_provider = runtime_root_provider
+
+    @property
+    def index_path(self) -> Path:
+        return Path(self._runtime_root_provider()) / "data" / "index.sqlite3"
+
+    def list_documents(
+        self,
+        *,
+        query: str | None = None,
+        source_type: str = "all",
+        limit: int = 20,
+    ) -> dict[str, object]:
+        from ..database import load_database_index
+
+        if query is not None and not isinstance(query, str):
+            raise ValueError("query 必须是字符串或 null")
+        _validate_source_type(source_type)
+        validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=100)
+        catalog = load_database_index(self._existing_index_path())
+        volumes_by_source = {
+            str(item.get("source_file_id")): item
+            for item in catalog.get("volumes", [])
+            if isinstance(item, Mapping) and item.get("source_file_id")
+        }
+        works_by_volume = {
+            str(item.get("volume_id")): item
+            for item in catalog.get("works", [])
+            if isinstance(item, Mapping) and item.get("volume_id")
+        }
+        normalized_query = (query or "").strip().casefold()
+        documents = []
+        sources = sorted(
+            (
+                item
+                for item in catalog.get("source_files", [])
+                if isinstance(item, Mapping)
+            ),
+            key=lambda item: str(item.get("source_file_id") or ""),
+        )
+        for source in sources:
+            document_type = str(source.get("source_type") or "")
+            if source_type != "all" and document_type != source_type:
+                continue
+            volume = volumes_by_source.get(str(source.get("source_file_id") or ""), {})
+            work = works_by_volume.get(str(volume.get("volume_id") or ""), {})
+            bibliographic = source.get("bibliographic_metadata")
+            if not isinstance(bibliographic, Mapping):
+                bibliographic = {}
+            title = _first_text(
+                bibliographic.get("title"),
+                source.get("document_title"),
+                source.get("display_title"),
+                source.get("title"),
+                volume.get("display_title"),
+                volume.get("document_title"),
+                work.get("title"),
+                source.get("file_name"),
+            )
+            author = _first_text(
+                bibliographic.get("author"),
+                bibliographic.get("authors"),
+                source.get("author"),
+                source.get("author_label"),
+                volume.get("author_label"),
+                work.get("author_label"),
+            )
+            original_file_name = _first_text(
+                source.get("original_file_name"),
+                source.get("file_name"),
+            )
+            if normalized_query and normalized_query not in "\n".join(
+                value.casefold()
+                for value in (title, author, original_file_name)
+                if value is not None
+            ):
+                continue
+            documents.append(
+                {
+                    "source_file_id": str(source["source_file_id"]),
+                    "source_type": document_type,
+                    "title": title,
+                    "author": author,
+                    "original_file_name": original_file_name,
+                }
+            )
+
+        total = len(documents)
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "total": total,
+            "has_more": total > validated_limit,
+            "documents": documents[:validated_limit],
+        }
+
+    def locate_quote(
+        self,
+        quote: str,
+        *,
+        mode: str = "auto",
+        source_file_id: str | None = None,
+        source_type: str = "all",
+        limit: int = 5,
+    ) -> dict[str, object]:
+        from ..search import SearchEngine
+        from ..structured_reader import SourceNotFound
+
+        if not isinstance(quote, str) or not quote.strip():
+            raise ValueError("quote 必须是非空字符串")
+        if len(quote) > 10_000:
+            raise ValueError("quote 不能超过 10000 个 Unicode codepoint")
+        if not isinstance(mode, str) or mode not in SEARCH_MODES:
+            raise ValueError("mode 不受支持")
+        _validate_source_type(source_type)
+        validated_source_id = _validate_optional_source_id(source_file_id)
+        validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
+
+        engine = SearchEngine(self._existing_index_path())
+        try:
+            if (
+                validated_source_id is not None
+                and validated_source_id not in engine.sources_by_id
+            ):
+                raise SourceNotFound(f"未找到文献：{validated_source_id}")
+            raw_result = SearchService.execute(
+                engine,
+                SearchRequest(
+                    query=quote,
+                    mode=mode,
+                    limit=validated_limit,
+                    source_type=source_type,
+                    source_file_id=validated_source_id,
+                ),
+            )
+        finally:
+            engine.close()
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "query": str(raw_result["query"]),
+            "total": int(raw_result["total"]),
+            "total_is_exact": bool(raw_result["total_is_exact"]),
+            "has_more": bool(raw_result["has_more"]),
+            "matches": [
+                _search_match(item)
+                for item in raw_result["results"]
+                if isinstance(item, Mapping)
+            ],
+        }
+
+    def read_document_window(
+        self,
+        source_file_id: str,
+        *,
+        start: int = 0,
+        count: int = 10,
+    ) -> dict[str, object]:
+        from ..structured_reader import get_document_window
+
+        validated_source_id = _validate_source_id(source_file_id)
+        validated_start = _bounded_integer("start", start, minimum=0)
+        validated_count = _bounded_integer("count", count, minimum=1, maximum=50)
+        raw_result = get_document_window(
+            self._existing_index_path(),
+            validated_source_id,
+            start=validated_start,
+            count=validated_count,
+        )
+        source = raw_result["source"]
+        if not isinstance(source, Mapping):
+            raise ValueError("结构化阅读器返回了无效的 source")
+        source_type = str(source["source_type"])
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "source": {
+                "source_file_id": str(source["source_file_id"]),
+                "source_type": source_type,
+                "title": _first_text(
+                    source.get("display_title"),
+                    source.get("document_title"),
+                    source.get("file_name"),
+                ),
+                "original_file_name": _first_text(
+                    source.get("original_file_name"),
+                    source.get("file_name"),
+                ),
+            },
+            "start": int(raw_result["start"]),
+            "count": int(raw_result["count"]),
+            "total": int(raw_result["total"]),
+            "last_position": raw_result["last_position"],
+            "has_more": bool(raw_result["has_more"]),
+            "previous_start": raw_result["previous_start"],
+            "next_start": raw_result["next_start"],
+            "items": [
+                _reader_item(item, source_type)
+                for item in raw_result["items"]
+                if isinstance(item, Mapping)
+            ],
+        }
+
+    def _existing_index_path(self) -> Path:
+        path = self.index_path
+        if not path.is_file():
+            raise FileNotFoundError(f"Index not found: {path}")
+        return path
+
+
+def _validate_source_type(source_type: object) -> None:
+    if not isinstance(source_type, str) or source_type not in SOURCE_TYPES:
+        raise ValueError("source_type 必须是 all、pdf 或 word")
+
+
+def _validate_source_id(source_file_id: object) -> str:
+    if not isinstance(source_file_id, str) or not SOURCE_ID_PATTERN.fullmatch(
+        source_file_id
+    ):
+        raise ValueError(
+            "source_file_id 只能包含 ASCII 字母、数字、点、下划线和连字符，且长度不超过 128"
+        )
+    return source_file_id
+
+
+def _validate_optional_source_id(source_file_id: object) -> str | None:
+    if source_file_id is None:
+        return None
+    return _validate_source_id(source_file_id)
+
+
+def _bounded_integer(
+    name: str,
+    value: object,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} 必须是整数")
+    if value < minimum:
+        raise ValueError(f"{name} 不能小于 {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{name} 不能大于 {maximum}")
+    return value
+
+
+def _first_text(*values: object) -> str | None:
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, (list, tuple)):
+            text = "、".join(str(item).strip() for item in value if str(item).strip())
+        else:
+            text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _first_present(fields: Mapping[str, object], *keys: str) -> object:
+    for key in keys:
+        value = fields.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _physical_page(
+    fields: Mapping[str, object],
+    source_type: str,
+) -> dict[str, object]:
+    if source_type != "pdf":
+        return {
+            "start_index": None,
+            "end_index": None,
+            "start_label": None,
+            "end_label": None,
+        }
+    start_index = _first_present(fields, "pdf_page_start_index", "pdf_page_index")
+    end_index = _first_present(fields, "pdf_page_end_index", "pdf_page_index")
+    start_label = _first_text(
+        _first_present(fields, "pdf_page_start_label", "pdf_page_label")
+    )
+    end_label = _first_text(
+        _first_present(fields, "pdf_page_end_label", "pdf_page_label")
+    )
+    return {
+        "start_index": int(start_index) if start_index is not None else None,
+        "end_index": int(end_index) if end_index is not None else None,
+        "start_label": start_label,
+        "end_label": end_label or start_label,
+    }
+
+
+def _citation_page(
+    fields: Mapping[str, object],
+    source_type: str,
+    physical_page: Mapping[str, object],
+) -> dict[str, object]:
+    verified_value = _first_present(
+        fields,
+        "citation_page_verified",
+        "page_verified",
+    )
+    verified = bool(verified_value)
+    start = _first_text(fields.get("citation_page_start")) if verified else None
+    end = _first_text(fields.get("citation_page_end")) if verified else None
+    if verified:
+        status = "calibrated" if source_type == "pdf" else "verified"
+    elif source_type == "pdf" and physical_page.get("start_index") is not None:
+        status = "uncalibrated"
+    else:
+        status = "unavailable"
+    return {
+        "start": start,
+        "end": end or start,
+        "status": status,
+    }
+
+
+def _page_mapping(fields: Mapping[str, object]) -> dict[str, object]:
+    confidence = _first_present(
+        fields,
+        "page_mapping_confidence",
+        "mapping_confidence",
+        "page_confidence",
+    )
+    return {
+        "method": _first_text(
+            _first_present(
+                fields,
+                "page_mapping_method",
+                "mapping_method",
+                "page_source_type",
+            )
+        ),
+        "confidence": float(confidence) if confidence is not None else None,
+        "confidence_level": _first_text(fields.get("mapping_confidence_level")),
+        "note": _first_text(fields.get("page_note")),
+    }
+
+
+def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
+    source_type = str(fields["source_type"])
+    internal_match_type = str(fields["match_type"])
+    physical_page = _physical_page(fields, source_type)
+    reader_start = _first_present(
+        fields,
+        "pdf_page_start_index" if source_type == "pdf" else "paragraph_index",
+    )
+    return {
+        "paragraph_id": str(fields["paragraph_id"]),
+        "source_file_id": str(fields["source_file_id"]),
+        "source_type": source_type,
+        "document_title": _first_text(fields.get("document_title")),
+        "work_title": _first_text(fields.get("work_title")),
+        "author": _first_text(fields.get("author_label")),
+        "matched_text": str(fields["matched_text"]),
+        "paragraph_text": str(fields["paragraph_text"]),
+        "context_before": fields["context_before"],
+        "context_after": fields["context_after"],
+        "match_type": (
+            "fuzzy" if internal_match_type == "ngram_fuzzy" else internal_match_type
+        ),
+        "match_score": float(fields["match_score"]),
+        "physical_page": physical_page,
+        "citation_page": _citation_page(fields, source_type, physical_page),
+        "page_mapping": _page_mapping(fields),
+        "reader": {
+            "unit": "pdf_page" if source_type == "pdf" else "word_paragraph",
+            "start": int(reader_start),
+        },
+    }
+
+
+def _reader_item(
+    fields: Mapping[str, object],
+    source_type: str,
+) -> dict[str, object]:
+    physical_page = _physical_page(fields, source_type)
+    position = _first_present(
+        fields,
+        "pdf_page_index" if source_type == "pdf" else "paragraph_index",
+    )
+    text = str(fields["text_raw"])
+    citation_formats = fields["citation_formats"]
+    if not isinstance(citation_formats, Mapping):
+        raise ValueError("结构化阅读器返回了无效的 citation_formats")
+    return {
+        "item_type": str(fields["item_type"]),
+        "anchor_id": _first_text(fields.get("anchor_id")),
+        "position": int(position),
+        "text": text,
+        "is_empty": bool(fields.get("is_empty", not text.strip())),
+        "physical_page": physical_page,
+        "citation_page": _citation_page(fields, source_type, physical_page),
+        "page_mapping": _page_mapping(fields),
+        "page_display": str(fields["page_display"]),
+        "page_verified": bool(fields["page_verified"]),
+        "citation_formats": {
+            "chinese": str(citation_formats["chinese"]),
+            "gb": str(citation_formats["gb"]),
+            "page_verified": bool(citation_formats["page_verified"]),
+            "can_copy": bool(citation_formats["can_copy"]),
+        },
+    }

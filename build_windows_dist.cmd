@@ -4,6 +4,9 @@ setlocal
 cd /d "%~dp0"
 set "PYTHON=%CD%\.venv-windows\Scripts\python.exe"
 set "DIST=%CD%\dist\MEFinder"
+set "MCP_DIST=%CD%\build\mcp-sidecar-dist"
+set "MCP_WORK=%CD%\build\mcp-sidecar-work"
+set "MCP_SOURCE=%MCP_DIST%\MEFinderMCP.exe"
 set "LOCAL_DATA=%CD%\dist\MEFinderData"
 set "DATA_ROOT_MARKER=%DIST%\data_root.txt"
 if defined NO_PROXY (
@@ -17,7 +20,7 @@ if not exist "%PYTHON%" (
   exit /b 1
 )
 
-"%PYTHON%" -c "import PyInstaller, webview; from src.me_finder import __version__; print('Building MEFinder v' + __version__)"
+"%PYTHON%" -c "import PyInstaller, mcp, webview; from src.me_finder import __version__; print('Building MEFinder v' + __version__)"
 if errorlevel 1 exit /b 1
 
 "%PYTHON%" -m unittest ^
@@ -83,6 +86,14 @@ if errorlevel 1 exit /b 1
   tests.test_update_service ^
   tests.test_windows_version_info ^
   tests.test_windows_packaging ^
+  tests.test_runtime_location ^
+  tests.test_literature_verification_service ^
+  tests.test_mcp_v1_baseline ^
+  tests.test_mcp_server ^
+  tests.test_mcp_quality ^
+  tests.test_mcp_documentation ^
+  tests.test_mcp_packaging ^
+  tests.test_mcp_concurrency ^
   tests.test_platform_open ^
   tests.test_theme_system ^
   tests.test_frontend_assets ^
@@ -101,9 +112,19 @@ if errorlevel 1 exit /b 1
 "%PYTHON%" -m PyInstaller desktop.spec --clean --noconfirm
 if errorlevel 1 exit /b 1
 
-"%PYTHON%" -c "import os, sys; from pathlib import Path; matches = list(Path(os.environ['DIST']).glob('*.exe')); sys.exit(0 if len(matches) == 1 else 1)"
+if exist "%MCP_DIST%" rmdir /s /q "%MCP_DIST%"
+if exist "%MCP_WORK%" rmdir /s /q "%MCP_WORK%"
+"%PYTHON%" -m PyInstaller mcp_sidecar.spec --clean --noconfirm --distpath "%MCP_DIST%" --workpath "%MCP_WORK%"
+if errorlevel 1 exit /b 1
+if not exist "%MCP_SOURCE%" (
+  echo PyInstaller did not create MEFinderMCP.exe.
+  exit /b 1
+)
+copy /y "%MCP_SOURCE%" "%DIST%\MEFinderMCP.exe" >nul
+
+"%PYTHON%" -c "import os, sys; from pathlib import Path; names = {p.name for p in Path(os.environ['DIST']).glob('*.exe')}; sys.exit(0 if names == {'文献原句定位器.exe', 'MEFinderMCP.exe'} else 1)"
 if errorlevel 1 (
-  echo PyInstaller did not create the expected executable.
+  echo Build output must contain the desktop executable and MEFinderMCP.exe.
   exit /b 1
 )
 
@@ -121,6 +142,8 @@ if errorlevel 1 (
 
 if not exist "%LOCAL_DATA%" mkdir "%LOCAL_DATA%"
 "%PYTHON%" -c "import os; from pathlib import Path; Path(os.environ['DATA_ROOT_MARKER']).write_text(os.environ['LOCAL_DATA'], encoding='utf-8')"
+if errorlevel 1 exit /b 1
+"%PYTHON%" -m tools.smoke_mcp_sidecar "%DIST%\MEFinderMCP.exe" "%DIST%"
 if errorlevel 1 exit /b 1
 
 echo Windows test build: %DIST%

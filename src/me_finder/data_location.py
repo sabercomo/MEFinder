@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import shutil
-import sqlite3
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -129,6 +128,8 @@ def _validate_migration_paths(current_root: Path, target_root: Path) -> None:
 
 
 def _copy_sqlite_database(source: Path, destination: Path) -> None:
+    import sqlite3
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     source_connection = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
     destination_connection = sqlite3.connect(destination)

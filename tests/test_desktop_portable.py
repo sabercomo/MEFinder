@@ -110,7 +110,7 @@ class DesktopPortableTests(unittest.TestCase):
             '"LSMinimumSystemVersion": minimum_system_version',
             spec_source,
         )
-        self.assertNotIn(
+        self.assertIn(
             '("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")',
             spec_source,
         )
@@ -118,7 +118,7 @@ class DesktopPortableTests(unittest.TestCase):
             'cp -R "THIRD_PARTY_LICENSES" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES"',
             build_source,
         )
-        self.assertNotIn("MEFINDER_PYTHON_LICENSE", build_source)
+        self.assertIn("MEFINDER_PYTHON_LICENSE", build_source)
 
         self.assertIn('MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"', build_source)
         self.assertIn(

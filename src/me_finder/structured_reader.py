@@ -903,6 +903,10 @@ def _source_metadata(
         "source_file_id": str(source_row["source_file_id"]),
         "source_type": str(source_row["source_type"] or "unknown"),
         "file_name": file_name,
+        "original_file_name": _first_nonempty(
+            payload.get("original_file_name"),
+            file_name,
+        ),
         "display_title": display_title,
         "document_title": document_title,
         "volume_number": (
@@ -989,6 +993,7 @@ def _pdf_window(
                     page_index + 1,
                     default=page_index + 1,
                 ),
+                "pdf_page_label": _optional_text(payload.get("pdf_page_label")),
                 "text_raw": text_raw,
                 "page_text_hash": _optional_text(payload.get("page_text_hash"))
                 or pdf_page_text_hash(text_raw),
@@ -996,6 +1001,18 @@ def _pdf_window(
                 "page_display": display.display,
                 "page_note": display.note,
                 "page_verified": page_verified,
+                "citation_page_start": page_resolution.start,
+                "citation_page_end": page_resolution.end,
+                "page_mapping_method": _optional_text(
+                    payload.get("page_mapping_method")
+                )
+                or display.page_source_type,
+                "page_mapping_confidence": payload.get(
+                    "page_mapping_confidence"
+                ),
+                "mapping_confidence_level": _optional_text(
+                    payload.get("mapping_confidence_level")
+                ),
                 "is_empty": not bool(text_raw.strip()),
                 "citation_formats": _safe_citation_formats(
                     _citation_metadata_for_item(
@@ -1107,6 +1124,15 @@ def _word_window(
                 "page_display": display.display,
                 "page_note": display.note,
                 "page_verified": page_verified,
+                "citation_page_start": page_resolution.start,
+                "citation_page_end": page_resolution.end,
+                "page_mapping_method": display.page_source_type,
+                "page_mapping_confidence": payload.get(
+                    "page_mapping_confidence"
+                ),
+                "mapping_confidence_level": _optional_text(
+                    payload.get("mapping_confidence_level")
+                ),
                 "document_page_range": document_page_range,
                 "citation_formats": _safe_citation_formats(
                     _citation_metadata_for_item(

@@ -17,6 +17,9 @@ MEFINDER_PACKAGE="MEFinder-v${MEFINDER_VERSION}-macos-${MEFINDER_ARCH}"
 MEFINDER_TEMP_ROOT="$(mktemp -d "${TMPDIR:-/private/tmp}/mefinder-build.XXXXXX")"
 MEFINDER_TEMP_DIST="$MEFINDER_TEMP_ROOT/dist"
 MEFINDER_BUILT_APP="$MEFINDER_TEMP_DIST/MEFinder.app"
+MEFINDER_SIDECAR_DIST="$MEFINDER_TEMP_ROOT/mcp-dist"
+MEFINDER_SIDECAR_WORK="$MEFINDER_TEMP_ROOT/mcp-work"
+MEFINDER_BUILT_SIDECAR="$MEFINDER_SIDECAR_DIST/MEFinderMCP"
 MEFINDER_ZIP="release/${MEFINDER_PACKAGE}.zip"
 MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"
 MEFINDER_TEMP_ZIP="$MEFINDER_TEMP_ROOT/${MEFINDER_PACKAGE}.zip"
@@ -64,8 +67,17 @@ verify_app_signature() {
   codesign --verify --deep --strict "$1"
 }
 
+sign_sidecar() {
+  codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$1"
+  codesign --verify --strict "$1"
+}
+
+smoke_sidecar() {
+  "$MEFINDER_PYTHON" -m tools.smoke_mcp_sidecar "$1" "$MEFINDER_STAGE"
+}
+
 "$MEFINDER_PYTHON" -c \
-  "import PyInstaller, webview; from Quartz.PDFKit import PDFDocument, PDFView" \
+  "import PyInstaller, mcp, webview; from Quartz.PDFKit import PDFDocument, PDFView" \
   >/dev/null
 
 rm -rf "$MEFINDER_STAGE"
@@ -90,6 +102,12 @@ finally:
 PY
 cp "config/pdf_imports.empty.json" "$MEFINDER_STAGE/config/pdf_imports.json"
 cp "config/mineru_api.local.example.json" "$MEFINDER_STAGE/config/mineru_api.local.example.json"
+MEFINDER_PYTHON_LICENSE="$($MEFINDER_PYTHON -c 'from pathlib import Path; import sysconfig; print(Path(sysconfig.get_path("stdlib")) / "LICENSE.txt")')"
+if [[ ! -f "$MEFINDER_PYTHON_LICENSE" ]]; then
+  echo "Build failed: Python runtime license was not found: $MEFINDER_PYTHON_LICENSE" >&2
+  exit 1
+fi
+cp "$MEFINDER_PYTHON_LICENSE" "$MEFINDER_STAGE/Python-runtime-LICENSE.txt"
 
 MEFINDER_ICONSET="$MEFINDER_STAGE/MEFinder.iconset"
 mkdir -p "$MEFINDER_ICONSET"
@@ -170,7 +188,15 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_vision_api \
   tests.test_frontend_assets \
   tests.test_frontend_pure_logic \
-  tests.test_portable_index_rebuild
+  tests.test_portable_index_rebuild \
+  tests.test_runtime_location \
+  tests.test_literature_verification_service \
+  tests.test_mcp_v1_baseline \
+  tests.test_mcp_server \
+  tests.test_mcp_quality \
+  tests.test_mcp_documentation \
+  tests.test_mcp_packaging \
+  tests.test_mcp_concurrency
 
 if command -v node >/dev/null 2>&1; then
   # app.js 已按功能拆分到 static/js/，逐个检查以免新增文件漏检。
@@ -197,6 +223,21 @@ if [[ ! -d "$MEFINDER_BUILT_APP" ]]; then
   exit 1
 fi
 
+MEFINDER_TARGET_ARCH="$MEFINDER_ARCH" \
+MEFINDER_CODESIGN_IDENTITY="$MEFINDER_CODESIGN_IDENTITY" \
+  "$MEFINDER_PYTHON" -m PyInstaller mcp_sidecar.spec \
+    --clean \
+    --noconfirm \
+    --distpath "$MEFINDER_SIDECAR_DIST" \
+    --workpath "$MEFINDER_SIDECAR_WORK"
+if [[ ! -x "$MEFINDER_BUILT_SIDECAR" ]]; then
+  echo "Build failed: $MEFINDER_BUILT_SIDECAR was not created." >&2
+  exit 1
+fi
+cp "$MEFINDER_BUILT_SIDECAR" "$MEFINDER_BUILT_APP/Contents/MacOS/MEFinderMCP"
+chmod 755 "$MEFINDER_BUILT_APP/Contents/MacOS/MEFinderMCP"
+smoke_sidecar "$MEFINDER_BUILT_APP/Contents/MacOS/MEFinderMCP"
+
 if ! find "$MEFINDER_BUILT_APP" -type f \
   -path '*/Quartz/PDFKit/_PDFKit*.so' -print -quit | grep -q .; then
   echo "Build failed: the app does not contain the PyObjC PDFKit bridge." >&2
@@ -220,8 +261,10 @@ if find "$MEFINDER_BUILT_APP" -type f \( \
 fi
 
 clean_app_metadata "$MEFINDER_BUILT_APP"
+sign_sidecar "$MEFINDER_BUILT_APP/Contents/MacOS/MEFinderMCP"
 codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$MEFINDER_BUILT_APP"
 verify_app_signature "$MEFINDER_BUILT_APP"
+smoke_sidecar "$MEFINDER_BUILT_APP/Contents/MacOS/MEFinderMCP"
 
 # Build every release artifact under the local temporary directory. A project
 # stored in Documents/iCloud Drive can have FinderInfo reattached asynchronously
@@ -243,6 +286,7 @@ fi
 mkdir -p "$MEFINDER_TEMP_ROOT/verify"
 ditto -x -k "$MEFINDER_TEMP_ZIP" "$MEFINDER_TEMP_ROOT/verify"
 verify_app_signature "$MEFINDER_TEMP_ROOT/verify/MEFinder.app"
+smoke_sidecar "$MEFINDER_TEMP_ROOT/verify/MEFinder.app/Contents/MacOS/MEFinderMCP"
 
 mkdir -p "$MEFINDER_DMG_STAGE" "$MEFINDER_DMG_MOUNT" "$(dirname "$MEFINDER_DMG_VERIFY_COPY")"
 ditto --norsrc --noextattr --noqtn --noacl \
@@ -273,11 +317,13 @@ if [[ ! -L "$MEFINDER_DMG_MOUNT/Applications" ]] \
   exit 1
 fi
 verify_app_signature "$MEFINDER_DMG_MOUNT/MEFinder.app"
+smoke_sidecar "$MEFINDER_DMG_MOUNT/MEFinder.app/Contents/MacOS/MEFinderMCP"
 
 # Simulate copying the app out of the mounted image and verify that the copied
 # application remains valid.
 ditto "$MEFINDER_DMG_MOUNT/MEFinder.app" "$MEFINDER_DMG_VERIFY_COPY"
 verify_app_signature "$MEFINDER_DMG_VERIFY_COPY"
+smoke_sidecar "$MEFINDER_DMG_VERIFY_COPY/Contents/MacOS/MEFinderMCP"
 
 hdiutil detach "$MEFINDER_DMG_MOUNT" >/dev/null
 MEFINDER_DMG_ATTACHED=0

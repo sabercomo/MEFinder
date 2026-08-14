@@ -1,0 +1,5 @@
+# Replace <USER> only if you do not use the default per-user install path.
+[mcp_servers.mefinder]
+command = 'C:\Users\<USER>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe'
+startup_timeout_sec = 10
+tool_timeout_sec = 60

@@ -62,6 +62,7 @@ class WindowsPackagingTests(unittest.TestCase):
             "BSD-3-Clause.txt",
             "MIT.txt",
             "setuptools-vendored__autocommand-2.2.2.dist-info__LICENSE",
+            "MCP-2.0.0-runtime-NOTICES.txt",
         ):
             path = license_dir / filename
             self.assertTrue(path.is_file(), f"missing third-party license: {path}")
