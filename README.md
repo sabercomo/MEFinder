@@ -177,21 +177,7 @@ claude mcp list
 
 #### WorkBuddy（Windows）
 
-打开 **插件 → MCP 服务器 → 配置 MCP**，在 JSON 的 `mcpServers` 中加入：
-
-```json
-{
-  "mcpServers": {
-    "mefinder": {
-      "type": "stdio",
-      "command": "D:\\MEFinder\\MEFinderMCP.exe",
-      "args": []
-    }
-  }
-}
-```
-
-`command` 是 JSON 字段名，值是 `MEFinderMCP.exe` 的完整路径，不是要在终端运行的命令。JSON 中的 Windows 反斜杠必须写成双反斜杠 `\\`。
+打开 **插件 → MCP 服务器 → 配置 MCP**。在打开的文件里找到 `command`，把它后面引号里的地址换成你电脑上 `MEFinderMCP.exe` 的实际位置。比如文件在 `D:\MEFinder\MEFinderMCP.exe`，这里就写成 `D:\\MEFinder\\MEFinderMCP.exe`，其他内容不用改。配置文件保存在哪里不用管，直接修改 WorkBuddy 为你打开的那个文件即可。
 
 更完整的 Windows 操作、macOS 三客户端配置和常见错误见 [Windows/macOS MCP 配置教程](docs/MCP_CLIENT_SETUP.md)；源码模式和 Codex 高级排错见 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。返回给 AI 的命中原文和上下文会进入相应客户端的对话及模型上下文，涉及未公开文献时请留意。
 
