@@ -164,7 +164,20 @@ codex mcp add mefinder -- "$mefinder"
 claude mcp add --scope user mefinder -- "$mefinder"
 ```
 
-WorkBuddy 请从“插件 → MCP 服务器 → 配置 MCP”打开配置文件，并把 `command` 设为同一个 sidecar 绝对路径。不同版本显示的配置文件位置可能不同，以 WorkBuddy 界面打开的文件为准。
+WorkBuddy 不需要在 Windows 终端执行命令。请从“插件 → MCP 服务器 → 配置 MCP”打开它当前使用的 JSON 配置文件，在 `mcpServers` 中加入下面这段（把 `<你的用户名>` 换成实际用户名）：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "command": "C:\\Users\\<你的用户名>\\AppData\\Local\\Programs\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+这里的 `command` 是 JSON 字段名，字段值是 `MEFinderMCP.exe` 的完整路径，不是 PowerShell 命令。绿色版则填写解压目录中 `MEFinderMCP.exe` 的完整路径。不同 WorkBuddy 版本显示的配置文件位置可能不同，以该界面实际打开的文件为准。
 
 #### macOS（终端）
 

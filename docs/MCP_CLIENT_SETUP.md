@@ -91,7 +91,7 @@ claude mcp remove --scope user mefinder
 
 1. 打开侧边栏“插件 → MCP 服务器 → 配置 MCP”；
 2. 使用该入口打开 WorkBuddy 当前实际读取的 MCP 配置文件；
-3. 在 `mcpServers` 中加入 `mefinder`，把 `command` 换成 `$mefinder` 对应的完整路径；
+3. 在 `mcpServers` 中加入 `mefinder`，把 JSON 字段 `command` 的值换成 `MEFinderMCP.exe` 的完整路径；这里不是让你在 Windows 终端执行一条叫作 `command` 的命令；
 4. 保存后重启 WorkBuddy 或刷新 MCP 服务器列表；
 5. `mefinder` 状态显示绿色后，再新建会话验证。
 
