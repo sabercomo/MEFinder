@@ -142,7 +142,7 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 ### 配置 MinerU API（可选）
 
-扫描版、乱码文本层或复杂排版 PDF 会交给 MinerU 在线解析。先按 [3 分钟申请 MinerU API](https://www.xiaohongshu.com/discovery/item/6a685a27000000000f01545e?source=webshare&xhsshare=pc_web&xsec_token=AB6WAq6MuVQ4cocIilRCUwbdwhQq3nRGPHCDoSEOjhGsI=&xsec_source=pc_share) 申请 API Token，再到软件里填：
+扫描版、乱码文本层或复杂排版 PDF 会交给 MinerU 在线解析。先到 [MinerU 申请 API Token](https://mineru.net/apiManage/token)（先登录，再申请）拿到 Token，再到软件里填：
 
 1. 打开 **设置 → MinerU API**，进去就是填写表单，其他保持默认即可；
 2. 把申请到的 **API Token** 粘贴进输入框；
