@@ -140,20 +140,20 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 5. **复制出处**
    选择中文脚注、GB/T 7714、APA、MLA 或 Chicago，然后复制当前文献的规范出处。关键元数据或页码缺失时，程序会明确提示。
 
-### 配置 MinerU API（可选，扫描 PDF 需要）
+### 配置 MinerU API（可选）
 
-扫描版、乱码文本层或复杂排版 PDF 需要先有解析服务。MinerU 是内置的免费选项，先按 [3 分钟申请 MinerU API](https://www.xiaohongshu.com/discovery/item/6a685a27000000000f01545e?source=webshare&xhsshare=pc_web&xsec_token=AB6WAq6MuVQ4cocIilRCUwbdwhQq3nRGPHCDoSEOjhGsI=&xsec_source=pc_share) 拿到 API Token，再在软件里配置：
+MEFinder 可以把扫描件、乱码文本层或复杂排版 PDF 交给 MinerU 在线解析。先按 [3 分钟申请 MinerU API](https://www.xiaohongshu.com/discovery/item/6a685a27000000000f01545e?source=webshare&xhsshare=pc_web&xsec_token=AB6WAq6MuVQ4cocIilRCUwbdwhQq3nRGPHCDoSEOjhGsI=&xsec_source=pc_share) 申请 API Token，然后在软件中配置：
 
 1. 打开 **设置 → MinerU API**；
-2. 点 **添加账号**，账号名称随便填（只用于本地列表显示）；
-3. 把申请到的 **API Token** 粘贴进输入框；
-4. **到期日期**选填，但建议填上——免费 API Key 一般只有三个月有效期，填了到期前会提醒；
-5. 点 **保存账号**；
-6. 回到账号列表，点 **测试**，显示连接成功就能用了。
+2. 首次配置时表单会直接展开。服务地址保持默认即可；账号名称可以保留“MinerU 账号”，也可以改成便于区分的名称；
+3. 把申请到的 **API Token** 粘贴到输入框；
+4. **到期日期**只用于本地提醒。MinerU 没有给出明确到期日时，可以留空；
+5. 点 **保存配置**；
+6. 保存后账号会出现在列表中。点 **测试**，确认连接成功。
 
-之后导入扫描 PDF 时选“强制 MinerU”（或保持“自动”，识别到文字层不可靠时会自动转 MinerU）。
+导入扫描 PDF 时，可以选择 **强制 MinerU**；通常保留默认的 **自动选择** 即可，文字层不可靠时会自动转交 MinerU。
 
-不用 MinerU 的话，也可以在 **设置 → 其他解析 API** 里添加 OpenAI 兼容的视觉模型或中转接口，导入时选“其他视觉 API”。
+如需改用 OpenAI 兼容的视觉模型或中转接口，可在 **设置 → 其他解析 API** 中配置，导入时选择 **其他视觉 API**。
 
 ### 文档包导出 / 导入（0.4.4）
 
