@@ -11,6 +11,7 @@ except ModuleNotFoundError:  # Python 3.10 remains supported for source mode.
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 GUIDE_PATH = PROJECT_ROOT / "docs" / "CODEX_MCP.md"
+CLIENT_GUIDE_PATH = PROJECT_ROOT / "docs" / "MCP_CLIENT_SETUP.md"
 EXAMPLE_PATH = PROJECT_ROOT / "docs" / "examples" / "mefinder-codex-source.toml"
 WINDOWS_EXAMPLE_PATH = (
     PROJECT_ROOT / "docs" / "examples" / "mefinder-codex-windows-installed.toml"
@@ -27,6 +28,7 @@ class MCPDocumentationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.guide = GUIDE_PATH.read_text(encoding="utf-8")
+        cls.client_guide = CLIENT_GUIDE_PATH.read_text(encoding="utf-8")
         cls.example = EXAMPLE_PATH.read_text(encoding="utf-8")
         cls.windows_example = WINDOWS_EXAMPLE_PATH.read_text(encoding="utf-8")
         cls.macos_example = MACOS_EXAMPLE_PATH.read_text(encoding="utf-8")
@@ -55,6 +57,28 @@ class MCPDocumentationTests(unittest.TestCase):
             "IDE 扩展",
         ):
             self.assertIn(expected, self.guide)
+
+    def test_client_guide_covers_three_clients_on_windows_and_macos(self) -> None:
+        for expected in (
+            "## Windows",
+            "## macOS",
+            "codex mcp add mefinder",
+            "codex mcp remove mefinder",
+            "claude mcp add --scope user mefinder",
+            "claude mcp remove --scope user mefinder",
+            "WorkBuddy",
+            r"%USERPROFILE%\.workbuddy\mcp.json",
+            "~/.workbuddy/mcp.json",
+            'Resolve-Path ".\\MEFinderMCP.exe"',
+            "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP",
+        ):
+            self.assertIn(expected, self.client_guide)
+
+    def test_readme_states_document_package_integrity_boundaries(self) -> None:
+        self.assertIn("已入库 PDF", self.readme)
+        self.assertIn("当前版本不导出 Word", self.readme)
+        self.assertIn("未做数字签名", self.readme)
+        self.assertNotIn("被改动过的文档包在入库前就会被拒绝", self.readme)
 
     def test_guide_freezes_source_runtime_and_health_check_boundaries(self) -> None:
         for expected in (

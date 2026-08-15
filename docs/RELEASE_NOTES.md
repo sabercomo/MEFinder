@@ -55,7 +55,7 @@
 - 新增独立 onefile `MEFinderMCP` sidecar：Windows 安装版与绿色版固定放在发布目录根部，macOS 固定放在 `MEFinder.app/Contents/MacOS/MEFinderMCP`；桌面主程序继续保持原有 onedir/.app 架构；
 - Windows 构建脚本不再假设发布目录只有一个 exe，安装器通配 payload 自动包含 sidecar，绿色版 `portable.flag` 同时控制桌面程序和 sidecar 的包内数据根；
 - macOS 构建在未签名应用、签名应用、ZIP 解包、DMG 挂载和 DMG 复制五个位置建立真实 MCP STDIO 会话，并严格验证 sidecar 与外层应用签名；
-- 三类发布路径、覆盖升级、绿色版移动和卸载后的显式命令不存在行为已写入接入指南；MEFinder 仍不静默修改用户 Codex 配置；
+- 新增按 Windows/macOS 拆分的 Codex、Claude Code、WorkBuddy 发布包接入教程；三类发布路径、覆盖升级、绿色版移动和卸载后的显式命令不存在行为仍保留在 Codex 高级指南中，MEFinder 不静默修改任何客户端配置；
 - 增补 MCP SDK 及其运行时依赖的许可证归属材料。macOS arm64 实物发布链已通过；Windows 与 macOS Intel 产物仍需对应系统/架构的发布实机复验。
 
 ## MCP 文献核对：第八阶段
