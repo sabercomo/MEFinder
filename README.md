@@ -144,7 +144,7 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 0.4.4 提供三个本地只读 MCP 工具（`list_documents`、`locate_quote`、`read_document_window`），让 AI 助手直接读你的文献库：列出已导入文献、定位原句、继续读命中位置的上下文。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
 
-要配的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
+需要选择的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
 
 ```text
 C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
