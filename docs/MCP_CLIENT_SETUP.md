@@ -166,29 +166,37 @@ claude mcp remove --scope user mefinder
 
 ## 四、WorkBuddy 配置
 
-打开 **插件 → MCP 服务器 → 配置 MCP**。在打开的文件里找到 `command`，把它后面引号里的地址换成你电脑上 `MEFinderMCP.exe` 的实际位置。
+进入 WorkBuddy 后，打开：
 
-比如文件在：
+**插件 → MCP 服务器 → 配置 MCP**
+
+这个入口会打开 WorkBuddy 当前实际读取的 JSON 配置文件。在 `mcpServers` 中加入：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "type": "stdio",
+      "command": "D:\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+把路径换成你电脑上的 `MEFinderMCP.exe` 路径。
+
+Windows 普通路径写成：
 
 ```text
 D:\MEFinder\MEFinderMCP.exe
 ```
 
-这里就写成：
+但在 JSON 字符串中，每个反斜杠需要写两次：
 
 ```text
 D:\\MEFinder\\MEFinderMCP.exe
 ```
-
-其他内容不用改。配置文件保存在哪里不用管，直接修改 WorkBuddy 为你打开的那个文件即可。
-
-保存后，刷新 MCP 服务器列表或重启 WorkBuddy。看到 `mefinder` 已连接后测试：
-
-```text
-请只使用 mefinder 搜索这段文字。
-```
-
-不同版本显示的配置文件位置可能不同，以 WorkBuddy 界面打开的文件为准。
 
 ## 五、最常见的配置错误
 
@@ -205,7 +213,7 @@ D:\\MEFinder\\MEFinderMCP.exe
 | --- | --- |
 | Codex | 设置 → 插件 → MCP → 添加 → 添加 MCP 服务器 |
 | Claude Code | `claude mcp add --transport stdio --scope user mefinder -- "MEFinderMCP.exe 的完整路径"` |
-| WorkBuddy | 插件 → MCP 服务器 → 配置 MCP → 修改 `command` 后面的程序地址 |
+| WorkBuddy | 插件 → MCP 服务器 → 配置 MCP → 添加 STDIO JSON 配置 |
 
 三种客户端的核心配置相同：
 
