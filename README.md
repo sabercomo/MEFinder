@@ -144,12 +144,11 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 扫描版、乱码文本层或复杂排版 PDF 会交给 MinerU 在线解析。先按 [3 分钟申请 MinerU API](https://www.xiaohongshu.com/discovery/item/6a685a27000000000f01545e?source=webshare&xhsshare=pc_web&xsec_token=AB6WAq6MuVQ4cocIilRCUwbdwhQq3nRGPHCDoSEOjhGsI=&xsec_source=pc_share) 申请 API Token，再到软件里填：
 
-1. 打开 **设置 → MinerU API**；
-2. 首次进入就是这个表单，不用再点别的。服务地址保持默认；账号名称默认是“MinerU 账号”，想区分多个账号就改成自己好认的名字；
-3. 把申请到的 **API Token** 粘贴进输入框；
-4. **到期日期**选填，拿不准就留空。建议填上：免费 Key 一般只有三个月有效期，填了到期前会提醒；
-5. 点 **保存配置**；
-6. 保存后账号出现在列表里，点 **测试**，显示连接成功就行。
+1. 打开 **设置 → MinerU API**，进去就是填写表单，其他保持默认即可；
+2. 把申请到的 **API Token** 粘贴进输入框；
+3. **到期日期**选填，拿不准就留空。建议填上：免费 Key 一般只有三个月有效期，填了到期前会提醒；
+4. 点 **保存配置**；
+5. 保存后账号出现在列表里，点 **测试**，显示连接成功就行。
 
 导入扫描 PDF 时选 **强制 MinerU**，或者保留默认的 **自动选择**——文字层不可靠时程序会自动改用 MinerU。
 
