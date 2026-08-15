@@ -140,6 +140,21 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 5. **复制出处**
    选择中文脚注、GB/T 7714、APA、MLA 或 Chicago，然后复制当前文献的规范出处。关键元数据或页码缺失时，程序会明确提示。
 
+### 配置 MinerU API（可选，扫描 PDF 需要）
+
+扫描版、乱码文本层或复杂排版 PDF 需要先有解析服务。MinerU 是内置的免费选项，先按 [3 分钟申请 MinerU API](https://www.xiaohongshu.com/discovery/item/6a685a27000000000f01545e?source=webshare&xhsshare=pc_web&xsec_token=AB6WAq6MuVQ4cocIilRCUwbdwhQq3nRGPHCDoSEOjhGsI=&xsec_source=pc_share) 拿到 API Token，再在软件里配置：
+
+1. 打开 **设置 → MinerU API**；
+2. 点 **添加账号**，账号名称随便填（只用于本地列表显示）；
+3. 把申请到的 **API Token** 粘贴进输入框；
+4. **到期日期**选填，但建议填上——免费 API Key 一般只有三个月有效期，填了到期前会提醒；
+5. 点 **保存账号**；
+6. 回到账号列表，点 **测试**，显示连接成功就能用了。
+
+之后导入扫描 PDF 时选“强制 MinerU”（或保持“自动”，识别到文字层不可靠时会自动转 MinerU）。
+
+不用 MinerU 的话，也可以在 **设置 → 其他解析 API** 里添加 OpenAI 兼容的视觉模型或中转接口，导入时选“其他视觉 API”。
+
 ### 文档包导出 / 导入（0.4.4）
 
 解析结果可以随身带走，换台电脑也不用重新 OCR：
