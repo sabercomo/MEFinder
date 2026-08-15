@@ -1386,7 +1386,7 @@ def _parse_pdf_with_mineru_local(
     on_progress: Optional[ProgressCallback],
     timeout_minutes: int,
 ) -> Dict[str, object]:
-    """Run an explicitly requested retry through the user's local service."""
+    """Run an explicitly requested import through the user's local service."""
 
     config = load_mineru_local_config(resolve_mineru_config_path(root))
     provider = MinerULocalProvider(config)

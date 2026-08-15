@@ -165,7 +165,10 @@ function navigateTo(page) {
   const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
   if (link) link.classList.add('active');
   if (page === 'library' && !libLoaded) loadLibrary();
-  if (page === 'import' && !visionConfigLoaded) loadVisionProviders();
+  if (page === 'import') {
+    if (!visionConfigLoaded) loadVisionProviders();
+    if (!mineruConfigLoaded) loadMineruConfig();
+  }
   if (page === 'settings') {
     ensureVisibleSettingsCategory();
     if (!preferencesLoaded) loadPreferences();

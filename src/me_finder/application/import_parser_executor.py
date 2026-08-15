@@ -80,7 +80,11 @@ class ImportParserExecutor:
                 or str(profile.get("detected_pdf_type")) != "native_text"
             )
             use_local_mineru = bool(
-                use_mineru and profile.get("mineru_local_retry") is True
+                use_mineru
+                and (
+                    profile.get("mineru_local") is True
+                    or profile.get("mineru_local_retry") is True
+                )
             )
             if use_vision:
                 job = jobs.job_status(job_id)

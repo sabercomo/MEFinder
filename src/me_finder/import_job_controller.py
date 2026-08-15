@@ -258,7 +258,7 @@ class ImportJobController:
                 context,
             )
             profile = dict(context["profile"])
-            profile["mineru_local_retry"] = True
+            profile["mineru_local"] = True
             job_id = self._imports.start_retry_import_job(
                 previous_job_id,
                 target,

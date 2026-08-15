@@ -98,7 +98,7 @@
   font-size: 12px;
   line-height: 1.5;
 }
-/* PDF 解析方式：三种业务路径保留，但视觉上收成一组连续设置行。 */
+/* PDF 解析方式：常用路径常驻，本地 MinerU 仅在用户主动启用后出现。 */
 .pdf-parse-section { margin-top: 20px; }
 .pdf-parse-heading { display: flex; align-items: baseline; gap: 8px; margin: 0 2px 8px; }
 .pdf-parse-heading-title { font-size: 14px; font-weight: 650; color: var(--text-primary); }
@@ -124,6 +124,7 @@
   cursor: pointer;
   transition: background-color var(--transition-fast);
 }
+.pdf-parse-option[hidden] { display: none; }
 .pdf-parse-option:first-child { border-top: 0; border-radius: 12px 12px 0 0; }
 .pdf-parse-option:last-child { border-radius: 0 0 12px 12px; }
 @media (hover: hover) and (pointer: fine) {
@@ -151,6 +152,7 @@
 .pdf-parse-tag { padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; line-height: 1; white-space: nowrap; }
 .pdf-parse-tag-default { color: var(--accent); background: var(--accent-soft); }
 .pdf-parse-tag-free { color: var(--success); background: var(--success-soft); }
+.pdf-parse-tag-advanced { color: var(--text-secondary); background: var(--surface-hover); }
 .pdf-parse-provider { display: block; margin-top: 2px; }
 .pdf-parse-option.is-disabled { opacity: 0.55; cursor: not-allowed; }
 .pdf-parse-option.is-disabled .pdf-provider-config-link { pointer-events: auto; }

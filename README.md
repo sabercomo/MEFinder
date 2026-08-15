@@ -144,54 +144,56 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 0.4.4 提供三个本地只读 MCP 工具（`list_documents`、`locate_quote`、`read_document_window`），让 AI 助手直接读你的文献库：列出已导入文献、定位原句、继续读命中位置的上下文。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
 
-完整的六种接入步骤见 [Windows/macOS MCP 配置教程](docs/MCP_CLIENT_SETUP.md)；源码模式和 Codex 高级排错见 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。
+需要配置的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
 
-#### Windows（PowerShell）
-
-先按版本选择 sidecar 路径。安装版使用固定路径；绿色版必须在完整解压后的目录中取得绝对路径：
-
-```powershell
-# 安装版
-$mefinder = "$env:LOCALAPPDATA\Programs\MEFinder\MEFinderMCP.exe"
-
-# 绿色版：先进入解压目录，再改用下一行
-# $mefinder = (Resolve-Path ".\MEFinderMCP.exe").Path
-
-# Codex
-codex mcp add mefinder -- "$mefinder"
-
-# Claude Code
-claude mcp add --scope user mefinder -- "$mefinder"
+```text
+C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
 ```
 
-WorkBuddy 不需要在 Windows 终端执行命令。请从“插件 → MCP 服务器 → 配置 MCP”打开它当前使用的 JSON 配置文件，在 `mcpServers` 中加入下面这段（把 `<你的用户名>` 换成实际用户名）：
+绿色版则使用解压目录中的 `MEFinderMCP.exe`，例如 `D:\MEFinder\MEFinderMCP.exe`。它是本地 **STDIO** 服务，不需要手动双击，客户端会自动启动它。
+
+#### Codex（Windows）
+
+打开 **设置 → 插件 → MCP → 添加 → 添加 MCP 服务器**，填写：
+
+| 项目 | 内容 |
+| --- | --- |
+| 名称 | `mefinder` |
+| 类型 | `STDIO` |
+| 启动命令 | `MEFinderMCP.exe` 的完整路径 |
+| 参数、环境变量 | 留空 |
+| 工作目录 | `MEFinderMCP.exe` 所在文件夹 |
+
+保存后重启或重新加载 MCP，再让 Codex：“请只使用 mefinder 搜索这句话来自哪篇文献、哪一页。”
+
+#### Claude Code（Windows）
+
+在 PowerShell 中运行，并把路径换成自己的实际路径：
+
+```powershell
+claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
+claude mcp list
+```
+
+#### WorkBuddy（Windows）
+
+打开 **插件 → MCP 服务器 → 配置 MCP**，在 JSON 的 `mcpServers` 中加入：
 
 ```json
 {
   "mcpServers": {
     "mefinder": {
-      "command": "C:\\Users\\<你的用户名>\\AppData\\Local\\Programs\\MEFinder\\MEFinderMCP.exe",
+      "type": "stdio",
+      "command": "D:\\MEFinder\\MEFinderMCP.exe",
       "args": []
     }
   }
 }
 ```
 
-这里的 `command` 是 JSON 字段名，字段值是 `MEFinderMCP.exe` 的完整路径，不是 PowerShell 命令。绿色版则填写解压目录中 `MEFinderMCP.exe` 的完整路径。不同 WorkBuddy 版本显示的配置文件位置可能不同，以该界面实际打开的文件为准。
+`command` 是 JSON 字段名，值是 `MEFinderMCP.exe` 的完整路径，不是要在终端运行的命令。JSON 中的 Windows 反斜杠必须写成双反斜杠 `\\`。
 
-#### macOS（终端）
-
-把 `MEFinder.app` 拖进“应用程序”后，sidecar 固定位于 `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP`。
-
-```bash
-# Codex
-codex mcp add mefinder -- /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
-
-# Claude Code
-claude mcp add --scope user mefinder -- /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
-```
-
-WorkBuddy 同样从界面打开 MCP 配置，把 `command` 设为上述 macOS sidecar 路径。配置后重启或新建客户端会话，再让 AI“只使用 MEFinder 核对这句话出自哪篇文献、哪一页”。注意：返回给 AI 的命中原文和上下文会进入相应客户端的对话及模型上下文，涉及未公开文献时请留意。
+更完整的 Windows 操作、macOS 三客户端配置和常见错误见 [Windows/macOS MCP 配置教程](docs/MCP_CLIENT_SETUP.md)；源码模式和 Codex 高级排错见 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。返回给 AI 的命中原文和上下文会进入相应客户端的对话及模型上下文，涉及未公开文献时请留意。
 
 <a id="已知限制"></a>
 

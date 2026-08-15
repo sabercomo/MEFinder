@@ -58,15 +58,20 @@ class MCPDocumentationTests(unittest.TestCase):
         ):
             self.assertIn(expected, self.guide)
 
-    def test_client_guide_covers_three_clients_on_windows_and_macos(self) -> None:
+    def test_client_guide_gives_concrete_windows_steps_and_macos_appendix(self) -> None:
         for expected in (
-            "## Windows",
-            "## macOS",
+            "# MEFinder MCP 配置教程",
+            "## 二、Codex 配置",
+            "## 三、Claude Code 配置",
+            "## 四、WorkBuddy 配置",
+            "## 七、macOS 配置",
+            "设置 → 插件 → MCP → 添加 → 添加 MCP 服务器",
+            '"type": "stdio"',
+            '"command": "D:\\\\MEFinder\\\\MEFinderMCP.exe"',
             "codex mcp add mefinder",
             "codex mcp remove mefinder",
-            "claude mcp add --scope user mefinder",
+            "claude mcp add --transport stdio --scope user mefinder",
             "claude mcp remove --scope user mefinder",
-            "WorkBuddy",
             r"%USERPROFILE%\.workbuddy\mcp.json",
             "~/.workbuddy/mcp.json",
             'Resolve-Path ".\\MEFinderMCP.exe"',
