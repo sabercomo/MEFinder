@@ -405,7 +405,7 @@ STDOUT 只允许 MCP 协议帧。日志写入 STDERR；发布版是否同时写�
 工作：
 
 - 生成可使用 STDIO 的 `MEFinderMCP.exe` sidecar；
-- 修改 `desktop.spec` 或增加专用 PyInstaller spec；
+- 修改 `packaging/desktop.spec` 或增加专用 PyInstaller spec；
 - 修改构建脚本当前“发布目录只能有一个 exe”的假设；
 - 让 Inno Setup 和自动更新包含 sidecar；
 - 保持安装路径稳定，使 Codex 配置在覆盖升级后继续有效；
@@ -427,7 +427,7 @@ STDOUT 只允许 MCP 协议帧。日志写入 STDERR；发布版是否同时写�
 
 - 在 `MEFinder.app` 中包含可执行 sidecar；
 - 固定 Codex 配置所引用的包内路径；
-- 更新 `desktop_macos.spec`、签名、DMG/ZIP 校验；
+- 更新 `packaging/desktop_macos.spec`、签名、DMG/ZIP 校验；
 - 验证 Developer ID/hardened runtime 场景下 sidecar 可由 Codex 启动；
 - 验证应用覆盖升级后配置路径保持不变。
 
@@ -505,7 +505,7 @@ v2 不是简单给现有数据库方法套 MCP。写操作开始前必须完成�
 
 - `desktop.py`：改为复用数据根解析模块；
 - `requirements-windows.txt`、`requirements-macos.txt`：增加锁定的 MCP SDK 依赖；
-- `desktop.spec`、`desktop_macos.spec`：加入 sidecar；
+- `packaging/desktop.spec`、`packaging/desktop_macos.spec`：加入 sidecar；
 - `build_windows_installer.ps1`、`build_portable_release.ps1`、`build_macos.sh`：构建和验证 sidecar；
 - `installer/MEFinder.iss`：包含 sidecar；
 - `THIRD_PARTY_NOTICES.txt` 和第三方许可证材料；

@@ -109,12 +109,12 @@ for %%F in (src\me_finder\static\js\*.js) do (
 node --check src\me_finder\static\reader.js
 if errorlevel 1 exit /b 1
 
-"%PYTHON%" -m PyInstaller desktop.spec --clean --noconfirm
+"%PYTHON%" -m PyInstaller "packaging\desktop.spec" --clean --noconfirm
 if errorlevel 1 exit /b 1
 
 if exist "%MCP_DIST%" rmdir /s /q "%MCP_DIST%"
 if exist "%MCP_WORK%" rmdir /s /q "%MCP_WORK%"
-"%PYTHON%" -m PyInstaller mcp_sidecar.spec --clean --noconfirm --distpath "%MCP_DIST%" --workpath "%MCP_WORK%"
+"%PYTHON%" -m PyInstaller "packaging\mcp_sidecar.spec" --clean --noconfirm --distpath "%MCP_DIST%" --workpath "%MCP_WORK%"
 if errorlevel 1 exit /b 1
 if not exist "%MCP_SOURCE%" (
   echo PyInstaller did not create MEFinderMCP.exe.

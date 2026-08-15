@@ -214,7 +214,7 @@ fi
 
 MEFINDER_APP_VERSION="$MEFINDER_VERSION" \
 MEFINDER_TARGET_ARCH="$MEFINDER_ARCH" \
-  "$MEFINDER_PYTHON" -m PyInstaller desktop_macos.spec \
+  "$MEFINDER_PYTHON" -m PyInstaller packaging/desktop_macos.spec \
     --clean \
     --noconfirm \
     --distpath "$MEFINDER_TEMP_DIST"
@@ -226,7 +226,7 @@ fi
 
 MEFINDER_TARGET_ARCH="$MEFINDER_ARCH" \
 MEFINDER_CODESIGN_IDENTITY="$MEFINDER_CODESIGN_IDENTITY" \
-  "$MEFINDER_PYTHON" -m PyInstaller mcp_sidecar.spec \
+  "$MEFINDER_PYTHON" -m PyInstaller packaging/mcp_sidecar.spec \
     --clean \
     --noconfirm \
     --distpath "$MEFINDER_SIDECAR_DIST" \

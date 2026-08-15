@@ -19,7 +19,7 @@ class WindowsPackagingTests(unittest.TestCase):
         cls.inno_script = Path("installer/MEFinder.iss").read_text(
             encoding="utf-8-sig"
         )
-        cls.spec = Path("desktop.spec").read_text(encoding="utf-8-sig")
+        cls.spec = Path("packaging/desktop.spec").read_text(encoding="utf-8-sig")
 
     def test_project_declares_agpl_3_only(self) -> None:
         license_text = Path("LICENSE").read_text(encoding="utf-8")
@@ -81,7 +81,9 @@ class WindowsPackagingTests(unittest.TestCase):
         )
 
     def test_portable_build_includes_windows_unblock_fallback(self) -> None:
-        launcher = Path("portable_first_run.cmd").read_text(encoding="utf-8-sig")
+        launcher = Path("packaging/portable_first_run.cmd").read_text(
+            encoding="utf-8-sig"
+        )
 
         self.assertIn("portable_first_run.cmd", self.portable_script)
         self.assertIn("0-首次启动-程序打不开时运行.cmd", self.portable_script)
@@ -90,10 +92,10 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("Start-Process", launcher)
 
     def test_portable_build_includes_plain_text_user_guide(self) -> None:
-        guide = Path("PORTABLE_README.txt")
+        guide = Path("packaging/PORTABLE_README.txt")
 
         self.assertTrue(guide.is_file())
-        self.assertIn('"PORTABLE_README.txt"', self.portable_script)
+        self.assertIn('"packaging\\PORTABLE_README.txt"', self.portable_script)
         self.assertIn('"README.txt"', self.portable_script)
         self.assertNotIn('"README.md"', self.portable_script)
         content = guide.read_text(encoding="utf-8-sig")

@@ -169,7 +169,7 @@ class MacOSPDFViewerTests(unittest.TestCase):
         self.assertIsNone(viewer._controller)
 
     def test_packaging_collects_pdfkit_bridge_and_main_thread_helper(self) -> None:
-        spec = Path("desktop_macos.spec").read_text(encoding="utf-8")
+        spec = Path("packaging/desktop_macos.spec").read_text(encoding="utf-8")
         build_script = Path("build_macos.sh").read_text(encoding="utf-8")
         self.assertIn('collect_submodules("Quartz.PDFKit")', spec)
         self.assertIn('"src.me_finder.macos_pdf_viewer"', spec)

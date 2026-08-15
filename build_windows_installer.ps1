@@ -198,11 +198,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }
 
-    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller desktop.spec --clean --noconfirm
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller "packaging\desktop.spec" --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
     if (Test-Path -LiteralPath $McpDistPath) { Remove-Item -LiteralPath $McpDistPath -Recurse -Force }
     if (Test-Path -LiteralPath $McpWorkPath) { Remove-Item -LiteralPath $McpWorkPath -Recurse -Force }
-    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller mcp_sidecar.spec --clean --noconfirm --distpath $McpDistPath --workpath $McpWorkPath
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller "packaging\mcp_sidecar.spec" --clean --noconfirm --distpath $McpDistPath --workpath $McpWorkPath
     if ($LASTEXITCODE -ne 0) { throw "MCP sidecar PyInstaller build failed." }
     if (-not (Test-Path -LiteralPath $McpSourcePath -PathType Leaf)) {
         throw "PyInstaller did not create MEFinderMCP.exe."

@@ -7,7 +7,9 @@ from pathlib import Path
 class MCPPackagingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.sidecar_spec = Path("mcp_sidecar.spec").read_text(encoding="utf-8")
+        cls.sidecar_spec = Path("packaging/mcp_sidecar.spec").read_text(
+            encoding="utf-8"
+        )
         cls.windows_dev = Path("build_windows_dist.cmd").read_text(
             encoding="utf-8-sig"
         )
@@ -18,7 +20,9 @@ class MCPPackagingTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         cls.macos_build = Path("build_macos.sh").read_text(encoding="utf-8")
-        cls.macos_spec = Path("desktop_macos.spec").read_text(encoding="utf-8")
+        cls.macos_spec = Path("packaging/desktop_macos.spec").read_text(
+            encoding="utf-8"
+        )
         cls.macos_requirements = Path("requirements-macos.txt").read_text(
             encoding="utf-8"
         )
@@ -43,7 +47,7 @@ class MCPPackagingTests(unittest.TestCase):
             self.windows_installer,
             self.windows_portable,
         ):
-            self.assertIn("mcp_sidecar.spec", script)
+            self.assertIn(r"packaging\mcp_sidecar.spec", script)
             self.assertIn("MEFinderMCP.exe", script)
             self.assertIn("tools.smoke_mcp_sidecar", script)
             self.assertIn("tests.test_mcp_packaging", script)
@@ -52,7 +56,7 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn("must contain exactly two executables", self.windows_installer)
 
     def test_macos_bundle_contains_signed_smoked_sidecar_and_licenses(self) -> None:
-        self.assertIn("mcp_sidecar.spec", self.macos_build)
+        self.assertIn("packaging/mcp_sidecar.spec", self.macos_build)
         self.assertIn("Contents/MacOS/MEFinderMCP", self.macos_build)
         self.assertIn("tools.smoke_mcp_sidecar", self.macos_build)
         self.assertIn('codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$1"', self.macos_build)

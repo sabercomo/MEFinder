@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 桌面版（pywebview 原生窗口）onedir 构建。
+# Windows 桌面版（pywebview 原生窗口）onedir 构建。
 # 由 Windows 绿色版或安装版发布脚本调用；开发时也可直接运行 PyInstaller。
 # UPX 不要开：压缩 WebView2/.NET DLL 会导致加载失败和杀软误报。
 

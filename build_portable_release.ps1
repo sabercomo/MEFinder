@@ -79,11 +79,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
     }
 
-    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller desktop.spec --clean --noconfirm
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller "packaging\desktop.spec" --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
     if (Test-Path -LiteralPath $McpDistPath) { Remove-Item -LiteralPath $McpDistPath -Recurse -Force }
     if (Test-Path -LiteralPath $McpWorkPath) { Remove-Item -LiteralPath $McpWorkPath -Recurse -Force }
-    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller mcp_sidecar.spec --clean --noconfirm --distpath $McpDistPath --workpath $McpWorkPath
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller "packaging\mcp_sidecar.spec" --clean --noconfirm --distpath $McpDistPath --workpath $McpWorkPath
     if ($LASTEXITCODE -ne 0) { throw "MCP sidecar PyInstaller build failed." }
     if (-not (Test-Path -LiteralPath $McpSourcePath -PathType Leaf)) {
         throw "PyInstaller did not create MEFinderMCP.exe."
@@ -123,8 +123,8 @@ try {
             throw "Required license material is missing from the portable payload: $licensePath"
         }
     }
-    Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination (Join-Path $StagePath "README.txt")
-    Copy-Item -LiteralPath "portable_first_run.cmd" -Destination (Join-Path $StagePath "0-首次启动-程序打不开时运行.cmd")
+    Copy-Item -LiteralPath "packaging\PORTABLE_README.txt" -Destination (Join-Path $StagePath "README.txt")
+    Copy-Item -LiteralPath "packaging\portable_first_run.cmd" -Destination (Join-Path $StagePath "0-首次启动-程序打不开时运行.cmd")
     $blankIndexPath = Join-Path $StagePath "data\index.sqlite3"
     & $pythonCommand @pythonLauncherArgs -m tools.create_empty_index $blankIndexPath
     if ($LASTEXITCODE -ne 0) { throw "Blank index creation failed." }
