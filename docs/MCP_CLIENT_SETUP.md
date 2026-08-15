@@ -32,11 +32,11 @@ D:\MEFinder\MEFinderMCP.exe
 
 需要选择的是 `MEFinderMCP.exe`，不是桌面主程序 `文献原句定位器.exe` 或 `MEFinder.exe`。
 
-MEFinder MCP 使用 **STDIO** 方式连接。一般不需要手动双击运行 `MEFinderMCP.exe`，Codex、Claude Code 或 WorkBuddy 会在需要时自动启动它。桌面版 MEFinder 可以保持关闭。
+MEFinder MCP 走 **STDIO** 协议，不用手动双击运行 `MEFinderMCP.exe`，Codex、Claude Code 或 WorkBuddy 会在需要时自动启动它。桌面版 MEFinder 可以保持关闭。
 
 ## 二、Codex 配置
 
-Codex 可以直接在设置界面添加 MEFinder MCP。OpenAI 官方说明：本地客户端支持 STDIO MCP Server，可在设置中填写服务器名称、类型和启动命令。
+Codex 支持在设置界面直接添加 STDIO 类型的 MCP 服务器（OpenAI 官方说明见文末链接），填好服务器名称、类型和启动命令即可。
 
 ### 1. 打开 MCP 设置
 
@@ -116,9 +116,9 @@ D:\MEFinder
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-### 4. 也可以使用 Codex CLI
+### 4. 也可以用 Codex CLI
 
-如果更习惯终端，可以在 PowerShell 中运行：
+习惯用命令行的话，在 PowerShell 里运行：
 
 ```powershell
 codex mcp add mefinder -- "D:\MEFinder\MEFinderMCP.exe"
@@ -133,13 +133,13 @@ codex mcp remove mefinder
 
 ## 三、Claude Code 配置
 
-Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行：按 `Win + R` 打开“运行”，输入 `powershell` 并按回车。在打开的蓝色或黑色窗口中粘贴下面的命令：
+打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
 ```
 
-把 `D:\MEFinder\MEFinderMCP.exe` 换成你电脑上的实际路径。
+命令里的路径换成你自己的。
 
 - `--transport stdio`：这是本地 STDIO MCP；
 - `--scope user`：添加到当前用户，以后打开其他项目也能使用；
@@ -152,7 +152,7 @@ claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderM
 claude mcp list
 ```
 
-如果看到 `mefinder` 已连接，就可以进入 Claude Code 输入 `/mcp` 再确认一次，然后测试：
+看到 `mefinder` 已连接后，进入 Claude Code 输入 `/mcp` 再确认一次，然后测试：
 
 ```text
 请只使用 mefinder 搜索这段引文。
@@ -170,7 +170,7 @@ claude mcp remove --scope user mefinder
 
 **插件 → MCP 服务器 → 配置 MCP**
 
-这个入口会打开 WorkBuddy 当前实际读取的 JSON 配置文件。在 `mcpServers` 中加入：
+WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
 
 ```json
 {
@@ -184,7 +184,7 @@ claude mcp remove --scope user mefinder
 }
 ```
 
-把路径换成你电脑上的 `MEFinderMCP.exe` 路径。
+`command` 里的路径换成你电脑上 `MEFinderMCP.exe` 的实际位置。
 
 Windows 普通路径写成：
 
@@ -233,7 +233,7 @@ D:\\MEFinder\\MEFinderMCP.exe
 /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 ```
 
-需要运行命令时，按 `Command（⌘）+ 空格` 打开搜索，输入“终端”或 `Terminal`，然后按回车。
+按 `Command（⌘）+ 空格` 搜索“终端”并打开，再运行命令。
 
 ### Codex
 
@@ -275,7 +275,7 @@ claude mcp remove --scope user mefinder
 
 ### WorkBuddy
 
-打开“插件 → MCP 服务器 → 配置 MCP”。在打开的文件里找到 `command`，把它后面引号里的地址换成 `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP`，其他内容不用改。配置文件保存在哪里不用管，直接修改 WorkBuddy 为你打开的那个文件即可。
+打开“插件 → MCP 服务器 → 配置 MCP”，在 WorkBuddy 打开的配置文件里找到 `command`，把后面的路径改成 `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP`，其余不用动。不用管文件保存在哪。
 
 ## 八、配置成功后能做什么
 

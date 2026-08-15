@@ -144,13 +144,13 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 0.4.4 提供三个本地只读 MCP 工具（`list_documents`、`locate_quote`、`read_document_window`），让 AI 助手直接读你的文献库：列出已导入文献、定位原句、继续读命中位置的上下文。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
 
-需要配置的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
+要配的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
 
 ```text
 C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
 ```
 
-绿色版则使用解压目录中的 `MEFinderMCP.exe`，例如 `D:\MEFinder\MEFinderMCP.exe`。它是本地 **STDIO** 服务，不需要手动双击，客户端会自动启动它。
+绿色版则用解压目录里的 `MEFinderMCP.exe`，例如 `D:\MEFinder\MEFinderMCP.exe`。它走本地 **STDIO** 协议，不用手动双击，客户端会自动启动它。
 
 #### Codex（Windows）
 
@@ -168,7 +168,7 @@ C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
 
 #### Claude Code（Windows）
 
-Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行：按 `Win + R` 打开“运行”，输入 `powershell` 并按回车。在打开的蓝色或黑色窗口中粘贴下面的命令，并把路径换成自己的实际路径：
+打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令，把路径换成自己的：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
@@ -181,7 +181,7 @@ claude mcp list
 
 **插件 → MCP 服务器 → 配置 MCP**
 
-这个入口会打开 WorkBuddy 当前实际读取的 JSON 配置文件。在 `mcpServers` 中加入：
+WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
 
 ```json
 {
@@ -195,7 +195,7 @@ claude mcp list
 }
 ```
 
-把路径换成你电脑上的 `MEFinderMCP.exe` 路径。
+`command` 里的路径换成你电脑上 `MEFinderMCP.exe` 的实际位置。
 
 Windows 普通路径写成：
 
