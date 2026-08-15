@@ -125,12 +125,6 @@ codex mcp add mefinder -- "D:\MEFinder\MEFinderMCP.exe"
 codex mcp list
 ```
 
-移除：
-
-```powershell
-codex mcp remove mefinder
-```
-
 ## 三、Claude Code 配置
 
 打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令：
@@ -156,12 +150,6 @@ claude mcp list
 
 ```text
 请只使用 mefinder 搜索这段引文。
-```
-
-移除：
-
-```powershell
-claude mcp remove --scope user mefinder
 ```
 
 ## 四、WorkBuddy 配置
@@ -254,23 +242,11 @@ codex mcp add mefinder -- /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 codex mcp list
 ```
 
-移除：
-
-```bash
-codex mcp remove mefinder
-```
-
 ### Claude Code
 
 ```bash
 claude mcp add --transport stdio --scope user mefinder -- /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 claude mcp list
-```
-
-移除：
-
-```bash
-claude mcp remove --scope user mefinder
 ```
 
 ### WorkBuddy
@@ -294,3 +270,23 @@ MEFinder MCP 提供三个只读工具：
 MEFinder MCP 本身不访问网络，但客户端调用工具后，返回的命中原文和上下文会进入对应 AI 客户端的对话及模型上下文。涉及未公开文献时请留意。
 
 Codex 的界面与 STDIO 配置说明见 [OpenAI 官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。源码模式、数据位置和高级排错见 [Codex MCP 高级指南](CODEX_MCP.md)。
+
+## 九、以后想解除配置怎么办
+
+上面的配置步骤不需要运行任何“移除”命令。下面这些只在以后不想用 mefinder 时才需要执行，日常使用请忽略。
+
+Windows（PowerShell）：
+
+```powershell
+codex mcp remove mefinder
+claude mcp remove --scope user mefinder
+```
+
+macOS（终端）：
+
+```bash
+codex mcp remove mefinder
+claude mcp remove --scope user mefinder
+```
+
+WorkBuddy 回到“插件 → MCP 服务器 → 配置 MCP”，把之前加进去的 mefinder 配置删掉即可。
