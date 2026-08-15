@@ -608,6 +608,13 @@ def main() -> None:
             return str(selection)
         return str(selection[0])
 
+    def choose_export_directory() -> str | None:
+        try:
+            selection = choose_folders(Path.home() / "Downloads")
+        except webview.errors.WebViewException as exc:
+            raise RuntimeError(str(exc)) from exc
+        return selection[0] if selection else None
+
     def choose_scan_directories() -> list[str]:
         # Never start at the home folder: picking it is one click away there,
         # and scanning it would walk the user's whole personal library.
@@ -651,6 +658,9 @@ def main() -> None:
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
+                native_export_directory_chooser=(
+                    choose_export_directory if sys.platform == "win32" else None
+                ),
                 native_scan_directory_chooser=choose_scan_directories,
                 native_backup_file_chooser=choose_backup_file,
             )

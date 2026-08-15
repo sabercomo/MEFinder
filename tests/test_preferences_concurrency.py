@@ -18,6 +18,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             {"calibration_view": "list"},
             {"scan_directories": ["D:/Papers", "E:/Notes"]},
             {"pdf_open_mode": "system"},
+            {"document_export_mode": "with_pdf"},
             {"auto_update": True},
             {"citation_styles": ["chinese", "gb", "apa"]},
         )
@@ -27,6 +28,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "calibration_view": "list",
             "scan_directories": [str(Path("D:/Papers")), str(Path("E:/Notes"))],
             "pdf_open_mode": "system",
+            "document_export_mode": "with_pdf",
             "auto_update": True,
             "citation_styles": ["chinese", "gb", "apa"],
             "citation_style": "chinese",

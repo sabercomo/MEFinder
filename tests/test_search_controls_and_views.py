@@ -211,7 +211,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="filter-opts-lang"', HTML)
         self.assertIn('id="filter-opts-type"', HTML)
         self.assertIn("else if (kind === 'lang') libLangFilter = value;", HTML)
-        self.assertIn("(s.language || 'chinese') === libLangFilter", HTML)
+        self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
+        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
 
     def test_library_filters_by_document_type(self) -> None:
         self.assertIn('id="filter-opts-doctype"', HTML)
@@ -272,9 +273,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('value="vision"', HTML)
         self.assertIn("function selectedPdfParseMode()", HTML)
         self.assertIn("parse_mode: q.parseMode || 'auto'", HTML)
-        self.assertIn("parseMode: ext === '.pdf' ? pdfParseMode : null", HTML)
+        self.assertIn("parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null", HTML)
         self.assertIn("/api/import-upload/start", HTML)
         self.assertIn("q.file.slice(offset, end)", HTML)
+        self.assertIn('accept=".pdf,.docx,.mefinder.zip"', HTML)
+        self.assertIn("import_kind: importKind || 'document'", HTML)
+        self.assertNotIn("companion_upload_id", HTML)
+        self.assertNotIn("'parsed_result'", HTML)
         self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
         self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
         self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
@@ -545,6 +550,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="backup-import-choose"', HTML)
         self.assertNotIn('id="backup-import-path"', HTML)
         self.assertIn("function exportBackup()", HTML)
+        self.assertIn("function chooseWindowsExportDirectory()", HTML)
+        self.assertIn("fetch('/api/export-directory/choose'", HTML)
+        self.assertIn("payload.output_dir = outputDirectory", HTML)
         self.assertIn("function importBackup()", HTML)
         self.assertIn('<small id="backup-export-hint">', HTML)
         self.assertIn("仅备份页码、书目和偏好，不含 PDF", HTML)
@@ -555,6 +563,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/backup/import/choose"', WEB_SOURCE)
         self.assertIn('"/api/backup/import"', WEB_SOURCE)
         self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
+
+    def test_document_transfer_setting_controls_export_payload(self) -> None:
+        self.assertIn('data-target="document-transfer-settings"', HTML)
+        self.assertIn('id="document-transfer-settings"', HTML)
+        self.assertIn('value="data_only"', HTML)
+        self.assertIn('value="with_pdf"', HTML)
+        self.assertIn("function setDocumentExportMode(mode)", HTML)
+        self.assertIn(
+            "include_source_pdf: currentDocumentExportMode === 'with_pdf'",
+            HTML,
+        )
 
     def test_every_top_level_settings_section_is_a_switchable_panel(self) -> None:
         settings_start = HTML.index('<div class="settings-page-content">')
@@ -576,6 +595,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "citation-format-settings",
             "bib-completion-settings",
             "backup-settings",
+            "document-transfer-settings",
         }
         self.assertEqual({section_id for _, section_id in sections}, expected_ids)
         for classes, section_id in sections:

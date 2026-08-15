@@ -100,6 +100,7 @@ function openVisionSettings() {
 
 var preferencesLoadPromise = null;
 var pdfOpenModeSaving = false;
+var documentExportModeSaving = false;
 var citationStylesSaving = false;
 
 function normalizeCitationStyles(styles) {
@@ -233,6 +234,33 @@ function renderPdfOpenMode() {
     current.className = 'settings-status';
     var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
     current.textContent = currentPdfOpenMode === 'system' ? systemName : '应用内阅读器';
+  }
+}
+
+function setDocumentExportModeControlsDisabled(disabled) {
+  var options = document.getElementById('document-export-options');
+  if (options) {
+    options.classList.toggle('is-busy', disabled);
+    options.setAttribute('aria-busy', disabled ? 'true' : 'false');
+  }
+  document.querySelectorAll('input[name="document-export-mode"]').forEach(function(input) {
+    input.disabled = disabled;
+  });
+}
+
+function renderDocumentExportMode() {
+  document.querySelectorAll('.document-export-option').forEach(function(option) {
+    var selected = option.dataset.documentExportChoice === currentDocumentExportMode;
+    option.classList.toggle('selected', selected);
+    var input = option.querySelector('input[name="document-export-mode"]');
+    if (input) input.checked = selected;
+  });
+  var current = document.getElementById('document-export-current');
+  if (current) {
+    current.className = 'settings-status';
+    current.textContent = currentDocumentExportMode === 'with_pdf'
+      ? '包含原 PDF'
+      : '仅文档数据';
   }
 }
 
@@ -437,6 +465,9 @@ function applyPreferencesData(data, requestedThemeRevision) {
     syncOnlineAutoMatchControl();
   }
   currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+  currentDocumentExportMode = data.document_export_mode === 'with_pdf'
+    ? 'with_pdf'
+    : 'data_only';
   autoUpdateEnabled = data.auto_update === true;
   enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
   saveLocalCitationStyles(enabledCitationStyles);
@@ -445,6 +476,7 @@ function applyPreferencesData(data, requestedThemeRevision) {
   var autoUpdateInput = document.getElementById('auto-update-enabled');
   if (autoUpdateInput) autoUpdateInput.checked = autoUpdateEnabled;
   renderPdfOpenMode();
+  renderDocumentExportMode();
   renderCitationStylePreferences();
   scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
   renderScanDirectories();
@@ -501,16 +533,52 @@ async function setPdfOpenMode(mode) {
   }
 }
 
+async function setDocumentExportMode(mode) {
+  if (mode !== 'data_only' && mode !== 'with_pdf') return;
+  if (documentExportModeSaving || preferencesLoadPromise) {
+    renderDocumentExportMode();
+    return;
+  }
+  var previousMode = currentDocumentExportMode;
+  currentDocumentExportMode = mode;
+  documentExportModeSaving = true;
+  setDocumentExportModeControlsDisabled(true);
+  renderDocumentExportMode();
+  try {
+    var resp = await fetch('/api/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({document_export_mode: mode})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    currentDocumentExportMode = data.document_export_mode === 'with_pdf'
+      ? 'with_pdf'
+      : 'data_only';
+    preferencesLoaded = true;
+    renderDocumentExportMode();
+  } catch (e) {
+    currentDocumentExportMode = previousMode;
+    renderDocumentExportMode();
+    showToast('文档包导出设置保存失败：' + e.message);
+  } finally {
+    documentExportModeSaving = false;
+    if (!preferencesLoadPromise) setDocumentExportModeControlsDisabled(false);
+  }
+}
+
 async function loadPreferences() {
   if (preferencesLoadPromise) return preferencesLoadPromise;
-  if (pdfOpenModeSaving) return null;
+  if (pdfOpenModeSaving || documentExportModeSaving) return null;
   var requestedThemeRevision = themeRevision;
   renderThemeSelection();
   renderPdfOpenMode();
+  renderDocumentExportMode();
   renderCitationStylePreferences();
   syncOnlineAutoMatchControl();
   syncLibDefaultLanguageControl();
   setPdfOpenModeControlsDisabled(true);
+  setDocumentExportModeControlsDisabled(true);
   setCitationStyleControlsDisabled(true);
   var current = document.getElementById('pdf-reader-current');
   if (current) {
@@ -541,6 +609,7 @@ async function loadPreferences() {
     } finally {
       preferencesLoadPromise = null;
       if (!pdfOpenModeSaving) setPdfOpenModeControlsDisabled(false);
+      if (!documentExportModeSaving) setDocumentExportModeControlsDisabled(false);
       if (!citationStylesSaving) setCitationStyleControlsDisabled(false);
     }
   })();

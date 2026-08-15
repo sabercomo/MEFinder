@@ -14,6 +14,7 @@ from .mineru_api import MinerUError
 
 ShellResponse = Tuple[int, Dict[str, object]]
 NativeDirectoryChooser = Callable[[], Optional[Union[str, Path]]]
+NativeExportDirectoryChooser = Callable[[], Optional[Union[str, Path]]]
 NativeBackupFileChooser = Callable[[], Optional[Union[str, Path]]]
 NativeScanDirectoryChooser = Callable[
     [], Optional[Union[str, Path, Sequence[Union[str, Path]]]]
@@ -62,6 +63,7 @@ class DesktopShellController:
         migrate_data_root: MigrateDataRoot,
         update_service: Optional[UpdateServicePort] = None,
         native_directory_chooser: Optional[NativeDirectoryChooser] = None,
+        native_export_directory_chooser: Optional[NativeExportDirectoryChooser] = None,
         native_scan_directory_chooser: Optional[NativeScanDirectoryChooser] = None,
         native_backup_file_chooser: Optional[NativeBackupFileChooser] = None,
         app_data_root: Optional[Path] = None,
@@ -80,6 +82,7 @@ class DesktopShellController:
         self._migrate_data_root = migrate_data_root
         self._update_service = update_service
         self._native_directory_chooser = native_directory_chooser
+        self._native_export_directory_chooser = native_export_directory_chooser
         self._native_scan_directory_chooser = native_scan_directory_chooser
         self._native_backup_file_chooser = native_backup_file_chooser
         self._app_data_root = app_data_root
@@ -213,6 +216,31 @@ class DesktopShellController:
             "cancelled": False,
             "path": str(path),
             "name": path.name,
+        }
+
+    def choose_export_directory(self) -> ShellResponse:
+        if (
+            self._desktop_shell != "win32"
+            or self._native_export_directory_chooser is None
+        ):
+            return 400, {"error": "当前运行方式不支持选择导出文件夹。"}
+        try:
+            selected_directory = self._native_export_directory_chooser()
+        except (OSError, RuntimeError) as exc:
+            return 500, {"error": f"打开导出文件夹选择器失败：{exc}"}
+        if not selected_directory:
+            return 200, {"ok": True, "cancelled": True}
+        path = Path(str(selected_directory))
+        try:
+            is_directory = path.is_dir()
+        except OSError as exc:
+            return 500, {"error": f"读取所选导出文件夹失败：{exc}"}
+        if not is_directory:
+            return 400, {"error": "所选路径不是文件夹。"}
+        return 200, {
+            "ok": True,
+            "cancelled": False,
+            "path": str(path),
         }
 
     def migrate_data_location(

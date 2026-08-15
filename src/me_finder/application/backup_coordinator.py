@@ -76,11 +76,14 @@ class BackupCoordinator:
         self._restore = restore
         self._config_lock = config_lock
 
-    def export(self) -> Dict[str, object]:
+    def export(self, *, output_dir: Path | None = None) -> Dict[str, object]:
         app_data_root = self._app_data_root()
+        destination = (
+            Path(output_dir) if output_dir is not None else app_data_root / "backups"
+        )
         target = self._write(
             self._paths.runtime_root,
-            app_data_root / "backups",
+            destination,
             app_data_root=app_data_root,
         )
         return {

@@ -314,6 +314,41 @@ class DesktopShellControllerTests(unittest.TestCase):
                 ),
             )
 
+    def test_windows_export_directory_picker_returns_folder_and_cancel(self) -> None:
+        with TemporaryDirectory() as temporary:
+            selected = Path(temporary)
+            controller = self._controller(
+                desktop_shell="win32",
+                native_export_directory_chooser=lambda: selected,
+            )
+
+            self.assertEqual(
+                controller.choose_export_directory(),
+                (
+                    200,
+                    {
+                        "ok": True,
+                        "cancelled": False,
+                        "path": str(selected),
+                    },
+                ),
+            )
+
+        self.assertEqual(
+            self._controller(
+                desktop_shell="win32",
+                native_export_directory_chooser=lambda: None,
+            ).choose_export_directory(),
+            (200, {"ok": True, "cancelled": True}),
+        )
+        self.assertEqual(
+            self._controller(
+                desktop_shell="macos",
+                native_export_directory_chooser=lambda: Path("/unused"),
+            ).choose_export_directory(),
+            (400, {"error": "当前运行方式不支持选择导出文件夹。"}),
+        )
+
     def test_migration_closes_admission_before_rechecking_uploads_and_jobs(
         self,
     ) -> None:

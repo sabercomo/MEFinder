@@ -69,6 +69,15 @@ class DocumentQueryServiceTests(unittest.TestCase):
                     pdf_page_index INTEGER NOT NULL,
                     payload_json TEXT NOT NULL
                 );
+                CREATE TABLE paragraphs (
+                    row_id INTEGER PRIMARY KEY,
+                    source_file_id TEXT NOT NULL,
+                    paragraph_index INTEGER NOT NULL,
+                    eligible_for_search INTEGER NOT NULL,
+                    text_raw TEXT NOT NULL
+                );
+                CREATE INDEX idx_test_paragraphs_source_position
+                ON paragraphs(source_file_id, paragraph_index);
                 """
             )
             connection.commit()
@@ -128,6 +137,17 @@ class DocumentQueryServiceTests(unittest.TestCase):
                         ("ignored", "not-json"),
                     ],
                 )
+                connection.execute(
+                    "INSERT INTO paragraphs "
+                    "(source_file_id, paragraph_index, eligible_for_search, text_raw) "
+                    "VALUES (?, ?, ?, ?)",
+                    (
+                        "importing",
+                        0,
+                        1,
+                        "This is an English document about society and the forms of life.",
+                    ),
+                )
                 connection.commit()
             finally:
                 connection.close()
@@ -162,6 +182,8 @@ class DocumentQueryServiceTests(unittest.TestCase):
                 for item in calibration["items"]
             }
             self.assertEqual(library_items["importing"]["status"], "mapping")
+            self.assertEqual(library_items["importing"]["language_code"], "en")
+            self.assertEqual(library_items["importing"]["language"], "foreign")
             self.assertEqual(
                 library_items["importing"]["imported_at"],
                 "2026-08-11T10:00:00+00:00",

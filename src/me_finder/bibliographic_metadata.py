@@ -21,6 +21,7 @@ METADATA_FIELDS = (
 DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
 RESPONSIBILITY_STATUSES = ("present", "none", "unknown")
 PUBLISHER_PLACES = {
+    "上海古籍出版社": "上海",
     "上海人民出版社": "上海",
     "上海译文出版社": "上海",
     "商务印书馆": "北京",
@@ -41,6 +42,7 @@ PUBLISHER_PLACES = {
     "重庆出版社": "重庆",
     "社会科学文献出版社": "北京",
     "中国社会科学出版社": "北京",
+    "中华书局": "北京",
 }
 KNOWN_PUBLISHERS = sorted(PUBLISHER_PLACES, key=len, reverse=True)
 INVALID_PLACEHOLDERS = {"unknown", "unrecognized", "未识别", "未知", "暂无", "null", "none"}
@@ -58,6 +60,8 @@ PUBLISHER_ALIASES = {
     "China CITIC Press": "中信出版社",
     "CHINA CITIC PRESS": "中信出版社",
     "SDX Joint Publishing Company": "生活·读书·新知三联书店",
+    "中華書局": "中华书局",
+    "商務印書館": "商务印书馆",
 }
 MARX_ENGELS_FIRST_EDITION_YEARS = {
     1: "1956", 2: "1957", 3: "1960", 4: "1958", 5: "1958",
@@ -103,7 +107,10 @@ MIN_AUTO_CONFIDENCE = {
     "issn": 0.9,
 }
 
-_CHINESE_PUBLISHER_SUFFIX = r"(?:出版集团(?:股份有限公司|有限公司)?|出版社|印书馆|书局)"
+_CHINESE_PUBLISHER_SUFFIX = (
+    r"(?:出版(?:集团|集團)(?:股份有限公司|有限公司)?|"
+    r"出版中心|出版社|印书馆|印書館|书局|書局)"
+)
 _CHINESE_NAME_CHARS = r"\u3400-\u4dbf\u4e00-\u9fff·•.．・‧\-—A-Za-z"
 _ENGLISH_NAME_CHARS = r"A-Za-zÀ-ÖØ-öø-ÿĀ-ž'’.\-\s"
 
@@ -297,6 +304,26 @@ def detect_pdf_bibliographic_metadata(
     confidence: Dict[str, object] = {}
     rejected_evidence: Dict[str, object] = {}
 
+    # Windows 为同名下载件追加的 (1)(1) 不是书名的一部分。只在旧标题
+    # 与实际文件名完全相同时修复，不触碰人工编辑过的书名。
+    file_stem = path.stem.strip()
+    repaired_file_title = re.sub(r"(?:\s*\(\d+\))+\s*$", "", file_stem).strip()
+    if (
+        result.get("title")
+        and str(result["title"]).strip() == file_stem
+        and repaired_file_title != file_stem
+        and is_valid_bibliographic_value(repaired_file_title)
+    ):
+        result["title"] = repaired_file_title
+        evidence["title"] = {
+            "source": "file_name_repair",
+            "source_page": None,
+            "evidence_text": path.name,
+            "rule": "windows_duplicate_suffix",
+            "confidence": 0.99,
+        }
+        confidence["title"] = 0.99
+
     collection_defaults, collection_rule = marx_engels_collection_metadata(path.name)
     for field, value in collection_defaults.items():
         if field == "document_type":
@@ -318,7 +345,7 @@ def detect_pdf_bibliographic_metadata(
             "evidence_text": result.get("title"),
             "reason": "pdf_file_name_is_not_a_title",
         }
-        fallback_title = path.stem.strip()
+        fallback_title = repaired_file_title
         result["title"] = fallback_title if is_valid_bibliographic_value(fallback_title) else None
         if result.get("title"):
             evidence["title"] = {
@@ -887,7 +914,7 @@ def _extract_chinese_cip_statement(
         # 数字；数字间的斜杠（《24/7》）属于题名本身。
         rf"(?P<title>.{{2,130}}?)\s*[/／](?!\d)\s*"
         rf"(?P<responsibility>.{{2,110}}?)\s*"
-        rf"(?:[.。．]\s*)?[—–―一\-]{{1,2}}\s*"
+        rf"(?:[.。．]\s*)?(?:[—–―一\-]{{1,2}}\s*)?"
         rf"(?P<place>[\u3400-\u9fff]{{2,8}})\s*[:：]\s*"
         rf"(?P<publisher>[\u3400-\u9fff·\s]{{2,45}}?{_CHINESE_PUBLISHER_SUFFIX})"
         rf"\s*[,，]\s*(?P<year>(?:19|20)\d{{2}})",
@@ -1003,6 +1030,7 @@ def _extract_from_front_matter(
         lines = [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines() if line.strip()]
         page_has_cjk = bool(re.search(r"[\u3400-\u9fff]", normalized))
         for line_index, line in enumerate(lines):
+            cjk_line = re.sub(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])", "", line)
             windows = [line]
             if line_index + 1 < len(lines):
                 windows.append(f"{line} {lines[line_index + 1]}")
@@ -1011,13 +1039,17 @@ def _extract_from_front_matter(
             # 1972年版”与版权页声明同形。含书名号或“年版”的行是引文，
             # 不参与本篇出版社/出版地/年份提取（真正的版权页不用书名号）。
             if "《" in line or "》" in line or "年版" in line:
+                # 老籍出版说明常用“《书名》……，宋某某撰”复核著者。
+                # 只读带“撰”的古籍责任句，仍不从该行提取出版信息。
+                if "撰" in line:
+                    _extract_chinese_people(line, page_idx, candidates)
                 continue
 
             for publisher in KNOWN_PUBLISHERS:
-                if publisher in line:
-                    _add_candidate(candidates, "publisher", publisher, page_idx, line, 0.9, "known_publisher")
+                if publisher in cjk_line:
+                    _add_candidate(candidates, "publisher", publisher, page_idx, cjk_line, 0.9, "known_publisher")
             for publisher_alias, publisher in PUBLISHER_ALIASES.items():
-                if publisher_alias.casefold() in line.casefold():
+                if publisher_alias.casefold() in cjk_line.casefold():
                     _add_candidate(
                         candidates,
                         "publisher",
@@ -1079,14 +1111,14 @@ def _extract_from_front_matter(
                     role_confidence=0.84 if page_has_cjk else 0.98,
                 )
 
-            explicit_place = re.search(r"(?:出版地|出版地点)\s*[:：]\s*([\u4e00-\u9fff]{2,8})", line)
+            explicit_place = re.search(r"(?:出版地|出版地点)\s*[:：]\s*([\u4e00-\u9fff]{2,8})", cjk_line)
             if explicit_place:
                 _add_candidate(
                     candidates,
                     "publish_place",
                     explicit_place.group(1),
                     page_idx,
-                    line,
+                    cjk_line,
                     0.97,
                     "explicit_publication_place",
                 )
@@ -1094,7 +1126,7 @@ def _extract_from_front_matter(
             city_publisher = re.search(
                 rf"(?P<place>[\u3400-\u9fff]{{2,10}})\s*[:：]\s*"
                 rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
-                line,
+                cjk_line,
             )
             if city_publisher and city_publisher.group("place") not in INVALID_PUBLICATION_PLACES:
                 _add_candidate(
@@ -1102,7 +1134,7 @@ def _extract_from_front_matter(
                     "publish_place",
                     city_publisher.group("place"),
                     page_idx,
-                    line,
+                    cjk_line,
                     0.99,
                     "chinese_catalog_statement",
                 )
@@ -1111,15 +1143,15 @@ def _extract_from_front_matter(
                     "publisher",
                     _clean_publisher(city_publisher.group("publisher")),
                     page_idx,
-                    line,
+                    cjk_line,
                     0.99,
                     "chinese_catalog_statement",
                 )
 
             labelled_publisher = re.search(
-                rf"(?:出版发行|出版者|出版社)\s*[:：]\s*"
+                rf"(?:出版发行|出版者|出版社)(?:\s*[:：]\s*|\s+)"
                 rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
-                line,
+                cjk_line,
             )
             if labelled_publisher:
                 _add_candidate(
@@ -1127,21 +1159,37 @@ def _extract_from_front_matter(
                     "publisher",
                     _clean_publisher(labelled_publisher.group("publisher")),
                     page_idx,
-                    line,
+                    cjk_line,
                     0.97,
                     "labelled_chinese_publisher",
                 )
 
+            standalone_publisher = re.fullmatch(
+                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})"
+                rf"(?:出版|發行|发行)?",
+                cjk_line,
+            )
+            if standalone_publisher:
+                _add_candidate(
+                    candidates,
+                    "publisher",
+                    _clean_publisher(standalone_publisher.group("publisher")),
+                    page_idx,
+                    cjk_line,
+                    0.98,
+                    "standalone_chinese_publisher",
+                )
+
             for generic_publisher in re.finditer(
                 rf"([\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
-                line,
+                cjk_line,
             ):
                 _add_candidate(
                     candidates,
                     "publisher",
                     _clean_publisher(generic_publisher.group(1)),
                     page_idx,
-                    line,
+                    cjk_line,
                     0.86,
                     "generic_chinese_publisher",
                 )
@@ -1959,11 +2007,14 @@ def _extract_chinese_people(
     candidates: Dict[str, List[_MetadataCandidate]],
 ) -> None:
     country = r"(?:[\[［【(（〔](?P<country>[^\]］】)）〕]{1,8})[\]］】)）〕]\s*)?"
+    required_country = r"[\[［【(（〔](?P<country>[^\]］】)）〕]{1,8})[\]］】)）〕]\s*"
     name = rf"(?P<name>[{_CHINESE_NAME_CHARS}][{_CHINESE_NAME_CHARS}\s,，、]{{1,48}}?)"
+    short_name = rf"(?P<name>[{_CHINESE_NAME_CHARS}][{_CHINESE_NAME_CHARS}\s,，、]{{1,14}}?)"
 
     author_patterns = (
         (rf"(?:著者|作者)\s*[:：]\s*{country}{name}(?=$|[;；])", "labelled_chinese_author", 0.98),
         (rf"{country}{name}\s*(?:[/／]\s*)?著(?=$|[\s,，;；.。/／])", "chinese_author_role", 0.96),
+        (rf"^{required_country}{short_name}\s*撰(?=$|[\s,，;；.。/／])", "classical_chinese_author_role", 0.98),
     )
     for pattern, rule, score in author_patterns:
         match = re.search(pattern, line, flags=re.IGNORECASE)
@@ -1979,6 +2030,33 @@ def _extract_chinese_people(
                     score,
                     rule,
                 )
+
+    classical_prose = re.search(
+        rf"(?:^|[,，;；。：《》])"
+        rf"(?P<country>先秦|秦|西漢|东汉|東漢|漢|汉|魏|晉|晋|隨|隋|唐|五代|宋|遼|辽|金|元|明|清|民國|民国)"
+        rf"(?P<name>[{_CHINESE_NAME_CHARS}]{{2,10}}?)"
+        rf"(?:[（(][^)）]{{1,32}}[)）])?\s*撰(?=$|[\s,，;；.。])",
+        line,
+    )
+    if classical_prose:
+        _add_candidate(
+            candidates,
+            "author",
+            _clean_people(classical_prose.group("name")),
+            page_idx,
+            line,
+            0.95,
+            "classical_chinese_authorship_prose",
+        )
+        _add_candidate(
+            candidates,
+            "country",
+            classical_prose.group("country"),
+            page_idx,
+            line,
+            0.95,
+            "classical_chinese_authorship_prose",
+        )
 
     translator_patterns = (
         (

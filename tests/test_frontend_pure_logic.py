@@ -454,6 +454,12 @@ class ImportStepsForTests(unittest.TestCase):
             ["读取文件", "文本入库", "建立索引"],
         )
 
+    def test_document_package_restores_metadata_and_pages(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "document_package"}),
+            ["读取文档包", "校验版本", "恢复书目与页码", "建立索引"],
+        )
+
     def test_pdf_mineru_route(self):
         self.assertEqual(
             _call("importStepsFor", {"type": "pdf", "route": "mineru"}),
@@ -658,9 +664,41 @@ class SpreadCitationPairTests(unittest.TestCase):
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class LibLangChipLabelTests(unittest.TestCase):
-    def test_chinese_and_foreign(self):
+    def test_language_group_and_detail_labels(self):
         self.assertEqual(_call("libLangChipLabel", "chinese"), "中文")
-        self.assertEqual(_call("libLangChipLabel", "latin"), "外文")
+        self.assertEqual(_call("libLangChipLabel", "foreign"), "外文")
+        self.assertEqual(_call("libLangChipLabel", "zh-Hans"), "简体中文")
+        self.assertEqual(_call("libLangChipLabel", "zh-Hant"), "繁体中文")
+        self.assertEqual(_call("libLangChipLabel", "en"), "英语")
+        self.assertEqual(_call("libLangChipLabel", "de"), "德语")
+        self.assertEqual(_call("libLangChipLabel", "fr"), "法语")
+        self.assertEqual(_call("libLangChipLabel", "ja"), "日语")
+
+    def test_language_detail_falls_back_for_old_catalog_rows(self):
+        self.assertEqual(_call("libraryLanguageCode", {"language": "chinese"}), "zh-Hans")
+        self.assertEqual(_call("libraryLanguageCode", {"language": "foreign"}), "other")
+        self.assertEqual(_call("libraryLanguageGroup", {"language_code": "zh-Hant"}), "chinese")
+        self.assertEqual(_call("libraryLanguageGroup", {"language_code": "fr"}), "foreign")
+
+    def test_facets_only_include_present_languages_and_follow_group_priority(self):
+        sources = [
+            {"language_code": "zh-Hans", "language": "chinese"},
+            {"language_code": "zh-Hant", "language": "chinese"},
+            {"language_code": "en", "language": "foreign"},
+            {"language_code": "en", "language": "foreign"},
+            {"language_code": "de", "language": "foreign"},
+        ]
+        chinese_first = _call("libraryLanguageFacetOptions", sources, "chinese")
+        foreign_first = _call("libraryLanguageFacetOptions", sources, "foreign")
+        self.assertEqual(
+            [(item["v"], item["n"]) for item in chinese_first],
+            [("zh-Hans", 1), ("zh-Hant", 1), ("en", 2), ("de", 1)],
+        )
+        self.assertEqual(
+            [item["v"] for item in foreign_first],
+            ["en", "de", "zh-Hans", "zh-Hant"],
+        )
+        self.assertNotIn("fr", [item["v"] for item in chinese_first])
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

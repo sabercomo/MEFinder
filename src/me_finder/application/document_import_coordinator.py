@@ -20,7 +20,14 @@ from typing import (
 
 from ..app_context import AppPaths
 from ..chunked_upload import ChunkedUploadStore
+from ..document_export import DocumentExportError, extract_embedded_source_pdf
+from ..document_package_import import (
+    DocumentPackageImportError,
+    build_document_package_records,
+    read_document_package,
+)
 from ..import_resume import sha256_file
+from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError
 from ..pdf_import_service import (
     cleanup_stale_document_storage_files,
@@ -28,12 +35,34 @@ from ..pdf_import_service import (
     detect_imported_pdf,
     document_storage_error,
     document_storage_target,
+    load_import_config,
+    locked_import_config,
     release_document_storage_target,
+    save_import_config,
 )
 from ..vision_api import VisionAPIError
 
 
 class ImportJobsPort(Protocol):
+    def register_background_job(self, job: Mapping[str, object]) -> None:
+        ...
+
+    def submit_background_task(
+        self, task: Callable[..., None], *args: object
+    ) -> None:
+        ...
+
+    def update_import_job(self, job_id: str, **updates: object) -> None:
+        ...
+
+    def replace_imported_source(
+        self,
+        job_id: str,
+        extracted: Mapping[str, object],
+        source_file_id: str,
+    ) -> None:
+        ...
+
     def register_pdf_for_import(
         self,
         target: Path,
@@ -173,15 +202,28 @@ class DocumentImportCoordinator:
         *,
         pdf_parse_mode: object = "auto",
         vision_provider_id: object = "",
+        import_kind: object = "document",
     ) -> Dict[str, object]:
         with self._admission():
             suffix = Path(filename).suffix.lower()
-            if suffix not in {".pdf", ".docx"}:
-                raise MinerUError("只支持 PDF 或 DOCX 文件。")
-            mode, provider_id = self.validate_parse_options(
-                pdf_parse_mode,
-                vision_provider_id,
-            )
+            kind = str(import_kind or "document").strip().lower()
+            allowed = {
+                "document": {".pdf", ".docx"},
+                "document_package": {".zip"},
+            }
+            if kind not in allowed or suffix not in allowed[kind]:
+                raise MinerUError("导入文件类型与导入方式不匹配。")
+            if kind == "document_package" and not filename.lower().endswith(
+                ".mefinder.zip"
+            ):
+                raise MinerUError("文档包文件名必须以 .mefinder.zip 结尾。")
+            if kind == "document":
+                mode, provider_id = self.validate_parse_options(
+                    pdf_parse_mode,
+                    vision_provider_id,
+                )
+            else:
+                mode, provider_id = "provided", ""
             result = self._chunked_uploads.start(
                 filename,
                 total_size,
@@ -189,6 +231,7 @@ class DocumentImportCoordinator:
                     "is_pdf": "1" if suffix == ".pdf" else "0",
                     "parse_mode": mode,
                     "provider_id": provider_id,
+                    "import_kind": kind,
                 },
             )
             result.update({"file_name": Path(filename).name})
@@ -254,6 +297,22 @@ class DocumentImportCoordinator:
             staged_path: Optional[Path] = completed.temp_path
             try:
                 metadata = dict(completed.metadata)
+                import_kind = str(metadata.get("import_kind") or "document")
+                if import_kind == "document_package":
+                    artifact_path = self._store_artifact_completed(
+                        completed.filename,
+                        completed.total_size,
+                        completed.temp_path,
+                    )
+                    staged_path = None
+                    try:
+                        return self._start_document_package_import(
+                            artifact_path,
+                            display_file_name=completed.filename,
+                        )
+                    except Exception:
+                        artifact_path.unlink(missing_ok=True)
+                        raise
                 is_pdf = metadata.get("is_pdf") == "1"
                 mode, provider_id = self.validate_parse_options(
                     metadata.get("parse_mode", "auto"),
@@ -286,6 +345,291 @@ class DocumentImportCoordinator:
                         staged_path.unlink(missing_ok=True)
                     except OSError:
                         pass
+
+    def _store_artifact_completed(
+        self,
+        filename: str,
+        length: int,
+        staged_path: Path,
+    ) -> Path:
+        if length <= 0 or staged_path.stat().st_size != length:
+            raise MinerUError("上传文件大小校验失败。")
+        safe_name = Path(filename).name
+        if not safe_name or safe_name in {".", ".."}:
+            raise MinerUError("无法识别文件名。")
+        directory = self._paths.corpus_root / "parsed" / "imports"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"import-{uuid.uuid4().hex[:12]}-{safe_name}"
+        try:
+            staged_path.replace(target)
+        except OSError as exc:
+            raise document_storage_error(safe_name, exc) from exc
+        return target
+
+    def _start_document_package_import(
+        self,
+        artifact_path: Path,
+        *,
+        display_file_name: str,
+    ) -> Dict[str, object]:
+        job_id = f"artifact-import-{uuid.uuid4().hex[:12]}"
+        self._jobs.register_background_job(
+            {
+                "job_id": job_id,
+                "status": "processing",
+                "phase": "validating_result",
+                "message": "正在校验 MEFinder 文档包…",
+                "file_name": Path(display_file_name).name,
+                "file_type": "document_package",
+                "size_bytes": artifact_path.stat().st_size,
+                "parse_route": "provided",
+                "can_resume": False,
+            }
+        )
+        try:
+            self._jobs.submit_background_task(
+                self._run_document_package_import,
+                job_id,
+                artifact_path,
+            )
+        except (ImportQueueFullError, ImportQueueClosedError) as exc:
+            self._jobs.update_import_job(
+                job_id,
+                status="failed",
+                phase="queue_failed",
+                message="文档包导入任务未能进入队列。",
+            )
+            artifact_path.unlink(missing_ok=True)
+            raise MinerUError("导入任务暂时无法启动，请稍后重试。") from exc
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "file_name": Path(display_file_name).name,
+            "file_type": "document_package",
+            "parse_route": "provided",
+        }
+
+    def _run_document_package_import(
+        self,
+        job_id: str,
+        artifact_path: Path,
+    ) -> None:
+        reserved_source_id = ""
+        imported_pdf: Optional[Path] = None
+        embedded_pdf = artifact_path.with_name(
+            f".embedded-{uuid.uuid4().hex[:12]}.pdf"
+        )
+        completed = False
+        try:
+            package = read_document_package(artifact_path)
+            self._jobs.update_import_job(
+                job_id,
+                phase="text_parsing",
+                message="格式校验通过，正在恢复页级文本、书目和页码…",
+            )
+            extracted_pdf = extract_embedded_source_pdf(
+                artifact_path,
+                embedded_pdf,
+            )
+            if extracted_pdf is not None:
+                profile = self._detect_pdf(extracted_pdf)
+                actual_page_count = int(profile.get("pdf_page_count") or 0)
+                package_last_page = max(
+                    int(page["physical_pdf_page"]) for page in package.pages
+                )
+                if actual_page_count and package_last_page > actual_page_count:
+                    raise DocumentPackageImportError(
+                        "文档包的物理页码超出了包内原 PDF 的总页数。"
+                    )
+
+            source_path: Optional[Path] = None
+            if extracted_pdf is not None:
+                imported_pdf = self._copy_local(
+                    self._paths.runtime_root,
+                    extracted_pdf,
+                )
+                document, source_file_id, source_path = (
+                    self._jobs.register_pdf_for_import(
+                        imported_pdf,
+                        original_file_name=package.source_file_name,
+                    )
+                )
+                reserved_source_id = source_file_id
+                document_id = str(document.get("document_id") or source_file_id)
+                original_file_name = str(
+                    document.get("original_file_name") or source_path.name
+                )
+            else:
+                source_file_id = f"pdf-import-{package.source_sha256[:16]}"
+                document_id = source_file_id.upper().replace("-", "_")
+                source_path = self._configured_pdf_path(
+                    source_file_id,
+                    expected_sha256=package.source_sha256,
+                )
+                original_file_name = package.source_file_name
+
+            extracted, mapping_segments = build_document_package_records(
+                package,
+                package_path=artifact_path,
+                source_file_id=source_file_id,
+                document_id=document_id,
+                runtime_root=self._paths.runtime_root,
+                source_path=source_path,
+            )
+            source = extracted["source_files"][0]
+            if source.get("source_type") == "pdf":
+                self._persist_imported_pdf_config(
+                    source_file_id=source_file_id,
+                    document_id=document_id,
+                    file_name=(
+                        source_path.name
+                        if source_path is not None
+                        else original_file_name
+                    ),
+                    title=package.title,
+                    metadata=package.bibliographic_metadata,
+                    mapping_segments=mapping_segments,
+                )
+            self._jobs.update_import_job(
+                job_id,
+                source_file_id=source_file_id,
+                page_count=len(package.pages),
+            )
+            self._jobs.replace_imported_source(
+                job_id,
+                extracted,
+                source_file_id,
+            )
+            self._jobs.update_import_job(
+                job_id,
+                status="completed",
+                phase="completed",
+                source_file_id=source_file_id,
+                message=(
+                    f"已恢复 {len(package.pages)} 页文档数据"
+                    + ("和原 PDF" if extracted_pdf is not None else "")
+                    + "，未运行 OCR。"
+                ),
+            )
+            completed = True
+        except (
+            DocumentPackageImportError,
+            DocumentExportError,
+            MinerUError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
+            self._jobs.update_import_job(
+                job_id,
+                status="failed",
+                phase="failed",
+                failure_stage=(
+                    "validation"
+                    if isinstance(exc, (DocumentPackageImportError, DocumentExportError))
+                    else "index"
+                ),
+                can_resume=False,
+                message=f"导入 MEFinder 文档包失败：{exc}",
+            )
+        except Exception as exc:
+            logging.exception("document package import failed")
+            self._jobs.update_import_job(
+                job_id,
+                status="failed",
+                phase="failed",
+                failure_stage="index",
+                can_resume=False,
+                message=f"导入 MEFinder 文档包失败：{type(exc).__name__}: {exc}",
+            )
+        finally:
+            if reserved_source_id:
+                self._jobs.release_import_reservation(reserved_source_id)
+            embedded_pdf.unlink(missing_ok=True)
+            artifact_path.unlink(missing_ok=True)
+            if imported_pdf is not None and not completed:
+                self._jobs.cleanup_unreferenced_import_target(imported_pdf)
+
+    def _configured_pdf_path(
+        self,
+        source_file_id: str,
+        *,
+        expected_sha256: Optional[str],
+    ) -> Optional[Path]:
+        config = load_import_config(
+            self._paths.config_root / "pdf_imports.json"
+        )
+        document = next(
+            (
+                item
+                for item in config.get("documents", [])
+                if isinstance(item, Mapping)
+                and str(item.get("source_file_id") or "") == source_file_id
+            ),
+            None,
+        )
+        if document is None:
+            return None
+        raw_name = str(document.get("file_name") or "").strip()
+        if not raw_name:
+            return None
+        candidate = Path(raw_name)
+        if not candidate.is_absolute():
+            candidate = self._paths.corpus_root / "raw_pdf" / candidate
+        if not candidate.is_file():
+            return None
+        if expected_sha256 and self._hash_file(candidate) != expected_sha256:
+            return None
+        return candidate
+
+    def _persist_imported_pdf_config(
+        self,
+        *,
+        source_file_id: str,
+        document_id: str,
+        file_name: str,
+        title: str,
+        metadata: Mapping[str, object],
+        mapping_segments: Sequence[Mapping[str, object]],
+    ) -> None:
+        config_path = self._paths.config_root / "pdf_imports.json"
+        with locked_import_config(config_path) as config:
+            documents = config["documents"]
+            document = next(
+                (
+                    item
+                    for item in documents
+                    if isinstance(item, dict)
+                    and str(item.get("source_file_id") or "") == source_file_id
+                ),
+                None,
+            )
+            if document is None:
+                document = {
+                    "enabled": True,
+                    "source_file_id": source_file_id,
+                    "document_id": document_id,
+                    "file_name": Path(file_name).name,
+                    "original_file_name": Path(file_name).name,
+                }
+                documents.append(document)
+            document["enabled"] = True
+            document["title"] = str(metadata.get("title") or title)
+            for key, value in metadata.items():
+                if value not in (None, ""):
+                    document[key] = value
+            if mapping_segments:
+                document["page_mapping"] = {
+                    "validated_by": "document_package",
+                    "mapping_origin": "document_package",
+                    "segments": [dict(item) for item in mapping_segments],
+                }
+            else:
+                document.setdefault(
+                    "page_mapping",
+                    {"validated_by": None, "segments": []},
+                )
+            save_import_config(config_path, config)
 
     def import_local(
         self,

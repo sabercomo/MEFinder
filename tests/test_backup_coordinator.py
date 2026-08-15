@@ -117,6 +117,25 @@ class BackupCoordinatorTests(unittest.TestCase):
             self.assertEqual(calls[0][1], target.parent)
             self.assertEqual(calls[0][2], root / "app-data")
 
+    def test_export_uses_selected_output_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected = root / "selected"
+            selected.mkdir()
+            target = selected / "backup.zip"
+            target.write_bytes(b"zip")
+            destinations = []
+
+            def write(_runtime_root, destination, *, app_data_root):
+                destinations.append((destination, app_data_root))
+                return target
+
+            coordinator, _jobs, _events = self._coordinator(root, write=write)
+            result = coordinator.export(output_dir=selected)
+
+            self.assertEqual(result["path"], str(target))
+            self.assertEqual(destinations, [(selected, root / "app-data")])
+
     def test_restore_preserves_lock_order_and_job_messages(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

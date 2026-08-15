@@ -148,6 +148,7 @@ try {
         tests.test_structured_reader_web `
         tests.test_batch_directory_import `
         tests.test_calibration_library_ui `
+        tests.test_document_package_import `
         tests.test_directory_scan `
         tests.test_import_queue `
         tests.test_import_resume_mineru `

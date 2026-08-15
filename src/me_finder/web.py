@@ -151,6 +151,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/import-resume",
         "/api/import-resume-dismiss",
         "/api/bibliographic-metadata/batch-detect",
+        "/api/export-directory/choose",
         "/api/backup/export",
         "/api/document/export",
         "/api/backup/import",
@@ -383,6 +384,7 @@ def open_pdf_in_adobe(target: Path, page_number: Optional[int]) -> Optional[Dict
 NativePDFOpener = Callable[[Path, Optional[int]], Dict[str, object]]
 NativeThemeSetter = Callable[[str], None]
 NativeDirectoryChooser = Callable[[], Optional[str]]
+NativeExportDirectoryChooser = Callable[[], Optional[str]]
 NativeScanDirectoryChooser = Callable[[], Optional[Union[str, Sequence[str]]]]
 NativeBackupFileChooser = Callable[[], Optional[str]]
 
@@ -556,6 +558,7 @@ def make_handler(
     native_theme_setter: NativeThemeSetter | None = None,
     update_service: object | None = None,
     native_directory_chooser: NativeDirectoryChooser | None = None,
+    native_export_directory_chooser: NativeExportDirectoryChooser | None = None,
     native_scan_directory_chooser: NativeScanDirectoryChooser | None = None,
     native_backup_file_chooser: NativeBackupFileChooser | None = None,
     app_data_root: Path | None = None,
@@ -1011,6 +1014,7 @@ def make_handler(
         ),
         update_service=update_service,
         native_directory_chooser=native_directory_chooser,
+        native_export_directory_chooser=native_export_directory_chooser,
         native_scan_directory_chooser=native_scan_directory_chooser,
         native_backup_file_chooser=native_backup_file_chooser,
         app_data_root=app_data_root,
@@ -1032,6 +1036,9 @@ def make_handler(
         ),
         "/api/backup/import/choose": (
             lambda _payload: desktop_shell_controller.choose_backup_file()
+        ),
+        "/api/export-directory/choose": (
+            lambda _payload: desktop_shell_controller.choose_export_directory()
         ),
         "/api/data-location/choose": (
             lambda _payload: desktop_shell_controller.choose_data_location()
@@ -1067,6 +1074,14 @@ def make_handler(
 
         def _send_json(self, data: object, status: int = 200) -> None:
             self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+        def _discard_small_request_body(self) -> None:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except (TypeError, ValueError):
+                return
+            if 0 < length <= MAX_JSON_REQUEST_BYTES:
+                self.rfile.read(length)
 
         def _validated_request_host(
             self,
@@ -1254,6 +1269,7 @@ def make_handler(
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
             if self._reject_untrusted_request():
+                self._discard_small_request_body()
                 return
             content_type = str(self.headers.get("Content-Type") or "")
             media_type = content_type.partition(";")[0].strip().casefold()
@@ -1269,6 +1285,7 @@ def make_handler(
                 invalid_content_type = media_type != "application/json"
                 content_type_error = "JSON 请求必须使用 application/json。"
             if invalid_content_type:
+                self._discard_small_request_body()
                 self._send_json(
                     {"error": content_type_error},
                     status=415,
@@ -1281,11 +1298,13 @@ def make_handler(
                 with data_root_admission.operation():
                     self._do_POST()
             except DataRootAdmissionError as exc:
+                self._discard_small_request_body()
                 self._send_json({"error": str(exc)}, status=409)
 
         def _do_POST(self) -> None:
             parsed = urlparse(self.path)
             if index_runtime.closing:
+                self._discard_small_request_body()
                 self._send_json({"error": "应用正在关闭。"}, status=503)
                 return
             if parsed.path == "/api/import":
@@ -1363,6 +1382,7 @@ def make_handler(
                 self._send_json({"error": "引文请求内容过大。"}, status=413)
                 return
             if parsed.path == "/api/bibliographic-metadata/parse-cnki-citation" and length > 32 * 1024:
+                self.rfile.read(length)
                 self._send_json({"error": "知网引用文字过大，请只粘贴一条引文。"}, status=413)
                 return
             if (
@@ -1397,13 +1417,6 @@ def make_handler(
                     self._send_json({"error": "上传开始请求必须是 JSON 对象。"}, status=400)
                     return
                 filename = str(payload.get("file_name") or payload.get("filename") or "")
-                suffix = Path(filename).suffix.lower()
-                if suffix not in {".pdf", ".docx"}:
-                    self._send_json(
-                        {"error": "只支持 PDF 或 DOCX 文件。"},
-                        status=400,
-                    )
-                    return
                 try:
                     total_size = int(payload.get("size") or 0)
                     result = document_imports.start_chunked(
@@ -1411,6 +1424,7 @@ def make_handler(
                         total_size,
                         pdf_parse_mode=payload.get("parse_mode", "auto"),
                         vision_provider_id=payload.get("provider_id", ""),
+                        import_kind=payload.get("import_kind", "document"),
                     )
                     self._send_json(result)
                 except ChunkedUploadError as exc:

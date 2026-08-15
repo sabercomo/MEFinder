@@ -88,6 +88,7 @@ let persistedTheme = currentTheme;
 let themeRevision = 0;
 let themeSaveQueue = Promise.resolve();
 let currentPdfOpenMode = 'native';
+let currentDocumentExportMode = 'data_only';
 let autoUpdateEnabled = false;
 let updateAutoStarted = false;
 let updateState = {status: 'idle', can_self_update: false};

@@ -12,6 +12,28 @@ from .collection_metadata import infer_collection_metadata
 
 
 _CJK_RE = re.compile(r"[㐀-鿿]")
+_KANA_RE = re.compile(r"[\u3040-\u30ff]")
+_HANGUL_RE = re.compile(r"[\uac00-\ud7af]")
+_CYRILLIC_RE = re.compile(r"[\u0400-\u04ff]")
+_WORD_RE = re.compile(r"[a-zà-öø-ÿā-ž]+")
+
+_SIMPLIFIED_HINTS = frozenset(
+    "这为个国书学与发后业专东对会时来们从实应说还进过开关门无长华"
+    "简体阅页数术论历经现总类区记语释鉴丛编辑设责处条线归译读写"
+)
+_TRADITIONAL_HINTS = frozenset(
+    "這為個國書學與發後業專東對會時來們從實應說還進過開關門無長華"
+    "簡體閱頁數術論歷經現總類區記語釋鑑叢編輯設責處條線歸譯讀寫"
+)
+_LANGUAGE_STOPWORDS = {
+    "en": frozenset("the of and to in a is that for as with by on from this are be or an which not it was at have has".split()),
+    "de": frozenset("der die das und ist zu den von mit sich des auf für als im dem nicht ein eine auch werden aus bei durch sind war wird".split()),
+    "fr": frozenset("le la les de des du et est à en un une que qui pour dans sur avec par ce cette pas sont au aux se".split()),
+    "es": frozenset("el la los las de del y en un una que por para con es no se al como más son".split()),
+    "it": frozenset("il lo la i gli le di del della e è un una che per con in non si come sono".split()),
+    "pt": frozenset("o a os as de do da e em um uma que por para com é não se ao como são".split()),
+    "ru": frozenset("и в не на что с по для как это из к о от же за был быть при".split()),
+}
 
 
 def _item_language(title: object, author: object, file_name: object = None) -> str:
@@ -28,6 +50,70 @@ def _item_language(title: object, author: object, file_name: object = None) -> s
     if _CJK_RE.search(Path(str(file_name or "")).stem):
         return "chinese"
     return "foreign"
+
+
+def _item_language_code(
+    sample: object,
+    title: object,
+    author: object,
+    file_name: object = None,
+) -> str:
+    """Identify the language used by the indexed body text.
+
+    Script distinctions are deterministic.  Closely related Latin languages
+    use common function words from a bounded body sample; a tie stays
+    unidentified instead of being guessed from a short title.
+    """
+
+    fallback = " ".join(
+        value
+        for value in (
+            str(title or "").strip(),
+            str(author or "").strip(),
+            Path(str(file_name or "")).stem,
+        )
+        if value
+    )
+    body = str(sample or "").strip()
+    text = f"{body}\n{fallback}" if body else fallback
+    if not text:
+        return "und"
+
+    kana_count = len(_KANA_RE.findall(text))
+    hangul_count = len(_HANGUL_RE.findall(text))
+    han_count = len(_CJK_RE.findall(text))
+    if kana_count >= 8 and kana_count * 10 >= max(han_count, 1):
+        return "ja"
+    if hangul_count >= 8 and hangul_count * 5 >= max(han_count, 1):
+        return "ko"
+    if han_count:
+        simplified = sum(text.count(char) for char in _SIMPLIFIED_HINTS)
+        traditional = sum(text.count(char) for char in _TRADITIONAL_HINTS)
+        if traditional > simplified:
+            return "zh-Hant"
+        return "zh-Hans"
+
+    lowered = text.casefold()
+    if _CYRILLIC_RE.search(lowered):
+        words = re.findall(r"[\u0400-\u04ff]+", lowered)
+        russian_score = sum(word in _LANGUAGE_STOPWORDS["ru"] for word in words)
+        return "ru" if russian_score >= 2 else "und"
+
+    words = _WORD_RE.findall(lowered)
+    if not words:
+        return "und"
+    scores = {
+        code: sum(word in stopwords for word in words)
+        for code, stopwords in _LANGUAGE_STOPWORDS.items()
+        if code != "ru"
+    }
+    scores["de"] += 3 * sum(char in lowered for char in "äöüß")
+    scores["fr"] += 3 * sum(char in lowered for char in "àâçéèêëîïôûùÿœæ")
+    scores["es"] += 3 * sum(char in lowered for char in "ñ¿¡")
+    scores["pt"] += 3 * sum(char in lowered for char in "ãõ")
+    best_score = max(scores.values())
+    winners = [code for code, score in scores.items() if score == best_score]
+    return winners[0] if best_score >= 2 and len(winners) == 1 else "und"
 
 
 # 文献列表只需要书名、作者、分类和状态。映射区间、识别证据和 PDF 剖面
@@ -66,6 +152,7 @@ def build_library(
     documents: Sequence[Mapping[str, object]],
     latest_runs: Optional[Mapping[str, Mapping[str, object]]] = None,
     active_source_ids: Optional[Iterable[str]] = None,
+    language_samples: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, object]:
     """Return the unified library payload for every source.
 
@@ -115,6 +202,7 @@ def build_library(
     for work in works:
         works_by_volume.setdefault(str(work.get("volume_id")), []).append(work)
 
+    language_samples = language_samples or {}
     items: List[Dict[str, object]] = []
     for source in source_files:
         source_id = str(source.get("source_file_id") or "")
@@ -165,8 +253,21 @@ def build_library(
                 item["author"] = explicit_responsibility
             else:
                 item["author"] = inferred_author
-        item["language"] = _item_language(
-            item.get("title"), item.get("author"), item.get("file_name")
+        language_code = _item_language_code(
+            language_samples.get(source_id),
+            item.get("title"),
+            item.get("author"),
+            item.get("file_name"),
+        )
+        item["language_code"] = language_code
+        item["language"] = (
+            "chinese"
+            if language_code.startswith("zh-")
+            else "foreign"
+            if language_code != "und"
+            else _item_language(
+                item.get("title"), item.get("author"), item.get("file_name")
+            )
         )
         bibliographic = item.get("bibliographic_metadata") if isinstance(item.get("bibliographic_metadata"), Mapping) else {}
         item["document_type"] = (
