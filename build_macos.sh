@@ -141,6 +141,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_database_resilience \
   tests.test_desktop_portable \
   tests.test_desktop_shell_controller \
+  tests.test_document_package_import \
   tests.test_directory_scan \
   tests.test_fts_search_scalability \
   tests.test_import_config_concurrency \

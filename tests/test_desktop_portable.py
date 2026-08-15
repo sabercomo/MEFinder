@@ -98,7 +98,7 @@ class DesktopPortableTests(unittest.TestCase):
             desktop_source,
         )
 
-    def test_windows_export_picker_uses_native_folder_selection(self) -> None:
+    def test_desktop_export_picker_uses_native_folder_selection(self) -> None:
         desktop_source = Path("desktop.py").read_text(encoding="utf-8")
 
         self.assertIn("def choose_export_directory()", desktop_source)
@@ -107,7 +107,7 @@ class DesktopPortableTests(unittest.TestCase):
             desktop_source,
         )
         self.assertIn(
-            'choose_export_directory if sys.platform == "win32" else None',
+            'if sys.platform in {"darwin", "win32"}',
             desktop_source,
         )
 

@@ -310,7 +310,7 @@ function loadMineruStatistics() {
 async function exportBackup() {
   var hint = document.getElementById('backup-export-hint');
   try {
-    var outputDirectory = await chooseWindowsExportDirectory();
+    var outputDirectory = await chooseDesktopExportDirectory();
     if (outputDirectory === null) return;
     if (hint) hint.textContent = '正在导出…';
     var payload = {};

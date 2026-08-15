@@ -698,7 +698,7 @@ function drawerMainActionsHTML(src) {
 async function exportLibraryDocument(sourceId) {
   if (!sourceId) return;
   try {
-    var outputDirectory = await chooseWindowsExportDirectory();
+    var outputDirectory = await chooseDesktopExportDirectory();
     if (outputDirectory === null) return;
     showToast('正在导出 MEFinder 文档包…');
     var data = await requestLibraryDocumentExport(sourceId, outputDirectory);
@@ -738,7 +738,7 @@ async function exportSelectedLibraryDocuments() {
 
   var outputDirectory;
   try {
-    outputDirectory = await chooseWindowsExportDirectory();
+    outputDirectory = await chooseDesktopExportDirectory();
   } catch (error) {
     showToast('选择导出文件夹失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
     return;

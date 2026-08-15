@@ -219,7 +219,7 @@ class DocumentExportHTTPTests(unittest.TestCase):
             self.assertEqual(payload["schema_version"], "mefinder.document.v1")
             self.assertTrue(payload["includes_source_pdf"])
             self.assertTrue(Path(payload["path"]).is_file())
-            self.assertEqual(Path(payload["path"]).parent, selected_output)
+            self.assertEqual(Path(payload["path"]).parent, selected_output.resolve())
 
         source = Path("src/me_finder/static/js/30-library.js").read_text(
             encoding="utf-8"

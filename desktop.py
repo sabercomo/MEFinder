@@ -659,7 +659,9 @@ def main() -> None:
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
                 native_export_directory_chooser=(
-                    choose_export_directory if sys.platform == "win32" else None
+                    choose_export_directory
+                    if sys.platform in {"darwin", "win32"}
+                    else None
                 ),
                 native_scan_directory_chooser=choose_scan_directories,
                 native_backup_file_chooser=choose_backup_file,

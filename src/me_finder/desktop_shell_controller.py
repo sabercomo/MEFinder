@@ -220,7 +220,7 @@ class DesktopShellController:
 
     def choose_export_directory(self) -> ShellResponse:
         if (
-            self._desktop_shell != "win32"
+            self._desktop_shell not in {"macos", "win32"}
             or self._native_export_directory_chooser is None
         ):
             return 400, {"error": "当前运行方式不支持选择导出文件夹。"}

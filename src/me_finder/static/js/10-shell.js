@@ -26,8 +26,8 @@ function closeWindowsWindow() {
   callWindowsWindow('close');
 }
 
-async function chooseWindowsExportDirectory() {
-  if (desktopShell !== 'win32') return undefined;
+async function chooseDesktopExportDirectory() {
+  if (desktopShell !== 'macos' && desktopShell !== 'win32') return undefined;
   var response = await fetch('/api/export-directory/choose', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -197,4 +197,3 @@ function toggleSidebar(force) {
     btn.setAttribute('title', label);
   }
 })();
-
