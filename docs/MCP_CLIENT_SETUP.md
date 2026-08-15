@@ -133,7 +133,7 @@ codex mcp remove mefinder
 
 ## 三、Claude Code 配置
 
-Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行：
+Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行：按 `Win + R` 打开“运行”，输入 `powershell` 并按回车。在打开的蓝色或黑色窗口中粘贴下面的命令：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
@@ -232,6 +232,8 @@ D:\\MEFinder\\MEFinderMCP.exe
 ```text
 /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 ```
+
+需要运行命令时，按 `Command（⌘）+ 空格` 打开搜索，输入“终端”或 `Terminal`，然后按回车。
 
 ### Codex
 

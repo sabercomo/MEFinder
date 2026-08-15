@@ -168,7 +168,7 @@ C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
 
 #### Claude Code（Windows）
 
-在 PowerShell 中运行，并把路径换成自己的实际路径：
+Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行：按 `Win + R` 打开“运行”，输入 `powershell` 并按回车。在打开的蓝色或黑色窗口中粘贴下面的命令，并把路径换成自己的实际路径：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
