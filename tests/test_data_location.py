@@ -83,7 +83,12 @@ def _request_json(
         connection.close()
 
 
-def _make_web_runtime(base: Path, *, native_directory_chooser=None):
+def _make_web_runtime(
+    base: Path,
+    *,
+    native_directory_chooser=None,
+    native_export_directory_chooser=None,
+):
     app_data = base / "current" / "MEFinder"
     runtime = app_data / "runtime"
     index_path = runtime / "data" / "index.sqlite3"
@@ -127,6 +132,7 @@ def _make_web_runtime(base: Path, *, native_directory_chooser=None):
         index_path,
         app_context=context,
         native_directory_chooser=native_directory_chooser,
+        native_export_directory_chooser=native_export_directory_chooser,
     )
     handler.log_message = lambda *_args: None
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -431,6 +437,38 @@ class DataLocationTests(unittest.TestCase):
                         chosen["target_path"],
                         str(selected.resolve() / "MEFinder"),
                     )
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    handler.close_runtime()
+                    server_thread.join(timeout=2)
+
+    def test_windows_desktop_exposes_native_export_directory_picker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            selected = base / "exports"
+            selected.mkdir()
+            with patch.dict(
+                os.environ,
+                {"ME_FINDER_DESKTOP_SHELL": "win32"},
+            ):
+                _app_data, _runtime, handler, server, server_thread = (
+                    _make_web_runtime(
+                        base,
+                        native_export_directory_chooser=lambda: selected,
+                    )
+                )
+                try:
+                    server_thread.start()
+                    status, chosen = _request_json(
+                        server,
+                        "POST",
+                        "/api/export-directory/choose",
+                        {},
+                    )
+                    self.assertEqual(status, 200)
+                    self.assertEqual(chosen["path"], str(selected))
+                    self.assertFalse(chosen["cancelled"])
                 finally:
                     server.shutdown()
                     server.server_close()

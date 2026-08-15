@@ -27,14 +27,13 @@ from src.me_finder import __version__
 from src.me_finder.data_location import (
     default_macos_data_root,
     default_windows_data_root,
-    read_data_root,
-    read_macos_data_root,
 )
 from src.me_finder.preferences import DEFAULT_THEME, read_preferences
+from src.me_finder import runtime_location
 
 APP_TITLE = "文献原句定位器"
-PORTABLE_MARKER = "portable.flag"
-INSTALLED_MARKER = "installed.flag"
+PORTABLE_MARKER = runtime_location.PORTABLE_MARKER
+INSTALLED_MARKER = runtime_location.INSTALLED_MARKER
 DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
 MACOS_TITLEBAR_HEIGHT = 28.0
 MACOS_TRAFFIC_LIGHT_SAFE_WIDTH = 82.0
@@ -175,14 +174,7 @@ ERROR_HTML = """<!doctype html>
 
 
 def app_root() -> Path:
-    if getattr(sys, "frozen", False):
-        executable_dir = Path(sys.executable).resolve().parent
-        if sys.platform == "darwin":
-            contents_dir = executable_dir.parent
-            if executable_dir.name == "MacOS" and contents_dir.name == "Contents":
-                return contents_dir / "Resources"
-        return executable_dir
-    return Path(__file__).resolve().parent
+    return runtime_location.app_root()
 
 
 def installed_data_root_override(bundle_root: Path | None = None) -> Path | None:
@@ -193,53 +185,12 @@ def installed_data_root_override(bundle_root: Path | None = None) -> Path | None
     user picked on first install instead of resetting to the default.
     """
 
-    if sys.platform != "win32" or not getattr(sys, "frozen", False):
-        return None
     root = Path(bundle_root) if bundle_root is not None else app_root()
-    if is_portable_bundle(root):
-        return None
-    marker = root / "data_root.txt"
-    try:
-        raw = marker.read_bytes()
-    except OSError:
-        return None
-    for encoding in ("utf-8-sig", "utf-8"):
-        try:
-            text = raw.decode(encoding).strip()
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        text = raw.decode(errors="replace").strip()
-    if not text:
-        return None
-    return Path(text).expanduser().resolve()
+    return runtime_location.installed_data_root_override(root)
 
 
 def local_app_data_root(home: Path | None = None) -> Path:
-    configured_root = os.environ.get("ME_FINDER_APP_DATA_ROOT", "").strip()
-    if configured_root:
-        return Path(configured_root).expanduser().resolve()
-    if sys.platform == "win32":
-        installed_root = installed_data_root_override()
-        local_app_data = os.environ.get("LOCALAPPDATA") or None
-        if home is None and local_app_data is None and installed_root is not None:
-            return installed_root
-        default_root = default_windows_data_root(
-            home,
-            local_app_data=local_app_data,
-        )
-        return read_data_root(
-            default_root,
-            fallback_root=installed_root or default_root,
-        )
-    user_home = Path(home) if home is not None else Path.home()
-    if sys.platform == "darwin":
-        return read_macos_data_root(user_home)
-    xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
-    if xdg_data_home:
-        return Path(xdg_data_home).expanduser() / "MEFinder"
-    return user_home / ".local" / "share" / "MEFinder"
+    return runtime_location.local_app_data_root(home, bundle_root=app_root())
 
 
 def python_launcher() -> str:
@@ -247,18 +198,11 @@ def python_launcher() -> str:
 
 
 def is_portable_bundle(bundle_root: Path) -> bool:
-    return bool(getattr(sys, "frozen", False) and (Path(bundle_root) / PORTABLE_MARKER).is_file())
+    return runtime_location.is_portable_bundle(bundle_root)
 
 
 def installation_kind(bundle_root: Path) -> str:
-    if not getattr(sys, "frozen", False):
-        return "source"
-    bundle_root = Path(bundle_root)
-    if is_portable_bundle(bundle_root):
-        return "portable"
-    if (bundle_root / INSTALLED_MARKER).is_file():
-        return "installed"
-    return "standalone"
+    return runtime_location.installation_kind(bundle_root)
 
 
 def webview_storage_path(root: Path, portable: bool) -> str:
@@ -270,11 +214,16 @@ def webview_storage_path(root: Path, portable: bool) -> str:
 def prepare_runtime_root(bundle_root: Path) -> Path:
     """Keep mutable corpus/index data outside the replaceable exe folder."""
 
-    if not getattr(sys, "frozen", False):
+    runtime_root = runtime_location.runtime_root(
+        bundle_root,
+        app_data_root=(
+            local_app_data_root()
+            if getattr(sys, "frozen", False) and not is_portable_bundle(bundle_root)
+            else None
+        ),
+    )
+    if runtime_root == bundle_root:
         return bundle_root
-    if is_portable_bundle(bundle_root):
-        return bundle_root
-    runtime_root = local_app_data_root() / "runtime"
     runtime_root.mkdir(parents=True, exist_ok=True)
     for folder in ("data", "config", "corpus"):
         source = bundle_root / folder
@@ -659,6 +608,13 @@ def main() -> None:
             return str(selection)
         return str(selection[0])
 
+    def choose_export_directory() -> str | None:
+        try:
+            selection = choose_folders(Path.home() / "Downloads")
+        except webview.errors.WebViewException as exc:
+            raise RuntimeError(str(exc)) from exc
+        return selection[0] if selection else None
+
     def choose_scan_directories() -> list[str]:
         # Never start at the home folder: picking it is one click away there,
         # and scanning it would walk the user's whole personal library.
@@ -702,6 +658,11 @@ def main() -> None:
                 native_theme_setter=native_theme_setter,
                 update_service=update_service,
                 native_directory_chooser=choose_data_directory,
+                native_export_directory_chooser=(
+                    choose_export_directory
+                    if sys.platform in {"darwin", "win32"}
+                    else None
+                ),
                 native_scan_directory_chooser=choose_scan_directories,
                 native_backup_file_chooser=choose_backup_file,
             )

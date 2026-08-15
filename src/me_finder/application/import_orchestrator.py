@@ -168,6 +168,26 @@ class ImportOrchestrator:
     def update_import_job(self, job_id: str, **updates: object) -> None:
         self._job_lifecycle.update_job(job_id, **updates)
 
+    def replace_imported_source(
+        self,
+        job_id: str,
+        extracted: Mapping[str, object],
+        source_file_id: str,
+    ) -> None:
+        """Publish an already parsed source without invoking any parser."""
+
+        self.update_import_job(
+            job_id,
+            phase="rebuilding_index",
+            message="正在把解析结果写入本地 SQLite 索引…",
+        )
+        with self._durable_operations.operation():
+            self._index_runtime.replace_source(
+                extracted,
+                source_file_id,
+                backup_existing=False,
+            )
+
     def progress_import_job(self, job_id: str, update: Dict[str, object]) -> None:
         self._job_lifecycle.progress_job(
             job_id,

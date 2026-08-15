@@ -11,7 +11,10 @@ from pathlib import Path
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.database import build_database
-from src.me_finder.document_export import read_document_export
+from src.me_finder.document_export import (
+    extract_embedded_source_pdf,
+    read_document_export,
+)
 from src.me_finder.document_export_service import (
     IndexedDocumentNotFound,
     UnsupportedDocumentExport,
@@ -145,6 +148,26 @@ class IndexedDocumentExportTests(unittest.TestCase):
                     output_dir=root / "exports",
                 )
 
+    def test_indexed_pdf_can_be_embedded_in_the_document_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database, source_id = export_fixture(root)
+            result = export_indexed_pdf(
+                database_path=database,
+                runtime_root=root,
+                source_file_id=source_id,
+                output_dir=root / "exports",
+                include_source_pdf=True,
+            )
+            restored = root / "restored.pdf"
+
+            self.assertTrue(result["includes_source_pdf"])
+            self.assertEqual(
+                extract_embedded_source_pdf(Path(result["path"]), restored),
+                restored,
+            )
+            self.assertEqual(restored.read_bytes(), b"source bytes")
+
 
 class DocumentExportHTTPTests(unittest.TestCase):
     @staticmethod
@@ -170,13 +193,22 @@ class DocumentExportHTTPTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             database, source_id = export_fixture(root)
+            selected_output = root / "selected-output"
+            selected_output.mkdir()
             context = AppContext.create(root, index_path=database)
             handler = make_handler(database, app_context=context)
             server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
-                status, payload = self._post(server, {"source_id": source_id})
+                status, payload = self._post(
+                    server,
+                    {
+                        "source_id": source_id,
+                        "include_source_pdf": True,
+                        "output_dir": str(selected_output),
+                    },
+                )
             finally:
                 server.shutdown()
                 server.server_close()
@@ -185,7 +217,9 @@ class DocumentExportHTTPTests(unittest.TestCase):
 
             self.assertEqual(status, 200)
             self.assertEqual(payload["schema_version"], "mefinder.document.v1")
+            self.assertTrue(payload["includes_source_pdf"])
             self.assertTrue(Path(payload["path"]).is_file())
+            self.assertEqual(Path(payload["path"]).parent, selected_output.resolve())
 
         source = Path("src/me_finder/static/js/30-library.js").read_text(
             encoding="utf-8"
@@ -193,8 +227,13 @@ class DocumentExportHTTPTests(unittest.TestCase):
         self.assertIn("导出 MEFinder 文档", source)
         self.assertIn("function exportLibraryDocument(sourceId)", source)
         self.assertIn("function exportSelectedLibraryDocuments()", source)
-        self.assertIn("function requestLibraryDocumentExport(sourceId)", source)
+        self.assertIn(
+            "function requestLibraryDocumentExport(sourceId, outputDirectory)",
+            source,
+        )
         self.assertIn("fetch('/api/document/export'", source)
+        self.assertIn("include_source_pdf: currentDocumentExportMode === 'with_pdf'", source)
+        self.assertIn("payload.output_dir = outputDirectory", source)
 
 
 if __name__ == "__main__":

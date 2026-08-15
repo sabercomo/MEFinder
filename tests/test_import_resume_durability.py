@@ -55,7 +55,8 @@ class ImportResumeDurabilityTests(unittest.TestCase):
 
             self.assertEqual(
                 events,
-                ["file_fsync", "replace", "directory_fsync"],
+                ["file_fsync", "replace"]
+                + ([] if os.name == "nt" else ["directory_fsync"]),
             )
             self.assertEqual(
                 json.loads(target.read_text(encoding="utf-8")),
@@ -89,13 +90,17 @@ class ImportResumeDurabilityTests(unittest.TestCase):
 
             self.assertEqual(
                 events,
-                [
-                    "directory_fsync",
-                    "directory_fsync",
-                    "file_fsync",
-                    "replace",
-                    "directory_fsync",
-                ],
+                (
+                    ["file_fsync", "replace"]
+                    if os.name == "nt"
+                    else [
+                        "directory_fsync",
+                        "directory_fsync",
+                        "file_fsync",
+                        "replace",
+                        "directory_fsync",
+                    ]
+                ),
             )
             self.assertTrue(target.is_file())
             self.assertEqual(list(target.parent.glob("*.tmp")), [])
@@ -133,12 +138,8 @@ class ImportResumeDurabilityTests(unittest.TestCase):
 
             self.assertEqual(
                 events,
-                [
-                    "file_fsync",
-                    "replace",
-                    "unlink",
-                    "directory_fsync",
-                ],
+                ["file_fsync", "replace", "unlink"]
+                + ([] if os.name == "nt" else ["directory_fsync"]),
             )
             self.assertFalse(target.exists())
             self.assertEqual(list(directory.glob("*.tmp")), [])
@@ -180,7 +181,11 @@ class ImportResumeDurabilityTests(unittest.TestCase):
             ):
                 quarantined = quarantine_corrupt_manifest(damaged)
 
-            self.assertEqual(events, ["replace", "directory_fsync"])
+            self.assertEqual(
+                events,
+                ["replace"]
+                + ([] if os.name == "nt" else ["directory_fsync"]),
+            )
             self.assertIsNotNone(quarantined)
             self.assertFalse(damaged.exists())
             self.assertTrue(quarantined.is_file())
@@ -209,7 +214,11 @@ class ImportResumeDurabilityTests(unittest.TestCase):
             ):
                 self.assertTrue(journal.delete_job("first"))
 
-            self.assertEqual(events, ["unlink", "directory_fsync"])
+            self.assertEqual(
+                events,
+                ["unlink"]
+                + ([] if os.name == "nt" else ["directory_fsync"]),
+            )
             self.assertFalse(first.exists())
 
             second = directory / "second.json"

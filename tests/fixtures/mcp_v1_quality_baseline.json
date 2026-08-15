@@ -1,0 +1,97 @@
+{
+  "schema_version": "1",
+  "fixture": "synthetic-public-domain-independent-quality-matrix",
+  "measurement": {
+    "method": "compact JSON structuredContent plus UTF-8 text content, excluding JSON-RPC framing",
+    "result_unit": "UTF-8 bytes",
+    "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
+  },
+  "advertised_context": {
+    "instructions_characters": 156,
+    "instructions_utf8_bytes": 326,
+    "utf8_bytes": 9215,
+    "before_unreferenced_defs_trim_utf8_bytes": 16744
+  },
+  "responses": {
+    "named_document_list": {
+      "tool": "list_documents",
+      "arguments": {"query": "MCP 合成 PDF 样例"},
+      "structured_content_utf8_bytes": 214,
+      "content_utf8_bytes": 21
+    },
+    "exact_locate": {
+      "tool": "locate_quote",
+      "arguments": {
+        "quote": "技术判断必须由可复核证据支撑",
+        "mode": "exact",
+        "source_file_id": "fixture-pdf"
+      },
+      "structured_content_utf8_bytes": 948,
+      "content_utf8_bytes": 27
+    },
+    "ambiguous_locate": {
+      "tool": "locate_quote",
+      "arguments": {
+        "quote": "重复原句必须作为多个候选返回",
+        "mode": "exact",
+        "limit": 20
+      },
+      "structured_content_utf8_bytes": 1766,
+      "content_utf8_bytes": 27
+    },
+    "no_result_locate": {
+      "tool": "locate_quote",
+      "arguments": {
+        "quote": "这是一条夹具中不存在的句子",
+        "mode": "exact"
+      },
+      "structured_content_utf8_bytes": 134,
+      "content_utf8_bytes": 27
+    },
+    "cross_page_locate": {
+      "tool": "locate_quote",
+      "arguments": {"quote": "跨页证据\n仍可追溯", "mode": "exact"},
+      "structured_content_utf8_bytes": 995,
+      "content_utf8_bytes": 27
+    },
+    "spread_right_locate": {
+      "tool": "locate_quote",
+      "arguments": {"quote": "右页保存另一证据", "mode": "exact"},
+      "structured_content_utf8_bytes": 1010,
+      "content_utf8_bytes": 27
+    },
+    "uncalibrated_locate": {
+      "tool": "locate_quote",
+      "arguments": {
+        "quote": "物理页位置不能自动视为正式引用页",
+        "mode": "exact",
+        "source_file_id": "fixture-pdf"
+      },
+      "structured_content_utf8_bytes": 1076,
+      "content_utf8_bytes": 27
+    },
+    "cross_page_window": {
+      "tool": "read_document_window",
+      "arguments": {"source_file_id": "fixture-pdf", "start": 2, "count": 2},
+      "structured_content_utf8_bytes": 1649,
+      "content_utf8_bytes": 30
+    }
+  },
+  "workflows": {
+    "exact_quote": {
+      "responses": ["exact_locate"],
+      "call_count": 1,
+      "result_utf8_bytes": 975
+    },
+    "named_document_quote": {
+      "responses": ["named_document_list", "exact_locate"],
+      "call_count": 2,
+      "result_utf8_bytes": 1210
+    },
+    "quote_with_context_expansion": {
+      "responses": ["cross_page_locate", "cross_page_window"],
+      "call_count": 2,
+      "result_utf8_bytes": 2701
+    }
+  }
+}

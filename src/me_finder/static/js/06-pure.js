@@ -282,6 +282,7 @@ function formatFileSize(bytes) {
 
 // 导入队列的处理步骤文案。原在 80-import.js，纯映射，前移以便单测。
 function importStepsFor(q) {
+  if (q.type === 'document_package') return ['读取文档包', '校验版本', '恢复书目与页码', '建立索引'];
   if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
   if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
   if (q.route === 'vision') return ['读取文件', '类型检测', (q.providerName || '其他 API') + ' 解析', '文本入库', '建立索引'];
@@ -381,7 +382,55 @@ function spreadCitationPair(seg) {
 
 // 原在 30-library.js，纯函数，前移以便单测。
 function libLangChipLabel(scriptLang) {
-  return scriptLang === 'chinese' ? '中文' : '外文';
+  var labels = {
+    'zh-Hans':'简体中文',
+    'zh-Hant':'繁体中文',
+    en:'英语',
+    de:'德语',
+    fr:'法语',
+    ja:'日语',
+    ko:'韩语',
+    es:'西班牙语',
+    it:'意大利语',
+    pt:'葡萄牙语',
+    ru:'俄语',
+    und:'未识别语言',
+    other:'其他语言'
+  };
+  if (scriptLang === 'chinese') return '中文';
+  if (scriptLang === 'foreign') return '外文';
+  return labels[scriptLang] || '其他语言';
+}
+
+function libraryLanguageCode(source) {
+  var code = String((source && source.language_code) || '');
+  if (code) return code;
+  return source && source.language === 'foreign' ? 'other' : 'zh-Hans';
+}
+
+function libraryLanguageGroup(source) {
+  var group = String((source && source.language) || '');
+  if (group === 'chinese' || group === 'foreign') return group;
+  var code = libraryLanguageCode(source);
+  return code === 'zh-Hans' || code === 'zh-Hant' ? 'chinese' : 'foreign';
+}
+
+function libraryLanguageFacetOptions(sources, defaultGroup) {
+  var counts = {};
+  (sources || []).forEach(function(source) {
+    var code = libraryLanguageCode(source);
+    counts[code] = (counts[code] || 0) + 1;
+  });
+  var order = {'zh-Hans':0,'zh-Hant':1,en:10,de:11,fr:12,ja:13,ko:14,es:15,it:16,pt:17,ru:18,und:98,other:99};
+  return Object.keys(counts).sort(function(left, right) {
+    var leftPrimary = libraryLanguageGroup({language_code:left}) === defaultGroup ? 0 : 1;
+    var rightPrimary = libraryLanguageGroup({language_code:right}) === defaultGroup ? 0 : 1;
+    if (leftPrimary !== rightPrimary) return leftPrimary - rightPrimary;
+    var detailOrder = (order[left] == null ? 90 : order[left]) - (order[right] == null ? 90 : order[right]);
+    return detailOrder || libLangChipLabel(left).localeCompare(libLangChipLabel(right), 'zh-CN');
+  }).map(function(code) {
+    return {v:code, label:libLangChipLabel(code), n:counts[code]};
+  });
 }
 
 // 原在 30-library.js，纯函数，前移以便单测。

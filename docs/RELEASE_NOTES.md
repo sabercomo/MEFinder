@@ -1,3 +1,76 @@
+# 文献原句定位器 v0.4.4
+
+## MCP 文献核对：第一阶段
+
+- 冻结 MCP v1 的三个只读工具：列出文献、定位原句和读取文献窗口；
+- 固定输入/输出 schema、安全标注、页码术语、初始化 instructions 和错误码；
+- 新增不依赖个人文献库的公共合成夹具，覆盖 PDF、Word、已校准页码、未校准页码和无结果；
+- 新增现有搜索引擎与结构化阅读器的机器可读基线测试，为后续服务层和 STDIO MCP Server 提供回归标准；
+- 本阶段不加入 MCP 运行时依赖，不改变搜索算法、页码算法、数据库 schema 或现有 HTTP 契约。
+
+## MCP 文献核对：第二阶段
+
+- 新增独立的运行时路径解析模块，统一源码版、Windows 安装版、Windows 绿色版和 macOS 应用的数据根规则；
+- 桌面入口改为复用同一解析模块，保留既有初始化、迁移、WebView 数据和配置文件行为；
+- 新增 `LiteratureVerificationService` 最小应用层接缝，每次使用时重新解析当前索引位置，不缓存数据根、搜索引擎或 SQLite 连接；
+- 路径解析导入链不再提前加载 SQLite，服务层可以在不导入桌面、HTTP 或数据库运行时的情况下独立构造。
+
+## MCP 文献核对：第三阶段
+
+- 实现 `list_documents`、`locate_quote` 和 `read_document_window` 三个只读核对用例，统一复用现有目录、搜索和结构化阅读能力；
+- 增加严格按 MCP v1 契约裁剪的结果对象，只返回稳定文献 ID、原文证据、阅读游标、物理页和引用页状态，不返回 HTML、绝对路径或内部页哈希；
+- 为搜索与结构化阅读结果补充可直接消费的引用页字段，Word 已验证页码不再依赖解析展示字符串，PDF 未校准物理页继续明确标为 `uncalibrated`；
+- 每次检索重新解析当前索引并在调用结束后关闭搜索引擎；无结果返回成功的空集合，指定文献不存在继续作为错误处理；
+- 新增服务层契约测试，覆盖文献筛选、多候选确定性、PDF 已校准/未校准页、Word 已验证页、字段裁剪、输入边界及异常时资源释放；本阶段仍不引入 MCP SDK 或 STDIO Server。
+
+## MCP 文献核对：第四阶段
+
+- 锁定 Python `mcp==2.0.0`，新增 `python -m src.me_finder.mcp_server` 源码模式 STDIO Server，并支持 `--runtime-root` 测试覆盖；
+- 注册 MCP v1 的三个只读工具，初始化返回稳定的 `mefinder` 名称、0.4.4 版本和跨工具 instructions，工具列表保留冻结的标题、描述、输入 schema、输出 schema 与安全标注；
+- 成功调用同时返回简短文本和精简 `structuredContent`；已知故障映射为冻结错误码，未知异常写入 STDERR 并返回不泄露内部细节的 `internal_error`；
+- 将合同根级公共 `$defs` 按依赖附入各工具对外输出 schema，使 `tools/list` 中的 schema 可独立解析和校验；
+- 在 SDK 文件描述符隔离之外增加 Python 标准输出重定向，防止处理器缓冲输出在退出时污染 STDIO 协议帧；
+- 新增 SDK 客户端协议测试，覆盖 `initialize`、`tools/list`、三种 `tools/call`、缺少索引仍可初始化、错误区分、启动耗时、正常退出和 STDOUT 隔离；本阶段尚不修改 Codex 配置或构建 sidecar。
+
+## MCP 文献核对：第五阶段
+
+- 建立公共合成质量矩阵，覆盖精确、空格、标点、NFKC、少量错字、重复候选、PDF 跨页、双开页左右侧、已校准/未校准页码、Word、来源限定、无结果及索引故障；
+- 修复模糊搜索内部术语 `ngram_fuzzy` 泄漏到 MCP 输出的问题，适配层现在稳定返回契约规定的 `fuzzy`；
+- 验证搜索候选可通过稳定来源 ID 和阅读游标追溯到对应 PDF 页或 Word 段落，未校准页码继续只返回物理位置；
+- `tools/list` 只为每个输出 schema 附加实际引用的 `$defs` 及其传递依赖，模型可见工具上下文由 16,744 字节降至 9,215 字节，三个 schema 仍可独立校验；
+- 记录三个代表性工作流的调用次数和结果体积，并将 instructions、工具元数据及结果体积冻结为自动回归基线；
+- 本阶段不新增工具或字段，也不修改搜索与页码算法；真实 Codex 配置和自然语言端到端验收进入下一阶段。
+
+## MCP 文献核对：第六阶段
+
+- 新增源码模式 Codex 接入指南，覆盖独立虚拟环境、`codex mcp add`、`config.toml`、桌面端/IDE 设置、`codex mcp list`、`/mcp`、禁用和移除；
+- 明确 0.4.4 当前只开放源码预览，Windows 安装版、绿色版和 macOS 包内 sidecar 路径仍属于下一打包阶段，不把桌面主程序误写成 MCP 命令；
+- 明确隐私边界：MCP Server 本身不联网且只读，但返回给 Codex 的命中原文和上下文会进入 Codex 对话及模型上下文；
+- 使用不加载用户配置、不持久化会话的一次性 Codex 配置完成真实自然语言验收，已校准页、未校准物理页、重复候选、模糊命中和无结果均按约束表述；
+- 在 MEFinder Web 服务关闭与开启两种状态下核对同一合成索引，调用结束后无残留 MCP/Web 进程或数据库句柄；
+- 从空白虚拟环境安装 `mcp==2.0.0` 并通过 initialize、tools/list 和三工具协议测试；新增文档契约测试，防止配置、健康检查、隐私或可逆移除说明回退。
+
+## MCP 文献核对：第七阶段
+
+- 新增独立 onefile `MEFinderMCP` sidecar：Windows 安装版与绿色版固定放在发布目录根部，macOS 固定放在 `MEFinder.app/Contents/MacOS/MEFinderMCP`；桌面主程序继续保持原有 onedir/.app 架构；
+- Windows 构建脚本不再假设发布目录只有一个 exe，安装器通配 payload 自动包含 sidecar，绿色版 `portable.flag` 同时控制桌面程序和 sidecar 的包内数据根；
+- macOS 构建在未签名应用、签名应用、ZIP 解包、DMG 挂载和 DMG 复制五个位置建立真实 MCP STDIO 会话，并严格验证 sidecar 与外层应用签名；
+- 新增按 Windows/macOS 拆分的 Codex、Claude Code、WorkBuddy 发布包接入教程；三类发布路径、覆盖升级、绿色版移动和卸载后的显式命令不存在行为仍保留在 Codex 高级指南中，MEFinder 不静默修改任何客户端配置；
+- 增补 MCP SDK 及其运行时依赖的许可证归属材料。macOS arm64 实物发布链已通过；Windows 与 macOS Intel 产物仍需对应系统/架构的发布实机复验。
+
+## MCP 文献核对：第八阶段
+
+- 新增跨进程并发测试：保持 MCP Server 运行时完成索引原子替换，下一次调用读取新快照；模拟 Windows 文件占用重试，确认短连接释放后替换成功；数据迁移在原子切换指针前后均可读取一致索引；
+- 发布构建强制运行 MCP 契约、协议、质量、文档、打包和并发测试；新增禁用、移除、绿色版移动与卸载后清理说明；
+- 完整发布仍以 Windows 安装/覆盖升级/卸载、Windows 绿色版移动及 macOS Developer ID/notarization 实机记录为准，不用当前 macOS ad-hoc 结果替代其他平台结论。
+
+## MCP 写能力决策
+
+- 0.4.4 不开放写工具。现有导入队列和 mutation gate 只协调桌面进程内线程，不能安全协调独立 MCP 进程；直接套壳会产生重复任务、桌面缓存过期和索引替换竞态；
+- `import_document`、`get_import_status`、`save_bibliographic_metadata` 与 `apply_page_calibration` 保留为后续候选，必须先建立跨进程持久任务/互斥协议、明确审批与幂等边界，再逐项进入新契约版本。
+
+---
+
 # 文献原句定位器 v0.3.9
 
 > 本条目以 v0.3.8 为基线。

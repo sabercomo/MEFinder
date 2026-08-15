@@ -98,6 +98,19 @@ class DesktopPortableTests(unittest.TestCase):
             desktop_source,
         )
 
+    def test_desktop_export_picker_uses_native_folder_selection(self) -> None:
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+
+        self.assertIn("def choose_export_directory()", desktop_source)
+        self.assertIn(
+            'choose_folders(Path.home() / "Downloads")',
+            desktop_source,
+        )
+        self.assertIn(
+            'if sys.platform in {"darwin", "win32"}',
+            desktop_source,
+        )
+
     def test_macos_release_builds_a_verified_drag_install_dmg(self) -> None:
         build_source = Path("build_macos.sh").read_text(encoding="utf-8")
         spec_source = Path("desktop_macos.spec").read_text(encoding="utf-8")
@@ -110,7 +123,7 @@ class DesktopPortableTests(unittest.TestCase):
             '"LSMinimumSystemVersion": minimum_system_version',
             spec_source,
         )
-        self.assertNotIn(
+        self.assertIn(
             '("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")',
             spec_source,
         )
@@ -118,7 +131,7 @@ class DesktopPortableTests(unittest.TestCase):
             'cp -R "THIRD_PARTY_LICENSES" "$MEFINDER_DMG_STAGE/THIRD_PARTY_LICENSES"',
             build_source,
         )
-        self.assertNotIn("MEFINDER_PYTHON_LICENSE", build_source)
+        self.assertIn("MEFINDER_PYTHON_LICENSE", build_source)
 
         self.assertIn('MEFINDER_DMG="release/${MEFINDER_PACKAGE}.dmg"', build_source)
         self.assertIn(

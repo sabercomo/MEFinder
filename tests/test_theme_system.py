@@ -15,12 +15,14 @@ from src.me_finder.preferences import (
     DEFAULT_CALIBRATION_VIEW,
     DEFAULT_CITATION_STYLE,
     DEFAULT_CITATION_STYLES,
+    DEFAULT_DOCUMENT_EXPORT_MODE,
     DEFAULT_LIBRARY_LANGUAGE,
     DEFAULT_LIBRARY_VIEW,
     DEFAULT_ONLINE_AUTO_MATCH,
     DEFAULT_PDF_OPEN_MODE,
     DEFAULT_THEME,
     VALID_PDF_OPEN_MODES,
+    VALID_DOCUMENT_EXPORT_MODES,
     VALID_THEMES,
     read_preferences,
     save_preferences,
@@ -37,6 +39,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "calibration_view": DEFAULT_CALIBRATION_VIEW,
             "scan_directories": [],
             "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
+            "document_export_mode": DEFAULT_DOCUMENT_EXPORT_MODE,
             "auto_update": DEFAULT_AUTO_UPDATE,
             "citation_styles": list(DEFAULT_CITATION_STYLES),
             "citation_style": DEFAULT_CITATION_STYLE,
@@ -119,6 +122,22 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertTrue(read_preferences(path)["auto_update"])
             with self.assertRaises(ValueError):
                 save_preferences({"auto_update": "true"}, path)
+
+    def test_document_export_mode_defaults_to_data_only_and_round_trips(self) -> None:
+        self.assertEqual(
+            VALID_DOCUMENT_EXPORT_MODES,
+            frozenset({"data_only", "with_pdf"}),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            self.assertEqual(
+                read_preferences(path)["document_export_mode"],
+                "data_only",
+            )
+            saved = save_preferences({"document_export_mode": "with_pdf"}, path)
+            self.assertEqual(saved["document_export_mode"], "with_pdf")
+            with self.assertRaises(ValueError):
+                save_preferences({"document_export_mode": "pdf_only"}, path)
 
     def test_citation_styles_default_and_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -255,7 +274,10 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("function setPdfOpenMode(mode)", HTML)
         self.assertIn("var preferencesLoadPromise = null;", HTML)
         self.assertIn("if (preferencesLoadPromise) return preferencesLoadPromise;", HTML)
-        self.assertIn("if (pdfOpenModeSaving) return null;", HTML)
+        self.assertIn(
+            "if (pdfOpenModeSaving || documentExportModeSaving) return null;",
+            HTML,
+        )
         self.assertIn("setPdfOpenModeControlsDisabled(true);", HTML)
         self.assertIn("if (pdfOpenModeSaving || preferencesLoadPromise)", HTML)
         self.assertIn("function applyPreferencesData(data, requestedThemeRevision)", HTML)
@@ -444,6 +466,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "bib-completion-settings": "bib-completion-body",
             "appearance-card": "appearance-body",
             "data-location-settings": "data-location-body",
+            "document-transfer-settings": "document-transfer-body",
             "backup-settings": "backup-settings-body",
             "software-update-settings": "software-update-body",
             "macos-update-settings": "macos-update-body",

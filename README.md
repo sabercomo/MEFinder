@@ -43,6 +43,7 @@ MEFinder 面向论文写作、文献阅读和资料核对场景。输入完整�
 | **繁体竖排 / 外部解析结果** | 可继续检索已经由 OCR、MinerU 或其他工具解析的繁体竖排、影印本等材料，并结合页码信息定位。 |
 | **结构化阅读** | 从搜索结果直接打开结构化文本，查看命中段落、相邻内容与原始 PDF 页面。 |
 | **题录补全 / 五种出处格式** | 识别并补全图书、译著、期刊和学位论文题录；支持中文脚注、GB/T 7714、APA、MLA、Chicago。 |
+| **文档包传输** | 把已入库 PDF 连同页级文本、书目和页码映射导出为 `.mefinder.zip`，换设备后重新导入即可恢复，不用重新 OCR。 |
 
 <a id="适合什么场景"></a>
 
@@ -130,6 +131,69 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 5. **复制出处**
    选择中文脚注、GB/T 7714、APA、MLA 或 Chicago，然后复制当前文献的规范出处。关键元数据或页码缺失时，程序会明确提示。
+
+### 文档包导出 / 导入（0.4.4）
+
+文献解析结果可以随身带走，不用换台电脑就重跑一遍 OCR：
+
+- **导出**：选中一本或多本已入库 PDF，在设置 → 文档传输里选择“仅文档数据”（页级文本、书目、页码映射，文件小）或“文档包＋原 PDF”（跨设备推荐，导入后可直接打开原文），导出为 `.mefinder.zip`。当前版本不导出 Word，批量操作会跳过 Word 文献。
+- **导入**：把 `.mefinder.zip` 拖进导入页即可，程序会恢复书目、页码和索引；包内含原 PDF 时一并恢复，不需要重新解析。
+- **完整性校验**：包内原 PDF 会核对大小和 SHA-256；校验不一致时拒绝恢复该 PDF。文档包未做数字签名，不能据此判断来源真实性。
+
+### MCP 文献核对（0.4.4，可选只读集成）
+
+0.4.4 提供三个本地只读 MCP 工具（`list_documents`、`locate_quote`、`read_document_window`），让 AI 助手直接读你的文献库：列出已导入文献、定位原句、继续读命中位置的上下文。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
+
+需要配置的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
+
+```text
+C:\Users\<你的用户名>\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
+```
+
+绿色版则使用解压目录中的 `MEFinderMCP.exe`，例如 `D:\MEFinder\MEFinderMCP.exe`。它是本地 **STDIO** 服务，不需要手动双击，客户端会自动启动它。
+
+#### Codex（Windows）
+
+打开 **设置 → 插件 → MCP → 添加 → 添加 MCP 服务器**，填写：
+
+| 项目 | 内容 |
+| --- | --- |
+| 名称 | `mefinder` |
+| 类型 | `STDIO` |
+| 启动命令 | `MEFinderMCP.exe` 的完整路径 |
+| 参数、环境变量 | 留空 |
+| 工作目录 | `MEFinderMCP.exe` 所在文件夹 |
+
+保存后重启或重新加载 MCP，再让 Codex：“请只使用 mefinder 搜索这句话来自哪篇文献、哪一页。”
+
+#### Claude Code（Windows）
+
+在 PowerShell 中运行，并把路径换成自己的实际路径：
+
+```powershell
+claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
+claude mcp list
+```
+
+#### WorkBuddy（Windows）
+
+打开 **插件 → MCP 服务器 → 配置 MCP**，在 JSON 的 `mcpServers` 中加入：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "type": "stdio",
+      "command": "D:\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+`command` 是 JSON 字段名，值是 `MEFinderMCP.exe` 的完整路径，不是要在终端运行的命令。JSON 中的 Windows 反斜杠必须写成双反斜杠 `\\`。
+
+更完整的 Windows 操作、macOS 三客户端配置和常见错误见 [Windows/macOS MCP 配置教程](docs/MCP_CLIENT_SETUP.md)；源码模式和 Codex 高级排错见 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。返回给 AI 的命中原文和上下文会进入相应客户端的对话及模型上下文，涉及未公开文献时请留意。
 
 <a id="已知限制"></a>
 

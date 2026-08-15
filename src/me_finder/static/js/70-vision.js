@@ -322,8 +322,16 @@ function loadMineruStatistics() {
 async function exportBackup() {
   var hint = document.getElementById('backup-export-hint');
   try {
+    var outputDirectory = await chooseDesktopExportDirectory();
+    if (outputDirectory === null) return;
     if (hint) hint.textContent = '正在导出…';
-    var resp = await fetch('/api/backup/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+    var payload = {};
+    if (outputDirectory) payload.output_dir = outputDirectory;
+    var resp = await fetch('/api/backup/export', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
     if (hint) hint.textContent = '已导出到：' + data.path;

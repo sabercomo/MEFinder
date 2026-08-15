@@ -999,6 +999,125 @@ class CitationFormatTests(unittest.TestCase):
             "suspicious_person_punctuation",
         )
 
+    def test_chinese_publishing_center_cip_replaces_noisy_file_name(self) -> None:
+        path = Path(
+            "[象形文字·经典译丛]利维坦 ([英]托马斯·霍布斯；段保良译) "
+            "(z-library.sk, 1lib.sk, z-lib.sk).pdf"
+        )
+        detected = detect_pdf_bibliographic_metadata(
+            path,
+            [
+                {
+                    "pdf_page_index": 1,
+                    "text_raw": (
+                        "图书在版编目（CIP）数据\n"
+                        "利维坦 / （英）托马斯·霍布斯著；段保良译.\n"
+                        "上海：东方出版中心，2024.10. -- "
+                        "ISBN 978-7-5473-2525-4"
+                    ),
+                },
+                {
+                    "pdf_page_index": 2,
+                    "text_raw": (
+                        "利维坦\n"
+                        "著 者 [英]托马斯·霍布斯\n"
+                        "译 者 段保良\n"
+                        "出版发行 东方出版中心\n"
+                        "地 址 上海市仙霞路345号\n"
+                        "版 次 2025年1月第1版"
+                    ),
+                },
+            ],
+            {
+                "title": path.stem,
+                "metadata_source": "automatic_recognition",
+            },
+        )
+
+        self.assertEqual(detected["title"], "利维坦")
+        self.assertEqual(detected["publisher"], "东方出版中心")
+        self.assertEqual(detected["publish_place"], "上海")
+        self.assertEqual(detected["publish_year"], "2025")
+        self.assertEqual(
+            detected["metadata_evidence"]["title"]["rule"],
+            "chinese_cip_statement",
+        )
+
+    def test_traditional_classical_book_colophon_and_duplicate_suffix(self) -> None:
+        detected = detect_pdf_bibliographic_metadata(
+            Path("唐律疏议(1).pdf"),
+            [
+                {"pdf_page_index": 1, "text_raw": "廣\n律\n疏\n議唐長孫無忌等撰"},
+                {
+                    "pdf_page_index": 3,
+                    "text_raw": (
+                        "唐律疏議\n"
+                        "[唐] 長孫無忌等撰\n"
+                        "劉俊文 點校\n"
+                        "中華書局出版\n"
+                        "(北京王府井大街 36 號)\n"
+                        "1983年11月第1版 1983年11月北京第1次印刷"
+                    ),
+                },
+                {"pdf_page_index": 100, "text_raw": ""},
+            ],
+            {
+                "title": "唐律疏议(1)",
+                "metadata_source": "automatic_recognition",
+            },
+        )
+
+        self.assertEqual(detected["title"], "唐律疏议")
+        self.assertEqual(detected["author"], "長孫無忌等")
+        self.assertEqual(detected["country"], "唐")
+        self.assertEqual(detected["publisher"], "中华书局")
+        self.assertEqual(detected["publish_place"], "北京")
+        self.assertEqual(detected["publish_year"], "1983")
+        self.assertEqual(detected["metadata_status"], "complete")
+        self.assertEqual(
+            detected["metadata_evidence"]["title"]["rule"],
+            "windows_duplicate_suffix",
+        )
+
+    def test_classical_authorship_prose_resolves_colophon_ocr_error(self) -> None:
+        detected = detect_pdf_bibliographic_metadata(
+            Path("唐鉴(1)(1).pdf"),
+            [
+                {
+                    "pdf_page_index": 2,
+                    "text_raw": "(宋) 范祖禹撰\n金鑑\n上海古籍出版社",
+                },
+                {
+                    "pdf_page_index": 3,
+                    "text_raw": (
+                        "唐鑑\n"
+                        "[宋]范礼禹撰\n"
+                        "上海古籍出版社出版\n"
+                        "(上海瑞金二路272號)\n"
+                        "1984年10月第1版 1984年10月第1次印刷"
+                    ),
+                },
+                {
+                    "pdf_page_index": 5,
+                    "text_raw": "《唐鑑》十二卷，宋范祖禹（一〇四一——一〇九八）撰。",
+                },
+                {"pdf_page_index": 100, "text_raw": ""},
+            ],
+            {
+                "title": "唐鉴(1)(1)",
+                "metadata_source": "automatic_recognition",
+            },
+        )
+
+        self.assertEqual(detected["title"], "唐鉴")
+        self.assertEqual(detected["author"], "范祖禹")
+        self.assertEqual(detected["country"], "宋")
+        self.assertEqual(detected["publisher"], "上海古籍出版社")
+        self.assertEqual(detected["publish_place"], "上海")
+        self.assertEqual(detected["publish_year"], "1984")
+        self.assertEqual(detected["metadata_status"], "complete")
+        self.assertEqual(detected["metadata_conflicts"], [])
+
     def test_foucault_cip_statement_supplies_complete_current_edition_metadata(self) -> None:
         detected = detect_pdf_bibliographic_metadata(
             Path("性经验史 第二卷 快感的享用.pdf"),

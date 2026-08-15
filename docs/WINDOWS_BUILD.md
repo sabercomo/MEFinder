@@ -2,7 +2,7 @@
 
 > Windows 构建入口与依赖清单仍位于仓库根目录。
 
-Windows 发布版沿用 PyInstaller `onedir` 目录结构，再由 Inno Setup 封装成单个安装程序。安装程序只安装应用文件；用户索引、导入文献、设置、日志与 API 配置保存在独立的数据目录，升级应用时不会覆盖这些数据。
+Windows 桌面程序沿用 PyInstaller `onedir` 目录结构；独立的 `MEFinderMCP.exe` 以 onefile sidecar 构建，再由 Inno Setup 一并封装。安装程序只安装应用文件；用户索引、导入文献、设置、日志与 API 配置保存在独立的数据目录，升级应用时不会覆盖这些数据。
 
 全新安装时，安装向导会询问该数据目录的位置，默认 `%LOCALAPPDATA%\MEFinder`，可以改到其他磁盘（例如语料库较大、C 盘空间紧张时）。选择结果写入应用根目录的 `data_root.txt`，供后续静默更新读取，避免更新时重新询问或跳回默认位置。已经在使用旧版（无该文件、数据已在默认位置）的安装会被自动识别并跳过询问，继续使用原有位置。
 
@@ -41,7 +41,11 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_installer.ps1 -PythonEx
 
 脚本会在构建前验证 Python 至少为 3.11 且为 64 位，避免意外生成旧版 x86 安装包。
 
-构建脚本从 `src.me_finder.__version__` 读取唯一版本号。通常不要传 `-Version`；若显式传入，值必须与源码版本完全一致，否则构建会停止。脚本会先运行发布相关测试，然后执行 PyInstaller、生成空索引、检查私密数据，最后调用 Inno Setup。
+仓库还提供手动触发的 `.github/workflows/windows-release-smoke.yml`。工作流进入默认分支后可在 GitHub Actions 页面手工运行；它固定使用 GitHub 托管 `windows-2022` x64 runner，构建安装版与绿色版，校验并安装 v0.4.3 后覆盖到 v0.4.4，在桌面关闭和开启两种状态下分别建立 MCP STDIO 会话，验证卸载保留用户数据，并在移动绿色版目录后再次冒烟。成功运行会上传未签名的四个发布文件。
+
+托管 runner 是 Windows Server 2022，只用于可重复构建与生命周期门禁，不能替代 Windows 10/11 x64 消费者实机的最终 GUI、WebView2、代码签名和 SmartScreen 验收。工作流只允许手动触发，避免普通提交意外生成发布包。
+
+构建脚本从 `src.me_finder.__version__` 读取唯一版本号。通常不要传 `-Version`；若显式传入，值必须与源码版本完全一致，否则构建会停止。脚本会先运行发布相关测试，然后分别构建桌面程序与 MCP sidecar、生成空索引、用真实 STDIO 客户端冒烟、检查私密数据，最后调用 Inno Setup。
 
 输出位于 `release\`：
 
@@ -49,6 +53,8 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_installer.ps1 -PythonEx
 - `MEFinder-v<version>-windows-setup.exe.sha256.txt`
 
 安装目录默认为 `%LOCALAPPDATA%\Programs\MEFinder`，无需管理员权限。安装器额外写入应用根目录的 `installed.flag`；程序仅在发现该标记时启用安装态自更新。直接运行 `dist\MEFinder` 属于开发构建，不会误判为已安装版。应用内更新会安静安装，并在升级完成后重新启动新版本。
+
+Codex 使用的安装版命令固定为 `%LOCALAPPDATA%\Programs\MEFinder\MEFinderMCP.exe`，覆盖升级不会改变路径。卸载会删除 sidecar，但不会修改 Codex 配置；保留的旧配置会明确报告命令不存在，用户再手工执行 `codex mcp remove mefinder`。
 
 ## 发布与应用内更新
 
@@ -65,3 +71,5 @@ SHA-256 校验不能替代 Windows 代码签名。对外发布前建议使用可
 - `config\mineru_api.local.example.json`：仅包含占位符的示例
 
 构建脚本会拒绝包含个人语料库、真实 API 配置、偏好文件、日志、额外数据库或 `portable.flag` 的 payload。不要绕过该检查，也不要直接把本机 `data\`、`corpus\` 或真实 `config\*.local.json` 复制到 `dist\MEFinder`。
+
+绿色版 ZIP 同样包含根目录 `MEFinderMCP.exe`。`portable.flag` 让 sidecar 读取包内 `data\index.sqlite3`；移动整个绿色版目录后必须更新 Codex 中保存的命令绝对路径。

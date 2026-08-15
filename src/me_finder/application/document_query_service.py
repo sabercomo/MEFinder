@@ -112,6 +112,11 @@ class DocumentQueryService:
             documents,
             latest_runs=self.latest_pdf_import_runs(),
             active_source_ids=active,
+            language_samples=self.language_samples(
+                str(source.get("source_file_id") or "")
+                for source in sources
+                if source.get("source_file_id")
+            ),
         )
 
     def calibration_library_data(
@@ -157,6 +162,19 @@ class DocumentQueryService:
 
     def latest_pdf_import_runs(self) -> Dict[str, Dict[str, object]]:
         result = self._index.run_when_ready(self._read_latest_pdf_import_runs)
+        if result is None:
+            raise DocumentQueryUnavailable("索引正在重建，请稍后再加载文献。")
+        return result
+
+    def language_samples(
+        self, source_file_ids: Iterable[str]
+    ) -> Dict[str, str]:
+        source_ids = tuple(dict.fromkeys(str(value) for value in source_file_ids))
+        result = self._index.run_when_ready(
+            lambda database_path: self._read_language_samples(
+                database_path, source_ids
+            )
+        )
         if result is None:
             raise DocumentQueryUnavailable("索引正在重建，请稍后再加载文献。")
         return result
@@ -350,3 +368,27 @@ class DocumentQueryService:
                 continue
             result[str(source_id)] = payload
         return result
+
+    @staticmethod
+    def _read_language_samples(
+        database_path: Path,
+        source_file_ids: Sequence[str],
+    ) -> Dict[str, str]:
+        """Read a bounded opening sample from each indexed document."""
+
+        connection = sqlite3.connect(str(database_path))
+        try:
+            samples: Dict[str, str] = {}
+            for source_id in source_file_ids:
+                rows = connection.execute(
+                    "SELECT substr(text_raw, 1, 1000) FROM paragraphs "
+                    "WHERE source_file_id = ? AND eligible_for_search = 1 "
+                    "AND text_raw <> '' ORDER BY paragraph_index LIMIT 16",
+                    (source_id,),
+                ).fetchall()
+                text = "\n".join(str(row[0]) for row in rows if row[0])
+                if text:
+                    samples[source_id] = text
+            return samples
+        finally:
+            connection.close()

@@ -16,11 +16,11 @@ MEFinder 文献原句定位器（Windows 绿色版）
 2. 在该文件夹的地址栏输入 powershell，按回车。
 3. 核验绿色版 ZIP 时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.3-windows-portable.zip"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.4-windows-portable.zip"
 
    核验安装版时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.3-windows-setup.exe"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.4-windows-setup.exe"
 
 4. 将输出中的 Hash 与同名 .sha256.txt 文件第一列的 64 位字符逐字比较。英文字母大小写不影响结果。
 5. 如果两者不一致，请删除下载文件，不要运行，并从 MEFinder 官方 GitHub 发布页重新下载。
@@ -41,6 +41,12 @@ MEFinder 文献原句定位器（Windows 绿色版）
 绿色版的数据位置
 
 本版本无需安装。portable.flag 会让程序把索引、文献、设置、日志和 API 配置全部保存在解压目录中。删除整个目录即可移除程序及其本地数据。
+
+MEFinder MCP
+
+绿色版根目录中的 MEFinderMCP.exe 是可选的本地只读 MCP 服务。需要在 Codex、Claude Code 或 WorkBuddy 中配置的是这个文件，不是桌面主程序“文献原句定位器.exe”。
+
+MEFinder MCP 使用 STDIO 连接，不需要手动双击运行，AI 客户端会在需要时自动启动它。配置时填写 MEFinderMCP.exe 的完整路径；移动绿色版目录后，需要在客户端中重新填写新路径。完整教程见项目 README 中的“Windows/macOS MCP 配置教程”。
 
 文献解析与隐私
 

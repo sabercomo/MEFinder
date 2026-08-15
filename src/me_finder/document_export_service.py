@@ -34,6 +34,7 @@ def export_indexed_pdf(
     runtime_root: Path,
     source_file_id: str,
     output_dir: Path,
+    include_source_pdf: bool = False,
 ) -> Dict[str, object]:
     """Stream one indexed PDF into an atomic Zip64 document export."""
 
@@ -111,7 +112,16 @@ def export_indexed_pdf(
         or volume.get("display_title")
         or Path(str(source.get("file_name") or source_id)).stem
     )
-    source_digest = _source_digest(source, Path(runtime_root))
+    source_pdf = (
+        _source_pdf_path(source, Path(runtime_root))
+        if include_source_pdf
+        else None
+    )
+    source_digest = (
+        file_sha256(source_pdf)
+        if source_pdf is not None
+        else _source_digest(source, Path(runtime_root))
+    )
     parser_provider = str(
         profile.get("provider_id")
         or first_page.get("parser")
@@ -170,6 +180,7 @@ def export_indexed_pdf(
         destination,
         manifest,
         iter_indexed_pdf_pages(database, source_id),
+        source_pdf_path=source_pdf,
     )
     return {
         "ok": True,
@@ -180,6 +191,7 @@ def export_indexed_pdf(
         "page_count": page_count,
         "warning_count": len(warnings),
         "missing_ranges": missing_ranges,
+        "includes_source_pdf": source_pdf is not None,
     }
 
 
@@ -217,6 +229,18 @@ def _source_digest(source: Mapping[str, object], runtime_root: Path) -> str:
             "文献索引缺少 source_sha256，且原 PDF 不可读。"
         )
     return file_sha256(candidate)
+
+
+def _source_pdf_path(source: Mapping[str, object], runtime_root: Path) -> Path:
+    relative = str(source.get("relative_path") or "").strip()
+    candidate = Path(relative)
+    if relative and not candidate.is_absolute():
+        candidate = Path(runtime_root) / candidate
+    if not relative or not candidate.is_file():
+        raise UnsupportedDocumentExport(
+            "找不到这份文献的原 PDF，无法导出包含原 PDF 的文档包。"
+        )
+    return candidate
 
 
 def _missing_page_ranges(

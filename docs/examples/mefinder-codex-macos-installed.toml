@@ -1,0 +1,4 @@
+[mcp_servers.mefinder]
+command = "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP"
+startup_timeout_sec = 10
+tool_timeout_sec = 60

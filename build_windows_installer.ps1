@@ -11,6 +11,9 @@ $ReleaseRoot = Join-Path $ProjectRoot "release"
 $DistPath = Join-Path $ProjectRoot "dist\MEFinder"
 $LocalDataRoot = Join-Path $ProjectRoot "dist\MEFinderData"
 $LocalDataMarker = Join-Path $DistPath "data_root.txt"
+$McpDistPath = Join-Path $ProjectRoot "build\mcp-sidecar-dist"
+$McpWorkPath = Join-Path $ProjectRoot "build\mcp-sidecar-work"
+$McpSourcePath = Join-Path $McpDistPath "MEFinderMCP.exe"
 
 function Restore-LocalDevelopmentDataMarker {
     if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) { return }
@@ -145,6 +148,7 @@ try {
         tests.test_structured_reader_web `
         tests.test_batch_directory_import `
         tests.test_calibration_library_ui `
+        tests.test_document_package_import `
         tests.test_directory_scan `
         tests.test_import_queue `
         tests.test_import_resume_mineru `
@@ -166,6 +170,14 @@ try {
         tests.test_update_service `
         tests.test_windows_version_info `
         tests.test_windows_packaging `
+        tests.test_runtime_location `
+        tests.test_literature_verification_service `
+        tests.test_mcp_v1_baseline `
+        tests.test_mcp_server `
+        tests.test_mcp_quality `
+        tests.test_mcp_documentation `
+        tests.test_mcp_packaging `
+        tests.test_mcp_concurrency `
         tests.test_platform_open `
         tests.test_theme_system `
         tests.test_frontend_assets `
@@ -188,9 +200,18 @@ try {
 
     & $packagerPythonCommand @packagerPythonArgs -m PyInstaller desktop.spec --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
+    if (Test-Path -LiteralPath $McpDistPath) { Remove-Item -LiteralPath $McpDistPath -Recurse -Force }
+    if (Test-Path -LiteralPath $McpWorkPath) { Remove-Item -LiteralPath $McpWorkPath -Recurse -Force }
+    & $packagerPythonCommand @packagerPythonArgs -m PyInstaller mcp_sidecar.spec --clean --noconfirm --distpath $McpDistPath --workpath $McpWorkPath
+    if ($LASTEXITCODE -ne 0) { throw "MCP sidecar PyInstaller build failed." }
+    if (-not (Test-Path -LiteralPath $McpSourcePath -PathType Leaf)) {
+        throw "PyInstaller did not create MEFinderMCP.exe."
+    }
+    Copy-Item -LiteralPath $McpSourcePath -Destination (Join-Path $DistPath "MEFinderMCP.exe") -Force
     $appExecutables = @(Get-ChildItem -LiteralPath $DistPath -Filter "*.exe" -File)
-    if ($appExecutables.Count -ne 1) {
-        throw "PyInstaller output must contain exactly one application executable; found $($appExecutables.Count)."
+    $requiredExecutables = @("文献原句定位器.exe", "MEFinderMCP.exe")
+    if ($appExecutables.Count -ne 2 -or @($requiredExecutables | Where-Object { -not (Test-Path -LiteralPath (Join-Path $DistPath $_) -PathType Leaf) }).Count -ne 0) {
+        throw "PyInstaller output must contain exactly two executables: 文献原句定位器.exe and MEFinderMCP.exe."
     }
 
     New-Item -ItemType Directory -Force -Path (Join-Path $DistPath "data") | Out-Null
@@ -219,6 +240,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
     }
+    & $packagerPythonCommand @packagerPythonArgs -m tools.smoke_mcp_sidecar (Join-Path $DistPath "MEFinderMCP.exe") $DistPath
+    if ($LASTEXITCODE -ne 0) { throw "Packaged MCP sidecar smoke test failed." }
 
     $forbiddenNames = @(
         "mineru_api.local.json",

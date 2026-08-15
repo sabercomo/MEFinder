@@ -8,6 +8,12 @@
 
 本版本无需安装。`portable.flag` 会让程序把索引、文献、设置、日志和 API 配置全部保存在解压目录中。删除整个目录即可移除程序及其本地数据。
 
+## Codex MCP
+
+绿色版根目录中的 `MEFinderMCP.exe` 是可选的本地只读 MCP 服务。把它的绝对路径添加为 Codex STDIO MCP 命令即可；不需要先启动桌面窗口。
+
+移动绿色版目录后，Codex 保存的旧绝对路径不会自动更新。请执行 `codex mcp remove mefinder`，再用新位置的 `MEFinderMCP.exe` 重新添加。删除绿色版目录不会静默修改 Codex 配置，旧配置会明确报告命令不存在。
+
 ## 文献解析与隐私
 
 - 原生文本 Word/PDF 的索引与搜索在本机完成。

@@ -1,0 +1,13 @@
+# Copy this table into ~/.codex/config.toml or a trusted project's
+# .codex/config.toml, then replace every /ABSOLUTE/PATH placeholder.
+[mcp_servers.mefinder]
+command = "/ABSOLUTE/PATH/TO/MEFINDER/.venv-mcp/bin/python"
+args = [
+  "-m",
+  "src.me_finder.mcp_server",
+  "--runtime-root",
+  "/ABSOLUTE/PATH/TO/MEFINDER/RUNTIME",
+]
+cwd = "/ABSOLUTE/PATH/TO/MEFINDER"
+startup_timeout_sec = 10
+tool_timeout_sec = 60

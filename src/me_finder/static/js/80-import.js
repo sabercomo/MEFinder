@@ -820,16 +820,17 @@ function selectedVisionProviderId() {
 
 function handleFileSelect(files) {
   if (!files || files.length === 0) return;
-  var validExts = ['.pdf', '.docx'];
+  var selectedFiles = Array.prototype.slice.call(files);
   var pdfParseMode = selectedPdfParseMode();
   var selectedProviderId = selectedVisionProviderId();
   var selectedProvider = (visionConfig.providers || []).find(function(item) { return item.id === selectedProviderId; });
-  for (var i = 0; i < files.length; i++) {
-    var file = files[i];
+  selectedFiles.forEach(function(file, i) {
+    var lowerName = file.name.toLowerCase();
     var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
-    if (validExts.indexOf(ext) === -1) {
+    var isPackage = lowerName.endsWith('.mefinder.zip');
+    if (!isPackage && ['.pdf', '.docx'].indexOf(ext) === -1) {
       showToast('不支持的格式: ' + file.name);
-      continue;
+      return;
     }
     var id = 'import-' + Date.now() + '-' + i;
     importQueue.push({
@@ -837,17 +838,18 @@ function handleFileSelect(files) {
       file: file,
       name: file.name,
       size: file.size,
-      type: ext === '.pdf' ? 'pdf' : 'docx',
-      parseMode: ext === '.pdf' ? pdfParseMode : null,
-      providerId: ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId
-        : ext === '.pdf' && pdfParseMode === 'mineru-local' ? 'mineru-local' : null,
-      providerName: ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name
-        : ext === '.pdf' && pdfParseMode === 'mineru-local' ? '本地 MinerU' : null,
+      type: isPackage ? 'document_package' : ext === '.pdf' ? 'pdf' : 'docx',
+      importKind: isPackage ? 'document_package' : 'document',
+      parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null,
+      providerId: !isPackage && ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? 'mineru-local' : null,
+      providerName: !isPackage && ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? '本地 MinerU' : null,
       status: 'queued',
       step: 0,
-      message: '等待处理'
+      message: isPackage ? '等待恢复文档包' : '等待处理'
     });
-  }
+  });
   document.getElementById('file-input').value = '';
   renderImportQueue();
   importQueue.filter(function(q) { return q.status === 'queued'; }).forEach(function(q) {
@@ -867,7 +869,8 @@ function renderImportQueue() {
   queueEl.style.display = 'block';
   syncImportRecoveryPanel();
   itemsEl.innerHTML = importQueue.map(function(q) {
-    var typeCls = q.type === 'pdf' ? 'pdf' : 'word';
+    var typeCls = q.type === 'pdf' ? 'pdf' : q.type === 'document_package' ? 'package' : 'word';
+    var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'document_package' ? '文档包' : 'DOCX';
     var retryProvider = visionRetryProviderFor(q);
     var steps = importStepsFor(q);
     var stepsHTML = steps.map(function(label, i) {
@@ -913,7 +916,7 @@ function renderImportQueue() {
     }
     return '<div class="import-item" data-id="' + q.id + '">'
       + '<div class="import-item-header">'
-      + '<span class="type-badge ' + typeCls + '">' + (q.type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
+      + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
       + '<span class="import-item-name">' + esc(q.name) + '</span>'
       + importRouteBadge(q)
       + '<span class="import-item-size">' + formatFileSize(q.size) + '</span>'
@@ -1008,16 +1011,18 @@ async function removeImport(id, options) {
     )) return false;
   }
   if (q && q.uploadId) {
-    var activeUploadId = q.uploadId;
+    var activeUploadIds = [q.uploadId];
     q.uploadId = null;
-    try {
-      await fetch('/api/import-upload/cancel', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({upload_id: activeUploadId})
-      });
-    } catch (cancelError) {
-      console.warn('cancel chunked upload failed:', cancelError);
+    for (var uploadIndex = 0; uploadIndex < activeUploadIds.length; uploadIndex += 1) {
+      try {
+        await fetch('/api/import-upload/cancel', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({upload_id: activeUploadIds[uploadIndex]})
+        });
+      } catch (cancelError) {
+        console.warn('cancel chunked upload failed:', cancelError);
+      }
     }
   }
   if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
@@ -1044,6 +1049,65 @@ async function removeImport(id, options) {
 
 var IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES = 4 * 1024 * 1024;
 
+async function uploadImportFile(q, importKind, progressLabel) {
+  var startResp = await fetch('/api/import-upload/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      file_name: q.file.name,
+      size: q.file.size,
+      parse_mode: q.parseMode || 'auto',
+      provider_id: q.providerId || '',
+      import_kind: importKind || 'document'
+    })
+  });
+  var startData = await startResp.json();
+  if (!startResp.ok || startData.error) throw new Error(startData.error || '无法开始读取文件');
+  var uploadId = startData.upload_id;
+  if (!uploadId) throw new Error('上传任务编号缺失');
+  q.uploadId = uploadId;
+  try {
+    var totalSize = Number(q.file.size || 0);
+    var chunkSize = Number(startData.chunk_size || IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES);
+    if (!Number.isFinite(chunkSize) || chunkSize <= 0) chunkSize = IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES;
+    chunkSize = Math.min(chunkSize, 8 * 1024 * 1024);
+    var offset = 0;
+    while (offset < totalSize) {
+      var end = Math.min(offset + chunkSize, totalSize);
+      var uploadChunk = q.file.slice(offset, end);
+      var chunkResp = await fetch('/api/import-upload/chunk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': q.file.type || 'application/octet-stream',
+          'X-Upload-ID': uploadId,
+          'X-Upload-Offset': String(offset)
+        },
+        body: uploadChunk
+      });
+      var chunkData = await chunkResp.json();
+      if (!chunkResp.ok || chunkData.error) throw new Error(chunkData.error || '读取文件失败');
+      var received = Number(chunkData.received_size);
+      if (!Number.isFinite(received) || received !== end) throw new Error('上传分块位置校验失败');
+      offset = received;
+      q.message = progressLabel + ' ' + (totalSize ? Math.round(offset * 100 / totalSize) : 0) + '%';
+      renderImportQueue();
+    }
+  } catch (error) {
+    try {
+      await fetch('/api/import-upload/cancel', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({upload_id: uploadId})
+      });
+    } catch (cancelError) {
+      console.warn('cancel chunked upload failed:', cancelError);
+    }
+    q.uploadId = null;
+    throw error;
+  }
+  return uploadId;
+}
+
 async function uploadImport(id) {
   var q = importQueue.find(function(q) { return q.id === id; });
   if (!q) return;
@@ -1053,48 +1117,8 @@ async function uploadImport(id) {
   renderImportQueue();
   var uploadId = null;
   try {
-    var startResp = await fetch('/api/import-upload/start', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        file_name: q.name,
-        size: q.file.size,
-        parse_mode: q.parseMode || 'auto',
-        provider_id: q.providerId || ''
-      })
-    });
-    var startData = await startResp.json();
-    if (!startResp.ok || startData.error) throw new Error(startData.error || '无法开始读取文件');
-    uploadId = startData.upload_id;
-    if (!uploadId) throw new Error('上传任务编号缺失');
+    uploadId = await uploadImportFile(q, q.importKind || 'document', '正在读取文件…');
     q.uploadId = uploadId;
-    var totalSize = Number(q.file.size || 0);
-    var chunkSize = Number(startData.chunk_size || IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES);
-    if (!Number.isFinite(chunkSize) || chunkSize <= 0) chunkSize = IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES;
-    chunkSize = Math.min(chunkSize, 8 * 1024 * 1024);
-    var offset = 0;
-    while (offset < totalSize) {
-      var end = Math.min(offset + chunkSize, totalSize);
-      var chunkResp = await fetch('/api/import-upload/chunk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': q.file.type || 'application/octet-stream',
-          'X-Upload-ID': uploadId,
-          'X-Upload-Offset': String(offset)
-        },
-        body: q.file.slice(offset, end)
-      });
-      var chunkData = await chunkResp.json();
-      if (!chunkResp.ok || chunkData.error) throw new Error(chunkData.error || '读取文件失败');
-      var received = Number(chunkData.received_size);
-      if (!Number.isFinite(received) || received !== end) {
-        throw new Error('上传分块位置校验失败');
-      }
-      offset = received;
-      q.uploadProgress = totalSize ? Math.round(offset * 100 / totalSize) : 0;
-      q.message = '正在读取文件… ' + q.uploadProgress + '%';
-      renderImportQueue();
-    }
     var resp = await fetch('/api/import-upload/finish', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1121,12 +1145,13 @@ async function uploadImport(id) {
     renderImportQueue();
     if (q.jobId) pollImportJob(q.id);
   } catch (e) {
-    if (uploadId) {
+    var pendingUploadIds = [uploadId].filter(Boolean);
+    for (var pendingIndex = 0; pendingIndex < pendingUploadIds.length; pendingIndex += 1) {
       try {
         await fetch('/api/import-upload/cancel', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({upload_id: uploadId})
+          body: JSON.stringify({upload_id: pendingUploadIds[pendingIndex]})
         });
       } catch (cancelError) {
         console.warn('cancel chunked upload failed:', cancelError);
@@ -1149,6 +1174,7 @@ function pollImportJob(id) {
       if (data.parse_route) q.route = data.parse_route;
       if (data.provider_id) q.providerId = data.provider_id;
       if (data.provider_name) q.providerName = data.provider_name;
+      if (data.source_file_id) q.sourceFileId = data.source_file_id;
       q.mineruFailed = !!data.mineru_failed;
       q.visionFailed = !!data.vision_failed;
       q.mineruInterrupted = !!data.mineru_interrupted;
@@ -1157,9 +1183,10 @@ function pollImportJob(id) {
       else if (data.phase === 'vision_processing') q.route = 'vision';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
       var steps = importStepsFor(q);
-      if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
+      if (data.phase === 'validating_result') q.step = 1;
+      else if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
       else if (data.phase === 'vision_processing') q.step = 2;
-      else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('文本入库');
+      else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('恢复书目与页码');
       else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
       else if (data.status === 'completed') q.step = steps.length;
       q.message = data.message || q.message;
@@ -1168,7 +1195,10 @@ function pollImportJob(id) {
         q.message = data.message || '导入完成，已自动更新索引';
         if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
         invalidateLibraryCatalog();
-        ensureSearchDocuments(true).then(updateSearchDocumentLabel);
+        var refreshPromise = currentPage === 'library'
+          ? loadLibrary()
+          : ensureSearchDocuments();
+        refreshPromise.then(updateSearchDocumentLabel);
       } else if (data.status === 'failed') {
         q.status = 'error';
         q.message = data.message || '导入失败';

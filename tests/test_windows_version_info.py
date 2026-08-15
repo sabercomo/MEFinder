@@ -27,6 +27,17 @@ class WindowsVersionInfoTests(unittest.TestCase):
             self.assertEqual(written, target)
             self.assertIn("filevers=(1, 2, 3, 0)", target.read_text(encoding="utf-8"))
 
+    def test_sidecar_metadata_uses_its_executable_name(self) -> None:
+        rendered = render_windows_version_info(
+            file_description="MEFinder MCP Server",
+            internal_name="MEFinderMCP",
+            original_filename="MEFinderMCP.exe",
+        )
+
+        self.assertIn("StringStruct(u'FileDescription', u'MEFinder MCP Server')", rendered)
+        self.assertIn("StringStruct(u'InternalName', u'MEFinderMCP')", rendered)
+        self.assertIn("StringStruct(u'OriginalFilename', u'MEFinderMCP.exe')", rendered)
+
     def test_non_numeric_version_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             render_windows_version_info("1.2.3-beta")

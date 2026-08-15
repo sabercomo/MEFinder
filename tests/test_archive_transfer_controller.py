@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -19,10 +20,12 @@ class FakeBackup:
             "size_bytes": 12,
         }
         self.export_error: Exception | None = None
+        self.export_output_dirs: list[Path | None] = []
         self.restore_error: Exception | None = None
         self.restore_paths: list[str] = []
 
-    def export(self):
+    def export(self, *, output_dir=None):
+        self.export_output_dirs.append(output_dir)
         if self.export_error is not None:
             raise self.export_error
         return dict(self.export_result)
@@ -79,14 +82,35 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                     "runtime_root": Path("/runtime"),
                     "source_file_id": " pdf-one ",
                     "output_dir": Path("/app-data/exports"),
+                    "include_source_pdf": False,
                 }
             ],
         )
+
+        self.controller.export_document(
+            {"source_id": "pdf-two", "include_source_pdf": True}
+        )
+        self.assertTrue(self.export_calls[-1]["include_source_pdf"])
         self.assertEqual(
             self.controller.restore_backup({"path": " /tmp/backup.zip "}),
             (200, {"ok": True, "job_id": "restore-123"}),
         )
         self.assertEqual(self.backup.restore_paths, ["/tmp/backup.zip"])
+
+    def test_selected_output_directory_is_forwarded_to_both_exporters(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+
+            self.assertEqual(
+                self.controller.export_backup({"output_dir": str(output_dir)}),
+                (200, self.backup.export_result),
+            )
+            self.controller.export_document(
+                {"source_id": "pdf-one", "output_dir": str(output_dir)}
+            )
+
+        self.assertEqual(self.backup.export_output_dirs[-1], output_dir)
+        self.assertEqual(self.export_calls[-1]["output_dir"], output_dir)
 
     def test_invalid_payloads_fail_before_archive_services(self) -> None:
         for payload in (None, [], "pdf-one"):
@@ -95,6 +119,18 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                     self.controller.export_document(payload),
                     (400, {"error": "单书导出请求必须是 JSON 对象。"}),
                 )
+        self.assertEqual(
+            self.controller.export_document(
+                {"source_id": "pdf-one", "include_source_pdf": "yes"}
+            ),
+            (400, {"error": "文档包原 PDF 选项必须是布尔值。"}),
+        )
+        for payload in (
+            {"source_id": "pdf-one", "output_dir": ""},
+            {"source_id": "pdf-one", "output_dir": "relative"},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.controller.export_document(payload)[0], 400)
         for payload in (None, [], {}, {"path": "  "}):
             with self.subTest(payload=payload):
                 self.assertEqual(

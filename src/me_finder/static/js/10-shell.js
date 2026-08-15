@@ -26,6 +26,20 @@ function closeWindowsWindow() {
   callWindowsWindow('close');
 }
 
+async function chooseDesktopExportDirectory() {
+  if (desktopShell !== 'macos' && desktopShell !== 'win32') return undefined;
+  var response = await fetch('/api/export-directory/choose', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: '{}'
+  });
+  var data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || '选择导出文件夹失败');
+  if (data.cancelled) return null;
+  if (!data.path) throw new Error('没有收到所选导出文件夹。');
+  return data.path;
+}
+
 window.addEventListener('pywebviewready', function() {
   if (desktopShell === 'win32') {
     callWindowsWindow('is_maximized').then(setWindowsMaximized);
@@ -186,4 +200,3 @@ function toggleSidebar(force) {
     btn.setAttribute('title', label);
   }
 })();
-

@@ -9,6 +9,7 @@ written one NDJSON record at a time.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import zipfile
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from typing import Dict, Iterable, Iterator, Mapping, Optional, Sequence
 DOCUMENT_SCHEMA_VERSION = "mefinder.document.v1"
 ZIP_MANIFEST_NAME = "manifest.json"
 ZIP_PAGES_NAME = "pages.ndjson"
+ZIP_SOURCE_PDF_NAME = "source/original.pdf"
 
 
 class DocumentExportError(ValueError):
@@ -200,8 +202,10 @@ def export_document_zip(
     output_path: Path,
     manifest: Mapping[str, object],
     pages: Iterable[Mapping[str, object]],
+    *,
+    source_pdf_path: Optional[Path] = None,
 ) -> Path:
-    """Atomically write a Zip64 ``manifest.json`` + incremental NDJSON export."""
+    """Atomically write a Zip64 document package, optionally with its PDF."""
 
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -243,6 +247,20 @@ def export_document_zip(
             "format": "ndjson",
             "path": ZIP_PAGES_NAME,
         }
+        if source_pdf_path is not None:
+            source_pdf = Path(source_pdf_path)
+            if not source_pdf.is_file():
+                raise DocumentExportError("要嵌入的原 PDF 不存在。")
+            zip_manifest["source_pdf"] = {
+                "path": ZIP_SOURCE_PDF_NAME,
+                "sha256": str(manifest.get("source_sha256") or ""),
+                "size_bytes": source_pdf.stat().st_size,
+            }
+            archive.write(
+                source_pdf,
+                ZIP_SOURCE_PDF_NAME,
+                compress_type=zipfile.ZIP_STORED,
+            )
         archive.writestr(
             ZIP_MANIFEST_NAME,
             json.dumps(
@@ -265,6 +283,7 @@ def read_document_export(path: Path) -> ExportedDocument:
     if zipfile.is_zipfile(source):
         with zipfile.ZipFile(source) as archive:
             manifest = json.loads(archive.read(ZIP_MANIFEST_NAME).decode("utf-8"))
+            _embedded_source_pdf_info(archive, manifest)
             pages = list(_iter_zip_pages(archive))
     else:
         payload = json.loads(source.read_text(encoding="utf-8-sig"))
@@ -274,6 +293,45 @@ def read_document_export(path: Path) -> ExportedDocument:
         manifest = payload
     _validate_read_export(manifest, pages)
     return ExportedDocument(manifest=manifest, pages=pages)
+
+
+def extract_embedded_source_pdf(source: Path, destination: Path) -> Optional[Path]:
+    """Extract and verify the optional original PDF from a document package."""
+
+    package = Path(source)
+    if not zipfile.is_zipfile(package):
+        raise DocumentExportError("MEFinder 文档包必须是 ZIP 文件。")
+    target = Path(destination)
+    partial = _partial_path(target)
+    with zipfile.ZipFile(package) as archive:
+        manifest = json.loads(archive.read(ZIP_MANIFEST_NAME).decode("utf-8"))
+        info = _embedded_source_pdf_info(archive, manifest)
+        if info is None:
+            return None
+        target.parent.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            with archive.open(ZIP_SOURCE_PDF_NAME, "r") as source_stream, partial.open(
+                "wb"
+            ) as destination_stream:
+                for chunk in iter(lambda: source_stream.read(1024 * 1024), b""):
+                    size += len(chunk)
+                    if size > int(info["size_bytes"]):
+                        raise DocumentExportError("文档包内原 PDF 的大小与清单不一致。")
+                    digest.update(chunk)
+                    destination_stream.write(chunk)
+                destination_stream.flush()
+                os.fsync(destination_stream.fileno())
+            if size != int(info["size_bytes"]):
+                raise DocumentExportError("文档包内原 PDF 的大小与清单不一致。")
+            if digest.hexdigest() != str(info["sha256"]):
+                raise DocumentExportError("文档包内原 PDF 的 SHA-256 校验失败。")
+            partial.replace(target)
+        except Exception:
+            partial.unlink(missing_ok=True)
+            raise
+    return target
 
 
 def iter_document_pages(path: Path) -> Iterator[Dict[str, object]]:
@@ -306,6 +364,41 @@ def _iter_zip_pages(archive: zipfile.ZipFile) -> Iterator[Dict[str, object]]:
                     f"pages.ndjson line {line_number} is not an object"
                 )
             yield page
+
+
+def _embedded_source_pdf_info(
+    archive: zipfile.ZipFile,
+    manifest: Mapping[str, object],
+) -> Optional[Dict[str, object]]:
+    raw = manifest.get("source_pdf")
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise DocumentExportError("文档包的原 PDF 清单格式无效。")
+    if raw.get("path") != ZIP_SOURCE_PDF_NAME:
+        raise DocumentExportError("文档包的原 PDF 路径无效。")
+    digest = str(raw.get("sha256") or "").strip().lower()
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise DocumentExportError("文档包的原 PDF 摘要无效。")
+    if digest != str(manifest.get("source_sha256") or "").strip().lower():
+        raise DocumentExportError("文档包的原 PDF 摘要与文档清单不一致。")
+    try:
+        size = int(raw.get("size_bytes"))
+    except (TypeError, ValueError) as exc:
+        raise DocumentExportError("文档包的原 PDF 大小无效。") from exc
+    if size < 1:
+        raise DocumentExportError("文档包的原 PDF 大小无效。")
+    try:
+        entry = archive.getinfo(ZIP_SOURCE_PDF_NAME)
+    except KeyError as exc:
+        raise DocumentExportError("文档包声明了原 PDF，但文件缺失。") from exc
+    if entry.file_size != size:
+        raise DocumentExportError("文档包内原 PDF 的大小与清单不一致。")
+    return {
+        "path": ZIP_SOURCE_PDF_NAME,
+        "sha256": digest,
+        "size_bytes": size,
+    }
 
 
 def _validate_read_export(

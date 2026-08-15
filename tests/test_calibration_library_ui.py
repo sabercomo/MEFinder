@@ -146,10 +146,12 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(word["modified_at"], "2026-07-01T08:00:00")
         self.assertIsNone(word.get("status"))
         self.assertEqual(word["language"], "chinese")
+        self.assertEqual(word["language_code"], "zh-Hans")
 
         pdf = by_id["pdf-critique"]
         self.assertEqual(pdf["source_type"], "pdf")
         self.assertEqual(pdf["language"], "foreign")
+        self.assertEqual(pdf["language_code"], "en")
         self.assertEqual(pdf["document_type"], "book")
         self.assertIsNone(word.get("document_type"))
         self.assertEqual(pdf["status"], "manual_mapped")
@@ -265,6 +267,58 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
             )
 
         self.assertEqual(result["items"][0]["language"], "chinese")
+        self.assertEqual(result["items"][0]["language_code"], "zh-Hans")
+
+    def test_body_samples_distinguish_only_the_languages_present(self) -> None:
+        samples = {
+            "simplified": "这是一本讨论社会理论与历史经验的简体中文著作。" * 8,
+            "traditional": "這是一本討論社會理論與歷史經驗的繁體中文著作。" * 8,
+            "english": "This is a study of society and the history of political ideas. " * 8,
+            "german": "Die Geschichte der Gesellschaft und der Begriff der Kritik sind wichtig. " * 8,
+            "french": "La critique de la société et de la raison est au centre de cette étude. " * 8,
+            "japanese": "これは社会と歴史についての日本語の研究です。" * 8,
+        }
+        sources = [
+            {
+                "source_file_id": source_id,
+                "source_type": "word",
+                "file_name": f"{source_id}.docx",
+                "title": source_id,
+            }
+            for source_id in samples
+        ]
+
+        result = build_library(
+            Path("."), sources, [], [], [], language_samples=samples
+        )
+
+        items = {item["source_file_id"]: item for item in result["items"]}
+        self.assertEqual(items["simplified"]["language_code"], "zh-Hans")
+        self.assertEqual(items["traditional"]["language_code"], "zh-Hant")
+        self.assertEqual(items["english"]["language_code"], "en")
+        self.assertEqual(items["german"]["language_code"], "de")
+        self.assertEqual(items["french"]["language_code"], "fr")
+        self.assertEqual(items["japanese"]["language_code"], "ja")
+        self.assertEqual(items["traditional"]["language"], "chinese")
+        self.assertEqual(items["japanese"]["language"], "foreign")
+
+    def test_sparse_kana_ocr_noise_does_not_turn_chinese_into_japanese(self) -> None:
+        sample = "这是一本讨论社会理论与历史经验的简体中文著作。" * 100
+        sample += "の" * 15
+        result = build_library(
+            Path("."),
+            [{
+                "source_file_id": "chinese-with-noise",
+                "source_type": "word",
+                "file_name": "中文资料.docx",
+            }],
+            [],
+            [],
+            [],
+            language_samples={"chinese-with-noise": sample},
+        )
+
+        self.assertEqual(result["items"][0]["language_code"], "zh-Hans")
 
     def test_merged_library_keeps_pinyin_sort_and_safe_remove_copy(self) -> None:
         self.assertNotIn("cal-doc-select", HTML)
@@ -429,6 +483,12 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);", HTML)
         # 加载时以后端为准。
         self.assertIn("data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign'", HTML)
+        self.assertIn("实际存在的简体中文、繁体中文等中文细类排在外语前", HTML)
+
+    def test_language_facets_are_dynamic_and_filter_card_fits_document_types(self) -> None:
+        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
+        self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
+        self.assertIn("width: 408px; max-width: calc(100vw - 48px)", HTML)
         self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)
 
     def test_global_layering_tokens_and_escape_stack(self) -> None:
@@ -564,6 +624,12 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertLess(library, importing)
         self.assertNotIn("navigateTo('calibration')", HTML)
         self.assertIn("navigateTo('library');\n  if (!libLoaded) await loadLibrary();", HTML)
+
+    def test_completed_import_refreshes_an_open_library_without_restart(self) -> None:
+        self.assertIn("var refreshPromise = currentPage === 'library'", HTML)
+        self.assertIn("? loadLibrary()", HTML)
+        self.assertIn(": ensureSearchDocuments();", HTML)
+        self.assertIn("refreshPromise.then(updateSearchDocumentLabel);", HTML)
 
     def test_sidebar_can_collapse_to_an_icon_rail_and_persists(self) -> None:
         # Toggle control, handler, and persisted state.

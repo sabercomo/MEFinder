@@ -1,0 +1,118 @@
+{
+  "schema_version": "1",
+  "fixture": "synthetic-public-domain-independent",
+  "search_cases": [
+    {
+      "name": "calibrated_pdf",
+      "request": {
+        "query": "技术判断必须由可复核证据支撑",
+        "mode": "exact",
+        "limit": 5,
+        "source_type": "pdf",
+        "source_file_id": "fixture-pdf"
+      },
+      "expected": {
+        "total": 1,
+        "paragraph_id": "fixture-pdf-P000000",
+        "source_type": "pdf",
+        "matched_text": "技术判断必须由可复核证据支撑",
+        "match_type": "exact",
+        "page": "引用页码：38",
+        "page_source_type": "manual_segment",
+        "citation_page_start": "38",
+        "pdf_page_start_index": 0
+      }
+    },
+    {
+      "name": "uncalibrated_pdf",
+      "request": {
+        "query": "物理页位置不能自动视为正式引用页",
+        "mode": "exact",
+        "limit": 5,
+        "source_type": "pdf",
+        "source_file_id": "fixture-pdf"
+      },
+      "expected": {
+        "total": 1,
+        "paragraph_id": "fixture-pdf-P000001",
+        "source_type": "pdf",
+        "matched_text": "物理页位置不能自动视为正式引用页",
+        "match_type": "exact",
+        "page": "PDF 第 2 页，引用页码尚未校准",
+        "page_source_type": "uncalibrated",
+        "citation_page_start": null,
+        "pdf_page_start_index": 1
+      }
+    },
+    {
+      "name": "word",
+      "request": {
+        "query": "文献核对首先要区分检索命中与结论成立",
+        "mode": "exact",
+        "limit": 5,
+        "source_type": "word",
+        "source_file_id": "fixture-word"
+      },
+      "expected": {
+        "total": 1,
+        "paragraph_id": "fixture-word-P000000",
+        "source_type": "word",
+        "matched_text": "文献核对首先要区分检索命中与结论成立",
+        "match_type": "exact",
+        "page": "第 7 页",
+        "page_source_type": "section_break_verified",
+        "citation_page_start": "7",
+        "pdf_page_start_index": null
+      }
+    },
+    {
+      "name": "no_result",
+      "request": {
+        "query": "这是一条夹具中不存在的句子",
+        "mode": "exact",
+        "limit": 5,
+        "source_type": "all",
+        "source_file_id": null
+      },
+      "expected": {
+        "total": 0,
+        "results": []
+      }
+    }
+  ],
+  "reader_cases": [
+    {
+      "name": "pdf_page_states",
+      "request": {
+        "source_id": "fixture-pdf",
+        "start": 0,
+        "count": 2
+      },
+      "expected": {
+        "source_type": "pdf",
+        "total": 2,
+        "positions": [0, 1],
+        "page_verified": [true, false],
+        "page_display": [
+          "引用页码：38",
+          "PDF 第 2 页，引用页码尚未校准"
+        ]
+      }
+    },
+    {
+      "name": "word_window",
+      "request": {
+        "source_id": "fixture-word",
+        "start": 0,
+        "count": 2
+      },
+      "expected": {
+        "source_type": "word",
+        "total": 2,
+        "positions": [0, 1],
+        "page_verified": [true, true],
+        "page_display": ["第 7 页", "第 8 页"]
+      }
+    }
+  ]
+}

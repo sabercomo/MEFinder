@@ -689,6 +689,7 @@ class SearchEngine:
                 page_fields["citation_page_number_start"] = None
                 page_fields["citation_page_number_end"] = None
         page_display = build_page_display(page_fields)
+        citation_page = resolve_citation_page(page_fields)
         page = page_display.display
         page_note = page_display.note
         if source_type == "pdf":
@@ -729,8 +730,9 @@ class SearchEngine:
             "pdf_page_end_label": paragraph.get("pdf_page_end_label"),
             "printed_page_start": page_fields.get("printed_page_start"),
             "printed_page_end": page_fields.get("printed_page_end"),
-            "citation_page_start": page_fields.get("citation_page_start"),
-            "citation_page_end": page_fields.get("citation_page_end"),
+            "citation_page_start": citation_page.start,
+            "citation_page_end": citation_page.end,
+            "citation_page_verified": citation_page.verified,
             "citation_page_number_start": page_fields.get("citation_page_number_start"),
             "citation_page_number_end": page_fields.get("citation_page_number_end"),
             "citation_page_label_start": page_fields.get("citation_page_label_start"),

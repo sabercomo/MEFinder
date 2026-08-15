@@ -103,8 +103,6 @@ function renderLibraryFilterBar() {
   var allCount = libSources.length;
   var wordCount = libSources.filter(function(s){ return s.source_type === 'word'; }).length;
   var pdfCount = libSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
-  var chineseCount = libSources.filter(function(s){ return (s.language || 'chinese') === 'chinese'; }).length;
-  var foreignCount = allCount - chineseCount;
   var journalCount = libSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
   var thesisCount = libSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
   // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
@@ -119,13 +117,10 @@ function renderLibraryFilterBar() {
   ];
   if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
 
-  // 语言：默认语言那一档排在另一档之前，让主语言文献靠前（沿用旧 order 主次）。
-  var other = libDefaultLanguage === 'chinese' ? 'foreign' : 'chinese';
-  var langOpts = [
-    {v:'all', label:'全部语言', n:allCount},
-    {v:libDefaultLanguage, label:libLangChipLabel(libDefaultLanguage), n:libDefaultLanguage === 'chinese' ? chineseCount : foreignCount},
-    {v:other, label:libLangChipLabel(other), n:other === 'chinese' ? chineseCount : foreignCount}
-  ];
+  // 语言细类只显示库内实际存在的语言；设置项仍只控制中文/外文两大类的先后。
+  var languageOptions = libraryLanguageFacetOptions(libSources, libDefaultLanguage);
+  if (libLangFilter !== 'all' && !languageOptions.some(function(option) { return option.v === libLangFilter; })) libLangFilter = 'all';
+  var langOpts = [{v:'all', label:'全部语言', n:allCount}].concat(languageOptions);
 
   var typeOpts = [
     {v:'all', label:'全部', n:allCount},
@@ -315,7 +310,7 @@ function getFilteredSources() {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }
   if (libLangFilter !== 'all') {
-    sources = sources.filter(s => (s.language || 'chinese') === libLangFilter);
+    sources = sources.filter(s => libraryLanguageCode(s) === libLangFilter);
   }
   if (libDocTypeFilter === 'unknown') {
     // 未识别：从未跑过书目识别的 PDF（类型只是默认回落成 book，并非真的判定过）。
@@ -688,7 +683,7 @@ function drawerMainActionsHTML(src) {
     var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
     if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
     if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
-    items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档</button>';
+    items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档包</button>';
     items += '<div class="bib-menu-sep"></div>';
   }
   items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
@@ -702,21 +697,29 @@ function drawerMainActionsHTML(src) {
 
 async function exportLibraryDocument(sourceId) {
   if (!sourceId) return;
-  showToast('正在导出这本 PDF…');
   try {
-    var data = await requestLibraryDocumentExport(sourceId);
+    var outputDirectory = await chooseDesktopExportDirectory();
+    if (outputDirectory === null) return;
+    showToast('正在导出 MEFinder 文档包…');
+    var data = await requestLibraryDocumentExport(sourceId, outputDirectory);
     showToast('已导出 ' + Number(data.page_count || 0).toLocaleString()
-      + ' 页到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
+      + ' 页' + (data.includes_source_pdf ? '，包含原 PDF' : '')
+      + ' 到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
   } catch (error) {
     showToast('导出 MEFinder 文档失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
   }
 }
 
-async function requestLibraryDocumentExport(sourceId) {
+async function requestLibraryDocumentExport(sourceId, outputDirectory) {
+  var payload = {
+    source_id: sourceId,
+    include_source_pdf: currentDocumentExportMode === 'with_pdf'
+  };
+  if (outputDirectory) payload.output_dir = outputDirectory;
   var response = await fetch('/api/document/export', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({source_id: sourceId})
+    body: JSON.stringify(payload)
   });
   var data = await response.json();
   if (!response.ok || data.error) throw new Error(data.error || '导出失败');
@@ -733,6 +736,15 @@ async function exportSelectedLibraryDocuments() {
     return;
   }
 
+  var outputDirectory;
+  try {
+    outputDirectory = await chooseDesktopExportDirectory();
+  } catch (error) {
+    showToast('选择导出文件夹失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
+    return;
+  }
+  if (outputDirectory === null) return;
+
   libraryExportRunning = true;
   var exportButton = document.getElementById('library-export-selected-btn');
   var exported = [];
@@ -743,7 +755,10 @@ async function exportSelectedLibraryDocuments() {
     for (var index = 0; index < items.length; index += 1) {
       exportButton.textContent = '正在导出 ' + (index + 1) + ' / ' + items.length;
       try {
-        exported.push(await requestLibraryDocumentExport(items[index].source_file_id));
+        exported.push(await requestLibraryDocumentExport(
+          items[index].source_file_id,
+          outputDirectory
+        ));
       } catch (error) {
         failures.push({
           title: items[index].title || items[index].file_name || items[index].source_file_id,
@@ -762,8 +777,9 @@ async function exportSelectedLibraryDocuments() {
       + skippedText + '。首个失败：' + failures[0].title + '：' + failures[0].message, 'warning');
     return;
   }
-  var outputDirectory = exported[0].path.replace(/[\\/][^\\/]+$/, '');
-  showToast('已导出 ' + exported.length + ' 本 PDF' + skippedText
+  outputDirectory = outputDirectory || exported[0].path.replace(/[\\/][^\\/]+$/, '');
+  showToast('已导出 ' + exported.length + ' 个文档包'
+    + (currentDocumentExportMode === 'with_pdf' ? '（包含原 PDF）' : '') + skippedText
     + '，每本一个文档包。保存到：' + outputDirectory, 'success');
 }
 
