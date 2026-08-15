@@ -31,6 +31,20 @@ jobs:
         shell: pwsh
         run: python -m pip install -r requirements-windows.txt
 
+      - name: Install pinned Inno Setup Simplified Chinese messages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $compiler = (Get-Command ISCC.exe -ErrorAction Stop).Source
+          $languagePath = Join-Path (Split-Path -Parent $compiler) "Languages\ChineseSimplified.isl"
+          $languageUrl = "https://raw.githubusercontent.com/jrsoftware/issrc/is-6_7_1/Files/Languages/Unofficial/ChineseSimplified.isl"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $languagePath) | Out-Null
+          Invoke-WebRequest -Uri $languageUrl -OutFile $languagePath
+          $languageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $languagePath).Hash.ToLowerInvariant()
+          if ($languageHash -ne "7d544b9bb1d142cfa11f2e5d3cc8abe2e55f8e066c5124e3772675aa236e1278") {
+            throw "Unexpected ChineseSimplified.isl SHA-256: $languageHash"
+          }
+
       - name: Build installer and portable release
         shell: pwsh
         run: |

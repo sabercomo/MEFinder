@@ -81,6 +81,14 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn("windows-2022", self.windows_workflow)
         self.assertIn("build_windows_installer.ps1", self.windows_workflow)
         self.assertIn("build_portable_release.ps1", self.windows_workflow)
+        self.assertIn(
+            "jrsoftware/issrc/is-6_7_1/Files/Languages/Unofficial/ChineseSimplified.isl",
+            self.windows_workflow,
+        )
+        self.assertIn(
+            "7d544b9bb1d142cfa11f2e5d3cc8abe2e55f8e066c5124e3772675aa236e1278",
+            self.windows_workflow,
+        )
         self.assertIn("gh release download v0.4.3", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
