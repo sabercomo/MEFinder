@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/app_icon_256.png" width="96" alt="MEFinder 图标">
+  <img src="assets/app_icon_256.png" width="128" alt="MEFinder 图标">
 </p>
 
 <h1 align="center">MEFinder</h1>
@@ -7,29 +7,37 @@
 <p align="center"><strong>从一句原文，定位到文献、上下文和页码。</strong></p>
 
 <p align="center">
-  本地优先的 Word / PDF 文献检索、页码定位与引文辅助工具
+  本地优先的 PDF / Word 文献检索、页码定位与引文辅助工具
 </p>
 
 <p align="center">
-  如果 MEFinder 对你有帮助，欢迎点亮 ⭐ 支持我！
-  <br>
-  <a href="https://github.com/sabercomo/MEFinder/stargazers"><img src="https://img.shields.io/github/stars/sabercomo/MEFinder?style=social" alt="GitHub Stars"></a>
+  <a href="https://github.com/sabercomo/MEFinder/stargazers"><img src="https://img.shields.io/github/stars/sabercomo/MEFinder?style=flat-square&logo=github" alt="GitHub Stars"></a>
+  <a href="https://github.com/sabercomo/MEFinder/releases/latest"><img src="https://img.shields.io/github/v/release/sabercomo/MEFinder?style=flat-square&label=Release" alt="最新版本"></a>
+  <a href="https://github.com/sabercomo/MEFinder/releases"><img src="https://img.shields.io/github/downloads/sabercomo/MEFinder/total?style=flat-square&label=Downloads" alt="累计下载量"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/sabercomo/MEFinder?style=flat-square" alt="许可证"></a>
+  <a href="#下载"><img src="https://img.shields.io/badge/Windows-supported-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="支持 Windows"></a>
+  <a href="#下载"><img src="https://img.shields.io/badge/macOS-supported-000000?style=flat-square&logo=apple&logoColor=white" alt="支持 macOS"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/sabercomo/MEFinder/releases/latest">下载最新版</a>
-  · <a href="#主要功能">主要功能</a>
-  · <a href="#快速开始">快速开始</a>
-  · <a href="#工作原理">工作原理</a>
+  <a href="https://github.com/sabercomo/MEFinder/releases/latest">🚀 下载最新版</a>
+  · <a href="#快速开始">📖 快速开始</a>
+  · <a href="docs/MCP_CLIENT_SETUP.md">🔌 MCP 配置</a>
+  · <a href="#主要功能">✨ 主要功能</a>
+  · <a href="#工作原理">⚙️ 工作原理</a>
 </p>
-
-MEFinder 面向论文写作、文献阅读和资料核对场景。输入完整原句、片段，甚至带少量错漏的文字，即可从本地文献库中找回对应文献，继续查看上下文、定位原页、校准引用页码，并复制规范出处。
-
-它不依赖大模型“猜出处”。搜索、索引、页码映射和大部分元数据处理默认都在本机完成；只有扫描件、乱码文本层和复杂版面材料需要在你主动选择后交给 MinerU 或其他视觉解析服务。
 
 <p align="center">
   <img src="assets/mefinder-main-interface.jpg" width="100%" alt="MEFinder 文献检索主界面">
 </p>
+
+## 为什么是 MEFinder？
+
+你可能记得一句话，却记不得它在哪篇文献、哪一页；也可能明明在 PDF 里见过，阅读器全文搜索却怎么也搜不到。
+
+MEFinder 面向论文写作、文献阅读和资料核对场景。输入完整原句、片段，甚至带少量错漏的文字，即可从本地文献库中找回对应文献，继续查看上下文、定位原页、校准引用页码，并复制规范出处。
+
+它不依赖大模型“猜出处”。搜索、索引、页码映射和大部分元数据处理默认都在本机完成；只有扫描件、乱码文本层和复杂版面材料需要在你主动选择后交给 MinerU 或其他视觉解析服务。
 
 <a id="主要功能"></a>
 
