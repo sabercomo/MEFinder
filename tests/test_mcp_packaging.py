@@ -89,6 +89,10 @@ class MCPPackagingTests(unittest.TestCase):
             "7d544b9bb1d142cfa11f2e5d3cc8abe2e55f8e066c5124e3772675aa236e1278",
             self.windows_workflow,
         )
+        self.assertIn(
+            'Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"',
+            self.windows_workflow,
+        )
         self.assertIn("gh release download v0.4.3", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
