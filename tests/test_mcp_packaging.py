@@ -35,10 +35,10 @@ class MCPPackagingTests(unittest.TestCase):
         cls.codex_guide = Path("docs/CODEX_MCP.md").read_text(encoding="utf-8")
 
     def test_sidecar_is_an_independent_console_onefile_build(self) -> None:
-        self.assertIn('["mefinder_mcp.py"]', self.sidecar_spec)
+        self.assertIn("mefinder_mcp.py", self.sidecar_spec)
         self.assertIn('name="MEFinderMCP"', self.sidecar_spec)
         self.assertIn("console=True", self.sidecar_spec)
-        self.assertIn('"docs/contracts/v0.4.4-mcp-v1-tools.json"', self.sidecar_spec)
+        self.assertIn("v0.4.4-mcp-v1-tools.json", self.sidecar_spec)
         self.assertNotIn("COLLECT(", self.sidecar_spec)
 
     def test_windows_builds_require_and_smoke_two_executables(self) -> None:

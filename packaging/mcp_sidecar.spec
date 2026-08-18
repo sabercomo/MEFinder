@@ -5,10 +5,17 @@ import os
 import sys
 from pathlib import Path
 
+# This spec lives in packaging/; resolve every repo path from the repo root so
+# PyInstaller 6.x (which resolves the Analysis script relative to the spec
+# directory) finds the sources regardless of the current working directory.
+ROOT = Path(SPECPATH).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from tools.windows_version_info import write_windows_version_info
 
 
-project_root = Path.cwd()
+project_root = ROOT
 target_arch = os.environ.get("MEFINDER_TARGET_ARCH") or None
 codesign_identity = os.environ.get("MEFINDER_CODESIGN_IDENTITY") or None
 if codesign_identity == "-":
@@ -20,19 +27,19 @@ if codesign_identity == "-":
 version_info_path = None
 if sys.platform == "win32":
     version_info_path = write_windows_version_info(
-        Path("build/mcp_windows_version_info.txt"),
+        ROOT / "build" / "mcp_windows_version_info.txt",
         file_description="MEFinder MCP Server",
         internal_name="MEFinderMCP",
         original_filename="MEFinderMCP.exe",
     )
 
 a = Analysis(
-    ["mefinder_mcp.py"],
+    [str(ROOT / "mefinder_mcp.py")],
     pathex=[str(project_root)],
     binaries=[],
     datas=[
         (
-            "docs/contracts/v0.4.4-mcp-v1-tools.json",
+            str(ROOT / "docs" / "contracts" / "v0.4.4-mcp-v1-tools.json"),
             "docs/contracts",
         ),
     ],
@@ -62,6 +69,6 @@ exe = EXE(
     argv_emulation=False,
     target_arch=target_arch,
     codesign_identity=codesign_identity,
-    icon="assets/app_icon.ico" if sys.platform == "win32" else None,
+    icon=str(ROOT / "assets" / "app_icon.ico") if sys.platform == "win32" else None,
     version=str(version_info_path) if version_info_path is not None else None,
 )

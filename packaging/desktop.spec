@@ -3,20 +3,28 @@
 # 由 Windows 绿色版或安装版发布脚本调用；开发时也可直接运行 PyInstaller。
 # UPX 不要开：压缩 WebView2/.NET DLL 会导致加载失败和杀软误报。
 
+import sys
 from pathlib import Path
+
+# This spec lives in packaging/; PyInstaller 6.x resolves the Analysis script
+# (and other relative paths) against the spec's own directory, so resolve every
+# repo path from the repo root instead of relying on the current directory.
+ROOT = Path(SPECPATH).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools.windows_version_info import write_windows_version_info
 
 
-version_info_path = write_windows_version_info(Path('build/windows_version_info.txt'))
+version_info_path = write_windows_version_info(ROOT / 'build' / 'windows_version_info.txt')
 
 a = Analysis(
-    ['desktop.py'],
-    pathex=[],
+    [str(ROOT / 'desktop.py')],
+    pathex=[str(ROOT)],
     binaries=[],
     datas=[
-        ('src/me_finder/templates', 'src/me_finder/templates'),
-        ('src/me_finder/static', 'src/me_finder/static'),
+        (str(ROOT / 'src' / 'me_finder' / 'templates'), 'src/me_finder/templates'),
+        (str(ROOT / 'src' / 'me_finder' / 'static'), 'src/me_finder/static'),
     ],
     hiddenimports=[
         'src',
@@ -65,7 +73,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    icon='assets/app_icon.ico',
+    icon=str(ROOT / 'assets' / 'app_icon.ico'),
     version=str(version_info_path),
 )
 
