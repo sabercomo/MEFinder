@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import uuid
@@ -16,6 +17,12 @@ from .document_export import (
     DocumentExportError,
     document_manifest,
     export_document_zip,
+)
+from .document_heading import (
+    DOCUMENT_HEADING_VERSION,
+    HEADING_SOURCE_PDF_OUTLINE,
+    enrich_pdf_headings,
+    find_content_list_v2,
 )
 from .markdown_export import document_to_markdown, safe_markdown_filename
 from .pdf_extractors import file_sha256
@@ -45,6 +52,14 @@ def export_indexed_pdf(
     database = Path(database_path)
     if not database.is_file():
         raise IndexedDocumentNotFound("当前文献索引不存在。")
+
+    # Ensure canonical heading metadata is persisted so it travels inside the
+    # exported package (older libraries were indexed before enrichment existed).
+    ensure_document_headings(
+        database_path=database,
+        runtime_root=runtime_root,
+        source_file_id=source_id,
+    )
 
     with closing(_connect(database)) as connection:
         source = _payload_row(
@@ -222,6 +237,7 @@ def export_indexed_pdf_markdown(
     database_path: Path,
     source_file_id: str,
     output_dir: Path,
+    runtime_root: Optional[Path] = None,
 ) -> Dict[str, object]:
     """Export one indexed PDF's persisted structured data as UTF-8 Markdown."""
 
@@ -231,6 +247,15 @@ def export_indexed_pdf_markdown(
     database = Path(database_path)
     if not database.is_file():
         raise IndexedDocumentNotFound("当前文献索引不存在。")
+
+    # Older libraries were indexed before canonical heading enrichment existed;
+    # bring them up to the current version from cached artifacts before reading.
+    if runtime_root is not None:
+        ensure_document_headings(
+            database_path=database,
+            runtime_root=runtime_root,
+            source_file_id=source_id,
+        )
 
     with closing(_connect(database)) as connection:
         source = _payload_row(
@@ -291,6 +316,197 @@ def export_indexed_pdf_markdown(
         "size_bytes": destination.stat().st_size,
         "page_count": page_count,
     }
+
+
+def _reconstruct_segments(
+    pages: list, runtime_root: Path, document_job_id: Optional[str]
+) -> list:
+    """Rebuild MinerU segment descriptors from persisted block metadata.
+
+    Every indexed block records its ``result_dir`` and page geometry, so we can
+    recover the per-segment result directory and page-index offset without the
+    original import config.  ``document_job_id`` (from the on-disk manifest, when
+    present) lets the engine path locate whole-document v2 under parser_jobs.
+    """
+
+    groups: Dict[str, int] = {}
+    for page in pages:
+        if not isinstance(page, Mapping):
+            continue
+        for block in page.get("blocks") or []:
+            if not isinstance(block, Mapping):
+                continue
+            raw_dir = block.get("result_dir")
+            if not raw_dir:
+                continue
+            result_dir = Path(str(raw_dir))
+            if not result_dir.is_absolute():
+                result_dir = Path(runtime_root) / result_dir
+            key = str(result_dir)
+            if key in groups:
+                continue
+            offset = block.get("page_index_offset")
+            if offset in (None, ""):
+                try:
+                    offset = int(block.get("pdf_page_index")) - int(
+                        block.get("local_page_idx")
+                    )
+                except (TypeError, ValueError):
+                    offset = 0
+            try:
+                groups[key] = int(offset)
+            except (TypeError, ValueError):
+                groups[key] = 0
+    return [
+        {
+            "result_dir": result_dir,
+            "page_index_offset": offset,
+            "document_job_id": document_job_id,
+        }
+        for result_dir, offset in groups.items()
+    ]
+
+
+def _manifest_document_job_id(runtime_root: Path, source_file_id: str) -> Optional[str]:
+    manifest = (
+        Path(runtime_root)
+        / "corpus"
+        / "processed"
+        / "mineru"
+        / "manifests"
+        / f"segments-{source_file_id}.json"
+    )
+    if not manifest.is_file():
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    job = data.get("document_job_id") if isinstance(data, Mapping) else None
+    return str(job) if job else None
+
+
+def ensure_document_headings(
+    *,
+    database_path: Path,
+    runtime_root: Path,
+    source_file_id: str,
+) -> Dict[str, object]:
+    """Lazily enrich an indexed PDF with canonical document heading metadata.
+
+    Idempotent: returns immediately when the source already carries a
+    ``document_heading_profile`` at the current version with status ``complete``.
+    Otherwise it recomputes headings from the existing DB plus the original PDF's
+    native outline and any cached MinerU ``content_list_v2`` — never re-OCRing,
+    calling MinerU, reparsing body text, rebuilding the index, or changing the
+    schema/``text_raw``/``text_level``/page mapping.  All writes happen in one
+    transaction; enrichment failures never block export.
+    """
+
+    database = Path(database_path)
+    root = Path(runtime_root)
+    if not database.is_file():
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+
+    with closing(_connect(database)) as connection:
+        row = connection.execute(
+            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+            (source_file_id,),
+        ).fetchone()
+        if row is None:
+            return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+        source = json.loads(row[0])
+        if str(source.get("source_type") or "") != "pdf":
+            return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+        profile = source.get("document_heading_profile")
+        if (
+            isinstance(profile, Mapping)
+            and profile.get("version") == DOCUMENT_HEADING_VERSION
+            and profile.get("status") == "complete"
+        ):
+            return dict(profile)  # already enriched at this version
+
+        page_rows = connection.execute(
+            "SELECT pdf_page_index, payload_json FROM pdf_pages "
+            "WHERE source_file_id = ? ORDER BY pdf_page_index",
+            (source_file_id,),
+        ).fetchall()
+        pages = [json.loads(r[1]) for r in page_rows]
+
+    # Locate original PDF (optional) and cached MinerU artifacts (optional).
+    relative = str(source.get("relative_path") or "").strip()
+    pdf_candidate = Path(relative)
+    if relative and not pdf_candidate.is_absolute():
+        pdf_candidate = root / pdf_candidate
+    pdf_path = pdf_candidate if relative and pdf_candidate.is_file() else None
+
+    document_job_id = _manifest_document_job_id(root, source_file_id)
+    segments = _reconstruct_segments(pages, root, document_job_id)
+
+    v2_available = any(
+        find_content_list_v2(seg["result_dir"]) is not None for seg in segments
+    ) or (
+        document_job_id is not None
+        and find_content_list_v2(None, root=root, document_job_id=document_job_id)
+        is not None
+    )
+
+    try:
+        outline = enrich_pdf_headings(pages, pdf_path, segments, root=root)
+    except Exception:  # pragma: no cover - never let enrichment block export
+        logging.exception("lazy document-heading enrichment failed")
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+
+    sources_used = sorted(
+        {
+            str(block.get("document_heading_source"))
+            for page in pages
+            for block in page.get("blocks") or []
+            if isinstance(block, Mapping) and block.get("document_heading_source")
+        }
+    )
+    classification = str(outline.get("classification") or "none")
+    if classification == "semantic" and HEADING_SOURCE_PDF_OUTLINE in sources_used:
+        status = "complete"
+    elif pdf_path is None and not v2_available:
+        status = "unavailable"
+    elif document_job_id is not None and not v2_available:
+        status = "partial"  # a referenced v2 artifact is missing; retry later
+    else:
+        status = "complete"
+
+    profile = {
+        "version": DOCUMENT_HEADING_VERSION,
+        "status": status,
+        "enriched_at": datetime.now(timezone.utc).isoformat(),
+        "sources": sources_used,
+        "outline_classification": classification,
+    }
+    source["pdf_outline"] = outline
+    source["document_heading_profile"] = profile
+
+    with closing(_connect(database)) as connection:
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
+                (json.dumps(source, ensure_ascii=False), source_file_id),
+            )
+            for page in pages:
+                connection.execute(
+                    "UPDATE pdf_pages SET payload_json = ? "
+                    "WHERE source_file_id = ? AND pdf_page_index = ?",
+                    (
+                        json.dumps(page, ensure_ascii=False),
+                        source_file_id,
+                        int(page.get("pdf_page_index")),
+                    ),
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+    return profile
 
 
 def _source_digest(source: Mapping[str, object], runtime_root: Path) -> str:

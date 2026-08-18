@@ -95,6 +95,7 @@ class ArchiveTransferController:
         try:
             result = self._export_document_markdown(
                 database_path=self._database_path,
+                runtime_root=self._runtime_root,
                 source_file_id=str(payload.get("source_id") or ""),
                 output_dir=output_dir,
             )

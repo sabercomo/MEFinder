@@ -140,6 +140,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
             [
                 {
                     "database_path": Path("/runtime/data/index.sqlite3"),
+                    "runtime_root": Path("/runtime"),
                     "source_file_id": " pdf-one ",
                     "output_dir": Path("/app-data/exports"),
                 }

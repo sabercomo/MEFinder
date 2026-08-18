@@ -33,6 +33,10 @@ from .auto_page_mapping import normalize_numeric_bookmark_title
 
 logger = logging.getLogger(__name__)
 
+# Bumped when the heading-derivation algorithm changes, so persisted documents
+# can be lazily re-enriched (see document_heading_profile / ensure_document_headings).
+DOCUMENT_HEADING_VERSION = 1
+
 HEADING_SOURCE_PDF_OUTLINE = "pdf_outline"
 HEADING_SOURCE_DOCUMENT_TOC = "document_toc"
 HEADING_SOURCE_MINERU_V2 = "mineru_v2"
