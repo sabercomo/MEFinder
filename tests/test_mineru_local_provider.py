@@ -21,8 +21,8 @@ from src.me_finder.parser_provider import (
 
 
 CONTENT = [
-    {"page_idx": 0, "type": "text", "text": "第一頁", "bbox": [1, 2, 3, 4]},
-    {"page_idx": 1, "type": "text", "text": "第二页"},
+    {"page_idx": 0, "type": "text", "text": "第一頁", "text_level": 1, "bbox": [1, 2, 3, 4]},
+    {"page_idx": 1, "type": "text", "text": "第二页", "text_level": 2},
 ]
 
 
@@ -163,6 +163,10 @@ class MinerULocalProviderTests(unittest.TestCase):
             )
             self.assertEqual([p.physical_pdf_page for p in normalized.pages], [41, 42])
             self.assertEqual(normalized.pages[0].blocks[0].bbox, (1, 2, 3, 4))
+            self.assertEqual(
+                [block.text_level for page in normalized.pages for block in page.blocks],
+                [1, 2],
+            )
 
     def test_service_restart_task_missing_is_explicit_and_reconnects(self) -> None:
         with FakeMinerUService() as service:
@@ -187,6 +191,28 @@ class MinerULocalProviderTests(unittest.TestCase):
             [(page.physical_pdf_page, page.text) for page in local.pages],
             [(page.physical_pdf_page, page.text) for page in cloud.pages],
         )
+        self.assertEqual(
+            [block.text_level for page in local.pages for block in page.blocks],
+            [block.text_level for page in cloud.pages for block in page.blocks],
+        )
+
+    def test_local_text_level_missing_stays_none(self) -> None:
+        request = self.request()
+        normalized = MinerULocalProvider(MinerULocalConfig()).normalize_result(
+            {
+                "results": {
+                    "slice.pdf": {
+                        "content_list": [
+                            {"page_idx": 0, "type": "header", "text": "无层级标题"},
+                        ]
+                    }
+                }
+            },
+            request,
+        )
+        block = normalized.pages[0].blocks[0]
+        self.assertEqual(block.block_type, "header")
+        self.assertIsNone(block.text_level)
 
     def test_endpoint_timeout_is_retryable(self) -> None:
         with FakeMinerUService() as service:

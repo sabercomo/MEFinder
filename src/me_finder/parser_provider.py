@@ -103,6 +103,7 @@ class NormalizedBlock:
     block_type: Optional[str] = None
     bbox: Optional[Sequence[float]] = None
     reading_order: Optional[int] = None
+    text_level: Optional[int] = None
     provenance: Mapping[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, object]:
@@ -111,6 +112,7 @@ class NormalizedBlock:
             "type": self.block_type,
             "bbox": list(self.bbox) if self.bbox is not None else None,
             "reading_order": self.reading_order,
+            "text_level": self.text_level,
             "provenance": dict(self.provenance),
         }
 

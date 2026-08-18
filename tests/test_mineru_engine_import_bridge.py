@@ -79,6 +79,18 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
                                 text=f"block {page_number}",
                                 block_type="text",
                                 reading_order=0,
+                                text_level=(
+                                    1
+                                    if page_number == 1
+                                    else 2
+                                    if page_number == 2
+                                    else 3
+                                ),
+                            ),
+                            NormalizedBlock(
+                                text=f"header {page_number}",
+                                block_type="header",
+                                reading_order=1,
                             ),
                         ),
                     )
@@ -134,7 +146,25 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
                     ).read_text(encoding="utf-8")
                 )
                 self.assertEqual(
-                    [item["page_idx"] for item in content], [0, 1]
+                    [item["page_idx"] for item in content], [0, 0, 1, 1]
+                )
+
+                def block_level(page_number: int) -> int:
+                    if page_number == 1:
+                        return 1
+                    if page_number == 2:
+                        return 2
+                    return 3
+
+                self.assertEqual(
+                    [item["text_level"] for item in content],
+                    [
+                        block_level(page) if block_index == 0 else None
+                        for page in range(
+                            segment["page_start"], segment["page_end"] + 1
+                        )
+                        for block_index in (0, 1)
+                    ],
                 )
 
             imported = load_import_config(config_path)
@@ -194,6 +224,22 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
                         (source_id,),
                     ).fetchone()[0],
                     4,
+                )
+                stored_blocks = [
+                    json.loads(row[0])["blocks"]
+                    for row in connection.execute(
+                        "SELECT payload_json FROM pdf_pages "
+                        "WHERE source_file_id = ? ORDER BY pdf_page_index",
+                        (source_id,),
+                    )
+                ]
+                self.assertEqual(
+                    [block["text_level"] for page in stored_blocks for block in page],
+                    [1, None, 2, None, 3, None, 3, None],
+                )
+                self.assertEqual(
+                    [block["mineru_type"] for page in stored_blocks for block in page],
+                    ["text", "header", "text", "header", "text", "header", "text", "header"],
                 )
 
     def test_multi_account_config_switches_existing_import_to_engine(self) -> None:

@@ -684,6 +684,7 @@ function drawerMainActionsHTML(src) {
     if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
     if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
     items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档包</button>';
+    items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">导出 Markdown</button>';
     items += '<div class="bib-menu-sep"></div>';
   }
   items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
@@ -717,6 +718,33 @@ async function requestLibraryDocumentExport(sourceId, outputDirectory) {
   };
   if (outputDirectory) payload.output_dir = outputDirectory;
   var response = await fetch('/api/document/export', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  var data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || '导出失败');
+  return data;
+}
+
+async function exportLibraryDocumentMarkdown(sourceId) {
+  if (!sourceId) return;
+  try {
+    var outputDirectory = await chooseDesktopExportDirectory();
+    if (outputDirectory === null) return;
+    showToast('正在导出 Markdown…');
+    var data = await requestLibraryDocumentMarkdownExport(sourceId, outputDirectory);
+    showToast('已导出 ' + Number(data.page_count || 0).toLocaleString()
+      + ' 页到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
+  } catch (error) {
+    showToast('导出 Markdown 失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
+  }
+}
+
+async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
+  var payload = {source_id: sourceId};
+  if (outputDirectory) payload.output_dir = outputDirectory;
+  var response = await fetch('/api/document/export-markdown', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)

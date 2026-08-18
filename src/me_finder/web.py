@@ -987,6 +987,9 @@ def make_handler(
         "/api/document/citation": structured_reader_controller.citation,
         "/api/backup/export": archive_transfer_controller.export_backup,
         "/api/document/export": archive_transfer_controller.export_document,
+        "/api/document/export-markdown": (
+            archive_transfer_controller.export_document_markdown
+        ),
         "/api/backup/import": archive_transfer_controller.restore_backup,
     }
 

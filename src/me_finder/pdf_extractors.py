@@ -17,6 +17,7 @@ from .auto_page_mapping import (
     has_manual_mapping,
 )
 from .bibliographic_metadata import METADATA_FIELDS
+from .document_heading import enrich_pdf_headings
 from .import_resume import resume_summary
 from .normalization import (
     compact_text,
@@ -207,6 +208,9 @@ def extract_pdf_source(
     audit_issues: List[Dict[str, object]] = []
     if structured_segments:
         pages = load_mineru_pdf_pages(path, source_file_id, document_id, config, structured_segments)
+        source_file["pdf_outline"] = enrich_pdf_headings(
+            pages, path, structured_segments, root=root
+        )
         manual_mapping = has_manual_mapping(config)
         auto_mapping = PageMappingService().infer(
             path,
@@ -578,6 +582,7 @@ def load_mineru_segments(
             item.setdefault("provider_id", manifest.get("provider_id"))
             item.setdefault("provider_name", manifest.get("provider_name"))
             item.setdefault("model", manifest.get("model"))
+            item.setdefault("document_job_id", manifest.get("document_job_id"))
             item.setdefault("import_resume", manifest_resume)
             raw_result_dir = str(item.get("result_dir") or "").strip()
             if root is not None and raw_result_dir:

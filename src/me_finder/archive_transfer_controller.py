@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Protocol, Tuple
 
 from .document_export import DocumentExportError
-from .document_export_service import export_indexed_pdf
+from .document_export_service import export_indexed_pdf, export_indexed_pdf_markdown
 from .mineru_api import MinerUError
 
 
@@ -35,12 +35,14 @@ class ArchiveTransferController:
         runtime_root: Path,
         document_output_dir: Path,
         export_document: DocumentExporter = export_indexed_pdf,
+        export_document_markdown: DocumentExporter = export_indexed_pdf_markdown,
     ) -> None:
         self._backup = backup
         self._database_path = Path(database_path)
         self._runtime_root = Path(runtime_root)
         self._document_output_dir = Path(document_output_dir)
         self._export_document = export_document
+        self._export_document_markdown = export_document_markdown
 
     def export_backup(self, payload: object) -> ArchiveTransferResponse:
         try:
@@ -78,6 +80,30 @@ class ArchiveTransferController:
             logging.exception("single-document export failed")
             return 500, {
                 "error": "单书导出失败，请检查应用数据目录和可用磁盘空间。"
+            }
+        return 200, result
+
+    def export_document_markdown(self, payload: object) -> ArchiveTransferResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "单书 Markdown 导出请求必须是 JSON 对象。"}
+        try:
+            output_dir = (
+                _requested_output_directory(payload) or self._document_output_dir
+            )
+        except ValueError as exc:
+            return 400, {"error": str(exc)}
+        try:
+            result = self._export_document_markdown(
+                database_path=self._database_path,
+                source_file_id=str(payload.get("source_id") or ""),
+                output_dir=output_dir,
+            )
+        except DocumentExportError as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, sqlite3.Error):
+            logging.exception("single-document markdown export failed")
+            return 500, {
+                "error": "单书 Markdown 导出失败，请检查应用数据目录和可用磁盘空间。"
             }
         return 200, result
 

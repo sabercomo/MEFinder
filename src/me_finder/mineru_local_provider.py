@@ -328,6 +328,7 @@ class MinerULocalProvider(ParserProvider):
                     block_type=str(item.get("type") or "") or None,
                     bbox=tuple(bbox) if isinstance(bbox, (list, tuple)) else None,
                     reading_order=len(blocks_by_page[local_page]),
+                    text_level=item.get("text_level"),
                     provenance={"mineru_local_item_index": item_index},
                 )
             )

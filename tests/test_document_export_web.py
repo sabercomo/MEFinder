@@ -171,13 +171,17 @@ class IndexedDocumentExportTests(unittest.TestCase):
 
 class DocumentExportHTTPTests(unittest.TestCase):
     @staticmethod
-    def _post(server: ThreadingHTTPServer, payload: object):
+    def _post(
+        server: ThreadingHTTPServer,
+        payload: object,
+        path: str = "/api/document/export",
+    ):
         body = json.dumps(payload).encode("utf-8")
         connection = HTTPConnection("127.0.0.1", server.server_port, timeout=5)
         try:
             connection.request(
                 "POST",
-                "/api/document/export",
+                path,
                 body=body,
                 headers={
                     "Content-Type": "application/json",
@@ -234,6 +238,44 @@ class DocumentExportHTTPTests(unittest.TestCase):
         self.assertIn("fetch('/api/document/export'", source)
         self.assertIn("include_source_pdf: currentDocumentExportMode === 'with_pdf'", source)
         self.assertIn("payload.output_dir = outputDirectory", source)
+
+    def test_http_markdown_endpoint_exports_utf8_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database, source_id = export_fixture(root)
+            selected_output = root / "selected-output"
+            selected_output.mkdir()
+            context = AppContext.create(root, index_path=database)
+            handler = make_handler(database, app_context=context)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, payload = self._post(
+                    server,
+                    {"source_id": source_id, "output_dir": str(selected_output)},
+                    path="/api/document/export-markdown",
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                thread.join(timeout=2)
+
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["page_count"], 3)
+            self.assertTrue(Path(payload["path"]).is_file())
+            self.assertEqual(Path(payload["path"]).parent, selected_output.resolve())
+            content = Path(payload["path"]).read_text(encoding="utf-8")
+            self.assertIn("第一页简体", content)
+            self.assertIn("第二頁繁體", content)
+
+        source = Path("src/me_finder/static/js/30-library.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("导出 Markdown", source)
+        self.assertIn("function exportLibraryDocumentMarkdown(sourceId)", source)
+        self.assertIn("fetch('/api/document/export-markdown'", source)
 
 
 if __name__ == "__main__":

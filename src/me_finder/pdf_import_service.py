@@ -1511,6 +1511,7 @@ def _publish_mineru_engine_results(
                             "page_idx": local_page,
                             "text": text,
                             "type": block.get("type"),
+                            "text_level": block.get("text_level"),
                             "bbox": block.get("bbox"),
                             "reading_order": block.get("reading_order"),
                         }

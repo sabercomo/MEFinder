@@ -17,6 +17,7 @@ from .document_export import (
     document_manifest,
     export_document_zip,
 )
+from .markdown_export import document_to_markdown, safe_markdown_filename
 from .pdf_extractors import file_sha256
 
 
@@ -214,6 +215,82 @@ def iter_indexed_pdf_pages(
             yield payload
     finally:
         connection.close()
+
+
+def export_indexed_pdf_markdown(
+    *,
+    database_path: Path,
+    source_file_id: str,
+    output_dir: Path,
+) -> Dict[str, object]:
+    """Export one indexed PDF's persisted structured data as UTF-8 Markdown."""
+
+    source_id = str(source_file_id or "").strip()
+    if not source_id or len(source_id) > 256:
+        raise IndexedDocumentNotFound("缺少要导出的文献标识。")
+    database = Path(database_path)
+    if not database.is_file():
+        raise IndexedDocumentNotFound("当前文献索引不存在。")
+
+    with closing(_connect(database)) as connection:
+        source = _payload_row(
+            connection,
+            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+            (source_id,),
+        )
+        if source is None:
+            raise IndexedDocumentNotFound("文献不存在或已从文献库移除。")
+        if str(source.get("source_type") or "") != "pdf":
+            raise UnsupportedDocumentExport(
+                "Markdown 导出仅支持已解析的 PDF 文献。"
+            )
+        volume = _payload_row(
+            connection,
+            "SELECT payload_json FROM volumes WHERE source_file_id = ? "
+            "ORDER BY volume_number, volume_id LIMIT 1",
+            (source_id,),
+        ) or {}
+        page_count = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        if page_count < 1:
+            raise UnsupportedDocumentExport(
+                "这份 PDF 还没有可导出的页级解析结果。"
+            )
+
+    bibliographic = (
+        source.get("bibliographic_metadata")
+        if isinstance(source.get("bibliographic_metadata"), Mapping)
+        else {}
+    )
+    title = str(
+        bibliographic.get("title")
+        or source.get("display_title")
+        or volume.get("display_title")
+        or Path(str(source.get("file_name") or source_id)).stem
+    )
+    author = bibliographic.get("author")
+    markdown = document_to_markdown(
+        iter_indexed_pdf_pages(database, source_id),
+        title=title,
+        author=author,
+    )
+    destination_dir = Path(output_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / safe_markdown_filename(title)
+    partial = destination.with_name(destination.name + ".partial")
+    partial.write_text(markdown, encoding="utf-8", newline="\n")
+    partial.replace(destination)
+    return {
+        "ok": True,
+        "source_file_id": source_id,
+        "path": str(destination.resolve()),
+        "size_bytes": destination.stat().st_size,
+        "page_count": page_count,
+    }
 
 
 def _source_digest(source: Mapping[str, object], runtime_root: Path) -> str:

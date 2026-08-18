@@ -93,8 +93,8 @@ class FakeMinerUClient:
                     {
                         "state": "done",
                         "content_list": [
-                            {"page_idx": 0, "type": "text", "text": "第一頁", "bbox": [1, 2, 3, 4]},
-                            {"page_idx": 1, "type": "text", "text": "第二页"},
+                            {"page_idx": 0, "type": "text", "text": "第一頁", "text_level": 1, "bbox": [1, 2, 3, 4]},
+                            {"page_idx": 1, "type": "text", "text": "第二页", "text_level": 2},
                         ],
                     }
                 ]
@@ -179,6 +179,46 @@ class ParserProviderContractTests(unittest.TestCase):
         normalized = provider.normalize_result(raw, self.request)
         self.assertEqual([p.physical_pdf_page for p in normalized.pages], [21, 22])
         self.assertEqual(normalized.pages[0].blocks[0].bbox, (1, 2, 3, 4))
+        self.assertEqual(
+            [block.text_level for page in normalized.pages for block in page.blocks],
+            [1, 2],
+        )
+        self.assertEqual(
+            normalized.pages[0].blocks[0].to_dict()["text_level"],
+            1,
+        )
+
+    def test_mineru_text_level_is_passthrough_and_missing_stays_none(self) -> None:
+        provider = MinerUCloudProvider(client=FakeMinerUClient())
+        normalized = provider.normalize_result(
+            {
+                "content_list": [
+                    {"page_idx": 0, "type": "text", "text": "章", "text_level": 1},
+                    {"page_idx": 0, "type": "text", "text": "节", "text_level": 2},
+                    {"page_idx": 0, "type": "text", "text": "小节", "text_level": 3},
+                    {"page_idx": 0, "type": "text", "text": "无层级正文"},
+                ]
+            },
+            self.request,
+        )
+        self.assertEqual(
+            [block.text_level for block in normalized.pages[0].blocks],
+            [1, 2, 3, None],
+        )
+
+    def test_mineru_header_type_without_text_level_gets_no_level(self) -> None:
+        provider = MinerUCloudProvider(client=FakeMinerUClient())
+        normalized = provider.normalize_result(
+            {
+                "content_list": [
+                    {"page_idx": 0, "type": "header", "text": "无层级标题"},
+                ]
+            },
+            self.request,
+        )
+        block = normalized.pages[0].blocks[0]
+        self.assertEqual(block.block_type, "header")
+        self.assertIsNone(block.text_level)
 
     def test_mineru_error_does_not_leak_outside_provider_contract(self) -> None:
         class FailingClient(FakeMinerUClient):

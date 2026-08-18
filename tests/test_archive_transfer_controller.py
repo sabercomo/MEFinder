@@ -50,12 +50,23 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                 "source_file_id": kwargs["source_file_id"],
             }
 
+        self.markdown_calls: list[dict[str, object]] = []
+
+        def export_markdown(**kwargs):
+            self.markdown_calls.append(dict(kwargs))
+            return {
+                "ok": True,
+                "path": "/data/exports/book.md",
+                "source_file_id": kwargs["source_file_id"],
+            }
+
         self.controller = ArchiveTransferController(
             self.backup,
             database_path=Path("/runtime/data/index.sqlite3"),
             runtime_root=Path("/runtime"),
             document_output_dir=Path("/app-data/exports"),
             export_document=export_document,
+            export_document_markdown=export_markdown,
         )
 
     def test_success_responses_preserve_archive_arguments(self) -> None:
@@ -111,6 +122,42 @@ class ArchiveTransferControllerTests(unittest.TestCase):
 
         self.assertEqual(self.backup.export_output_dirs[-1], output_dir)
         self.assertEqual(self.export_calls[-1]["output_dir"], output_dir)
+
+    def test_markdown_export_passes_arguments_and_uses_default_directory(self) -> None:
+        self.assertEqual(
+            self.controller.export_document_markdown({"source_id": " pdf-one "}),
+            (
+                200,
+                {
+                    "ok": True,
+                    "path": "/data/exports/book.md",
+                    "source_file_id": " pdf-one ",
+                },
+            ),
+        )
+        self.assertEqual(
+            self.markdown_calls,
+            [
+                {
+                    "database_path": Path("/runtime/data/index.sqlite3"),
+                    "source_file_id": " pdf-one ",
+                    "output_dir": Path("/app-data/exports"),
+                }
+            ],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            self.controller.export_document_markdown(
+                {"source_id": "pdf-two", "output_dir": str(output_dir)}
+            )
+        self.assertEqual(self.markdown_calls[-1]["output_dir"], output_dir)
+
+    def test_markdown_export_invalid_payload_fails_before_service(self) -> None:
+        self.assertEqual(
+            self.controller.export_document_markdown(None),
+            (400, {"error": "单书 Markdown 导出请求必须是 JSON 对象。"}),
+        )
+        self.assertEqual(self.markdown_calls, [])
 
     def test_invalid_payloads_fail_before_archive_services(self) -> None:
         for payload in (None, [], "pdf-one"):
