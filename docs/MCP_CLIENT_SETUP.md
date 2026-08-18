@@ -127,7 +127,7 @@ codex mcp list
 
 ## 三、Claude Code 配置
 
-打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令：
+Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行命令。打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
@@ -221,7 +221,7 @@ D:\\MEFinder\\MEFinderMCP.exe
 /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 ```
 
-按 `Command（⌘）+ 空格` 搜索“终端”并打开，再运行命令。
+按 `Command（⌘）+ 空格`，输入“终端”或 `Terminal` 搜索并打开，再运行命令。
 
 ### Codex
 

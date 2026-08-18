@@ -36,3 +36,4 @@ config/backups/
 config/*.pre-restore
 .project-memory/
 .venv*/
+config/mineru_accounts.local.json
