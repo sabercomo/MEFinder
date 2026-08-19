@@ -341,5 +341,66 @@ class DatabaseReplacementRetryTests(unittest.TestCase):
         self.assertEqual(sleep.call_args_list, [call(0.1), call(0.2)])
 
 
+class SurrogateSanitizationTests(unittest.TestCase):
+    def test_lone_surrogate_in_pdf_text_does_not_abort_index_write(self) -> None:
+        # A broken PDF text layer can smuggle an isolated UTF-16 surrogate
+        # (here via a JSON "\uD8xx" escape), which cannot be UTF-8 encoded and
+        # would otherwise crash the SQLite write with "surrogates not allowed".
+        tainted = json.loads('"页 \\ud835 文本"')
+        source_id = "pdf-import-cafecafecafecafe"
+        index = {
+            "metadata": {"source_count": 1, "paragraph_count": 1},
+            "source_files": [
+                pdf_source(source_id, file_name="书.pdf", sha256="c" * 64)
+            ],
+            "volumes": [
+                {
+                    "volume_id": "PDF_IMPORT_CAFE",
+                    "source_file_id": source_id,
+                    "source_type": "pdf",
+                    "display_title": tainted,
+                }
+            ],
+            "works": [],
+            "paragraphs": [
+                {
+                    "paragraph_id": f"{source_id}-P000000",
+                    "volume_id": "PDF_IMPORT_CAFE",
+                    "source_file_id": source_id,
+                    "source_type": "pdf",
+                    "paragraph_index": 0,
+                    "eligible_for_search": True,
+                    "text_raw": tainted,
+                    "plain_text": tainted,
+                    "pdf_page_start_index": 0,
+                    "pdf_page_end_index": 0,
+                }
+            ],
+            "pdf_pages": [
+                {
+                    "source_file_id": source_id,
+                    "pdf_page_index": 0,
+                    "page_text_hash": "page-hash",
+                    "text_raw": tainted,
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "index.sqlite3"
+            build_database(index, db_path)
+            connection = sqlite3.connect(str(db_path))
+            try:
+                stored_text, stored_payload = connection.execute(
+                    "SELECT text_raw, payload_json FROM paragraphs"
+                ).fetchone()
+            finally:
+                connection.close()
+        self.assertNotIn("\ud835", stored_text)
+        self.assertIn("�", stored_text)
+        # The payload round-trips as valid UTF-8 JSON with the same scrubbing.
+        self.assertNotIn("\ud835", stored_payload)
+        stored_payload.encode("utf-8")
+
+
 if __name__ == "__main__":
     unittest.main()

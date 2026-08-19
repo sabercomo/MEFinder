@@ -10,6 +10,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import re
 import shutil
 import sqlite3
 import threading
@@ -512,6 +513,48 @@ def _json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+# Isolated UTF-16 surrogate code points (U+D800–U+DFFF).  Broken PDF text
+# layers—and the parser/JSON output derived from them—occasionally smuggle
+# these in (often via ``\uD8xx`` escapes that ``json.loads`` accepts verbatim).
+# SQLite stores Python ``str`` as UTF-8, which forbids lone surrogates, so a
+# single tainted page would otherwise abort the whole index write with
+# "'utf-8' codec can't encode characters ... surrogates not allowed".
+_SURROGATE_RE = re.compile("[\ud800-\udfff]")
+
+
+def _strip_surrogates(text: str) -> str:
+    """Replace un-encodable surrogate code points with U+FFFD."""
+
+    if _SURROGATE_RE.search(text) is None:
+        return text
+    return _SURROGATE_RE.sub("�", text)
+
+
+def _sanitize_surrogates_in_place(value: object) -> None:
+    """Scrub surrogate code points from every string reachable in ``value``.
+
+    Mutates dicts/lists in place so a large index is not deep-copied; clean
+    strings are left untouched, so the pass is cheap when nothing is tainted.
+    """
+
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if isinstance(item, str):
+                cleaned = _strip_surrogates(item)
+                if cleaned is not item:
+                    value[key] = cleaned
+            elif isinstance(item, (dict, list)):
+                _sanitize_surrogates_in_place(item)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            if isinstance(item, str):
+                cleaned = _strip_surrogates(item)
+                if cleaned is not item:
+                    value[index] = cleaned
+            elif isinstance(item, (dict, list)):
+                _sanitize_surrogates_in_place(item)
+
+
 def _insert_page_anchors(
     connection: sqlite3.Connection,
     anchors: Sequence[Dict[str, object]],
@@ -978,6 +1021,9 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    # Do this before size estimation and any write: surrogates crash the
+    # UTF-8 encode step too, not just the SQLite insert.
+    _sanitize_surrogates_in_place(index)
     if backup_existing and db_path.exists():
         # A full rebuild needs both the snapshot and a new database-sized temp
         # file on the same volume.  Reserve that second copy up front so a
@@ -1316,6 +1362,7 @@ def replace_source_in_database(
 ) -> Dict[str, object]:
     """Atomically replace one imported source without rebuilding the corpus."""
 
+    _sanitize_surrogates_in_place(extracted)
     sources = [item for item in extracted.get("source_files", []) if isinstance(item, dict)]
     if len(sources) != 1 or not sources[0].get("source_file_id"):
         raise ValueError("A targeted database update requires exactly one source file.")
