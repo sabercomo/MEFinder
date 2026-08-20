@@ -377,7 +377,7 @@ claude mcp list
 
 ### WorkBuddy
 
-macOS 下 WorkBuddy 的入口和 Windows 完全一样，也是按照网上教程里的三步操作：
+macOS 下 WorkBuddy 的入口和 Windows 完全一样，也是按照win教程里的三步操作：
 
 **首页“连应用” → “更多连接器” → “自定义连接器” → “配置 MCP”**
 
