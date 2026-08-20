@@ -24,6 +24,7 @@ from .document_heading import (
     enrich_pdf_headings,
     find_content_list_v2,
 )
+from .database import _sanitize_surrogates_in_place
 from .markdown_export import document_to_markdown, safe_markdown_filename
 from .pdf_extractors import file_sha256
 
@@ -484,6 +485,15 @@ def ensure_document_headings(
     }
     source["pdf_outline"] = outline
     source["document_heading_profile"] = profile
+
+    # PDF bookmark/outline strings are decoded with ``surrogateescape``, so they
+    # can carry lone UTF-16 surrogate code points.  SQLite stores ``str`` as
+    # UTF-8, which forbids them, and the write below would otherwise raise
+    # "surrogates not allowed" and abort the whole export.  Scrub in place so the
+    # re-enriched payloads (and the Markdown later built from them) stay clean.
+    _sanitize_surrogates_in_place(source)
+    for page in pages:
+        _sanitize_surrogates_in_place(page)
 
     with closing(_connect(database)) as connection:
         try:

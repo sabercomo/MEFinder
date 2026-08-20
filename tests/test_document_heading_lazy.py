@@ -141,6 +141,45 @@ class LazyEnrichmentTests(unittest.TestCase):
         self.assertEqual(first["enriched_at"], again["enriched_at"])  # skipped
         self.assertEqual(self._blocks(sid)[0].get("sentinel"), "kept")  # not overwritten
 
+    def test_surrogate_headings_are_scrubbed_not_fatal(self) -> None:
+        # PDF bookmark/outline strings arrive via ``surrogateescape`` and can
+        # carry lone UTF-16 surrogates.  SQLite stores str as UTF-8 and rejects
+        # them, so the enrichment write must scrub them instead of aborting the
+        # export with "surrogates not allowed".  The taint enters through the
+        # PDF outline, so patch ``enrich_pdf_headings`` to emit one directly.
+        from unittest import mock
+
+        rd = self._make_v2_dir("s4", [[_v2_title("标题甲", 1, [1, 1, 2, 2])]])
+        sid = "s4"
+        self._insert(sid, [{
+            "pdf_page_index": 0, "text_raw": "标题甲",
+            "blocks": [{"text": "标题甲", "bbox": [1, 1, 2, 2], "result_dir": str(rd),
+                        "local_page_idx": 0, "pdf_page_index": 0, "mineru_type": "text"}],
+        }])
+        tainted_outline = {
+            "classification": "semantic",
+            "entries": [{"title": "Preface\udcc0\udc80\udcc0\udc80", "page": 9, "level": 1}],
+        }
+        with mock.patch(
+            "src.me_finder.document_export_service.enrich_pdf_headings",
+            return_value=tainted_outline,
+        ):
+            # Must not raise UnicodeEncodeError.
+            prof = ensure_document_headings(
+                database_path=self.db, runtime_root=self.root, source_file_id=sid
+            )
+        self.assertEqual(prof["version"], DOCUMENT_HEADING_VERSION)
+        # Stored payload round-trips as valid UTF-8 with no surrogates left.
+        import sqlite3
+        con = sqlite3.connect(str(self.db))
+        raw = con.execute(
+            "SELECT payload_json FROM source_files WHERE source_file_id=?", (sid,)
+        ).fetchone()[0]
+        con.close()
+        self.assertNotIn("\udcc0", raw)
+        raw.encode("utf-8")  # would raise if a lone surrogate survived
+        self.assertIn("�", raw)  # replaced, not silently dropped
+
 
 if __name__ == "__main__":
     unittest.main()
