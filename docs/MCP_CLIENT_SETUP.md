@@ -154,11 +154,61 @@ claude mcp list
 
 ## 四、WorkBuddy 配置
 
-进入 WorkBuddy 后，打开：
+WorkBuddy 当前可以从“连接器”界面进入自定义 MCP 配置。下面按三步完成配置。
 
-**插件 → MCP 服务器 → 配置 MCP**
+> 你在网上看到的教程图通常以 **Streamable HTTP** MCP 为例。MEFinder 不使用 HTTP，而是本地 **STDIO** MCP，所以前面的入口操作完全一样，最后粘贴的配置内容换成 MEFinder 的本地启动配置即可。
 
-WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
+### 第一步：进入自定义 MCP 配置
+
+打开 WorkBuddy，在首页任务输入框附近点击 **连应用**，然后在弹出的应用列表底部点击 **更多连接器**。
+
+进入“连接器”页面后，点击右上角的 **自定义连接器**，进入 **MCP 服务管理**，再点击右上角的 **配置 MCP**。
+
+如果首页没有看到“连应用”，也可以直接从左侧导航栏进入 **连接器**。两种方式最终都会进入同一个“连接器”页面。
+
+### 第二步：粘贴 MEFinder 配置
+
+Windows 安装版和绿色版的配置方法完全一样，区别只有 `MEFinderMCP.exe` 的实际路径不同。没有其他 MCP 时，直接粘贴下面的配置：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "type": "stdio",
+      "command": "MEFinderMCP.exe 的完整路径",
+      "args": []
+    }
+  }
+}
+```
+
+将 `command` 的值替换成第一节找到的真实路径。例如，安装版如果位于：
+
+```text
+C:\Users\Alice\AppData\Local\Programs\MEFinder\MEFinderMCP.exe
+```
+
+则填写：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "type": "stdio",
+      "command": "C:\\Users\\Alice\\AppData\\Local\\Programs\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+绿色版如果位于：
+
+```text
+D:\MEFinder\MEFinderMCP.exe
+```
+
+则填写：
 
 ```json
 {
@@ -172,25 +222,101 @@ WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
 }
 ```
 
-`command` 里的路径换成你电脑上 `MEFinderMCP.exe` 的实际位置。
-
-Windows 普通路径写成：
+Windows 普通路径中的反斜杠，在 JSON 字符串中必须写成两个：
 
 ```text
-D:\MEFinder\MEFinderMCP.exe
+D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 ```
 
-但在 JSON 字符串中，每个反斜杠需要写两次：
+如果配置编辑器中已经有其他 MCP，不要覆盖原内容，只需把 `mefinder` 与其他服务并列放在同一个 `mcpServers` 中：
+
+```json
+{
+  "mcpServers": {
+    "other-tool": {
+      "command": "example",
+      "args": []
+    },
+    "mefinder": {
+      "type": "stdio",
+      "command": "D:\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+两个 MCP 条目之间要加逗号；如果没有其他 MCP，则不需要添加 `other-tool` 示例。
+
+### 第三步：保存、启用并测试
+
+粘贴完成后保存配置，回到 **MCP 服务管理**，在“我的 MCP”列表中找到 `mefinder`。如果右侧开关没有打开，将它切换到启用状态。
+
+新建一个 WorkBuddy 任务，先输入：
 
 ```text
-D:\\MEFinder\\MEFinderMCP.exe
+请查看 mefinder MCP 提供了哪些工具。
 ```
+
+正常情况下应该能看到三个只读工具：
+
+```text
+list_documents
+locate_quote
+read_document_window
+```
+
+然后测试是否能读取自己的文献库：
+
+```text
+请只使用 mefinder，列出当前已经导入的文献。
+```
+
+如果能列出 MEFinder 中已经索引的文献，说明连接成功。
+
+接下来可以复制一段已经导入文献的原句：
+
+```text
+请只使用 mefinder 定位下面这句话，告诉我它来自哪篇文献、哪一页：
+
+<把原句粘贴到这里>
+```
+
+找到结果后继续说：
+
+```text
+继续使用 mefinder，读取刚才命中位置前后的上下文。
+```
+
+这样可以依次测试：
+
+```text
+list_documents
+→ locate_quote
+→ read_document_window
+```
+
+三个工具都能正常调用，就说明 WorkBuddy 已经完整接入 MEFinder。
+
+### 配置完成以后不用手动启动 MCP
+
+以后使用时直接打开 WorkBuddy 即可，不需要先手动双击：
+
+```text
+MEFinderMCP.exe
+```
+
+也不需要让 MEFinder 桌面主程序一直保持打开。
+
+WorkBuddy 在调用工具时会根据 MCP 配置自动启动 `MEFinderMCP.exe`。
+
+如果刚刚新导入了文献但 WorkBuddy 搜不到，先回到 MEFinder 确认文献已经完成解析和索引。
 
 ## 五、最常见的配置错误
 
 1. **启动程序选错。** 必须指向 `MEFinderMCP.exe`，不要填写桌面主程序。
 2. **文件路径已经变化。** 移动绿色版、重新安装或更新后，需要重新确认 `MEFinderMCP.exe` 的位置。
-3. **Codex 类型选错。** 应选择 `STDIO`，不要选择“流式 HTTP”。
+3. **MCP 类型选错。** MEFinder 使用本地 `STDIO`，不是网上 WorkBuddy 教程中常见的 `Streamable HTTP`。入口可以照着操作，但不要照抄 HTTP 的 URL / Headers 配置。
 4. **填写了不需要的内容。** 参数、环境变量和环境变量传递默认都留空。
 5. **手动双击 MCP 程序。** `MEFinderMCP.exe` 是供 AI 客户端启动的服务程序，一般不需要作为普通软件运行。
 6. **文献库还是空的。** 先在 MEFinder 中完成至少一篇文献的导入和索引，再测试搜索。
@@ -201,7 +327,7 @@ D:\\MEFinder\\MEFinderMCP.exe
 | --- | --- |
 | Codex | 设置 → 插件 → MCP → 添加 → 添加 MCP 服务器 |
 | Claude Code | `claude mcp add --transport stdio --scope user mefinder -- "MEFinderMCP.exe 的完整路径"` |
-| WorkBuddy | 插件 → MCP 服务器 → 配置 MCP → 添加 STDIO JSON 配置 |
+| WorkBuddy | 首页“连应用” → “更多连接器” → “自定义连接器” → “配置 MCP” → 粘贴 STDIO JSON |
 
 三种客户端的核心配置相同：
 
@@ -251,7 +377,117 @@ claude mcp list
 
 ### WorkBuddy
 
-打开“插件 → MCP 服务器 → 配置 MCP”，在 WorkBuddy 打开的配置文件里找到 `command`，把后面的路径改成 `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP`，其余不用动。不用管文件保存在哪。
+macOS 下 WorkBuddy 的入口和 Windows 完全一样，也是按照win教程里的三步操作：
+
+**首页“连应用” → “更多连接器” → “自定义连接器” → “配置 MCP”**
+
+如果首页没有看到“连应用”，也可以直接从左侧导航栏进入“连接器”。
+
+> 网上教程图以 Streamable HTTP 为例；MEFinder 仍然使用本地 **STDIO**，所以不要填写 URL 或 Headers。
+
+#### 1. 确认 macOS MCP 路径
+
+MEFinder 安装到“应用程序”后，MCP 程序位于：
+
+```text
+/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
+```
+
+可以先在终端确认：
+
+```bash
+ls -l /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
+```
+
+WorkBuddy 要启动的是 App 内部的 `MEFinderMCP`，不是整个 `MEFinder.app`。
+
+#### 2. 打开“配置 MCP”
+
+在 WorkBuddy 中依次点击：
+
+**连应用 → 更多连接器 → 自定义连接器**
+
+进入：
+
+**MCP 服务管理**
+
+再点击右上角：
+
+**配置 MCP**
+
+#### 3. 粘贴 macOS 配置
+
+如果当前没有其他 MCP，可以直接粘贴：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "type": "stdio",
+      "command": "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP",
+      "args": []
+    }
+  }
+}
+```
+
+macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。
+
+如果已经存在其他 MCP，同样不要覆盖原配置，只把 `mefinder` 加到同一个 `mcpServers` 里。例如：
+
+```json
+{
+  "mcpServers": {
+    "other-tool": {
+      "command": "/path/to/other-tool",
+      "args": []
+    },
+    "mefinder": {
+      "type": "stdio",
+      "command": "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP",
+      "args": []
+    }
+  }
+}
+```
+
+#### 4. 保存并启用
+
+保存以后返回：
+
+**MCP 服务管理**
+
+在“我的 MCP”中找到：
+
+```text
+mefinder
+```
+
+如果右侧开关没有打开，将它切换到启用状态。
+
+然后新建任务测试：
+
+```text
+请查看 mefinder MCP 提供了哪些工具。
+```
+
+正常情况下应该能看到：
+
+```text
+list_documents
+locate_quote
+read_document_window
+```
+
+再测试：
+
+```text
+请只使用 mefinder，列出当前已经导入的文献。
+```
+
+如果能正常返回 MEFinder 中已经索引的文献，就说明配置成功。
+
+配置完成以后，不需要手动运行 `MEFinderMCP`，WorkBuddy 会在调用时自动启动它。
 
 ## 八、配置成功后能做什么
 
@@ -269,7 +505,7 @@ MEFinder MCP 提供三个只读工具：
 
 MEFinder MCP 本身不访问网络，但客户端调用工具后，返回的命中原文和上下文会进入对应 AI 客户端的对话及模型上下文。涉及未公开文献时请留意。
 
-Codex 的界面与 STDIO 配置说明见 [OpenAI 官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。源码模式、数据位置和高级排错见 [Codex MCP 高级指南](CODEX_MCP.md)。
+Codex 的界面与 STDIO 配置说明见 [OpenAI 官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。源码模式、数据位置和高级排错见 [Codex MCP 高级指南](https://github.com/sabercomo/MEFinder/blob/main/docs/CODEX_MCP.md)。
 
 ## 九、以后想解除配置怎么办
 
@@ -289,4 +525,4 @@ codex mcp remove mefinder
 claude mcp remove --scope user mefinder
 ```
 
-WorkBuddy 回到“插件 → MCP 服务器 → 配置 MCP”，把之前加进去的 mefinder 配置删掉即可。
+WorkBuddy 回到“连应用 → 更多连接器 → 自定义连接器 → 配置 MCP”，把之前加入的 `mefinder` 配置删掉即可。

@@ -209,11 +209,13 @@ claude mcp list
 
 #### WorkBuddy（Windows）
 
-进入 WorkBuddy 后，打开：
+进入 WorkBuddy 后，依次点击：
 
-**插件 → MCP 服务器 → 配置 MCP**
+**连应用 → 更多连接器 → 自定义连接器 → 配置 MCP**
 
-WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
+WorkBuddy 的部分教程以 Streamable HTTP 为例；MEFinder 使用本地 STDIO MCP，不需要填写 URL 或 Headers。
+
+在 MCP 配置中加入：
 
 ```json
 {
@@ -227,19 +229,21 @@ WorkBuddy 会打开它正在用的配置文件，在 `mcpServers` 里加上：
 }
 ```
 
-`command` 里的路径换成你电脑上 `MEFinderMCP.exe` 的实际位置。
+把 command 里的路径换成你电脑上 MEFinderMCP.exe 的实际位置。Windows 安装版和绿色版的配置方式相同，区别只有 MEFinderMCP.exe 所在路径不同。
 
-Windows 普通路径写成：
+例如实际路径是：
 
 ```text
 D:\MEFinder\MEFinderMCP.exe
 ```
 
-但在 JSON 字符串中，每个反斜杠需要写两次：
+在 JSON 中需要写成：
 
 ```text
 D:\\MEFinder\\MEFinderMCP.exe
 ```
+
+保存后返回 MCP 服务管理，在“我的 MCP”中找到 mefinder 并确认已经启用。连接成功后即可在 WorkBuddy 中直接调用 MEFinder。
 
 Windows 的完整操作、macOS 三客户端配置和常见错误见 [Windows/macOS MCP 配置教程](docs/MCP_CLIENT_SETUP.md)；源码模式和 Codex 高级排错见 [Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)。返回给 AI 的命中原文和上下文会进入相应客户端的对话及模型上下文，涉及未公开文献时请留意。
 
