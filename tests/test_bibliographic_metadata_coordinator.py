@@ -177,7 +177,13 @@ class BibliographicMetadataCoordinatorTests(unittest.TestCase):
                 **dict(payload),
                 "metadata_source": "manual",
             },
-            metadata_fields=("title", "author", "publish_year"),
+            metadata_fields=(
+                "title",
+                "author",
+                "publish_year",
+                "language_code",
+                "edition",
+            ),
         )
         return {
             "coordinator": coordinator,
@@ -201,6 +207,8 @@ class BibliographicMetadataCoordinatorTests(unittest.TestCase):
             {
                 "title": "新标题",
                 "publish_year": "2026",
+                "language_code": "de",
+                "edition": "Studienausgabe",
                 "document_type": "book",
                 "metadata_status": "complete",
                 "metadata_source": "front_matter",
@@ -211,6 +219,8 @@ class BibliographicMetadataCoordinatorTests(unittest.TestCase):
         saved_document = fixture["saves"][0]["documents"][0]
         self.assertEqual(saved_document["title"], "新标题")
         self.assertEqual(saved_document["publication_year"], "2026")
+        self.assertEqual(saved_document["language_code"], "de")
+        self.assertEqual(saved_document["edition"], "Studienausgabe")
         self.assertEqual(saved_document["bibliographic_metadata"], result)
         self.assertEqual(
             fixture["database_updates"], [("pdf-one", result)]

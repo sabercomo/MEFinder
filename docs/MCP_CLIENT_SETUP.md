@@ -222,7 +222,7 @@ D:\MEFinder\MEFinderMCP.exe
 }
 ```
 
-Windows 普通路径中的反斜杠，在 JSON 字符串中必须写成两个：
+Windows 普通路径写成 JSON 时，每个反斜杠需要写两次：
 
 ```text
 D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe

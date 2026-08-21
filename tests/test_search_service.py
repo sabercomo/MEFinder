@@ -50,6 +50,29 @@ class SearchServiceTests(unittest.TestCase):
             ("原句", "auto", 5, "word", None),
         )
 
+    def test_folder_scope_is_validated_and_delegated_separately(self) -> None:
+        engine = RecordingSearchEngine()
+        request = SearchRequest.from_payload(
+            {
+                "query": "承认",
+                "scope_type": "folder",
+                "scope_id": " folder-one ",
+            }
+        )
+
+        SearchService.execute(engine, request)
+
+        self.assertEqual(
+            engine.arguments,
+            ("承认", "auto", 10, "all", None, "folder", "folder-one"),
+        )
+
+    def test_scoped_request_requires_a_scope_id(self) -> None:
+        with self.assertRaisesRegex(ValueError, "scope_id"):
+            SearchRequest.from_payload(
+                {"query": "承认", "scope_type": "document_group"}
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

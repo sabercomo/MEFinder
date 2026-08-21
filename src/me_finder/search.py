@@ -19,6 +19,7 @@ from .database import (
     database_has_fts5_search_index,
     ensure_database_search_index,
     load_database_index,
+    migrate_database_schema,
     open_database,
     paragraph_from_database_row,
 )
@@ -56,6 +57,7 @@ class SearchEngine:
         self._fts_install_attempted = False
         self._fts_ready = False
         if self.backend == "sqlite":
+            migrate_database_schema(self.index_path)
             self.db = open_database(self.index_path)
             self._fts_ready = database_has_fts5_search_index(self.db)
             self.index = load_database_index(self.index_path)
@@ -121,9 +123,17 @@ class SearchEngine:
         limit: int | str | None = 10,
         source_type: str = "all",
         source_file_id: Optional[str] = None,
+        scope_type: str = "all",
+        scope_id: Optional[str] = None,
     ) -> Dict[str, object]:
         query = (query or "").strip()
         source_file_id = str(source_file_id or "").strip() or None
+        scope_type = str(scope_type or "all").strip()
+        if scope_type not in {"all", "root", "folder", "document_group"}:
+            scope_type = "all"
+        scope_id = str(scope_id or "").strip() or None
+        if scope_type in {"all", "root"}:
+            scope_id = None
         if mode not in SEARCH_MODES:
             mode = "auto"
         if source_type not in {"all", "word", "pdf"}:
@@ -133,19 +143,35 @@ class SearchEngine:
         if not query:
             return {"query": query, "mode": mode, "total": 0, "results": []}
         if self.backend == "sqlite":
-            return self._search_sql(query, mode, normalized_limit, source_type, source_file_id)
+            return self._search_sql(
+                query,
+                mode,
+                normalized_limit,
+                source_type,
+                source_file_id,
+                scope_type,
+                scope_id,
+            )
         q_norm = normalize_text(query)
         q_compact = compact_text(query)
         q_plain = punctuationless_text(query)
         candidates: Dict[str, Dict[str, object]] = {}
         if mode in {"auto", "exact"}:
-            self._exact_pass(query, q_norm, candidates, source_type, source_file_id)
+            self._exact_pass(
+                query,
+                q_norm,
+                candidates,
+                source_type,
+                source_file_id,
+                scope_type,
+                scope_id,
+            )
         if mode in {"auto", "compact"} and (mode != "auto" or not candidates):
-            self._mapped_substring_pass(q_compact, "compact", "space_insensitive", 0.96, candidates, source_type, source_file_id)
+            self._mapped_substring_pass(q_compact, "compact", "space_insensitive", 0.96, candidates, source_type, source_file_id, scope_type, scope_id)
         if mode in {"auto", "punctuation"} and (mode != "auto" or not candidates):
-            self._mapped_substring_pass(q_plain, "plain", "punctuation_insensitive", 0.92, candidates, source_type, source_file_id)
+            self._mapped_substring_pass(q_plain, "plain", "punctuation_insensitive", 0.92, candidates, source_type, source_file_id, scope_type, scope_id)
         if mode in {"auto", "fuzzy"} and (mode != "auto" or not candidates):
-            self._fuzzy_pass(q_plain, candidates, source_type, source_file_id)
+            self._fuzzy_pass(q_plain, candidates, source_type, source_file_id, scope_type, scope_id)
         ranked = sorted(candidates.values(), key=self._rank_key)
         merged = self._merge_candidate_specs(ranked)
         selected = merged if normalized_limit is None else merged[:normalized_limit]
@@ -154,6 +180,8 @@ class SearchEngine:
             "mode": mode,
             "source_type": source_type,
             "source_file_id": source_file_id,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
             "total": len(merged),
             "total_is_exact": True,
             "has_more": normalized_limit is not None and len(merged) > normalized_limit,
@@ -169,6 +197,8 @@ class SearchEngine:
         limit: Optional[int],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
     ) -> Dict[str, object]:
         q_norm = normalize_text(query)
         q_compact = compact_text(query)
@@ -188,6 +218,8 @@ class SearchEngine:
                 candidates,
                 source_type,
                 source_file_id,
+                scope_type,
+                scope_id,
                 candidate_budget,
             )
         if mode in {"auto", "compact"} and (mode != "auto" or not candidates):
@@ -200,6 +232,8 @@ class SearchEngine:
                 candidates,
                 source_type,
                 source_file_id,
+                scope_type,
+                scope_id,
                 candidate_budget,
             )
         if mode in {"auto", "punctuation"} and (mode != "auto" or not candidates):
@@ -212,6 +246,8 @@ class SearchEngine:
                 candidates,
                 source_type,
                 source_file_id,
+                scope_type,
+                scope_id,
                 candidate_budget,
             )
         if mode in {"auto", "fuzzy"} and (mode != "auto" or not candidates):
@@ -220,6 +256,8 @@ class SearchEngine:
                 candidates,
                 source_type,
                 source_file_id,
+                scope_type,
+                scope_id,
                 candidate_budget,
             )
         ranked = sorted(candidates.values(), key=self._rank_key)
@@ -230,6 +268,8 @@ class SearchEngine:
             "mode": mode,
             "source_type": source_type,
             "source_file_id": source_file_id,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
             "total": len(merged),
             "total_is_exact": not truncated,
             "has_more": truncated or (limit is not None and len(merged) > limit),
@@ -242,6 +282,8 @@ class SearchEngine:
         self,
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str = "all",
+        scope_id: Optional[str] = None,
         alias: str = "",
     ) -> Tuple[str, List[object]]:
         prefix = f"{alias}." if alias else ""
@@ -253,6 +295,24 @@ class SearchEngine:
         if source_file_id:
             clauses.append(f"{prefix}source_file_id = ?")
             args.append(source_file_id)
+        if scope_type == "root":
+            clauses.append(
+                f"{prefix}source_file_id IN ("
+                "SELECT source_file_id FROM source_files WHERE folder_id IS NULL)"
+            )
+        elif scope_type == "folder" and scope_id:
+            clauses.append(
+                f"{prefix}source_file_id IN ("
+                "SELECT source_file_id FROM source_files WHERE folder_id = ?)"
+            )
+            args.append(scope_id)
+        elif scope_type == "document_group" and scope_id:
+            clauses.append(
+                f"{prefix}source_file_id IN ("
+                "SELECT source_file_id FROM source_files "
+                "WHERE document_group_id = ?)"
+            )
+            args.append(scope_id)
         return (" AND " + " AND ".join(clauses), args) if clauses else ("", args)
 
     def _ensure_fts_ready(self) -> bool:
@@ -305,13 +365,15 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
         candidate_budget: Optional[int],
     ) -> bool:
         if self.db is None:
             return False
         fts_query = self._fts_match_expression(q_plain, "AND")
         source_clause, source_args = self._sql_source_filter(
-            source_type, source_file_id, "p"
+            source_type, source_file_id, scope_type, scope_id, "p"
         )
         if fts_query:
             sql = (
@@ -364,13 +426,15 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
         candidate_budget: Optional[int],
     ) -> bool:
         if self.db is None or not query or column not in {"compact_text", "plain_text"}:
             return False
         fts_query = self._fts_match_expression(q_plain, "AND")
         source_clause, source_args = self._sql_source_filter(
-            source_type, source_file_id, "p"
+            source_type, source_file_id, scope_type, scope_id, "p"
         )
         if fts_query:
             sql = (
@@ -428,11 +492,15 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
         candidate_budget: Optional[int],
     ) -> bool:
         if self.db is None or not q_plain:
             return False
-        source_clause, source_args = self._sql_source_filter(source_type, source_file_id, "p")
+        source_clause, source_args = self._sql_source_filter(
+            source_type, source_file_id, scope_type, scope_id, "p"
+        )
         fts_query = self._fts_match_expression(q_plain, "OR")
         if fts_query:
             rows = self.db.execute(
@@ -530,9 +598,17 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
     ) -> None:
         for paragraph in self.paragraphs:
-            if not self._source_allowed(paragraph, source_type, source_file_id):
+            if not self._source_allowed(
+                paragraph,
+                source_type,
+                source_file_id,
+                scope_type,
+                scope_id,
+            ):
                 continue
             raw = str(paragraph.get("text_raw") or "")
             normalized = str(paragraph.get("normalized_text") or "")
@@ -554,12 +630,20 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
     ) -> None:
         if not query:
             return
         field = "compact_text" if mode == "compact" else "plain_text"
         for paragraph in self.paragraphs:
-            if not self._source_allowed(paragraph, source_type, source_file_id):
+            if not self._source_allowed(
+                paragraph,
+                source_type,
+                source_file_id,
+                scope_type,
+                scope_id,
+            ):
                 continue
             haystack = str(paragraph.get(field) or "")
             pos = haystack.find(query)
@@ -580,6 +664,8 @@ class SearchEngine:
         candidates: Dict[str, Dict[str, object]],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str,
+        scope_id: Optional[str],
     ) -> None:
         if not q_plain:
             return
@@ -593,7 +679,13 @@ class SearchEngine:
             search_space = [idx for idx, _ in counts.most_common(700)]
         for idx in search_space:
             paragraph = self.paragraphs[idx]
-            if not self._source_allowed(paragraph, source_type, source_file_id):
+            if not self._source_allowed(
+                paragraph,
+                source_type,
+                source_file_id,
+                scope_type,
+                scope_id,
+            ):
                 continue
             plain = str(paragraph.get("plain_text") or "")
             ratio, start, end = best_window_ratio(q_plain, plain)
@@ -1530,10 +1622,28 @@ class SearchEngine:
         paragraph: Dict[str, object],
         source_type: str,
         source_file_id: Optional[str],
+        scope_type: str = "all",
+        scope_id: Optional[str] = None,
     ) -> bool:
         if source_type != "all" and str(paragraph.get("source_type") or "word") != source_type:
             return False
-        return not source_file_id or str(paragraph.get("source_file_id") or "") == source_file_id
+        paragraph_source_id = str(paragraph.get("source_file_id") or "")
+        if source_file_id and paragraph_source_id != source_file_id:
+            return False
+        if scope_type == "all":
+            return True
+        source = self.sources_by_id.get(paragraph_source_id)
+        if source is None:
+            return False
+        if scope_type == "root":
+            return not source.get("folder_id")
+        if scope_type == "folder":
+            return str(source.get("folder_id") or "") == str(scope_id or "")
+        if scope_type == "document_group":
+            return str(source.get("document_group_id") or "") == str(
+                scope_id or ""
+            )
+        return True
 
     def _rank_key(self, item: Dict[str, object]) -> Tuple[float, int, int, str, int, str, int]:
         nested = item.get("paragraph")

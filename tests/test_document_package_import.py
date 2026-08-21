@@ -84,7 +84,13 @@ def make_package(
             "file_format": "pdf",
             "size_bytes": source_pdf.stat().st_size if source_pdf else 123,
         },
-        bibliographic_metadata={"title": "分享文献", "author": "作者丙"},
+        bibliographic_metadata={
+            "title": "分享文献",
+            "author": "作者丙",
+            "language_code": "ZH_hant",
+            "edition": "修订版",
+        },
+        version_metadata={"version_label": "共享测试版"},
         parser_provider="mineru",
         page_count=2,
     )
@@ -127,6 +133,9 @@ class DocumentPackageImportTests(unittest.TestCase):
 
         source = extracted["source_files"][0]
         self.assertEqual(source["bibliographic_metadata"]["author"], "作者丙")
+        self.assertEqual(source["bibliographic_metadata"]["language_code"], "zh-Hant")
+        self.assertEqual(source["bibliographic_metadata"]["edition"], "修订版")
+        self.assertEqual(source["version_metadata"], {"version_label": "共享测试版"})
         self.assertEqual(source["relative_path"], "")
         self.assertEqual(
             [page["citation_page"] for page in extracted["pdf_pages"]],

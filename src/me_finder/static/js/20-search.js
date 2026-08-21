@@ -125,6 +125,8 @@ function invalidateLibraryCatalog() {
   libDetailLoaded = {};
   libDetailPending = {};
   libWorks = [];
+  searchFolders = [];
+  searchDocumentGroups = [];
 }
 
 // 摘要投影不含映射证据、PDF 剖面与收录作品，详情由 ensureLibraryDetail 按需补齐。
@@ -158,6 +160,8 @@ async function ensureSearchDocuments(force) {
     var data = await fetchLibraryCatalog(force);
     searchSourceFiles = data.items || [];
     searchVolumes = data.volumes || [];
+    searchFolders = data.folders || [];
+    searchDocumentGroups = data.document_groups || [];
     libVolumeBySource = buildVolumeIndex(searchVolumes);
     searchDocumentsLoaded = true;
   } catch (error) {
@@ -192,12 +196,26 @@ function renderSearchDocumentOptions() {
     return calPinyinCollator.compare(searchDocumentView(a).title, searchDocumentView(b).title);
   });
   var check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
-  var allOption = '<button class="app-select-option' + (!searchDocumentId ? ' is-selected' : '') + '" type="button" data-value="" onclick="selectSearchDocument(event,this.dataset.value)"><span>全部文献</span>' + (!searchDocumentId ? check : '') + '</button>';
+  var allSelected = !searchDocumentId && searchScopeType === 'all';
+  var allOption = '<button class="app-select-option' + (allSelected ? ' is-selected' : '') + '" type="button" data-value="" onclick="selectSearchDocument(event,this.dataset.value)"><span>全部文献</span>' + (allSelected ? check : '') + '</button>';
+  var scopeOptions = '';
+  if (searchFolders.length) {
+    scopeOptions += '<div class="document-options-empty">文件夹范围</div>' + searchFolders.map(function(folder) {
+      var selected = searchScopeType === 'folder' && searchScopeId === folder.folder_id;
+      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" onclick="selectSearchScope(event,\'folder\',\'' + esc(folder.folder_id) + '\')"><span>文件夹 · ' + esc(folder.name) + '</span>' + (selected ? check : '') + '</button>';
+    }).join('');
+  }
+  if (searchDocumentGroups.length) {
+    scopeOptions += '<div class="document-options-empty">作品组范围</div>' + searchDocumentGroups.map(function(group) {
+      var selected = searchScopeType === 'document_group' && searchScopeId === group.document_group_id;
+      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" onclick="selectSearchScope(event,\'document_group\',\'' + esc(group.document_group_id) + '\')"><span>作品组 · ' + esc(group.title) + '</span>' + (selected ? check : '') + '</button>';
+    }).join('');
+  }
   if (!sources.length) {
-    options.innerHTML = allOption + '<div class="document-options-empty">没有符合条件的文献</div>';
+    options.innerHTML = allOption + scopeOptions + '<div class="document-options-empty">没有符合条件的文献</div>';
     return;
   }
-  options.innerHTML = allOption + sources.map(function(source) {
+  options.innerHTML = allOption + scopeOptions + '<div class="document-options-empty">单份文献</div>' + sources.map(function(source) {
     var view = searchDocumentView(source);
     var selected = source.source_file_id === searchDocumentId;
     return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-value="' + esc(source.source_file_id) + '" onclick="selectSearchDocument(event,this.dataset.value)"><span class="document-option-main"><span class="document-option-title">' + esc(view.title) + '</span><span class="document-option-meta">' + esc([view.sourceType, view.author].filter(Boolean).join(' · ')) + '</span></span>' + (selected ? check : '') + '</button>';
@@ -207,6 +225,18 @@ function renderSearchDocumentOptions() {
 function selectSearchDocument(event, sourceId) {
   event.stopPropagation();
   searchDocumentId = sourceId || '';
+  searchScopeType = 'all';
+  searchScopeId = '';
+  updateSearchDocumentLabel();
+  closeSearchSelects();
+  rerunSearchAfterFilterChange();
+}
+
+function selectSearchScope(event, scopeType, scopeId) {
+  event.stopPropagation();
+  searchDocumentId = '';
+  searchScopeType = scopeType;
+  searchScopeId = scopeId;
   updateSearchDocumentLabel();
   closeSearchSelects();
   rerunSearchAfterFilterChange();
@@ -216,8 +246,11 @@ function updateSearchDocumentLabel() {
   var label = document.getElementById('document-select-label');
   if (!label) return;
   var source = searchSourceFiles.find(function(item) { return item.source_file_id === searchDocumentId; });
-  label.textContent = source ? searchDocumentView(source).title : '全部文献';
-  label.title = source ? searchDocumentView(source).title : '';
+  var folder = searchFolders.find(function(item) { return searchScopeType === 'folder' && item.folder_id === searchScopeId; });
+  var group = searchDocumentGroups.find(function(item) { return searchScopeType === 'document_group' && item.document_group_id === searchScopeId; });
+  var scopeLabel = folder ? '文件夹 · ' + folder.name : group ? '作品组 · ' + group.title : '全部文献';
+  label.textContent = source ? searchDocumentView(source).title : scopeLabel;
+  label.title = source ? searchDocumentView(source).title : scopeLabel;
 }
 
 /* ═══ Search ═══ */
@@ -237,7 +270,7 @@ async function runSearch() {
     const resp = await fetch('/api/search', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({query, mode: currentMode, limit: searchLimit, source_type: searchSourceType, source_file_id: searchDocumentId || null})
+      body: JSON.stringify({query, mode: currentMode, limit: searchLimit, source_type: searchSourceType, source_file_id: searchDocumentId || null, scope_type: searchScopeType, scope_id: searchScopeId || null})
     });
     const data = await resp.json();
     if (seq !== searchSeq) return;  // 已有更新的检索发起，丢弃这次过期响应

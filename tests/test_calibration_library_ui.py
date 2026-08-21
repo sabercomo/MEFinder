@@ -269,6 +269,32 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["language"], "chinese")
         self.assertEqual(result["items"][0]["language_code"], "zh-Hans")
 
+    def test_explicit_language_code_overrides_body_inference(self) -> None:
+        result = build_library(
+            Path("."),
+            [
+                {
+                    "source_file_id": "manual-language",
+                    "source_type": "pdf",
+                    "file_name": "中文标题.pdf",
+                    "bibliographic_metadata": {
+                        "title": "中文标题",
+                        "language_code": "de",
+                        "edition": "Studienausgabe",
+                    },
+                }
+            ],
+            [],
+            [],
+            [],
+            language_samples={"manual-language": "这是中文正文。" * 30},
+        )
+
+        item = result["items"][0]
+        self.assertEqual(item["language_code"], "de")
+        self.assertEqual(item["language"], "foreign")
+        self.assertEqual(item["bibliographic_metadata"]["edition"], "Studienausgabe")
+
     def test_body_samples_distinguish_only_the_languages_present(self) -> None:
         samples = {
             "simplified": "这是一本讨论社会理论与历史经验的简体中文著作。" * 8,
@@ -418,7 +444,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 插槽渲染：内容槽（书目）在校准卡片之前，extra 槽（收录/文件/操作）在其后。
         self.assertIn('id="library-drawer-extra"', HTML)
         self.assertIn("var extra = document.getElementById('library-drawer-extra');", HTML)
-        self.assertIn("extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);", HTML)
+        self.assertIn(
+            "extra.innerHTML = drawerVersionMetadataHTML(src) + drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);",
+            HTML,
+        )
         # 上一条 / 下一条。
         self.assertIn("function drawerNavHTML(sourceId)", HTML)
         # 主操作收敛为「打开原文」+ ⋯；页码相关不再在此重复。
@@ -443,9 +472,9 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("libSources.length === 0", HTML)
         self.assertIn("文献库还是空的", HTML)
         self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
-        self.assertIn("当前筛选没有匹配文献", HTML)
+        self.assertIn("当前范围没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
-        self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
+        self.assertIn('onclick="clearLibraryFilters()">清除搜索与筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
         # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
         self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
@@ -486,7 +515,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("实际存在的简体中文、繁体中文等中文细类排在外语前", HTML)
 
     def test_language_facets_are_dynamic_and_filter_card_fits_document_types(self) -> None:
-        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
         self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
         self.assertIn("width: 408px; max-width: calc(100vw - 48px)", HTML)
         self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)
@@ -513,15 +542,13 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         """L-07 列表:详情比例 + 自适应详情宽度；L-09 常驻三态全选；L-11 列表键盘导航。"""
 
         # L-07
-        self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", HTML)
+        self.assertIn("grid-template-columns: 214px minmax(360px, 44fr) minmax(0, 56fr);", HTML)
         self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
-        # L-09
-        self.assertIn('id="lib-select-all"', HTML)
-        self.assertIn('role="checkbox"', HTML)
+        # L-09：工具栏常驻全选锚点已移除（每行悬停勾选 + 选中后批量条「全选当前」已够用）。
+        # syncLibrarySelectAll 保留为带空值守卫的无副作用函数，缺少元素时直接返回。
+        self.assertNotIn('id="lib-select-all"', HTML)
         self.assertIn("function syncLibrarySelectAll()", HTML)
         self.assertIn("syncLibrarySelectAll();", HTML)
-        self.assertIn(".lib-select-all.is-all", HTML)
-        self.assertIn(".lib-select-all.is-some .lib-select-all-dash { display: block; }", HTML)
         # L-11
         self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
         self.assertIn('" tabindex="0" role="option" data-id="', HTML)

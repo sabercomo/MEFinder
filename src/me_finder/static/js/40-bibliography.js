@@ -22,7 +22,7 @@ let bibEditorDirty = false;
 // 书目区默认查看态（label:value 只读），点「编辑」才进编辑态（输入表单）。
 // 每份文献一个开关，保存/取消/换文献回到查看态。语义仍是显式保存 + dirty 保护。
 let bibEditMode = {};
-const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'];
+const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn','language_code','edition'];
 function bibFieldCacheFromMeta(meta) {
   var out = {};
   BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { out[field] = String((meta && meta[field]) || '').trim(); });
@@ -46,7 +46,8 @@ function bibliographicEditorHTML(src) {
     fieldsHTML = field('author','author','作者',meta.author,false)
       + field('title','title','篇名',meta.title,true)
       + field('publisher','publisher','学校',meta.publisher,false)
-      + field('publish-year','publish_year','年份',meta.publish_year,false);
+      + field('publish-year','publish_year','年份',meta.publish_year,false)
+      + field('language-code','language_code','语言代码',meta.language_code,false);
   } else if (docType === 'journal_article') {
     fieldsHTML = field('title','title','标题（篇名）',meta.title,true)
       + field('author','author','作者',meta.author,false)
@@ -56,12 +57,14 @@ function bibliographicEditorHTML(src) {
       + field('publish-year','publish_year','时间（年份）',meta.publish_year,false)
       + field('page-range','page_range','页码（起止页）',meta.page_range,false)
       + field('doi','doi','DOI',meta.doi,false)
-      + field('issn','issn','ISSN',meta.issn,false);
+      + field('issn','issn','ISSN',meta.issn,false)
+      + field('language-code','language_code','语言代码',meta.language_code,false);
   } else {
     fieldsHTML = field('author','author','作者',meta.author,false) + field('country','country','国别',meta.country,false)
       + field('title','title','书名',meta.title,false) + field('translator','translator','译者',meta.translator,false)
       + field('publish-place','publish_place','出版地',meta.publish_place,false)
       + field('publisher','publisher','出版社',meta.publisher,false) + field('publish-year','publish_year','出版年份',meta.publish_year,false)
+      + field('edition','edition','版次',meta.edition,false) + field('language-code','language_code','语言代码',meta.language_code,false)
       + field('isbn','isbn','ISBN',meta.isbn,true);
   }
   var sid = esc(src.source_file_id);
@@ -150,19 +153,25 @@ function bibliographicReadHTML(src) {
       + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
   }
   var rows;
+  var languageText = meta.language_code
+    ? libLangChipLabel(meta.language_code) + '（' + meta.language_code + '）'
+    : libLangChipLabel(libraryLanguageCode(src)) + '（自动推断）';
   if (docType === 'thesis') {
     rows = row('作者','author',meta.author) + row('篇名','title',meta.title,true)
-      + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year);
+      + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year)
+      + row('语言','language_code',languageText);
   } else if (docType === 'journal_article') {
     rows = row('篇名','title',meta.title,true) + row('作者','author',meta.author)
       + row('出版刊物','journal_name',meta.journal_name) + row('卷次','volume',meta.volume)
       + row('期号','issue',meta.issue) + row('年份','publish_year',meta.publish_year)
-      + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn);
+      + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn)
+      + row('语言','language_code',languageText);
   } else {
     rows = row('作者','author',meta.author) + row('国别','country',meta.country)
       + row('书名','title',meta.title,true) + row('译者','translator',meta.translator)
       + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
-      + row('出版年份','publish_year',meta.publish_year) + row('ISBN','isbn',meta.isbn,true);
+      + row('出版年份','publish_year',meta.publish_year) + row('版次','edition',meta.edition)
+      + row('语言','language_code',languageText) + row('ISBN','isbn',meta.isbn,true);
   }
   // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
   // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
@@ -352,6 +361,7 @@ function collectBibliographicForm() {
     publisher: value('publisher', 'publisher'), publish_year: value('publish-year', 'publish_year'), isbn: value('isbn', 'isbn'),
     journal_name: value('journal-name', 'journal_name'), volume: value('volume', 'volume'),
     issue: value('issue', 'issue'), page_range: value('page-range', 'page_range'), doi: value('doi', 'doi'), issn: value('issn', 'issn'),
+    language_code: value('language-code', 'language_code'), edition: value('edition', 'edition'),
     metadata_evidence: bibliographicPendingEvidence[libSelectedId] || {}
   };
   if (libSelectedId) {

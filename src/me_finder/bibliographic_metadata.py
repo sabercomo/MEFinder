@@ -18,6 +18,8 @@ METADATA_FIELDS = (
     "publish_year", "isbn", "journal_name", "volume", "issue", "page_range",
     "doi", "issn",
 )
+OPTIONAL_BIBLIOGRAPHIC_FIELDS = ("language_code", "edition")
+BIBLIOGRAPHIC_FIELDS = (*METADATA_FIELDS, *OPTIONAL_BIBLIOGRAPHIC_FIELDS)
 DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
 RESPONSIBILITY_STATUSES = ("present", "none", "unknown")
 PUBLISHER_PLACES = {
@@ -128,6 +130,10 @@ def canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
     return _canonical_metadata(value)
 
 
+def normalize_language_code(value: object) -> str:
+    return _normalize_language_code(str(value or ""))
+
+
 def is_valid_bibliographic_value(value: object) -> bool:
     text = str(value or "").strip()
     if not text or text.lower() in INVALID_PLACEHOLDERS or "\ufffd" in text:
@@ -148,7 +154,7 @@ def _has_suspicious_person_punctuation(value: object) -> bool:
 def invalid_metadata_fields(metadata: Mapping[str, object]) -> List[str]:
     return [
         field
-        for field in METADATA_FIELDS
+        for field in BIBLIOGRAPHIC_FIELDS
         if metadata.get(field) not in (None, "")
         and (
             not is_valid_bibliographic_value(metadata.get(field))
@@ -643,7 +649,7 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
     invalid = invalid_metadata_fields(payload)
     if invalid:
         raise ValueError("以下书目字段包含无效问号或不可用文本：" + "、".join(invalid))
-    for field in METADATA_FIELDS:
+    for field in BIBLIOGRAPHIC_FIELDS:
         value = str(payload.get(field) or "").strip()
         if field == "doi" and value:
             normalized = normalize_doi(value)
@@ -655,6 +661,8 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
             if not normalized:
                 raise ValueError("ISSN 格式或校验位无效。")
             value = normalized
+        if field == "language_code" and value:
+            value = normalize_language_code(value)
         result[field] = value or None
     requested_type = str(payload.get("document_type") or "").strip()
     if requested_type in DOCUMENT_TYPES:
@@ -685,13 +693,13 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
     # stale automatic evidence, while a user-confirmed CNKI candidate may pass
     # narrowly validated evidence carrying the matching value.
     evidence = dict(previous_metadata.get("metadata_evidence") or {})
-    for field in METADATA_FIELDS:
+    for field in BIBLIOGRAPHIC_FIELDS:
         if result.get(field) != previous_metadata.get(field):
             evidence.pop(field, None)
     supplied_evidence = payload.get("metadata_evidence")
     if isinstance(supplied_evidence, Mapping):
         for field, raw_item in supplied_evidence.items():
-            if field not in METADATA_FIELDS or not isinstance(raw_item, Mapping):
+            if field not in BIBLIOGRAPHIC_FIELDS or not isinstance(raw_item, Mapping):
                 continue
             source = str(raw_item.get("source") or "")
             value = str(raw_item.get("value") or "").strip()
@@ -736,7 +744,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
         for key, value in canonical.items():
             if value not in (None, ""):
                 source[key] = value
-            elif key in METADATA_FIELDS:
+            elif key in BIBLIOGRAPHIC_FIELDS:
                 source.pop(key, None)
         connection.execute(
             "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
@@ -2303,6 +2311,8 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         "publisher": ("publisher", "press"),
         "publish_place": ("publish_place", "publication_place"),
         "publish_year": ("publish_year", "publication_year"),
+        "language_code": ("language_code",),
+        "edition": ("edition",),
         "isbn": ("isbn",),
         "journal_name": ("journal_name", "journal_title", "journal", "periodical"),
         "volume": ("volume", "journal_volume"),
@@ -2313,6 +2323,13 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
     }
     for field, keys in aliases.items():
         result[field] = next((source.get(key) for key in keys if source.get(key) not in (None, "")), None)
+    if result.get("language_code"):
+        try:
+            result["language_code"] = normalize_language_code(
+                str(result["language_code"])
+            )
+        except ValueError:
+            result["language_code"] = None
     for field in (
         "document_type",
         "metadata_status",
@@ -2326,6 +2343,18 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         if source.get(field) not in (None, ""):
             result[field] = source[field]
     return result
+
+
+def _normalize_language_code(value: str) -> str:
+    code = str(value or "").strip().replace("_", "-")
+    if not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", code):
+        raise ValueError("语言代码格式无效。")
+    lowered = code.casefold()
+    if lowered == "zh-hans":
+        return "zh-Hans"
+    if lowered == "zh-hant":
+        return "zh-Hant"
+    return lowered
 
 
 def _clean_person(value: str) -> str:

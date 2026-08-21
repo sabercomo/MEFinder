@@ -212,7 +212,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="filter-opts-type"', HTML)
         self.assertIn("else if (kind === 'lang') libLangFilter = value;", HTML)
         self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
-        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
 
     def test_library_filters_by_document_type(self) -> None:
         self.assertIn('id="filter-opts-doctype"', HTML)
@@ -534,11 +534,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         brand_start = HTML.index("var VISION_BRAND_RULES = [")
         brand_end = HTML.index("];", brand_start)
         brand_rules = HTML[brand_start:brand_end]
+        # DeepSeek 现已支持视觉：排在通义千问、Kimi 之后、智谱 GLM 之前，且不再标「不支持」。
         self.assertGreater(
             brand_rules.index("{re: /deepseek/i"),
-            brand_rules.index("{re: /together/i"),
+            brand_rules.index("{re: /moonshot/i"),
         )
-        self.assertIn("base: 'https://api.deepseek.com', unsupported: true", brand_rules)
+        self.assertLess(
+            brand_rules.index("{re: /deepseek/i"),
+            brand_rules.index("{re: /bigmodel|zhipu/i"),
+        )
+        self.assertIn("base: 'https://api.deepseek.com'}", brand_rules)
+        self.assertNotIn("unsupported", brand_rules)
         self.assertIn(
             'vision-model-badge capability-unsupported">不支持图片',
             HTML,

@@ -450,6 +450,13 @@ function librarySortProjection(source) {
   };
 }
 
+function libraryScopeMatches(source, scopeType, scopeId) {
+  if (scopeType === 'root') return !source.folder_id;
+  if (scopeType === 'folder') return String(source.folder_id || '') === String(scopeId || '');
+  if (scopeType === 'document_group') return String(source.document_group_id || '') === String(scopeId || '');
+  return true;
+}
+
 // 原在 70-vision.js，纯函数，前移以便单测。
 function visionHash(text) {
   var h = 0;
@@ -488,10 +495,37 @@ function metadataSourceLabel(source) {
 function sourceBibliographicMetadata(src) {
   var nested = src && src.bibliographic_metadata ? src.bibliographic_metadata : {};
   var meta = Object.assign({}, nested);
-  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
+  ['title','author','country','translator','publisher','publish_place','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn','language_code','edition','document_type','metadata_status','metadata_source','metadata_confidence','metadata_evidence','metadata_conflicts','metadata_missing_fields'].forEach(function(key) {
     if (src && src[key] != null && src[key] !== '') meta[key] = src[key];
   });
   return meta;
+}
+
+function documentGroupMemberDisplayName(source) {
+  source = source || {};
+  var versionMetadata = source.version_metadata && typeof source.version_metadata === 'object'
+    ? source.version_metadata
+    : {};
+  var explicit = String(versionMetadata.version_label || '').trim();
+  if (explicit) return explicit;
+  var meta = sourceBibliographicMetadata(source);
+  var parts = [];
+  var translator = String(meta.translator || '').trim();
+  if (translator) {
+    translator = translator.replace(/\s*译$/, '');
+    parts.push(translator + '译本');
+  }
+  var languageCode = String(meta.language_code || source.language_code || '').trim();
+  if (languageCode && languageCode !== 'und') {
+    var languageLabel = libLangChipLabel(languageCode);
+    parts.push(languageLabel === '其他语言' ? languageCode : languageLabel);
+  }
+  var edition = String(meta.edition || '').trim();
+  if (edition) parts.push(edition);
+  var publishYear = String(meta.publish_year || '').trim();
+  if (publishYear) parts.push(publishYear);
+  return parts.join(' · ')
+    || String(source.title || source.file_name || source.source_file_id || '未命名版本');
 }
 
 // 书目缺失字段的中文提示串。原在 40-bibliography.js，依赖本文件内的判定函数。

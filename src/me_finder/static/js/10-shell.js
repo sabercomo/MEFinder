@@ -123,6 +123,12 @@ document.addEventListener('keydown', function(event) {
     resolveCnkiBatchChoice({action:'skip'});
     return;
   }
+  var organizationModal = document.getElementById('library-organization-modal');
+  if (organizationModal && organizationModal.classList.contains('open')) {
+    event.preventDefault();
+    closeLibraryOrganizationModal();
+    return;
+  }
   // 3. 通用确认 / 提示对话框。
   var backdrop = document.getElementById('app-dialog-backdrop');
   if (backdrop && backdrop.classList.contains('open')) {

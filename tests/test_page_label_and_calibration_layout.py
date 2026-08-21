@@ -64,7 +64,10 @@ class LibraryWorkspaceLayoutMarkupTests(unittest.TestCase):
         # L-07：列表:详情由 36:64 调平到 44:56，列表不再被压到只剩标题。
         rule = re.search(r"\.library-body\.detail-open\s*\{([^}]+)\}", HTML, re.S)
         self.assertIsNotNone(rule)
-        self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", rule.group(1))
+        self.assertIn(
+            "grid-template-columns: 214px minmax(360px, 44fr) minmax(0, 56fr);",
+            rule.group(1),
+        )
 
     def test_detail_content_expands_with_the_drawer(self) -> None:
         rule = re.search(

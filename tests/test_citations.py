@@ -691,6 +691,30 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(saved["document_type"], "thesis")
         self.assertEqual(saved["metadata_status"], "complete")
 
+    def test_optional_version_fields_normalize_without_affecting_missing_status(self) -> None:
+        saved = manual_metadata(
+            {
+                "document_type": "book",
+                "author": "黑格尔",
+                "title": "精神现象学",
+                "publisher": "商务印书馆",
+                "publish_place": "北京",
+                "publish_year": "1979",
+                "language_code": "ZH_hant",
+                "edition": "第 2 版",
+            }
+        )
+
+        self.assertEqual(saved["language_code"], "zh-Hant")
+        self.assertEqual(saved["edition"], "第 2 版")
+        self.assertEqual(saved["metadata_status"], "complete")
+        self.assertEqual(saved["metadata_missing_fields"], [])
+
+        old_file = dict(saved)
+        old_file.pop("language_code")
+        old_file.pop("edition")
+        self.assertEqual(metadata_missing_fields(old_file), [])
+
     def test_thesis_gb_citation_uses_degree_document_marker(self) -> None:
         metadata = {
             "document_type": "thesis",

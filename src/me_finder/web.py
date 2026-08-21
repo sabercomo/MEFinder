@@ -36,6 +36,9 @@ from .application.import_orchestrator import (
     ImportOrchestrator,
 )
 from .application.index_runtime import IndexRuntime
+from .application.library_organization_coordinator import (
+    LibraryOrganizationCoordinator,
+)
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import migrate_data_root
@@ -45,12 +48,13 @@ from .desktop_shell_controller import DesktopShellController
 from .document_lifecycle_controller import DocumentLifecycleController
 from .import_job_controller import ImportJobController
 from .library_query_controller import LibraryQueryController
+from .library_organization_controller import LibraryOrganizationController
 from .page_mapping_controller import PageMappingController
 from .parser_settings_controller import ParserSettingsController
 from .preferences_controller import PreferencesController
 from .structured_reader_controller import StructuredReaderController
 from .bibliographic_metadata import (
-    METADATA_FIELDS,
+    BIBLIOGRAPHIC_FIELDS,
     canonical_metadata,
     detect_pdf_bibliographic_metadata,
     manual_metadata,
@@ -162,6 +166,15 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/auto-page-mapping/accept",
         "/api/documents/remove",
         "/api/documents/remove-batch",
+        "/api/folders/create",
+        "/api/folders/rename",
+        "/api/folders/delete",
+        "/api/documents/move",
+        "/api/document-groups/create",
+        "/api/document-groups/rename",
+        "/api/document-groups/delete",
+        "/api/document-groups/assign",
+        "/api/document-groups/version-label",
     }
 )
 
@@ -685,7 +698,7 @@ def make_handler(
         build_manual_metadata=(
             lambda payload, document: manual_metadata(payload, document)
         ),
-        metadata_fields=METADATA_FIELDS,
+        metadata_fields=BIBLIOGRAPHIC_FIELDS,
     )
     page_mapping_coordinator = PageMappingCoordinator(
         context.paths,
@@ -737,6 +750,11 @@ def make_handler(
             )
         ),
     )
+    library_organization_coordinator = LibraryOrganizationCoordinator(
+        context.paths,
+        index_runtime,
+        durable_operations,
+    )
     bibliographic_metadata_controller = BibliographicMetadataController(
         document_queries,
         metadata_coordinator,
@@ -759,6 +777,9 @@ def make_handler(
     )
     document_lifecycle_controller = DocumentLifecycleController(
         deletion_coordinator
+    )
+    library_organization_controller = LibraryOrganizationController(
+        library_organization_coordinator
     )
     structured_reader_controller = StructuredReaderController(
         index_runtime.run_when_ready,
@@ -975,6 +996,33 @@ def make_handler(
         "/api/documents/remove": document_lifecycle_controller.remove,
         "/api/documents/remove-batch": (
             document_lifecycle_controller.remove_batch
+        ),
+        "/api/folders/create": (
+            library_organization_controller.create_folder
+        ),
+        "/api/folders/rename": (
+            library_organization_controller.rename_folder
+        ),
+        "/api/folders/delete": (
+            library_organization_controller.delete_folder
+        ),
+        "/api/documents/move": (
+            library_organization_controller.move_sources
+        ),
+        "/api/document-groups/create": (
+            library_organization_controller.create_document_group
+        ),
+        "/api/document-groups/rename": (
+            library_organization_controller.rename_document_group
+        ),
+        "/api/document-groups/delete": (
+            library_organization_controller.delete_document_group
+        ),
+        "/api/document-groups/assign": (
+            library_organization_controller.assign_group
+        ),
+        "/api/document-groups/version-label": (
+            library_organization_controller.update_version_label
         ),
         "/api/mineru-reparse": import_job_controller.reparse_with_mineru,
         "/api/import-retry-mineru": import_job_controller.retry_with_mineru,
@@ -1336,6 +1384,7 @@ def make_handler(
                     )
                     self._send_json(result)
                 except (MinerUError, VisionAPIError, ValueError) as exc:
+                    self._discard_small_request_body()
                     self._send_json({"error": str(exc)}, status=400)
                 except OSError:
                     logging.exception("legacy import request failed")
