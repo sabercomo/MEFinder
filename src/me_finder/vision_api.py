@@ -522,8 +522,6 @@ def _vision_model_capability(
         "hunyuan-vision",
         "ernie-vl",
         "minimax-vl",
-        "deepseek-v4",
-        "deepseek-vl",
         "moonshot-v1-vision",
         "kimi-k2.5",
         "kimi-k2.6",
@@ -555,6 +553,7 @@ def _vision_model_capability(
             and bool(declared_modalities)
             and not _model_has_image_input(item)
         )
+        or "deepseek" in normalized
         or (basename.startswith("qwen3.7-max") and not qwen37_max_has_vision)
         or basename == "qwen3.6-max-preview"
         or basename.startswith("qwen3-max")

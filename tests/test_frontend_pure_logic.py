@@ -738,22 +738,6 @@ class LibrarySortProjectionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class LibraryScopeTests(unittest.TestCase):
-    def test_folder_and_document_group_are_independent_scopes(self):
-        source = {"folder_id": "folder-a", "document_group_id": "group-one"}
-        self.assertTrue(_call("libraryScopeMatches", source, "folder", "folder-a"))
-        self.assertFalse(_call("libraryScopeMatches", source, "folder", "folder-b"))
-        self.assertTrue(
-            _call("libraryScopeMatches", source, "document_group", "group-one")
-        )
-
-    def test_root_and_all_keep_unfiled_compatibility(self):
-        source = {"folder_id": None, "document_group_id": None}
-        self.assertTrue(_call("libraryScopeMatches", source, "root", None))
-        self.assertTrue(_call("libraryScopeMatches", source, "all", None))
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class VisionHashTests(unittest.TestCase):
     """31 进制滚动哈希，无符号 32 位。"""
 
@@ -836,49 +820,6 @@ class SourceBibliographicMetadataTests(unittest.TestCase):
 
     def test_null_src_is_empty(self):
         self.assertEqual(_call("sourceBibliographicMetadata", None), {})
-
-    def test_optional_fields_are_merged(self):
-        src = {
-            "bibliographic_metadata": {"language_code": "de", "edition": "2. Auflage"},
-            "language_code": "en",
-        }
-        self.assertEqual(
-            _call("sourceBibliographicMetadata", src),
-            {"language_code": "en", "edition": "2. Auflage"},
-        )
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class DocumentGroupMemberDisplayNameTests(unittest.TestCase):
-    def test_explicit_label_has_priority(self):
-        source = {
-            "version_metadata": {"version_label": "贺麟译本"},
-            "bibliographic_metadata": {
-                "translator": "先刚",
-                "language_code": "zh-Hans",
-            },
-        }
-        self.assertEqual(_call("documentGroupMemberDisplayName", source), "贺麟译本")
-
-    def test_fallback_uses_existing_metadata_without_requiring_backfill(self):
-        source = {
-            "bibliographic_metadata": {
-                "translator": "先刚",
-                "language_code": "zh-Hans",
-                "edition": "第二版",
-                "publish_year": "2013",
-            },
-        }
-        self.assertEqual(
-            _call("documentGroupMemberDisplayName", source),
-            "先刚译本 · 简体中文 · 第二版 · 2013",
-        )
-
-    def test_old_file_falls_back_to_title(self):
-        self.assertEqual(
-            _call("documentGroupMemberDisplayName", {"title": "精神现象学"}),
-            "精神现象学",
-        )
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

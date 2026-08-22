@@ -26,13 +26,7 @@ class DocumentExportTests(unittest.TestCase):
             document={"document_id": "DOC-繁", "source_file_id": "pdf-1"},
             source_sha256=hashlib.sha256(b"book").hexdigest(),
             source_file={"file_name": "古籍《學》.pdf", "size_bytes": 123},
-            bibliographic_metadata={
-                "title": "學而時習之",
-                "author": "孔子",
-                "language_code": "zh-Hant",
-                "edition": "第二版",
-            },
-            version_metadata={"version_label": "繁体版"},
+            bibliographic_metadata={"title": "學而時習之", "author": "孔子"},
             external_ids={"isbn": None},
             parser_provider="fake",
             parser_model="fake-v1",
@@ -68,9 +62,6 @@ class DocumentExportTests(unittest.TestCase):
     def test_schema_version_is_fixed(self) -> None:
         self.assertEqual(self.manifest["schema_version"], "mefinder.document.v1")
         self.assertEqual(DOCUMENT_SCHEMA_VERSION, "mefinder.document.v1")
-        self.assertEqual(self.manifest["bibliographic_metadata"]["language_code"], "zh-Hant")
-        self.assertEqual(self.manifest["bibliographic_metadata"]["edition"], "第二版")
-        self.assertEqual(self.manifest["version_metadata"], {"version_label": "繁体版"})
 
     def test_json_export_round_trips_unicode_order_warnings_and_provenance(self) -> None:
         path = export_document_json(self.root / "document.json", self.manifest, self.pages)

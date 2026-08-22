@@ -45,7 +45,6 @@ def document_manifest(
     parser_options: Optional[Mapping[str, object]] = None,
     parser_provenance: Optional[Mapping[str, object]] = None,
     bibliographic_metadata: Optional[Mapping[str, object]] = None,
-    version_metadata: Optional[Mapping[str, object]] = None,
     external_ids: Optional[Mapping[str, object]] = None,
     parsed_at: Optional[str] = None,
     parser_version: Optional[str] = None,
@@ -71,7 +70,6 @@ def document_manifest(
         "source_sha256": digest,
         "source_file": dict(source_file),
         "bibliographic_metadata": dict(bibliographic_metadata or {}),
-        "version_metadata": dict(version_metadata or {}),
         "external_ids": dict(external_ids or {}),
         "parser": {
             "provider": provider,

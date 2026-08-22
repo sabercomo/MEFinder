@@ -123,11 +123,6 @@ def export_indexed_pdf(
         if isinstance(source.get("bibliographic_metadata"), Mapping)
         else {}
     )
-    version_metadata = (
-        source.get("version_metadata")
-        if isinstance(source.get("version_metadata"), Mapping)
-        else {}
-    )
     title = str(
         bibliographic.get("title")
         or source.get("display_title")
@@ -174,7 +169,6 @@ def export_indexed_pdf(
             "last_modified": source.get("last_modified"),
         },
         bibliographic_metadata=bibliographic,
-        version_metadata=version_metadata,
         external_ids=_external_ids(bibliographic, source),
         parser_provider=parser_provider,
         parser_model=(

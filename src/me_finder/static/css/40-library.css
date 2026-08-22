@@ -79,9 +79,7 @@
 }
 /* W1 工具栏（Notion / Linear / Zotero 范式）：统计分组一行 + 控件一行。
    控件行：全选 · 筛选按钮 · 生效 chips —spacer— 视图 · 合并排序 · 联网补全 · 补全书目。 */
-/* 方案 A：四条工具带合并为一行工具栏。padding:0 覆盖旧 .library-toolbar 的
-   0 32px 16px——否则会在页面本身的边距上再叠 32px，两端都缩进、右侧留空。 */
-#library-toolbar-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0; }
+#library-toolbar-line { display: flex; flex-direction: column; gap: 12px; }
 .library-controls-line .view-switch { flex: 0 0 auto; }
 .library-metadata-btn { flex: 0 0 auto; }
 .library-controls-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -173,6 +171,26 @@
 .library-sort-direction-select .app-select-trigger { min-width: 88px; }
 .library-sort-controls .app-select-menu { width: 178px; }
 .library-sort-direction-select .app-select-menu { width: 112px; }
+/* 常驻三态全选（L-09）：空 / 半选（横杠）/ 全选（对勾）。 */
+.lib-select-all {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  display: inline-grid; place-items: center;
+  border: 1.6px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-primary);
+  color: var(--accent-contrast);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.lib-select-all:hover:not(:disabled) { border-color: var(--accent); }
+.lib-select-all:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
+.lib-select-all:disabled { opacity: .4; cursor: default; }
+.lib-select-all-check { width: 14px; height: 14px; opacity: 0; }
+.lib-select-all-dash { width: 10px; height: 2px; border-radius: 1px; background: var(--accent); display: none; }
+.lib-select-all.is-all { background: var(--accent); border-color: var(--accent); }
+.lib-select-all.is-all .lib-select-all-check { opacity: 1; }
+.lib-select-all.is-some .lib-select-all-dash { display: block; }
 /* 键盘导航焦点可见（L-11）。 */
 .library-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* 从检索结果跳来补书目的返回横幅（S-03）。 */
@@ -188,74 +206,6 @@
   border-top: 1px solid var(--divider);
   position: relative;
 }
-.library-scopes {
-  flex: 0 0 214px;
-  width: 214px;
-  padding: 16px 12px;
-  overflow-y: auto;
-  border-right: 1px solid var(--divider);
-  background: var(--surface-secondary);
-}
-.library-scope-section + .library-scope-section { margin-top: 18px; }
-.library-scope-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 26px;
-  padding: 0 8px 5px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .04em;
-}
-.library-scope-heading button,
-.library-scope-actions button {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font: inherit;
-}
-.library-scope-heading button { width: 24px; height: 24px; font-size: 17px; }
-.library-scope-heading button:hover,
-.library-scope-actions button:hover { background: var(--surface-hover); color: var(--text-primary); }
-.library-scope-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 34px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-.library-scope-item:hover { background: var(--surface-hover); color: var(--text-primary); }
-.library-scope-item.is-active { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
-.library-scope-target {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  min-height: 34px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-}
-.library-scope-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.library-scope-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
-.library-scope-actions { display: none; align-items: center; flex: 0 0 auto; padding-right: 4px; }
-.library-scope-item:hover .library-scope-actions,
-.library-scope-item:focus-within .library-scope-actions { display: inline-flex; }
-.library-scope-actions button { width: 20px; height: 20px; padding: 0; }
-.library-scope-empty { padding: 5px 8px; color: var(--text-tertiary); font-size: 12px; }
 .library-list-scroll {
   flex: 1;
   overflow-y: auto;
@@ -459,7 +409,7 @@
 .library-body.detail-open {
   display: grid;
   /* 列表 : 详情 由 36:64 调平到 44:56，列表不再被压到只剩标题（L-07）。 */
-  grid-template-columns: 214px minmax(360px, 44fr) minmax(0, 56fr);
+  grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);
 }
 .library-body.detail-open .library-list-scroll { min-width: 0; }
 .library-body.detail-open .library-drawer,
@@ -473,29 +423,8 @@
 .library-body.detail-open .library-row-missing { display: none; }
 @media (max-width: 1120px) {
   .library-body.detail-open { display: block; position: relative; }
-  .library-body.detail-open .library-scopes { display: none; }
   .library-body.detail-open .library-list-scroll { display: none; }
   .library-body.detail-open .library-drawer.open { width: 100%; min-width: 0; height: 100%; border-left: 0; }}
-@media (max-width: 760px) {
-  .library-body { display: block; overflow-y: auto; }
-  .library-scopes { width: 100%; max-height: 210px; border-right: 0; border-bottom: 1px solid var(--divider); }
-  .library-list-scroll { overflow-y: visible; }
-}
-
-.library-organization-dialog { width: min(430px, 100%); }
-.library-organization-input {
-  width: 100%;
-  height: 40px;
-  margin-top: 16px;
-  padding: 0 11px;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--text-primary);
-  font: inherit;
-}
-.library-organization-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
-.library-organization-input[hidden] { display: none; }
 .cal-collapse-head {
   display: flex;
   align-items: center;
@@ -724,110 +653,3 @@
 @media (max-width: 560px) {
   .bib-read-grid { grid-template-columns: 1fr; }
 }
-
-/* ══ 方案 A：单行工具栏 · 底部状态条 · 可折叠左栏 · 细节打磨 ══ */
-
-/* 工具栏内：标题 + 搜索 + 控件同处一行。 */
-.library-toolbar .library-title { margin: 0; flex: 0 0 auto; font-size: 18px; line-height: 1.2; white-space: nowrap; }
-/* 搜索框铺满左侧空档，控件靠右成组，中间不留空隙。 */
-.library-toolbar .library-search-wrap { margin-top: 0; flex: 1 1 auto; min-width: 160px; }
-.library-toolbar .library-search { height: 36px; }
-#library-toolbar-line > .view-switch,
-#library-toolbar-line > .library-filter,
-#library-toolbar-line > .library-sort,
-#library-toolbar-line > .library-overflow { flex: 0 0 auto; }
-
-/* ☰ 折叠开关：无框图标按钮（与示例图一致，不做成重按钮）。 */
-.library-fold-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; flex: 0 0 auto;
-  border: 0; border-radius: 8px;
-  background: transparent; color: var(--text-secondary); cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-}
-.library-fold-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
-.library-fold-btn:active { transform: scale(.94); }
-.library-fold-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.library-fold-btn.is-collapsed { color: var(--accent); background: var(--accent-soft); }
-.library-fold-btn svg { width: 18px; height: 18px; }
-
-/* ⋯ 更多：无框图标按钮。必须逐项盖掉 .app-select-trigger 的
-   min-width:88 / border / padding / height，否则会撑成一个空的大框。 */
-.library-overflow-btn {
-  width: 34px; height: 34px; min-width: 0; padding: 0;
-  justify-content: center; border: 0; border-radius: 8px;
-  background: transparent; color: var(--text-secondary); cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-}
-.library-overflow-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
-.library-overflow-btn:active { transform: scale(.95); }
-.library-overflow-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.library-overflow-btn svg { width: 18px; height: 18px; color: currentColor; }
-/* 打开态：用轻底色代替边框 + ring，和无框图标保持一致。 */
-.library-overflow.is-open .library-overflow-btn { background: var(--accent-soft); color: var(--accent); box-shadow: none; border-color: transparent; }
-.library-overflow-menu { left: auto; right: 0; min-width: 184px; }
-
-/* 底部状态条（Zotero 式）：统计从顶部沉到这里。 */
-.library-statusbar {
-  flex: 0 0 auto;
-  display: flex; align-items: center;
-  min-height: 34px;
-  padding: 5px 20px;
-  border-top: 1px solid var(--divider);
-  background: var(--surface-secondary);
-}
-.library-statusbar .library-stats-row { width: 100%; gap: 12px; }
-.library-statusbar .stat-group__label { font-size: 10.5px; }
-/* 计数为 0 的统计降噪：不用告警色抢注意力。 */
-.status-stat.is-zero { opacity: .5; }
-.status-stat.is-zero .status-stat__count,
-.status-stat.is-zero .status-stat__label { color: var(--text-tertiary); }
-
-/* 左栏折叠：收起后把宽度让给列表。
-   过渡只在用户手动切换时启用（.rail-animated），首帧按存储状态直接定位、不播动画。 */
-.library-body.rail-animated .library-scopes {
-  transition: flex-basis 160ms var(--ease-out, ease), width 160ms var(--ease-out, ease), padding 160ms var(--ease-out, ease);
-}
-.library-body.rail-collapsed .library-scopes {
-  flex-basis: 0; width: 0; min-width: 0;
-  padding-left: 0; padding-right: 0;
-  border-right: 0; overflow: hidden;
-}
-.library-body.detail-open.rail-collapsed { grid-template-columns: 0 minmax(360px, 44fr) minmax(0, 56fr); }
-.library-body.detail-open.rail-collapsed .library-scopes { display: none; }
-
-/* 左栏：当前范围与列表选中行同一套视觉语言（3px 强调左条）。 */
-.library-scope-item { position: relative; }
-.library-scope-item.is-active::before {
-  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
-  width: 3px; border-radius: 2px; background: var(--accent);
-}
-/* + 新建：空分组不再铺「尚无…」空状态，只留一个轻动作。 */
-.library-scope-new {
-  display: inline-flex; align-items: center; gap: 6px;
-  margin: 2px 4px; padding: 6px 8px;
-  border: 0; border-radius: 8px;
-  background: transparent; color: var(--text-tertiary);
-  font: inherit; font-size: 12.5px; cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-}
-.library-scope-new svg { width: 14px; height: 14px; flex: 0 0 auto; }
-.library-scope-new:hover { background: var(--surface-hover); color: var(--text-primary); }
-.library-scope-new:active { transform: scale(.98); }
-.library-scope-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-/* 分组标题 + 按钮：补齐按压 / 焦点态。 */
-.library-scope-heading button:active,
-.library-scope-actions button:active { transform: scale(.9); }
-.library-scope-heading button:focus-visible,
-.library-scope-actions button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-
-/* 选中条：危险动作与常规动作用分隔线断开。 */
-.library-selection-divider {
-  width: 1px; align-self: stretch; margin: 4px 2px;
-  background: var(--border-default); flex: 0 0 auto;
-}
-
-/* 详情关闭：图标按钮 + 按压 / 焦点反馈。 */
-.drawer-close svg { width: 15px; height: 15px; }
-.drawer-close:active { transform: scale(.98); }
-.drawer-close:focus-visible { outline: none; box-shadow: var(--shadow-card), var(--focus-ring); border-color: var(--accent); }

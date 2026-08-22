@@ -16,7 +16,7 @@ from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
     has_manual_mapping,
 )
-from .bibliographic_metadata import BIBLIOGRAPHIC_FIELDS
+from .bibliographic_metadata import METADATA_FIELDS
 from .document_heading import enrich_pdf_headings
 from .import_resume import resume_summary
 from .normalization import (
@@ -50,8 +50,8 @@ def _attach_bibliographic_metadata(
     source_file: Dict[str, object], bibliographic: Mapping[str, object]
 ) -> None:
     """Copy every canonical bibliographic field into the searchable source record."""
-    top_level_fields = (*BIBLIOGRAPHIC_FIELDS, "publication_year", *_BIBLIOGRAPHIC_STATE_FIELDS)
-    nested_fields = (*BIBLIOGRAPHIC_FIELDS, *_BIBLIOGRAPHIC_STATE_FIELDS)
+    top_level_fields = (*METADATA_FIELDS, "publication_year", *_BIBLIOGRAPHIC_STATE_FIELDS)
+    nested_fields = (*METADATA_FIELDS, *_BIBLIOGRAPHIC_STATE_FIELDS)
     for field in top_level_fields:
         if bibliographic.get(field) not in (None, ""):
             source_file[field] = bibliographic[field]

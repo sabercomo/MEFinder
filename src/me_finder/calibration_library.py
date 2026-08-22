@@ -7,11 +7,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .auto_page_mapping import has_manual_mapping
-from .bibliographic_metadata import (
-    BIBLIOGRAPHIC_FIELDS,
-    is_valid_bibliographic_value,
-    metadata_missing_fields,
-)
+from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
 from .collection_metadata import infer_collection_metadata
 
 
@@ -157,8 +153,6 @@ def build_library(
     latest_runs: Optional[Mapping[str, Mapping[str, object]]] = None,
     active_source_ids: Optional[Iterable[str]] = None,
     language_samples: Optional[Mapping[str, str]] = None,
-    folders: Sequence[Mapping[str, object]] = (),
-    document_groups: Sequence[Mapping[str, object]] = (),
 ) -> Dict[str, object]:
     """Return the unified library payload for every source.
 
@@ -259,14 +253,7 @@ def build_library(
                 item["author"] = explicit_responsibility
             else:
                 item["author"] = inferred_author
-        bibliographic = (
-            item.get("bibliographic_metadata")
-            if isinstance(item.get("bibliographic_metadata"), Mapping)
-            else {}
-        )
-        language_code = _first_valid(
-            bibliographic.get("language_code"), item.get("language_code")
-        ) or _item_language_code(
+        language_code = _item_language_code(
             language_samples.get(source_id),
             item.get("title"),
             item.get("author"),
@@ -282,6 +269,7 @@ def build_library(
                 item.get("title"), item.get("author"), item.get("file_name")
             )
         )
+        bibliographic = item.get("bibliographic_metadata") if isinstance(item.get("bibliographic_metadata"), Mapping) else {}
         item["document_type"] = (
             item.get("document_type")
             or bibliographic.get("document_type")
@@ -293,8 +281,6 @@ def build_library(
         "stats": calibration["stats"],
         "volumes": normalized_volumes,
         "works": list(works),
-        "folders": [dict(item) for item in folders],
-        "document_groups": [dict(item) for item in document_groups],
     }
 
 
@@ -328,8 +314,6 @@ def summarize_library(payload: Mapping[str, object]) -> Dict[str, object]:
         "items": items,
         "stats": payload.get("stats") or {},
         "volumes": list(payload.get("volumes") or []),
-        "folders": list(payload.get("folders") or []),
-        "document_groups": list(payload.get("document_groups") or []),
     }
 
 
@@ -417,7 +401,7 @@ def build_calibration_library(
         run = latest_runs.get(source_id, {})
         metadata = source.get("bibliographic_metadata") if isinstance(source.get("bibliographic_metadata"), Mapping) else {}
         bibliographic = dict(metadata)
-        for field in BIBLIOGRAPHIC_FIELDS:
+        for field in METADATA_FIELDS:
             for candidate in (document.get(field), source.get(field)):
                 if is_valid_bibliographic_value(candidate):
                     bibliographic[field] = candidate

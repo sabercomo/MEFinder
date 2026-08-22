@@ -85,8 +85,6 @@ class IndexRuntime:
                 "source_files": list(self._sources),
                 "volumes": list(self._volumes),
                 "works": list(self._works),
-                "folders": list(self._folders),
-                "document_groups": list(self._document_groups),
             }
 
     def source(self, source_file_id: str) -> Optional[Dict[str, object]]:
@@ -217,22 +215,12 @@ class IndexRuntime:
                     raise
                 time.sleep(0.05 * (2**attempt))
 
-        (
-            sources,
-            volumes,
-            works,
-            folders,
-            document_groups,
-            metadata,
-            source_files,
-        ) = self._catalog_from(engine)
+        sources, volumes, works, metadata, source_files = self._catalog_from(engine)
         indexed_source_ids = set(source_files)
         with self._state_lock:
             self._sources = sources
             self._volumes = volumes
             self._works = works
-            self._folders = folders
-            self._document_groups = document_groups
             self._index_metadata = metadata
             self._source_files = source_files
             self._rebuilding = False
@@ -250,8 +238,6 @@ class IndexRuntime:
             self._sources,
             self._volumes,
             self._works,
-            self._folders,
-            self._document_groups,
             self._index_metadata,
             self._source_files,
         ) = self._catalog_from(engine)
@@ -263,28 +249,16 @@ class IndexRuntime:
         List[Dict[str, object]],
         List[Dict[str, object]],
         List[Dict[str, object]],
-        List[Dict[str, object]],
-        List[Dict[str, object]],
         Dict[str, object],
         Dict[str, Dict[str, object]],
     ]:
         sources = list(engine.index.get("source_files", []))
         volumes = list(engine.index.get("volumes", []))
         works = list(engine.index.get("works", []))
-        folders = list(engine.index.get("folders", []))
-        document_groups = list(engine.index.get("document_groups", []))
         metadata = dict(engine.index.get("metadata", {}))
         source_files = {
             str(item.get("source_file_id")): item
             for item in sources
             if item.get("source_file_id")
         }
-        return (
-            sources,
-            volumes,
-            works,
-            folders,
-            document_groups,
-            metadata,
-            source_files,
-        )
+        return sources, volumes, works, metadata, source_files

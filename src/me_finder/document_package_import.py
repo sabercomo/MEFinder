@@ -10,11 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .bibliographic_metadata import (
-    BIBLIOGRAPHIC_FIELDS,
-    canonical_metadata,
-    normalize_language_code,
-)
+from .bibliographic_metadata import METADATA_FIELDS
 from .document_export import (
     DocumentExportError,
     ExportedDocument,
@@ -22,7 +18,6 @@ from .document_export import (
     read_document_export,
 )
 from .normalization import normalize_pdf_text
-from .version_metadata import canonical_version_metadata
 from .pdf_extractors import (
     import_run_record,
     make_pdf_paragraphs,
@@ -43,7 +38,6 @@ class DocumentPackage:
     pages: Sequence[Dict[str, object]]
     title: str
     bibliographic_metadata: Dict[str, object]
-    version_metadata: Dict[str, str]
     parser_provider: str
     parser_model: Optional[str]
     parser_version: Optional[str]
@@ -86,15 +80,6 @@ def _from_export(exported: ExportedDocument) -> DocumentPackage:
         for key in ("isbn", "doi", "issn"):
             if external_ids.get(key) not in (None, ""):
                 metadata.setdefault(key, external_ids[key])
-    try:
-        if metadata.get("language_code") not in (None, ""):
-            metadata["language_code"] = normalize_language_code(
-                metadata["language_code"]
-            )
-        metadata = canonical_metadata({"bibliographic_metadata": metadata})
-        version_metadata = canonical_version_metadata(manifest)
-    except ValueError as exc:
-        raise DocumentPackageImportError(f"文档包元数据无效：{exc}") from exc
     title = str(
         metadata.get("title")
         or document.get("title")
@@ -115,7 +100,6 @@ def _from_export(exported: ExportedDocument) -> DocumentPackage:
         pages=pages,
         title=title or "未命名文献",
         bibliographic_metadata=metadata,
-        version_metadata=version_metadata,
         parser_provider=str(parser.get("provider") or "mefinder-document-import"),
         parser_model=_optional_text(parser.get("model")),
         parser_version=_optional_text(parser.get("version")),
@@ -193,8 +177,6 @@ def build_document_package_records(
         "imported_document_package": Path(package_path).name,
     }
     _attach_metadata(source, metadata)
-    if package.version_metadata:
-        source["version_metadata"] = dict(package.version_metadata)
     volume = {
         "volume_id": document_id,
         "source_type": "pdf",
@@ -406,7 +388,7 @@ def _audit_issues(
 
 
 def _attach_metadata(source: Dict[str, object], metadata: Mapping[str, object]) -> None:
-    allowed = (*BIBLIOGRAPHIC_FIELDS, "document_type", "metadata_status", "metadata_source")
+    allowed = (*METADATA_FIELDS, "document_type", "metadata_status", "metadata_source")
     for key in allowed:
         if metadata.get(key) not in (None, ""):
             source[key] = metadata[key]

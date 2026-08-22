@@ -11,7 +11,7 @@ from typing import Callable, Dict, Iterable, List, Mapping, Optional, Protocol, 
 
 from ..app_context import AppPaths
 from ..bibliographic_metadata import (
-    BIBLIOGRAPHIC_FIELDS,
+    METADATA_FIELDS,
     canonical_metadata,
     manual_metadata,
     metadata_missing_fields,
@@ -127,7 +127,7 @@ class BibliographicMetadataCoordinator:
         canonicalize: CanonicalizeMetadata = canonical_metadata,
         missing_fields: MissingMetadataFields = metadata_missing_fields,
         build_manual_metadata: BuildManualMetadata = manual_metadata,
-        metadata_fields: Sequence[str] = BIBLIOGRAPHIC_FIELDS,
+        metadata_fields: Sequence[str] = METADATA_FIELDS,
     ) -> None:
         self.paths = paths
         self._queries = queries

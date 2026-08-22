@@ -109,28 +109,9 @@ class RuntimePageMappingTests(unittest.TestCase):
                     "publisher": "上海人民出版社",
                     "publish_year": "2023",
                     "isbn": "",
-                    "language_code": "zh-Hans",
-                    "edition": "第一版",
                 }
             )
             update_metadata_in_database(database, "pdf-test", metadata)
-            connection = sqlite3.connect(str(database))
-            try:
-                stored_source = json.loads(
-                    connection.execute(
-                        "SELECT payload_json FROM source_files WHERE source_file_id = ?",
-                        ("pdf-test",),
-                    ).fetchone()[0]
-                )
-            finally:
-                connection.close()
-            self.assertEqual(
-                stored_source["bibliographic_metadata"]["language_code"],
-                "zh-Hans",
-            )
-            self.assertEqual(
-                stored_source["bibliographic_metadata"]["edition"], "第一版"
-            )
             engine = SearchEngine(database)
             try:
                 search_result = engine.search("测试段落", mode="exact", source_type="pdf")
@@ -176,8 +157,6 @@ class RuntimePageMappingTests(unittest.TestCase):
         self.assertIn("data.query_notice", HTML)
         self.assertIn("field('doi','doi','DOI'", HTML)
         self.assertIn("field('issn','issn','ISSN'", HTML)
-        self.assertIn("field('language-code','language_code','语言代码'", HTML)
-        self.assertIn("field('edition','edition','版次'", HTML)
         self.assertIn("if (!existing)", HTML)
 
 

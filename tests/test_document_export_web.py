@@ -60,10 +60,7 @@ def export_fixture(root: Path, *, source_type: str = "pdf") -> tuple[Path, str]:
                         "title": "导出测试：简繁體",
                         "author": "测试者",
                         "isbn": "978-7-0000-0000-1",
-                        "language_code": "zh-Hant",
-                        "edition": "增订版",
                     },
-                    "version_metadata": {"version_label": "繁体增订版"},
                     "pdf_profile": {
                         "pdf_page_count": 3,
                         "parser": "mineru",
@@ -125,17 +122,6 @@ class IndexedDocumentExportTests(unittest.TestCase):
             self.assertEqual(exported.manifest["parser"]["provider"], "mineru-cloud")
             self.assertEqual(
                 exported.manifest["external_ids"]["isbn"], "978-7-0000-0000-1"
-            )
-            self.assertEqual(
-                exported.manifest["bibliographic_metadata"]["language_code"],
-                "zh-Hant",
-            )
-            self.assertEqual(
-                exported.manifest["bibliographic_metadata"]["edition"], "增订版"
-            )
-            self.assertEqual(
-                exported.manifest["version_metadata"],
-                {"version_label": "繁体增订版"},
             )
             self.assertEqual(
                 [page["text"] for page in exported.pages],

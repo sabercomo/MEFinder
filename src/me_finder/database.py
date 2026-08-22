@@ -18,13 +18,11 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
-
-from .version_metadata import canonical_version_metadata
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 2
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
 DATABASE_REPLACE_ATTEMPTS = 15
@@ -33,26 +31,11 @@ DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 3;
+PRAGMA user_version = 2;
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
     value_json TEXT NOT NULL
-);
-
-CREATE TABLE folders (
-    folder_id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    parent_id TEXT REFERENCES folders(folder_id) ON DELETE SET NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE document_groups (
-    document_group_id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE source_files (
@@ -61,8 +44,6 @@ CREATE TABLE source_files (
     file_name TEXT,
     relative_path TEXT,
     volume_number INTEGER,
-    folder_id TEXT REFERENCES folders(folder_id) ON DELETE SET NULL,
-    document_group_id TEXT REFERENCES document_groups(document_group_id) ON DELETE SET NULL,
     payload_json TEXT NOT NULL
 );
 
@@ -154,215 +135,7 @@ CREATE INDEX idx_paragraphs_searchable ON paragraphs(eligible_for_search, source
 CREATE INDEX idx_paragraphs_volume_position ON paragraphs(volume_id, paragraph_index);
 CREATE INDEX idx_paragraphs_source_position ON paragraphs(source_file_id, paragraph_index);
 CREATE INDEX idx_pdf_pages_source_page ON pdf_pages(source_file_id, pdf_page_index);
-CREATE INDEX idx_source_files_folder ON source_files(folder_id);
-CREATE INDEX idx_source_files_document_group ON source_files(document_group_id);
-CREATE INDEX idx_folders_parent ON folders(parent_id);
 """
-
-
-def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
-    return connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-        (table_name,),
-    ).fetchone() is not None
-
-
-def _table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
-    return {
-        str(row[1])
-        for row in connection.execute(f"PRAGMA table_info({table_name})")
-    }
-
-
-def _install_library_organization_schema(
-    connection: sqlite3.Connection,
-) -> bool:
-    """Install the additive v3 organization schema on an open transaction."""
-
-    changed = False
-    if not _table_exists(connection, "folders"):
-        connection.execute(
-            """
-            CREATE TABLE folders (
-                folder_id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                parent_id TEXT REFERENCES folders(folder_id) ON DELETE SET NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-        changed = True
-    if not _table_exists(connection, "document_groups"):
-        connection.execute(
-            """
-            CREATE TABLE document_groups (
-                document_group_id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-        changed = True
-
-    source_columns = _table_columns(connection, "source_files")
-    if "folder_id" not in source_columns:
-        connection.execute(
-            "ALTER TABLE source_files ADD COLUMN folder_id TEXT "
-            "REFERENCES folders(folder_id) ON DELETE SET NULL"
-        )
-        changed = True
-    if "document_group_id" not in source_columns:
-        connection.execute(
-            "ALTER TABLE source_files ADD COLUMN document_group_id TEXT "
-            "REFERENCES document_groups(document_group_id) ON DELETE SET NULL"
-        )
-        changed = True
-
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_source_files_folder "
-        "ON source_files(folder_id)"
-    )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_source_files_document_group "
-        "ON source_files(document_group_id)"
-    )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)"
-    )
-    return changed
-
-
-def migrate_database_schema(db_path: Path) -> bool:
-    """Transactionally upgrade an existing index without rebuilding content."""
-
-    path = Path(db_path)
-    if not path.exists():
-        return False
-    connection = sqlite3.connect(str(path))
-    try:
-        connection.execute("PRAGMA busy_timeout = 30000")
-        connection.execute("PRAGMA foreign_keys = ON")
-        current_version = int(
-            connection.execute("PRAGMA user_version").fetchone()[0]
-        )
-        if current_version > DATABASE_SCHEMA_VERSION:
-            raise ValueError(
-                "数据库版本高于当前应用支持的版本："
-                f"{current_version} > {DATABASE_SCHEMA_VERSION}"
-            )
-        connection.execute("BEGIN IMMEDIATE")
-        changed = _install_library_organization_schema(connection)
-        if current_version != DATABASE_SCHEMA_VERSION:
-            changed = True
-        if _table_exists(connection, "metadata"):
-            connection.execute(
-                "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-                ("database_schema_version", _json(DATABASE_SCHEMA_VERSION)),
-            )
-        connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
-        connection.commit()
-        return changed
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-
-
-def _load_library_organization(db_path: Path) -> Dict[str, object]:
-    """Read folders, groups and memberships from a database being replaced."""
-
-    snapshot: Dict[str, object] = {
-        "folders": [],
-        "document_groups": [],
-        "memberships": {},
-        "version_metadata": {},
-    }
-    path = Path(db_path)
-    if not path.exists():
-        return snapshot
-    with path.open("rb") as stream:
-        if stream.read(16) != b"SQLite format 3\x00":
-            return snapshot
-    connection = sqlite3.connect(str(path))
-    connection.row_factory = sqlite3.Row
-    try:
-        if _table_exists(connection, "folders"):
-            snapshot["folders"] = [
-                dict(row)
-                for row in connection.execute(
-                    "SELECT folder_id, name, parent_id, created_at, updated_at "
-                    "FROM folders ORDER BY created_at, folder_id"
-                )
-            ]
-        if _table_exists(connection, "document_groups"):
-            snapshot["document_groups"] = [
-                dict(row)
-                for row in connection.execute(
-                    "SELECT document_group_id, title, created_at, updated_at "
-                    "FROM document_groups ORDER BY created_at, document_group_id"
-                )
-            ]
-        source_columns = _table_columns(connection, "source_files")
-        if {"folder_id", "document_group_id"}.issubset(source_columns):
-            snapshot["memberships"] = {
-                str(row["source_file_id"]): (
-                    row["folder_id"],
-                    row["document_group_id"],
-                )
-                for row in connection.execute(
-                    "SELECT source_file_id, folder_id, document_group_id "
-                    "FROM source_files"
-                )
-            }
-        if {"source_file_id", "payload_json"}.issubset(source_columns):
-            saved_version_metadata: Dict[str, Dict[str, str]] = {}
-            for row in connection.execute(
-                "SELECT source_file_id, payload_json FROM source_files"
-            ):
-                payload = json.loads(row["payload_json"])
-                if isinstance(payload, dict) and payload.get("version_metadata"):
-                    saved_version_metadata[str(row["source_file_id"])] = (
-                        canonical_version_metadata(payload)
-                    )
-            snapshot["version_metadata"] = saved_version_metadata
-        return snapshot
-    finally:
-        connection.close()
-
-
-def _merge_organization_rows(
-    existing: Sequence[Dict[str, object]],
-    incoming: object,
-    identity_field: str,
-) -> List[Dict[str, object]]:
-    rows = {
-        str(item.get(identity_field)): dict(item)
-        for item in existing
-        if item.get(identity_field)
-    }
-    if isinstance(incoming, list):
-        for item in incoming:
-            if isinstance(item, dict) and item.get(identity_field):
-                rows[str(item[identity_field])] = dict(item)
-    return list(rows.values())
-
-
-def _source_organization(
-    source: Dict[str, object],
-    existing_memberships: Mapping[str, Tuple[object, object]],
-) -> Tuple[object, object]:
-    source_id = str(source.get("source_file_id") or "")
-    previous = existing_memberships.get(source_id, (None, None))
-    folder_id = source.get("folder_id") if "folder_id" in source else previous[0]
-    group_id = (
-        source.get("document_group_id")
-        if "document_group_id" in source
-        else previous[1]
-    )
-    return folder_id, group_id
 
 
 # These four large strings already have authoritative typed columns.  Keeping
@@ -563,7 +336,6 @@ def ensure_database_search_index(db_path: Path) -> bool:
     """Upgrade paragraph storage and create FTS once, with scan fallback."""
 
     db_path = Path(db_path)
-    migrate_database_schema(db_path)
     with _FTS_INSTALL_LOCK:
         connection = sqlite3.connect(str(db_path))
         try:
@@ -637,8 +409,6 @@ def optimize_database_storage(db_path: Path) -> bool:
         connection.execute("BEGIN IMMEDIATE")
         table_names = (
             "metadata",
-            "folders",
-            "document_groups",
             "source_files",
             "volumes",
             "works",
@@ -1202,8 +972,6 @@ def _estimate_database_build_size(index: Dict[str, object]) -> int:
     if isinstance(metadata, dict):
         estimated += len(_json(metadata).encode("utf-8"))
     for table_name in (
-        "folders",
-        "document_groups",
         "source_files",
         "volumes",
         "works",
@@ -1267,7 +1035,6 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
                 _estimate_database_build_size(index),
             ),
         )
-    existing_organization = _load_library_organization(db_path)
 
     raw_source_files = [
         item for item in index.get("source_files", []) if isinstance(item, dict)
@@ -1275,18 +1042,6 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     source_files, duplicate_source_count = _deduplicate_source_files(
         raw_source_files
     )
-    folders = _merge_organization_rows(
-        existing_organization["folders"],
-        index.get("folders"),
-        "folder_id",
-    )
-    document_groups = _merge_organization_rows(
-        existing_organization["document_groups"],
-        index.get("document_groups"),
-        "document_group_id",
-    )
-    existing_memberships = existing_organization["memberships"]
-    existing_version_metadata = existing_organization["version_metadata"]
     volumes, duplicate_volume_count = _deduplicate_keyed_rows(
         [item for item in index.get("volumes", []) if isinstance(item, dict)],
         table_name="volumes",
@@ -1370,88 +1125,29 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
                 "strategy": "first_record_wins_and_fills_missing_fields",
                 "merged_rows": deduplicated_rows,
             }
-        source_rows = []
-        for item in source_files:
-            if not item.get("source_file_id"):
-                continue
-            folder_id, document_group_id = _source_organization(
-                item, existing_memberships
-            )
-            version_metadata = (
-                canonical_version_metadata(item)
-                if "version_metadata" in item
-                else dict(existing_version_metadata.get(str(item["source_file_id"]), {}))
-            )
-            source_payload = {
-                **item,
-                "folder_id": folder_id,
-                "document_group_id": document_group_id,
-            }
-            if version_metadata:
-                source_payload["version_metadata"] = version_metadata
-            else:
-                source_payload.pop("version_metadata", None)
-            source_rows.append(
+        connection.executemany(
+            "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
+            [(str(key), _json(value)) for key, value in metadata.items()],
+        )
+
+        connection.executemany(
+            """
+            INSERT INTO source_files(
+                source_file_id, source_type, file_name, relative_path, volume_number, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
                 (
                     str(item.get("source_file_id") or ""),
                     str(item.get("source_type") or "word"),
                     item.get("file_name"),
                     item.get("relative_path"),
                     _int_or_none(item.get("volume_number")),
-                    folder_id,
-                    document_group_id,
-                    _json(source_payload),
+                    _json(item),
                 )
-            )
-        connection.executemany(
-            "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
-            [(str(key), _json(value)) for key, value in metadata.items()],
-        )
-
-        organization_timestamp = datetime.now(timezone.utc).isoformat()
-        connection.executemany(
-            """
-            INSERT INTO folders(folder_id, name, parent_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("folder_id") or ""),
-                    str(item.get("name") or ""),
-                    item.get("parent_id"),
-                    str(item.get("created_at") or organization_timestamp),
-                    str(item.get("updated_at") or organization_timestamp),
-                )
-                for item in folders
-                if item.get("folder_id")
+                for item in source_files
+                if item.get("source_file_id")
             ],
-        )
-        connection.executemany(
-            """
-            INSERT INTO document_groups(
-                document_group_id, title, created_at, updated_at
-            ) VALUES (?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("document_group_id") or ""),
-                    str(item.get("title") or ""),
-                    str(item.get("created_at") or organization_timestamp),
-                    str(item.get("updated_at") or organization_timestamp),
-                )
-                for item in document_groups
-                if item.get("document_group_id")
-            ],
-        )
-
-        connection.executemany(
-            """
-            INSERT INTO source_files(
-                source_file_id, source_type, file_name, relative_path, volume_number,
-                folder_id, document_group_id, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            source_rows,
         )
 
         connection.executemany(
@@ -1641,399 +1337,21 @@ def _load_payload_rows(connection: sqlite3.Connection, table: str, order_by: str
     return [json.loads(row[0]) for row in connection.execute(f"SELECT payload_json FROM {table} ORDER BY {order_by}")]
 
 
-def _load_source_rows(connection: sqlite3.Connection) -> List[Dict[str, object]]:
-    result: List[Dict[str, object]] = []
-    for payload_json, folder_id, document_group_id in connection.execute(
-        "SELECT payload_json, folder_id, document_group_id "
-        "FROM source_files ORDER BY source_file_id"
-    ):
-        payload = json.loads(payload_json)
-        payload["folder_id"] = folder_id
-        payload["document_group_id"] = document_group_id
-        result.append(payload)
-    return result
-
-
 def load_database_index(db_path: Path) -> Dict[str, object]:
     """Load the small metadata/catalog portion used by the Web UI."""
 
-    migrate_database_schema(db_path)
     connection = sqlite3.connect(str(db_path))
     try:
         metadata = {str(row[0]): json.loads(row[1]) for row in connection.execute("SELECT key, value_json FROM metadata")}
         result = {
             "metadata": metadata,
-            "source_files": _load_source_rows(connection),
+            "source_files": _load_payload_rows(connection, "source_files", "source_file_id"),
             "volumes": _load_payload_rows(connection, "volumes", "volume_id"),
             "works": _load_payload_rows(connection, "works", "rowid"),
-            "folders": [
-                dict(zip(
-                    ("folder_id", "name", "parent_id", "created_at", "updated_at"),
-                    row,
-                ))
-                for row in connection.execute(
-                    "SELECT folder_id, name, parent_id, created_at, updated_at "
-                    "FROM folders ORDER BY name, folder_id"
-                )
-            ],
-            "document_groups": [
-                dict(zip(
-                    ("document_group_id", "title", "created_at", "updated_at"),
-                    row,
-                ))
-                for row in connection.execute(
-                    "SELECT document_group_id, title, created_at, updated_at "
-                    "FROM document_groups ORDER BY title, document_group_id"
-                )
-            ],
         }
         return result
     finally:
         connection.close()
-
-
-def _organization_name(value: object, label: str) -> str:
-    name = str(value or "").strip()
-    if not name:
-        raise ValueError(f"{label}不能为空。")
-    if len(name) > 200:
-        raise ValueError(f"{label}不能超过 200 个字符。")
-    return name
-
-
-def _organization_source_ids(values: Sequence[object]) -> List[str]:
-    source_ids: List[str] = []
-    for value in values:
-        source_id = str(value or "").strip()
-        if source_id and source_id not in source_ids:
-            source_ids.append(source_id)
-    if not source_ids:
-        raise ValueError("至少选择一份文献。")
-    return source_ids
-
-
-def create_folder(
-    name: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-    *,
-    parent_id: object = None,
-) -> Dict[str, object]:
-    folder_name = _organization_name(name, "文件夹名称")
-    normalized_parent = str(parent_id or "").strip() or None
-    folder_id = f"folder-{uuid.uuid4().hex}"
-    timestamp = datetime.now(timezone.utc).isoformat()
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        if normalized_parent and connection.execute(
-            "SELECT 1 FROM folders WHERE folder_id = ?", (normalized_parent,)
-        ).fetchone() is None:
-            raise ValueError("父文件夹不存在。")
-        connection.execute(
-            "INSERT INTO folders(folder_id, name, parent_id, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (folder_id, folder_name, normalized_parent, timestamp, timestamp),
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "folder_id": folder_id,
-        "name": folder_name,
-        "parent_id": normalized_parent,
-        "created_at": timestamp,
-        "updated_at": timestamp,
-    }
-
-
-def rename_folder(
-    folder_id: object,
-    name: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    normalized_id = str(folder_id or "").strip()
-    if not normalized_id:
-        raise ValueError("folder_id is required")
-    folder_name = _organization_name(name, "文件夹名称")
-    timestamp = datetime.now(timezone.utc).isoformat()
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        cursor = connection.execute(
-            "UPDATE folders SET name = ?, updated_at = ? WHERE folder_id = ?",
-            (folder_name, timestamp, normalized_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("文件夹不存在。")
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {"folder_id": normalized_id, "name": folder_name, "updated_at": timestamp}
-
-
-def delete_folder(
-    folder_id: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    normalized_id = str(folder_id or "").strip()
-    if not normalized_id:
-        raise ValueError("folder_id is required")
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        if connection.execute(
-            "SELECT 1 FROM folders WHERE folder_id = ?", (normalized_id,)
-        ).fetchone() is None:
-            raise ValueError("文件夹不存在。")
-        moved_count = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM source_files WHERE folder_id = ?",
-                (normalized_id,),
-            ).fetchone()[0]
-        )
-        connection.execute(
-            "UPDATE source_files SET folder_id = NULL WHERE folder_id = ?",
-            (normalized_id,),
-        )
-        connection.execute(
-            "UPDATE folders SET parent_id = NULL WHERE parent_id = ?",
-            (normalized_id,),
-        )
-        connection.execute("DELETE FROM folders WHERE folder_id = ?", (normalized_id,))
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {"folder_id": normalized_id, "moved_to_root_count": moved_count}
-
-
-def _assign_sources_to_organization(
-    source_file_ids: Sequence[object],
-    target_id: object,
-    db_path: Path,
-    *,
-    table_name: str,
-    identity_column: str,
-    source_column: str,
-    missing_message: str,
-) -> Dict[str, object]:
-    source_ids = _organization_source_ids(source_file_ids)
-    normalized_target = str(target_id or "").strip() or None
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        if normalized_target and connection.execute(
-            f"SELECT 1 FROM {table_name} WHERE {identity_column} = ?",
-            (normalized_target,),
-        ).fetchone() is None:
-            raise ValueError(missing_message)
-        for source_id in source_ids:
-            cursor = connection.execute(
-                f"UPDATE source_files SET {source_column} = ? WHERE source_file_id = ?",
-                (normalized_target, source_id),
-            )
-            if cursor.rowcount != 1:
-                raise ValueError(f"文献不存在：{source_id}")
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "source_file_ids": source_ids,
-        source_column: normalized_target,
-        "updated_count": len(source_ids),
-    }
-
-
-def move_sources_to_folder(
-    source_file_ids: Sequence[object],
-    folder_id: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    return _assign_sources_to_organization(
-        source_file_ids,
-        folder_id,
-        Path(db_path),
-        table_name="folders",
-        identity_column="folder_id",
-        source_column="folder_id",
-        missing_message="文件夹不存在。",
-    )
-
-
-def create_document_group(
-    title: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    group_title = _organization_name(title, "作品组标题")
-    group_id = f"document-group-{uuid.uuid4().hex}"
-    timestamp = datetime.now(timezone.utc).isoformat()
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        connection.execute(
-            "INSERT INTO document_groups(document_group_id, title, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?)",
-            (group_id, group_title, timestamp, timestamp),
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "document_group_id": group_id,
-        "title": group_title,
-        "created_at": timestamp,
-        "updated_at": timestamp,
-    }
-
-
-def rename_document_group(
-    document_group_id: object,
-    title: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    normalized_id = str(document_group_id or "").strip()
-    if not normalized_id:
-        raise ValueError("document_group_id is required")
-    group_title = _organization_name(title, "作品组标题")
-    timestamp = datetime.now(timezone.utc).isoformat()
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        cursor = connection.execute(
-            "UPDATE document_groups SET title = ?, updated_at = ? "
-            "WHERE document_group_id = ?",
-            (group_title, timestamp, normalized_id),
-        )
-        if cursor.rowcount != 1:
-            raise ValueError("作品组不存在。")
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "document_group_id": normalized_id,
-        "title": group_title,
-        "updated_at": timestamp,
-    }
-
-
-def delete_document_group(
-    document_group_id: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    normalized_id = str(document_group_id or "").strip()
-    if not normalized_id:
-        raise ValueError("document_group_id is required")
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        if connection.execute(
-            "SELECT 1 FROM document_groups WHERE document_group_id = ?",
-            (normalized_id,),
-        ).fetchone() is None:
-            raise ValueError("作品组不存在。")
-        member_count = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM source_files WHERE document_group_id = ?",
-                (normalized_id,),
-            ).fetchone()[0]
-        )
-        connection.execute(
-            "UPDATE source_files SET document_group_id = NULL "
-            "WHERE document_group_id = ?",
-            (normalized_id,),
-        )
-        connection.execute(
-            "DELETE FROM document_groups WHERE document_group_id = ?",
-            (normalized_id,),
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {"document_group_id": normalized_id, "unlinked_count": member_count}
-
-
-def assign_sources_to_document_group(
-    source_file_ids: Sequence[object],
-    document_group_id: object,
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    return _assign_sources_to_organization(
-        source_file_ids,
-        document_group_id,
-        Path(db_path),
-        table_name="document_groups",
-        identity_column="document_group_id",
-        source_column="document_group_id",
-        missing_message="作品组不存在。",
-    )
-
-
-def update_source_version_metadata(
-    source_file_id: object,
-    version_metadata: Mapping[str, object],
-    db_path: Path = DEFAULT_DATABASE_PATH,
-) -> Dict[str, object]:
-    source_id = str(source_file_id or "").strip()
-    if not source_id:
-        raise ValueError("source_file_id is required")
-    canonical = canonical_version_metadata(version_metadata)
-    migrate_database_schema(db_path)
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        row = connection.execute(
-            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
-            (source_id,),
-        ).fetchone()
-        if row is None:
-            raise ValueError("文献不存在。")
-        source = json.loads(row[0])
-        if canonical:
-            source["version_metadata"] = canonical
-        else:
-            source.pop("version_metadata", None)
-        connection.execute(
-            "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
-            (_json(source), source_id),
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {"source_file_id": source_id, "version_metadata": canonical}
 
 
 def replace_source_in_database(
@@ -2051,43 +1369,11 @@ def replace_source_in_database(
     source = sources[0]
     source_id = str(source["source_file_id"])
     db_path = Path(db_path)
-    migrate_database_schema(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
     connection = sqlite3.connect(str(db_path))
     try:
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
-        organization_row = connection.execute(
-            "SELECT folder_id, document_group_id, payload_json FROM source_files "
-            "WHERE source_file_id = ?",
-            (source_id,),
-        ).fetchone()
-        folder_id = (
-            organization_row[0]
-            if organization_row is not None
-            else source.get("folder_id")
-        )
-        document_group_id = (
-            organization_row[1]
-            if organization_row is not None
-            else source.get("document_group_id")
-        )
-        version_metadata = (
-            canonical_version_metadata(source)
-            if "version_metadata" in source
-            else canonical_version_metadata(json.loads(organization_row[2]))
-            if organization_row is not None
-            else {}
-        )
-        source_payload = {
-            **source,
-            "folder_id": folder_id,
-            "document_group_id": document_group_id,
-        }
-        if version_metadata:
-            source_payload["version_metadata"] = version_metadata
-        else:
-            source_payload.pop("version_metadata", None)
         old_volume_ids = [
             str(row[0])
             for row in connection.execute(
@@ -2120,9 +1406,8 @@ def replace_source_in_database(
         connection.execute(
             """
             INSERT INTO source_files(
-                source_file_id, source_type, file_name, relative_path, volume_number,
-                folder_id, document_group_id, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                source_file_id, source_type, file_name, relative_path, volume_number, payload_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 source_id,
@@ -2130,9 +1415,7 @@ def replace_source_in_database(
                 source.get("file_name"),
                 source.get("relative_path"),
                 _int_or_none(source.get("volume_number")),
-                folder_id,
-                document_group_id,
-                _json(source_payload),
+                _json(source),
             ),
         )
         volumes = [item for item in extracted.get("volumes", []) if isinstance(item, dict)]

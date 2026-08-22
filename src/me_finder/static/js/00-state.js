@@ -24,12 +24,8 @@ let citationStyle = loadLocalSelectedCitationStyle() || 'chinese';
 let searchSourceType = 'all';
 let searchLimit = 10;
 let searchDocumentId = '';
-let searchScopeType = 'all';
-let searchScopeId = '';
 let searchSourceFiles = [];
 let searchVolumes = [];
-let searchFolders = [];
-let searchDocumentGroups = [];
 let searchDocumentsLoaded = false;
 // 文献库摘要在搜索下拉与文献库页之间共用一份：两处并发打开时只发一次请求。
 let libraryCatalog = null;
@@ -41,8 +37,6 @@ let libSources = [];
 let libVolumes = [];
 let libVolumeBySource = new Map();
 let libWorks = [];
-let libFolders = [];
-let libDocumentGroups = [];
 let libStats = null;
 let libLoaded = false;
 let libDetailLoaded = {};
@@ -60,20 +54,10 @@ let libDocTypeFilter = 'all';
 // 数据源永远按文字系统事实选择（中文→知网，其余→Crossref / 图书目录）。
 let libDefaultLanguage = loadLibDefaultLanguage();
 let libStatusFilter = 'all';
-let libScopeType = 'all';
-let libScopeId = '';
-try {
-  var storedLibraryScope = JSON.parse(localStorage.getItem('meFinderLibraryScopeV1') || '{}');
-  if (['all','root','folder','document_group'].indexOf(storedLibraryScope.type) >= 0) {
-    libScopeType = storedLibraryScope.type;
-    libScopeId = String(storedLibraryScope.id || '');
-  }
-} catch (_) {}
 let libSelectedId = null;
 let libDeleteSelection = new Set();
 let libraryExportRunning = false;
 let libraryDragSelection = null;
-let libraryOrganizationAction = null;
 let suppressLibrarySelectionClick = false;
 let libViewMode = localStorage.getItem('meFinderLibraryView') === 'grid' ? 'grid' : 'list';
 let libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at';

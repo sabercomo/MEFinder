@@ -3,271 +3,23 @@ function applyLibraryCatalog(data) {
   libSources = data.items || [];
   libVolumes = data.volumes || [];
   libVolumeBySource = buildVolumeIndex(libVolumes);
-  libFolders = data.folders || [];
-  libDocumentGroups = data.document_groups || [];
-  if (libScopeType === 'folder' && !libFolders.some(function(item) { return item.folder_id === libScopeId; })) {
-    libScopeType = 'all';
-    libScopeId = '';
-  }
-  if (libScopeType === 'document_group' && !libDocumentGroups.some(function(item) { return item.document_group_id === libScopeId; })) {
-    libScopeType = 'all';
-    libScopeId = '';
-  }
   libStats = data.stats || null;
   libLoaded = true;
   // 搜索下拉与文献库共用同一份摘要，避免两处各拉一次。
   searchSourceFiles = libSources;
   searchVolumes = libVolumes;
-  searchFolders = libFolders;
-  searchDocumentGroups = libDocumentGroups;
   searchDocumentsLoaded = true;
 }
 
 async function loadLibrary(force) {
   try {
     applyLibraryCatalog(await fetchLibraryCatalog(force));
-    renderLibraryScopes();
     renderLibraryStats();
     syncLibraryViewButtons();
     syncLibrarySortControls();
     renderLibraryList();
-    applyLibraryRailState();
   } catch(e) {
     document.getElementById('library-list').innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">' + esc(e.message || '文献库加载失败') + '</div></div>';
-  }
-}
-
-function scopedLibrarySources() {
-  return libSources.filter(function(source) {
-    return libraryScopeMatches(source, libScopeType, libScopeId);
-  });
-}
-
-function persistLibraryScope() {
-  try {
-    localStorage.setItem('meFinderLibraryScopeV1', JSON.stringify({type:libScopeType, id:libScopeId}));
-  } catch (_) {}
-}
-
-async function setLibraryScope(scopeType, scopeId) {
-  if (!await guardLeaveDetail()) return;
-  libScopeType = ['root','folder','document_group'].indexOf(scopeType) >= 0 ? scopeType : 'all';
-  libScopeId = libScopeType === 'folder' || libScopeType === 'document_group' ? String(scopeId || '') : '';
-  persistLibraryScope();
-  closeLibDrawer();
-  clearLibrarySelection();
-  renderLibraryScopes();
-  renderLibraryStats();
-  renderLibraryList();
-}
-
-// 左栏折叠（方案 A）：常驻但可收起，状态记在本地，切页/重载后保持。
-function applyLibraryRailState() {
-  var body = document.querySelector('#page-library .library-body');
-  var btn = document.getElementById('library-fold-btn');
-  // 默认折叠：没存过偏好时收起左栏；用户手动展开后记住其选择（存 '0'）。
-  var raw = null;
-  try { raw = localStorage.getItem('meFinderLibraryRailCollapsed'); } catch (_) {}
-  var collapsed = raw === null ? true : raw === '1';
-  if (body) body.classList.toggle('rail-collapsed', collapsed);
-  if (btn) {
-    btn.classList.toggle('is-collapsed', collapsed);
-    btn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-    btn.setAttribute('aria-label', collapsed ? '展开文件夹栏' : '折叠文件夹栏');
-  }
-}
-
-function toggleLibraryRail() {
-  var body = document.querySelector('#page-library .library-body');
-  if (!body) return;
-  body.classList.add('rail-animated');  // 仅用户手动切换才播过渡；首帧不播
-  var collapsed = !body.classList.contains('rail-collapsed');
-  try { localStorage.setItem('meFinderLibraryRailCollapsed', collapsed ? '1' : '0'); } catch (_) {}
-  applyLibraryRailState();
-}
-
-function libraryScopeCount(type, id) {
-  return libSources.filter(function(source) {
-    return libraryScopeMatches(source, type, id);
-  }).length;
-}
-
-function libraryScopeButton(type, id, label, count, editable) {
-  var active = libScopeType === type && String(libScopeId || '') === String(id || '');
-  var idText = esc(String(id || ''));
-  var actions = editable
-    ? '<span class="library-scope-actions"><button type="button" title="重命名" onclick="openLibraryOrganizationModal(\'' + (type === 'folder' ? 'rename_folder' : 'rename_group') + '\',\'' + idText + '\')">•••</button><button type="button" title="删除" onclick="' + (type === 'folder' ? 'deleteLibraryFolder' : 'deleteLibraryDocumentGroup') + '(\'' + idText + '\')">×</button></span>'
-    : '';
-  return '<div class="library-scope-item' + (active ? ' is-active' : '') + '"><button class="library-scope-target" type="button" onclick="setLibraryScope(\'' + type + '\',\'' + idText + '\')"><span class="library-scope-name">' + esc(label) + '</span><span class="library-scope-count">' + count + '</span></button>' + actions + '</div>';
-}
-
-function renderLibraryScopes() {
-  var container = document.getElementById('library-scopes');
-  if (!container) return;
-  var folders = libFolders.slice().sort(function(a, b) { return calPinyinCollator.compare(a.name || '', b.name || ''); });
-  var groups = libDocumentGroups.slice().sort(function(a, b) { return calPinyinCollator.compare(a.title || '', b.title || ''); });
-  container.innerHTML = '<div class="library-scope-section">'
-    + '<div class="library-scope-heading">浏览</div>'
-    + libraryScopeButton('all', '', '全部文件', libSources.length, false)
-    + libraryScopeButton('root', '', '根目录', libraryScopeCount('root', ''), false)
-    + '</div><div class="library-scope-section"><div class="library-scope-heading"><span>文件夹</span><button type="button" title="新建文件夹" onclick="openLibraryOrganizationModal(\'create_folder\')">＋</button></div>'
-    + folders.map(function(folder) { return libraryScopeButton('folder', folder.folder_id, folder.name, libraryScopeCount('folder', folder.folder_id), true); }).join('')
-    + (folders.length ? '' : '<button type="button" class="library-scope-new" onclick="openLibraryOrganizationModal(\'create_folder\')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>新建文件夹</button>')
-    + '</div><div class="library-scope-section"><div class="library-scope-heading"><span>作品组</span><button type="button" title="创建作品组" onclick="openLibraryOrganizationModal(\'create_group\')">＋</button></div>'
-    + groups.map(function(group) { return libraryScopeButton('document_group', group.document_group_id, group.title, libraryScopeCount('document_group', group.document_group_id), true); }).join('')
-    + (groups.length ? '' : '<button type="button" class="library-scope-new" onclick="openLibraryOrganizationModal(\'create_group\')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>新建作品组</button>') + '</div>';
-}
-
-function openLibraryOrganizationModal(action, targetId) {
-  var modal = document.getElementById('library-organization-modal');
-  var title = document.getElementById('library-organization-title');
-  var input = document.getElementById('library-organization-input');
-  var select = document.getElementById('library-organization-select');
-  var hint = document.getElementById('library-organization-hint');
-  if (!modal || !title || !input || !select || !hint) return;
-  var selectedIds = Array.from(libDeleteSelection);
-  if ((action === 'move_sources' || action === 'assign_group') && !selectedIds.length) return;
-  libraryOrganizationAction = {action:action, targetId:String(targetId || ''), sourceIds:selectedIds};
-  input.hidden = true;
-  select.hidden = true;
-  hint.textContent = '';
-  if (action === 'create_folder') {
-    title.textContent = '新建文件夹';
-    input.value = '';
-    input.placeholder = '文件夹名称';
-    input.hidden = false;
-  } else if (action === 'rename_folder') {
-    var folder = libFolders.find(function(item) { return item.folder_id === targetId; });
-    title.textContent = '重命名文件夹';
-    input.value = folder ? folder.name : '';
-    input.hidden = false;
-  } else if (action === 'create_group') {
-    title.textContent = '创建作品组';
-    input.value = '';
-    input.placeholder = '作品标题';
-    input.hidden = false;
-  } else if (action === 'rename_group') {
-    var group = libDocumentGroups.find(function(item) { return item.document_group_id === targetId; });
-    title.textContent = '重命名作品组';
-    input.value = group ? group.title : '';
-    input.hidden = false;
-  } else if (action === 'move_sources') {
-    title.textContent = '移动 ' + selectedIds.length + ' 份文献';
-    select.innerHTML = '<option value="">根目录</option>' + libFolders.map(function(item) {
-      return '<option value="' + esc(item.folder_id) + '">' + esc(item.name) + '</option>';
-    }).join('');
-    select.hidden = false;
-    hint.textContent = '只改变文件所在位置，不影响索引、页码或作品组。';
-  } else if (action === 'assign_group') {
-    title.textContent = '设置 ' + selectedIds.length + ' 份文献的作品组';
-    select.innerHTML = '<option value="">不属于任何作品组</option>' + libDocumentGroups.map(function(item) {
-      return '<option value="' + esc(item.document_group_id) + '">' + esc(item.title) + '</option>';
-    }).join('');
-    select.hidden = false;
-    hint.textContent = '同一作品组的不同版本仍可位于不同文件夹。';
-  } else if (action === 'version_label') {
-    var source = libSources.find(function(item) { return item.source_file_id === targetId; });
-    if (!source || !source.document_group_id) return;
-    title.textContent = '编辑版本名称';
-    input.value = String((source.version_metadata && source.version_metadata.version_label) || '');
-    input.placeholder = documentGroupMemberDisplayName(Object.assign({}, source, {version_metadata:{}}));
-    input.hidden = false;
-    hint.textContent = '可留空；留空时将按译者、语言、版次和出版年份自动生成。';
-  } else {
-    return;
-  }
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  setTimeout(function() { (input.hidden ? select : input).focus(); }, 0);
-}
-
-function closeLibraryOrganizationModal() {
-  var modal = document.getElementById('library-organization-modal');
-  if (modal) {
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-  libraryOrganizationAction = null;
-}
-
-function libraryOrganizationBackdropClick(event) {
-  if (event.target && event.target.id === 'library-organization-modal') closeLibraryOrganizationModal();
-}
-
-async function requestLibraryOrganization(path, payload, successMessage) {
-  var response = await fetch(path, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(payload)
-  });
-  var data = await response.json();
-  if (!response.ok || data.error) throw new Error(data.error || '资料组织操作失败');
-  closeLibraryOrganizationModal();
-  clearLibrarySelection();
-  await loadLibrary(true);
-  showToast(successMessage, 'success');
-  return data.result || {};
-}
-
-async function submitLibraryOrganizationModal() {
-  if (!libraryOrganizationAction) return;
-  var action = libraryOrganizationAction;
-  var input = document.getElementById('library-organization-input');
-  var select = document.getElementById('library-organization-select');
-  try {
-    if (action.action === 'create_folder') {
-      await requestLibraryOrganization('/api/folders/create', {name:input.value}, '文件夹已创建');
-    } else if (action.action === 'rename_folder') {
-      await requestLibraryOrganization('/api/folders/rename', {folder_id:action.targetId, name:input.value}, '文件夹已重命名');
-    } else if (action.action === 'create_group') {
-      await requestLibraryOrganization('/api/document-groups/create', {title:input.value}, '作品组已创建');
-    } else if (action.action === 'rename_group') {
-      await requestLibraryOrganization('/api/document-groups/rename', {document_group_id:action.targetId, title:input.value}, '作品组已重命名');
-    } else if (action.action === 'move_sources') {
-      await requestLibraryOrganization('/api/documents/move', {source_file_ids:action.sourceIds, folder_id:select.value || null}, '文献位置已更新');
-    } else if (action.action === 'assign_group') {
-      await requestLibraryOrganization('/api/document-groups/assign', {source_file_ids:action.sourceIds, document_group_id:select.value || null}, '作品组成员已更新');
-    } else if (action.action === 'version_label') {
-      await requestLibraryOrganization('/api/document-groups/version-label', {source_file_id:action.targetId, version_label:input.value}, '版本名称已更新');
-    }
-  } catch (error) {
-    showToast(error.message || '资料组织操作失败', 'danger');
-  }
-}
-
-async function deleteLibraryFolder(folderId) {
-  var folder = libFolders.find(function(item) { return item.folder_id === folderId; });
-  if (!folder || !await showAppConfirm(
-    '删除文件夹“' + folder.name + '”后，其中的文献会移回根目录；不会删除实际文献。',
-    {title:'删除文件夹？', tone:'warning', confirmText:'删除文件夹'}
-  )) return;
-  try {
-    if (libScopeType === 'folder' && libScopeId === folderId) {
-      libScopeType = 'root';
-      libScopeId = '';
-      persistLibraryScope();
-    }
-    await requestLibraryOrganization('/api/folders/delete', {folder_id:folderId}, '文件夹已删除，文献已移回根目录');
-  } catch (error) {
-    showToast(error.message || '删除文件夹失败', 'danger');
-  }
-}
-
-async function deleteLibraryDocumentGroup(groupId) {
-  var group = libDocumentGroups.find(function(item) { return item.document_group_id === groupId; });
-  if (!group || !await showAppConfirm(
-    '删除作品组“' + group.title + '”只会解除版本关系，不会删除其中的实际文献。',
-    {title:'删除作品组？', tone:'warning', confirmText:'删除作品组'}
-  )) return;
-  try {
-    if (libScopeType === 'document_group' && libScopeId === groupId) {
-      libScopeType = 'all';
-      libScopeId = '';
-      persistLibraryScope();
-    }
-    await requestLibraryOrganization('/api/document-groups/delete', {document_group_id:groupId}, '作品组已删除，文献仍保留');
-  } catch (error) {
-    showToast(error.message || '删除作品组失败', 'danger');
   }
 }
 
@@ -312,7 +64,7 @@ function renderLibraryStats() {
   var container = document.getElementById('library-stats');
   if (!container) return;
   var current = {total:0,calibrated:0,page_pending:0,bibliographic:0};
-  scopedLibrarySources().forEach(function(item) {
+  libSources.forEach(function(item) {
     if (item.source_type !== 'pdf') return;
     current.total += 1;
     var group = calibrationStatusGroup(item.status);
@@ -329,11 +81,6 @@ function renderLibraryStats() {
     + statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
     + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
     + '</div>';
-  // 计数为 0 的统计降噪：0 是「无事」，不该用告警色抢注意力。
-  container.querySelectorAll('.status-stat').forEach(function(btn) {
-    var count = btn.querySelector('.status-stat__count');
-    btn.classList.toggle('is-zero', !!count && count.textContent.trim() === '0');
-  });
 }
 
 // 主流范式（Notion / Linear / Zotero）：三个筛选收进一个「筛选」按钮 + 弹层分面；
@@ -353,15 +100,14 @@ function libFilterActiveList() {
 }
 
 function renderLibraryFilterBar() {
-  var scopeSources = scopedLibrarySources();
-  var allCount = scopeSources.length;
-  var wordCount = scopeSources.filter(function(s){ return s.source_type === 'word'; }).length;
-  var pdfCount = scopeSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
-  var journalCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
-  var thesisCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
+  var allCount = libSources.length;
+  var wordCount = libSources.filter(function(s){ return s.source_type === 'word'; }).length;
+  var pdfCount = libSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
+  var journalCount = libSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
+  var thesisCount = libSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
   // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
-  var bookCount = scopeSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
-  var unknownCount = scopeSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
+  var bookCount = libSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
+  var unknownCount = libSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
 
   var doctypeOpts = [
     {v:'all', label:'全部类型', n:allCount},
@@ -372,7 +118,7 @@ function renderLibraryFilterBar() {
   if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
 
   // 语言细类只显示库内实际存在的语言；设置项仍只控制中文/外文两大类的先后。
-  var languageOptions = libraryLanguageFacetOptions(scopeSources, libDefaultLanguage);
+  var languageOptions = libraryLanguageFacetOptions(libSources, libDefaultLanguage);
   if (libLangFilter !== 'all' && !languageOptions.some(function(option) { return option.v === libLangFilter; })) libLangFilter = 'all';
   var langOpts = [{v:'all', label:'全部语言', n:allCount}].concat(languageOptions);
 
@@ -559,7 +305,7 @@ function compareLibraryDates(a, b) {
 }
 
 function getFilteredSources() {
-  let sources = scopedLibrarySources();
+  let sources = libSources.slice();
   if (libTypeFilter !== 'all') {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }
@@ -587,9 +333,7 @@ function getFilteredSources() {
   const q = (document.getElementById('lib-search').value || '').trim().toLowerCase().replace(/\s+/g, '');
   if (q) {
     sources = sources.filter(s => {
-      var bib = sourceBibliographicMetadata(s);
-      const haystack = [s.title, s.author, s.translator, s.publisher, s.file_name,
-        documentGroupMemberDisplayName(s), bib.language_code, bib.edition, bib.publish_year]
+      const haystack = [s.title, s.author, s.translator, s.publisher, s.file_name]
         .map(function(value) { return String(value || '').toLowerCase().replace(/\s+/g, ''); })
         .join('|');
       return haystack.indexOf(q) >= 0;
@@ -751,14 +495,13 @@ function renderLibraryList() {
   });
   // 筛选按钮角标 + 生效 chips + 弹层三组分面（含实时计数），一处渲染。
   renderLibraryFilterBar();
-  renderLibraryScopes();
 
   libraryRenderToken += 1;
   if (sources.length === 0) {
     // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
     listEl.innerHTML = libSources.length === 0
       ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF 或 DOCX 后即可检索、校准页码、补全书目</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
-      : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前范围没有匹配文献</div><div class="empty-state-hint">可切换文件夹，或清除搜索与筛选条件</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除搜索与筛选</button></div>';
+      : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
     updateLibraryDeleteControls();
     return;
   }
@@ -792,11 +535,8 @@ function appendLibraryEntries(sources, start, token) {
 function libraryEntryHTML(src) {
   var vol = volumeForSource(src.source_file_id);
   var isPdf = src.source_type === 'pdf';
-  var documentTitle = src.title || (src.file_name || src.source_file_id);
-  var inDocumentGroupScope = libScopeType === 'document_group'
-    && String(src.document_group_id || '') === String(libScopeId || '');
-  var title = inDocumentGroupScope ? documentGroupMemberDisplayName(src) : documentTitle;
-  var author = inDocumentGroupScope ? documentTitle : (src.author || '作者信息待完善');
+  var title = src.title || (src.file_name || src.source_file_id);
+  var author = src.author || '作者信息待完善';
   var thesisIcon = src.document_type === 'thesis'
     ? '<svg class="doc-thesis-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="学位论文"><title>学位论文</title><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/><path d="M22 10v5"/></svg>'
     : '';
@@ -928,17 +668,6 @@ function drawerFileInfoHTML(src, vol) {
     + '</button>'
     + '<div class="drawer-collapse-body" style="display:none"><div class="drawer-info">' + info + '</div></div>'
     + '</div>';
-}
-
-function drawerVersionMetadataHTML(src) {
-  if (!src.document_group_id) return '';
-  var explicit = String((src.version_metadata && src.version_metadata.version_label) || '').trim();
-  return '<div class="drawer-info"><div class="drawer-info-row">'
-    + '<span class="drawer-info-label">作品组版本</span>'
-    + '<span class="drawer-info-value">' + esc(documentGroupMemberDisplayName(src))
-    + (explicit ? '' : ' <small>（自动生成）</small>') + '</span>'
-    + '<button class="action-btn sm" type="button" onclick="openLibraryOrganizationModal(\'version_label\',\'' + esc(src.source_file_id) + '\')">编辑</button>'
-    + '</div></div>';
 }
 
 // 主操作栏收敛为「打开原文」+ ⋯（重新解析 / 导出 / 页码动作 / 移除）。
@@ -1126,7 +855,7 @@ async function selectLibDoc(sourceId) {
     + bibliographicHTML;
 
   var extra = document.getElementById('library-drawer-extra');
-  if (extra) extra.innerHTML = drawerVersionMetadataHTML(src) + drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);
+  if (extra) extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);
 
   document.getElementById('library-drawer').classList.add('open');
   var body = document.querySelector('#page-library .library-body');

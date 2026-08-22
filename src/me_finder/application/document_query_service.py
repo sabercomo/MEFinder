@@ -101,15 +101,7 @@ class DocumentQueryService:
         *,
         additional_active_source_ids: Iterable[str] = (),
     ) -> Dict[str, object]:
-        (
-            sources,
-            volumes,
-            works,
-            documents,
-            active,
-            folders,
-            document_groups,
-        ) = self._library_context(
+        sources, volumes, works, documents, active = self._library_context(
             additional_active_source_ids
         )
         return build_library(
@@ -125,8 +117,6 @@ class DocumentQueryService:
                 for source in sources
                 if source.get("source_file_id")
             ),
-            folders=folders,
-            document_groups=document_groups,
         )
 
     def calibration_library_data(
@@ -134,15 +124,7 @@ class DocumentQueryService:
         *,
         additional_active_source_ids: Iterable[str] = (),
     ) -> Dict[str, object]:
-        (
-            sources,
-            volumes,
-            _works,
-            documents,
-            active,
-            _folders,
-            _document_groups,
-        ) = self._library_context(
+        sources, volumes, _works, documents, active = self._library_context(
             additional_active_source_ids
         )
         return build_calibration_library(
@@ -352,8 +334,6 @@ class DocumentQueryService:
         List[Dict[str, object]],
         List[Dict[str, object]],
         set[str],
-        List[Dict[str, object]],
-        List[Dict[str, object]],
     ]:
         config = self._config_loader(self.config_path)
         catalog = self._index.catalog()
@@ -365,8 +345,6 @@ class DocumentQueryService:
             catalog["works"],
             config.get("documents", []),
             active,
-            catalog.get("folders", []),
-            catalog.get("document_groups", []),
         )
 
     @staticmethod

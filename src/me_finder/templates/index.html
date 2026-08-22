@@ -174,14 +174,27 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     <!-- ── Library Page ── -->
     <div id="page-library" class="page">
       <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">文献库</div>
+            <div class="page-subtitle">管理已导入的文献及其索引状态</div>
+          </div>
+          <div class="page-header-meta"></div>
+        </div>
+        <div class="library-search-wrap">
+          <span class="library-search-icon">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+          </span>
+          <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
+        </div>
         <div class="library-controls-row">
-          <div id="library-toolbar-line" class="library-toolbar">
-            <button class="library-fold-btn" id="library-fold-btn" type="button" aria-pressed="false" aria-label="折叠文件夹栏" title="折叠 / 展开文件夹栏" onclick="toggleLibraryRail()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg></button>
-            <div class="page-title library-title">文献库</div>
-            <div class="library-search-wrap">
-              <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
-              <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
-            </div>
+          <div id="library-toolbar-line">
+            <div class="library-stats-row" id="library-stats"></div>
+            <div class="library-controls-line">
+              <button class="lib-select-all" id="lib-select-all" type="button" role="checkbox" aria-checked="false" aria-label="全选当前筛选结果" title="全选当前筛选结果" onclick="toggleSelectVisibleLibraryDocuments()">
+                <svg class="lib-select-all-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
+                <span class="lib-select-all-dash" aria-hidden="true"></span>
+              </button>
               <div class="app-select library-filter" id="library-filter">
                 <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
                   <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
@@ -208,6 +221,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </div>
               <div class="library-filter-chips" id="library-filter-chips"></div>
+              <span class="library-controls-spacer"></span>
               <div class="view-switch" role="group" aria-label="文献库显示方式">
                 <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
                 <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
@@ -222,23 +236,16 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <svg class="library-sort-dir-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M6 12l4 4 4-4"/></svg>
                 </button>
               </div>
-              <div class="app-select library-overflow" id="library-overflow">
-                <button class="app-select-trigger library-overflow-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作" onclick="toggleAppSelect(event,'library-overflow')"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button>
-                <div class="app-select-menu library-overflow-menu" role="menu">
-                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-metadata-btn" onclick="closeAppSelects();runBatchMetadataDetection()">补全书目</button>
-                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-cnki-btn" title="联网补全期刊信息" onclick="closeAppSelects();runCnkiBatchButton()">联网补全期刊信息</button>
-                </div>
-              </div>
-          </div>
+              <button class="action-btn library-metadata-btn" type="button" id="batch-cnki-btn" title="联网补全期刊信息" onclick="runCnkiBatchButton()">联网补全</button>
+              <button class="action-btn library-metadata-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
+            </div>
+        </div>
           <div class="library-selection-bar" id="library-selection-bar" role="toolbar" aria-label="批量操作" aria-live="polite" hidden>
             <button class="library-selection-cancel" type="button" aria-label="取消选择" title="取消选择" onclick="clearLibrarySelection()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
             <span class="library-selection-count" id="library-selection-count">已选 0 项</span>
             <span class="library-selection-spacer"></span>
             <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
-            <button class="action-btn" type="button" id="library-move-selected-btn" onclick="openLibraryOrganizationModal('move_sources')">移动到文件夹</button>
-            <button class="action-btn" type="button" id="library-group-selected-btn" onclick="openLibraryOrganizationModal('assign_group')">设置作品组</button>
             <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选文档包</button>
-            <span class="library-selection-divider" aria-hidden="true"></span>
             <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
           </div>
         </div>
@@ -251,14 +258,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <span class="library-return-text">从检索结果跳来补全书目，补完后可返回继续</span>
       </div>
       <div class="library-body">
-        <aside class="library-scopes" id="library-scopes" aria-label="资料库范围"></aside>
         <div class="library-list-scroll">
           <div id="library-list" class="library-list-container library-view-list" role="listbox" aria-label="文献列表" aria-multiselectable="true"></div>
         </div>
         <div class="library-drawer" id="library-drawer" role="complementary" aria-label="文献详情">
           <div class="library-drawer-inner">
             <div class="drawer-close-bar">
-              <button class="drawer-close" type="button" aria-label="关闭详情" onclick="requestCloseLibDrawer()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5l-5 5 5 5"/><path d="M6 10h9"/></svg>关闭</button>
+              <button class="drawer-close" type="button" onclick="requestCloseLibDrawer()">← 关闭</button>
             </div>
             <div id="library-drawer-content"></div>
             <div id="library-drawer-calibration" style="display:none">
@@ -331,9 +337,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div id="library-drawer-extra"></div>
           </div>
         </div>
-      </div>
-      <div class="library-statusbar" id="library-statusbar">
-        <div class="library-stats-row" id="library-stats"></div>
       </div>
     </div>
 
@@ -894,18 +897,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     <div class="app-dialog-actions">
       <button class="action-btn" type="button" id="app-dialog-cancel" onclick="settleAppDialog(false)">取消</button>
       <button class="action-btn primary" type="button" id="app-dialog-confirm" onclick="settleAppDialog(true)">确定</button>
-    </div>
-  </div>
-</div>
-<div id="library-organization-modal" class="app-dialog-backdrop" aria-hidden="true" onclick="libraryOrganizationBackdropClick(event)">
-  <div class="app-dialog library-organization-dialog" role="dialog" aria-modal="true" aria-labelledby="library-organization-title">
-    <div class="app-dialog-title" id="library-organization-title">资料组织</div>
-    <input id="library-organization-input" class="library-organization-input" type="text" maxlength="200" autocomplete="off" onkeydown="if(event.key==='Enter')submitLibraryOrganizationModal()">
-    <select id="library-organization-select" class="library-organization-input"></select>
-    <div class="app-dialog-message" id="library-organization-hint"></div>
-    <div class="app-dialog-actions">
-      <button class="action-btn" type="button" onclick="closeLibraryOrganizationModal()">取消</button>
-      <button class="action-btn primary" type="button" onclick="submitLibraryOrganizationModal()">确定</button>
     </div>
   </div>
 </div>

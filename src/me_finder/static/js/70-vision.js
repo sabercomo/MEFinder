@@ -544,7 +544,6 @@ function bindMineruAccountDialogDismissal() {
 var VISION_BRAND_RULES = [
   {re: /dashscope|aliyuncs/i, name: '通义千问', color: '#615CED', icon: 'qwen-color.svg', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1'},
   {re: /moonshot/i, name: '月之暗面 Kimi', color: '#1E1F24', icon: 'kimi-color.svg', iconBg: '#101319', base: 'https://api.moonshot.cn/v1'},
-  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com'},
   {re: /bigmodel|zhipu/i, name: '智谱 GLM', color: '#3859FF', icon: 'zhipu-color.svg', base: 'https://open.bigmodel.cn/api/paas/v4'},
   {re: /siliconflow/i, name: '硅基流动', color: '#7C3AED', icon: 'siliconcloud-color.svg', base: 'https://api.siliconflow.cn/v1'},
   {re: /volces|volcengine|doubao/i, name: '火山方舟（豆包）', color: '#3370FF', icon: 'doubao-color.svg', base: 'https://ark.cn-beijing.volces.com/api/v3'},
@@ -559,7 +558,8 @@ var VISION_BRAND_RULES = [
   {re: /(^|\W)x\.ai|grok/i, name: 'Grok', color: '#1D1F23', icon: 'grok.svg', base: 'https://api.x.ai/v1'},
   {re: /mistral/i, name: 'Mistral', color: '#FA520F', icon: 'mistral-color.svg', base: 'https://api.mistral.ai/v1'},
   {re: /groq/i, name: 'Groq', color: '#F55036', icon: 'groq.svg', base: 'https://api.groq.com/openai/v1'},
-  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'}
+  {re: /together/i, name: 'Together', color: '#0F6FFF', icon: 'together-color.svg', base: 'https://api.together.xyz/v1'},
+  {re: /deepseek/i, name: '深度求索 DeepSeek', color: '#4D6BFE', icon: 'deepseek-color.svg', base: 'https://api.deepseek.com', unsupported: true}
 ];
 var VISION_AVATAR_PALETTE = ['#1677FF', '#7B5EC7', '#C9446A', '#B85C2B', '#637A50', '#0E8A8A', '#B0499B', '#4D6BFE'];
 var VISION_PLUS_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
