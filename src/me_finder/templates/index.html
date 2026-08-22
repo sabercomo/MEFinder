@@ -181,10 +181,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
               <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
             </div>
-              <button class="lib-select-all" id="lib-select-all" type="button" role="checkbox" aria-checked="false" aria-label="全选当前筛选结果" title="全选当前筛选结果" onclick="toggleSelectVisibleLibraryDocuments()">
-                <svg class="lib-select-all-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
-                <span class="lib-select-all-dash" aria-hidden="true"></span>
-              </button>
               <div class="app-select library-filter" id="library-filter">
                 <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
                   <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>

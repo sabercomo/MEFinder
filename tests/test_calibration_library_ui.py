@@ -510,18 +510,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
 
     def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
-        """L-07 列表:详情比例 + 自适应详情宽度；L-09 常驻三态全选；L-11 列表键盘导航。"""
+        """L-07 列表:详情比例 + 自适应详情宽度；L-11 列表键盘导航。"""
 
         # L-07
         self.assertIn("grid-template-columns: minmax(360px, 44fr) minmax(0, 56fr);", HTML)
         self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
-        # L-09
-        self.assertIn('id="lib-select-all"', HTML)
-        self.assertIn('role="checkbox"', HTML)
-        self.assertIn("function syncLibrarySelectAll()", HTML)
-        self.assertIn("syncLibrarySelectAll();", HTML)
-        self.assertIn(".lib-select-all.is-all", HTML)
-        self.assertIn(".lib-select-all.is-some .lib-select-all-dash { display: block; }", HTML)
         # L-11
         self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
         self.assertIn('" tabindex="0" role="option" data-id="', HTML)

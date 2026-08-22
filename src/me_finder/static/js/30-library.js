@@ -392,7 +392,6 @@ function updateLibraryDeleteControls() {
     selectVisibleButton.textContent = allSelected ? '取消全选' : '全选当前';
     selectVisibleButton.disabled = selectable.length === 0;
   }
-  syncLibrarySelectAll();
 }
 
 function syncLibraryDeleteSelectionUI() {
@@ -455,22 +454,6 @@ function setupLibraryKeyboardNav() {
   if (!list || list.dataset.keyboardReady === '1') return;
   list.dataset.keyboardReady = '1';
   list.addEventListener('keydown', handleLibraryListKeydown);
-}
-
-// 常驻全选（L-09）：工具栏三态复选框——空 / 半选 / 全选当前筛选结果，
-// 既是全选入口，也是「这里可多选」的可发现锚点。
-function syncLibrarySelectAll() {
-  var box = document.getElementById('lib-select-all');
-  if (!box) return;
-  var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
-  var selectedVisible = selectable.filter(function(item) { return libDeleteSelection.has(item.source_file_id); });
-  var state = selectable.length === 0 ? 'empty'
-    : selectedVisible.length === 0 ? 'empty'
-    : selectedVisible.length === selectable.length ? 'all' : 'some';
-  box.classList.toggle('is-all', state === 'all');
-  box.classList.toggle('is-some', state === 'some');
-  box.setAttribute('aria-checked', state === 'all' ? 'true' : state === 'some' ? 'mixed' : 'false');
-  box.disabled = selectable.length === 0;
 }
 
 function handleLibraryEntryClick(event, sourceId) {

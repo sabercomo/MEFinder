@@ -263,9 +263,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
     BASELINE_SHA256 = (
-        "201d7a2f5371e19ed077fbab86e8df3812a917c5a5e7a5c95ea2138956e02331"
+        "386f177f9fc5cbda8634cbefda201406a3be0f575897d6066cccbb5689a08a96"
     )
-    BASELINE_BYTES = 736103
+    BASELINE_BYTES = 733570
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
