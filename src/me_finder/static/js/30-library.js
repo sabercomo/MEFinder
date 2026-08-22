@@ -14,14 +14,87 @@ function applyLibraryCatalog(data) {
 async function loadLibrary(force) {
   try {
     applyLibraryCatalog(await fetchLibraryCatalog(force));
+    await loadDocumentGroups();
     renderLibraryStats();
     syncLibraryViewButtons();
     syncLibrarySortControls();
+    renderGroupScopeSelector();
     renderLibraryList();
   } catch(e) {
     document.getElementById('library-list').innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">' + esc(e.message || '文献库加载失败') + '</div></div>';
   }
 }
+
+// 作品组只做「限定 source_file 集合」（不引入 folder/root scope）：拉列表，scope 变化即重绘。
+async function loadDocumentGroups() {
+  try {
+    var response = await fetch('/api/document-groups');
+    var data = await response.json();
+    libDocumentGroups = (response.ok && !data.error && Array.isArray(data.document_groups))
+      ? data.document_groups : [];
+  } catch (_) {
+    libDocumentGroups = [];
+  }
+  if (libGroupScopeId && !libDocumentGroups.some(function(g) { return g.document_group_id === libGroupScopeId; })) {
+    libGroupScopeId = '';
+  }
+}
+
+function documentGroupById(groupId) {
+  return libDocumentGroups.find(function(g) { return g.document_group_id === groupId; }) || null;
+}
+
+function documentGroupMemberIdSet(groupId) {
+  var group = documentGroupById(groupId);
+  var ids = new Set();
+  if (group) (group.members || []).forEach(function(m) { ids.add(m.source_file_id); });
+  return ids;
+}
+
+// 当前 scope 下某文献的成员版本名（display_name 由 /api/document-groups 用 B 的 fallback 算好）。
+function documentGroupMemberLabel(groupId, sourceId) {
+  var group = documentGroupById(groupId);
+  if (!group) return '';
+  var member = (group.members || []).find(function(m) { return m.source_file_id === sourceId; });
+  return member ? (member.display_name || '') : '';
+}
+
+function setLibraryGroupScope(groupId) {
+  libGroupScopeId = groupId || '';
+  closeAppSelects();
+  clearLibrarySelection();
+  renderGroupScopeSelector();
+  renderLibraryList();
+}
+
+// 工具栏轻量作品组入口（无常驻左栏、无 fold）：全部文献 / 各作品组（含版本数）。
+function renderGroupScopeSelector() {
+  var menu = document.getElementById('library-group-scope-menu');
+  var label = document.getElementById('library-group-scope-label');
+  var wrap = document.getElementById('library-group-scope');
+  if (!menu || !label) return;
+  var current = documentGroupById(libGroupScopeId);
+  label.textContent = current ? current.title : '全部文献';
+  if (wrap) wrap.classList.toggle('is-scoped', !!current);
+  var html = '<button class="app-select-option lib-group-opt' + (libGroupScopeId ? '' : ' is-selected')
+    + '" type="button" role="option" onclick="setLibraryGroupScope(\'\')">'
+    + '<span class="lib-group-name">全部文献</span></button>';
+  if (libDocumentGroups.length) {
+    html += '<div class="lib-group-sep" role="separator"></div>';
+    html += libDocumentGroups.map(function(g) {
+      var count = (g.members || []).length;
+      return '<button class="app-select-option lib-group-opt' + (g.document_group_id === libGroupScopeId ? ' is-selected' : '')
+        + '" type="button" role="option" onclick="setLibraryGroupScope(\'' + esc(g.document_group_id) + '\')">'
+        + '<span class="lib-group-name">' + esc(g.title) + '</span>'
+        + '<span class="lib-group-count">' + count + ' 个版本</span></button>';
+    }).join('');
+  }
+  html += groupScopeManageOptionsHTML();
+  menu.innerHTML = html;
+}
+
+// C1：无管理项。C2 覆盖此函数追加「新建作品组 / 管理作品组」。
+function groupScopeManageOptionsHTML() { return ''; }
 
 // 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。
 function ensureLibraryDetail(sourceId) {
@@ -306,6 +379,11 @@ function compareLibraryDates(a, b) {
 
 function getFilteredSources() {
   let sources = libSources.slice();
+  if (libGroupScopeId) {
+    // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
+    var groupMemberIds = documentGroupMemberIdSet(libGroupScopeId);
+    sources = sources.filter(function(s) { return groupMemberIds.has(s.source_file_id); });
+  }
   if (libTypeFilter !== 'all') {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }

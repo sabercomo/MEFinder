@@ -181,6 +181,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
               <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
             </div>
+              <div class="app-select library-group-scope" id="library-group-scope">
+                <button class="app-select-trigger library-group-scope-btn" type="button" aria-haspopup="listbox" aria-expanded="false" title="作品组范围" onclick="toggleAppSelect(event,'library-group-scope')">
+                  <svg class="library-group-scope-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7.5" r="2.4"/><circle cx="13" cy="7.5" r="2.4"/><path d="M3.2 16c0-2.2 1.9-3.6 4.2-3.6M16.8 16c0-2.2-1.9-3.6-4.2-3.6"/></svg>
+                  <span class="app-select-value" id="library-group-scope-label">全部文献</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                </button>
+                <div class="app-select-menu library-group-scope-menu" role="listbox" id="library-group-scope-menu"></div>
+              </div>
               <div class="app-select library-filter" id="library-filter">
                 <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
                   <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>

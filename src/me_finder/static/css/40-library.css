@@ -644,8 +644,21 @@
 .library-toolbar .library-search { height: 36px; }
 #library-toolbar-line > .view-switch,
 #library-toolbar-line > .library-filter,
+#library-toolbar-line > .library-group-scope,
 #library-toolbar-line > .library-sort,
 #library-toolbar-line > .library-overflow { flex: 0 0 auto; }
+
+/* 作品组范围选择器（轻量工具栏入口，不是常驻左栏）。 */
+.library-group-scope-btn { gap: 6px; min-width: 0; }
+.library-group-scope-icon { width: 15px; height: 15px; flex: 0 0 auto; color: var(--text-tertiary); }
+.library-group-scope .app-select-value { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-group-scope.is-scoped .app-select-trigger { border-color: var(--accent); color: var(--accent); }
+.library-group-scope.is-scoped .library-group-scope-icon { color: var(--accent); }
+.library-group-scope-menu { min-width: 224px; max-height: 340px; overflow-y: auto; }
+.lib-group-opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lib-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-group-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lib-group-sep { height: 1px; margin: 5px 8px; background: var(--border-subtle); }
 
 /* ⋯ 更多：无框图标按钮。逐项盖掉 .app-select-trigger 的 min-width / border /
    padding / height，否则会撑成一个空的大框。 */
