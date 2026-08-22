@@ -22,7 +22,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 4
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
 DATABASE_REPLACE_ATTEMPTS = 15
@@ -31,7 +31,7 @@ DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
@@ -81,6 +81,39 @@ CREATE TABLE document_group_members (
     added_at TEXT NOT NULL
 );
 CREATE INDEX idx_document_group_members_group ON document_group_members(document_group_id);
+
+CREATE TABLE alignment_groups (
+    alignment_group_id TEXT PRIMARY KEY,
+    document_group_id  TEXT NOT NULL REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
+    review_status      TEXT NOT NULL DEFAULT 'proposed',
+    is_stale           INTEGER NOT NULL DEFAULT 0,
+    provenance         TEXT NOT NULL DEFAULT 'manual',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL,
+    payload_json       TEXT NOT NULL DEFAULT '{}',
+    CHECK (review_status IN ('proposed','confirmed','rejected')),
+    CHECK (is_stale IN (0,1))
+);
+CREATE INDEX idx_alignment_groups_docgroup ON alignment_groups(document_group_id);
+
+CREATE TABLE alignment_segments (
+    alignment_segment_id  TEXT PRIMARY KEY,
+    alignment_group_id    TEXT NOT NULL REFERENCES alignment_groups(alignment_group_id) ON DELETE CASCADE,
+    source_file_id        TEXT NOT NULL,
+    start_paragraph_id    TEXT NOT NULL,
+    end_paragraph_id      TEXT NOT NULL,
+    start_paragraph_index INTEGER NOT NULL,
+    end_paragraph_index   INTEGER NOT NULL,
+    segment_order         INTEGER NOT NULL DEFAULT 0,
+    text_fingerprint      TEXT,
+    created_at            TEXT NOT NULL,
+    updated_at            TEXT NOT NULL,
+    payload_json          TEXT NOT NULL DEFAULT '{}',
+    UNIQUE (alignment_group_id, source_file_id, segment_order),
+    CHECK (start_paragraph_index <= end_paragraph_index)
+);
+CREATE INDEX idx_alignment_segments_group ON alignment_segments(alignment_group_id);
+CREATE INDEX idx_alignment_segments_locate ON alignment_segments(source_file_id, start_paragraph_index, end_paragraph_index);
 
 CREATE TABLE toc_entries (
     row_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -438,6 +471,8 @@ def optimize_database_storage(db_path: Path) -> bool:
             "audit_issues",
             "document_groups",
             "document_group_members",
+            "alignment_groups",
+            "alignment_segments",
         )
         for table_name in table_names:
             destination_columns = [
@@ -1046,8 +1081,13 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         read_document_group_snapshot,
         restore_document_group_snapshot,
     )
+    from .alignment import (
+        read_alignment_snapshot,
+        restore_alignment_snapshot,
+    )
 
     preserved_document_groups = read_document_group_snapshot(db_path)
+    preserved_alignment = read_alignment_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
     _sanitize_surrogates_in_place(index)
@@ -1289,6 +1329,11 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             values = [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows]
             if values:
                 connection.executemany(sql, values)
+
+        # Alignment references paragraphs, so restore it once source_files,
+        # document_groups and paragraphs all exist. A drifted paragraph anchor
+        # marks its group stale (segment kept); only a gone source_file prunes.
+        restore_alignment_snapshot(connection, preserved_alignment)
 
         fts_installed = _install_fts5_search_index(connection, rebuild=True)
         connection.commit()
