@@ -1281,6 +1281,65 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .vision-model-combo { flex-basis: 100%; }
 }
 
+/* ── 可扩展主题引擎控件（阶段 4） ── */
+.appearance-engine { display: flex; flex-direction: column; gap: 20px; }
+.appearance-field { display: flex; flex-direction: column; gap: 8px; }
+.appearance-field-label { font-size: 13px; font-weight: 650; color: var(--text-secondary); }
+.appearance-seg {
+  display: inline-flex; align-self: flex-start; padding: 3px; gap: 2px;
+  background: var(--surface-secondary); border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+.appearance-seg-btn {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  color: var(--text-secondary); transition: background var(--transition-fast), color var(--transition-fast);
+}
+.appearance-seg-btn:hover { color: var(--text-primary); }
+.appearance-seg-btn.is-active { background: var(--surface-elevated); color: var(--accent); box-shadow: var(--shadow-card); }
+.appearance-seg-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.appearance-mode-hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+.appearance-edit-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding-top: 4px; border-top: 1px solid var(--border-subtle);
+}
+.appearance-edit-tabs { display: inline-flex; gap: 4px; }
+.appearance-edit-tab {
+  appearance: none; border: 1px solid transparent; background: transparent; cursor: pointer;
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+}
+.appearance-edit-tab:hover { color: var(--text-primary); background: var(--surface-hover); }
+.appearance-edit-tab.is-active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-soft); }
+.appearance-edit-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.appearance-edit-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.appearance-btn {
+  appearance: none; cursor: pointer; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--border-default); background: var(--surface-elevated);
+  color: var(--text-secondary); font-size: 12px; font-weight: 600;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+.appearance-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--surface-hover); }
+.appearance-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.appearance-custom {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px;
+  background: var(--surface-secondary); border: 1px solid var(--border-default); border-radius: 12px;
+}
+.appearance-custom-head { font-size: 13px; font-weight: 650; color: var(--text-primary); display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.appearance-custom-note { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+.appearance-custom-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;
+}
+.appearance-color, .appearance-range { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--text-secondary); }
+.appearance-color span, .appearance-range span { font-weight: 600; }
+.appearance-range b { color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.appearance-color input[type="color"] {
+  appearance: none; width: 100%; height: 38px; padding: 0; cursor: pointer;
+  border: 1px solid var(--border-default); border-radius: 9px; background: var(--surface-elevated);
+}
+.appearance-color input[type="color"]::-webkit-color-swatch-wrapper { padding: 4px; }
+.appearance-color input[type="color"]::-webkit-color-swatch { border: 1px solid var(--border-subtle); border-radius: 6px; }
+.appearance-range input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+
 .theme-options {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

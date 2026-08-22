@@ -741,11 +741,43 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="appearance-card" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">外观</span><span class="settings-section-note">选择应用主题</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">外观</span><span class="settings-section-note">外观模式、浅色与深色主题各自独立保存</span></span>
             <span class="settings-current-theme" id="appearance-current"></span>
             </div>
             <div class="settings-collapse-body" id="appearance-body">
-            <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
+            <div class="appearance-engine">
+              <div class="appearance-field">
+                <div class="appearance-field-label">外观模式</div>
+                <div class="appearance-seg" id="appearance-mode-seg" role="radiogroup" aria-label="外观模式">
+                  <button type="button" class="appearance-seg-btn" data-appearance-mode="system" role="radio" aria-checked="false" onclick="setAppearanceMode('system')">跟随系统</button>
+                  <button type="button" class="appearance-seg-btn" data-appearance-mode="light" role="radio" aria-checked="false" onclick="setAppearanceMode('light')">浅色</button>
+                  <button type="button" class="appearance-seg-btn" data-appearance-mode="dark" role="radio" aria-checked="false" onclick="setAppearanceMode('dark')">深色</button>
+                </div>
+                <div class="appearance-mode-hint" id="appearance-mode-hint"></div>
+              </div>
+              <div class="appearance-edit-row">
+                <div class="appearance-edit-tabs" role="tablist" aria-label="编辑主题">
+                  <button type="button" class="appearance-edit-tab" data-appearance-edit="light" role="tab" aria-selected="false" onclick="setAppearanceEdit('light')">浅色主题</button>
+                  <button type="button" class="appearance-edit-tab" data-appearance-edit="dark" role="tab" aria-selected="false" onclick="setAppearanceEdit('dark')">深色主题</button>
+                </div>
+                <div class="appearance-edit-actions">
+                  <button type="button" class="appearance-btn" onclick="duplicateCurrentTheme()">复制为自定义</button>
+                  <button type="button" class="appearance-btn" onclick="exportCurrentTheme()">导出</button>
+                  <button type="button" class="appearance-btn" onclick="triggerThemeImport()">导入</button>
+                  <input type="file" id="appearance-import-file" accept="application/json,.json" hidden onchange="onThemeImportFile(event)">
+                </div>
+              </div>
+              <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
+              <div class="appearance-custom" id="appearance-custom">
+                <div class="appearance-custom-head">自定义配色<span class="appearance-custom-note">改动官方预设会自动生成一份副本</span></div>
+                <div class="appearance-custom-grid">
+                  <label class="appearance-color"><span>强调色</span><input type="color" id="appearance-accent" oninput="onCustomColorInput()"></label>
+                  <label class="appearance-color"><span>背景色</span><input type="color" id="appearance-background" oninput="onCustomColorInput()"></label>
+                  <label class="appearance-color"><span>前景色</span><input type="color" id="appearance-foreground" oninput="onCustomColorInput()"></label>
+                  <label class="appearance-range"><span>对比度 <b id="appearance-contrast-value">55</b></span><input type="range" min="0" max="100" step="1" id="appearance-contrast" oninput="onCustomColorInput()"></label>
+                </div>
+              </div>
+            </div>
             </div>
           </section>
           <section class="settings-section macos-data-location-settings" id="data-location-settings" role="tabpanel">

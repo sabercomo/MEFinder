@@ -92,6 +92,11 @@ let currentTheme = document.documentElement.dataset.theme || 'frost-blue';
 let persistedTheme = currentTheme;
 let themeRevision = 0;
 let themeSaveQueue = Promise.resolve();
+// 可扩展主题引擎（阶段 3-6）：外观模式 + 浅/深各自独立的主题选择 + 自定义主题。
+// 首帧仍由服务端注入的 data-theme 决定；载入偏好后 applyAppearance() 校正。
+let appearanceState = { mode: 'system', light: 'frost-blue', dark: 'midnight', customThemes: {} };
+let appearanceEditMode = 'light';   // 设置页当前正在编辑哪一套（浅/深）
+let appearanceReady = false;
 let currentPdfOpenMode = 'native';
 let currentDocumentExportMode = 'data_only';
 let autoUpdateEnabled = false;

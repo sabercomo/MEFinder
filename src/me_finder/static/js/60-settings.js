@@ -1,47 +1,287 @@
-/* ═══ Appearance settings ═══ */
-const THEME_OPTIONS = [
-  {id:'frost-blue', name:'晴蓝', tone:'浅色', description:'清爽理性，适合日间使用'},
-  {id:'sage-ivory', name:'抹茶', tone:'浅色', description:'低刺激、安静，适合长时间阅读'},
-  {id:'warm-sand', name:'暖沙', tone:'浅色', description:'温暖柔和，带轻微纸张气质'},
-  {id:'rose-mist', name:'樱粉', tone:'浅色', description:'清柔克制，带淡粉强调'},
-  {id:'lavender-purple', name:'薰衣草', tone:'浅色', description:'优雅现代，使用柔和薰衣草紫'},
-  {id:'midnight', name:'午夜', tone:'深色', description:'低亮度深色主题，适合夜间使用'}
-];
-const THEME_IDS = new Set(THEME_OPTIONS.map(function(theme) { return theme.id; }));
+/* ═══ Appearance settings（可扩展主题引擎，阶段 3-6） ═══
+   外观模式（系统/浅/深）+ 浅色与深色各自独立保存的主题选择 + 自定义配色。
+   预设与派生逻辑在 05-theme-engine.js；这里只做 DOM 编排与持久化。 */
+const THEME_IDS = new Set(THEME_BUILTIN_CSS_IDS);
 
+var appearanceSaveTimer = null;
 
-
-
+// 组装当前编辑模式下可选的主题（官方预设 + 该模式的自定义主题）。
+function themeChoicesForMode(mode) {
+  var list = THEME_PRESETS.filter(function(p) { return p.mode === mode; });
+  var custom = appearanceState.customThemes || {};
+  Object.keys(custom).forEach(function(id) {
+    var def = custom[id];
+    if (def && def.mode === mode) {
+      list.push({ id: id, name: def.name, label: def.name, mode: mode,
+        builtinCss: false, desc: '自定义主题',
+        accent: def.accent, background: def.background, foreground: def.foreground,
+        contrast: typeof def.contrast === 'number' ? def.contrast : 55, custom: true });
+    }
+  });
+  return list;
+}
 
 function renderThemeOptions() {
   var container = document.getElementById('theme-options');
   if (!container) return;
-  container.innerHTML = THEME_OPTIONS.map(themeOptionMarkup).join('');
+  container.innerHTML = themeChoicesForMode(appearanceEditMode).map(themeOptionMarkup).join('');
   renderThemeSelection();
 }
 
 function renderThemeSelection() {
+  var selectedId = appearanceState[appearanceEditMode];
   document.querySelectorAll('.theme-option').forEach(function(option) {
-    var selected = option.dataset.themeChoice === currentTheme;
+    var selected = option.dataset.themeChoice === selectedId;
     option.classList.toggle('selected', selected);
     option.setAttribute('aria-checked', selected ? 'true' : 'false');
   });
 }
 
-function applyTheme(theme) {
-  if (!THEME_IDS.has(theme)) return;
-  currentTheme = theme;
-  document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem('meFinderTheme', theme); } catch (_) {}
-  renderThemeSelection();
-  updateAppearanceSummary();
+// 主题元数据（名字）用于摘要显示：预设查表，自定义查 customThemes。
+function themeDisplayName(id) {
+  if (appearanceState.customThemes && appearanceState.customThemes[id]) {
+    return appearanceState.customThemes[id].name || '自定义主题';
+  }
+  var p = THEME_PRESET_MAP[id];
+  return p ? (p.label || p.name) : id;
 }
 
 function updateAppearanceSummary() {
   var el = document.getElementById('appearance-current');
   if (!el) return;
-  var current = THEME_OPTIONS.find(function(t) { return t.id === currentTheme; });
-  el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(current ? current.name : '');
+  var modeLabel = appearanceState.mode === 'system' ? '跟随系统'
+    : (appearanceState.mode === 'dark' ? '深色' : '浅色');
+  var activeId = resolveActiveThemeId(appearanceState, teSystemPrefersDark());
+  el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(modeLabel + ' · ' + themeDisplayName(activeId));
+}
+
+// 外观模式区、编辑标签、自定义输入全部与状态对齐。
+function syncAppearanceControls() {
+  document.querySelectorAll('#appearance-mode-seg .appearance-seg-btn').forEach(function(btn) {
+    var on = btn.dataset.appearanceMode === appearanceState.mode;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.appearance-edit-tab').forEach(function(btn) {
+    var on = btn.dataset.appearanceEdit === appearanceEditMode;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  var hint = document.getElementById('appearance-mode-hint');
+  if (hint) {
+    hint.textContent = appearanceState.mode === 'system'
+      ? '系统浅色时用你的浅色主题，系统深色时用你的深色主题'
+      : (appearanceState.mode === 'dark' ? '始终使用你的深色主题' : '始终使用你的浅色主题');
+  }
+  syncCustomInputs();
+  updateAppearanceSummary();
+}
+
+// 把当前编辑模式选中主题的基础色回填到自定义输入。
+function syncCustomInputs() {
+  var def = activeEditDef();
+  var accent = document.getElementById('appearance-accent');
+  var background = document.getElementById('appearance-background');
+  var foreground = document.getElementById('appearance-foreground');
+  var contrast = document.getElementById('appearance-contrast');
+  var contrastValue = document.getElementById('appearance-contrast-value');
+  if (accent) accent.value = normalizeHexForInput(def.accent);
+  if (background) background.value = normalizeHexForInput(def.background);
+  if (foreground) foreground.value = normalizeHexForInput(def.foreground);
+  if (contrast) contrast.value = String(typeof def.contrast === 'number' ? def.contrast : 55);
+  if (contrastValue) contrastValue.textContent = String(typeof def.contrast === 'number' ? def.contrast : 55);
+}
+
+// <input type=color> 只吃 #rrggbb；把 #rgb 或异常值补齐。
+function normalizeHexForInput(hex) {
+  var rgb = teHexToRgb(hex);
+  return rgb ? teRgbToHex(rgb) : '#000000';
+}
+
+// 当前编辑模式实际选中的主题定义（预设或自定义），始终返回一份可读对象。
+function activeEditDef() {
+  var id = appearanceState[appearanceEditMode];
+  if (appearanceState.customThemes && appearanceState.customThemes[id]) {
+    return appearanceState.customThemes[id];
+  }
+  var p = THEME_PRESET_MAP[id];
+  if (p) return p;
+  return THEME_PRESET_MAP[THEME_MODE_DEFAULT[appearanceEditMode]];
+}
+
+/* ── 交互 ── */
+function setAppearanceMode(mode) {
+  if (['system', 'light', 'dark'].indexOf(mode) < 0) return;
+  appearanceState.mode = mode;
+  applyAppearance();
+  syncAppearanceControls();
+  persistAppearance();
+}
+
+function setAppearanceEdit(mode) {
+  if (mode !== 'light' && mode !== 'dark') return;
+  appearanceEditMode = mode;
+  renderThemeOptions();
+  syncAppearanceControls();
+}
+
+// 选择某个预设/自定义主题作为当前编辑模式的主题。
+function selectThemeChoice(id) {
+  appearanceState[appearanceEditMode] = id;
+  renderThemeSelection();
+  syncCustomInputs();
+  if (isEditModeLive()) applyAppearance();
+  updateAppearanceSummary();
+  persistAppearance();
+}
+
+// 当前编辑模式是否正是屏幕上生效的模式（据外观模式与系统偏好）。
+function isEditModeLive() {
+  if (appearanceState.mode === 'light') return appearanceEditMode === 'light';
+  if (appearanceState.mode === 'dark') return appearanceEditMode === 'dark';
+  return appearanceEditMode === (teSystemPrefersDark() ? 'dark' : 'light');
+}
+
+// 稳定的自定义主题 id：每个模式一份「快速自定义」槽，避免无限增生。
+function quickCustomId(mode) { return 'custom-' + mode; }
+
+// 改动任一颜色/对比度：把当前编辑主题派生成一份自定义副本并即时生效。
+function onCustomColorInput() {
+  var accent = document.getElementById('appearance-accent');
+  var background = document.getElementById('appearance-background');
+  var foreground = document.getElementById('appearance-foreground');
+  var contrast = document.getElementById('appearance-contrast');
+  var contrastValue = document.getElementById('appearance-contrast-value');
+  var base = activeEditDef();
+  var id = quickCustomId(appearanceEditMode);
+  var wasCustom = appearanceState.customThemes && appearanceState.customThemes[appearanceState[appearanceEditMode]]
+    && appearanceState[appearanceEditMode].indexOf('custom') === 0;
+  var name = wasCustom ? (activeEditDef().name || '自定义主题') : ('自定义 · ' + (base.label || base.name || ''));
+  var def = {
+    schemaVersion: THEME_ENGINE_SCHEMA,
+    id: id,
+    name: name,
+    mode: appearanceEditMode,
+    accent: accent ? accent.value : base.accent,
+    background: background ? background.value : base.background,
+    foreground: foreground ? foreground.value : base.foreground,
+    contrast: contrast ? Number(contrast.value) : (base.contrast || 55)
+  };
+  if (contrastValue && contrast) contrastValue.textContent = String(contrast.value);
+  if (!appearanceState.customThemes) appearanceState.customThemes = {};
+  appearanceState.customThemes[id] = def;
+  appearanceState[appearanceEditMode] = id;
+  renderThemeOptions();
+  if (isEditModeLive()) applyAppearance();
+  updateAppearanceSummary();
+  persistAppearance();
+}
+
+// 复制当前主题为一份带时间戳的自定义主题（不改内置定义）。
+function duplicateCurrentTheme() {
+  var base = activeEditDef();
+  var id = 'custom-' + appearanceEditMode + '-' + Date.now().toString(36);
+  var def = {
+    schemaVersion: THEME_ENGINE_SCHEMA, id: id,
+    name: (base.label || base.name || '主题') + ' 副本',
+    mode: appearanceEditMode,
+    accent: base.accent, background: base.background,
+    foreground: base.foreground, contrast: base.contrast || 55
+  };
+  if (!appearanceState.customThemes) appearanceState.customThemes = {};
+  appearanceState.customThemes[id] = def;
+  appearanceState[appearanceEditMode] = id;
+  renderThemeOptions();
+  syncCustomInputs();
+  if (isEditModeLive()) applyAppearance();
+  updateAppearanceSummary();
+  persistAppearance();
+  showToast('已复制为自定义主题');
+}
+
+// 导出当前编辑主题为带版本号的 JSON 文件（用户主动触发的应用内下载）。
+function exportCurrentTheme() {
+  var def = activeEditDef();
+  var payload = themeDefToExport(def);
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'mefinder-theme-' + (payload.mode) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+function triggerThemeImport() {
+  var input = document.getElementById('appearance-import-file');
+  if (input) { input.value = ''; input.click(); }
+}
+
+// 导入主题：解析→校验→存为自定义并选中。非法文件只提示不崩溃。
+function onThemeImportFile(event) {
+  var file = event && event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function() {
+    var raw;
+    try { raw = JSON.parse(String(reader.result)); }
+    catch (e) { showToast('主题文件不是有效的 JSON'); return; }
+    var result = normalizeThemeDef(raw);
+    if (!result.ok) { showToast('导入失败：' + result.error); return; }
+    var def = result.def;
+    var id = 'custom-' + def.mode + '-' + Date.now().toString(36);
+    def.id = id;
+    if (!appearanceState.customThemes) appearanceState.customThemes = {};
+    appearanceState.customThemes[id] = def;
+    appearanceEditMode = def.mode;
+    appearanceState[def.mode] = id;
+    renderThemeOptions();
+    syncAppearanceControls();
+    if (isEditModeLive()) applyAppearance();
+    persistAppearance();
+    showToast('已导入主题「' + def.name + '」');
+  };
+  reader.onerror = function() { showToast('读取主题文件失败'); };
+  reader.readAsText(file);
+}
+
+// 把 appearanceState 序列化成后端 appearance 结构。
+function serializeAppearance() {
+  var custom = {};
+  var src = appearanceState.customThemes || {};
+  Object.keys(src).forEach(function(id) {
+    var d = src[id];
+    custom[id] = {
+      schemaVersion: THEME_ENGINE_SCHEMA, name: d.name, mode: d.mode,
+      accent: d.accent, background: d.background, foreground: d.foreground,
+      contrast: typeof d.contrast === 'number' ? d.contrast : 55
+    };
+    if (d.fontUi) custom[id].fontUi = d.fontUi;
+    if (d.fontCode) custom[id].fontCode = d.fontCode;
+  });
+  return {
+    schemaVersion: THEME_ENGINE_SCHEMA,
+    mode: appearanceState.mode,
+    light: appearanceState.light,
+    dark: appearanceState.dark,
+    custom_themes: custom
+  };
+}
+
+// 去抖持久化：同时写 appearance（完整状态）与 legacy theme（内置回退，供首帧/原生）。
+function persistAppearance() {
+  if (!appearanceReady) return;
+  try { localStorage.setItem('meFinderTheme', activeBuiltinFallback()); } catch (_) {}
+  if (appearanceSaveTimer) clearTimeout(appearanceSaveTimer);
+  appearanceSaveTimer = setTimeout(function() {
+    fetch('/api/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appearance: serializeAppearance(), theme: activeBuiltinFallback() })
+    }).catch(function() {});
+  }, 250);
 }
 
 function showSettingsCategory(sectionId) {
@@ -446,11 +686,8 @@ async function migrateDataLocation() {
 }
 
 function applyPreferencesData(data, requestedThemeRevision) {
-  var loadedTheme = THEME_IDS.has(data.theme) ? data.theme : 'frost-blue';
-  if (themeRevision === requestedThemeRevision) {
-    persistedTheme = loadedTheme;
-    applyTheme(loadedTheme);
-  }
+  // 从后端 appearance 恢复外观引擎状态，并即时解析生效（覆盖服务端首帧回退）。
+  loadAppearanceFromPreferences(data.appearance);
   if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
   else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
   // 后端为准（随数据迁移）：文献默认语言与联网自动匹配阈值（C-01）。
@@ -918,33 +1155,40 @@ function persistDisplayPreference(key, value) {
   }).catch(function() {});
 }
 
-async function setTheme(theme) {
-  if (!THEME_IDS.has(theme)) return;
-  var revision = ++themeRevision;
-  applyTheme(theme);
-  var request = themeSaveQueue.catch(function() {}).then(async function() {
-    var resp = await fetch('/api/preferences', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({theme: theme})
-    });
-    var data = await resp.json();
-    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    return data;
-  });
-  themeSaveQueue = request.catch(function() {});
-  try {
-    var data = await request;
-    persistedTheme = THEME_IDS.has(data.theme) ? data.theme : theme;
-    if (revision !== themeRevision) return;
-    preferencesLoaded = true;
-    applyTheme(persistedTheme);
-    // Visible success: the whole UI已经换了主题，无需再弹 Toast。
-  } catch (e) {
-    if (revision !== themeRevision) return;
-    applyTheme(persistedTheme);
-    showToast('主题保存失败：' + e.message);
+// 从后端 appearance 恢复外观状态。缺字段则退回安全默认，绝不因坏数据崩溃。
+function loadAppearanceFromPreferences(appearance) {
+  if (appearance && typeof appearance === 'object') {
+    appearanceState.mode = ['system', 'light', 'dark'].indexOf(appearance.mode) >= 0 ? appearance.mode : 'system';
+    appearanceState.light = typeof appearance.light === 'string' && appearance.light ? appearance.light : 'frost-blue';
+    appearanceState.dark = typeof appearance.dark === 'string' && appearance.dark ? appearance.dark : 'midnight';
+    var custom = {};
+    var src = appearance.custom_themes;
+    if (src && typeof src === 'object') {
+      Object.keys(src).forEach(function(id) {
+        var result = normalizeThemeDef(src[id]);
+        if (result.ok) { result.def.id = id; custom[id] = result.def; }
+      });
+    }
+    appearanceState.customThemes = custom;
   }
+  // 选中主题若已不存在（如被清理），退回该模式默认，避免空引用。
+  ['light', 'dark'].forEach(function(m) {
+    var id = appearanceState[m];
+    if (!THEME_PRESET_MAP[id] && !(appearanceState.customThemes && appearanceState.customThemes[id])) {
+      appearanceState[m] = THEME_MODE_DEFAULT[m];
+    }
+  });
+  appearanceReady = true;
+  // 编辑标签默认对准当前生效的模式。
+  appearanceEditMode = appearanceState.mode === 'dark'
+    ? 'dark'
+    : (appearanceState.mode === 'light' ? 'light' : (teSystemPrefersDark() ? 'dark' : 'light'));
+  applyAppearance();
+  renderThemeOptions();
+  syncAppearanceControls();
 }
 
+// 首帧后先按当前 data-theme 渲染一份，偏好载入后再校正。
+initAppearanceSystemWatch();
 renderThemeOptions();
+syncAppearanceControls();

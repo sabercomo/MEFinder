@@ -32,9 +32,24 @@ from src.me_finder.web import HTML, render_html
 
 class PreferencePersistenceTests(unittest.TestCase):
     @staticmethod
+    def default_appearance(
+        mode: str = "light", light: str = "frost-blue", dark: str = "midnight"
+    ) -> dict[str, object]:
+        return {
+            "schemaVersion": 1,
+            "mode": mode,
+            "light": light,
+            "dark": dark,
+            "custom_themes": {},
+        }
+
+    @staticmethod
     def default_preferences(theme: str = DEFAULT_THEME) -> dict[str, object]:
         return {
             "theme": theme,
+            # 一旦文件里存在 appearance，保存单独 theme 不会改动它；这些用例始终从
+            # 空文件（frost-blue）起步，因此 appearance 恒为浅色迁移结果。
+            "appearance": PreferencePersistenceTests.default_appearance(),
             "library_view": DEFAULT_LIBRARY_VIEW,
             "calibration_view": DEFAULT_CALIBRATION_VIEW,
             "scan_directories": [],
@@ -195,12 +210,16 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertEqual(HTML.count("--match-focus-ring:"), 6)
 
     def test_settings_uses_preview_cards_and_switches_without_reload(self) -> None:
-        expected_order = ["晴蓝", "抹茶", "暖沙", "樱粉", "薰衣草", "午夜"]
-        positions = [HTML.index(f"name:'{name}'") for name in expected_order]
+        # 主题预设现由引擎的 THEME_PRESETS 驱动（每项 id/label/mode/desc）。
+        expected_order = ["晴蓝", "暖纸", "棕褐", "抹茶", "暖沙", "樱粉", "薰衣草", "午夜"]
+        positions = [HTML.index(f"label: '{name}'") for name in expected_order]
         self.assertEqual(positions, sorted(positions))
         for theme in self.THEMES:
-            self.assertIn(f"id:'{theme}'", HTML)
-        self.assertEqual(HTML.count('function themePreviewMarkup(themeId)'), 1)
+            self.assertIn(f"id: '{theme}'", HTML)
+        # 六套内置 CSS 主题之外，新官方预设仅是配置，不新增 CSS 主题块。
+        for preset in ("warm-paper", "sepia", "oled-black", "midnight-blue"):
+            self.assertIn(f"id: '{preset}'", HTML)
+        self.assertEqual(HTML.count('function themePreviewMarkup(themeId, styleAttr)'), 1)
         self.assertEqual(HTML.count('class="theme-mini-sidebar"'), 1)
         self.assertEqual(HTML.count('class="theme-mini-search"'), 1)
         self.assertEqual(HTML.count('class="theme-mini-doc-card"'), 3)
@@ -215,9 +234,15 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('.theme-option:focus-visible', HTML)
         self.assertIn('role="radiogroup"', HTML)
         self.assertIn('role="radio"', HTML)
-        self.assertIn("container.innerHTML = THEME_OPTIONS.map(themeOptionMarkup).join('')", HTML)
-        self.assertIn("document.documentElement.dataset.theme = theme", HTML)
+        # 网格由当前编辑模式（浅/深）筛选出的预设 + 自定义主题渲染。
+        self.assertIn("container.innerHTML = themeChoicesForMode(appearanceEditMode).map(themeOptionMarkup).join('')", HTML)
+        # 引擎把选中主题真正落到 data-theme（内置切 id、自定义切 custom）。
+        self.assertIn("document.documentElement.dataset.theme = id", HTML)
         self.assertIn("fetch('/api/preferences'", HTML)
+        # 外观模式：跟随系统 / 浅 / 深。
+        self.assertIn("data-appearance-mode=\"system\"", HTML)
+        self.assertIn("(prefers-color-scheme: dark)", HTML)
+        self.assertIn("function setAppearanceMode(mode)", HTML)
         self.assertNotIn('id="theme-select"', HTML)
         self.assertNotIn("location.reload", HTML)
         self.assertNotIn('theme-preview-line', HTML)
@@ -544,28 +569,32 @@ class ThemeMarkupTests(unittest.TestCase):
         )
         self.assertIn('id="update-status-badge"', update_markup)
 
-    def test_theme_switch_is_immediate_serialized_and_ignores_stale_results(self) -> None:
-        self.assertIn("let persistedTheme = currentTheme;", HTML)
-        self.assertIn("let themeRevision = 0;", HTML)
-        self.assertIn("let themeSaveQueue = Promise.resolve();", HTML)
+    def test_theme_switch_is_immediate_and_persisted(self) -> None:
+        # 引擎状态：外观模式 + 浅/深各自选择 + 自定义主题。
+        self.assertIn("let appearanceState = {", HTML)
+        self.assertIn("let appearanceEditMode = 'light';", HTML)
 
-        theme_start = HTML.index("async function setTheme(theme)")
-        theme_end = HTML.index("renderThemeOptions();", theme_start)
-        theme_block = HTML[theme_start:theme_end]
-        revision_at = theme_block.index("var revision = ++themeRevision;")
-        immediate_apply_at = theme_block.index("applyTheme(theme);")
-        request_at = theme_block.index("var request = themeSaveQueue")
-        fetch_at = theme_block.index("fetch('/api/preferences'")
-        self.assertLess(revision_at, immediate_apply_at)
-        self.assertLess(immediate_apply_at, request_at)
-        self.assertLess(request_at, fetch_at)
-        self.assertIn(
-            "themeSaveQueue.catch(function() {}).then(async function()",
-            theme_block,
-        )
-        self.assertIn("themeSaveQueue = request.catch(function() {});", theme_block)
-        self.assertEqual(theme_block.count("if (revision !== themeRevision) return;"), 2)
-        self.assertIn("applyTheme(persistedTheme);", theme_block)
+        # 选主题：先即时应用（若正是生效模式），再持久化。
+        choice_start = HTML.index("function selectThemeChoice(id)")
+        choice_end = HTML.index("function isEditModeLive()", choice_start)
+        choice_block = HTML[choice_start:choice_end]
+        apply_at = choice_block.index("if (isEditModeLive()) applyAppearance();")
+        persist_at = choice_block.index("persistAppearance();")
+        self.assertLess(apply_at, persist_at)
+
+        # applyAppearance 解析当前模式与系统偏好后落到 data-theme，且更新 currentTheme。
+        self.assertIn("function applyAppearance()", HTML)
+        self.assertIn("currentTheme = activeId;", HTML)
+
+        # 持久化去抖，且同时写 appearance 完整状态与 legacy theme 内置回退。
+        persist_start = HTML.index("function persistAppearance()")
+        persist_end = HTML.index("function loadAppearanceFromPreferences", persist_start)
+        persist_block = HTML[persist_start:persist_end]
+        self.assertIn("setTimeout(function()", persist_block)
+        self.assertIn("appearance: serializeAppearance()", persist_block)
+        self.assertIn("theme: activeBuiltinFallback()", persist_block)
+        # 切主题不重载页面。
+        self.assertNotIn("location.reload", HTML)
 
     def test_browser_shell_does_not_show_the_macos_titlebar(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):

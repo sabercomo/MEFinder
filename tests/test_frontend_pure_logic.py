@@ -908,13 +908,18 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertTrue(html.startswith('<span class="theme-preview" data-preview-theme="dawn"'))
 
     def test_option_wraps_choice_and_embeds_preview(self):
-        theme = {"id": "dawn", "name": "晨", "tone": "亮", "description": "desc"}
+        # 新契约：主题选项由 THEME_PRESETS/自定义主题驱动，字段为 label/mode/desc，
+        # 点击走引擎的 selectThemeChoice。
+        theme = {"id": "dawn", "label": "晨", "mode": "light", "desc": "desc",
+                 "builtinCss": True}
         html = _call("themeOptionMarkup", theme)
         self.assertTrue(html.startswith('<button class="theme-option" type="button" data-theme-choice="dawn"'))
+        self.assertIn('onclick="selectThemeChoice(\'dawn\')"', html)
         # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
         self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
         self.assertIn(">晨<", html)
         self.assertIn(">desc<", html)
+        self.assertIn(">浅色<", html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

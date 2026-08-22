@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any, Mapping
@@ -39,6 +40,136 @@ VALID_LIBRARY_LANGUAGES = frozenset({"chinese", "foreign"})
 DEFAULT_ONLINE_AUTO_MATCH = 0.90
 ONLINE_AUTO_MATCH_MIN = 0.80
 ONLINE_AUTO_MATCH_MAX = 1.00
+
+# ── 可扩展主题引擎（阶段 3-6）的持久化 ──
+# 浅色与深色各自独立保存一份主题选择，外观模式决定跟随系统/浅/深。
+# 内置 CSS 主题（VALID_THEMES）仍是首帧与原生标题栏的回退，legacy `theme`
+# 字段继续只存这 6 个之一；真正的引擎状态放在独立的 `appearance` 对象里，
+# 因此不影响任何既有 theme 契约与后端校验。
+APPEARANCE_SCHEMA_VERSION = 1
+VALID_APPEARANCE_MODES = frozenset({"system", "light", "dark"})
+DEFAULT_APPEARANCE_MODE = "system"
+# 每种模式的默认内置主题（也是 legacy theme 回退）。
+APPEARANCE_MODE_DEFAULT_THEME = {"light": "frost-blue", "dark": "midnight"}
+_HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+_THEME_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_MAX_CUSTOM_THEMES = 60
+
+
+def _mode_of_theme(theme: str) -> str:
+    return "dark" if theme == "midnight" else "light"
+
+
+def _builtin_fallback_theme(theme_id: str, custom_themes: dict, mode_hint: str) -> str:
+    """把任意主题 id（内置/新预设/自定义）归约为一个内置 CSS 主题 id，
+    供 legacy `theme` 字段（首帧、原生标题栏）使用。"""
+
+    if theme_id in VALID_THEMES:
+        return theme_id
+    mode = mode_hint
+    entry = custom_themes.get(theme_id) if isinstance(custom_themes, dict) else None
+    if isinstance(entry, dict) and entry.get("mode") in {"light", "dark"}:
+        mode = str(entry["mode"])
+    return APPEARANCE_MODE_DEFAULT_THEME.get(mode, "frost-blue")
+
+
+def _normalized_theme_def(value: Any) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    mode = value.get("mode")
+    if mode not in {"light", "dark"}:
+        return None
+    accent, background, foreground = (
+        value.get("accent"),
+        value.get("background"),
+        value.get("foreground"),
+    )
+    for color in (accent, background, foreground):
+        if not isinstance(color, str) or not _HEX_COLOR.match(color.strip()):
+            return None
+    try:
+        contrast = float(value.get("contrast", 55))
+    except (TypeError, ValueError):
+        contrast = 55.0
+    contrast = max(0, min(100, round(contrast)))
+    name = str(value.get("name") or "自定义主题").strip()[:60] or "自定义主题"
+    normalized = {
+        "schemaVersion": APPEARANCE_SCHEMA_VERSION,
+        "name": name,
+        "mode": str(mode),
+        "accent": str(accent).strip(),
+        "background": str(background).strip(),
+        "foreground": str(foreground).strip(),
+        "contrast": contrast,
+    }
+    for font_key in ("fontUi", "fontCode"):
+        font_value = value.get(font_key)
+        if isinstance(font_value, str) and 0 < len(font_value) < 200:
+            normalized[font_key] = font_value
+    tokens = value.get("tokens")
+    if isinstance(tokens, dict):
+        clean = {
+            str(k): str(v)
+            for k, v in tokens.items()
+            if isinstance(k, str) and re.match(r"^--[a-z0-9-]+$", k) and isinstance(v, str)
+        }
+        if clean:
+            normalized["tokens"] = clean
+    return normalized
+
+
+def _normalized_appearance(value: Any, legacy_theme: str) -> dict[str, Any]:
+    """把 appearance 规整为可信结构；缺失或损坏时从 legacy theme 迁移。
+
+    迁移策略：把用户当前的单一 theme 放进它所属模式的选择里，另一模式取默认，
+    外观模式设为该 theme 的模式——升级后表现与升级前逐帧一致。"""
+
+    legacy_mode = _mode_of_theme(legacy_theme)
+    custom_themes: dict[str, Any] = {}
+    if isinstance(value, dict):
+        raw_custom = value.get("custom_themes")
+        if isinstance(raw_custom, dict):
+            for key, entry in raw_custom.items():
+                if not isinstance(key, str) or not _THEME_ID.match(key):
+                    continue
+                normalized = _normalized_theme_def(entry)
+                if normalized is not None:
+                    normalized["id"] = key
+                    custom_themes[key] = normalized
+                if len(custom_themes) >= _MAX_CUSTOM_THEMES:
+                    break
+
+    def _resolve_selection(raw: Any, mode: str) -> str:
+        candidate = str(raw).strip() if isinstance(raw, str) else ""
+        if candidate in VALID_THEMES:
+            return candidate
+        if candidate in custom_themes and custom_themes[candidate].get("mode") == mode:
+            return candidate
+        # 新官方预设 id（前端 THEME_PRESETS 里非内置 CSS 的那些）也放行：
+        # 后端不内联颜色语义，仅要求 id 合法且非空。
+        if candidate and _THEME_ID.match(candidate):
+            return candidate
+        return APPEARANCE_MODE_DEFAULT_THEME[mode]
+
+    if isinstance(value, dict):
+        mode = value.get("mode")
+        if mode not in VALID_APPEARANCE_MODES:
+            mode = DEFAULT_APPEARANCE_MODE
+        light = _resolve_selection(value.get("light"), "light")
+        dark = _resolve_selection(value.get("dark"), "dark")
+    else:
+        # 首次迁移：从 legacy theme 构造。
+        mode = legacy_mode
+        light = legacy_theme if legacy_mode == "light" else APPEARANCE_MODE_DEFAULT_THEME["light"]
+        dark = legacy_theme if legacy_mode == "dark" else APPEARANCE_MODE_DEFAULT_THEME["dark"]
+
+    return {
+        "schemaVersion": APPEARANCE_SCHEMA_VERSION,
+        "mode": str(mode),
+        "light": light,
+        "dark": dark,
+        "custom_themes": custom_themes,
+    }
 
 
 def _normalized_online_auto_match(value: Any) -> float:
@@ -105,8 +236,13 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     online_auto_match = _normalized_online_auto_match(
         payload.get("online_auto_match_threshold") if isinstance(payload, dict) else None
     )
+    appearance = _normalized_appearance(
+        payload.get("appearance") if isinstance(payload, dict) else None,
+        theme,
+    )
     return {
         "theme": theme,
+        "appearance": appearance,
         "library_view": library_view,
         "calibration_view": calibration_view,
         "scan_directories": scan_directories,
@@ -224,6 +360,18 @@ def _save_preferences_locked(
         current["online_auto_match_threshold"] = _normalized_online_auto_match(
             updates["online_auto_match_threshold"]
         )
+    if "appearance" in updates:
+        appearance = _normalized_appearance(updates["appearance"], current["theme"])
+        current["appearance"] = appearance
+        # 客户端未显式带 legacy theme 时，从活动选择归约出内置回退，
+        # 保证首帧与原生标题栏跟随外观设置（system 模式无从得知系统色，
+        # 退到浅色选择，前端载入后会立即校正）。
+        if "theme" not in updates:
+            active_mode = "dark" if appearance["mode"] == "dark" else "light"
+            active_selection = appearance[active_mode]
+            current["theme"] = _builtin_fallback_theme(
+                active_selection, appearance["custom_themes"], active_mode
+            )
 
     preferences_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = preferences_path.with_suffix(preferences_path.suffix + ".tmp")

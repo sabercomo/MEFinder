@@ -504,8 +504,10 @@ function bibliographicMissingText(meta) {
 }
 
 // 主题预览缩略图标记。原在 60-settings.js，纯字符串拼接。
-function themePreviewMarkup(themeId) {
-  return '<span class="theme-preview" data-preview-theme="' + themeId + '" aria-hidden="true">'
+// styleAttr 非空时（新预设/自定义主题）以内联派生 token 着色；内置 CSS 主题
+// 仍靠 data-preview-theme 的样式块，缩略图内部一律用 var(--token)，天然复用真实设计 token。
+function themePreviewMarkup(themeId, styleAttr) {
+  return '<span class="theme-preview" data-preview-theme="' + themeId + '"' + (styleAttr ? ' style="' + styleAttr + '"' : '') + ' aria-hidden="true">'
     + '<span class="theme-mini-sidebar">'
     + '<span class="theme-mini-brand"><span class="theme-mini-brand-mark"></span><span class="theme-mini-brand-line"></span></span>'
     + '<span class="theme-mini-nav">'
@@ -523,13 +525,29 @@ function themePreviewMarkup(themeId) {
     + '</span></span></span>';
 }
 
-// 主题选项按钮标记。原在 60-settings.js，依赖 themePreviewMarkup。
-function themeOptionMarkup(theme) {
-  return '<button class="theme-option" type="button" data-theme-choice="' + theme.id + '" role="radio" aria-checked="false" onclick="setTheme(\'' + theme.id + '\')">'
-    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + theme.name + '</span><span class="theme-option-tone">' + theme.tone + '</span></span>'
+// 派生 token 的内联 style 串（新预设/自定义主题的缩略图与卡片着色用）。
+function themePreviewInlineStyle(def) {
+  if (typeof deriveThemeTokens !== 'function') return '';
+  var tokens = deriveThemeTokens(def);
+  var out = [];
+  for (var key in tokens) {
+    if (tokens.hasOwnProperty(key)) out.push(key + ':' + tokens[key]);
+  }
+  return out.join(';');
+}
+
+// 主题选项按钮标记。现由 THEME_PRESETS/自定义主题驱动，点击走 selectThemeChoice。
+// preset: { id, name, label, mode, builtinCss, desc, accent, background, foreground, contrast }
+function themeOptionMarkup(preset) {
+  var tone = preset.mode === 'dark' ? '深色' : '浅色';
+  var name = preset.label || preset.name || preset.id;
+  var desc = preset.desc || '';
+  var styleAttr = preset.builtinCss ? '' : themePreviewInlineStyle(preset);
+  return '<button class="theme-option" type="button" data-theme-choice="' + preset.id + '" role="radio" aria-checked="false" onclick="selectThemeChoice(\'' + preset.id + '\')">'
+    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span><span class="theme-option-tone">' + tone + '</span></span>'
     + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
-    + themePreviewMarkup(theme.id)
-    + '<span class="theme-option-description">' + theme.description + '</span></button>';
+    + themePreviewMarkup(preset.id, styleAttr)
+    + '<span class="theme-option-description">' + esc(desc) + '</span></button>';
 }
 
 // 卷册索引：source_file_id → volume。原在 20-search.js，纯。
