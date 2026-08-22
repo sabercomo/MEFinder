@@ -55,6 +55,19 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
             """
         )
         changed = True
+    else:
+        # An index migrated under the (reverted) 837d808 folders+groups feature
+        # already has a document_groups table WITHOUT base_source_file_id (837 kept
+        # membership as a source_files column, not a base pointer). Add it additively.
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(document_groups)")
+        }
+        if "base_source_file_id" not in columns:
+            connection.execute(
+                "ALTER TABLE document_groups ADD COLUMN base_source_file_id TEXT"
+            )
+            changed = True
     if not _table_exists(connection, "document_group_members"):
         connection.execute(
             """

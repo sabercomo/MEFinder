@@ -135,6 +135,33 @@ class DocumentGroupDataLayerTests(unittest.TestCase):
         )
         after.close()
 
+    def test_migration_adds_base_column_to_legacy_837_group_table(self) -> None:
+        # An index migrated under 837d808 has a document_groups table WITHOUT
+        # base_source_file_id and no members table; ensure() must add the column
+        # additively so reads/writes don't crash on "no such column".
+        connection = sqlite3.connect(str(self.db))
+        connection.execute(
+            "CREATE TABLE document_groups (document_group_id TEXT PRIMARY KEY, "
+            "title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO document_groups VALUES ('g-old', '旧组', 't', 't')"
+        )
+        connection.commit()
+        connection.close()
+
+        dg.ensure_document_group_schema(self.db)
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["title"], "旧组")
+        self.assertIsNone(groups[0]["base_source_file_id"])
+        # base management works after the additive migration
+        dg.add_group_member("g-old", "src-zh", self.db)
+        dg.set_document_group_base("g-old", "src-zh", self.db)
+        self.assertEqual(
+            dg.list_document_groups(self.db)[0]["base_source_file_id"], "src-zh"
+        )
+
     def test_create_rename_delete_roundtrip(self) -> None:
         created = dg.create_document_group("初版", self.db)
         gid = created["document_group_id"]
