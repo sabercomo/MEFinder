@@ -19,7 +19,7 @@ from me_finder import document_groups as dg
 from me_finder.application.document_group_coordinator import (
     DocumentGroupCoordinator,
 )
-from me_finder.database import DATABASE_SCHEMA_VERSION
+from me_finder.database import DATABASE_SCHEMA_VERSION, build_database
 from me_finder.document_group_controller import DocumentGroupController
 from me_finder.document_group_metadata import member_display_name
 
@@ -344,6 +344,107 @@ class DocumentGroupControllerTests(unittest.TestCase):
             {"document_group_id": gid, "base_source_file_id": "src-en"}
         )
         self.assertEqual(status, 400)
+
+
+def _rebuild_index(source_ids):
+    return {
+        "metadata": {},
+        "source_files": [
+            {
+                "source_file_id": sid,
+                "source_type": "pdf",
+                "file_name": f"{sid}.pdf",
+                "title": sid,
+            }
+            for sid in source_ids
+        ],
+        "volumes": [],
+        "works": [],
+        "paragraphs": [],
+        "page_anchors": [],
+        "pdf_pages": [],
+        "pdf_page_mappings": [],
+    }
+
+
+class DocumentGroupRebuildPreservationTests(unittest.TestCase):
+    """Groups are user data and must survive a from-scratch index rebuild (B1)."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.db = Path(self._dir.name) / "index.sqlite3"
+
+    def tearDown(self) -> None:
+        self._dir.cleanup()
+
+    def _build(self, source_ids) -> None:
+        build_database(
+            _rebuild_index(source_ids), self.db, backup_existing=self.db.exists()
+        )
+
+    def test_rebuild_preserves_groups_members_base_and_order(self) -> None:
+        self._build(["a", "b", "c"])
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "a", self.db, version_label="甲本")
+        dg.add_group_member(gid, "b", self.db)
+        dg.set_document_group_base(gid, "a", self.db)
+
+        self._build(["a", "b", "c"])  # simulate a full index rebuild
+
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["title"], "组")
+        self.assertEqual(groups[0]["base_source_file_id"], "a")
+        members = {m["source_file_id"]: m for m in groups[0]["members"]}
+        self.assertEqual(members["a"]["version_label"], "甲本")
+        self.assertEqual(members["a"]["member_order"], 0)
+        self.assertEqual(members["b"]["member_order"], 1)
+
+    def test_rebuild_skips_missing_source_and_clears_base(self) -> None:
+        self._build(["a", "b"])
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "a", self.db)
+        dg.add_group_member(gid, "b", self.db)
+        dg.set_document_group_base(gid, "a", self.db)
+
+        self._build(["b"])  # "a" is no longer imported
+
+        group = dg.list_document_groups(self.db)[0]
+        self.assertEqual({m["source_file_id"] for m in group["members"]}, {"b"})
+        self.assertIsNone(group["base_source_file_id"])
+
+    def test_rebuild_keeps_group_when_all_members_missing(self) -> None:
+        self._build(["a"])
+        gid = dg.create_document_group("孤组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "a", self.db)
+
+        self._build(["b"])  # every member gone
+
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["members"], [])
+        self.assertIsNone(groups[0]["base_source_file_id"])
+
+    def test_rebuild_does_not_reintroduce_folders(self) -> None:
+        self._build(["a"])
+        connection = sqlite3.connect(str(self.db))
+        try:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            source_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(source_files)")
+            }
+        finally:
+            connection.close()
+        self.assertNotIn("folders", tables)
+        self.assertNotIn("folder_id", source_columns)
+        self.assertIn("document_groups", tables)
+        self.assertIn("document_group_members", tables)
 
 
 if __name__ == "__main__":

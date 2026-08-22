@@ -499,6 +499,124 @@ def list_document_groups(
         connection.close()
 
 
+def read_document_group_snapshot(db_path: Path) -> Dict[str, list]:
+    """Read all group + membership rows from an existing (old) index DB.
+
+    Used before a from-scratch index rebuild replaces the file. Returns empty
+    lists when the DB or the tables are absent (a pre-v3 index).
+    """
+
+    snapshot: Dict[str, list] = {
+        "document_groups": [],
+        "document_group_members": [],
+    }
+    path = Path(db_path)
+    if not path.exists():
+        return snapshot
+    with path.open("rb") as stream:
+        if stream.read(16) != b"SQLite format 3\x00":
+            return snapshot
+    connection = sqlite3.connect(str(path))
+    connection.row_factory = sqlite3.Row
+    try:
+        if not _table_exists(connection, "document_groups"):
+            return snapshot
+        snapshot["document_groups"] = [
+            {
+                "document_group_id": row["document_group_id"],
+                "title": row["title"],
+                "base_source_file_id": row["base_source_file_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+            for row in connection.execute(
+                "SELECT document_group_id, title, base_source_file_id, "
+                "created_at, updated_at FROM document_groups"
+            )
+        ]
+        if _table_exists(connection, "document_group_members"):
+            snapshot["document_group_members"] = [
+                {
+                    "document_group_id": row["document_group_id"],
+                    "source_file_id": row["source_file_id"],
+                    "version_label": row["version_label"],
+                    "member_order": row["member_order"],
+                    "added_at": row["added_at"],
+                }
+                for row in connection.execute(
+                    "SELECT document_group_id, source_file_id, version_label, "
+                    "member_order, added_at FROM document_group_members"
+                )
+            ]
+        return snapshot
+    finally:
+        connection.close()
+
+
+def restore_document_group_snapshot(
+    connection: sqlite3.Connection, snapshot: Dict[str, list]
+) -> None:
+    """Re-apply a group snapshot into a freshly-built index (open transaction).
+
+    Runs inside the rebuild's own transaction so a failure aborts the rebuild
+    rather than corrupting the retained old DB. Members whose SourceFile no
+    longer exists are skipped (no dangling references); a group whose base
+    version is missing or not among the restored members has its base cleared.
+    Groups are preserved even when every member was dropped.
+    """
+
+    if not snapshot:
+        return
+    groups = snapshot.get("document_groups") or []
+    members = snapshot.get("document_group_members") or []
+    if not groups:
+        return
+    install_document_group_schema(connection)
+
+    valid_sources = {
+        row[0]
+        for row in connection.execute("SELECT source_file_id FROM source_files")
+    }
+    surviving: Dict[str, list] = {}
+    for member in members:
+        if member.get("source_file_id") in valid_sources:
+            surviving.setdefault(member["document_group_id"], []).append(member)
+
+    for group in groups:
+        group_id = group.get("document_group_id")
+        member_ids = {m["source_file_id"] for m in surviving.get(group_id, [])}
+        base = group.get("base_source_file_id")
+        if base and base not in member_ids:
+            base = None
+        connection.execute(
+            "INSERT INTO document_groups"
+            "(document_group_id, title, base_source_file_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                group_id,
+                group.get("title"),
+                base,
+                group.get("created_at"),
+                group.get("updated_at"),
+            ),
+        )
+
+    for group_id, group_members in surviving.items():
+        for member in group_members:
+            connection.execute(
+                "INSERT INTO document_group_members"
+                "(document_group_id, source_file_id, version_label, member_order, "
+                "added_at) VALUES (?, ?, ?, ?, ?)",
+                (
+                    group_id,
+                    member["source_file_id"],
+                    member.get("version_label"),
+                    int(member.get("member_order") or 0),
+                    member.get("added_at"),
+                ),
+            )
+
+
 def document_group_for_source(
     source_file_id: object, db_path: Path = DEFAULT_DATABASE_PATH
 ) -> Optional[str]:

@@ -436,6 +436,8 @@ def optimize_database_storage(db_path: Path) -> bool:
             "pdf_page_mappings",
             "pdf_import_runs",
             "audit_issues",
+            "document_groups",
+            "document_group_members",
         )
         for table_name in table_names:
             destination_columns = [
@@ -1038,6 +1040,14 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
 
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    # DocumentGroups are user data that live only in the index DB; capture them
+    # from the file about to be replaced, then restore after source_files exist.
+    from .document_groups import (
+        read_document_group_snapshot,
+        restore_document_group_snapshot,
+    )
+
+    preserved_document_groups = read_document_group_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
     _sanitize_surrogates_in_place(index)
@@ -1166,6 +1176,10 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
                 if item.get("source_file_id")
             ],
         )
+
+        # SourceFiles now exist in the rebuilt DB; re-apply preserved groups,
+        # skipping members whose source is gone and clearing a missing base.
+        restore_document_group_snapshot(connection, preserved_document_groups)
 
         connection.executemany(
             """
