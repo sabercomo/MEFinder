@@ -47,7 +47,7 @@ class SearchServiceTests(unittest.TestCase):
         self.assertEqual(result, {"total": 0, "results": []})
         self.assertEqual(
             engine.arguments,
-            ("原句", "auto", 5, "word", None),
+            ("原句", "auto", 5, "word", None, None),
         )
 
 

@@ -37,6 +37,7 @@ class FakeEngine:
         limit: int | str | None = 10,
         source_type: str = "all",
         source_file_id: str | None = None,
+        source_file_ids: tuple[str, ...] | None = None,
     ) -> dict[str, object]:
         return {
             "engine": self.name,
@@ -45,6 +46,7 @@ class FakeEngine:
             "limit": limit,
             "source_type": source_type,
             "source_file_id": source_file_id,
+            "source_file_ids": source_file_ids,
         }
 
 

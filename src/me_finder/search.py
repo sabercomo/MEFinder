@@ -121,9 +121,19 @@ class SearchEngine:
         limit: int | str | None = 10,
         source_type: str = "all",
         source_file_id: Optional[str] = None,
+        source_file_ids: Optional[Sequence[str]] = None,
     ) -> Dict[str, object]:
         query = (query or "").strip()
         source_file_id = str(source_file_id or "").strip() or None
+        # A set scope (e.g. a DocumentGroup's members, resolved upstream) is applied
+        # through _scope_source_ids and read by both the SQL and in-memory scope
+        # helpers. None = no set scope; an empty set = an explicit empty scope that
+        # matches nothing — never widened to the whole library.
+        self._scope_source_ids = (
+            frozenset(str(item) for item in source_file_ids)
+            if source_file_ids is not None
+            else None
+        )
         if mode not in SEARCH_MODES:
             mode = "auto"
         if source_type not in {"all", "word", "pdf"}:
@@ -250,7 +260,18 @@ class SearchEngine:
         if source_type != "all":
             clauses.append(f"{prefix}source_type = ?")
             args.append(source_type)
-        if source_file_id:
+        scope_ids = getattr(self, "_scope_source_ids", None)
+        if scope_ids is not None:
+            # Explicit set scope (DocumentGroup members). An empty set matches
+            # nothing; it must never fall through to an unscoped whole-library search.
+            if not scope_ids:
+                clauses.append("1 = 0")
+            else:
+                ordered = list(scope_ids)
+                placeholders = ", ".join("?" for _ in ordered)
+                clauses.append(f"{prefix}source_file_id IN ({placeholders})")
+                args.extend(ordered)
+        elif source_file_id:
             clauses.append(f"{prefix}source_file_id = ?")
             args.append(source_file_id)
         return (" AND " + " AND ".join(clauses), args) if clauses else ("", args)
@@ -1533,6 +1554,10 @@ class SearchEngine:
     ) -> bool:
         if source_type != "all" and str(paragraph.get("source_type") or "word") != source_type:
             return False
+        scope_ids = getattr(self, "_scope_source_ids", None)
+        if scope_ids is not None:
+            # Explicit set scope; an empty set matches nothing.
+            return str(paragraph.get("source_file_id") or "") in scope_ids
         return not source_file_id or str(paragraph.get("source_file_id") or "") == source_file_id
 
     def _rank_key(self, item: Dict[str, object]) -> Tuple[float, int, int, str, int, str, int]:

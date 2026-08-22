@@ -287,6 +287,22 @@ class DocumentGroupDataLayerTests(unittest.TestCase):
             "黎思复 译",
         )
 
+    def test_resolve_source_ids_ordered_by_member_order(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "src-zh", self.db)
+        dg.add_group_member(gid, "src-en", self.db)
+        self.assertEqual(
+            dg.resolve_document_group_source_ids(gid, self.db), ["src-zh", "src-en"]
+        )
+
+    def test_resolve_missing_group_raises_not_found(self) -> None:
+        with self.assertRaises(dg.DocumentGroupNotFound):
+            dg.resolve_document_group_source_ids("no-such-group", self.db)
+
+    def test_resolve_empty_group_returns_empty_list(self) -> None:
+        gid = dg.create_document_group("空组", self.db)["document_group_id"]
+        self.assertEqual(dg.resolve_document_group_source_ids(gid, self.db), [])
+
     def test_version_label_too_long_rejected(self) -> None:
         gid = dg.create_document_group("组", self.db)["document_group_id"]
         with self.assertRaises(ValueError):

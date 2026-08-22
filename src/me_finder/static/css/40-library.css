@@ -693,6 +693,9 @@
 .grp-remove-btn { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; color: var(--text-tertiary); font-size: 13px; cursor: pointer; }
 .grp-remove-btn:hover { background: var(--danger-soft); color: var(--danger); }
 
+/* 检索页「文献范围」下拉里的分节标题（单篇文献 / 作品组）。 */
+.document-options-head { padding: 7px 12px 3px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--text-tertiary); }
+
 /* ⋯ 更多：无框图标按钮。逐项盖掉 .app-select-trigger 的 min-width / border /
    padding / height，否则会撑成一个空的大框。 */
 .library-overflow-btn {

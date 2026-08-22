@@ -630,6 +630,51 @@ def restore_document_group_snapshot(
             )
 
 
+class DocumentGroupNotFound(ValueError):
+    """The referenced document group does not exist."""
+
+
+def resolve_document_group_source_ids(
+    document_group_id: object, db_path: Path = DEFAULT_DATABASE_PATH
+) -> List[str]:
+    """Resolve a group to its ordered member source_file_ids.
+
+    Boundary helper for full-text scope: the search engine only ever receives
+    source_file_ids, never a DocumentGroup. Raises DocumentGroupNotFound when the
+    group is absent (so a bad id is a hard error, never a whole-library search);
+    an existing group with no members returns [] (an explicit empty scope).
+    """
+
+    group_id = str(document_group_id or "").strip()
+    if not group_id:
+        raise DocumentGroupNotFound("作品组不存在。")
+    path = Path(db_path)
+    if not path.exists():
+        raise DocumentGroupNotFound("作品组不存在。")
+    connection = sqlite3.connect(str(path))
+    try:
+        if not _table_exists(connection, "document_groups"):
+            raise DocumentGroupNotFound("作品组不存在。")
+        if (
+            connection.execute(
+                "SELECT 1 FROM document_groups WHERE document_group_id = ?",
+                (group_id,),
+            ).fetchone()
+            is None
+        ):
+            raise DocumentGroupNotFound("作品组不存在。")
+        if not _table_exists(connection, "document_group_members"):
+            return []
+        rows = connection.execute(
+            "SELECT source_file_id FROM document_group_members "
+            "WHERE document_group_id = ? ORDER BY member_order, source_file_id",
+            (group_id,),
+        ).fetchall()
+        return [row[0] for row in rows]
+    finally:
+        connection.close()
+
+
 def document_group_for_source(
     source_file_id: object, db_path: Path = DEFAULT_DATABASE_PATH
 ) -> Optional[str]:

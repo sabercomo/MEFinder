@@ -39,6 +39,7 @@ from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .application.document_group_coordinator import DocumentGroupCoordinator
 from .document_group_controller import DocumentGroupController
+from .document_groups import DocumentGroupNotFound, resolve_document_group_source_ids
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import migrate_data_root
 from .bibliographic_metadata_controller import BibliographicMetadataController
@@ -1221,7 +1222,25 @@ def make_handler(
 
         def _post_search(self, payload: object) -> None:
             try:
+                # Resolve a document_group_id scope to member source_file_ids at the
+                # transport boundary; SearchService / search.py never see DocumentGroups.
+                if isinstance(payload, dict) and str(
+                    payload.get("document_group_id") or ""
+                ).strip():
+                    if str(payload.get("source_file_id") or "").strip():
+                        raise ValueError(
+                            "source_file_id 与 document_group_id 不能同时指定。"
+                        )
+                    member_ids = resolve_document_group_source_ids(
+                        payload["document_group_id"], index_path
+                    )
+                    payload = dict(payload)
+                    payload.pop("document_group_id", None)
+                    payload["source_file_ids"] = member_ids
                 request = SearchRequest.from_payload(payload)
+            except DocumentGroupNotFound as exc:
+                self._send_json({"error": str(exc)}, status=404)
+                return
             except ValueError as exc:
                 self._send_json({"error": str(exc)}, status=400)
                 return
