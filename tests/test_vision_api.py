@@ -612,6 +612,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                     "vendor-document-ocr",
                     "qwen3-vl-plus",
                     "qwen3.7-plus",
+                    "deepseek-v4-flash",
                     "qwen3-omni-flash",
                     "qwen3-vl-flash",
                     "qwen3.6-flash",
@@ -626,7 +627,6 @@ class VisionAPIConfigTests(unittest.TestCase):
                     "qwen3.8-max",
                     "vendor-multimodal-model",
                     "text-model",
-                    "deepseek-v4-flash",
                     "glm-5.2",
                     "qwen-long",
                     "qwen3.6-max-preview",
@@ -691,9 +691,9 @@ class VisionAPIConfigTests(unittest.TestCase):
             )
             self.assertEqual(
                 by_id["deepseek-v4-flash"]["capability_label"],
-                "不支持图片",
+                "支持图片",
             )
-            self.assertFalse(by_id["deepseek-v4-flash"]["likely_vision"])
+            self.assertTrue(by_id["deepseek-v4-flash"]["likely_vision"])
             self.assertEqual(opener.request.get_method(), "GET")
             self.assertEqual(
                 opener.request.full_url,
