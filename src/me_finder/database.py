@@ -22,7 +22,7 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 3
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
 DATABASE_REPLACE_ATTEMPTS = 15
@@ -31,7 +31,7 @@ DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
@@ -64,6 +64,23 @@ CREATE TABLE works (
     title TEXT,
     payload_json TEXT NOT NULL
 );
+
+CREATE TABLE document_groups (
+    document_group_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    base_source_file_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE document_group_members (
+    document_group_id TEXT NOT NULL REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
+    source_file_id TEXT NOT NULL UNIQUE,
+    version_label TEXT,
+    member_order INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL
+);
+CREATE INDEX idx_document_group_members_group ON document_group_members(document_group_id);
 
 CREATE TABLE toc_entries (
     row_id INTEGER PRIMARY KEY AUTOINCREMENT,

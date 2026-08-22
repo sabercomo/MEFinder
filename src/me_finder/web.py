@@ -37,6 +37,8 @@ from .application.import_orchestrator import (
 )
 from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
+from .application.document_group_coordinator import DocumentGroupCoordinator
+from .document_group_controller import DocumentGroupController
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import migrate_data_root
 from .bibliographic_metadata_controller import BibliographicMetadataController
@@ -162,6 +164,13 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/auto-page-mapping/accept",
         "/api/documents/remove",
         "/api/documents/remove-batch",
+        "/api/document-groups/create",
+        "/api/document-groups/rename",
+        "/api/document-groups/delete",
+        "/api/document-groups/add-member",
+        "/api/document-groups/remove-member",
+        "/api/document-groups/set-base",
+        "/api/document-groups/version-label",
     }
 )
 
@@ -760,6 +769,14 @@ def make_handler(
     document_lifecycle_controller = DocumentLifecycleController(
         deletion_coordinator
     )
+    document_group_coordinator = DocumentGroupCoordinator(
+        context.paths,
+        index_runtime,
+        durable_operations,
+    )
+    document_group_controller = DocumentGroupController(
+        document_group_coordinator
+    )
     structured_reader_controller = StructuredReaderController(
         index_runtime.run_when_ready,
         get_window=(
@@ -878,6 +895,9 @@ def make_handler(
         "/api/calibration-library": (
             lambda _params: library_query_controller.calibration_library()
         ),
+        "/api/document-groups": (
+            lambda _params: document_group_controller.list()
+        ),
         "/api/preferences": (
             lambda _params: preferences_controller.preferences()
         ),
@@ -967,6 +987,17 @@ def make_handler(
         ),
         "/api/bibliographic-metadata/save": (
             bibliographic_metadata_controller.save
+        ),
+        "/api/document-groups/create": document_group_controller.create,
+        "/api/document-groups/rename": document_group_controller.rename,
+        "/api/document-groups/delete": document_group_controller.delete,
+        "/api/document-groups/add-member": document_group_controller.add_member,
+        "/api/document-groups/remove-member": (
+            document_group_controller.remove_member
+        ),
+        "/api/document-groups/set-base": document_group_controller.set_base,
+        "/api/document-groups/version-label": (
+            document_group_controller.set_version_label
         ),
         "/api/calibration": page_mapping_controller.calibrate,
         "/api/auto-page-mapping/detect": page_mapping_controller.detect,

@@ -1,0 +1,350 @@
+"""DocumentGroup + membership data layer (Commit B).
+
+Verifies the confirmed architecture and its five data constraints against a
+throwaway index DB: additive migration, UNIQUE(source_file_id), base-must-be-member,
+base-cleared-on-member-removal, and group deletion never touching source_files.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import tempfile
+import unittest
+from pathlib import Path
+
+from contextlib import contextmanager
+
+from me_finder import document_groups as dg
+from me_finder.application.document_group_coordinator import (
+    DocumentGroupCoordinator,
+)
+from me_finder.database import DATABASE_SCHEMA_VERSION
+from me_finder.document_group_controller import DocumentGroupController
+from me_finder.document_group_metadata import member_display_name
+
+
+def _make_v2_source_db(path: Path, sources) -> None:
+    """A pre-feature (v2) index: source_files only, no group tables."""
+
+    connection = sqlite3.connect(str(path))
+    try:
+        connection.execute(
+            "CREATE TABLE source_files ("
+            "source_file_id TEXT PRIMARY KEY, source_type TEXT NOT NULL, "
+            "file_name TEXT, relative_path TEXT, volume_number INTEGER, "
+            "payload_json TEXT NOT NULL)"
+        )
+        for source in sources:
+            connection.execute(
+                "INSERT INTO source_files"
+                "(source_file_id, source_type, file_name, payload_json) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    source["source_file_id"],
+                    source.get("source_type", "pdf"),
+                    source.get("file_name", ""),
+                    json.dumps(source, ensure_ascii=False),
+                ),
+            )
+        connection.execute("PRAGMA user_version = 2")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+class DocumentGroupDataLayerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.db = Path(self._dir.name) / "index.sqlite3"
+        _make_v2_source_db(
+            self.db,
+            [
+                {
+                    "source_file_id": "src-zh",
+                    "file_name": "leviathan-zh.pdf",
+                    "title": "利维坦",
+                    "translator": "黎思复",
+                    "language_code": "zh-Hans",
+                },
+                {
+                    "source_file_id": "src-en",
+                    "file_name": "leviathan-en.pdf",
+                    "title": "Leviathan",
+                    "language_code": "en",
+                },
+                {
+                    "source_file_id": "src-de",
+                    "file_name": "leviathan-de.pdf",
+                    "title": "Leviathan (DE)",
+                    "language_code": "de",
+                },
+            ],
+        )
+
+    def tearDown(self) -> None:
+        self._dir.cleanup()
+
+    # ── helpers ──
+    def _tables(self):
+        connection = sqlite3.connect(str(self.db))
+        try:
+            return {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+        finally:
+            connection.close()
+
+    def _user_version(self) -> int:
+        connection = sqlite3.connect(str(self.db))
+        try:
+            return int(connection.execute("PRAGMA user_version").fetchone()[0])
+        finally:
+            connection.close()
+
+    def _membership_rows(self):
+        connection = sqlite3.connect(str(self.db))
+        try:
+            return connection.execute(
+                "SELECT document_group_id, source_file_id FROM "
+                "document_group_members ORDER BY source_file_id"
+            ).fetchall()
+        finally:
+            connection.close()
+
+    # ── constraint 5: additive migration ──
+    def test_migration_is_additive_and_preserves_sources(self) -> None:
+        self.assertNotIn("document_groups", self._tables())
+        before = sqlite3.connect(str(self.db))
+        source_count = before.execute("SELECT COUNT(*) FROM source_files").fetchone()[0]
+        before.close()
+
+        dg.create_document_group("霍布斯《利维坦》", self.db)
+
+        tables = self._tables()
+        self.assertIn("document_groups", tables)
+        self.assertIn("document_group_members", tables)
+        self.assertEqual(self._user_version(), DATABASE_SCHEMA_VERSION)
+        after = sqlite3.connect(str(self.db))
+        self.assertEqual(
+            after.execute("SELECT COUNT(*) FROM source_files").fetchone()[0],
+            source_count,
+        )
+        after.close()
+
+    def test_create_rename_delete_roundtrip(self) -> None:
+        created = dg.create_document_group("初版", self.db)
+        gid = created["document_group_id"]
+        self.assertIsNone(created["base_source_file_id"])
+
+        dg.rename_document_group(gid, "利维坦", self.db)
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["title"], "利维坦")
+
+        dg.delete_document_group(gid, self.db)
+        self.assertEqual(dg.list_document_groups(self.db), [])
+
+    def test_empty_title_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            dg.create_document_group("   ", self.db)
+
+    # ── constraint 1: one group per source (UNIQUE) ──
+    def test_source_belongs_to_at_most_one_group(self) -> None:
+        g1 = dg.create_document_group("组一", self.db)["document_group_id"]
+        g2 = dg.create_document_group("组二", self.db)["document_group_id"]
+        dg.add_group_member(g1, "src-zh", self.db)
+        # Re-assigning to another group MOVES it, never duplicates.
+        dg.add_group_member(g2, "src-zh", self.db)
+
+        rows = self._membership_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], g2)
+        self.assertEqual(dg.document_group_for_source("src-zh", self.db), g2)
+
+    def test_add_member_requires_existing_group_and_source(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        with self.assertRaises(ValueError):
+            dg.add_group_member("no-such-group", "src-zh", self.db)
+        with self.assertRaises(ValueError):
+            dg.add_group_member(gid, "no-such-source", self.db)
+
+    def test_remove_member(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "src-zh", self.db)
+        dg.remove_group_member("src-zh", self.db)
+        self.assertEqual(self._membership_rows(), [])
+        with self.assertRaises(ValueError):
+            dg.remove_group_member("src-zh", self.db)
+
+    # ── constraint 2: base must be a member ──
+    def test_base_must_be_a_member(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        with self.assertRaises(ValueError):
+            dg.set_document_group_base(gid, "src-zh", self.db)  # not a member yet
+        dg.add_group_member(gid, "src-zh", self.db)
+        dg.set_document_group_base(gid, "src-zh", self.db)
+        group = dg.list_document_groups(self.db)[0]
+        self.assertEqual(group["base_source_file_id"], "src-zh")
+        self.assertTrue(
+            next(m for m in group["members"] if m["source_file_id"] == "src-zh")[
+                "is_base"
+            ]
+        )
+        # Clearing the base with an empty value is allowed.
+        dg.set_document_group_base(gid, "", self.db)
+        self.assertIsNone(dg.list_document_groups(self.db)[0]["base_source_file_id"])
+
+    # ── constraint 3: removing the base member clears the base ──
+    def test_removing_base_member_clears_base(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "src-zh", self.db)
+        dg.add_group_member(gid, "src-en", self.db)
+        dg.set_document_group_base(gid, "src-zh", self.db)
+        dg.remove_group_member("src-zh", self.db)
+        self.assertIsNone(dg.list_document_groups(self.db)[0]["base_source_file_id"])
+
+    def test_moving_base_member_out_clears_old_base(self) -> None:
+        g1 = dg.create_document_group("组一", self.db)["document_group_id"]
+        g2 = dg.create_document_group("组二", self.db)["document_group_id"]
+        dg.add_group_member(g1, "src-zh", self.db)
+        dg.set_document_group_base(g1, "src-zh", self.db)
+        dg.add_group_member(g2, "src-zh", self.db)  # move out of g1
+        by_id = {g["document_group_id"]: g for g in dg.list_document_groups(self.db)}
+        self.assertIsNone(by_id[g1]["base_source_file_id"])
+
+    # ── constraint 4: deleting a group never deletes source_files ──
+    def test_delete_group_keeps_source_files(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "src-zh", self.db)
+        dg.add_group_member(gid, "src-en", self.db)
+        result = dg.delete_document_group(gid, self.db)
+        self.assertEqual(result["unlinked_count"], 2)
+        connection = sqlite3.connect(str(self.db))
+        try:
+            remaining = connection.execute(
+                "SELECT COUNT(*) FROM source_files"
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(remaining, 3)
+
+    # ── version metadata + display-name fallback ──
+    def test_version_label_and_display_name_fallback(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        dg.add_group_member(gid, "src-zh", self.db, version_label="通行本")
+        dg.add_group_member(gid, "src-en", self.db)  # no label; en has no translator
+        members = {
+            m["source_file_id"]: m
+            for m in dg.list_document_groups(self.db)[0]["members"]
+        }
+        self.assertEqual(members["src-zh"]["display_name"], "通行本")
+        # src-en falls back to language.
+        self.assertEqual(members["src-en"]["display_name"], "英文")
+
+        dg.set_member_version_label("src-en", "企鹅版", self.db)
+        members = {
+            m["source_file_id"]: m
+            for m in dg.list_document_groups(self.db)[0]["members"]
+        }
+        self.assertEqual(members["src-en"]["display_name"], "企鹅版")
+
+    def test_display_name_prefers_translator_over_language(self) -> None:
+        self.assertEqual(
+            member_display_name(
+                "", {"translator": "黎思复", "language_code": "zh-Hans"}
+            ),
+            "黎思复 译",
+        )
+
+    def test_version_label_too_long_rejected(self) -> None:
+        gid = dg.create_document_group("组", self.db)["document_group_id"]
+        with self.assertRaises(ValueError):
+            dg.add_group_member(gid, "src-zh", self.db, version_label="x" * 201)
+
+
+class _StubRuntime:
+    @contextmanager
+    def mutation(self):
+        yield
+
+    def suspend(self):
+        pass
+
+    def reopen(self, *, attempts: int = 1) -> bool:
+        return True
+
+
+class _StubDurable:
+    @contextmanager
+    def operation(self):
+        yield
+
+
+class _Paths:
+    def __init__(self, index_path: Path) -> None:
+        self.index_path = index_path
+
+
+class DocumentGroupControllerTests(unittest.TestCase):
+    """The coordinator + controller plumbing over the data layer (stubbed runtime)."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.db = Path(self._dir.name) / "index.sqlite3"
+        _make_v2_source_db(
+            self.db,
+            [
+                {"source_file_id": "src-zh", "file_name": "a.pdf", "translator": "张三"},
+                {"source_file_id": "src-en", "file_name": "b.pdf", "language_code": "en"},
+            ],
+        )
+        coordinator = DocumentGroupCoordinator(
+            _Paths(self.db), _StubRuntime(), _StubDurable()
+        )
+        self.controller = DocumentGroupController(coordinator)
+
+    def tearDown(self) -> None:
+        self._dir.cleanup()
+
+    def test_create_add_base_and_list(self) -> None:
+        status, body = self.controller.create({"title": "组"})
+        self.assertEqual(status, 200)
+        self.assertTrue(body["ok"])
+        gid = body["result"]["document_group_id"]
+
+        status, _ = self.controller.add_member(
+            {"document_group_id": gid, "source_file_id": "src-zh"}
+        )
+        self.assertEqual(status, 200)
+        status, _ = self.controller.set_base(
+            {"document_group_id": gid, "base_source_file_id": "src-zh"}
+        )
+        self.assertEqual(status, 200)
+
+        status, body = self.controller.list()
+        self.assertEqual(status, 200)
+        groups = body["document_groups"]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["base_source_file_id"], "src-zh")
+        self.assertEqual(groups[0]["members"][0]["display_name"], "张三 译")
+
+    def test_invalid_input_maps_to_400(self) -> None:
+        status, body = self.controller.create({"title": "  "})
+        self.assertEqual(status, 400)
+        self.assertIn("error", body)
+
+    def test_set_base_non_member_maps_to_400(self) -> None:
+        _, body = self.controller.create({"title": "组"})
+        gid = body["result"]["document_group_id"]
+        status, body = self.controller.set_base(
+            {"document_group_id": gid, "base_source_file_id": "src-en"}
+        )
+        self.assertEqual(status, 400)
+
+
+if __name__ == "__main__":
+    unittest.main()
