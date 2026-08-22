@@ -79,7 +79,9 @@
 }
 /* W1 工具栏（Notion / Linear / Zotero 范式）：统计分组一行 + 控件一行。
    控件行：全选 · 筛选按钮 · 生效 chips —spacer— 视图 · 合并排序 · 联网补全 · 补全书目。 */
-#library-toolbar-line { display: flex; flex-direction: column; gap: 12px; }
+/* Commit A：四条工具带合并为一行工具栏。padding:0 覆盖旧 .library-toolbar 的
+   page 内边距（页头已提供 32px 左右留白）。 */
+#library-toolbar-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0; }
 .library-controls-line .view-switch { flex: 0 0 auto; }
 .library-metadata-btn { flex: 0 0 auto; }
 .library-controls-spacer { flex: 1 1 auto; min-width: 8px; }
@@ -653,3 +655,41 @@
 @media (max-width: 560px) {
   .bib-read-grid { grid-template-columns: 1fr; }
 }
+
+/* ══ Commit A：单行工具栏 · 搜索铺满 · ⋯ 溢出菜单 · 底部状态条 ══ */
+/* 工具栏内：标题 + 搜索 + 控件同处一行。 */
+.library-toolbar .library-title { margin: 0; flex: 0 0 auto; font-size: 18px; line-height: 1.2; white-space: nowrap; }
+/* 搜索框铺满左侧空档，控件靠右成组，中间不留空隙。 */
+.library-toolbar .library-search-wrap { margin-top: 0; flex: 1 1 auto; min-width: 160px; }
+.library-toolbar .library-search { height: 36px; }
+#library-toolbar-line > .view-switch,
+#library-toolbar-line > .library-filter,
+#library-toolbar-line > .library-sort,
+#library-toolbar-line > .library-overflow { flex: 0 0 auto; }
+
+/* ⋯ 更多：无框图标按钮。逐项盖掉 .app-select-trigger 的 min-width / border /
+   padding / height，否则会撑成一个空的大框。 */
+.library-overflow-btn {
+  width: 34px; height: 34px; min-width: 0; padding: 0;
+  justify-content: center; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+.library-overflow-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.library-overflow-btn:active { transform: scale(.95); }
+.library-overflow-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.library-overflow-btn svg { width: 18px; height: 18px; color: currentColor; }
+.library-overflow.is-open .library-overflow-btn { background: var(--accent-soft); color: var(--accent); box-shadow: none; border-color: transparent; }
+.library-overflow-menu { left: auto; right: 0; min-width: 184px; }
+
+/* 底部状态条（Zotero 式）：统计从顶部沉到这里。 */
+.library-statusbar {
+  flex: 0 0 auto;
+  display: flex; align-items: center;
+  min-height: 34px;
+  padding: 5px 20px;
+  border-top: 1px solid var(--divider);
+  background: var(--surface-secondary);
+}
+.library-statusbar .library-stats-row { width: 100%; gap: 12px; }
+.library-statusbar .stat-group__label { font-size: 10.5px; }

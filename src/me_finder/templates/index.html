@@ -174,23 +174,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     <!-- ── Library Page ── -->
     <div id="page-library" class="page">
       <div class="page-header">
-        <div class="page-header-row">
-          <div>
-            <div class="page-title">文献库</div>
-            <div class="page-subtitle">管理已导入的文献及其索引状态</div>
-          </div>
-          <div class="page-header-meta"></div>
-        </div>
-        <div class="library-search-wrap">
-          <span class="library-search-icon">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
-          </span>
-          <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
-        </div>
         <div class="library-controls-row">
-          <div id="library-toolbar-line">
-            <div class="library-stats-row" id="library-stats"></div>
-            <div class="library-controls-line">
+          <div id="library-toolbar-line" class="library-toolbar">
+            <div class="page-title library-title">文献库</div>
+            <div class="library-search-wrap">
+              <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
+              <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
+            </div>
               <button class="lib-select-all" id="lib-select-all" type="button" role="checkbox" aria-checked="false" aria-label="全选当前筛选结果" title="全选当前筛选结果" onclick="toggleSelectVisibleLibraryDocuments()">
                 <svg class="lib-select-all-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>
                 <span class="lib-select-all-dash" aria-hidden="true"></span>
@@ -221,7 +211,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </div>
               <div class="library-filter-chips" id="library-filter-chips"></div>
-              <span class="library-controls-spacer"></span>
               <div class="view-switch" role="group" aria-label="文献库显示方式">
                 <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
                 <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
@@ -236,10 +225,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <svg class="library-sort-dir-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M6 12l4 4 4-4"/></svg>
                 </button>
               </div>
-              <button class="action-btn library-metadata-btn" type="button" id="batch-cnki-btn" title="联网补全期刊信息" onclick="runCnkiBatchButton()">联网补全</button>
-              <button class="action-btn library-metadata-btn" type="button" id="batch-metadata-btn" onclick="runBatchMetadataDetection()">补全书目</button>
-            </div>
-        </div>
+              <div class="app-select library-overflow" id="library-overflow">
+                <button class="app-select-trigger library-overflow-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作" onclick="toggleAppSelect(event,'library-overflow')"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button>
+                <div class="app-select-menu library-overflow-menu" role="menu">
+                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-metadata-btn" onclick="closeAppSelects();runBatchMetadataDetection()">补全书目</button>
+                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-cnki-btn" title="联网补全期刊信息" onclick="closeAppSelects();runCnkiBatchButton()">联网补全期刊信息</button>
+                </div>
+              </div>
+          </div>
           <div class="library-selection-bar" id="library-selection-bar" role="toolbar" aria-label="批量操作" aria-live="polite" hidden>
             <button class="library-selection-cancel" type="button" aria-label="取消选择" title="取消选择" onclick="clearLibrarySelection()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
             <span class="library-selection-count" id="library-selection-count">已选 0 项</span>
@@ -337,6 +330,9 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div id="library-drawer-extra"></div>
           </div>
         </div>
+      </div>
+      <div class="library-statusbar" id="library-statusbar">
+        <div class="library-stats-row" id="library-stats"></div>
       </div>
     </div>
 
