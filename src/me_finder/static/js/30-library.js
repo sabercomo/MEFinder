@@ -93,8 +93,153 @@ function renderGroupScopeSelector() {
   menu.innerHTML = html;
 }
 
-// C1：无管理项。C2 覆盖此函数追加「新建作品组 / 管理作品组」。
-function groupScopeManageOptionsHTML() { return ''; }
+// C2：选择器底部追加管理入口。
+function groupScopeManageOptionsHTML() {
+  return '<div class="lib-group-sep" role="separator"></div>'
+    + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups(true)">＋ 新建作品组</button>'
+    + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>';
+}
+
+function openManageDocumentGroups(focusCreate) {
+  var modal = document.getElementById('group-manage-modal');
+  if (!modal) return;
+  renderDocumentGroupManager();
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  if (focusCreate) setTimeout(function() {
+    var input = document.getElementById('grp-create-input');
+    if (input) input.focus();
+  }, 0);
+}
+
+function closeGroupManageModal() {
+  var modal = document.getElementById('group-manage-modal');
+  if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
+}
+
+function groupManageBackdrop(event) {
+  if (event.target && event.target.id === 'group-manage-modal') closeGroupManageModal();
+}
+
+// 单一「管理作品组」弹窗承载全部管理：新建 / 重命名 / 删除 / 加入所选 / 移除 /
+// 设/换基准 / 编辑 version_label。成员展示复用 B 的 display_name fallback。
+function renderDocumentGroupManager() {
+  var body = document.getElementById('group-manage-body');
+  if (!body) return;
+  var selectedCount = libDeleteSelection.size;
+  var html = '<div class="grp-create">'
+    + '<input id="grp-create-input" class="grp-input" type="text" placeholder="新建作品组标题…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
+    + '<button class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
+  if (selectedCount) {
+    html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组。</div>';
+  }
+  if (!libDocumentGroups.length) {
+    html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹。</div>';
+  }
+  libDocumentGroups.forEach(function(g) {
+    var gid = esc(g.document_group_id);
+    html += '<div class="grp-block"><div class="grp-head">'
+      + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)">'
+      + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\')">加入所选（' + selectedCount + '）</button>' : '')
+      + '<button class="action-btn sm danger-outline" type="button" onclick="deleteDocumentGroupAction(\'' + gid + '\')">删除组</button>'
+      + '</div>';
+    var members = g.members || [];
+    if (!members.length) {
+      html += '<div class="grp-empty grp-empty--sm">尚无成员。在文献列表勾选后用底部「设置作品组」加入。</div>';
+    } else {
+      html += '<div class="grp-members">' + members.map(function(m) {
+        var sid = esc(m.source_file_id);
+        var src = libSources.find(function(s) { return s.source_file_id === m.source_file_id; });
+        var srcTitle = src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id;
+        var isBase = m.source_file_id === g.base_source_file_id;
+        return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
+          + '<span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
+          + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(m.display_name || '') + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
+          + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button" onclick="setGroupBaseAction(\'' + gid + '\',\'' + (isBase ? '' : sid) + '\')">' + (isBase ? '★ 基准' : '设为基准') + '</button>'
+          + '<button class="grp-remove-btn" type="button" aria-label="从作品组移除" title="从作品组移除" onclick="removeGroupMemberAction(\'' + sid + '\')">✕</button>'
+          + '</div>';
+      }).join('') + '</div>';
+    }
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+async function postGroupOp(path, payload, successMessage) {
+  var response = await fetch(path, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  var data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || '操作失败');
+  await loadDocumentGroups();
+  renderGroupScopeSelector();
+  renderDocumentGroupManager();
+  renderLibraryList();
+  if (successMessage) showToast(successMessage, 'success');
+  return data.result || {};
+}
+
+async function createDocumentGroupInline() {
+  var input = document.getElementById('grp-create-input');
+  var title = input ? input.value.trim() : '';
+  if (!title) { showToast('请输入作品组标题', 'warning'); return; }
+  try {
+    await postGroupOp('/api/document-groups/create', {title: title}, '作品组已创建');
+    var again = document.getElementById('grp-create-input');
+    if (again) again.focus();
+  } catch (e) { showToast(e.message || '创建失败', 'danger'); }
+}
+
+async function renameDocumentGroupInline(groupId, value) {
+  var title = (value || '').trim();
+  if (!title) { renderDocumentGroupManager(); return; }
+  try { await postGroupOp('/api/document-groups/rename', {document_group_id: groupId, title: title}, '已重命名'); }
+  catch (e) { showToast(e.message || '重命名失败', 'danger'); }
+}
+
+async function deleteDocumentGroupAction(groupId) {
+  var group = documentGroupById(groupId);
+  var name = group ? group.title : '';
+  if (!await showAppConfirm('删除作品组“' + name + '”只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
+  try { await postGroupOp('/api/document-groups/delete', {document_group_id: groupId}, '作品组已删除（文献仍保留）'); }
+  catch (e) { showToast(e.message || '删除失败', 'danger'); }
+}
+
+async function setGroupBaseAction(groupId, sourceId) {
+  try { await postGroupOp('/api/document-groups/set-base', {document_group_id: groupId, base_source_file_id: sourceId}, sourceId ? '已设为基准版本' : '已取消基准版本'); }
+  catch (e) { showToast(e.message || '设置基准失败', 'danger'); }
+}
+
+async function removeGroupMemberAction(sourceId) {
+  try { await postGroupOp('/api/document-groups/remove-member', {source_file_id: sourceId}, '已从作品组移除（文献仍保留）'); }
+  catch (e) { showToast(e.message || '移除失败', 'danger'); }
+}
+
+async function setMemberVersionLabelInline(sourceId, value) {
+  try { await postGroupOp('/api/document-groups/version-label', {source_file_id: sourceId, version_label: (value || '').trim()}, '版本名称已更新'); }
+  catch (e) { showToast(e.message || '更新失败', 'danger'); }
+}
+
+async function assignSelectedToGroupAction(groupId) {
+  var ids = Array.from(libDeleteSelection);
+  if (!ids.length) { showToast('请先在文献列表勾选文献', 'warning'); return; }
+  try {
+    for (var i = 0; i < ids.length; i += 1) {
+      var response = await fetch('/api/document-groups/add-member', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({document_group_id: groupId, source_file_id: ids[i]})
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '加入失败');
+    }
+    clearLibrarySelection();
+    await loadDocumentGroups();
+    renderGroupScopeSelector();
+    renderDocumentGroupManager();
+    renderLibraryList();
+    showToast('已将 ' + ids.length + ' 份文献加入作品组', 'success');
+  } catch (e) { showToast(e.message || '加入失败', 'danger'); }
+}
 
 // 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。
 function ensureLibraryDetail(sourceId) {

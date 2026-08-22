@@ -243,6 +243,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="library-selection-spacer"></span>
             <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
             <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选文档包</button>
+            <button class="action-btn" type="button" id="library-group-selected-btn" onclick="openManageDocumentGroups()">设置作品组</button>
             <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
           </div>
         </div>
@@ -898,6 +899,16 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       <button class="action-btn" type="button" id="app-dialog-cancel" onclick="settleAppDialog(false)">取消</button>
       <button class="action-btn primary" type="button" id="app-dialog-confirm" onclick="settleAppDialog(true)">确定</button>
     </div>
+  </div>
+</div>
+<div id="group-manage-modal" class="group-manage-backdrop" aria-hidden="true" onclick="groupManageBackdrop(event)">
+  <div class="group-manage-card" role="dialog" aria-label="管理作品组" onclick="event.stopPropagation()">
+    <div class="group-manage-head">
+      <span class="group-manage-title">管理作品组</span>
+      <button class="group-manage-close" type="button" aria-label="关闭" onclick="closeGroupManageModal()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+    </div>
+    <div class="group-manage-body" id="group-manage-body"></div>
+    <div class="group-manage-foot"><button class="action-btn primary" type="button" onclick="closeGroupManageModal()">完成</button></div>
   </div>
 </div>
 <div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">

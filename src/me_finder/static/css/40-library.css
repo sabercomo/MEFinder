@@ -659,6 +659,39 @@
 .lib-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-group-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .lib-group-sep { height: 1px; margin: 5px 8px; background: var(--border-subtle); }
+.lib-group-manage { color: var(--accent); font-weight: 600; }
+
+/* ── 管理作品组弹窗（C2，单弹窗承载全部管理，无左栏）── */
+.group-manage-backdrop { position: fixed; inset: 0; z-index: var(--z-modal, 1000); display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 20, 25, .44); }
+.group-manage-backdrop.open { display: flex; }
+.group-manage-card { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; background: var(--surface-primary); border: 1px solid var(--border-default); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .5); overflow: hidden; }
+.group-manage-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--divider); }
+.group-manage-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.group-manage-close { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--text-secondary); cursor: pointer; }
+.group-manage-close:hover { background: var(--surface-hover); color: var(--text-primary); }
+.group-manage-close svg { width: 16px; height: 16px; }
+.group-manage-body { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.group-manage-foot { display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--divider); }
+.grp-input { height: 32px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 13px; }
+.grp-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.grp-create { display: flex; gap: 8px; }
+.grp-create .grp-input { flex: 1; }
+.grp-assign-hint { font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 8px 10px; }
+.grp-empty { font-size: 13px; color: var(--text-tertiary); padding: 8px 2px; }
+.grp-empty--sm { font-size: 12px; padding: 4px 2px 6px; }
+.grp-block { border: 1px solid var(--divider); border-radius: 10px; overflow: hidden; }
+.grp-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--surface-secondary); }
+.grp-head .grp-title { flex: 1; min-width: 0; font-weight: 600; }
+.grp-members { display: flex; flex-direction: column; }
+.grp-member { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--divider); }
+.grp-member.is-base { background: var(--accent-soft); }
+.grp-member-title { flex: 1 1 40%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text-primary); }
+.grp-vlabel { flex: 1 1 30%; min-width: 88px; height: 28px; }
+.grp-base-btn { flex: 0 0 auto; height: 28px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--surface-primary); color: var(--text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.grp-base-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.grp-base-btn.is-base { border-color: var(--accent); color: var(--accent); background: transparent; font-weight: 650; }
+.grp-remove-btn { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; color: var(--text-tertiary); font-size: 13px; cursor: pointer; }
+.grp-remove-btn:hover { background: var(--danger-soft); color: var(--danger); }
 
 /* ⋯ 更多：无框图标按钮。逐项盖掉 .app-select-trigger 的 min-width / border /
    padding / height，否则会撑成一个空的大框。 */
