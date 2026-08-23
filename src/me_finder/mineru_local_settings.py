@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, Mapping
@@ -19,6 +20,10 @@ def mineru_local_config_summary(config_path: Path) -> Dict[str, object]:
     data = read_mineru_config_data(Path(config_path))
     return {
         "enabled": data.get("local_deployment_enabled") is True,
+        "managed": data.get("local_deployment_managed") is True,
+        "managed_profile": str(
+            data.get("local_deployment_managed_profile") or ""
+        ),
         "endpoint": str(
             data.get("local_deployment_endpoint")
             or DEFAULT_MINERU_LOCAL_ENDPOINT
@@ -44,6 +49,8 @@ def save_mineru_local_config(
     data.update(
         {
             "local_deployment_enabled": bool(payload["enabled"]),
+            "local_deployment_managed": False,
+            "local_deployment_managed_profile": "",
             "local_deployment_endpoint": config.endpoint.rstrip("/"),
             "local_deployment_backend": config.backend,
         }
@@ -54,10 +61,63 @@ def save_mineru_local_config(
         json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    try:
+    if os.name != "nt":
         temporary.chmod(0o600)
-    except OSError:
-        pass
+    temporary.replace(path)
+    return mineru_local_config_summary(path)
+
+
+def configure_managed_mineru(
+    config_path: Path,
+    *,
+    endpoint: str,
+    backend: str,
+    profile: str,
+) -> Dict[str, object]:
+    config = _config_from_payload({"endpoint": endpoint, "backend": backend})
+    path = Path(config_path)
+    data = read_mineru_config_data(path)
+    data.update(
+        {
+            "local_deployment_enabled": True,
+            "local_deployment_managed": True,
+            "local_deployment_managed_profile": profile,
+            "local_deployment_endpoint": config.endpoint.rstrip("/"),
+            "local_deployment_backend": config.backend,
+        }
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if os.name != "nt":
+        temporary.chmod(0o600)
+    temporary.replace(path)
+    return mineru_local_config_summary(path)
+
+
+def clear_managed_mineru(config_path: Path) -> Dict[str, object]:
+    path = Path(config_path)
+    data = read_mineru_config_data(path)
+    if data.get("local_deployment_managed") is not True:
+        return mineru_local_config_summary(path)
+    data.update(
+        {
+            "local_deployment_enabled": False,
+            "local_deployment_managed": False,
+            "local_deployment_managed_profile": "",
+        }
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if os.name != "nt":
+        temporary.chmod(0o600)
     temporary.replace(path)
     return mineru_local_config_summary(path)
 

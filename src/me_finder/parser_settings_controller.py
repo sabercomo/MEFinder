@@ -28,6 +28,7 @@ from .mineru_local_settings import (
     save_mineru_local_config,
     test_mineru_local_connection,
 )
+from .managed_mineru import ManagedMinerUError
 from .import_resume import ResumeManifestError
 from .local_ocr_installer import LocalOCRInstallerError
 from .local_ocr_settings import (
@@ -88,6 +89,8 @@ class ParserSettingsController:
         test_local_ocr: JSONOperation = test_local_ocr_engine,
         summarize_local_ocr_installer: JSONOperation | None = None,
         manage_local_ocr_installer: JSONOperation | None = None,
+        summarize_managed_mineru: JSONOperation | None = None,
+        manage_managed_mineru: JSONOperation | None = None,
     ) -> None:
         self._paths = paths
         self._mineru_account_service = mineru_account_service
@@ -117,6 +120,8 @@ class ParserSettingsController:
         self._test_local_ocr = test_local_ocr
         self._summarize_local_ocr_installer = summarize_local_ocr_installer
         self._manage_local_ocr_installer = manage_local_ocr_installer
+        self._summarize_managed_mineru = summarize_managed_mineru
+        self._manage_managed_mineru = manage_managed_mineru
         self._legacy_migration_error: Exception | None = None
 
     def mineru_accounts(self) -> ParserSettingsResponse:
@@ -420,6 +425,31 @@ class ParserSettingsController:
             return 400, {"error": str(exc)}
         return 200, result
 
+    def manage_mineru_local_component(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "MinerU 本地组件操作必须是 JSON 对象。"}
+        if self._manage_managed_mineru is None:
+            return 400, {"error": "当前运行方式不支持一键安装 MinerU。"}
+        try:
+            result = self._manage_managed_mineru(payload)
+        except (ManagedMinerUError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except OSError:
+            logging.exception("Managed MinerU component operation failed")
+            return 500, {"error": "MinerU 本地组件操作失败。"}
+        return 200, {"ok": True, "managed_runtime": result}
+
+    def managed_mineru_local_component(self) -> ParserSettingsResponse:
+        if self._summarize_managed_mineru is None:
+            return 400, {"error": "当前运行方式不支持一键安装 MinerU。"}
+        try:
+            return 200, self._summarize_managed_mineru()
+        except (ManagedMinerUError, OSError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+
     def local_ocr_config(self) -> ParserSettingsResponse:
         path = self._resolve_local_ocr_config(self._paths.runtime_root)
         try:
@@ -567,6 +597,14 @@ class ParserSettingsController:
         global_config = self._read_mineru_config(
             self._resolve_mineru_config(self._paths.runtime_root)
         )
+        local_deployment = self._summarize_mineru_local(
+            self._resolve_mineru_config(self._paths.runtime_root)
+        )
+        if self._summarize_managed_mineru is not None:
+            local_deployment = {
+                **local_deployment,
+                "managed_runtime": self._summarize_managed_mineru(),
+            }
         return {
             "configured": any(
                 bool(getattr(item, "configured", False))
@@ -578,7 +616,5 @@ class ParserSettingsController:
             ).rstrip("/"),
             "accounts": [item.to_dict() for item in accounts],
             "statistics": statistics.to_dict(),
-            "local_deployment": self._summarize_mineru_local(
-                self._resolve_mineru_config(self._paths.runtime_root)
-            ),
+            "local_deployment": local_deployment,
         }

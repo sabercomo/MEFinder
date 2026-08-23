@@ -256,6 +256,32 @@ class ParserSettingsControllerTests(unittest.TestCase):
         self.assertEqual(installer_summary.call_count, 2)
         installer_action.assert_called_once_with(request)
 
+    def test_managed_mineru_status_and_actions_share_local_deployment_payload(self) -> None:
+        runtime_summary = Mock(
+            return_value={"supported": True, "profiles": [], "service": {}}
+        )
+        runtime_action = Mock(return_value=runtime_summary.return_value)
+        controller = self._controller(
+            summarize_mineru_local=Mock(
+                return_value={"enabled": False, "endpoint": "http://127.0.0.1:8000"}
+            ),
+            summarize_managed_mineru=runtime_summary,
+            manage_managed_mineru=runtime_action,
+        )
+        request = {"profile": "pipeline", "action": "install"}
+
+        status, accounts = controller.mineru_accounts()
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            accounts["local_deployment"]["managed_runtime"],
+            runtime_summary.return_value,
+        )
+        self.assertEqual(
+            controller.manage_mineru_local_component(request),
+            (200, {"ok": True, "managed_runtime": runtime_action.return_value}),
+        )
+        runtime_action.assert_called_once_with(request)
+
     def test_read_errors_keep_existing_status_and_messages(self) -> None:
         broken_statistics = self._controller(
             build_statistics=Mock(side_effect=sqlite3.OperationalError("damaged"))

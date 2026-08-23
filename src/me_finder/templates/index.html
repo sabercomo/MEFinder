@@ -567,12 +567,28 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               </section>
               <details class="mineru-local-settings" id="mineru-local-settings">
                 <summary>
-                  <span class="mineru-local-summary-copy"><strong>本地部署（高级）</strong><small>仅供已自行部署 MinerU 服务的用户；启用后可在导入时直接选择</small></span>
+                  <span class="mineru-local-summary-copy"><strong>本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
                   <span id="mineru-local-status" class="settings-status">未启用</span>
                   <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
                 </summary>
                 <div class="mineru-local-body">
-                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>ME Finder 不会下载模型或启动服务。请先在本机运行兼容 <code>GET /health</code>、<code>POST /tasks</code> 的 MinerU 服务。</span></div>
+                  <section class="managed-mineru" aria-labelledby="managed-mineru-title">
+                    <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">ME Finder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><button id="managed-mineru-auto-install" class="action-btn primary" type="button" onclick="manageMineruComponent('auto','install',this)">安装推荐配置</button></div>
+                    <div class="managed-mineru-profile-list">
+                      <article class="managed-mineru-profile" data-mineru-profile="pipeline">
+                        <div><strong>Pipeline</strong><small>兼容性优先 · 支持纯 CPU</small></div>
+                        <span id="managed-mineru-pipeline-state" class="settings-status warning">未安装</span>
+                        <div class="settings-actions"><button id="managed-mineru-pipeline-install" class="action-btn primary" type="button" onclick="manageMineruComponent('pipeline','install',this)">下载安装</button><button id="managed-mineru-pipeline-start" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','start',this)" hidden>启动</button><button id="managed-mineru-pipeline-stop" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','stop',this)" hidden>停止</button><button id="managed-mineru-pipeline-uninstall" class="action-btn danger" type="button" onclick="manageMineruComponent('pipeline','uninstall',this)" hidden>卸载</button><button id="managed-mineru-pipeline-cancel" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','cancel',this)" hidden>取消</button></div>
+                      </article>
+                      <article class="managed-mineru-profile" data-mineru-profile="vlm">
+                        <div><strong>VLM 高精度</strong><small>需要 Apple Silicon 或兼容 NVIDIA GPU（8GB+ 显存）</small></div>
+                        <span id="managed-mineru-vlm-state" class="settings-status warning">未安装</span>
+                        <div class="settings-actions"><button id="managed-mineru-vlm-install" class="action-btn primary" type="button" onclick="manageMineruComponent('vlm','install',this)">下载安装</button><button id="managed-mineru-vlm-start" class="action-btn" type="button" onclick="manageMineruComponent('vlm','start',this)" hidden>启动</button><button id="managed-mineru-vlm-stop" class="action-btn" type="button" onclick="manageMineruComponent('vlm','stop',this)" hidden>停止</button><button id="managed-mineru-vlm-uninstall" class="action-btn danger" type="button" onclick="manageMineruComponent('vlm','uninstall',this)" hidden>卸载</button><button id="managed-mineru-vlm-cancel" class="action-btn" type="button" onclick="manageMineruComponent('vlm','cancel',this)" hidden>取消</button></div>
+                      </article>
+                    </div>
+                    <small id="managed-mineru-hint" class="settings-hint" role="status" aria-live="polite"></small>
+                  </section>
+                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>高级：也可以连接你自行部署的兼容服务。服务需提供 <code>GET /health</code>、<code>POST /tasks</code> 等官方异步接口。</span></div>
                   <div class="settings-grid mineru-local-grid">
                     <label class="settings-label" for="mineru-local-endpoint">服务地址</label>
                     <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>通常为 http://127.0.0.1:8000</small></div>

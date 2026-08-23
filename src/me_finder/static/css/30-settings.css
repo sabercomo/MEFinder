@@ -834,6 +834,34 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-summary-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
 .mineru-local-settings[open] > summary .settings-collapse-chevron { transform: rotate(180deg); }
 .mineru-local-body { padding: 2px 0 20px; }
+.managed-mineru {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+}
+.managed-mineru-heading,
+.managed-mineru-profile { display: flex; align-items: center; gap: 12px; }
+.managed-mineru-heading > span,
+.managed-mineru-profile > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin-right: auto;
+}
+.managed-mineru-heading small,
+.managed-mineru-profile small { color: var(--text-secondary); }
+.managed-mineru-profile-list { display: grid; gap: 8px; }
+.managed-mineru-profile {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.managed-mineru-profile .settings-actions { flex: 0 0 auto; }
 .mineru-local-notice {
   display: flex;
   align-items: flex-start;
@@ -853,6 +881,12 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
 .mineru-local-enable-row { padding-top: 6px; }
 .mineru-local-enable-row > small { max-width: 62ch; }
+@media (max-width: 760px) {
+  .managed-mineru-heading,
+  .managed-mineru-profile { align-items: flex-start; flex-wrap: wrap; }
+  .managed-mineru-profile > div:first-child { flex: 1 1 220px; }
+  .managed-mineru-profile .settings-actions { width: 100%; }
+}
 /* 本地 OCR 组件：无外框分组（对齐 macOS 系统设置 / GitHub Settings 的主流做法）——
    不套卡片、不套容器，每个组件直接成组，组间仅用一条发丝线分隔；输入框保留自身
    边框即可，避免「框里再套框」。 */

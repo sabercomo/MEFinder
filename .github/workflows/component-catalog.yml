@@ -1,0 +1,42 @@
+name: Publish component catalog
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: component-catalog-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify catalog and installer contracts
+        run: >-
+          python -m unittest
+          tests.test_component_catalog
+          tests.test_local_ocr_installer
+          tests.test_managed_mineru
+
+      - name: Export catalog
+        run: python -m tools.export_component_catalog
+
+      - name: Publish fixed component channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view components-v1 >/dev/null 2>&1; then
+            gh release create components-v1 --title "MEFinder component catalog v1" --notes "Independent optional-component update channel."
+          fi
+          gh release upload components-v1 release/component-catalog/* --clobber

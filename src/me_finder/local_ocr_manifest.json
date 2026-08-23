@@ -1,6 +1,40 @@
 {
   "schema_version": 1,
+  "catalog_version": 1,
   "uv_version": "0.12.1",
+  "mineru": {
+    "version": "3.4.5",
+    "python": "3.12",
+    "profiles": {
+      "pipeline": {
+        "display_name": "Pipeline",
+        "package": "mineru[pipeline]==3.4.5",
+        "model_type": "pipeline",
+        "backend": "pipeline",
+        "minimum_memory_gb": 16,
+        "minimum_disk_gb": 20
+      },
+      "vlm": {
+        "display_name": "VLM 高精度",
+        "packages": {
+          "darwin-arm64": "mineru[core,mlx]==3.4.5",
+          "win32-x86_64": "mineru[core,lmdeploy]==3.4.5",
+          "linux-x86_64": "mineru[core,vllm]==3.4.5"
+        },
+        "model_type": "vlm",
+        "backend": "vlm-auto-engine",
+        "minimum_vram_gb": 8,
+        "minimum_memory_gb": 16,
+        "minimum_disk_gb": 20
+      }
+    },
+    "platforms": {
+      "darwin-arm64": ["pipeline", "vlm"],
+      "darwin-x86_64": ["pipeline"],
+      "win32-x86_64": ["pipeline", "vlm"],
+      "linux-x86_64": ["pipeline", "vlm"]
+    }
+  },
   "engines": {
     "ndlocr-lite": {
       "display_name": "NDL 日文 OCR",

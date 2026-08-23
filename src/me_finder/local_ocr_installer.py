@@ -19,7 +19,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Dict, Mapping, Optional, Sequence
+from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -211,14 +211,17 @@ class LocalOCRInstaller:
         runtime_root: Path,
         config_path: Path,
         *,
-        manifest_path: Path = LOCAL_OCR_MANIFEST_FILE,
+        manifest_path: Path | Callable[[], Path] = LOCAL_OCR_MANIFEST_FILE,
         platform_key: Optional[str] = None,
+        catalog_summary: Optional[Callable[[], Dict[str, object]]] = None,
     ) -> None:
         self.runtime_root = Path(runtime_root).resolve()
         self.config_path = Path(config_path).resolve()
         self.component_root = self.runtime_root / LOCAL_OCR_COMPONENT_DIR
+        self._manifest_path = manifest_path
+        self._catalog_summary = catalog_summary
         self.engines, self.platform = load_local_ocr_installer_manifest(
-            manifest_path,
+            self._current_manifest_path(),
             platform_key=platform_key,
         )
         self.platform_key = platform_key or current_platform_key()
@@ -241,13 +244,48 @@ class LocalOCRInstaller:
                 self._engine_summary(provider_id, state)
                 for provider_id, state in self._states.items()
             ]
-        return {
+        summary = {
             "supported": self.platform is not None,
             "platform": self.platform_key,
             "platform_notes": self.platform.notes if self.platform else "",
             "uv_version": self.platform.uv.version if self.platform else None,
             "engines": engines,
         }
+        if self._catalog_summary is not None:
+            summary["catalog"] = self._catalog_summary()
+        return summary
+
+    def refresh_manifest(self) -> None:
+        engines, selected = load_local_ocr_installer_manifest(
+            self._current_manifest_path(),
+            platform_key=self.platform_key,
+        )
+        with self._state_lock:
+            if any(state.operation is not None for state in self._states.values()):
+                return
+            self.engines = engines
+            self.platform = selected
+            self._states = {
+                provider_id: self._states.get(
+                    provider_id,
+                    _EngineInstallState(
+                        state=(
+                            "installed"
+                            if self._managed_install_is_valid(provider_id)
+                            else "not_installed"
+                        )
+                    ),
+                )
+                for provider_id in engines
+            }
+
+    def _current_manifest_path(self) -> Path:
+        value = (
+            self._manifest_path()
+            if callable(self._manifest_path)
+            else self._manifest_path
+        )
+        return Path(value)
 
     def perform(self, payload: Mapping[str, object]) -> Dict[str, object]:
         provider_id = str(payload.get("provider_id") or "").strip()
@@ -257,7 +295,7 @@ class LocalOCRInstaller:
         if action == "cancel":
             self._cancel(provider_id)
             return self.summary()
-        if action not in {"install", "validate", "uninstall"}:
+        if action not in {"install", "update", "validate", "uninstall"}:
             raise LocalOCRInstallerError("不支持的本地 OCR 组件操作。")
         if self.platform is None:
             raise LocalOCRInstallerError(
@@ -274,6 +312,8 @@ class LocalOCRInstaller:
             installed = self._managed_install_is_valid(provider_id)
             if action == "install" and installed:
                 raise LocalOCRInstallerError("该组件已安装。")
+            if action == "update" and not self._update_available(provider_id):
+                raise LocalOCRInstallerError("该组件没有可安装的更新。")
             if action in {"validate", "uninstall"} and not installed:
                 raise LocalOCRInstallerError("该组件尚未由 MEFinder 安装。")
         if not self._operation_lock.acquire(blocking=False):
@@ -286,6 +326,7 @@ class LocalOCRInstaller:
             )
         initial_state = {
             "install": "downloading",
+            "update": "downloading",
             "validate": "validating",
             "uninstall": "cleaning",
         }[action]
@@ -318,7 +359,7 @@ class LocalOCRInstaller:
         engine_lock: threading.Lock,
     ) -> None:
         try:
-            if action == "install":
+            if action in {"install", "update"}:
                 self._install(provider_id)
                 self._set_state(
                     provider_id,
@@ -394,8 +435,6 @@ class LocalOCRInstaller:
         final = self.component_root / provider_id
         uv_created = False
         self.component_root.mkdir(parents=True, exist_ok=True)
-        if final.exists():
-            shutil.rmtree(final)
         staging.mkdir()
         try:
             archive = staging / "source.tar.gz"
@@ -503,10 +542,17 @@ class LocalOCRInstaller:
             shutil.rmtree(staging / ".validation")
             self._remove_tree(staging / ".uv-cache")
             self._write_install_receipt(staging, engine, dependencies)
-            staging.replace(final)
-            final_python = final / self.platform.venv_python
-            final_script = final / "source" / engine.script_path
+            previous = self.component_root / (
+                f".previous-{provider_id}-{uuid.uuid4().hex}"
+            )
+            published = False
             try:
+                if final.exists():
+                    final.replace(previous)
+                staging.replace(final)
+                published = True
+                final_python = final / self.platform.venv_python
+                final_script = final / "source" / engine.script_path
                 configure_managed_local_ocr_engine(
                     self.config_path,
                     provider_id,
@@ -514,8 +560,12 @@ class LocalOCRInstaller:
                     script_path=final_script,
                 )
             except (LocalOCRError, ResumeManifestError, OSError):
-                self._remove_tree(final)
+                if published:
+                    self._remove_tree(final)
+                if previous.exists():
+                    previous.replace(final)
                 raise
+            self._remove_tree(previous)
         finally:
             self._remove_tree(staging)
             if not self._managed_install_is_valid(provider_id):
@@ -1014,7 +1064,7 @@ class LocalOCRInstaller:
         if not isinstance(receipt, Mapping):
             return False
         engine = self.engines.get(provider_id)
-        if engine is None or receipt.get("tag") != engine.tag:
+        if engine is None or receipt.get("provider_id") != provider_id:
             return False
         if self.platform is None:
             return False
@@ -1030,12 +1080,14 @@ class LocalOCRInstaller:
     ) -> Dict[str, object]:
         engine = self.engines[provider_id]
         installed_at = None
+        installed_tag = None
         receipt_path = self.component_root / provider_id / "installed.json"
         if receipt_path.is_file():
             try:
                 receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                 if isinstance(receipt, Mapping):
                     installed_at = receipt.get("installed_at")
+                    installed_tag = receipt.get("tag")
             except (OSError, json.JSONDecodeError):
                 pass
         return {
@@ -1054,7 +1106,22 @@ class LocalOCRInstaller:
             "error": state.error,
             "managed": self._managed_install_is_valid(provider_id),
             "installed_at": installed_at,
+            "installed_tag": installed_tag,
+            "update_available": self._update_available(provider_id),
         }
+
+    def _update_available(self, provider_id: str) -> bool:
+        if not self._managed_install_is_valid(provider_id):
+            return False
+        receipt_path = self.component_root / provider_id / "installed.json"
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        return (
+            isinstance(receipt, Mapping)
+            and receipt.get("tag") != self.engines[provider_id].tag
+        )
 
     def _set_state(
         self,

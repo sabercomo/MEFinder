@@ -1,0 +1,223 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+import tarfile
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from src.me_finder.managed_mineru import (
+    ManagedMinerU,
+    detect_mineru_hardware,
+    load_managed_mineru_manifest,
+)
+from src.me_finder.mineru_local_settings import mineru_local_config_summary
+
+
+class ManagedMinerUTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runtime = self.root / "runtime 中文"
+        self.config = self.runtime / "config/mineru.json"
+
+    def _manifest(self) -> Path:
+        uv = self.root / "uv"
+        uv.write_text(
+            """#!/usr/bin/env python3
+from pathlib import Path
+import os, stat, sys
+if sys.argv[1] == 'venv':
+    venv = Path(sys.argv[-1])
+    (venv / 'bin').mkdir(parents=True)
+    (venv / 'bin/python').symlink_to(sys.executable)
+elif sys.argv[1:3] == ['pip', 'install']:
+    python = Path(sys.argv[sys.argv.index('--python') + 1])
+    bindir = python.parent
+    downloader = bindir / 'mineru-models-download'
+    downloader.write_text('''#!/usr/bin/env python3
+from pathlib import Path
+import json, os
+config = Path(os.environ["MINERU_TOOLS_CONFIG_JSON"])
+models = config.parent / "models" / "fake"
+models.mkdir(parents=True, exist_ok=True)
+(models / "weights.bin").write_bytes(b"weights")
+config.write_text(json.dumps({"models-dir": {"pipeline": str(models), "vlm": str(models)}}))
+''')
+    api = bindir / 'mineru-api'
+    api.write_text('''#!/usr/bin/env python3
+import json, sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+if "--help" in sys.argv:
+    raise SystemExit(0)
+port = int(sys.argv[sys.argv.index("--port") + 1])
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_args): pass
+    def do_GET(self):
+        raw = json.dumps({"protocol_version": "test"}).encode()
+        self.send_response(200 if self.path == "/health" else 404)
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers(); self.wfile.write(raw)
+ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+''')
+    for script in (downloader, api):
+        script.chmod(script.stat().st_mode | stat.S_IXUSR)
+else:
+    raise SystemExit(2)
+""",
+            encoding="utf-8",
+        )
+        uv.chmod(0o755)
+        archive = self.root / "uv.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            bundle.add(uv, arcname="fake-uv/uv")
+        payload = {
+            "schema_version": 1,
+            "uv_version": "test",
+            "engines": {},
+            "mineru": {
+                "version": "3.4.5",
+                "python": "3.12",
+                "profiles": {
+                    "pipeline": {
+                        "display_name": "Pipeline",
+                        "package": "mineru[pipeline]==3.4.5",
+                        "model_type": "pipeline",
+                        "backend": "pipeline",
+                        "minimum_memory_gb": 16,
+                        "minimum_disk_gb": 20,
+                    },
+                    "vlm": {
+                        "display_name": "VLM",
+                        "packages": {
+                            "test-platform": "mineru[core,vllm]==3.4.5"
+                        },
+                        "model_type": "vlm",
+                        "backend": "vlm-auto-engine",
+                        "minimum_memory_gb": 16,
+                        "minimum_disk_gb": 20,
+                        "minimum_vram_gb": 8,
+                    },
+                },
+                "platforms": {"test-platform": ["pipeline", "vlm"]},
+            },
+            "platforms": {
+                "test-platform": {
+                    "python": "3.12",
+                    "venv_python": "venv/bin/python",
+                    "onnxruntime": "unused",
+                    "uv": {
+                        "url": archive.as_uri(),
+                        "size": archive.stat().st_size,
+                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                        "archive_type": "tar.gz",
+                        "member": "fake-uv/uv",
+                    },
+                    "notes": "test",
+                }
+            },
+        }
+        path = self.root / "manifest.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
+    def _manager(self) -> ManagedMinerU:
+        return ManagedMinerU(
+            self.runtime,
+            self.config,
+            manifest_path=self._manifest(),
+            platform_key="test-platform",
+            hardware_detector=lambda: {
+                "kind": "nvidia",
+                "name": "Test GPU",
+                "vlm_supported": True,
+                "recommended_profile": "vlm",
+                "vram_mb": 24576,
+                "compute_capability": 8.9,
+            },
+        )
+
+    def _wait(self, manager: ManagedMinerU, profile: str, timeout: float = 20) -> dict:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            item = next(
+                value
+                for value in manager.summary()["profiles"]
+                if value["profile"] == profile
+            )
+            if item["operation"] is None:
+                return item
+            time.sleep(0.05)
+        self.fail("managed MinerU operation did not finish")
+
+    def test_manifest_is_version_pinned_and_exposes_both_profiles(self) -> None:
+        manifest = load_managed_mineru_manifest(
+            self._manifest(), platform_key="test-platform"
+        )
+        self.assertEqual(manifest.version, "3.4.5")
+        self.assertEqual(manifest.supported_profiles, ("pipeline", "vlm"))
+        self.assertEqual(manifest.profiles["vlm"].backend, "vlm-auto-engine")
+
+    def test_pipeline_install_starts_loopback_service_and_uninstalls(self) -> None:
+        manager = self._manager()
+        self.addCleanup(manager.close)
+        manager.perform({"profile": "pipeline", "action": "install"})
+        installed = self._wait(manager, "pipeline")
+        self.assertTrue(installed["installed"])
+        service = manager.summary()["service"]
+        self.assertTrue(service["running"])
+        self.assertTrue(str(service["endpoint"]).startswith("http://127.0.0.1:"))
+        local = mineru_local_config_summary(self.config)
+        self.assertTrue(local["managed"])
+        self.assertEqual(local["managed_profile"], "pipeline")
+        self.assertEqual(local["backend"], "pipeline")
+
+        manager.perform({"profile": "pipeline", "action": "uninstall"})
+        removed = self._wait(manager, "pipeline")
+        self.assertFalse(removed["installed"])
+        self.assertFalse(mineru_local_config_summary(self.config)["enabled"])
+
+    def test_auto_selects_vlm_on_qualified_gpu(self) -> None:
+        manager = self._manager()
+        self.addCleanup(manager.close)
+        manager.perform({"profile": "auto", "action": "install"})
+        installed = self._wait(manager, "vlm")
+        self.assertTrue(installed["installed"])
+        self.assertEqual(mineru_local_config_summary(self.config)["backend"], "vlm-auto-engine")
+
+    def test_nvidia_detection_requires_both_architecture_and_memory(self) -> None:
+        class Result:
+            stdout = "RTX small, 6144, 8.9\nTesla V100, 16384, 7.0\n"
+
+        detected = detect_mineru_hardware(
+            platform_key="linux-x86_64",
+            command_runner=lambda *_args, **_kwargs: Result(),
+        )
+        self.assertTrue(detected["vlm_supported"])
+        self.assertEqual(detected["name"], "Tesla V100")
+
+    def test_apple_silicon_detection_requires_macos_14_and_16gb_memory(self) -> None:
+        class Result:
+            stdout = str(16 * 1024 * 1024 * 1024)
+
+        with mock.patch(
+            "src.me_finder.managed_mineru.platform.mac_ver",
+            return_value=("14.6.1", ("", "", ""), ""),
+        ):
+            detected = detect_mineru_hardware(
+                platform_key="darwin-arm64",
+                command_runner=lambda *_args, **_kwargs: Result(),
+            )
+
+        self.assertTrue(detected["vlm_supported"])
+        self.assertEqual(detected["recommended_profile"], "vlm")
+        self.assertEqual(detected["memory_mb"], 16 * 1024)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -39,6 +39,7 @@ from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .application.document_group_coordinator import DocumentGroupCoordinator
 from .document_group_controller import DocumentGroupController
+from .component_catalog import ComponentCatalog
 from .document_groups import DocumentGroupNotFound, resolve_document_group_source_ids
 from .database import DEFAULT_DATABASE_PATH, replace_source_in_database
 from .data_location import migrate_data_root
@@ -80,11 +81,12 @@ from .mineru_api import (
 )
 from .large_document.job_ledger import JobLedger
 from .mineru_local_settings import mineru_local_config_summary
+from .managed_mineru import ManagedMinerU
 from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
 )
-from .local_ocr_installer import LocalOCRInstaller
+from .local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
 from .local_ocr_settings import resolve_local_ocr_config_path
 from .parser_statistics import build_parser_statistics
 from .macos_update import check_macos_update
@@ -144,6 +146,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/mineru-accounts/service",
         "/api/mineru-config",
         "/api/mineru-local",
+        "/api/mineru-local/component",
         "/api/local-ocr",
         "/api/local-ocr/component",
         "/api/vision-providers",
@@ -835,10 +838,31 @@ def make_handler(
             )
         ),
     )
+    component_catalog = ComponentCatalog(root, LOCAL_OCR_MANIFEST_FILE)
+    managed_mineru = ManagedMinerU(
+        root,
+        resolve_mineru_config_path(root),
+        manifest_path=component_catalog.manifest_path,
+        catalog_summary=component_catalog.summary,
+    )
     local_ocr_installer = LocalOCRInstaller(
         root,
         resolve_local_ocr_config_path(root),
+        manifest_path=component_catalog.manifest_path,
+        catalog_summary=component_catalog.summary,
     )
+    if os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower() in {
+        "macos",
+        "win32",
+        "linux",
+    }:
+        component_catalog.start_background_check(
+            on_updated=lambda: (
+                local_ocr_installer.refresh_manifest(),
+                managed_mineru.refresh_manifest(),
+            )
+        )
+    managed_mineru.start_installed_if_managed()
     parser_settings_controller = ParserSettingsController(
         context.paths,
         mineru_account_service,
@@ -890,6 +914,8 @@ def make_handler(
         ),
         summarize_local_ocr_installer=local_ocr_installer.summary,
         manage_local_ocr_installer=local_ocr_installer.perform,
+        summarize_managed_mineru=managed_mineru.summary,
+        manage_managed_mineru=managed_mineru.perform,
     )
     parser_settings_controller.migrate_legacy_mineru_account()
     controller_get_routes = {
@@ -930,6 +956,9 @@ def make_handler(
         ),
         "/api/mineru-config": (
             lambda _params: parser_settings_controller.mineru_config()
+        ),
+        "/api/mineru-local/component": (
+            lambda _params: parser_settings_controller.managed_mineru_local_component()
         ),
         "/api/local-ocr": (
             lambda _params: parser_settings_controller.local_ocr_config()
@@ -972,6 +1001,9 @@ def make_handler(
         ),
         "/api/mineru-local/test": (
             parser_settings_controller.test_mineru_local_config
+        ),
+        "/api/mineru-local/component": (
+            parser_settings_controller.manage_mineru_local_component
         ),
         "/api/local-ocr": (
             parser_settings_controller.save_local_ocr_config
@@ -1730,6 +1762,7 @@ def make_handler(
                 "background imports are still stopping; runtime engine kept open"
             )
             return False
+        managed_mineru.close()
         index_runtime.close()
         return True
 
@@ -1751,6 +1784,8 @@ def make_handler(
     Handler.page_mapping_coordinator = page_mapping_coordinator
     Handler.bibliographic_metadata_controller = bibliographic_metadata_controller
     Handler.page_mapping_controller = page_mapping_controller
+    Handler.component_catalog = component_catalog
+    Handler.managed_mineru = managed_mineru
     Handler.document_lifecycle_controller = document_lifecycle_controller
     return Handler
 

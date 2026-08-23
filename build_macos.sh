@@ -157,6 +157,9 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_mineru_local_provider \
   tests.test_local_ocr_settings \
   tests.test_local_ocr_installer \
+  tests.test_component_catalog \
+  tests.test_component_catalog_export \
+  tests.test_managed_mineru \
   tests.test_local_ocr_provider \
   tests.test_mineru_engine_import_bridge \
   tests.test_parser_settings_controller \

@@ -5,6 +5,8 @@ var parserStatistics = {total:{parsed_book_count:0, parsed_page_count:0, provide
 var mineruSelectedAccountId = '';
 var localOCRConfig = null;
 var localOCRPollTimer = null;
+var managedMineruPollTimer = null;
+var managedMineruWasBusy = false;
 
 function localOCREngineFields(providerId) {
   var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
@@ -67,7 +69,7 @@ function renderLocalOCRInstaller(config) {
     };
     if (fields.managedState) {
       fields.managedState.className = 'settings-status ' + (installed ? 'ready' : 'warning');
-      fields.managedState.textContent = labels[managed.state] || (installed ? '已安装 · tag ' + managed.tag : '未安装');
+      fields.managedState.textContent = labels[managed.state] || (managed.update_available ? '可更新 · tag ' + managed.tag : installed ? '已安装 · tag ' + managed.tag : '未安装');
     }
     if (fields.installHint) {
       var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
@@ -84,7 +86,14 @@ function renderLocalOCRInstaller(config) {
       if (bar) bar.style.width = managed.progress == null ? '18%' : Math.round(managed.progress * 100) + '%';
       fields.progress.classList.toggle('indeterminate', busy && managed.progress == null);
     }
-    if (fields.install) { fields.install.hidden = installed || busy; fields.install.disabled = !installer.supported; }
+    if (fields.install) {
+      fields.install.hidden = (installed && !managed.update_available) || busy;
+      fields.install.disabled = !installer.supported;
+      fields.install.textContent = managed.update_available ? '更新组件' : '下载安装';
+      fields.install.onclick = function() {
+        manageLocalOCRComponent(engine.provider_id, managed.update_available ? 'update' : 'install', fields.install);
+      };
+    }
     if (fields.validate) fields.validate.hidden = !installed || busy;
     if (fields.uninstall) fields.uninstall.hidden = !installed || busy;
     if (fields.cancel) fields.cancel.hidden = !busy;
@@ -95,6 +104,13 @@ function renderLocalOCRInstaller(config) {
   if (!installer.supported) {
     var status = document.getElementById('local-ocr-status');
     if (status) status.title = '当前平台不在安装矩阵中：' + (installer.platform || '未知');
+  }
+  var catalog = installer.catalog || {};
+  var catalogStatus = document.getElementById('local-ocr-status');
+  if (catalogStatus && catalog.last_checked_at) {
+    catalogStatus.title = catalog.last_error
+      ? '组件更新检查失败：' + catalog.last_error
+      : '组件清单已自动检查；24 小时内不会重复请求';
   }
   if (localOCRPollTimer) clearTimeout(localOCRPollTimer);
   localOCRPollTimer = active ? setTimeout(loadLocalOCRConfig, 700) : null;
@@ -281,8 +297,116 @@ function renderMineruLocalSettings(config) {
   if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
   if (backend) backend.value = config.backend || 'pipeline';
   if (enabled) enabled.checked = !!config.enabled;
+  renderManagedMineru(config.managed_runtime || {});
   syncMineruLocalImportOption(!!config.enabled);
   updateMineruLocalStatus(!!config.enabled);
+}
+
+function managedMineruFields(profileId) {
+  var prefix = 'managed-mineru-' + profileId;
+  return {
+    state: document.getElementById(prefix + '-state'),
+    install: document.getElementById(prefix + '-install'),
+    start: document.getElementById(prefix + '-start'),
+    stop: document.getElementById(prefix + '-stop'),
+    uninstall: document.getElementById(prefix + '-uninstall'),
+    cancel: document.getElementById(prefix + '-cancel')
+  };
+}
+
+function renderManagedMineru(runtime) {
+  var hardware = runtime.hardware || {};
+  var hardwareText = document.getElementById('managed-mineru-hardware');
+  if (hardwareText) {
+    var memory = hardware.vram_mb ? ' · ' + (hardware.vram_mb / 1024).toFixed(0) + 'GB 显存' : '';
+    hardwareText.textContent = hardware.detection_error
+      ? hardware.detection_error + ' · 默认推荐 Pipeline'
+      : hardware.name
+      ? hardware.name + memory + ' · 推荐 ' + (hardware.recommended_profile === 'vlm' ? 'VLM' : 'Pipeline')
+      : '未检测到可用的本地推理硬件';
+  }
+  var service = runtime.service || {};
+  var active = false;
+  var errors = [];
+  (runtime.profiles || []).forEach(function(profile) {
+    var fields = managedMineruFields(profile.profile);
+    var busy = ['provisioning','downloading_models','validating','starting','cleaning'].indexOf(profile.state) >= 0;
+    var running = !!service.running && service.profile === profile.profile;
+    active = active || busy;
+    if (profile.error) errors.push(profile.display_name + '：' + profile.error);
+    var labels = {
+      provisioning:'安装依赖中', downloading_models:'下载模型中', validating:'验证中',
+      starting:'启动中', cleaning:'清理中'
+    };
+    if (fields.state) {
+      fields.state.className = 'settings-status ' + (profile.installed ? 'ready' : 'warning');
+      fields.state.textContent = labels[profile.state]
+        || (running ? '运行中' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? '未安装' : '平台不支持');
+    }
+    if (fields.install) {
+      fields.install.hidden = (profile.installed && !profile.update_available) || busy;
+      fields.install.disabled = !profile.supported || (profile.profile === 'vlm' && !hardware.vlm_supported);
+      fields.install.textContent = profile.update_available ? '更新组件' : '下载安装';
+      fields.install.onclick = function() {
+        manageMineruComponent(profile.profile, profile.update_available ? 'update' : 'install', fields.install);
+      };
+    }
+    if (fields.start) fields.start.hidden = !profile.installed || busy || running;
+    if (fields.stop) fields.stop.hidden = !running || busy;
+    if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
+    if (fields.cancel) fields.cancel.hidden = !busy;
+  });
+  var autoButton = document.getElementById('managed-mineru-auto-install');
+  if (autoButton) {
+    var recommended = hardware.recommended_profile || 'pipeline';
+    var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
+    autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
+    autoButton.textContent = recommendedProfile && recommendedProfile.installed ? '推荐配置已安装' : '安装推荐配置';
+  }
+  var hint = document.getElementById('managed-mineru-hint');
+  if (hint) hint.textContent = errors[0] || (service.running ? '本地服务运行于 ' + service.endpoint : active ? '安装可能下载约 20GB 数据，请保持应用开启。' : '组件按需下载，不会随主程序更新自动安装。');
+  if (managedMineruPollTimer) clearTimeout(managedMineruPollTimer);
+  managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
+  if (managedMineruWasBusy && !active) loadMineruConfig();
+  managedMineruWasBusy = active;
+}
+
+async function loadManagedMineruStatus() {
+  try {
+    var response = await fetch('/api/mineru-local/component');
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+    renderManagedMineru(data);
+  } catch (error) {
+    var hint = document.getElementById('managed-mineru-hint');
+    if (hint) hint.textContent = '读取托管运行时失败：' + error.message;
+  }
+}
+
+async function manageMineruComponent(profile, action, button) {
+  if ((action === 'install' || action === 'update') && !await showAppConfirm(
+    '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘。',
+    {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
+  )) return;
+  if (action === 'uninstall' && !await showAppConfirm(
+    '将删除该配置的 MinerU 运行时、依赖和本地模型。',
+    {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
+  )) return;
+  if (button) button.disabled = true;
+  try {
+    var response = await fetch('/api/mineru-local/component', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({profile:profile, action:action})
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '操作失败');
+    renderManagedMineru(data.managed_runtime || {});
+  } catch (error) {
+    showToast('本地 MinerU 组件操作失败：' + error.message, 'danger');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function syncMineruLocalImportOption(enabled) {

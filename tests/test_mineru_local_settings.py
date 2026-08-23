@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from src.me_finder.mineru_api import MinerUError
 from src.me_finder.mineru_local_settings import (
+    clear_managed_mineru,
+    configure_managed_mineru,
     load_mineru_local_config,
     mineru_local_config_summary,
     save_mineru_local_config,
@@ -26,6 +28,8 @@ class MinerULocalSettingsTests(unittest.TestCase):
             mineru_local_config_summary(self.path),
             {
                 "enabled": False,
+                "managed": False,
+                "managed_profile": "",
                 "endpoint": "http://127.0.0.1:8000",
                 "backend": "pipeline",
             },
@@ -92,6 +96,21 @@ class MinerULocalSettingsTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["endpoint"], "http://127.0.0.1:8123")
         health.assert_called_once_with()
+
+    def test_managed_runtime_configuration_is_explicit_and_reversible(self) -> None:
+        configured = configure_managed_mineru(
+            self.path,
+            endpoint="http://127.0.0.1:18432",
+            backend="vlm-auto-engine",
+            profile="vlm",
+        )
+        self.assertTrue(configured["enabled"])
+        self.assertTrue(configured["managed"])
+        self.assertEqual(configured["managed_profile"], "vlm")
+
+        cleared = clear_managed_mineru(self.path)
+        self.assertFalse(cleared["enabled"])
+        self.assertFalse(cleared["managed"])
 
 
 if __name__ == "__main__":

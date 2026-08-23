@@ -167,6 +167,12 @@ else:
             self.assertEqual(selected.uv.version, "0.12.1")
             self.assertEqual(engines["ndlocr-lite"].tag, "1.2.3")
             self.assertEqual(engines["ndlkotenocr-lite"].tag, "1.4.3")
+        release = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(release["mineru"]["version"], "3.4.5")
+        self.assertEqual(
+            release["mineru"]["profiles"]["vlm"]["backend"],
+            "vlm-auto-engine",
+        )
 
     def test_install_runs_every_state_and_writes_machine_local_paths(self) -> None:
         installer = self._installer()
@@ -199,6 +205,66 @@ else:
         self.assertEqual(engine.python_path, final / "venv/bin/python")
         self.assertTrue((final / "installed.json").is_file())
         self.assertTrue((final / "sbom.spdx.json").is_file())
+
+    def test_remote_manifest_refresh_marks_installed_engine_update(self) -> None:
+        manifest_path, _archive = self._asset()
+        installer = LocalOCRInstaller(
+            self.runtime_root,
+            self.config_path,
+            manifest_path=lambda: manifest_path,
+            platform_key="test-platform",
+        )
+        installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+        self._wait(installer)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["engines"]["ndlocr-lite"]["tag"] = "1.1"
+        manifest["engines"]["ndlocr-lite"]["version"] = "1.1"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        installer.refresh_manifest()
+
+        engine = installer.summary()["engines"][0]
+        self.assertTrue(engine["managed"])
+        self.assertTrue(engine["update_available"])
+        self.assertEqual(engine["installed_tag"], "1.0")
+
+        installer.perform({"provider_id": "ndlocr-lite", "action": "update"})
+        updated = self._wait(installer)
+
+        self.assertEqual(updated["state"], "installed")
+        self.assertFalse(updated["update_available"])
+        self.assertEqual(updated["installed_tag"], "1.1")
+
+    def test_update_publish_failure_restores_previous_runtime(self) -> None:
+        manifest_path, _archive = self._asset()
+        installer = LocalOCRInstaller(
+            self.runtime_root,
+            self.config_path,
+            manifest_path=manifest_path,
+            platform_key="test-platform",
+        )
+        installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+        self._wait(installer)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["engines"]["ndlocr-lite"]["tag"] = "1.1"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        installer.refresh_manifest()
+        original_replace = Path.replace
+
+        def fail_staging_publish(source: Path, target: Path) -> Path:
+            if source.name.startswith(".staging-"):
+                raise OSError("publish failed")
+            return original_replace(source, target)
+
+        with mock.patch.object(Path, "replace", autospec=True, side_effect=fail_staging_publish):
+            installer.perform({"provider_id": "ndlocr-lite", "action": "update"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "installed")
+        self.assertEqual(result["installed_tag"], "1.0")
+        self.assertTrue(result["update_available"])
+        self.assertIn("publish failed", result["error"])
+        self.assertFalse(list(installer.component_root.glob(".previous-*")))
 
     def test_bad_digest_rolls_back_without_config_or_staging(self) -> None:
         manifest_path, _archive = self._asset()

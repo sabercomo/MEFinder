@@ -17,6 +17,8 @@ from unittest.mock import patch
 
 from src.me_finder.app_context import AppContext, AppPaths
 from src.me_finder.database import build_database
+from src.me_finder.component_catalog import ComponentCatalog
+from src.me_finder.managed_mineru import ManagedMinerU
 from src.me_finder.pdf_import_service import rebuild_local_index
 from src.me_finder.web import make_handler
 
@@ -190,6 +192,31 @@ class AppContextTests(unittest.TestCase):
 
             self.assertEqual(received_paths, [context.paths.index_path])
             self.assertFalse((root / "data" / "index.sqlite3").exists())
+
+    def test_desktop_startup_schedules_component_catalog_check(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            context = AppContext.create(root, index_path=Path("data/index.sqlite3"))
+            build_database({"metadata": {}}, context.paths.index_path)
+            with (
+                patch.dict(os.environ, {"ME_FINDER_DESKTOP_SHELL": "macos"}),
+                patch.object(
+                    ComponentCatalog,
+                    "start_background_check",
+                    return_value=True,
+                ) as start_check,
+                patch.object(
+                    ManagedMinerU,
+                    "start_installed_if_managed",
+                    return_value=False,
+                ),
+            ):
+                handler = make_handler(context.paths.index_path, app_context=context)
+            try:
+                start_check.assert_called_once()
+                self.assertTrue(callable(start_check.call_args.kwargs["on_updated"]))
+            finally:
+                handler.close_runtime()
 
 
 if __name__ == "__main__":
