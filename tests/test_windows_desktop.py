@@ -15,8 +15,37 @@ from src.me_finder.windows_desktop import (
     WindowsWindowController,
     apply_windows_titlebar,
     configure_windows_chromeless,
+    frameless_resize_hit,
     pdf_file_url,
 )
+
+
+class FramelessResizeHitTests(unittest.TestCase):
+    # Window rect 100,100 → 500,400; grab 8px. Top edge is client (titlebar).
+    RECT = dict(left=100, top=100, right=500, bottom=400, grab=8)
+
+    def hit(self, x: int, y: int) -> int:
+        return frameless_resize_hit(x, y, **self.RECT)
+
+    def test_interior_is_client(self) -> None:
+        self.assertEqual(self.hit(300, 250), windows_desktop._HTCLIENT)
+
+    def test_top_edge_stays_client_for_the_titlebar(self) -> None:
+        self.assertEqual(self.hit(300, 101), windows_desktop._HTCLIENT)
+
+    def test_left_and_right_edges_resize(self) -> None:
+        self.assertEqual(self.hit(101, 250), windows_desktop._HTLEFT)
+        self.assertEqual(self.hit(499, 250), windows_desktop._HTRIGHT)
+
+    def test_bottom_edge_and_corners_resize(self) -> None:
+        self.assertEqual(self.hit(300, 399), windows_desktop._HTBOTTOM)
+        self.assertEqual(self.hit(101, 399), windows_desktop._HTBOTTOMLEFT)
+        self.assertEqual(self.hit(499, 399), windows_desktop._HTBOTTOMRIGHT)
+
+    def test_top_corners_fall_back_to_side_resize_not_top(self) -> None:
+        # Top-edge resize is given up, so a top corner is a plain side grab.
+        self.assertEqual(self.hit(101, 101), windows_desktop._HTLEFT)
+        self.assertEqual(self.hit(499, 101), windows_desktop._HTRIGHT)
 
 
 class _FakeHandle:

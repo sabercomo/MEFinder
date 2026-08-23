@@ -38,10 +38,54 @@ _SWP_NOZORDER = 0x0004
 _SWP_NOACTIVATE = 0x0010
 _SWP_FRAMECHANGED = 0x0020
 _WM_NCCALCSIZE = 0x0083
+_WM_NCHITTEST = 0x0084
 _DWMWA_WINDOW_CORNER_PREFERENCE = 33
 _DWMWA_BORDER_COLOR = 34
 _DWMWCP_ROUND = 2
 _DWMWA_COLOR_NONE = 0xFFFFFFFE
+
+# WM_NCHITTEST return codes for the frameless resize border.
+_HTCLIENT = 1
+_HTLEFT = 10
+_HTRIGHT = 11
+_HTBOTTOM = 15
+_HTBOTTOMLEFT = 16
+_HTBOTTOMRIGHT = 17
+# Grab thickness (px) for the invisible resize border on left/right/bottom edges.
+_FRAMELESS_RESIZE_GRAB = 8
+
+
+def frameless_resize_hit(
+    x: int,
+    y: int,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    grab: int = _FRAMELESS_RESIZE_GRAB,
+) -> int:
+    """Resize hit-test for a frameless window whose frame border was removed.
+
+    The HTML titlebar owns the top edge, so top-edge (and top-corner) resizing
+    is intentionally not offered — only the left, right and bottom edges plus
+    the two bottom corners report resize codes. Everything else is client area,
+    which keeps the titlebar drag region and web content interactive.
+    """
+
+    on_left = left <= x < left + grab
+    on_right = right - grab <= x < right
+    on_bottom = bottom - grab <= y < bottom
+    if on_bottom and on_left:
+        return _HTBOTTOMLEFT
+    if on_bottom and on_right:
+        return _HTBOTTOMRIGHT
+    if on_left:
+        return _HTLEFT
+    if on_right:
+        return _HTRIGHT
+    if on_bottom:
+        return _HTBOTTOM
+    return _HTCLIENT
 
 _CALLBACK_FACTORY = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
 _SUBCLASSPROC = _CALLBACK_FACTORY(
@@ -113,6 +157,30 @@ def _set_dwm_attribute(hwnd: int, attribute: int, value: int) -> int:
     return int(setter(hwnd, attribute, ctypes.byref(payload), ctypes.sizeof(payload)))
 
 
+class _MARGINS(ctypes.Structure):
+    _fields_ = [
+        ("cxLeftWidth", ctypes.c_int),
+        ("cxRightWidth", ctypes.c_int),
+        ("cyTopHeight", ctypes.c_int),
+        ("cyBottomHeight", ctypes.c_int),
+    ]
+
+
+def _extend_frame_into_client(hwnd: int, margin: int = 1) -> int:
+    """Keep the DWM drop shadow after the resize frame insets are collapsed.
+
+    Removing every ``WM_NCCALCSIZE`` inset makes the window borderless but also
+    drops the shadow. Extending the DWM frame a hairline back into the client
+    area restores the shadow without repainting a visible border.
+    """
+
+    extender = _library("dwmapi").DwmExtendFrameIntoClientArea
+    extender.argtypes = [ctypes.c_void_p, ctypes.POINTER(_MARGINS)]
+    extender.restype = ctypes.c_long
+    margins = _MARGINS(0, 0, 0, int(margin))
+    return int(extender(hwnd, ctypes.byref(margins)))
+
+
 def _get_native_window_style(hwnd: int) -> int:
     getter = getattr(_library("user32"), "GetWindowLongPtrW", None)
     if getter is None:
@@ -154,13 +222,18 @@ def _refresh_native_window_frame(hwnd: int) -> int:
 
 
 def remove_windows_top_resize_inset(hwnd: int) -> bool:
-    """Keep the client area flush with the top edge of the frameless window.
+    """Remove the whole native resize frame and re-implement edge resizing.
 
     ``WS_THICKFRAME`` reserves a resize inset on every edge during
-    ``WM_NCCALCSIZE``; the top one has no caption to cover it and renders as a
-    system-colored line above the HTML titlebar. Restoring the pre-default top
-    keeps left/right/bottom resize borders while the top edge paints web
-    content only (top-edge resizing is given up for the seamless titlebar).
+    ``WM_NCCALCSIZE``, and DWM paints a system-colored one-pixel frame line in
+    it. On Windows 11 that line is suppressed with ``DWMWA_BORDER_COLOR`` =
+    ``COLOR_NONE``, but that attribute does not exist on Windows 10, so the
+    active-window frame line shows through (a bright border that appears only
+    while the window is focused). To make the shell look identical on Windows 10
+    and 11, we collapse *all four* insets so the client area fills the entire
+    window (no frame line on any edge), then restore left/right/bottom + the two
+    bottom corners as resize zones via ``WM_NCHITTEST``. Top-edge resizing stays
+    given up so the HTML titlebar drag region is unobstructed.
     """
 
     if hwnd in _top_inset_subclasses:
@@ -180,14 +253,35 @@ def remove_windows_top_resize_inset(hwnd: int) -> bool:
         ctypes.c_ssize_t,
     ]
     comctl32.DefSubclassProc.restype = ctypes.c_ssize_t
+    user32 = _library("user32")
+    user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowRect.restype = wintypes.BOOL
 
     def proc(handle, message, wparam, lparam, _subclass_id, _ref_data):
         if message == _WM_NCCALCSIZE and wparam and lparam:
             rect = ctypes.cast(lparam, ctypes.POINTER(wintypes.RECT)).contents
-            top_before_default = rect.top
+            before = (rect.left, rect.top, rect.right, rect.bottom)
             result = comctl32.DefSubclassProc(handle, message, wparam, lparam)
-            rect.top = top_before_default
+            # Restore the pre-default rect on every edge: the client area now
+            # fills the whole window, so DWM has no frame inset to paint.
+            rect.left, rect.top, rect.right, rect.bottom = before
             return result
+        if message == _WM_NCHITTEST:
+            # A borderless window reports HTCLIENT everywhere, which kills edge
+            # resizing; re-derive the resize zones from the cursor position.
+            x = lparam & 0xFFFF
+            if x >= 0x8000:
+                x -= 0x10000
+            y = (lparam >> 16) & 0xFFFF
+            if y >= 0x8000:
+                y -= 0x10000
+            rect = wintypes.RECT()
+            if user32.GetWindowRect(handle, ctypes.byref(rect)):
+                hit = frameless_resize_hit(
+                    x, y, rect.left, rect.top, rect.right, rect.bottom
+                )
+                if hit != _HTCLIENT:
+                    return hit
         return comctl32.DefSubclassProc(handle, message, wparam, lparam)
 
     callback = _SUBCLASSPROC(proc)
@@ -287,14 +381,19 @@ def configure_windows_chromeless(
     refresher(hwnd)
 
     # Keep Windows 11 rounded corners while suppressing DWM's non-client border.
-    # The resize frame and shadow remain active; only the bright one-pixel ring
-    # around the HTML-painted dark shell is removed.
+    # BORDER_COLOR handles Windows 11; the inset removal above handles Windows 10
+    # (where BORDER_COLOR does not exist and the active-window frame line would
+    # otherwise show). Re-extend the frame a hairline so the drop shadow stays.
     try:
         dwm_setter = attribute_setter or _set_dwm_attribute
         dwm_setter(hwnd, _DWMWA_WINDOW_CORNER_PREFERENCE, _DWMWCP_ROUND)
         dwm_setter(hwnd, _DWMWA_BORDER_COLOR, _DWMWA_COLOR_NONE)
     except Exception:
         logging.debug("frameless DWM styling is unavailable", exc_info=True)
+    try:
+        _extend_frame_into_client(hwnd)
+    except Exception:
+        logging.debug("frameless shadow extension is unavailable", exc_info=True)
     try:
         (maximize_bounds_preparer or prepare_windows_maximized_bounds)(window)
     except Exception:
