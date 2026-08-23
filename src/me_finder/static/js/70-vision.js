@@ -7,6 +7,7 @@ var localOCRConfig = null;
 var localOCRPollTimer = null;
 var managedMineruPollTimer = null;
 var managedMineruWasBusy = false;
+var mineruLocalConfig = {};
 
 function localOCREngineFields(providerId) {
   var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
@@ -291,6 +292,7 @@ async function loadMineruConfig() {
 }
 
 function renderMineruLocalSettings(config) {
+  mineruLocalConfig = config;
   var endpoint = document.getElementById('mineru-local-endpoint');
   var backend = document.getElementById('mineru-local-backend');
   var enabled = document.getElementById('mineru-local-enabled');
@@ -299,7 +301,11 @@ function renderMineruLocalSettings(config) {
   if (enabled) enabled.checked = !!config.enabled;
   renderManagedMineru(config.managed_runtime || {});
   syncMineruLocalImportOption(!!config.enabled);
-  updateMineruLocalStatus(!!config.enabled);
+  var service = (config.managed_runtime || {}).service || {};
+  var label = config.managed
+    ? (service.running ? '托管运行中' : '托管已配置')
+    : config.enabled ? '自部署已配置' : '';
+  updateMineruLocalStatus(!!config.enabled, label);
 }
 
 function managedMineruFields(profileId) {
@@ -315,6 +321,7 @@ function managedMineruFields(profileId) {
 }
 
 function renderManagedMineru(runtime) {
+  var externalConfigured = !!mineruLocalConfig.enabled && !mineruLocalConfig.managed;
   var hardware = runtime.hardware || {};
   var hardwareText = document.getElementById('managed-mineru-hardware');
   if (hardwareText) {
@@ -341,12 +348,12 @@ function renderManagedMineru(runtime) {
     if (fields.state) {
       fields.state.className = 'settings-status ' + (profile.installed ? 'ready' : 'warning');
       fields.state.textContent = labels[profile.state]
-        || (running ? '运行中' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? '未安装' : '平台不支持');
+        || (running ? '运行中' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? (externalConfigured ? '未由 MEFinder 安装' : '未安装') : '平台不支持');
     }
     if (fields.install) {
       fields.install.hidden = (profile.installed && !profile.update_available) || busy;
       fields.install.disabled = !profile.supported || (profile.profile === 'vlm' && !hardware.vlm_supported);
-      fields.install.textContent = profile.update_available ? '更新组件' : '下载安装';
+      fields.install.textContent = profile.update_available ? '更新组件' : externalConfigured ? '改用托管安装' : '下载安装';
       fields.install.onclick = function() {
         manageMineruComponent(profile.profile, profile.update_available ? 'update' : 'install', fields.install);
       };
@@ -361,10 +368,16 @@ function renderManagedMineru(runtime) {
     var recommended = hardware.recommended_profile || 'pipeline';
     var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
     autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
-    autoButton.textContent = recommendedProfile && recommendedProfile.installed ? '推荐配置已安装' : '安装推荐配置';
+    autoButton.textContent = recommendedProfile && recommendedProfile.installed
+      ? '推荐配置已安装'
+      : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
   }
   var hint = document.getElementById('managed-mineru-hint');
-  if (hint) hint.textContent = errors[0] || (service.running ? '本地服务运行于 ' + service.endpoint : active ? '安装可能下载约 20GB 数据，请保持应用开启。' : '组件按需下载，不会随主程序更新自动安装。');
+  if (hint) hint.textContent = errors[0] || (service.running
+    ? '本地服务运行于 ' + service.endpoint
+    : active ? '安装可能下载约 20GB 数据，请保持应用开启。'
+    : externalConfigured ? '已配置自部署服务 ' + mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案。'
+    : '组件按需下载，不会随主程序更新自动安装。');
   if (managedMineruPollTimer) clearTimeout(managedMineruPollTimer);
   managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
   if (managedMineruWasBusy && !active) loadMineruConfig();
@@ -479,10 +492,11 @@ async function testMineruLocalConnection() {
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '连接失败');
     if (hint) hint.textContent = '连接成功 · ' + data.latency_ms + ' ms';
+    updateMineruLocalStatus(true, mineruLocalConfig.managed ? '托管运行中' : '自部署运行中');
   } catch (error) {
     if (hint) hint.textContent = '连接失败：' + error.message;
     var status = document.getElementById('mineru-local-status');
-    if (status) { status.className = 'settings-status warning'; status.textContent = '连接失败'; }
+    if (status) { status.className = 'settings-status warning'; status.textContent = mineruLocalConfig.managed ? '托管未连接' : '自部署未连接'; }
   } finally {
     button.disabled = false;
     button.textContent = '检测连接';

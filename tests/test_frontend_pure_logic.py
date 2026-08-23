@@ -1682,6 +1682,47 @@ class VisionPopVisibilityTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class MineruLocalDisplayTests(unittest.TestCase):
+    """自行部署的服务不应被托管安装卡片误报为普通“未安装”。"""
+
+    def test_external_deployment_is_distinguished_from_managed_runtime(self):
+        tail = r"""
+        function el() { return {textContent:'', className:'', hidden:false, disabled:false}; }
+        var elements = {};
+        [
+          'managed-mineru-hardware', 'managed-mineru-pipeline-state',
+          'managed-mineru-pipeline-install', 'managed-mineru-pipeline-start',
+          'managed-mineru-pipeline-stop', 'managed-mineru-pipeline-uninstall',
+          'managed-mineru-pipeline-cancel', 'managed-mineru-auto-install',
+          'managed-mineru-hint'
+        ].forEach(function(id) { elements[id] = el(); });
+        globalThis.document = {getElementById:function(id) { return elements[id] || null; }};
+        mineruLocalConfig = {enabled:true, managed:false, endpoint:'http://127.0.0.1:8000'};
+        renderManagedMineru({
+          supported:true,
+          hardware:{name:'CPU', recommended_profile:'pipeline'},
+          service:{running:false},
+          profiles:[{profile:'pipeline', display_name:'Pipeline', supported:true, installed:false, state:'not_installed'}]
+        });
+        return {
+          state:elements['managed-mineru-pipeline-state'].textContent,
+          install:elements['managed-mineru-pipeline-install'].textContent,
+          auto:elements['managed-mineru-auto-install'].textContent,
+          hint:elements['managed-mineru-hint'].textContent
+        };
+        """
+        self.assertEqual(_vision_eval(tail), {
+            "state": "未由 MEFinder 安装",
+            "install": "改用托管安装",
+            "auto": "改用推荐托管配置",
+            "hint": (
+                "已配置自部署服务 http://127.0.0.1:8000；无需重复下载。"
+                "下方托管运行时为可选方案。"
+            ),
+        })
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CrossrefLookupConfigTests(unittest.TestCase):
     """Crossref 走 runLookup 工厂后，CROSSREF_LOOKUP 回调须复现原 lookupCrossref 行为。"""
 

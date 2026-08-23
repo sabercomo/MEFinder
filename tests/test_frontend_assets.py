@@ -284,10 +284,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：统一 MinerU 与其他解析接口的编辑表单视觉结构。
     # 0.4.7 后续：补充本地 OCR 自动路由说明，收紧未配置的视觉 API 入口。
     # 0.4.7 后续：本地 MinerU Pipeline/VLM 托管安装与组件清单更新入口。
+    # 0.4.7 后续：区分自行部署 MinerU 与 MEFinder 托管安装状态。
     BASELINE_SHA256 = (
-        "89abbd5a2e8519b40a913fb64236e5060e34a6149419cc2bf27800766732425a"
+        "42c3c3e04cd3becc34ada86897817267888366667589c766ef28d2b194139a84"
     )
-    BASELINE_BYTES = 844774
+    BASELINE_BYTES = 845609
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
