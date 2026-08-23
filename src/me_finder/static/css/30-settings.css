@@ -862,7 +862,13 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .local-ocr-component-head small { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 .local-ocr-grid { margin-top: 16px; }
 .local-ocr-grid .settings-input { max-width: none; }
-.local-ocr-save-row { margin-top: 16px; }
+.local-ocr-save-row {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+  margin-top: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-subtle);
+}
 #bib-completion-settings .auto-match-setting { width: 100%; max-width: none; }
 /* Lightweight account switcher (chips) + a plain settings form — replaces the
    old table + modal dialog. One simple form; pick which account with a chip. */

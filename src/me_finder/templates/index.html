@@ -588,7 +588,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span id="local-ocr-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
-              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>OCR 只接收 MEFinder 渲染的页图，不会生成文字层 PDF。首版请配置两个上游 CLI 的独立 Python 环境；组件路径只保存在本机。本地 OCR 失败时，自动导入会继续沿用现有 MinerU / 视觉 API 回退策略。</span></div>
+              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>OCR 只识别 MEFinder 渲染的页图，不生成带文字层的 PDF。首次使用需为两个上游 CLI 各配独立的 Python 环境，组件路径仅保存在本机。本地识别失败时，自动导入会改用 MinerU / 视觉 API 完成。</span></div>
               <div class="local-ocr-component-list">
                 <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
                   <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div>

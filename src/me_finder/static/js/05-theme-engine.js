@@ -110,6 +110,15 @@ function deriveThemeTokens(def) {
   var mode = def.mode === 'dark' ? 'dark' : 'light';
   var bg = teHexToRgb(def.background) ? def.background : (mode === 'dark' ? '#0e1420' : '#f6f8fc');
   var accent = teHexToRgb(def.accent) ? def.accent : '#2f6df6';
+  // 浅色皮肤统一白字主操作按钮（与内置主题一致）：accent 太浅时压深到白字达 4.5:1，
+  // 避免同为浅色皮肤，有的搜索按钮白字、有的却翻成黑字。深色皮肤保持自动选色。
+  if (mode !== 'dark') {
+    var accentGuard = 0;
+    while (teContrast('#ffffff', accent) < 4.5 && accentGuard < 30) {
+      accent = teDarken(accent, 0.05);
+      accentGuard++;
+    }
+  }
   var highlight = teHexToRgb(def.highlight) ? def.highlight : THEME_DEFAULT_HIGHLIGHT[mode];
   var fgRaw = teHexToRgb(def.foreground) ? def.foreground : (mode === 'dark' ? '#eef4fb' : '#172033');
   var contrast = typeof def.contrast === 'number' ? def.contrast : 55;
@@ -211,7 +220,7 @@ function deriveThemeTokens(def) {
 
   // accent 通用派生（含守护）。
   t['--accent'] = accent;
-  t['--accent-contrast'] = teAccentContrast(accent);
+  t['--accent-contrast'] = mode === 'dark' ? teAccentContrast(accent) : '#ffffff';
   t['--accent-text'] = teReadableAccentText(accent, t['--app-bg'], 4.5);
   t['--highlight'] = highlight;
   t['--focus-ring'] = '0 0 0 3px ' + teAlpha(accent, 0.22);
