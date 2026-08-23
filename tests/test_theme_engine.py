@@ -47,7 +47,7 @@ REQUIRED_TOKENS = (
     "--surface-elevated", "--surface-hover", "--surface-selected",
     "--text-primary", "--text-secondary", "--text-tertiary", "--text-disabled",
     "--border-subtle", "--border-default", "--border-strong", "--border-control",
-    "--accent", "--accent-hover", "--accent-soft", "--accent-contrast", "--accent-text",
+    "--accent", "--accent-fill", "--accent-hover", "--accent-soft", "--accent-contrast", "--accent-text",
     "--highlight",
     "--input-bg", "--menu-bg", "--dialog-bg", "--tooltip-bg", "--focus-ring",
     "--scrollbar-thumb", "--skeleton-base", "--skeleton-highlight",
@@ -72,7 +72,7 @@ class ThemeEngineDerivationTests(unittest.TestCase):
             "E.THEME_PRESETS.map(function(p){var t=E.deriveThemeTokens(p);return {"
             "id:p.id,"
             "text:E.teContrast(t['--text-primary'],t['--app-bg']),"
-            "btn:E.teContrast(t['--accent-contrast'],t['--accent']),"
+            "btn:E.teContrast(t['--accent-contrast'],t['--accent-fill']),"
             "atext:E.teContrast(t['--accent-text'],t['--app-bg']),"
             "htext:E.teContrast(t['--match-inline-text'],t['--match-inline-bg'])};})"
         )

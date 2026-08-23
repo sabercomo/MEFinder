@@ -37,7 +37,7 @@
   height: 36px;
   padding: 0 16px;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-contrast);
   font-size: 14px;
   font-weight: 600;
@@ -573,9 +573,9 @@
 }
 .action-btn:hover { background: var(--surface-hover); }
 .action-btn.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-contrast);
-  border-color: var(--accent);
+  border-color: var(--accent-fill);
 }
 .action-btn.primary:hover { opacity: 0.85; }
 .detail-format-trigger {

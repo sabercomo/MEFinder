@@ -360,7 +360,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-contrast);
   font-size: 11px;
   display: grid;

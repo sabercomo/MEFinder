@@ -99,7 +99,7 @@
 .library-filter.is-open .library-filter-icon { transform: none; }
 .library-filter.has-active .library-filter-btn { border-color: var(--accent); color: var(--accent); }
 .library-filter.has-active .library-filter-icon { color: var(--accent); }
-.library-filter-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-contrast); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.library-filter-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-fill); color: var(--accent-contrast); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .library-filter-badge[hidden] { display: none; }
 /* Hallmark · component: content-width library facets within the existing app system. */
 .library-filter-pop { left: 0; right: auto; width: 408px; max-width: calc(100vw - 48px); padding: 13px 14px; }

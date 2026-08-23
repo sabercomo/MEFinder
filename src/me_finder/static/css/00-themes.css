@@ -19,6 +19,7 @@
   --border-strong: #C8D4E2;
   --border-control: #828CA0;
   --accent: #0F62E6;
+  --accent-fill: #0F62E6;
   --accent-hover: #0B54C9;
   --accent-soft: #EAF3FF;
   --accent-contrast: #FFFFFF;
@@ -96,6 +97,7 @@ html[data-theme="sage-ivory"], .theme-preview[data-preview-theme="sage-ivory"] {
   --border-strong: #C8CEBC;
   --border-control: #818778;
   --accent: #4A5F39;
+  --accent-fill: #4A5F39;
   --accent-hover: #3E5130;
   --accent-soft: #E8EEDF;
   --accent-contrast: #FFFFFF;
@@ -150,6 +152,7 @@ html[data-theme="warm-sand"], .theme-preview[data-preview-theme="warm-sand"] {
   --border-strong: #D6C2B1;
   --border-control: #94806F;
   --accent: #9F4A1E;
+  --accent-fill: #9F4A1E;
   --accent-hover: #873E19;
   --accent-soft: #F7E3D5;
   --accent-contrast: #FFFFFF;
@@ -204,6 +207,7 @@ html[data-theme="rose-mist"], .theme-preview[data-preview-theme="rose-mist"] {
   --border-strong: #DCCAD2;
   --border-control: #8C7B82;
   --accent: #B0335A;
+  --accent-fill: #B0335A;
   --accent-hover: #992C4E;
   --accent-soft: #FBE4EC;
   --accent-contrast: #FFFFFF;
@@ -258,6 +262,7 @@ html[data-theme="lavender-purple"], .theme-preview[data-preview-theme="lavender-
   --border-strong: #CFC6DE;
   --border-control: #867F93;
   --accent: #6544B0;
+  --accent-fill: #6544B0;
   --accent-hover: #583A99;
   --accent-soft: #EBE5F7;
   --accent-contrast: #FFFFFF;
@@ -343,6 +348,7 @@ html[data-theme="midnight"], .theme-preview[data-preview-theme="midnight"] {
   --border-strong: #3D444D;
   --border-control: #6E7681;
   --accent: #1F6FEB;
+  --accent-fill: #1F6FEB;
   --accent-hover: #388BFD;
   --accent-soft: rgba(56,139,253,0.15);
   /* GitHub 用 #1F6FEB 作主按钮底、#58A6FF 作链接文字。白字在 #1F6FEB 上约 4.9:1，达标。 */

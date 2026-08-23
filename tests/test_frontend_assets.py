@@ -264,11 +264,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
 
     # 0.4.7 主题修正及本地 OCR 设置、导入状态接入后同步更新。
     # 0.4.7 后续：解析方式单选按钮改自绘扁平点；本地 OCR 面板去外框，改为无框分组；
-    # 浅色皮肤统一白字主操作按钮；本地 OCR 保存按钮右对齐；说明文案改写。
+    # 全主题主操作按钮统一「实色底 --accent-fill + 白字」；本地 OCR 保存右对齐；文案改写。
     BASELINE_SHA256 = (
-        "2ad3a61e80bbdaf2d1978320b0c479354232823ad17dbbfaa6d03fceca5461e3"
+        "fdc11664e79aaf5919644a84c6b119a8a7a5568c3af28cb3b663190a0f47cf27"
     )
-    BASELINE_BYTES = 820886
+    BASELINE_BYTES = 821248
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

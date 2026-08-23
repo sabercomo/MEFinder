@@ -265,7 +265,7 @@ class ThemeMarkupTests(unittest.TestCase):
         "--app-bg", "--sidebar-bg", "--surface-primary", "--surface-secondary",
         "--surface-elevated", "--surface-hover", "--surface-selected",
         "--text-primary", "--text-secondary", "--text-tertiary", "--text-disabled",
-        "--border-subtle", "--border-default", "--border-strong", "--accent",
+        "--border-subtle", "--border-default", "--border-strong", "--accent", "--accent-fill",
         "--accent-hover", "--accent-soft", "--accent-contrast", "--highlight", "--success",
         "--success-soft", "--success-border", "--success-icon", "--warning",
         "--warning-soft", "--warning-border", "--warning-icon", "--danger",
