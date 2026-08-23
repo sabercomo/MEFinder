@@ -52,6 +52,9 @@ class MCPPackagingTests(unittest.TestCase):
             self.assertIn("tools.smoke_mcp_sidecar", script)
             self.assertIn("tests.test_mcp_packaging", script)
             self.assertIn("tests.test_mcp_concurrency", script)
+            self.assertIn("tests.test_backup_coordinator", script)
+            self.assertIn("tests.test_document_groups", script)
+            self.assertIn("tests.test_search_group_scope", script)
 
         self.assertIn("must contain exactly two executables", self.windows_installer)
 
@@ -62,6 +65,9 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn('codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$1"', self.macos_build)
         self.assertIn("tests.test_mcp_packaging", self.macos_build)
         self.assertIn("tests.test_mcp_concurrency", self.macos_build)
+        self.assertIn("tests.test_backup_coordinator", self.macos_build)
+        self.assertIn("tests.test_document_groups", self.macos_build)
+        self.assertIn("tests.test_search_group_scope", self.macos_build)
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_LICENSES"):
             self.assertIn(name, self.macos_spec)
         self.assertIn(
@@ -97,7 +103,9 @@ class MCPPackagingTests(unittest.TestCase):
             'Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"',
             self.windows_workflow,
         )
-        self.assertIn("gh release download v0.4.3", self.windows_workflow)
+        self.assertIn("gh release download v0.4.5", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.7-windows-setup.exe", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.7-windows-portable.zip", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
         self.assertIn("portable-moved", self.windows_workflow)

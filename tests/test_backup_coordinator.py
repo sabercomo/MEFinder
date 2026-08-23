@@ -64,7 +64,7 @@ class FakeJobs:
 
 
 class BackupCoordinatorTests(unittest.TestCase):
-    def _coordinator(self, root, *, write=None, restore=None):
+    def _coordinator(self, root, *, write=None, restore=None, restore_groups=None):
         events = []
         jobs = FakeJobs(events)
 
@@ -84,6 +84,8 @@ class BackupCoordinatorTests(unittest.TestCase):
             kwargs["write"] = write
         if restore is not None:
             kwargs["restore"] = restore
+        if restore_groups is not None:
+            kwargs["restore_groups"] = restore_groups
         coordinator = BackupCoordinator(
             AppPaths.create(root),
             FakeIndex(events),
@@ -101,8 +103,8 @@ class BackupCoordinatorTests(unittest.TestCase):
             target.write_bytes(b"zip")
             calls = []
 
-            def write(runtime_root, destination, *, app_data_root):
-                calls.append((runtime_root, destination, app_data_root))
+            def write(runtime_root, destination, *, app_data_root, index_path):
+                calls.append((runtime_root, destination, app_data_root, index_path))
                 return target
 
             coordinator, _jobs, _events = self._coordinator(
@@ -116,6 +118,7 @@ class BackupCoordinatorTests(unittest.TestCase):
             self.assertEqual(calls[0][0], root.resolve())
             self.assertEqual(calls[0][1], target.parent)
             self.assertEqual(calls[0][2], root / "app-data")
+            self.assertEqual(calls[0][3], root / "data" / "index.sqlite3")
 
     def test_export_uses_selected_output_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -126,15 +129,18 @@ class BackupCoordinatorTests(unittest.TestCase):
             target.write_bytes(b"zip")
             destinations = []
 
-            def write(_runtime_root, destination, *, app_data_root):
-                destinations.append((destination, app_data_root))
+            def write(_runtime_root, destination, *, app_data_root, index_path):
+                destinations.append((destination, app_data_root, index_path))
                 return target
 
             coordinator, _jobs, _events = self._coordinator(root, write=write)
             result = coordinator.export(output_dir=selected)
 
             self.assertEqual(result["path"], str(target))
-            self.assertEqual(destinations, [(selected, root / "app-data")])
+            self.assertEqual(
+                destinations,
+                [(selected, root / "app-data", root / "data" / "index.sqlite3")],
+            )
 
     def test_restore_preserves_lock_order_and_job_messages(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -145,11 +151,23 @@ class BackupCoordinatorTests(unittest.TestCase):
             def restore(runtime_root, payload, *, app_data_root):
                 events.append("restore")
                 self.assertEqual(payload, b"archive")
-                return {"count": 3}
+                return {
+                    "count": 3,
+                    "document_group_snapshot": {
+                        "document_groups": [],
+                        "document_group_members": [],
+                    },
+                }
+
+            def restore_groups(snapshot, index_path):
+                events.append("restore-groups")
+                self.assertEqual(snapshot["document_groups"], [])
+                self.assertEqual(index_path, root / "data" / "index.sqlite3")
 
             coordinator, jobs, events = self._coordinator(
                 root,
                 restore=restore,
+                restore_groups=restore_groups,
             )
             job_id = coordinator.start_restore(str(source))
 
@@ -162,12 +180,33 @@ class BackupCoordinatorTests(unittest.TestCase):
                     "config-enter",
                     "restore",
                     "rebuild",
+                    "restore-groups",
                     "config-exit",
                     "index-exit",
                     "durable-exit",
                 ],
             )
             self.assertEqual(jobs.updates[-1][1]["status"], "completed")
+
+    def test_v1_restore_keeps_existing_document_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "backup.zip"
+            source.write_bytes(b"archive")
+            calls = []
+
+            def restore(*_args, **_kwargs):
+                return {"count": 1, "document_group_snapshot": None}
+
+            def restore_groups(*args):
+                calls.append(args)
+
+            coordinator, _jobs, _events = self._coordinator(
+                root, restore=restore, restore_groups=restore_groups
+            )
+            coordinator.start_restore(str(source))
+
+            self.assertEqual(calls, [])
 
     def test_restore_failure_is_visible_on_background_job(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

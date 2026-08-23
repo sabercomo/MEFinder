@@ -38,6 +38,10 @@ _SWP_NOZORDER = 0x0004
 _SWP_NOACTIVATE = 0x0010
 _SWP_FRAMECHANGED = 0x0020
 _WM_NCCALCSIZE = 0x0083
+_DWMWA_WINDOW_CORNER_PREFERENCE = 33
+_DWMWA_BORDER_COLOR = 34
+_DWMWCP_ROUND = 2
+_DWMWA_COLOR_NONE = 0xFFFFFFFE
 
 _CALLBACK_FACTORY = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
 _SUBCLASSPROC = _CALLBACK_FACTORY(
@@ -282,12 +286,15 @@ def configure_windows_chromeless(
         logging.debug("top resize inset removal is unavailable", exc_info=True)
     refresher(hwnd)
 
-    # DWMWA_WINDOW_CORNER_PREFERENCE=33, DWMWCP_ROUND=2 (Windows 11).
-    # Unsupported older Windows versions simply retain their normal outline.
+    # Keep Windows 11 rounded corners while suppressing DWM's non-client border.
+    # The resize frame and shadow remain active; only the bright one-pixel ring
+    # around the HTML-painted dark shell is removed.
     try:
-        (attribute_setter or _set_dwm_attribute)(hwnd, 33, 2)
+        dwm_setter = attribute_setter or _set_dwm_attribute
+        dwm_setter(hwnd, _DWMWA_WINDOW_CORNER_PREFERENCE, _DWMWCP_ROUND)
+        dwm_setter(hwnd, _DWMWA_BORDER_COLOR, _DWMWA_COLOR_NONE)
     except Exception:
-        logging.debug("rounded frameless corners are unavailable", exc_info=True)
+        logging.debug("frameless DWM styling is unavailable", exc_info=True)
     try:
         (maximize_bounds_preparer or prepare_windows_maximized_bounds)(window)
     except Exception:

@@ -662,9 +662,9 @@
 .lib-group-manage { color: var(--accent); font-weight: 600; }
 
 /* ── 管理作品组弹窗（C2，单弹窗承载全部管理，无左栏）── */
-.group-manage-backdrop { position: fixed; inset: 0; z-index: var(--z-modal, 1000); display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 20, 25, .44); }
+.group-manage-backdrop { position: fixed; inset: 0; z-index: var(--z-modal, 1000); display: none; align-items: center; justify-content: center; padding: 24px; background: var(--dialog-backdrop); }
 .group-manage-backdrop.open { display: flex; }
-.group-manage-card { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; background: var(--surface-primary); border: 1px solid var(--border-default); border-radius: 14px; box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .5); overflow: hidden; }
+.group-manage-card { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; background: var(--dialog-bg); border: 1px solid var(--border-default); border-radius: 14px; box-shadow: var(--shadow-popover); overflow: hidden; }
 .group-manage-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--divider); }
 .group-manage-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
 .group-manage-close { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--text-secondary); cursor: pointer; }

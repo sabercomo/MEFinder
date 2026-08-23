@@ -194,6 +194,35 @@ class ParserSettingsControllerTests(unittest.TestCase):
         save_local.assert_called_once_with(payload, expected_path)
         test_local.assert_called_once_with(payload, expected_path)
 
+    def test_local_ocr_settings_use_injected_boundaries(self) -> None:
+        summarize = Mock(return_value={"available": False, "engines": []})
+        save = Mock(return_value={"available": True, "engines": []})
+        test = Mock(return_value={"ok": True, "provider_id": "ndlocr-lite"})
+        controller = self._controller(
+            resolve_local_ocr_config=lambda root: root / "config/local_ocr.json",
+            summarize_local_ocr=summarize,
+            save_local_ocr=save,
+            test_local_ocr=test,
+        )
+        payload = {"engines": {}}
+
+        self.assertEqual(
+            controller.local_ocr_config(),
+            (200, summarize.return_value),
+        )
+        self.assertEqual(
+            controller.save_local_ocr_config(payload),
+            (200, {"ok": True, **save.return_value}),
+        )
+        self.assertEqual(
+            controller.test_local_ocr_config({"provider_id": "ndlocr-lite"}),
+            (200, test.return_value),
+        )
+        expected = self.paths.runtime_root / "config/local_ocr.json"
+        summarize.assert_called_once_with(expected)
+        save.assert_called_once_with(payload, expected)
+        test.assert_called_once_with({"provider_id": "ndlocr-lite"}, expected)
+
     def test_read_errors_keep_existing_status_and_messages(self) -> None:
         broken_statistics = self._controller(
             build_statistics=Mock(side_effect=sqlite3.OperationalError("damaged"))

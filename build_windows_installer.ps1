@@ -55,6 +55,12 @@ function Find-InnoCompiler {
 
 Push-Location $ProjectRoot
 try {
+    $projectSrc = Join-Path $ProjectRoot "src"
+    $env:PYTHONPATH = if ($env:PYTHONPATH) {
+        "$projectSrc$([IO.Path]::PathSeparator)$env:PYTHONPATH"
+    } else {
+        $projectSrc
+    }
     $env:NO_PROXY = (@($env:NO_PROXY, "127.0.0.1", "localhost") -join ",").Trim(",")
 
     if ($PythonExe) {
@@ -109,6 +115,7 @@ try {
         tests.test_anchor_metadata `
         tests.test_api_fallback_recovery `
         tests.test_backup_service `
+        tests.test_backup_coordinator `
         tests.test_backup_file_picker `
         tests.test_data_location `
         tests.test_desktop_shell_controller `
@@ -135,6 +142,7 @@ try {
         tests.test_search_match_spans `
         tests.test_search_occurrence_identity `
         tests.test_search_service `
+        tests.test_search_group_scope `
         tests.test_api_request_limits `
         tests.test_source_streaming `
         tests.test_app_context `
@@ -148,6 +156,7 @@ try {
         tests.test_structured_reader_web `
         tests.test_batch_directory_import `
         tests.test_calibration_library_ui `
+        tests.test_document_groups `
         tests.test_document_package_import `
         tests.test_directory_scan `
         tests.test_import_queue `
@@ -209,8 +218,9 @@ try {
     }
     Copy-Item -LiteralPath $McpSourcePath -Destination (Join-Path $DistPath "MEFinderMCP.exe") -Force
     $appExecutables = @(Get-ChildItem -LiteralPath $DistPath -Filter "*.exe" -File)
-    $requiredExecutables = @("文献原句定位器.exe", "MEFinderMCP.exe")
-    if ($appExecutables.Count -ne 2 -or @($requiredExecutables | Where-Object { -not (Test-Path -LiteralPath (Join-Path $DistPath $_) -PathType Leaf) }).Count -ne 0) {
+    $sidecarExecutables = @($appExecutables | Where-Object { $_.Name -eq "MEFinderMCP.exe" })
+    $desktopExecutables = @($appExecutables | Where-Object { $_.Name -ne "MEFinderMCP.exe" })
+    if ($appExecutables.Count -ne 2 -or $sidecarExecutables.Count -ne 1 -or $desktopExecutables.Count -ne 1) {
         throw "PyInstaller output must contain exactly two executables: 文献原句定位器.exe and MEFinderMCP.exe."
     }
 

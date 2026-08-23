@@ -284,6 +284,7 @@ async function runSearch() {
     });
     const data = await resp.json();
     if (seq !== searchSeq) return;  // 已有更新的检索发起，丢弃这次过期响应
+    if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
     searchResults = data.results || [];
     if (data.total_is_exact === false || data.has_more) {
       statusEl.textContent = '显示前 ' + searchResults.length + ' 条匹配结果，还有更多';

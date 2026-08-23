@@ -194,7 +194,21 @@ class WindowsTitlebarTests(unittest.TestCase):
         style_setter.assert_called_once_with(321, expected_style)
         self.assertEqual(expected_style & windows_desktop._WS_CAPTION, 0)
         frame_refresher.assert_called_once_with(321)
-        attribute_setter.assert_called_once_with(321, 33, 2)
+        self.assertEqual(
+            attribute_setter.call_args_list,
+            [
+                mock.call(
+                    321,
+                    windows_desktop._DWMWA_WINDOW_CORNER_PREFERENCE,
+                    windows_desktop._DWMWCP_ROUND,
+                ),
+                mock.call(
+                    321,
+                    windows_desktop._DWMWA_BORDER_COLOR,
+                    windows_desktop._DWMWA_COLOR_NONE,
+                ),
+            ],
+        )
         maximize_bounds_preparer.assert_called_once_with(window)
         top_inset_remover.assert_called_once_with(321)
 

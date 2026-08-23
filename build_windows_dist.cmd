@@ -3,6 +3,7 @@ setlocal
 
 cd /d "%~dp0"
 set "PYTHON=%CD%\.venv-windows\Scripts\python.exe"
+set "PYTHONPATH=%CD%\src;%PYTHONPATH%"
 set "DIST=%CD%\dist\MEFinder"
 set "MCP_DIST=%CD%\build\mcp-sidecar-dist"
 set "MCP_WORK=%CD%\build\mcp-sidecar-work"
@@ -77,7 +78,10 @@ if errorlevel 1 exit /b 1
   tests.test_import_resume_vision ^
   tests.test_import_resume_web ^
   tests.test_backup_service ^
+  tests.test_backup_coordinator ^
   tests.test_backup_file_picker ^
+  tests.test_document_groups ^
+  tests.test_search_group_scope ^
   tests.test_data_location ^
   tests.test_desktop_shell_controller ^
   tests.test_scan_directory_picker ^
@@ -122,7 +126,7 @@ if not exist "%MCP_SOURCE%" (
 )
 copy /y "%MCP_SOURCE%" "%DIST%\MEFinderMCP.exe" >nul
 
-"%PYTHON%" -c "import os, sys; from pathlib import Path; names = {p.name for p in Path(os.environ['DIST']).glob('*.exe')}; sys.exit(0 if names == {'文献原句定位器.exe', 'MEFinderMCP.exe'} else 1)"
+"%PYTHON%" -c "import os, sys; from pathlib import Path; names = {p.name for p in Path(os.environ['DIST']).glob('*.exe')}; sys.exit(0 if len(names) == 2 and 'MEFinderMCP.exe' in names else 1)"
 if errorlevel 1 (
   echo Build output must contain the desktop executable and MEFinderMCP.exe.
   exit /b 1

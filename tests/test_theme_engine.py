@@ -1,6 +1,6 @@
 """可扩展主题引擎（05-theme-engine.js）的纯逻辑回归测试。
 
-引擎的价值在于「由 accent/background/foreground/contrast 派生全部语义 token 且带
+引擎的价值在于「由 button/highlight/background/foreground/contrast 派生全部语义 token 且带
 可读性守护」。这里用 node 直接 require 该模块（它对 node 暴露 module.exports），
 对派生结果做 WCAG 对比度与结构断言，并覆盖导入校验的非法输入。node 不可用时整类跳过。
 """
@@ -48,6 +48,7 @@ REQUIRED_TOKENS = (
     "--text-primary", "--text-secondary", "--text-tertiary", "--text-disabled",
     "--border-subtle", "--border-default", "--border-strong", "--border-control",
     "--accent", "--accent-hover", "--accent-soft", "--accent-contrast", "--accent-text",
+    "--highlight",
     "--input-bg", "--menu-bg", "--dialog-bg", "--tooltip-bg", "--focus-ring",
     "--scrollbar-thumb", "--skeleton-base", "--skeleton-highlight",
     "--success", "--warning", "--danger", "--info", "--neutral",
@@ -72,12 +73,28 @@ class ThemeEngineDerivationTests(unittest.TestCase):
             "id:p.id,"
             "text:E.teContrast(t['--text-primary'],t['--app-bg']),"
             "btn:E.teContrast(t['--accent-contrast'],t['--accent']),"
-            "atext:E.teContrast(t['--accent-text'],t['--app-bg'])};})"
+            "atext:E.teContrast(t['--accent-text'],t['--app-bg']),"
+            "htext:E.teContrast(t['--match-inline-text'],t['--match-inline-bg'])};})"
         )
         for row in report:
             self.assertGreaterEqual(row["text"], 4.5, row["id"])
             self.assertGreaterEqual(row["btn"], 4.5, row["id"])
             self.assertGreaterEqual(row["atext"], 4.0, row["id"])
+            self.assertGreaterEqual(row["htext"], 4.5, row["id"])
+
+    def test_button_and_content_highlight_are_distinct_palette_roles(self) -> None:
+        report = _eval(
+            "E.THEME_PRESETS.map(function(p){return {id:p.id,mode:p.mode,"
+            "button:p.accent,highlight:p.highlight};})"
+        )
+        by_id = {row["id"]: row for row in report}
+        for row in report:
+            self.assertNotEqual(row["button"].lower(), row["highlight"].lower(), row["id"])
+        for theme in ("sepia", "warm-sand", "solarized-light"):
+            self.assertEqual(by_id[theme]["highlight"], "#2563B8")
+        dark_highlights = {row["highlight"].lower() for row in report if row["mode"] == "dark"}
+        self.assertEqual(len(dark_highlights), 9)
+        self.assertNotIn("#fbbf24", dark_highlights)
 
     def test_white_on_white_is_rescued_by_the_readability_guard(self) -> None:
         ratio = _eval(
@@ -105,6 +122,7 @@ class ThemeImportExportTests(unittest.TestCase):
             "{}",
             "{mode:'sideways'}",
             "{mode:'dark',accent:'not-a-color',background:'#000',foreground:'#fff'}",
+            "{mode:'dark',accent:'#369',highlight:'not-a-color',background:'#000',foreground:'#fff'}",
             "null",
             "42",
         ]
@@ -115,18 +133,19 @@ class ThemeImportExportTests(unittest.TestCase):
 
     def test_accepts_and_clamps_a_valid_definition(self) -> None:
         result = _eval(
-            "E.normalizeThemeDef({mode:'dark',accent:'#6EA8FF',background:'#121722',"
+            "E.normalizeThemeDef({mode:'dark',accent:'#6EA8FF',highlight:'#8BE9FD',background:'#121722',"
             "foreground:'#EEF3FA',contrast:999,name:'   Deep   '})"
         )
         self.assertTrue(result["ok"])
         self.assertEqual(result["def"]["contrast"], 100)
         self.assertEqual(result["def"]["mode"], "dark")
-        self.assertEqual(result["def"]["schemaVersion"], 1)
+        self.assertEqual(result["def"]["highlight"], "#8be9fd")
+        self.assertEqual(result["def"]["schemaVersion"], 2)
 
     def test_export_is_stable_and_versioned(self) -> None:
         payload = _eval("E.themeDefToExport(E.THEME_PRESET_MAP['midnight-blue'])")
-        self.assertEqual(payload["schemaVersion"], 1)
-        for key in ("name", "mode", "accent", "background", "foreground", "contrast"):
+        self.assertEqual(payload["schemaVersion"], 2)
+        for key in ("name", "mode", "accent", "highlight", "background", "foreground", "contrast"):
             self.assertIn(key, payload)
 
     def test_export_then_reimport_round_trips(self) -> None:

@@ -405,7 +405,8 @@
   background: var(--warning-soft);
   border-color: var(--warning-border);
 }
-.import-route-badge.vision {
+.import-route-badge.vision,
+.import-route-badge.local-ocr {
   color: var(--accent);
   background: var(--accent-light);
   border-color: var(--accent);

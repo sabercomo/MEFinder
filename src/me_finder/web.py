@@ -106,6 +106,7 @@ from .pdf_import_service import (
     import_config_lock,
     locked_import_config,
     parse_pdf_with_mineru,
+    parse_pdf_with_local_ocr,
     parse_pdf_with_provider,
     rebuild_local_index,
     load_import_config,
@@ -141,6 +142,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/mineru-accounts/service",
         "/api/mineru-config",
         "/api/mineru-local",
+        "/api/local-ocr",
         "/api/vision-providers",
         "/api/import",
         "/api/import-upload/start",
@@ -643,6 +645,9 @@ def make_handler(
         parse_with_provider=lambda *args, **kwargs: parse_pdf_with_provider(
             *args, **kwargs
         ),
+        parse_with_local_ocr=lambda *args, **kwargs: parse_pdf_with_local_ocr(
+            *args, **kwargs
+        ),
         extract_pdf=lambda *args, **kwargs: extract_pdf_source(*args, **kwargs),
         detect_metadata=document_queries.detect_bibliographic_metadata,
         persist_metadata=(
@@ -917,6 +922,9 @@ def make_handler(
         "/api/mineru-config": (
             lambda _params: parser_settings_controller.mineru_config()
         ),
+        "/api/local-ocr": (
+            lambda _params: parser_settings_controller.local_ocr_config()
+        ),
         "/api/vision-providers": (
             lambda _params: parser_settings_controller.vision_providers()
         ),
@@ -955,6 +963,12 @@ def make_handler(
         ),
         "/api/mineru-local/test": (
             parser_settings_controller.test_mineru_local_config
+        ),
+        "/api/local-ocr": (
+            parser_settings_controller.save_local_ocr_config
+        ),
+        "/api/local-ocr/test": (
+            parser_settings_controller.test_local_ocr_config
         ),
         "/api/vision-providers": (
             parser_settings_controller.update_vision_providers

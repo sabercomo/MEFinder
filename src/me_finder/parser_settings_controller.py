@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import subprocess
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Tuple
 from urllib.parse import urlparse
@@ -26,6 +27,14 @@ from .mineru_local_settings import (
     mineru_local_config_summary,
     save_mineru_local_config,
     test_mineru_local_connection,
+)
+from .import_resume import ResumeManifestError
+from .local_ocr_settings import (
+    LocalOCRError,
+    local_ocr_config_summary,
+    resolve_local_ocr_config_path,
+    save_local_ocr_config,
+    test_local_ocr_engine,
 )
 from .parser_provider import ParserProviderError
 from .parser_statistics import build_parser_statistics
@@ -72,6 +81,10 @@ class ParserSettingsController:
         save_vision: JSONOperation = save_vision_provider,
         delete_vision: JSONOperation = delete_vision_provider,
         save_vision_fallback: JSONOperation = save_vision_policy,
+        resolve_local_ocr_config: PathResolver = resolve_local_ocr_config_path,
+        summarize_local_ocr: JSONOperation = local_ocr_config_summary,
+        save_local_ocr: JSONOperation = save_local_ocr_config,
+        test_local_ocr: JSONOperation = test_local_ocr_engine,
     ) -> None:
         self._paths = paths
         self._mineru_account_service = mineru_account_service
@@ -95,6 +108,10 @@ class ParserSettingsController:
         self._save_vision = save_vision
         self._delete_vision = delete_vision
         self._save_vision_fallback = save_vision_fallback
+        self._resolve_local_ocr_config = resolve_local_ocr_config
+        self._summarize_local_ocr = summarize_local_ocr
+        self._save_local_ocr = save_local_ocr
+        self._test_local_ocr = test_local_ocr
         self._legacy_migration_error: Exception | None = None
 
     def mineru_accounts(self) -> ParserSettingsResponse:
@@ -395,6 +412,48 @@ class ParserSettingsController:
         try:
             result = self._test_mineru_local(payload, config_path)
         except (MinerUError, ParserProviderError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        return 200, result
+
+    def local_ocr_config(self) -> ParserSettingsResponse:
+        path = self._resolve_local_ocr_config(self._paths.runtime_root)
+        try:
+            return 200, self._summarize_local_ocr(path)
+        except (OSError, ResumeManifestError, LocalOCRError):
+            logging.exception("Local OCR configuration read failed")
+            return 500, {"error": "本地 OCR 组件设置无法读取。"}
+
+    def save_local_ocr_config(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "本地 OCR 设置必须是 JSON 对象。"}
+        path = self._resolve_local_ocr_config(self._paths.runtime_root)
+        try:
+            summary = self._save_local_ocr(payload, path)
+        except (LocalOCRError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, ResumeManifestError):
+            logging.exception("Local OCR configuration save failed")
+            return 500, {"error": "本地 OCR 组件设置无法保存。"}
+        return 200, {"ok": True, **summary}
+
+    def test_local_ocr_config(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "本地 OCR 测试必须是 JSON 对象。"}
+        path = self._resolve_local_ocr_config(self._paths.runtime_root)
+        try:
+            result = self._test_local_ocr(payload, path)
+        except (
+            LocalOCRError,
+            OSError,
+            ResumeManifestError,
+            subprocess.SubprocessError,
+        ) as exc:
             return 400, {"error": str(exc)}
         return 200, result
 

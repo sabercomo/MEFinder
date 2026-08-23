@@ -42,6 +42,7 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
     """Create the two group tables on an open connection if absent (idempotent)."""
 
     changed = False
+    members_table_missing = not _table_exists(connection, "document_group_members")
     if not _table_exists(connection, "document_groups"):
         connection.execute(
             """
@@ -68,7 +69,7 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
                 "ALTER TABLE document_groups ADD COLUMN base_source_file_id TEXT"
             )
             changed = True
-    if not _table_exists(connection, "document_group_members"):
+    if members_table_missing:
         connection.execute(
             """
             CREATE TABLE document_group_members (
@@ -86,6 +87,29 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
             "ON document_group_members(document_group_id)"
         )
         changed = True
+        source_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(source_files)")
+        }
+        if "document_group_id" in source_columns:
+            legacy_members = connection.execute(
+                "SELECT s.source_file_id, s.document_group_id "
+                "FROM source_files s JOIN document_groups g "
+                "ON g.document_group_id = s.document_group_id "
+                "WHERE s.document_group_id IS NOT NULL "
+                "AND TRIM(s.document_group_id) <> '' "
+                "ORDER BY s.document_group_id, s.source_file_id"
+            ).fetchall()
+            timestamp = _now()
+            member_orders: Dict[str, int] = {}
+            for source_file_id, document_group_id in legacy_members:
+                member_order = member_orders.get(document_group_id, 0)
+                connection.execute(
+                    "INSERT INTO document_group_members"
+                    "(document_group_id, source_file_id, version_label, "
+                    "member_order, added_at) VALUES (?, ?, NULL, ?, ?)",
+                    (document_group_id, source_file_id, member_order, timestamp),
+                )
+                member_orders[document_group_id] = member_order + 1
     return changed
 
 
@@ -458,11 +482,12 @@ def _member_source_payload(row: sqlite3.Row) -> Dict[str, object]:
 def list_document_groups(
     db_path: Path = DEFAULT_DATABASE_PATH,
 ) -> List[Dict[str, object]]:
-    """Read all groups with members + resolved display names (read-only)."""
+    """Read all groups with members + resolved display names."""
 
     path = Path(db_path)
     if not path.exists():
         return []
+    ensure_document_group_schema(path)
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
     try:
@@ -529,6 +554,7 @@ def read_document_group_snapshot(db_path: Path) -> Dict[str, list]:
     with path.open("rb") as stream:
         if stream.read(16) != b"SQLite format 3\x00":
             return snapshot
+    ensure_document_group_schema(path)
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
     try:
@@ -628,6 +654,26 @@ def restore_document_group_snapshot(
                     member.get("added_at"),
                 ),
             )
+
+
+def replace_document_group_snapshot(
+    snapshot: Dict[str, list], db_path: Path = DEFAULT_DATABASE_PATH
+) -> None:
+    """Replace current groups with a backup snapshot in one transaction."""
+
+    ensure_document_group_schema(db_path)
+    connection = _connect_writable(db_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM document_group_members")
+        connection.execute("DELETE FROM document_groups")
+        restore_document_group_snapshot(connection, snapshot)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 class DocumentGroupNotFound(ValueError):

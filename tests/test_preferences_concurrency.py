@@ -27,7 +27,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "theme": "midnight",
             # 没有 writer 触碰 appearance，它在首个写入时从空文件（frost-blue）迁移后即冻结。
             "appearance": {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "mode": "light",
                 "light": "frost-blue",
                 "dark": "midnight",

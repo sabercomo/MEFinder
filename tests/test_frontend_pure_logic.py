@@ -466,6 +466,23 @@ class ImportStepsForTests(unittest.TestCase):
             ["读取文件", "类型检测", "MinerU 解析", "文本入库", "建立索引"],
         )
 
+    def test_pdf_local_ocr_route(self):
+        self.assertEqual(
+            _call("importStepsFor", {"type": "pdf", "route": "local_ocr"}),
+            ["读取文件", "类型检测", "本地 OCR", "文本入库", "建立索引"],
+        )
+
+    def test_local_ocr_provider_names_are_stable(self):
+        self.assertEqual(
+            _call("localOCRProviderName", "ndlocr-lite"),
+            "NDL 日文 OCR",
+        )
+        self.assertEqual(
+            _call("localOCRProviderName", "ndlkotenocr-lite"),
+            "NDL 古籍 OCR",
+        )
+        self.assertIsNone(_call("localOCRProviderName", "unknown"))
+
     def test_pdf_vision_route_uses_provider_name(self):
         self.assertEqual(
             _call("importStepsFor",
@@ -917,6 +934,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('onclick="selectThemeChoice(\'dawn\')"', html)
         # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
         self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
+        self.assertIn('class="theme-swatch-highlight"', html)
         self.assertIn(">晨<", html)
         self.assertIn(">desc<", html)
         # 画廊已按明暗模式过滤，浅/深徽标是废话，已去掉；仅自定义主题才标徽标。

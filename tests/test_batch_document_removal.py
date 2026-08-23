@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.me_finder import database as database_module
+from src.me_finder import document_groups
 from src.me_finder.database import (
     DATABASE_BACKUP_RETENTION,
     build_database,
@@ -182,6 +183,42 @@ class BatchDatabaseDeletionTests(unittest.TestCase):
             self.assertEqual(result["deleted"]["paragraphs"], 3)
             self.assertEqual(result["source_count"], 1)
             self.assertIsNotNone(result["backup_path"])
+
+    def test_single_delete_unlinks_group_member_and_clears_base(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path = self._build(root, ["pdf-0", "pdf-1"])
+            group_id = document_groups.create_document_group("作品", database_path)[
+                "document_group_id"
+            ]
+            document_groups.add_group_member(group_id, "pdf-0", database_path)
+            document_groups.add_group_member(group_id, "pdf-1", database_path)
+            document_groups.set_document_group_base(group_id, "pdf-0", database_path)
+
+            delete_source_from_database("pdf-0", database_path)
+
+            group = document_groups.list_document_groups(database_path)[0]
+            self.assertIsNone(group["base_source_file_id"])
+            self.assertEqual(
+                [member["source_file_id"] for member in group["members"]], ["pdf-1"]
+            )
+
+    def test_batch_delete_removes_every_deleted_group_member(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database_path = self._build(root, ["pdf-0", "pdf-1", "pdf-2"])
+            group_id = document_groups.create_document_group("作品", database_path)[
+                "document_group_id"
+            ]
+            for source_id in ("pdf-0", "pdf-1", "pdf-2"):
+                document_groups.add_group_member(group_id, source_id, database_path)
+
+            delete_sources_from_database(["pdf-0", "pdf-1"], database_path)
+
+            group = document_groups.list_document_groups(database_path)[0]
+            self.assertEqual(
+                [member["source_file_id"] for member in group["members"]], ["pdf-2"]
+            )
 
     def test_backups_are_pruned_to_the_retention_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

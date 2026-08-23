@@ -110,6 +110,17 @@ class SyntheticProvider(ParserProvider):
         )
 
 
+class CancelledProvider(SyntheticProvider):
+    def submit(self, request, *, credential=None):
+        self.prepare(request)
+        self.submit_count += 1
+        return ParserSubmission(
+            self.provider_id,
+            None,
+            ParserTaskStatus.CANCELLED,
+        )
+
+
 def synthetic_slice_writer(source, start, end, output):
     with Path(output).open("wb") as stream:
         stream.write(b"%PDF-slice\n")
@@ -272,6 +283,28 @@ class LargeDocumentCoreTests(unittest.TestCase):
         restarted.run_once(resumed.id)
         self.assertEqual(resumed.id, job.id)
         self.assertEqual(provider.submit_count, 2)
+
+    def test_synchronous_provider_cancellation_stops_remaining_slices(self) -> None:
+        source = self.root / "source.pdf"
+        source.write_bytes(b"source")
+        provider = CancelledProvider(max_pages=1)
+        engine = LargeDocumentJobEngine(
+            ledger=JobLedger(self.root / "jobs.sqlite3"),
+            provider=provider,
+            work_dir=self.root / "work",
+            slicer=PhysicalPDFSlicer(synthetic_slice_writer),
+            page_counter=lambda path: 3,
+        )
+        job = engine.prepare(source_path=source, source_file_id="pdf-1", document_id="doc")
+
+        cancelled = engine.run_once(job.id)
+
+        self.assertEqual(cancelled.status, "cancelled")
+        self.assertEqual(provider.submit_count, 1)
+        self.assertEqual(
+            [item.status for item in engine.ledger.list_slice_jobs(job.id)],
+            ["cancelled", "queued", "queued"],
+        )
 
     def test_existing_remote_task_is_polled_after_restart(self) -> None:
         source = self.root / "source.pdf"

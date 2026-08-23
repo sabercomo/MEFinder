@@ -8,6 +8,7 @@ from unittest import mock
 from src.me_finder.application.import_job_store import ImportJobCancelled, Job
 from src.me_finder.application.import_parser_executor import ImportParserExecutor
 from src.me_finder.mineru_api import MinerUError
+from src.me_finder.local_ocr_settings import LocalOCRCancelled, LocalOCRError
 from src.me_finder.vision_api import VisionAPIError
 
 
@@ -85,12 +86,85 @@ class ImportParserExecutorTests(unittest.TestCase):
         *,
         mineru=None,
         provider=None,
+        local_ocr=None,
+        local_available=False,
     ) -> ImportParserExecutor:
         return ImportParserExecutor(
             self.root,
             parse_with_mineru=mineru or mock.Mock(),
             parse_with_provider=provider or mock.Mock(),
+            parse_with_local_ocr=local_ocr,
+            local_ocr_is_available=lambda _root: local_available,
         )
+
+    def test_auto_scanned_pdf_prefers_configured_local_ocr(self) -> None:
+        local_ocr = mock.Mock()
+        mineru = mock.Mock()
+        jobs = _FakeJobs()
+        executor = self._executor(
+            mineru=mineru,
+            local_ocr=local_ocr,
+            local_available=True,
+        )
+
+        succeeded = executor.execute(
+            "import-one",
+            self.target,
+            "pdf-one",
+            {"detected_pdf_type": "scanned"},
+            True,
+            jobs=jobs,
+        )
+
+        self.assertTrue(succeeded)
+        local_ocr.assert_called_once()
+        mineru.assert_not_called()
+        self.assertEqual(jobs.job["parse_route"], "local_ocr")
+        local_ocr.call_args.kwargs["on_progress"](
+            {"phase": "local_ocr_processing", "completed": 1}
+        )
+        self.assertEqual(jobs.progress[-1]["completed"], 1)
+
+    def test_local_ocr_failure_falls_back_to_existing_mineru_route(self) -> None:
+        mineru = mock.Mock()
+        jobs = _FakeJobs()
+        executor = self._executor(
+            mineru=mineru,
+            local_ocr=mock.Mock(side_effect=LocalOCRError("invalid JSON")),
+            local_available=True,
+        )
+
+        succeeded = executor.execute(
+            "import-one",
+            self.target,
+            "pdf-one",
+            {"detected_pdf_type": "scanned"},
+            True,
+            jobs=jobs,
+        )
+
+        self.assertTrue(succeeded)
+        mineru.assert_called_once()
+        self.assertTrue(jobs.job["local_ocr_failed"])
+        self.assertEqual(jobs.job["local_ocr_error"], "invalid JSON")
+        self.assertEqual(jobs.job["parse_route"], "mineru")
+
+    def test_local_ocr_cancellation_uses_import_cancellation_contract(self) -> None:
+        jobs = _FakeJobs()
+        executor = self._executor(
+            local_ocr=mock.Mock(side_effect=LocalOCRCancelled("cancelled")),
+            local_available=True,
+        )
+
+        with self.assertRaises(ImportJobCancelled):
+            executor.execute(
+                "import-one",
+                self.target,
+                "pdf-one",
+                {"detected_pdf_type": "scanned"},
+                True,
+                jobs=jobs,
+            )
 
     def test_native_route_records_state_without_calling_a_parser(self) -> None:
         mineru = mock.Mock()

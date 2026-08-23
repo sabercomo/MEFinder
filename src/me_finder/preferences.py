@@ -48,11 +48,12 @@ ONLINE_AUTO_MATCH_MAX = 1.00
 # 内置 CSS 主题（VALID_THEMES）仍是首帧与原生标题栏的回退，legacy `theme`
 # 字段继续只存这 6 个之一；真正的引擎状态放在独立的 `appearance` 对象里，
 # 因此不影响任何既有 theme 契约与后端校验。
-APPEARANCE_SCHEMA_VERSION = 1
+APPEARANCE_SCHEMA_VERSION = 2
 VALID_APPEARANCE_MODES = frozenset({"system", "light", "dark"})
 DEFAULT_APPEARANCE_MODE = "system"
 # 每种模式的默认内置主题（也是 legacy theme 回退）。
 APPEARANCE_MODE_DEFAULT_THEME = {"light": "frost-blue", "dark": "midnight"}
+APPEARANCE_MODE_DEFAULT_HIGHLIGHT = {"light": "#2563B8", "dark": "#58A6FF"}
 _HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _THEME_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MAX_CUSTOM_THEMES = 60
@@ -86,7 +87,8 @@ def _normalized_theme_def(value: Any) -> dict | None:
         value.get("background"),
         value.get("foreground"),
     )
-    for color in (accent, background, foreground):
+    highlight = value.get("highlight", APPEARANCE_MODE_DEFAULT_HIGHLIGHT[str(mode)])
+    for color in (accent, highlight, background, foreground):
         if not isinstance(color, str) or not _HEX_COLOR.match(color.strip()):
             return None
     try:
@@ -100,6 +102,7 @@ def _normalized_theme_def(value: Any) -> dict | None:
         "name": name,
         "mode": str(mode),
         "accent": str(accent).strip(),
+        "highlight": str(highlight).strip(),
         "background": str(background).strip(),
         "foreground": str(foreground).strip(),
         "contrast": contrast,

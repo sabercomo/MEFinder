@@ -262,11 +262,11 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
 class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
-    # 外观设置重做（明暗模式驱动画廊 + 白天/夜晚配对 + Aa 色板样张 + 自定义收起）后同步更新。
+    # 0.4.7 主题修正及本地 OCR 设置、导入状态接入后同步更新。
     BASELINE_SHA256 = (
-        "6abd0e55b842f68d4bb80cc3e78d56db127b66999cfb6dca3d79b22b476cca7d"
+        "98b7de7c428da967e1d680677a17b6063c9cd593c432b6c8933f8c9733a1042b"
     )
-    BASELINE_BYTES = 803505
+    BASELINE_BYTES = 819624
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

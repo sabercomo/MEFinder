@@ -11,6 +11,7 @@ from typing import Callable, Dict, Mapping, Protocol
 
 from ..app_context import AppPaths
 from ..backup_service import restore_backup, write_backup
+from ..document_groups import replace_document_group_snapshot
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError
 from ..pdf_import_service import import_config_lock
@@ -45,6 +46,7 @@ class DurableOperationsPort(Protocol):
 BackupRoot = Callable[[], Path]
 BackupWriter = Callable[..., Path]
 BackupRestorer = Callable[..., Dict[str, object]]
+GroupSnapshotRestorer = Callable[[Dict[str, list], Path], None]
 ConfigLock = Callable[[], AbstractContextManager[None]]
 
 
@@ -65,6 +67,7 @@ class BackupCoordinator:
         app_data_root: BackupRoot,
         write: BackupWriter = write_backup,
         restore: BackupRestorer = restore_backup,
+        restore_groups: GroupSnapshotRestorer = replace_document_group_snapshot,
         config_lock: ConfigLock = import_config_lock,
     ) -> None:
         self._paths = paths
@@ -74,6 +77,7 @@ class BackupCoordinator:
         self._app_data_root = app_data_root
         self._write = write
         self._restore = restore
+        self._restore_groups = restore_groups
         self._config_lock = config_lock
 
     def export(self, *, output_dir: Path | None = None) -> Dict[str, object]:
@@ -85,6 +89,7 @@ class BackupCoordinator:
             self._paths.runtime_root,
             destination,
             app_data_root=app_data_root,
+            index_path=self._paths.index_path,
         )
         return {
             "ok": True,
@@ -146,6 +151,9 @@ class BackupCoordinator:
                     ),
                 )
                 self._jobs.rebuild_runtime_index(job_id)
+                group_snapshot = summary.get("document_group_snapshot")
+                if group_snapshot is not None:
+                    self._restore_groups(group_snapshot, self._paths.index_path)
             self._jobs.update_import_job(
                 job_id,
                 status="completed",

@@ -1623,6 +1623,16 @@ def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> D
         placeholders = ",".join("?" for _ in work_ids)
         connection.execute(f"DELETE FROM toc_entries WHERE work_id IN ({placeholders})", work_ids)
         connection.execute(f"DELETE FROM works WHERE work_id IN ({placeholders})", work_ids)
+    timestamp = datetime.now(timezone.utc).isoformat()
+    connection.execute(
+        "UPDATE document_groups SET base_source_file_id = NULL, updated_at = ? "
+        "WHERE base_source_file_id = ?",
+        (timestamp, source_file_id),
+    )
+    connection.execute(
+        "DELETE FROM document_group_members WHERE source_file_id = ?",
+        (source_file_id,),
+    )
     connection.execute("DELETE FROM paragraphs WHERE source_file_id = ?", (source_file_id,))
     for table in ("pdf_pages", "pdf_page_mappings", "pdf_import_runs", "audit_issues"):
         connection.execute(f"DELETE FROM {table} WHERE source_file_id = ?", (source_file_id,))

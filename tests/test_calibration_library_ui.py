@@ -350,6 +350,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("libStatusFilter === 'bibliographic'", HTML)
         self.assertIn("bibliographicMissingFields(sourceBibliographicMetadata(s)).length > 0", HTML)
         self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
+        self.assertIn("libraryGroupScopedSources().forEach(function(item)", HTML)
+        self.assertIn("var scopeSources = libraryGroupScopedSources();", HTML)
 
     def test_page_and_bibliographic_labels_are_unambiguous(self) -> None:
         self.assertIn("needs_review:'页码待确认'", HTML)
@@ -445,6 +447,9 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
         self.assertIn("当前筛选没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
+        clear_filters = HTML.split("function clearLibraryFilters()", 1)[1].split("}", 1)[0]
+        self.assertIn("libGroupScopeId = '';", clear_filters)
+        self.assertIn("renderGroupScopeSelector();", clear_filters)
         self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
         # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
@@ -486,7 +491,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("实际存在的简体中文、繁体中文等中文细类排在外语前", HTML)
 
     def test_language_facets_are_dynamic_and_filter_card_fits_document_types(self) -> None:
-        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
         self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
         self.assertIn("width: 408px; max-width: calc(100vw - 48px)", HTML)
         self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)

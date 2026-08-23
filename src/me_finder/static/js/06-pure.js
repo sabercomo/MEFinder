@@ -285,6 +285,7 @@ function importStepsFor(q) {
   if (q.type === 'document_package') return ['读取文档包', '校验版本', '恢复书目与页码', '建立索引'];
   if (q.type !== 'pdf') return ['读取文件', '文本入库', '建立索引'];
   if (q.route === 'mineru') return ['读取文件', '类型检测', 'MinerU 解析', '文本入库', '建立索引'];
+  if (q.route === 'local_ocr') return ['读取文件', '类型检测', '本地 OCR', '文本入库', '建立索引'];
   if (q.route === 'vision') return ['读取文件', '类型检测', (q.providerName || '其他 API') + ' 解析', '文本入库', '建立索引'];
   if (!q.detectedType) return ['读取文件', '类型检测', '确定解析方式', '建立索引'];
   return ['读取文件', '类型检测', '本地解析', '建立索引'];
@@ -295,10 +296,18 @@ function importRouteBadge(q) {
   var mineru = q.route === 'mineru';
   var localMineru = mineru && q.providerId === 'mineru-local';
   var vision = q.route === 'vision';
-  return '<span class="import-route-badge ' + (mineru ? 'mineru' : vision ? 'vision' : 'native') + '">'
+  var localOCR = q.route === 'local_ocr';
+  return '<span class="import-route-badge ' + (mineru ? 'mineru' : vision ? 'vision' : localOCR ? 'local-ocr' : 'native') + '">'
     + esc(pdfTypeLabel(q.detectedType))
-    + (localMineru ? ' · 本地 MinerU' : mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : ' · 本地解析')
+    + (localMineru ? ' · 本地 MinerU' : mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : localOCR ? ' · ' + esc(q.providerName || '本地 OCR') : ' · 本地解析')
     + '</span>';
+}
+
+function localOCRProviderName(providerId) {
+  return {
+    'ndlocr-lite': 'NDL 日文 OCR',
+    'ndlkotenocr-lite': 'NDL 古籍 OCR'
+  }[providerId] || null;
 }
 
 // 联网补全的查询字段裁剪：不同数据源接受的字段集不同。原在 80-import.js。
@@ -507,12 +516,11 @@ function bibliographicMissingText(meta) {
 // styleAttr 非空时（新预设/自定义主题）以内联派生 token 着色；内置 CSS 主题
 // 仍靠 data-preview-theme 的样式块，缩略图内部一律用 var(--token)，天然复用真实设计 token。
 function themePreviewMarkup(themeId, styleAttr) {
-  // 色板样张：一眼比出「纸色(背景) / 墨色(前景 Aa) / 强调色 / 卡片面」四件事——
-  // 深色三主题只差背景与强调，繁复的假骨架反而把差别糊掉，样张才看得清。
+  // 色板样张同时展示按钮色与正文强调色，避免把两个不同角色误认成同一颜色。
   return '<span class="theme-preview" data-preview-theme="' + themeId + '"' + (styleAttr ? ' style="' + styleAttr + '"' : '') + ' aria-hidden="true">'
     + '<span class="theme-swatch-top">'
     + '<span class="theme-swatch-aa">Aa</span>'
-    + '<span class="theme-swatch-accent"></span>'
+    + '<span class="theme-swatch-colors"><span class="theme-swatch-accent"></span><span class="theme-swatch-highlight"></span></span>'
     + '</span>'
     + '<span class="theme-swatch-card">'
     + '<span class="theme-swatch-line"></span>'

@@ -19,6 +19,7 @@ from ..lifecycle import DurableOperationGate
 from ..mineru_api import MinerUError, resolve_mineru_config_path
 from ..mineru_local_settings import mineru_local_config_summary
 from ..mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
+from ..local_ocr_settings import local_ocr_available
 from ..pdf_import_service import (
     import_config_lock,
     load_import_config,
@@ -93,6 +94,7 @@ class ImportOrchestrator:
         extract_pdf: PDFExtractor,
         detect_metadata: MetadataDetector,
         persist_metadata: MetadataPersister,
+        parse_with_local_ocr: Optional[Parser] = None,
         job_store: Optional[ImportJobStore] = None,
     ) -> None:
         self._paths = paths
@@ -106,6 +108,7 @@ class ImportOrchestrator:
             self._root,
             parse_with_mineru=parse_with_mineru,
             parse_with_provider=parse_with_provider,
+            parse_with_local_ocr=parse_with_local_ocr,
         )
         self._extract_pdf = extract_pdf
         self._detect_metadata = detect_metadata
@@ -521,7 +524,13 @@ class ImportOrchestrator:
                 if vision_provider_id
                 else "mineru"
                 if force_mineru
-                or str(profile.get("detected_pdf_type")) != "native_text"
+                else "local_ocr"
+                if (
+                    str(profile.get("detected_pdf_type")) != "native_text"
+                    and local_ocr_available(self._root)
+                )
+                else "mineru"
+                if str(profile.get("detected_pdf_type")) != "native_text"
                 else "native"
             )
         job: Job = {

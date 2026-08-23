@@ -1,17 +1,18 @@
 /* ── Theme Engine ──────────────────────────────────────────────
    可扩展主题引擎（阶段 3-6）。核心是一组**纯函数**：由用户设定的
-   accent / background / foreground / contrast 派生出全部 ~50 个语义色
+   button / highlight / background / foreground / contrast 派生出全部语义色
    token，普通组件因此永远只依赖 token，不需要为新主题改一行组件 CSS。
 
    设计约束（见 tests/test_theme_engine.py）：
    * 纯函数不碰 DOM，输入完全由参数决定，node 可单测。
-   * 内置的 6 套 data-theme CSS 块保持不变（首帧/原生标题栏回退），
+   * 内置的 6 套 data-theme CSS 块负责首帧/原生标题栏回退，
      新增预设与自定义主题一律靠这里运行时派生并注入一个样式元素，
      绝不新增散落的 CSS 主题块。
    * 派生带对比度守护：用户设了前景≈背景也不会白字白底。
    ────────────────────────────────────────────────────────────── */
 
-var THEME_ENGINE_SCHEMA = 1;
+var THEME_ENGINE_SCHEMA = 2;
+var THEME_DEFAULT_HIGHLIGHT = { light: '#2563B8', dark: '#58A6FF' };
 
 /* ── 颜色基础运算（纯） ── */
 function teClamp(n) { return n < 0 ? 0 : (n > 255 ? 255 : Math.round(n)); }
@@ -104,11 +105,12 @@ function teAccentContrast(accent) {
 
 /* ── 由基础色派生完整 token 集（纯） ──
    返回 { '--app-bg': '#...', ... } 覆盖全部语义色 token。
-   def: { mode, accent, background, foreground, contrast } */
+   def: { mode, accent(button), highlight(content match), background, foreground, contrast } */
 function deriveThemeTokens(def) {
   var mode = def.mode === 'dark' ? 'dark' : 'light';
   var bg = teHexToRgb(def.background) ? def.background : (mode === 'dark' ? '#0e1420' : '#f6f8fc');
   var accent = teHexToRgb(def.accent) ? def.accent : '#2f6df6';
+  var highlight = teHexToRgb(def.highlight) ? def.highlight : THEME_DEFAULT_HIGHLIGHT[mode];
   var fgRaw = teHexToRgb(def.foreground) ? def.foreground : (mode === 'dark' ? '#eef4fb' : '#172033');
   var contrast = typeof def.contrast === 'number' ? def.contrast : 55;
   contrast = contrast < 0 ? 0 : (contrast > 100 ? 100 : contrast);
@@ -154,14 +156,14 @@ function deriveThemeTokens(def) {
     t['--calibration-card-border'] = teMix(accent, bg, 0.30);
     t['--calibration-card-text'] = teEnsureReadable(teLighten(accent, 0.40), teMix(accent, bg, 0.68), 4.5);
     t['--calibration-card-shadow'] = '0 5px 18px rgba(0,0,0,0.28)';
-    t['--match-block-bg'] = 'rgba(93,63,10,0.42)';
-    t['--match-block-border'] = 'rgba(251,191,36,0.62)';
-    t['--match-block-accent'] = '#FBBF24';
-    t['--match-block-flash-bg'] = 'rgba(122,82,12,0.62)';
-    t['--match-inline-bg'] = 'rgba(251,191,36,0.24)';
-    t['--match-inline-border'] = 'rgba(253,210,76,0.72)';
-    t['--match-inline-text'] = '#FFF8DF';
-    t['--match-focus-ring'] = 'rgba(251,191,36,0.22)';
+    t['--match-block-bg'] = teMix(bg, highlight, 0.18);
+    t['--match-block-border'] = teMix(bg, highlight, 0.68);
+    t['--match-block-accent'] = highlight;
+    t['--match-block-flash-bg'] = teMix(bg, highlight, 0.32);
+    t['--match-inline-bg'] = teMix(bg, highlight, 0.34);
+    t['--match-inline-border'] = teMix(bg, highlight, 0.78);
+    t['--match-inline-text'] = teEnsureReadable(teLighten(highlight, 0.42), t['--match-inline-bg'], 4.5);
+    t['--match-focus-ring'] = teAlpha(highlight, 0.24);
   } else {
     t['--app-bg'] = bg;
     t['--sidebar-bg'] = teMix(bg, fg, 0.05 * k);
@@ -197,20 +199,21 @@ function deriveThemeTokens(def) {
     t['--calibration-card-border'] = teMix(accent, bg, 0.42);
     t['--calibration-card-text'] = teEnsureReadable(teDarken(accent, 0.12), teMix(accent, bg, 0.74), 4.5);
     t['--calibration-card-shadow'] = '0 4px 14px ' + teAlpha(accent, 0.14);
-    t['--match-block-bg'] = '#FFF8E6';
-    t['--match-block-border'] = '#F2C66D';
-    t['--match-block-accent'] = '#D99000';
-    t['--match-block-flash-bg'] = '#FFEFC4';
-    t['--match-inline-bg'] = '#FFE7A8';
-    t['--match-inline-border'] = '#E9B644';
-    t['--match-inline-text'] = '#30240A';
-    t['--match-focus-ring'] = 'rgba(217,144,0,0.22)';
+    t['--match-block-bg'] = teMix(teMix(highlight, white, 0.90), bg, 0.22);
+    t['--match-block-border'] = teMix(highlight, white, 0.50);
+    t['--match-block-accent'] = highlight;
+    t['--match-block-flash-bg'] = teMix(highlight, white, 0.82);
+    t['--match-inline-bg'] = teMix(highlight, white, 0.80);
+    t['--match-inline-border'] = teMix(highlight, white, 0.38);
+    t['--match-inline-text'] = teEnsureReadable(teDarken(highlight, 0.38), t['--match-inline-bg'], 4.5);
+    t['--match-focus-ring'] = teAlpha(highlight, 0.22);
   }
 
   // accent 通用派生（含守护）。
   t['--accent'] = accent;
   t['--accent-contrast'] = teAccentContrast(accent);
   t['--accent-text'] = teReadableAccentText(accent, t['--app-bg'], 4.5);
+  t['--highlight'] = highlight;
   t['--focus-ring'] = '0 0 0 3px ' + teAlpha(accent, 0.22);
   t['--scrollbar-track'] = 'transparent';
   t['--scrollbar-thumb'] = teAlpha(t['--text-tertiary'], 0.30);
@@ -270,60 +273,60 @@ function themeDefToCss(def, selector) {
    其余为新预设，纯配置，运行时经引擎派生渲染，不新增 CSS 块。 */
 var THEME_PRESETS = [
   { id: 'frost-blue', name: 'MEFinder Light', label: '晴蓝', mode: 'light', builtinCss: true,
-    accent: '#0F62E6', background: '#F5F8FC', foreground: '#172033', contrast: 55,
+    accent: '#0F62E6', highlight: '#D99000', background: '#F5F8FC', foreground: '#172033', contrast: 55,
     desc: '清爽理性，适合日间使用' },
   { id: 'warm-paper', name: 'Graphite', label: '雾灰', mode: 'light', builtinCss: false,
-    accent: '#5B6472', background: '#F5F6F8', foreground: '#1F2328', contrast: 55,
+    accent: '#5B6472', highlight: '#3A6EA5', background: '#F5F6F8', foreground: '#1F2328', contrast: 55,
     desc: '中性灰，不偏色彩，专注阅读' },
   { id: 'sepia', name: 'Sepia', label: '棕褐', mode: 'light', builtinCss: false,
-    accent: '#B0742A', background: '#F3E7CC', foreground: '#43331C', contrast: 58,
+    accent: '#B0742A', highlight: '#2563B8', background: '#F3E7CC', foreground: '#43331C', contrast: 58,
     desc: '经典书页棕，温润偏黄' },
   { id: 'sage-ivory', name: '抹茶', label: '抹茶', mode: 'light', builtinCss: true,
-    accent: '#4A5F39', background: '#F7F7F1', foreground: '#25291F', contrast: 55,
+    accent: '#4A5F39', highlight: '#7656B8', background: '#F7F7F1', foreground: '#25291F', contrast: 55,
     desc: '低刺激、安静，适合长时间阅读' },
   { id: 'warm-sand', name: '暖沙', label: '暖沙', mode: 'light', builtinCss: true,
-    accent: '#9F4A1E', background: '#FBF7F1', foreground: '#34251E', contrast: 55,
+    accent: '#9F4A1E', highlight: '#2563B8', background: '#FBF7F1', foreground: '#34251E', contrast: 55,
     desc: '温暖柔和，带轻微纸张气质' },
   { id: 'rose-mist', name: '樱粉', label: '樱粉', mode: 'light', builtinCss: true,
-    accent: '#B0335A', background: '#FDF6F8', foreground: '#2C2528', contrast: 55,
+    accent: '#B0335A', highlight: '#1B8A99', background: '#FDF6F8', foreground: '#2C2528', contrast: 55,
     desc: '清柔克制，带淡粉强调' },
   { id: 'lavender-purple', name: '薰衣草', label: '薰衣草', mode: 'light', builtinCss: true,
-    accent: '#6544B0', background: '#F9F7FD', foreground: '#282532', contrast: 55,
+    accent: '#6544B0', highlight: '#B86C08', background: '#F9F7FD', foreground: '#282532', contrast: 55,
     desc: '优雅现代，使用柔和薰衣草紫' },
   { id: 'solarized-light', name: 'Solarized', label: '日光', mode: 'light', builtinCss: false,
-    accent: '#B58900', background: '#FDF6E3', foreground: '#586E75', contrast: 55,
+    accent: '#B58900', highlight: '#2563B8', background: '#FDF6E3', foreground: '#586E75', contrast: 55,
     desc: '经典米黄纸底 + 琥珀金，护眼耐读（Solarized Light）' },
   { id: 'rose-pine-dawn', name: 'Rosé Pine Dawn', label: '玫瑰', mode: 'light', builtinCss: false,
-    accent: '#D7827E', background: '#FAF4ED', foreground: '#575279', contrast: 55,
+    accent: '#D7827E', highlight: '#56949F', background: '#FAF4ED', foreground: '#575279', contrast: 55,
     desc: '柔雾玫瑰调，温软文艺（Rosé Pine Dawn）' },
   // 深色库：色值全部对齐各主题官方原版（GitHub / Vercel / Catppuccin Mocha /
   // Dracula / Tokyo Night / Gruvbox / Everforest / Nord / Absolutely），色相各不相同。
   { id: 'midnight', name: 'GitHub', label: '午夜', mode: 'dark', builtinCss: true,
-    accent: '#1F6FEB', background: '#0D1117', foreground: '#E6EDF3', contrast: 55,
+    accent: '#1F6FEB', highlight: '#58A6FF', background: '#0D1117', foreground: '#E6EDF3', contrast: 55,
     desc: '沉静蓝黑，克制专业（GitHub Dark）' },
   { id: 'oled-black', name: 'Vercel', label: '纯黑', mode: 'dark', builtinCss: false,
-    accent: '#006EFE', background: '#000000', foreground: '#EDEDED', contrast: 72,
+    accent: '#006EFE', highlight: '#3291FF', background: '#000000', foreground: '#EDEDED', contrast: 72,
     desc: '纯黑背景 + 亮蓝，极致对比、OLED 省电（Vercel）' },
   { id: 'midnight-blue', name: 'Catppuccin', label: '暮紫', mode: 'dark', builtinCss: false,
-    accent: '#CBA6F7', background: '#1E1E2E', foreground: '#CDD6F4', contrast: 55,
+    accent: '#CBA6F7', highlight: '#89B4FA', background: '#1E1E2E', foreground: '#CDD6F4', contrast: 55,
     desc: '柔紫沉静，人气配色（Catppuccin Mocha）' },
   { id: 'dracula', name: 'Dracula', label: '暗夜', mode: 'dark', builtinCss: false,
-    accent: '#FF79C6', background: '#282A36', foreground: '#F8F8F2', contrast: 55,
+    accent: '#FF79C6', highlight: '#8BE9FD', background: '#282A36', foreground: '#F8F8F2', contrast: 55,
     desc: '经典粉紫高饱和，活力十足（Dracula）' },
   { id: 'tokyo-night', name: 'Tokyo Night', label: '东京夜', mode: 'dark', builtinCss: false,
-    accent: '#7AA2F7', background: '#1A1B26', foreground: '#A9B1D6', contrast: 56,
+    accent: '#7AA2F7', highlight: '#7DCFFF', background: '#1A1B26', foreground: '#A9B1D6', contrast: 56,
     desc: '深靛蓝调，夜色霓虹（Tokyo Night）' },
   { id: 'gruvbox-dark', name: 'Gruvbox', label: '森褐', mode: 'dark', builtinCss: false,
-    accent: '#FE8019', background: '#282828', foreground: '#EBDBB2', contrast: 58,
+    accent: '#FE8019', highlight: '#83A598', background: '#282828', foreground: '#EBDBB2', contrast: 58,
     desc: '暖褐灰底 + 橙调，复古护眼（Gruvbox）' },
   { id: 'everforest', name: 'Everforest', label: '森绿', mode: 'dark', builtinCss: false,
-    accent: '#A7C080', background: '#2D353B', foreground: '#D3C6AA', contrast: 55,
+    accent: '#A7C080', highlight: '#7FBBB3', background: '#2D353B', foreground: '#D3C6AA', contrast: 55,
     desc: '柔和森林绿，低饱和自然（Everforest）' },
   { id: 'nord', name: 'Nord', label: '极夜', mode: 'dark', builtinCss: false,
-    accent: '#88C0D0', background: '#2E3440', foreground: '#ECEFF4', contrast: 55,
+    accent: '#88C0D0', highlight: '#81A1C1', background: '#2E3440', foreground: '#ECEFF4', contrast: 55,
     desc: '冷蓝灰调，清冷内敛（Nord）' },
   { id: 'absolutely', name: 'Absolutely', label: '陶褐', mode: 'dark', builtinCss: false,
-    accent: '#CC7D5E', background: '#2D2D2B', foreground: '#F9F9F7', contrast: 56,
+    accent: '#CC7D5E', highlight: '#8AB4C0', background: '#2D2D2B', foreground: '#F9F9F7', contrast: 56,
     desc: '暖陶褐点缀，中性暖灰底（Absolutely）' }
 ];
 
@@ -343,7 +346,9 @@ function normalizeThemeDef(raw) {
   if (!raw || typeof raw !== 'object') return { ok: false, error: '主题文件不是有效的对象' };
   var mode = raw.mode === 'dark' ? 'dark' : (raw.mode === 'light' ? 'light' : null);
   if (!mode) return { ok: false, error: '主题缺少有效的 mode（light/dark）' };
-  if (!teIsHex(raw.accent)) return { ok: false, error: '强调色不是有效的颜色值' };
+  if (!teIsHex(raw.accent)) return { ok: false, error: '按钮色不是有效的颜色值' };
+  var highlight = raw.highlight == null ? THEME_DEFAULT_HIGHLIGHT[mode] : raw.highlight;
+  if (!teIsHex(highlight)) return { ok: false, error: '强调色不是有效的颜色值' };
   if (!teIsHex(raw.background)) return { ok: false, error: '背景色不是有效的颜色值' };
   if (!teIsHex(raw.foreground)) return { ok: false, error: '前景色不是有效的颜色值' };
   var contrast = Number(raw.contrast);
@@ -355,6 +360,7 @@ function normalizeThemeDef(raw) {
     mode: mode,
     name: name,
     accent: teRgbToHex(teHexToRgb(raw.accent)),
+    highlight: teRgbToHex(teHexToRgb(highlight)),
     background: teRgbToHex(teHexToRgb(raw.background)),
     foreground: teRgbToHex(teHexToRgb(raw.foreground)),
     contrast: contrast
@@ -371,6 +377,7 @@ function themeDefToExport(def) {
     name: def.name || '主题',
     mode: def.mode === 'dark' ? 'dark' : 'light',
     accent: def.accent,
+    highlight: teIsHex(def.highlight) ? def.highlight : THEME_DEFAULT_HIGHLIGHT[def.mode === 'dark' ? 'dark' : 'light'],
     background: def.background,
     foreground: def.foreground,
     contrast: typeof def.contrast === 'number' ? def.contrast : 55

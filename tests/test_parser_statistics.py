@@ -72,6 +72,12 @@ class ParserStatisticsTests(unittest.TestCase):
                             "原生 PDF",
                             parser="pymupdf",
                         ),
+                        _pdf_source(
+                            "local-ocr-book",
+                            "本地 OCR 之书",
+                            parser="ndlocr-lite",
+                            provider_id="ndlocr-lite",
+                        ),
                         {
                             "source_file_id": "word-book",
                             "source_type": "word",
@@ -82,6 +88,7 @@ class ParserStatisticsTests(unittest.TestCase):
                         _pages("mineru-book", 3, "mineru")
                         + _pages("vision-book", 2, "openai_compatible")
                         + _pages("native-book", 1, "pymupdf")
+                        + _pages("local-ocr-book", 4, "ndlocr-lite")
                     ),
                     "pdf_import_runs": [
                         {
@@ -123,9 +130,9 @@ class ParserStatisticsTests(unittest.TestCase):
         self.assertEqual(
             result["total"],
             {
-                "parsed_book_count": 3,
-                "parsed_page_count": 6,
-                "provider_count": 3,
+                "parsed_book_count": 4,
+                "parsed_page_count": 10,
+                "provider_count": 4,
             },
         )
         providers = {
@@ -134,6 +141,8 @@ class ParserStatisticsTests(unittest.TestCase):
         self.assertEqual(providers["provider-qwen"]["provider_name"], "通义千问")
         self.assertEqual(providers["provider-qwen"]["parsed_page_count"], 2)
         self.assertEqual(providers["pymupdf"]["provider_kind"], "local")
+        self.assertEqual(providers["ndlocr-lite"]["provider_kind"], "local")
+        self.assertEqual(providers["ndlocr-lite"]["provider_name"], "NDL 日文 OCR")
         self.assertEqual(
             providers["mineru-cloud"]["credentials"][0]["parsed_page_count"],
             3,

@@ -387,6 +387,12 @@ class ImportJobLifecycle:
                 f"{provider_name} 解析中："
                 f"{update.get('completed', 0)}/{update.get('total', 0)} 页"
             )
+        elif phase == "local_ocr_processing":
+            provider_name = str(update.get("provider_name") or "本地 OCR")
+            message = (
+                f"{provider_name} 识别中："
+                f"{update.get('completed', 0)}/{update.get('total', 0)} 页"
+            )
         elif phase == "rebuilding_index":
             message = "正在重建本地 SQLite 索引…"
         updates: Dict[str, object] = {

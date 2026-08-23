@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 from src.me_finder.app_context import AppPaths
 from src.me_finder.application.document_import_coordinator import (
@@ -180,6 +181,24 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
             "folder/通典.pdf",
         )
         self.assertEqual(self.admission_events, ["enter", "exit"])
+
+    def test_auto_stream_reports_local_ocr_route_when_component_is_available(self) -> None:
+        payload = b"%PDF-1.4\nbody\n%%EOF\n"
+
+        with mock.patch(
+            "src.me_finder.application.document_import_coordinator.local_ocr_available",
+            return_value=True,
+        ):
+            result = self.coordinator.import_stream(
+                "scan.pdf",
+                len(payload),
+                io.BytesIO(payload),
+                pdf_parse_mode="auto",
+            )
+
+        self.assertEqual(result["parse_route"], "local_ocr")
+        self.assertFalse(self.jobs.import_calls[0]["force_mineru"])
+        self.assertIsNone(self.jobs.import_calls[0]["vision_provider_id"])
 
     def test_incomplete_stream_removes_temp_file_and_reservation(self) -> None:
         with self.assertRaisesRegex(MinerUError, "上传数据不完整"):

@@ -176,6 +176,25 @@ class ImportOrchestratorTests(unittest.TestCase):
             ["import-restored"],
         )
 
+    def test_scanned_auto_job_records_local_ocr_route_when_available(self) -> None:
+        target = self._target("scan.pdf")
+        orchestrator = self._orchestrator()
+
+        with mock.patch(
+            "src.me_finder.application.import_orchestrator.local_ocr_available",
+            return_value=True,
+        ):
+            job, context = orchestrator._build_import_job(
+                target,
+                {"detected_pdf_type": "scanned"},
+                "pdf-scan",
+                True,
+            )
+
+        self.assertEqual(job["parse_route"], "local_ocr")
+        self.assertFalse(context["force_mineru"])
+        self.assertIsNone(context["vision_provider_id"])
+
     def test_online_mineru_failure_exposes_local_retry_only_after_opt_in(self) -> None:
         orchestrator = self._orchestrator()
         job = {

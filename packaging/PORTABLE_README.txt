@@ -16,11 +16,11 @@ MEFinder 文献原句定位器（Windows 绿色版）
 2. 在该文件夹的地址栏输入 powershell，按回车。
 3. 核验绿色版 ZIP 时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.4-windows-portable.zip"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.7-windows-portable.zip"
 
    核验安装版时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.4-windows-setup.exe"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.4.7-windows-setup.exe"
 
 4. 将输出中的 Hash 与同名 .sha256.txt 文件第一列的 64 位字符逐字比较。英文字母大小写不影响结果。
 5. 如果两者不一致，请删除下载文件，不要运行，并从 MEFinder 官方 GitHub 发布页重新下载。
@@ -51,7 +51,9 @@ MEFinder MCP 使用 STDIO 连接，不需要手动双击运行，AI 客户端会
 文献解析与隐私
 
 - 原生文本 Word/PDF 的索引与搜索在本机完成。
-- 扫描版或乱码 PDF 只有在你主动确认后才会提交到 MinerU 或所选的其他视觉解析接口。
+- 配置并启用“设置 → 本地 OCR”后，扫描 PDF 会先把 MEFinder 渲染的页图交给本机 NDL OCR CLI；原 PDF 不会传给本地 runner，也不会生成文字层 PDF。
+- 绿色版不捆绑 NDL OCR 运行时或模型；两个组件的 Python 与 ocr.py 路径保存在 config\local_ocr.json。移动绿色版目录或 OCR 环境后需要重新配置路径。
+- 选择自动解析时，本地 OCR 失败会继续沿用既有 MinerU / 视觉 API 回退策略；显式选择 MinerU 或其他视觉 API 时会直接提交到相应服务。
 - MinerU 密钥保存在 config\mineru_api.local.json，请勿将填写过密钥的文件分享给他人。
 - 其他视觉接口的密钥保存在 config\vision_api.local.json。MinerU 失败时默认只提示；只有你在设置中明确开启后，程序才会自动切换到可能收费的接口。
 - 填写其他接口的地址和 API Key 后，程序会尝试自动获取模型列表；不支持 /models 的接口仍可手动填写模型 ID。

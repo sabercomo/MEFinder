@@ -3,6 +3,128 @@ var mineruAccounts = [];
 var mineruStatistics = {parsed_book_count:0, parsed_page_count:0, credentials:[]};
 var parserStatistics = {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
 var mineruSelectedAccountId = '';
+var localOCRConfig = null;
+
+function localOCREngineFields(providerId) {
+  var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
+  return {
+    enabled: document.getElementById(prefix + '-enabled'),
+    python: document.getElementById(prefix + '-python'),
+    script: document.getElementById(prefix + '-script'),
+    hint: document.getElementById(prefix + '-hint')
+  };
+}
+
+function renderLocalOCRConfig(config) {
+  localOCRConfig = config;
+  (config.engines || []).forEach(function(engine) {
+    var fields = localOCREngineFields(engine.provider_id);
+    if (fields.enabled) fields.enabled.checked = !!engine.enabled;
+    if (fields.python) fields.python.value = engine.python_path || '';
+    if (fields.script) fields.script.value = engine.script_path || '';
+    if (fields.hint) fields.hint.textContent = engine.configured ? '入口已配置' : '';
+  });
+  var available = (config.engines || []).filter(function(engine) {
+    return engine.enabled && engine.configured;
+  }).length;
+  var status = document.getElementById('local-ocr-status');
+  if (status) {
+    status.className = 'settings-status ' + (available ? 'ready' : 'warning');
+    status.textContent = available ? '可用 ' + available + ' 个组件' : '尚未启用';
+  }
+}
+
+async function loadLocalOCRConfig() {
+  var status = document.getElementById('local-ocr-status');
+  if (status) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+  try {
+    var response = await fetch('/api/local-ocr');
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+    renderLocalOCRConfig(data);
+  } catch (error) {
+    if (status) { status.className = 'settings-status warning'; status.textContent = '读取失败'; }
+    showToast('读取本地 OCR 设置失败：' + error.message, 'danger');
+  }
+}
+
+function localOCRPayload() {
+  var modern = localOCREngineFields('ndlocr-lite');
+  var ancient = localOCREngineFields('ndlkotenocr-lite');
+  var current = localOCRConfig || {};
+  var currentEngines = {};
+  (current.engines || []).forEach(function(engine) {
+    currentEngines[engine.provider_id] = engine;
+  });
+  return {
+    render_dpi: current.render_dpi || 200,
+    probe_pages: current.probe_pages || 3,
+    pages_per_slice: current.pages_per_slice || 10,
+    timeout_seconds_per_page: current.timeout_seconds_per_page || 300,
+    blank_ink_ratio: current.blank_ink_ratio == null ? 0.001 : current.blank_ink_ratio,
+    engines: {
+      'ndlocr-lite': {
+        enabled: !!modern.enabled.checked,
+        python_path: modern.python.value.trim(),
+        script_path: modern.script.value.trim(),
+        weights_sha256: (currentEngines['ndlocr-lite'] || {}).weights_sha256 || ''
+      },
+      'ndlkotenocr-lite': {
+        enabled: !!ancient.enabled.checked,
+        python_path: ancient.python.value.trim(),
+        script_path: ancient.script.value.trim(),
+        weights_sha256: (currentEngines['ndlkotenocr-lite'] || {}).weights_sha256 || ''
+      }
+    }
+  };
+}
+
+async function saveLocalOCRConfig() {
+  var button = document.getElementById('local-ocr-save');
+  var hint = document.getElementById('local-ocr-save-hint');
+  button.disabled = true;
+  button.textContent = '保存中…';
+  if (hint) hint.textContent = '';
+  try {
+    var response = await fetch('/api/local-ocr', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(localOCRPayload())
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+    renderLocalOCRConfig(data);
+    if (hint) hint.textContent = data.available ? '已保存；扫描类 PDF 将优先使用本地 OCR' : '已保存；当前不会改变导入路由';
+  } catch (error) {
+    if (hint) hint.textContent = '未保存：' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '保存设置';
+  }
+}
+
+async function testLocalOCREngine(providerId, button) {
+  var payload = localOCRPayload().engines[providerId];
+  var fields = localOCREngineFields(providerId);
+  button.disabled = true;
+  button.textContent = '测试中…';
+  if (fields.hint) fields.hint.textContent = '正在启动 CLI…';
+  try {
+    var response = await fetch('/api/local-ocr/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({provider_id: providerId, python_path: payload.python_path, script_path: payload.script_path})
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '启动失败');
+    if (fields.hint) fields.hint.textContent = '启动成功 · ' + data.latency_ms + ' ms';
+  } catch (error) {
+    if (fields.hint) fields.hint.textContent = '启动失败：' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = '测试启动';
+  }
+}
 
 async function loadMineruConfig() {
   var status = document.getElementById('mineru-config-status');

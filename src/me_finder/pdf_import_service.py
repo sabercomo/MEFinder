@@ -48,6 +48,16 @@ from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
 )
+from .local_ocr_provider import (
+    LocalOCRProvider,
+    choose_local_ocr_engine,
+)
+from .local_ocr_settings import (
+    LocalOCRCancelled,
+    LocalOCRError,
+    load_local_ocr_config,
+    resolve_local_ocr_config_path,
+)
 from .pdf_extractors import detect_pdf_type, file_sha256
 from .vision_api import (
     VisionAPIError,
@@ -1041,6 +1051,7 @@ def attach_parser_manifest(
     provider_id: str,
     provider_name: str,
     model: str,
+    parser: str = "openai_compatible",
     config_path: Optional[Path] = None,
 ) -> None:
     """Attach one non-MinerU structured parser result to a configured PDF."""
@@ -1067,7 +1078,7 @@ def attach_parser_manifest(
             raise VisionAPIError(f"PDF config not found: {source_file_id}")
         document["parser_results"] = {
             "manifest": relative_manifest.as_posix(),
-            "parser": "openai_compatible",
+            "parser": parser,
             "provider_id": provider_id,
             "provider_name": provider_name,
             "model": model,
@@ -1472,23 +1483,33 @@ def _publish_mineru_engine_results(
     document_job_id: str,
     provider_id: str = "mineru-cloud",
     provider_name: str = "MinerU",
+    parser_id: str = "mineru",
 ) -> Dict[str, object]:
     """Bridge validated normalized slices into the existing indexer contract."""
 
     job = ledger.get_document_job(document_job_id)
     if job.status != "validated":
-        raise MinerUError("只有通过完整页码校验的 MinerU 任务才能进入索引。")
-    manifest_dir = root / DEFAULT_MINERU_MANIFEST_DIR
+        raise MinerUError("只有通过完整页码校验的解析任务才能进入索引。")
+    manifest_dir = root / (
+        DEFAULT_MINERU_MANIFEST_DIR
+        if parser_id == "mineru"
+        else "corpus/processed/local_ocr/manifests"
+    )
     result_directory = (
         f"engine-{source_file_id}"
         if provider_id == "mineru-cloud"
         else f"engine-{provider_id}-{source_file_id}"
     )
-    result_root = root / DEFAULT_MINERU_RESULT_DIR / result_directory
+    result_root = root / (
+        DEFAULT_MINERU_RESULT_DIR
+        if parser_id == "mineru"
+        else "corpus/processed/local_ocr/results"
+    ) / result_directory
     segments: List[Dict[str, object]] = []
+    has_text = False
     for item in ledger.list_slice_jobs(job.id):
         if item.status != "completed" or not item.result_path:
-            raise MinerUError("MinerU 大文档任务缺少已验证的切片结果。")
+            raise MinerUError("解析任务缺少已验证的切片结果。")
         result_dir = result_root / (
             f"pages-{item.page_start:06d}-{item.page_end:06d}"
         )
@@ -1506,6 +1527,7 @@ def _publish_mineru_engine_results(
                     text = str(block.get("text") or "").strip()
                     if not text:
                         continue
+                    has_text = True
                     content.append(
                         {
                             "page_idx": local_page,
@@ -1519,6 +1541,7 @@ def _publish_mineru_engine_results(
             else:
                 text = str(page.get("text") or "").strip()
                 if text:
+                    has_text = True
                     content.append(
                         {"page_idx": local_page, "text": text, "type": "text"}
                     )
@@ -1545,9 +1568,11 @@ def _publish_mineru_engine_results(
                 "credential_id": item.credential_id,
             }
         )
+    if parser_id != "mineru" and not has_text:
+        raise LocalOCRError("本地 OCR 未在整本文档中识别出文字。")
     manifest: Dict[str, object] = {
-        "api": "precision",
-        "parser": "mineru",
+        "api": "precision" if parser_id == "mineru" else parser_id,
+        "parser": parser_id,
         "provider_id": provider_id,
         "provider_name": provider_name,
         "model": job.parser_model or "vlm",
@@ -1562,7 +1587,18 @@ def _publish_mineru_engine_results(
         manifest,
         manifest_dir,
     )
-    attach_mineru_manifest(root, source_file_id, manifest_path)
+    if parser_id == "mineru":
+        attach_mineru_manifest(root, source_file_id, manifest_path)
+    else:
+        attach_parser_manifest(
+            root,
+            source_file_id,
+            manifest_path,
+            provider_id=provider_id,
+            provider_name=provider_name,
+            model=job.parser_model or "unknown",
+            parser=parser_id,
+        )
     return {
         "manifest_path": str(manifest_path),
         "segments": len(segments),
@@ -1570,6 +1606,147 @@ def _publish_mineru_engine_results(
         "document_job_id": job.id,
         "resume": resume_summary(manifest, manifest_path=manifest_path),
     }
+
+
+def parse_pdf_with_local_ocr(
+    root: Path,
+    pdf_path: Path,
+    source_file_id: str,
+    *,
+    on_progress: Optional[ProgressCallback] = None,
+    cancel_requested: Optional[Callable[[], bool]] = None,
+) -> Dict[str, object]:
+    """Parse one PDF with an installed NDL runtime using page images only."""
+
+    root = Path(root)
+    pdf_path = Path(pdf_path)
+    config = load_local_ocr_config(
+        resolve_local_ocr_config_path(root),
+        require_available=True,
+    )
+    probe_dir = (
+        root
+        / "corpus"
+        / "processed"
+        / "local_ocr"
+        / "probes"
+        / f"{source_file_id}-{uuid.uuid4().hex}"
+    )
+    try:
+        selected, selection = choose_local_ocr_engine(
+            config.available_engines,
+            pdf_path=pdf_path,
+            work_dir=probe_dir,
+            render_dpi=config.render_dpi,
+            probe_pages=config.probe_pages,
+            timeout_seconds_per_page=config.timeout_seconds_per_page,
+            blank_ink_ratio=config.blank_ink_ratio,
+            cancel_requested=cancel_requested,
+        )
+    except Exception as exc:
+        if cancel_requested is not None and cancel_requested():
+            raise LocalOCRCancelled("本地 OCR 已取消。") from exc
+        if isinstance(exc, LocalOCRError):
+            raise
+        raise LocalOCRError(f"本地 OCR 探针失败：{exc}") from exc
+
+    completed_pages: set[int] = set()
+    total_pages = 0
+
+    def page_completed(physical_page: int) -> None:
+        completed_pages.add(int(physical_page))
+        if on_progress is not None:
+            on_progress(
+                {
+                    "phase": "local_ocr_processing",
+                    "provider_id": selected.provider_id,
+                    "provider_name": selected.display_name,
+                    "completed": len(completed_pages),
+                    "total": total_pages,
+                    "total_pages": total_pages,
+                    "completed_pages": sorted(completed_pages),
+                    "failed_pages": [],
+                }
+            )
+
+    provider = LocalOCRProvider(
+        selected,
+        render_dpi=config.render_dpi,
+        pages_per_slice=config.pages_per_slice,
+        timeout_seconds_per_page=config.timeout_seconds_per_page,
+        blank_ink_ratio=config.blank_ink_ratio,
+        cancel_requested=cancel_requested,
+        page_progress=page_completed,
+    )
+    ledger = JobLedger(root / "data" / "parser_jobs.sqlite3")
+    engine = LargeDocumentJobEngine(
+        ledger=ledger,
+        provider=provider,
+        work_dir=root / "corpus" / "processed" / "parser_jobs",
+    )
+    job = engine.prepare(
+        source_path=pdf_path,
+        source_file_id=source_file_id,
+        document_id=source_file_id.upper().replace("-", "_"),
+        model=selected.version,
+        options={
+            "input_mode": "page_image",
+            "render_dpi": config.render_dpi,
+            "blank_ink_ratio": config.blank_ink_ratio,
+            "engine_version": selected.version,
+            "weights_sha256": selected.weights_sha256,
+        },
+    )
+    total_pages = job.total_pages
+    for item in ledger.list_slice_jobs(job.id):
+        if item.status == "completed":
+            completed_pages.update(range(item.page_start, item.page_end + 1))
+    if on_progress is not None and completed_pages:
+        on_progress(
+            {
+                "phase": "local_ocr_processing",
+                "provider_id": selected.provider_id,
+                "provider_name": selected.display_name,
+                "completed": len(completed_pages),
+                "total": total_pages,
+                "total_pages": total_pages,
+                "completed_pages": sorted(completed_pages),
+                "failed_pages": [],
+            }
+        )
+    while job.status not in {
+        "validated",
+        "permanent_failure",
+        "cancelled",
+    }:
+        job = engine.run_once(job.id)
+    if job.status == "cancelled":
+        raise LocalOCRCancelled("本地 OCR 已取消。")
+    if job.status != "validated":
+        failed = next(
+            (
+                item.last_error
+                for item in ledger.list_slice_jobs(job.id)
+                if item.last_error
+            ),
+            None,
+        )
+        raise LocalOCRError(
+            failed or job.error_summary or "本地 OCR 未能完成全部页面。"
+        )
+    published = _publish_mineru_engine_results(
+        root,
+        source_file_id,
+        ledger=ledger,
+        document_job_id=job.id,
+        provider_id=selected.provider_id,
+        provider_name=selected.display_name,
+        parser_id=selected.provider_id,
+    )
+    published["selection"] = selection
+    published["provider_id"] = selected.provider_id
+    published["provider_name"] = selected.display_name
+    return published
 
 
 def parse_pdf_with_provider(

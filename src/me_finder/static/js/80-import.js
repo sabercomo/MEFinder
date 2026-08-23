@@ -768,7 +768,8 @@ async function importSelectedScanned() {
         jobId: job.job_id,
         providerId: job.provider_id || null,
         providerName: job.provider_id === 'mineru-local' ? '本地 MinerU'
-          : ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
+          : localOCRProviderName(job.provider_id)
+          || ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
         message: '文件已复制，正在处理…'
       };
       if (job.file_type === 'pdf' && job.detected_pdf_type) {
@@ -777,6 +778,7 @@ async function importSelectedScanned() {
         q.step = 2;
         q.message = '检测结果：' + pdfTypeLabel(job.detected_pdf_type)
           + (q.route === 'vision' ? '，将使用其他视觉 API'
+            : q.route === 'local_ocr' ? '，将使用本地 OCR'
             : q.route === 'mineru' && q.providerId === 'mineru-local' ? '，将使用本地 MinerU'
             : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
       } else if (job.file_type !== 'pdf') {
@@ -1044,7 +1046,7 @@ async function removeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
   if (q && q.jobId && q.status === 'processing' && !options.skipConfirm) {
-    var serviceName = q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+    var serviceName = q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
     if (!await showAppConfirm(
       '将停止 ' + serviceName + ' 后台解析；当前请求完成后不会再提交新页面',
       {title:'停止并移除任务？', confirmText:'停止任务', tone:'danger'}
@@ -1176,6 +1178,7 @@ async function uploadImport(id) {
       q.step = 2;
       q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
         + (q.route === 'vision' ? '，将使用其他视觉 API'
+          : q.route === 'local_ocr' ? '，将使用本地 OCR'
           : q.route === 'mineru' && q.providerId === 'mineru-local' ? '，将使用本地 MinerU'
           : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
     } else {
@@ -1220,11 +1223,13 @@ function pollImportJob(id) {
       q.mineruInterrupted = !!data.mineru_interrupted;
       q.canRetryLocalMineru = !!data.can_retry_with_local_mineru;
       if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
+      else if (data.phase === 'local_ocr_processing') q.route = 'local_ocr';
       else if (data.phase === 'vision_processing') q.route = 'vision';
       else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
       var steps = importStepsFor(q);
       if (data.phase === 'validating_result') q.step = 1;
       else if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
+      else if (data.phase === 'local_ocr_processing') q.step = steps.indexOf('本地 OCR');
       else if (data.phase === 'vision_processing') q.step = 2;
       else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('恢复书目与页码');
       else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
@@ -1309,9 +1314,10 @@ async function resumeImport(id, options) {
   options = options || {};
   var q = importQueue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || !q.canResume) return;
-  var serviceName = q.providerId === 'mineru-local' ? '本地 MinerU' : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
+  var serviceName = q.providerId === 'mineru-local' ? '本地 MinerU' : q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
   if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
       && q.providerId !== 'mineru-local'
+      && q.route !== 'local_ocr'
       && !await showAppConfirm(
         '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用',
         {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}

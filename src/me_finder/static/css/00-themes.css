@@ -23,6 +23,7 @@
   --accent-soft: #EAF3FF;
   --accent-contrast: #FFFFFF;
   --accent-text: #0B5EC7;
+  --highlight: #D99000;
   --calibration-card-bg: #DCEBFF;
   --calibration-card-hover: #CFE3FF;
   --calibration-card-border: #69A5F5;
@@ -99,6 +100,7 @@ html[data-theme="sage-ivory"], .theme-preview[data-preview-theme="sage-ivory"] {
   --accent-soft: #E8EEDF;
   --accent-contrast: #FFFFFF;
   --accent-text: #42562F;
+  --highlight: #7656B8;
   --calibration-card-bg: #E1EBD5;
   --calibration-card-hover: #D6E4C7;
   --calibration-card-border: #91AD78;
@@ -152,6 +154,7 @@ html[data-theme="warm-sand"], .theme-preview[data-preview-theme="warm-sand"] {
   --accent-soft: #F7E3D5;
   --accent-contrast: #FFFFFF;
   --accent-text: #8A3F16;
+  --highlight: #2563B8;
   --calibration-card-bg: #F9DDC8;
   --calibration-card-hover: #F4D0B5;
   --calibration-card-border: #D88A5E;
@@ -205,6 +208,7 @@ html[data-theme="rose-mist"], .theme-preview[data-preview-theme="rose-mist"] {
   --accent-soft: #FBE4EC;
   --accent-contrast: #FFFFFF;
   --accent-text: #A82E52;
+  --highlight: #1B8A99;
   --calibration-card-bg: #F8DCE6;
   --calibration-card-hover: #F3CEDB;
   --calibration-card-border: #DE819D;
@@ -258,6 +262,7 @@ html[data-theme="lavender-purple"], .theme-preview[data-preview-theme="lavender-
   --accent-soft: #EBE5F7;
   --accent-contrast: #FFFFFF;
   --accent-text: #5E3FA8;
+  --highlight: #B86C08;
   --calibration-card-bg: #E8DFF7;
   --calibration-card-hover: #DED1F2;
   --calibration-card-border: #A18BD4;
@@ -343,6 +348,7 @@ html[data-theme="midnight"], .theme-preview[data-preview-theme="midnight"] {
   /* GitHub 用 #1F6FEB 作主按钮底、#58A6FF 作链接文字。白字在 #1F6FEB 上约 4.9:1，达标。 */
   --accent-contrast: #FFFFFF;
   --accent-text: #58A6FF;
+  --highlight: #58A6FF;
   --calibration-card-bg: #17233A;
   --calibration-card-hover: #1C2B45;
   --calibration-card-border: #1F6FEB;
@@ -384,14 +390,14 @@ html[data-theme="midnight"], .theme-preview[data-preview-theme="midnight"] {
   --skeleton-base: #21262D;
   --skeleton-highlight: #30363D;
   --dialog-backdrop: rgba(1,4,9,0.70);
-  --match-block-bg: rgba(93,63,10,0.42);
-  --match-block-border: rgba(251,191,36,0.62);
-  --match-block-accent: #FBBF24;
-  --match-block-flash-bg: rgba(122,82,12,0.62);
-  --match-inline-bg: rgba(251,191,36,0.24);
-  --match-inline-border: rgba(253,210,76,0.72);
-  --match-inline-text: #FFF8DF;
-  --match-focus-ring: rgba(251,191,36,0.22);
+  --match-block-bg: #1B2C41;
+  --match-block-border: #4076B5;
+  --match-block-accent: #58A6FF;
+  --match-block-flash-bg: #254161;
+  --match-inline-bg: #274466;
+  --match-inline-border: #4885CC;
+  --match-inline-text: #9ECBFF;
+  --match-focus-ring: rgba(88,166,255,0.24);
   color-scheme: dark;
 }
 

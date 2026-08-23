@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_installer.ps1 -PythonEx
 
 脚本会在构建前验证 Python 至少为 3.11 且为 64 位，避免意外生成旧版 x86 安装包。
 
-仓库还提供手动触发的 `.github/workflows/windows-release-smoke.yml`。工作流进入默认分支后可在 GitHub Actions 页面手工运行；它固定使用 GitHub 托管 `windows-2022` x64 runner，构建安装版与绿色版，校验并安装 v0.4.3 后覆盖到 v0.4.4，在桌面关闭和开启两种状态下分别建立 MCP STDIO 会话，验证卸载保留用户数据，并在移动绿色版目录后再次冒烟。成功运行会上传未签名的四个发布文件。
+仓库还提供手动触发的 `.github/workflows/windows-release-smoke.yml`。工作流进入默认分支后可在 GitHub Actions 页面手工运行；它固定使用 GitHub 托管 `windows-2022` x64 runner，构建安装版与绿色版，校验并安装 v0.4.5 后覆盖到 v0.4.7，在桌面关闭和开启两种状态下分别建立 MCP STDIO 会话，验证卸载保留用户数据，并在移动绿色版目录后再次冒烟。成功运行会上传未签名的四个发布文件。
 
 托管 runner 是 Windows Server 2022，只用于可重复构建与生命周期门禁，不能替代 Windows 10/11 x64 消费者实机的最终 GUI、WebView2、代码签名和 SmartScreen 验收。工作流只允许手动触发，避免普通提交意外生成发布包。
 

@@ -14,7 +14,8 @@ function themeChoicesForMode(mode) {
     if (def && def.mode === mode) {
       list.push({ id: id, name: def.name, label: def.name, mode: mode,
         builtinCss: false, desc: '自定义主题',
-        accent: def.accent, background: def.background, foreground: def.foreground,
+        accent: def.accent, highlight: def.highlight,
+        background: def.background, foreground: def.foreground,
         contrast: typeof def.contrast === 'number' ? def.contrast : 55, custom: true });
     }
   });
@@ -119,15 +120,25 @@ function syncAppearanceControls() {
 function syncCustomInputs() {
   var def = activeEditDef();
   var accent = document.getElementById('appearance-accent');
+  var highlight = document.getElementById('appearance-highlight');
   var background = document.getElementById('appearance-background');
   var foreground = document.getElementById('appearance-foreground');
   var contrast = document.getElementById('appearance-contrast');
   var contrastValue = document.getElementById('appearance-contrast-value');
   if (accent) accent.value = normalizeHexForInput(def.accent);
+  if (highlight) highlight.value = normalizeHexForInput(def.highlight || THEME_DEFAULT_HIGHLIGHT[def.mode]);
   if (background) background.value = normalizeHexForInput(def.background);
   if (foreground) foreground.value = normalizeHexForInput(def.foreground);
   if (contrast) contrast.value = String(typeof def.contrast === 'number' ? def.contrast : 55);
   if (contrastValue) contrastValue.textContent = String(typeof def.contrast === 'number' ? def.contrast : 55);
+  syncCustomDeleteButton();
+}
+
+function syncCustomDeleteButton() {
+  var deleteButton = document.getElementById('appearance-delete-custom');
+  if (!deleteButton) return;
+  var selectedId = appearanceState[currentSlot()];
+  deleteButton.hidden = !(appearanceState.customThemes && appearanceState.customThemes[selectedId]);
 }
 
 // <input type=color> 只吃 #rrggbb；把 #rgb 或异常值补齐。
@@ -202,6 +213,7 @@ function quickCustomId(mode) { return 'custom-' + mode; }
 // 改动任一颜色/对比度：把当前编辑主题派生成一份自定义副本并即时生效。
 function onCustomColorInput() {
   var accent = document.getElementById('appearance-accent');
+  var highlight = document.getElementById('appearance-highlight');
   var background = document.getElementById('appearance-background');
   var foreground = document.getElementById('appearance-foreground');
   var contrast = document.getElementById('appearance-contrast');
@@ -218,6 +230,7 @@ function onCustomColorInput() {
     name: name,
     mode: slot,
     accent: accent ? accent.value : base.accent,
+    highlight: highlight ? highlight.value : (base.highlight || THEME_DEFAULT_HIGHLIGHT[slot]),
     background: background ? background.value : base.background,
     foreground: foreground ? foreground.value : base.foreground,
     contrast: contrast ? Number(contrast.value) : (base.contrast || 55)
@@ -226,6 +239,7 @@ function onCustomColorInput() {
   if (!appearanceState.customThemes) appearanceState.customThemes = {};
   appearanceState.customThemes[id] = def;
   appearanceState[slot] = id;
+  syncCustomDeleteButton();
   renderThemeOptions();
   if (isEditModeLive()) applyAppearance();
   refreshAppearanceReadouts();
@@ -241,7 +255,8 @@ function duplicateCurrentTheme() {
     schemaVersion: THEME_ENGINE_SCHEMA, id: id,
     name: (base.label || base.name || '主题') + ' 副本',
     mode: slot,
-    accent: base.accent, background: base.background,
+    accent: base.accent, highlight: base.highlight || THEME_DEFAULT_HIGHLIGHT[slot],
+    background: base.background,
     foreground: base.foreground, contrast: base.contrast || 55
   };
   if (!appearanceState.customThemes) appearanceState.customThemes = {};
@@ -253,6 +268,27 @@ function duplicateCurrentTheme() {
   refreshAppearanceReadouts();
   persistAppearance();
   showToast('已复制为自定义主题');
+}
+
+// 只删除当前选中的自定义主题；内置主题没有删除入口。删除后回到该模式默认主题。
+async function deleteCurrentCustomTheme() {
+  var slot = currentSlot();
+  var id = appearanceState[slot];
+  var custom = appearanceState.customThemes || {};
+  var def = custom[id];
+  if (!def) return;
+  var confirmed = await showAppConfirm(
+    '将删除自定义主题“' + (def.name || '自定义主题') + '”。此操作无法撤销。',
+    { title: '删除自定义主题？', confirmText: '删除', tone: 'danger' }
+  );
+  if (!confirmed) return;
+  delete custom[id];
+  appearanceState[slot] = THEME_MODE_DEFAULT[slot];
+  if (isEditModeLive()) applyAppearance();
+  renderThemeOptions();
+  syncAppearanceControls();
+  persistAppearance();
+  showToast('自定义主题已删除');
 }
 
 // 导出当前编辑主题为带版本号的 JSON 文件（用户主动触发的应用内下载）。
@@ -313,7 +349,9 @@ function serializeAppearance() {
     var d = src[id];
     custom[id] = {
       schemaVersion: THEME_ENGINE_SCHEMA, name: d.name, mode: d.mode,
-      accent: d.accent, background: d.background, foreground: d.foreground,
+      accent: d.accent,
+      highlight: d.highlight || THEME_DEFAULT_HIGHLIGHT[d.mode === 'dark' ? 'dark' : 'light'],
+      background: d.background, foreground: d.foreground,
       contrast: typeof d.contrast === 'number' ? d.contrast : 55
     };
     if (d.fontUi) custom[id].fontUi = d.fontUi;
@@ -338,7 +376,11 @@ function persistAppearance() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ appearance: serializeAppearance(), theme: activeBuiltinFallback() })
-    }).catch(function() {});
+    }).then(function(response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+    }).catch(function(error) {
+      showToast('主题设置保存失败：' + error.message, 'danger');
+    });
   }, 250);
 }
 

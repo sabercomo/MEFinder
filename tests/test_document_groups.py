@@ -162,6 +162,38 @@ class DocumentGroupDataLayerTests(unittest.TestCase):
             dg.list_document_groups(self.db)[0]["base_source_file_id"], "src-zh"
         )
 
+    def test_migration_copies_legacy_837_group_memberships(self) -> None:
+        connection = sqlite3.connect(str(self.db))
+        connection.execute("ALTER TABLE source_files ADD COLUMN document_group_id TEXT")
+        connection.execute(
+            "CREATE TABLE document_groups (document_group_id TEXT PRIMARY KEY, "
+            "title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.executemany(
+            "INSERT INTO document_groups VALUES (?, ?, 't', 't')",
+            [("g-old", "旧组"), ("g-empty", "空组")],
+        )
+        connection.execute(
+            "UPDATE source_files SET document_group_id = 'g-old' "
+            "WHERE source_file_id IN ('src-zh', 'src-en')"
+        )
+        connection.execute(
+            "UPDATE source_files SET document_group_id = 'missing-group' "
+            "WHERE source_file_id = 'src-de'"
+        )
+        connection.commit()
+        connection.close()
+
+        groups = {g["document_group_id"]: g for g in dg.list_document_groups(self.db)}
+        self.assertEqual(
+            [m["source_file_id"] for m in groups["g-old"]["members"]],
+            ["src-en", "src-zh"],
+        )
+        self.assertEqual(
+            [m["member_order"] for m in groups["g-old"]["members"]], [0, 1]
+        )
+        self.assertEqual(groups["g-empty"]["members"], [])
+
     def test_create_rename_delete_roundtrip(self) -> None:
         created = dg.create_document_group("初版", self.db)
         gid = created["document_group_id"]
@@ -466,6 +498,45 @@ class DocumentGroupRebuildPreservationTests(unittest.TestCase):
         groups = dg.list_document_groups(self.db)
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]["members"], [])
+        self.assertIsNone(groups[0]["base_source_file_id"])
+
+    def test_backup_snapshot_replaces_current_groups_and_skips_missing_sources(self) -> None:
+        self._build(["a", "b"])
+        current_id = dg.create_document_group("当前组", self.db)["document_group_id"]
+        dg.add_group_member(current_id, "a", self.db)
+        snapshot = {
+            "document_groups": [
+                {
+                    "document_group_id": "backup-group",
+                    "title": "备份组",
+                    "base_source_file_id": "missing",
+                    "created_at": "t",
+                    "updated_at": "t",
+                }
+            ],
+            "document_group_members": [
+                {
+                    "document_group_id": "backup-group",
+                    "source_file_id": "b",
+                    "version_label": "译本",
+                    "member_order": 0,
+                    "added_at": "t",
+                },
+                {
+                    "document_group_id": "backup-group",
+                    "source_file_id": "missing",
+                    "version_label": "原版",
+                    "member_order": 1,
+                    "added_at": "t",
+                },
+            ],
+        }
+
+        dg.replace_document_group_snapshot(snapshot, self.db)
+
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual([group["document_group_id"] for group in groups], ["backup-group"])
+        self.assertEqual([member["source_file_id"] for member in groups[0]["members"]], ["b"])
         self.assertIsNone(groups[0]["base_source_file_id"])
 
     def test_rebuild_does_not_reintroduce_folders(self) -> None:

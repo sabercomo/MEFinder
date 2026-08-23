@@ -192,8 +192,16 @@ class LargeDocumentJobEngine:
                     else "permanent_failure",
                     last_error=str(exc)[:2000],
                 )
+            if self.ledger.get_slice_job(slice_job.id).status == "cancelled":
+                break
         job = self.ledger.refresh_progress(job.id)
         slices = self.ledger.list_slice_jobs(job.id)
+        if any(item.status == "cancelled" for item in slices):
+            return self.ledger.update_document(
+                job.id,
+                status="cancelled",
+                error_summary=None,
+            )
         if any(item.status == "permanent_failure" for item in slices):
             return self.ledger.update_document(
                 job.id,
@@ -375,6 +383,13 @@ class LargeDocumentJobEngine:
                     self.credential_pool.finish_remote(
                         lease.credential.credential_id
                     )
+            return
+        if submission.status == ParserTaskStatus.CANCELLED:
+            self.ledger.update_slice(
+                slice_job.id,
+                status="cancelled",
+                last_error=None,
+            )
             return
         if not submission.remote_task_id:
             raise ParserProviderError(

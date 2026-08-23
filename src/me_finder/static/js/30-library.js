@@ -38,6 +38,10 @@ async function loadDocumentGroups() {
   if (libGroupScopeId && !libDocumentGroups.some(function(g) { return g.document_group_id === libGroupScopeId; })) {
     libGroupScopeId = '';
   }
+  if (searchGroupId && !libDocumentGroups.some(function(g) { return g.document_group_id === searchGroupId; })) {
+    searchGroupId = '';
+    updateSearchDocumentLabel();
+  }
 }
 
 function documentGroupById(groupId) {
@@ -64,6 +68,7 @@ function setLibraryGroupScope(groupId) {
   closeAppSelects();
   clearLibrarySelection();
   renderGroupScopeSelector();
+  renderLibraryStats();
   renderLibraryList();
 }
 
@@ -282,7 +287,7 @@ function renderLibraryStats() {
   var container = document.getElementById('library-stats');
   if (!container) return;
   var current = {total:0,calibrated:0,page_pending:0,bibliographic:0};
-  libSources.forEach(function(item) {
+  libraryGroupScopedSources().forEach(function(item) {
     if (item.source_type !== 'pdf') return;
     current.total += 1;
     var group = calibrationStatusGroup(item.status);
@@ -318,14 +323,15 @@ function libFilterActiveList() {
 }
 
 function renderLibraryFilterBar() {
-  var allCount = libSources.length;
-  var wordCount = libSources.filter(function(s){ return s.source_type === 'word'; }).length;
-  var pdfCount = libSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
-  var journalCount = libSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
-  var thesisCount = libSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
+  var scopeSources = libraryGroupScopedSources();
+  var allCount = scopeSources.length;
+  var wordCount = scopeSources.filter(function(s){ return s.source_type === 'word'; }).length;
+  var pdfCount = scopeSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
+  var journalCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
+  var thesisCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
   // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
-  var bookCount = libSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
-  var unknownCount = libSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
+  var bookCount = scopeSources.filter(function(s){ return s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'; }).length;
+  var unknownCount = scopeSources.filter(function(s){ return s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)); }).length;
 
   var doctypeOpts = [
     {v:'all', label:'全部类型', n:allCount},
@@ -336,7 +342,7 @@ function renderLibraryFilterBar() {
   if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
 
   // 语言细类只显示库内实际存在的语言；设置项仍只控制中文/外文两大类的先后。
-  var languageOptions = libraryLanguageFacetOptions(libSources, libDefaultLanguage);
+  var languageOptions = libraryLanguageFacetOptions(scopeSources, libDefaultLanguage);
   if (libLangFilter !== 'all' && !languageOptions.some(function(option) { return option.v === libLangFilter; })) libLangFilter = 'all';
   var langOpts = [{v:'all', label:'全部语言', n:allCount}].concat(languageOptions);
 
@@ -449,8 +455,10 @@ function clearLibraryFilters() {
   libLangFilter = 'all';
   libDocTypeFilter = 'all';
   libStatusFilter = 'all';
+  libGroupScopeId = '';
   var search = document.getElementById('lib-search');
   if (search) search.value = '';
+  renderGroupScopeSelector();
   renderLibraryStats();
   renderLibraryList();
 }
@@ -522,13 +530,18 @@ function compareLibraryDates(a, b) {
   return libSortDirection === 'desc' ? bv - av : av - bv;
 }
 
-function getFilteredSources() {
-  let sources = libSources.slice();
+function libraryGroupScopedSources() {
+  var sources = libSources.slice();
   if (libGroupScopeId) {
-    // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
     var groupMemberIds = documentGroupMemberIdSet(libGroupScopeId);
     sources = sources.filter(function(s) { return groupMemberIds.has(s.source_file_id); });
   }
+  return sources;
+}
+
+function getFilteredSources() {
+  // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
+  let sources = libraryGroupScopedSources();
   if (libTypeFilter !== 'all') {
     sources = sources.filter(s => s.source_type === libTypeFilter);
   }

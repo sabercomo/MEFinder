@@ -179,8 +179,14 @@ def _provider_identity(
     if explicit_id:
         return (
             explicit_id,
-            explicit_name or explicit_id,
-            "local" if explicit_id == "mineru-local" else "api",
+            explicit_name or _human_parser_name(explicit_id),
+            "local"
+            if explicit_id in {
+                "mineru-local",
+                "ndlocr-lite",
+                "ndlkotenocr-lite",
+            }
+            else "api",
         )
     if parser in {"mineru", "precision"}:
         return MINERU_PROVIDER_ID, explicit_name or "MinerU", "api"
@@ -196,6 +202,8 @@ def _provider_identity(
 
 def _human_parser_name(parser: str) -> str:
     return {
+        "ndlocr-lite": "NDL 日文 OCR",
+        "ndlkotenocr-lite": "NDL 古籍 OCR",
         "qwen-ocr": "Qwen OCR",
         "unknown-parser": "未标记解析器",
     }.get(parser, parser.replace("_", " "))

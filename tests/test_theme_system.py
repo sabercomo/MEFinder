@@ -37,7 +37,7 @@ class PreferencePersistenceTests(unittest.TestCase):
         mode: str = "light", light: str = "frost-blue", dark: str = "midnight"
     ) -> dict[str, object]:
         return {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "mode": mode,
             "light": light,
             "dark": dark,
@@ -101,6 +101,34 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertEqual(saved["library_view"], "grid")
             self.assertEqual(saved["calibration_view"], "list")
             self.assertEqual(read_preferences(path), saved)
+
+    def test_custom_theme_highlight_round_trips_and_old_entries_migrate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            appearance = self.default_appearance(light="custom-light")
+            appearance["custom_themes"] = {
+                "custom-light": {
+                    "schemaVersion": 1,
+                    "name": "旧自定义",
+                    "mode": "light",
+                    "accent": "#9F4A1E",
+                    "background": "#FBF7F1",
+                    "foreground": "#34251E",
+                    "contrast": 55,
+                }
+            }
+            saved = save_preferences({"appearance": appearance}, path)
+            migrated = saved["appearance"]["custom_themes"]["custom-light"]
+            self.assertEqual(migrated["schemaVersion"], 2)
+            self.assertEqual(migrated["highlight"], "#2563B8")
+
+            appearance = saved["appearance"]
+            appearance["custom_themes"]["custom-light"]["highlight"] = "#56949F"
+            saved = save_preferences({"appearance": appearance}, path)
+            self.assertEqual(
+                saved["appearance"]["custom_themes"]["custom-light"]["highlight"],
+                "#56949F",
+            )
 
     def test_legacy_calibration_view_migrates_when_library_view_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -180,7 +208,7 @@ class ThemeMarkupTests(unittest.TestCase):
         "--surface-elevated", "--surface-hover", "--surface-selected",
         "--text-primary", "--text-secondary", "--text-tertiary", "--text-disabled",
         "--border-subtle", "--border-default", "--border-strong", "--accent",
-        "--accent-hover", "--accent-soft", "--accent-contrast", "--success",
+        "--accent-hover", "--accent-soft", "--accent-contrast", "--highlight", "--success",
         "--success-soft", "--success-border", "--success-icon", "--warning",
         "--warning-soft", "--warning-border", "--warning-icon", "--danger",
         "--danger-soft", "--danger-border", "--danger-icon", "--info", "--info-soft",
@@ -222,10 +250,10 @@ class ThemeMarkupTests(unittest.TestCase):
         for preset in ("warm-paper", "sepia", "oled-black", "midnight-blue"):
             self.assertIn(f"id: '{preset}'", HTML)
         self.assertEqual(HTML.count('function themePreviewMarkup(themeId, styleAttr)'), 1)
-        # 预览缩略图现为「Aa 色板样张」：背景=纸、Aa=墨、圆丸=强调、卡片=面，
-        # 一眼比出四件事；旧的假骨架（侧栏/搜索/三卡片）已弃用。
+        # 预览缩略图现为「Aa 色板样张」：背景=纸、Aa=墨，并分开展示按钮色与正文强调色。
         self.assertIn('class="theme-swatch-aa"', HTML)
         self.assertIn('class="theme-swatch-accent"', HTML)
+        self.assertIn('class="theme-swatch-highlight"', HTML)
         self.assertIn('class="theme-swatch-card"', HTML)
         for description in (
             "清爽理性，适合日间使用", "低刺激、安静，适合长时间阅读",
@@ -236,6 +264,11 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('.theme-option:focus-visible', HTML)
         self.assertIn('role="radiogroup"', HTML)
         self.assertIn('role="radio"', HTML)
+        self.assertIn('<span>按钮色</span><input type="color" id="appearance-accent"', HTML)
+        self.assertIn('<span>强调色</span><input type="color" id="appearance-highlight"', HTML)
+        self.assertIn('id="appearance-delete-custom"', HTML)
+        self.assertIn("async function deleteCurrentCustomTheme()", HTML)
+        self.assertIn("appearanceState[slot] = THEME_MODE_DEFAULT[slot];", HTML)
         # 网格由当前生效的那一套（浅/深，由外观模式派生）筛选出的预设 + 自定义主题渲染。
         self.assertIn("container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('')", HTML)
         # 引擎把选中主题真正落到 data-theme（内置切 id、自定义切 custom）。
@@ -488,6 +521,7 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "mineru-api-settings": "mineru-api-body",
+            "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",
             "vision-api-settings": "vision-api-body",
             "citation-format-settings": "citation-format-body",
@@ -596,8 +630,17 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("setTimeout(function()", persist_block)
         self.assertIn("appearance: serializeAppearance()", persist_block)
         self.assertIn("theme: activeBuiltinFallback()", persist_block)
+        self.assertIn("if (!response.ok) throw new Error", persist_block)
+        self.assertIn("showToast('主题设置保存失败：' + error.message, 'danger')", persist_block)
         # 切主题不重载页面。
         self.assertNotIn("location.reload", HTML)
+
+    def test_document_group_dialog_uses_theme_tokens(self) -> None:
+        self.assertIn("background: var(--dialog-backdrop);", HTML)
+        self.assertIn(".group-manage-card", HTML)
+        group_card = HTML.split(".group-manage-card {", 1)[1].split("}", 1)[0]
+        self.assertIn("background: var(--dialog-bg)", group_card)
+        self.assertIn("box-shadow: var(--shadow-popover)", group_card)
 
     def test_browser_shell_does_not_show_the_macos_titlebar(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -626,7 +669,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "warm-sand": "#2563B8",
             "rose-mist": "#1B8A99",
             "lavender-purple": "#B86C08",
-            "midnight": "#FBBF24",
+            "midnight": "#58A6FF",
         }
         for theme, match_accent in expected_match_accents.items():
             block = re.search(
@@ -638,6 +681,8 @@ class ThemeMarkupTests(unittest.TestCase):
             accent = re.search(r"--accent:\s*([^;]+);", css).group(1).strip()
             actual_match = re.search(r"--match-block-accent:\s*([^;]+);", css).group(1).strip()
             self.assertEqual(actual_match, match_accent)
+            highlight = re.search(r"--highlight:\s*([^;]+);", css).group(1).strip()
+            self.assertEqual(highlight, actual_match)
             self.assertNotEqual(accent.lower(), actual_match.lower())
         self.assertIn("border-left: 3px solid var(--match-block-accent);", HTML)
         self.assertIn("background: var(--match-block-bg);", HTML)

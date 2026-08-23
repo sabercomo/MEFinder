@@ -1,5 +1,5 @@
 """Export and restore the user-curated runtime state (page calibration,
-bibliographic metadata, structured-parser manifests, preferences).
+bibliographic metadata, document groups, structured-parser manifests, preferences).
 
 Deliberately excludes the large regenerable artifacts — the SQLite index,
 the corpus PDFs, and the OCR/VLM page results — so a backup is a few hundred
@@ -17,14 +17,16 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List, Optional
 
+from .document_groups import read_document_group_snapshot
 from .pdf_import_service import import_config_lock, save_import_config
 
 BACKUP_MARKER = "me_finder_backup"
-BACKUP_VERSION = 1
+BACKUP_VERSION = 2
 
 # Paths are relative to the runtime root unless noted. preferences.json lives
 # one level up (the LOCALAPPDATA/MEFinder dir), handled via app_data_root.
 _CONFIG_FILE = "config/pdf_imports.json"
+_DOCUMENT_GROUPS_FILE = "config/document_groups.json"
 _MANIFEST_DIRS = (
     "corpus/processed/mineru/manifests",
     "corpus/processed/vision/manifests",
@@ -118,7 +120,11 @@ def _portable_manifest_bytes(path: Path, runtime_root: Path) -> bytes:
     ).encode("utf-8")
 
 
-def create_backup(runtime_root: Path, app_data_root: Optional[Path] = None) -> bytes:
+def create_backup(
+    runtime_root: Path,
+    app_data_root: Optional[Path] = None,
+    index_path: Optional[Path] = None,
+) -> bytes:
     """Return a zip archive of the curated state as raw bytes."""
 
     runtime_root = Path(runtime_root)
@@ -129,6 +135,17 @@ def create_backup(runtime_root: Path, app_data_root: Optional[Path] = None) -> b
         if config_path.exists():
             archive.write(config_path, _CONFIG_FILE)
             included.append(_CONFIG_FILE)
+
+        group_snapshot = (
+            read_document_group_snapshot(Path(index_path))
+            if index_path is not None
+            else {"document_groups": [], "document_group_members": []}
+        )
+        archive.writestr(
+            _DOCUMENT_GROUPS_FILE,
+            json.dumps(group_snapshot, ensure_ascii=False, indent=2),
+        )
+        included.append(_DOCUMENT_GROUPS_FILE)
 
         for relative_dir in _MANIFEST_DIRS:
             manifest_dir = runtime_root / relative_dir
@@ -162,11 +179,18 @@ def backup_filename() -> str:
     return f"MEFinder-backup-{stamp}.zip"
 
 
-def write_backup(runtime_root: Path, dest_dir: Path, app_data_root: Optional[Path] = None) -> Path:
+def write_backup(
+    runtime_root: Path,
+    dest_dir: Path,
+    app_data_root: Optional[Path] = None,
+    index_path: Optional[Path] = None,
+) -> Path:
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / backup_filename()
-    target.write_bytes(create_backup(runtime_root, app_data_root))
+    target.write_bytes(
+        create_backup(runtime_root, app_data_root, index_path=index_path)
+    )
     return target
 
 
@@ -178,7 +202,7 @@ def _is_safe_member(name: str) -> bool:
     normalized = name.replace("\\", "/")
     if normalized.startswith("../") or ".." in normalized.split("/") or normalized.startswith("/"):
         return False
-    return normalized == _CONFIG_FILE or any(
+    return normalized in {_CONFIG_FILE, _DOCUMENT_GROUPS_FILE} or any(
         normalized.startswith(f"{relative_dir}/")
         for relative_dir in _MANIFEST_DIRS
     )
@@ -233,12 +257,35 @@ def restore_backup(
             raise ValueError("备份清单损坏。") from exc
         if not isinstance(meta, dict) or meta.get("marker") != BACKUP_MARKER:
             raise ValueError("这不是 ME_Finder 备份文件。")
+        version = meta.get("version")
+        if version not in {1, BACKUP_VERSION}:
+            raise ValueError("不支持此备份版本。")
+        if version == BACKUP_VERSION and _DOCUMENT_GROUPS_FILE not in names:
+            raise ValueError("备份缺少作品组快照。")
 
         for name in names:
             if not _is_safe_member(name):
                 raise ValueError(f"备份包含不安全的路径：{name}")
 
         restored: List[str] = []
+        group_snapshot = None
+
+        if _DOCUMENT_GROUPS_FILE in names:
+            try:
+                group_snapshot = json.loads(
+                    archive.read(_DOCUMENT_GROUPS_FILE).decode("utf-8")
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise ValueError("作品组快照损坏。") from exc
+            if (
+                not isinstance(group_snapshot, dict)
+                or not isinstance(group_snapshot.get("document_groups"), list)
+                or not isinstance(
+                    group_snapshot.get("document_group_members"), list
+                )
+            ):
+                raise ValueError("作品组快照格式无效。")
+            restored.append(_DOCUMENT_GROUPS_FILE)
 
         if _CONFIG_FILE in names:
             target = runtime_root / _CONFIG_FILE
@@ -282,4 +329,5 @@ def restore_backup(
         "restored": restored,
         "created_at": meta.get("created_at"),
         "count": len(restored),
+        "document_group_snapshot": group_snapshot,
     }

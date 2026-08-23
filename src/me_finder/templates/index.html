@@ -474,6 +474,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" onclick="showSettingsCategory('local-ocr-settings');loadLocalOCRConfig()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
@@ -579,6 +580,34 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   </div>
                 </div>
               </details>
+            </div>
+          </section>
+          <section class="settings-section" id="local-ocr-settings" role="tabpanel">
+            <div class="settings-section-head">
+              <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
+              <span id="local-ocr-status" class="settings-status">读取中…</span>
+            </div>
+            <div class="settings-collapse-body" id="local-ocr-body">
+              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>OCR 只接收 MEFinder 渲染的页图，不会生成文字层 PDF。首版请配置两个上游 CLI 的独立 Python 环境；组件路径只保存在本机。本地 OCR 失败时，自动导入会继续沿用现有 MinerU / 视觉 API 回退策略。</span></div>
+              <div class="local-ocr-component-list">
+                <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
+                  <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div>
+                  <div class="settings-grid local-ocr-grid">
+                    <label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div>
+                    <label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div>
+                    <span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试启动</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                  </div>
+                </section>
+                <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
+                  <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div>
+                  <div class="settings-grid local-ocr-grid">
+                    <label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div>
+                    <label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div>
+                    <span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试启动</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                  </div>
+                </section>
+              </div>
+              <div class="settings-actions local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
             </div>
           </section>
           <section class="settings-section" id="statistics-settings" role="tabpanel">
@@ -785,7 +814,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </button>
                 <div class="appearance-custom-body" id="appearance-custom-body">
                   <div class="appearance-custom-grid">
-                    <label class="appearance-color"><span>强调色</span><input type="color" id="appearance-accent" oninput="onCustomColorInput()"></label>
+                    <label class="appearance-color"><span>按钮色</span><input type="color" id="appearance-accent" oninput="onCustomColorInput()"></label>
+                    <label class="appearance-color"><span>强调色</span><input type="color" id="appearance-highlight" oninput="onCustomColorInput()"></label>
                     <label class="appearance-color"><span>背景色</span><input type="color" id="appearance-background" oninput="onCustomColorInput()"></label>
                     <label class="appearance-color"><span>前景色</span><input type="color" id="appearance-foreground" oninput="onCustomColorInput()"></label>
                     <label class="appearance-range"><span>对比度 <b id="appearance-contrast-value">55</b></span><input type="range" min="0" max="100" step="1" id="appearance-contrast" oninput="onCustomColorInput()"></label>
@@ -794,6 +824,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <button type="button" class="appearance-btn" onclick="duplicateCurrentTheme()">复制为自定义</button>
                     <button type="button" class="appearance-btn" onclick="exportCurrentTheme()">导出</button>
                     <button type="button" class="appearance-btn" onclick="triggerThemeImport()">导入</button>
+                    <button type="button" class="appearance-btn appearance-delete-btn" id="appearance-delete-custom" onclick="deleteCurrentCustomTheme()" hidden>删除当前自定义</button>
                     <input type="file" id="appearance-import-file" accept="application/json,.json" hidden onchange="onThemeImportFile(event)">
                   </div>
                 </div>

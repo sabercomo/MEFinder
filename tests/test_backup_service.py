@@ -9,6 +9,8 @@ import zipfile
 from pathlib import Path
 
 from src.me_finder.backup_service import create_backup, restore_backup
+from src.me_finder.database import build_database
+from src.me_finder.document_groups import add_group_member, create_document_group
 from src.me_finder.pdf_import_service import (
     load_import_config,
     locked_import_config,
@@ -85,6 +87,7 @@ class BackupServiceTests(unittest.TestCase):
             archive = create_backup(root, app_data_root=app_data)
             names = set(zipfile.ZipFile(io.BytesIO(archive)).namelist())
             self.assertIn("config/pdf_imports.json", names)
+            self.assertIn("config/document_groups.json", names)
             self.assertIn("corpus/processed/mineru/manifests/segments-x.json", names)
             self.assertIn("corpus/processed/vision/manifests/vision-x.json", names)
             self.assertIn("preferences.json", names)
@@ -105,6 +108,43 @@ class BackupServiceTests(unittest.TestCase):
             )
             self.assertIsNone(portable["segments"][0]["state_file"])
             self.assertIsNone(portable["segments"][0]["result_dir"])
+
+    def test_backup_captures_document_group_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "runtime"
+            root.mkdir()
+            index_path = root / "data" / "index.sqlite3"
+            build_database(
+                {
+                    "metadata": {},
+                    "source_files": [
+                        {
+                            "source_file_id": "pdf-x",
+                            "source_type": "pdf",
+                            "file_name": "x.pdf",
+                        }
+                    ],
+                    "volumes": [],
+                    "works": [],
+                    "paragraphs": [],
+                },
+                index_path,
+            )
+            group_id = create_document_group("作品", index_path)[
+                "document_group_id"
+            ]
+            add_group_member(group_id, "pdf-x", index_path, version_label="原版")
+
+            archive = create_backup(root, index_path=index_path)
+            with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
+                snapshot = json.loads(zipped.read("config/document_groups.json"))
+                manifest = json.loads(zipped.read("backup.json"))
+
+            self.assertEqual(manifest["version"], 2)
+            self.assertEqual(snapshot["document_groups"][0]["title"], "作品")
+            self.assertEqual(
+                snapshot["document_group_members"][0]["version_label"], "原版"
+            )
 
     def test_backup_scrubs_foreign_absolute_paths_and_filters_lists(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -219,6 +259,11 @@ class BackupServiceTests(unittest.TestCase):
 
             summary = restore_backup(dest, archive, app_data_root=dest_app_data)
             self.assertIn("config/pdf_imports.json", summary["restored"])
+            self.assertIn("config/document_groups.json", summary["restored"])
+            self.assertEqual(
+                summary["document_group_snapshot"],
+                {"document_groups": [], "document_group_members": []},
+            )
             restored = json.loads((dest / "config" / "pdf_imports.json").read_text(encoding="utf-8"))
             self.assertEqual(restored["documents"][0]["source_file_id"], "pdf-x")
             self.assertTrue((dest / "config" / "pdf_imports.json.pre-restore").exists())
@@ -351,6 +396,13 @@ class BackupServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(ValueError):
                 restore_backup(Path(temp_dir), buffer.getvalue())
+
+    def test_restore_accepts_v1_backup_without_group_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary = restore_backup(
+                Path(temp_dir), _backup_with_config({"documents": []})
+            )
+            self.assertIsNone(summary["document_group_snapshot"])
 
 
 if __name__ == "__main__":

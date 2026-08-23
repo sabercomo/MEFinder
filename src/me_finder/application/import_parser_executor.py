@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Protocol
 
 from ..mineru_api import MinerUError
+from ..local_ocr_settings import (
+    LocalOCRCancelled,
+    LocalOCRError,
+    local_ocr_available,
+)
 from ..vision_api import (
     VisionAPIError,
     resolve_vision_config_path,
@@ -54,10 +59,14 @@ class ImportParserExecutor:
         *,
         parse_with_mineru: Parser,
         parse_with_provider: Parser,
+        parse_with_local_ocr: Optional[Parser] = None,
+        local_ocr_is_available: Callable[[Path], bool] = local_ocr_available,
     ) -> None:
         self._root = Path(root)
         self._parse_with_mineru = parse_with_mineru
         self._parse_with_provider = parse_with_provider
+        self._parse_with_local_ocr = parse_with_local_ocr
+        self._local_ocr_is_available = local_ocr_is_available
 
     def execute(
         self,
@@ -75,6 +84,14 @@ class ImportParserExecutor:
 
         use_vision = bool(is_pdf and vision_provider_id)
         try:
+            use_local_ocr = bool(
+                is_pdf
+                and not use_vision
+                and not force_mineru
+                and str(profile.get("detected_pdf_type")) != "native_text"
+                and self._parse_with_local_ocr is not None
+                and self._local_ocr_is_available(self._root)
+            )
             use_mineru = is_pdf and not use_vision and (
                 force_mineru
                 or str(profile.get("detected_pdf_type")) != "native_text"
@@ -107,6 +124,15 @@ class ImportParserExecutor:
                         update,
                     ),
                 )
+            elif use_local_ocr:
+                succeeded = self._execute_local_ocr(
+                    job_id,
+                    target,
+                    source_file_id,
+                    jobs=jobs,
+                )
+                if not succeeded:
+                    return False
             elif use_mineru:
                 succeeded = self._execute_mineru(
                     job_id,
@@ -151,6 +177,68 @@ class ImportParserExecutor:
                 needs_provider_config=False,
             )
             return False
+
+    def _execute_local_ocr(
+        self,
+        job_id: str,
+        target: Path,
+        source_file_id: str,
+        *,
+        jobs: ImportParserJobPort,
+    ) -> bool:
+        jobs.update_import_job(
+            job_id,
+            phase="local_ocr_processing",
+            message="正在使用本地 OCR 识别页图…",
+            parse_route="local_ocr",
+        )
+        assert self._parse_with_local_ocr is not None
+        try:
+            self._parse_with_local_ocr(
+                self._root,
+                target,
+                source_file_id,
+                on_progress=lambda update: jobs.progress_import_job(
+                    job_id,
+                    update,
+                ),
+                cancel_requested=lambda: str(
+                    (jobs.job_status(job_id) or {}).get("status") or ""
+                )
+                == "cancelling",
+            )
+            return True
+        except LocalOCRCancelled as exc:
+            raise ImportJobCancelled(str(exc)) from exc
+        except LocalOCRError as exc:
+            local_error = str(exc)
+        succeeded = self._execute_mineru(
+            job_id,
+            target,
+            source_file_id,
+            force_mineru=False,
+            use_local_mineru=False,
+            jobs=jobs,
+        )
+        if succeeded:
+            jobs.update_import_job(
+                job_id,
+                local_ocr_failed=True,
+                fallback_used=True,
+                local_ocr_error=local_error,
+            )
+            return True
+        job = jobs.job_status(job_id) or {}
+        jobs.update_import_job(
+            job_id,
+            message=(
+                f"本地 OCR 失败：{local_error}；"
+                f"{job.get('message') or '后续解析也未完成。'}"
+            ),
+            local_ocr_failed=True,
+            local_ocr_error=local_error,
+        )
+        return False
 
     def _execute_mineru(
         self,

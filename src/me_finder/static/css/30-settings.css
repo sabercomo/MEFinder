@@ -841,6 +841,18 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
 .mineru-local-enable-row { padding-top: 6px; }
 .mineru-local-enable-row > small { max-width: 62ch; }
+.local-ocr-component-list { display: grid; gap: 14px; margin-top: 16px; }
+.local-ocr-component {
+  padding: 18px; border: 1px solid var(--border-default); border-radius: 14px;
+  background: var(--surface-elevated); box-shadow: var(--shadow-card);
+}
+.local-ocr-component-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.local-ocr-component-head > span { display: grid; gap: 4px; }
+.local-ocr-component-head strong { color: var(--text-primary); font-size: 14px; }
+.local-ocr-component-head small { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
+.local-ocr-grid { margin-top: 16px; }
+.local-ocr-grid .settings-input { max-width: none; }
+.local-ocr-save-row { margin-top: 16px; }
 #bib-completion-settings .auto-match-setting { width: 100%; max-width: none; }
 /* Lightweight account switcher (chips) + a plain settings form — replaces the
    old table + modal dialog. One simple form; pick which account with a chip. */
@@ -1378,7 +1390,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .theme-option.selected .theme-option-check { opacity: 1; transform: scale(1); }
 .theme-option-description { display: block; margin: 7px 4px 2px; color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
 
-/* 色板样张：背景=纸、Aa=墨、圆丸=强调、卡片=面。深色三主题的差别一眼可辨。 */
+/* 色板样张：长丸=按钮色，圆点=正文强调色；两种角色不再混作一个 accent。 */
 .theme-preview {
   display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
   aspect-ratio: 8 / 5; padding: 15px;
@@ -1389,7 +1401,9 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .theme-swatch-top { display: flex; align-items: center; justify-content: space-between; }
 .theme-swatch-aa { font-size: 28px; font-weight: 680; line-height: 1; letter-spacing: -0.02em; color: var(--text-primary); }
-.theme-swatch-accent { width: 40px; height: 20px; border-radius: 999px; background: var(--accent); box-shadow: 0 1px 4px var(--accent-soft); }
+.theme-swatch-colors { display: inline-flex; align-items: center; gap: 6px; }
+.theme-swatch-accent { width: 38px; height: 20px; border-radius: 999px; background: var(--accent); box-shadow: 0 1px 4px var(--accent-soft); }
+.theme-swatch-highlight { width: 20px; height: 20px; border-radius: 999px; background: var(--highlight); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 12%, transparent); }
 .theme-swatch-card {
   display: flex; flex-direction: column; gap: 7px;
   padding: 11px 12px; border-radius: 10px;
@@ -1438,6 +1452,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .appearance-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--surface-hover); }
 .appearance-btn:active { transform: scale(0.97); }
 .appearance-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.appearance-delete-btn { color: var(--danger); border-color: var(--danger-border); }
+.appearance-delete-btn:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
 
 /* 窄屏（如手机）单列时，样张限高，避免过高的巨卡。 */
 @media (max-width: 430px) {

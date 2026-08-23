@@ -48,6 +48,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('data-value="all"', HTML)
         self.assertIn("searchLimit = limit === 'all'", HTML)
 
+    def test_search_surfaces_missing_document_group_scope(self) -> None:
+        self.assertIn("if (!resp.ok || data.error) throw new Error", HTML)
+        self.assertIn(
+            "if (searchGroupId && !libDocumentGroups.some(function(g) { return g.document_group_id === searchGroupId; }))",
+            HTML,
+        )
+        self.assertIn("searchGroupId = '';\n    updateSearchDocumentLabel();", HTML)
+
     def test_primary_search_and_library_dropdowns_use_application_menus(self) -> None:
         self.assertIn('id="library-sort-field-select"', HTML)
         # 排序方向合并成一个可点按钮（升/降切换），不再是独立下拉。
@@ -212,7 +220,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="filter-opts-type"', HTML)
         self.assertIn("else if (kind === 'lang') libLangFilter = value;", HTML)
         self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
-        self.assertIn("libraryLanguageFacetOptions(libSources, libDefaultLanguage)", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
 
     def test_library_filters_by_document_type(self) -> None:
         self.assertIn('id="filter-opts-doctype"', HTML)
@@ -473,6 +481,12 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('本地部署（高级）', HTML)
         self.assertIn("fetch('/api/mineru-local'", HTML)
         self.assertIn("fetch('/api/mineru-local/test'", HTML)
+        self.assertIn('id="local-ocr-settings"', HTML)
+        self.assertIn('data-target="local-ocr-settings"', HTML)
+        self.assertIn("fetch('/api/local-ocr'", HTML)
+        self.assertIn("fetch('/api/local-ocr/test'", HTML)
+        self.assertIn('"/api/local-ocr"', WEB_SOURCE)
+        self.assertIn('"/api/local-ocr/test"', WEB_SOURCE)
         self.assertIn("pollImportJob(item.id)", HTML)
         self.assertIn('切换到本地部署', HTML)
         self.assertIn("fetch('/api/parser-statistics'", HTML)
@@ -607,6 +621,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "macos-update-settings",
             "data-location-settings",
             "mineru-api-settings",
+            "local-ocr-settings",
             "statistics-settings",
             "vision-api-settings",
             "citation-format-settings",

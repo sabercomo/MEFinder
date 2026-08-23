@@ -30,6 +30,7 @@ from ..import_resume import sha256_file
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError, resolve_mineru_config_path
 from ..mineru_local_settings import mineru_local_config_summary
+from ..local_ocr_settings import local_ocr_available
 from ..pdf_import_service import (
     cleanup_stale_document_storage_files,
     copy_local_document,
@@ -853,7 +854,13 @@ class DocumentImportCoordinator:
                     if vision_provider_id
                     else "mineru"
                     if force_mineru
-                    or str(profile.get("detected_pdf_type")) != "native_text"
+                    else "local_ocr"
+                    if (
+                        str(profile.get("detected_pdf_type")) != "native_text"
+                        and local_ocr_available(self._paths.runtime_root)
+                    )
+                    else "mineru"
+                    if str(profile.get("detected_pdf_type")) != "native_text"
                     else "native"
                 )
             logging.info(
@@ -956,7 +963,13 @@ class DocumentImportCoordinator:
                         if provider_id
                         else "mineru"
                         if force_mineru
-                        or str(profile.get("detected_pdf_type")) != "native_text"
+                        else "local_ocr"
+                        if (
+                            str(profile.get("detected_pdf_type")) != "native_text"
+                            and local_ocr_available(self._paths.runtime_root)
+                        )
+                        else "mineru"
+                        if str(profile.get("detected_pdf_type")) != "native_text"
                         else "native"
                     )
                 prepared_items.append(
