@@ -34,6 +34,7 @@
 
 - Windows 与 macOS 使用同一个设置页入口和同一个安装状态机；平台资产、venv Python 相对路径和 onnxruntime pin 只从 manifest 读取。
 - 验证先执行 `<venv-python> <ocr.py> --help`，再把上游自带样图统一为单页 PNG，按 `--sourceimg <png> --output <dir>` 识别并解析 JSON。
+- 下载器优先使用 HTTP Range 续传。codeload 若忽略 Range，安装器保留本地 partial，重新连接后重放并丢弃已有前缀，再从断点追加；这会重复消耗前缀流量，但不丢本地进度，最终仍以完整 bytes + SHA-256 放行。
 - 安装位于机器本地的 `runtime/components/local-ocr/`；不写 PATH、注册表、plist 或系统 Python。
 - 卸载删除该引擎的源码、模型和 venv；最后一个引擎卸载后同时删除共享的 uv 和 uv-managed Python。若用户已将设置切换为其他手动路径，卸载不清空该手动路径。
 - `config/local_ocr.json`、组件目录、OCR 大结果与 parser manifest 不进入轻量备份；备份仍只保留 `pdf_imports.json` 中的可移植相对 attachment。

@@ -275,6 +275,22 @@ else:
         self.assertEqual(requests[0][0].get_header("Range"), "bytes=3-")
         self.assertEqual(requests[0][1], 30)
 
+    def test_downloader_keeps_checkpoint_when_server_ignores_range(self) -> None:
+        installer = self._installer()
+        target = self.root / "partial.bin"
+        target.write_bytes(b"abc")
+
+        with mock.patch(
+            "src.me_finder.local_ocr_installer.urlopen",
+            return_value=_DownloadResponse(b"abcdef", 200),
+        ) as opened:
+            installer._download_file(
+                "ndlocr-lite", "https://example.invalid/asset", target, 6
+            )
+
+        self.assertEqual(target.read_bytes(), b"abcdef")
+        self.assertEqual(opened.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -559,26 +559,33 @@ class LocalOCRInstaller:
                 headers["Range"] = f"bytes={existing}-"
             request = Request(url, headers=headers)
             try:
-                response = urlopen(request, timeout=30)
-                status = getattr(response, "status", None)
-                if existing and status != 206:
-                    response.close()
-                    target.unlink()
-                    attempts += 1
-                    continue
-                mode = "ab" if existing else "wb"
-                downloaded = existing
-                with response, target.open(mode) as output:
-                    while True:
-                        self._raise_if_cancelled(provider_id)
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        output.write(chunk)
-                        downloaded += len(chunk)
-                        self._set_download_progress(
-                            provider_id, downloaded, expected_size
-                        )
+                with urlopen(request, timeout=30) as response:
+                    status = getattr(response, "status", None)
+                    if existing and status != 206:
+                        replayed = 0
+                        while replayed < existing:
+                            self._raise_if_cancelled(provider_id)
+                            chunk = response.read(
+                                min(1024 * 1024, existing - replayed)
+                            )
+                            if not chunk:
+                                raise LocalOCRInstallerError(
+                                    "服务器无法重放下载断点。"
+                                )
+                            replayed += len(chunk)
+                    mode = "ab" if existing else "wb"
+                    downloaded = existing
+                    with target.open(mode) as output:
+                        while True:
+                            self._raise_if_cancelled(provider_id)
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            output.write(chunk)
+                            downloaded += len(chunk)
+                            self._set_download_progress(
+                                provider_id, downloaded, expected_size
+                            )
                 if downloaded == expected_size:
                     return
                 attempts += 1
