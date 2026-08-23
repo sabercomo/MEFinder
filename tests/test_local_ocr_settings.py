@@ -80,7 +80,59 @@ class LocalOCRSettingsTests(unittest.TestCase):
         self.assertEqual(summary["blank_ink_ratio"], 0.002)
         self.assertEqual(summary["engines"][0]["weights_sha256"], "weights-digest")
         raw = json.loads(self.config_path.read_text(encoding="utf-8"))
-        self.assertEqual(raw["engines"]["ndlocr-lite"]["script_path"], str(script.resolve()))
+        self.assertEqual(raw["engines"]["ndlocr-lite"]["script_path"], str(script))
+
+    def test_managed_venv_symlink_is_not_resolved_to_base_python(self) -> None:
+        python_path = (
+            self.root
+            / "components/local-ocr/ndlocr-lite/venv/bin/python"
+        )
+        python_path.parent.mkdir(parents=True)
+        python_path.symlink_to(Path(sys.executable).resolve())
+        script = self.root / "components/local-ocr/ndlocr-lite/source/src/ocr.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("print('ok')\n", encoding="utf-8")
+
+        configure_managed_local_ocr_engine(
+            self.config_path,
+            "ndlocr-lite",
+            python_path=python_path,
+            script_path=script,
+        )
+
+        engine = load_local_ocr_config(self.config_path).available_engines[0]
+        self.assertEqual(engine.python_path, python_path)
+        raw = json.loads(self.config_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            raw["engines"]["ndlocr-lite"]["python_path"],
+            str(python_path),
+        )
+
+    def test_legacy_resolved_managed_python_path_is_normalized(self) -> None:
+        managed_python = (
+            self.root
+            / "components/local-ocr/ndlocr-lite/venv/bin/python"
+        )
+        managed_python.parent.mkdir(parents=True)
+        managed_python.symlink_to(Path(sys.executable).resolve())
+        script = self.root / "components/local-ocr/ndlocr-lite/source/src/ocr.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("print('ok')\n", encoding="utf-8")
+        payload = self._payload(enabled=True, script=script)
+        payload["engines"]["ndlocr-lite"]["python_path"] = str(
+            managed_python.resolve()
+        )
+
+        summary = save_local_ocr_config(payload, self.config_path)
+
+        self.assertEqual(
+            summary["engines"][0]["python_path"],
+            str(managed_python),
+        )
+        self.assertEqual(
+            load_local_ocr_config(self.config_path).available_engines[0].python_path,
+            managed_python,
+        )
 
     def test_engine_test_starts_configured_cli(self) -> None:
         script = self.root / "ocr.py"

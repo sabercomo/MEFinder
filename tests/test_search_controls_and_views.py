@@ -316,6 +316,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("grid-template-columns: repeat(3", parse_css)
         self.assertIn(".pdf-parse-mode {\n  display: flex;\n  flex-direction: column;", HTML)
         self.assertIn(".pdf-parse-option-vision .pdf-parse-card", HTML)
+        self.assertIn(".import-vision-select[hidden] { display: none; }", HTML)
+        self.assertIn("container.hidden = providers.length === 0;", HTML)
         self.assertIn(".pdf-parse-option strong { color: var(--text-primary); font-size: 14px;", HTML)
 
     def test_directory_batch_import_is_bounded_and_isolates_pdf_index_writes(self) -> None:
@@ -452,7 +454,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="mineru-add-account"', HTML)
         self.assertIn("addButton.hidden = !mineruAccounts.length", HTML)
         self.assertIn("if (!mineruAccounts.length) startAddMineruAccount(false);", HTML)
-        self.assertIn("firstAccount ? '配置 MinerU API' : '添加 MinerU 账号'", HTML)
+        self.assertIn("'mineru-editor-title').textContent = '添加账号'", HTML)
         self.assertIn("document.getElementById('mineru-account-cancel').hidden = firstAccount", HTML)
         self.assertIn('id="parser-provider-list"', HTML)
         self.assertIn('id="parser-stat-books"', HTML)
@@ -489,6 +491,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("managed.eta_seconds", HTML)
         self.assertIn("正在检测网速…", HTML)
         self.assertIn("'预计剩余约 '", HTML)
+        self.assertIn("导入 PDF 时保持“自动选择”即可", HTML)
+        self.assertIn("本地识别失败时自动转入 MinerU", HTML)
         local_ocr_loader = HTML[
             HTML.index("async function loadLocalOCRConfig()"):
             HTML.index("function localOCRPayload()")
@@ -500,9 +504,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertEqual(
             HTML.count('class="settings-control settings-actions settings-save-row"'),
-            3,
+            1,
         )
+        self.assertEqual(HTML.count('class="settings-editor-actions"'), 2)
         self.assertIn(".settings-save-row > .action-btn.primary", HTML)
+        self.assertIn(".settings-editor-actions > .action-btn.primary", HTML)
         self.assertIn('"/api/local-ocr"', WEB_SOURCE)
         self.assertIn('"/api/local-ocr/test"', WEB_SOURCE)
         self.assertIn("pollImportJob(item.id)", HTML)

@@ -474,8 +474,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" onclick="showSettingsCategory('local-ocr-settings');loadLocalOCRConfig()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" onclick="showSettingsCategory('local-ocr-settings');loadLocalOCRConfig()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" onclick="showSettingsCategory('citation-format-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
@@ -529,33 +529,38 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <section class="mineru-account-management">
                 <div class="mineru-table-heading"><div><strong>账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
                 <div id="mineru-account-list" class="mineru-account-list" aria-live="polite"></div>
-                <div class="vision-editor-card mineru-editor-card" id="mineru-editor-card" hidden>
-                    <div class="vision-editor-head">
-                      <span class="vision-avatar vision-avatar-lg" aria-hidden="true"><span class="mineru-brand-glyph"></span></span>
-                      <div class="vision-editor-titles">
-                        <strong id="mineru-editor-title">添加 MinerU 账号</strong>
-                        <small>Token 只保存在本机应用数据中</small>
-                      </div>
+                <div class="settings-editor mineru-editor-card" id="mineru-editor-card" hidden>
+                    <div class="settings-editor-head">
+                      <strong id="mineru-editor-title">添加账号</strong>
                       <label class="ui-switch" title="停用后不再分配新的解析任务">
                         <input id="mineru-account-enabled" type="checkbox" checked>
                         <span class="ui-switch-track" aria-hidden="true"></span>
                         <span class="ui-switch-text">启用</span>
                       </label>
                     </div>
-                    <div class="settings-grid vision-provider-editor">
+                    <div class="settings-form settings-editor-form">
                       <input id="mineru-account-id" type="hidden">
-                      <label class="settings-label" for="mineru-account-name">账号名称</label>
-                      <div class="settings-control"><input id="mineru-account-name" class="settings-input" type="text" maxlength="120" autocomplete="off" placeholder="例如：工作账号"><small>仅用于本地账号列表和解析统计</small></div>
-                      <label class="settings-label" for="mineru-token">API Token</label>
-                      <div class="settings-control"><div class="settings-input-row"><input id="mineru-token" class="settings-input" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token"><button id="mineru-token-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')">显示</button></div><small id="mineru-token-help">新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机</small></div>
-                      <label class="settings-label" for="mineru-expires-at">到期日期</label>
-                      <div class="settings-control"><input id="mineru-expires-at" class="settings-input settings-input-date" type="date"><small>仅作本地提醒，不影响解析调度</small></div>
-                      <span class="settings-label"></span>
-                      <div class="settings-control settings-actions settings-save-row">
-                        <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
+                      <div class="settings-field">
+                        <label for="mineru-account-name">账号名称</label>
+                        <input id="mineru-account-name" class="settings-input settings-input--sm" type="text" maxlength="120" autocomplete="off" placeholder="例如：工作账号">
+                      </div>
+                      <div class="settings-field">
+                        <label for="mineru-token">API Token</label>
+                        <div class="settings-secret">
+                          <input id="mineru-token" class="settings-input settings-input--mono" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token">
+                          <button id="mineru-token-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
+                        </div>
+                        <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机。</small>
+                      </div>
+                      <div class="settings-field">
+                        <label for="mineru-expires-at">到期日期 <span class="settings-field-optional">（可选）</span></label>
+                        <input id="mineru-expires-at" class="settings-input settings-input-date" type="date">
+                      </div>
+                      <div class="settings-editor-actions">
+                        <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
                         <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
                         <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
-                        <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
+                        <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
                       </div>
                     </div>
                   </div>
@@ -588,7 +593,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span id="local-ocr-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
-              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>OCR 只识别 MEFinder 渲染的单页 PNG，不生成带文字层的 PDF。点击下载后会自动安装独立 Python 环境与 CPU 模型；组件和路径只保存在本机，不进入备份。</span></div>
+              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>安装并启用后，导入 PDF 时保持“自动选择”即可：扫描类日文 PDF 会优先使用本地 OCR，本地识别失败时自动转入 MinerU。点击下载会自动安装独立 Python 环境与 CPU 模型；组件和路径只保存在本机，不进入备份。</span></div>
               <div class="local-ocr-component-list">
                 <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
                   <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
@@ -636,59 +641,53 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="vision-provider-layout">
             <div class="mineru-table-heading"><div><strong>接口</strong><small>API Key 不会显示或返回到界面</small></div><span id="vision-provider-count">0 个接口</span></div>
             <div id="vision-provider-list" class="vision-provider-list"></div>
-            <div class="vision-editor-card" id="vision-editor-card">
-              <div class="vision-editor-head">
-                <span id="vision-editor-avatar" class="vision-avatar vision-avatar-lg" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg></span>
-                <div class="vision-editor-titles">
-                  <strong id="vision-editor-title">添加解析接口</strong>
-                  <small>兼容 OpenAI Responses / Chat Completions 的视觉模型或中转站</small>
-                </div>
+            <div class="settings-editor vision-editor-card" id="vision-editor-card">
+              <div class="settings-editor-head">
+                <strong id="vision-editor-title">添加解析接口</strong>
                 <label class="ui-switch" title="启用后可在导入页选择这个接口">
                   <input id="vision-provider-enabled" type="checkbox" checked>
                   <span class="ui-switch-track" aria-hidden="true"></span>
                   <span class="ui-switch-text">启用</span>
                 </label>
               </div>
-              <div class="settings-grid vision-provider-editor">
+              <div class="settings-form settings-editor-form">
                 <input id="vision-provider-id" type="hidden">
-                <label class="settings-label" for="vision-api-base">API 地址</label>
-                <div class="settings-control">
+                <div class="settings-field">
+                  <label for="vision-api-base">API 地址</label>
                   <div class="vision-model-combo vision-base-combo">
-                    <input id="vision-api-base" class="settings-input" type="url" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-base-pop" placeholder="点击选择常见服务商，或直接粘贴接口地址">
+                    <input id="vision-api-base" class="settings-input settings-input--mono" type="url" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-base-pop" placeholder="选择服务商，或粘贴接口地址">
                     <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" onclick="toggleVisionBaseList(event)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div id="vision-base-pop" class="vision-model-pop" hidden></div>
                   </div>
-                  <small>从列表选择会自动填写地址和名称；也可以粘贴兼容 OpenAI Responses / Chat Completions 的地址</small>
+                  <small>选服务商会自动带出名称，也可粘贴 OpenAI 兼容地址。</small>
                 </div>
-                <label class="settings-label" for="vision-api-key">API Key</label>
-                <div class="settings-control">
-                  <div class="settings-input-row">
-                    <input id="vision-api-key" class="settings-input" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key">
-                    <button id="vision-key-toggle" class="action-btn settings-toggle" type="button" onclick="toggleMineruSecret('vision-api-key','vision-key-toggle')">显示</button>
+                <div class="settings-field">
+                  <label for="vision-api-key">API Key</label>
+                  <div class="settings-secret">
+                    <input id="vision-api-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key">
+                    <button id="vision-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('vision-api-key','vision-key-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
                   </div>
-                  <small>编辑已有接口时留空表示保留原密钥。密钥只保存在本机</small>
+                  <small>只保存在本机；编辑时留空即保留原密钥。</small>
                 </div>
-                <label class="settings-label" for="vision-provider-name">显示名称</label>
-                <div class="settings-control">
-                  <input id="vision-provider-name" class="settings-input" type="text" maxlength="80" placeholder="根据 API 地址自动生成，可修改">
-                  <small>只用来在接口列表和导入页里区分，不影响调用</small>
+                <div class="settings-field">
+                  <label for="vision-provider-name">显示名称 <span class="settings-field-optional">（可选）</span></label>
+                  <input id="vision-provider-name" class="settings-input settings-input--sm" type="text" maxlength="80" placeholder="按地址自动生成">
                 </div>
-                <label class="settings-label" for="vision-model">视觉模型</label>
-                <div class="settings-control">
-                  <div class="settings-input-row vision-model-row">
+                <div class="settings-field">
+                  <label for="vision-model">视觉模型</label>
+                  <div class="settings-model-row">
                     <div class="vision-model-combo">
-                      <input id="vision-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-model-pop" placeholder="填写地址和 Key 后选择模型，也可手动输入">
+                      <input id="vision-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-model-pop" placeholder="选择模型，或手动输入">
                       <div id="vision-model-pop" class="vision-model-pop" hidden></div>
                     </div>
-                    <button id="vision-model-refresh" class="action-btn settings-toggle" type="button" onclick="fetchVisionModels()">获取模型</button>
+                    <button id="vision-model-refresh" class="action-btn settings-model-fetch" type="button" onclick="fetchVisionModels()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button>
                   </div>
-                  <small id="vision-model-hint" class="vision-model-hint">填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入</small>
+                  <small id="vision-model-hint" class="vision-model-hint">填好地址和 Key 后自动读取；接口不支持时手动输入。</small>
                 </div>
-                <span class="settings-label"></span>
-                <div class="settings-control settings-actions settings-save-row">
-                  <button class="action-btn primary" type="button" onclick="saveVisionProvider()">保存接口</button>
-                  <button class="action-btn" id="vision-cancel-edit" type="button" onclick="startAddVisionProvider()" hidden>取消编辑</button>
+                <div class="settings-editor-actions">
                   <span id="vision-save-hint" class="settings-hint"></span>
+                  <button class="action-btn" id="vision-cancel-edit" type="button" onclick="startAddVisionProvider()" hidden>取消编辑</button>
+                  <button class="action-btn primary" type="button" onclick="saveVisionProvider()">保存接口</button>
                 </div>
               </div>
             </div>

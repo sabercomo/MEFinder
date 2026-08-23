@@ -80,7 +80,11 @@ def load_local_ocr_config(
     if not isinstance(raw_engines, Mapping):
         raw_engines = {}
     engines = tuple(
-        _engine_from_mapping(provider_id, raw_engines.get(provider_id))
+        _engine_from_mapping(
+            provider_id,
+            raw_engines.get(provider_id),
+            runtime_root=Path(config_path).parent.parent,
+        )
         for provider_id in _ENGINE_SPECS
     )
     config = LocalOCRConfig(
@@ -204,8 +208,8 @@ def configure_managed_local_ocr_engine(
         payload = _config_payload(config)
         payload["engines"][provider_id] = {
             "enabled": True,
-            "python_path": str(Path(python_path).resolve()),
-            "script_path": str(Path(script_path).resolve()),
+            "python_path": str(Path(python_path).absolute()),
+            "script_path": str(Path(script_path).absolute()),
             "weights_sha256": "",
         }
         return _save_local_ocr_config(payload, config_path)
@@ -228,8 +232,8 @@ def clear_managed_local_ocr_engine(
             if engine.provider_id == provider_id
         )
         if (
-            current.python_path != Path(python_path).resolve()
-            or current.script_path != Path(script_path).resolve()
+            current.python_path != Path(python_path).absolute()
+            or current.script_path != Path(script_path).absolute()
         ):
             return local_ocr_config_summary(config_path)
         payload = _config_payload(config)
@@ -324,14 +328,33 @@ def test_local_ocr_engine(
 def _engine_from_mapping(
     provider_id: str,
     value: object,
+    *,
+    runtime_root: Path | None = None,
 ) -> LocalOCREngineConfig:
     raw = value if isinstance(value, Mapping) else {}
     display_name, version = _ENGINE_SPECS[provider_id]
+    python_path = _absolute_path(raw.get("python_path"))
+    if runtime_root is not None and str(python_path) != ".":
+        managed_python = (
+            Path(runtime_root)
+            / "components"
+            / "local-ocr"
+            / provider_id
+            / "venv"
+            / "bin"
+            / "python"
+        )
+        if (
+            managed_python.is_file()
+            and managed_python != python_path
+            and managed_python.resolve() == python_path
+        ):
+            python_path = managed_python
     return LocalOCREngineConfig(
         provider_id=provider_id,
         display_name=display_name,
         version=version,
-        python_path=_absolute_path(raw.get("python_path")),
+        python_path=python_path,
         script_path=_absolute_path(raw.get("script_path")),
         enabled=raw.get("enabled") is True,
         weights_sha256=(
@@ -347,7 +370,7 @@ def _absolute_path(value: object) -> Path:
     path = Path(text).expanduser()
     if not path.is_absolute():
         raise LocalOCRError("本地 OCR 运行时路径必须是绝对路径。")
-    return path.resolve()
+    return path
 
 
 def _bounded_int(value: object, default: int, minimum: int, maximum: int) -> int:

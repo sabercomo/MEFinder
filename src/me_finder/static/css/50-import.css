@@ -172,8 +172,10 @@
 .pdf-parse-option.is-disabled .pdf-provider-config-link { pointer-events: auto; }
 .pdf-provider-config-link { display: inline-block; margin-top: 3px; color: var(--accent); font-size: 11px; text-decoration: none; }
 .pdf-provider-config-link[hidden] { display: none; }
+.pdf-parse-option-vision .pdf-provider-config-link { margin-top: 0; }
 .pdf-provider-config-link:hover { text-decoration: underline; }
 .import-vision-select { display: block; width: 100%; min-width: 0; }
+.import-vision-select[hidden] { display: none; }
 .import-vision-select .app-select-trigger { width: 100%; min-width: 0; height: 36px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
 .import-vision-select.is-disabled { opacity: .55; cursor: not-allowed; pointer-events: none; }
 .import-vision-select .app-select-trigger:active { background: var(--surface-hover); }

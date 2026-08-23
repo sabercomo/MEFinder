@@ -448,9 +448,14 @@ class ParserSettingsController:
         path = self._resolve_local_ocr_config(self._paths.runtime_root)
         try:
             summary = self._save_local_ocr(payload, path)
+            if self._summarize_local_ocr_installer is not None:
+                summary = {
+                    **summary,
+                    "installer": self._summarize_local_ocr_installer(),
+                }
         except (LocalOCRError, ValueError) as exc:
             return 400, {"error": str(exc)}
-        except (OSError, ResumeManifestError):
+        except (OSError, ResumeManifestError, LocalOCRInstallerError):
             logging.exception("Local OCR configuration save failed")
             return 500, {"error": "本地 OCR 组件设置无法保存。"}
         return 200, {"ok": True, **summary}

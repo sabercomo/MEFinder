@@ -411,7 +411,15 @@ function mineruEditorPrep() {
   var error = document.getElementById('mineru-dialog-error');
   if (error) { error.hidden = true; error.textContent = ''; }
   var token = document.getElementById('mineru-token'); if (token) token.type = 'password';
-  var toggle = document.getElementById('mineru-token-toggle'); if (toggle) toggle.textContent = '显示';
+  var toggle = document.getElementById('mineru-token-toggle');
+  if (toggle) {
+    if (toggle.classList.contains('settings-secret-toggle')) {
+      toggle.classList.remove('is-visible');
+      toggle.setAttribute('aria-label', '显示');
+    } else {
+      toggle.textContent = '显示';
+    }
+  }
   var editing = !!document.getElementById('mineru-account-id').value.trim();
   var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
 }
@@ -424,7 +432,7 @@ function startAddMineruAccount(shouldFocus) {
   document.getElementById('mineru-token').value = '';
   document.getElementById('mineru-expires-at').value = '';
   document.getElementById('mineru-account-enabled').checked = true;
-  document.getElementById('mineru-editor-title').textContent = firstAccount ? '配置 MinerU API' : '添加 MinerU 账号';
+  document.getElementById('mineru-editor-title').textContent = '添加账号';
   document.getElementById('mineru-token-help').textContent = '新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机';
   document.getElementById('mineru-account-save').textContent = firstAccount ? '保存配置' : '保存账号';
   document.getElementById('mineru-account-cancel').hidden = firstAccount;
@@ -625,7 +633,12 @@ function toggleMineruSecret(inputId, buttonId) {
   if (!input || !button) return;
   var visible = input.type === 'text';
   input.type = visible ? 'password' : 'text';
-  button.textContent = visible ? '显示' : '隐藏';
+  if (button.classList.contains('settings-secret-toggle')) {
+    button.classList.toggle('is-visible', !visible);
+    button.setAttribute('aria-label', visible ? '显示' : '隐藏');
+  } else {
+    button.textContent = visible ? '显示' : '隐藏';
+  }
 }
 
 async function saveMineruConfig(event) {
@@ -1340,6 +1353,7 @@ function syncImportVisionProviders() {
     container.dataset.value = current;
   }
   var configLink = document.getElementById('vision-parse-config-link');
+  container.hidden = providers.length === 0;
   if (configLink) configLink.hidden = providers.length > 0;
   if (trigger) trigger.disabled = providers.length === 0;
   container.classList.toggle('is-disabled', providers.length === 0);
@@ -1598,30 +1612,32 @@ function updateVisionEditorHead() {
   var title = document.getElementById('vision-editor-title');
   var avatar = document.getElementById('vision-editor-avatar');
   var cancel = document.getElementById('vision-cancel-edit');
-  if (!title || !avatar) return;
+  if (!title) return;
   var editing = !!document.getElementById('vision-provider-id').value.trim();
   var name = document.getElementById('vision-provider-name').value.trim();
   var base = document.getElementById('vision-api-base').value.trim();
   title.textContent = editing
     ? '编辑接口' + (name ? ' · ' + name : '')
     : (name ? '添加接口 · ' + name : '添加解析接口');
-  if (name || base) {
-    var brand = visionBrandFromBase(base);
-    avatar.classList.add('has-brand');
-    if (brand && brand.icon) {
-      avatar.classList.add('has-icon');
-      avatar.style.background = brand.iconBg || '';
-      avatar.innerHTML = '<img src="/static/brands/' + brand.icon + '" alt="">';
+  if (avatar) {
+    if (name || base) {
+      var brand = visionBrandFromBase(base);
+      avatar.classList.add('has-brand');
+      if (brand && brand.icon) {
+        avatar.classList.add('has-icon');
+        avatar.style.background = brand.iconBg || '';
+        avatar.innerHTML = '<img src="/static/brands/' + brand.icon + '" alt="">';
+      } else {
+        avatar.classList.remove('has-icon');
+        var info = visionAvatarFor({name: name, api_base: base});
+        avatar.style.background = info.color;
+        avatar.textContent = info.letter;
+      }
     } else {
-      avatar.classList.remove('has-icon');
-      var info = visionAvatarFor({name: name, api_base: base});
-      avatar.style.background = info.color;
-      avatar.textContent = info.letter;
+      avatar.classList.remove('has-brand', 'has-icon');
+      avatar.style.background = '';
+      avatar.innerHTML = VISION_PLUS_SVG;
     }
-  } else {
-    avatar.classList.remove('has-brand', 'has-icon');
-    avatar.style.background = '';
-    avatar.innerHTML = VISION_PLUS_SVG;
   }
   if (cancel) cancel.hidden = !editing;
 }

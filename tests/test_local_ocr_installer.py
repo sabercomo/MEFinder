@@ -195,7 +195,8 @@ else:
         engine = config.available_engines[0]
         self.assertTrue(engine.python_path.is_file())
         self.assertTrue(engine.script_path.is_file())
-        final = self.runtime_root / "components/local-ocr/ndlocr-lite"
+        final = installer.component_root / "ndlocr-lite"
+        self.assertEqual(engine.python_path, final / "venv/bin/python")
         self.assertTrue((final / "installed.json").is_file())
         self.assertTrue((final / "sbom.spdx.json").is_file())
 

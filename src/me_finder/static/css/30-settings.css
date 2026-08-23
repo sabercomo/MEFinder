@@ -84,6 +84,11 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .settings-section.active { display: block; }
 #appearance-card.active { max-width: none; }
 #statistics-settings.active { max-width: none; }
+/* Parsing sections read as a single capped content column — header, service
+   address, account table and the inline editor all share one left/right edge,
+   so whitespace lands outside the column instead of as a hole inside it. */
+#mineru-api-settings.active,
+#vision-api-settings.active { max-width: 880px; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -1198,29 +1203,67 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .parser-provider-detail { padding-inline-start: 12px; }
   .parser-detail-label small { display: block; margin: 3px 0 0; }
 }
-.vision-editor-card {
-  border: 1px solid var(--divider);
-  border-radius: 14px;
-  background: var(--surface-elevated);
-  padding: 16px 18px 18px;
+/* Inline editor — frameless: fields sit directly on the settings panel,
+   separated by a hairline, no nested card. */
+.settings-editor {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 6px;
+  padding-top: 18px;
 }
-.vision-editor-head {
+.settings-editor[hidden] { display: none; }
+.settings-editor-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
 }
-.vision-editor-titles { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.vision-editor-titles strong { font-size: 13px; color: var(--text-primary); }
-.vision-editor-titles small {
-  font-size: 12px;
+.settings-editor-head strong { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.settings-editor-form { max-width: none; }
+.settings-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.settings-editor-actions > .settings-hint { margin-inline: 0 auto; }
+.settings-editor-actions > .action-btn.primary { white-space: nowrap; }
+.settings-field-optional { color: var(--text-tertiary); font-weight: 400; }
+.settings-input--sm { max-width: 320px; }
+.settings-input--mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12.5px; }
+
+/* Secret field — reveal toggle sits inside the input as an eye icon. */
+.settings-secret { position: relative; }
+.settings-secret .settings-input { padding-right: 42px; }
+.settings-secret-toggle {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
   color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-.vision-provider-editor { margin-top: 14px; }
+.settings-secret-toggle:hover { background: var(--surface-hover); color: var(--text-primary); }
+.settings-secret-toggle svg { width: 17px; height: 17px; }
+.settings-secret-toggle .icon-eye-off { display: none; }
+.settings-secret-toggle.is-visible .icon-eye { display: none; }
+.settings-secret-toggle.is-visible .icon-eye-off { display: inline; }
+
+/* Model row — input plus a compact "获取模型" button. */
+.settings-model-row { display: flex; align-items: center; gap: 8px; }
+.settings-model-fetch { flex: 0 0 auto; white-space: nowrap; gap: 6px; }
+.settings-model-fetch svg { width: 15px; height: 15px; }
 .vision-model-row { align-items: flex-start; }
 .vision-model-row .action-btn { white-space: nowrap; }
 .vision-model-combo { position: relative; flex: 1; min-width: 180px; }

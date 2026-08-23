@@ -227,6 +227,9 @@ class ParserSettingsControllerTests(unittest.TestCase):
         installer_summary = Mock(
             return_value={"supported": True, "engines": []}
         )
+        save_local_ocr = Mock(
+            return_value={"available": True, "engines": []}
+        )
         installer_action = Mock(
             return_value={"supported": True, "engines": []}
         )
@@ -234,6 +237,7 @@ class ParserSettingsControllerTests(unittest.TestCase):
             summarize_local_ocr=Mock(
                 return_value={"available": False, "engines": []}
             ),
+            save_local_ocr=save_local_ocr,
             summarize_local_ocr_installer=installer_summary,
             manage_local_ocr_installer=installer_action,
         )
@@ -242,11 +246,14 @@ class ParserSettingsControllerTests(unittest.TestCase):
         status, config = controller.local_ocr_config()
         self.assertEqual(status, 200)
         self.assertEqual(config["installer"], installer_summary.return_value)
+        status, saved = controller.save_local_ocr_config({"engines": {}})
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["installer"], installer_summary.return_value)
         self.assertEqual(
             controller.manage_local_ocr_component(request),
             (200, {"ok": True, "installer": installer_action.return_value}),
         )
-        installer_summary.assert_called_once_with()
+        self.assertEqual(installer_summary.call_count, 2)
         installer_action.assert_called_once_with(request)
 
     def test_read_errors_keep_existing_status_and_messages(self) -> None:

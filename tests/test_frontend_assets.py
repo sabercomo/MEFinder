@@ -281,10 +281,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 主题修正及本地 OCR 设置、导入状态接入后同步更新。
     # 0.4.7 后续：本地 OCR 一键安装、进度、取消、重新验证和卸载入口。
     # 0.4.7 后续：稳定安装状态，补充传输估时，并对齐解析设置保存操作。
+    # 0.4.7 后续：统一 MinerU 与其他解析接口的编辑表单视觉结构。
+    # 0.4.7 后续：补充本地 OCR 自动路由说明，收紧未配置的视觉 API 入口。
     BASELINE_SHA256 = (
-        "8b033d4df8021761d96d6afcb1c89a535bc2076a3054366f54015f2117679786"
+        "465e207c5bf4bd9b7818ba810dac53603af997aeaeac4e5f98bd7b36f5d3e7ee"
     )
-    BASELINE_BYTES = 831419
+    BASELINE_BYTES = 834346
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
