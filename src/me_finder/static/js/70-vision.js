@@ -4,15 +4,80 @@ var mineruStatistics = {parsed_book_count:0, parsed_page_count:0, credentials:[]
 var parserStatistics = {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
 var mineruSelectedAccountId = '';
 var localOCRConfig = null;
+var localOCRPollTimer = null;
 
 function localOCREngineFields(providerId) {
   var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
   return {
+    section: document.querySelector('[data-local-ocr-engine="' + providerId + '"]'),
     enabled: document.getElementById(prefix + '-enabled'),
     python: document.getElementById(prefix + '-python'),
     script: document.getElementById(prefix + '-script'),
-    hint: document.getElementById(prefix + '-hint')
+    hint: document.getElementById(prefix + '-hint'),
+    managedState: document.getElementById(prefix + '-managed-state'),
+    installHint: document.getElementById(prefix + '-install-hint'),
+    progress: document.getElementById(prefix + '-progress'),
+    install: document.getElementById(prefix + '-install'),
+    validate: document.getElementById(prefix + '-validate'),
+    uninstall: document.getElementById(prefix + '-uninstall'),
+    cancel: document.getElementById(prefix + '-cancel')
   };
+}
+
+function localOCRByteSize(value) {
+  var bytes = Number(value) || 0;
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function renderLocalOCRInstaller(config) {
+  var installer = config.installer || {supported:false, engines:[]};
+  var managedEngines = {};
+  (installer.engines || []).forEach(function(engine) {
+    managedEngines[engine.provider_id] = engine;
+  });
+  var active = false;
+  (config.engines || []).forEach(function(engine) {
+    var fields = localOCREngineFields(engine.provider_id);
+    var managed = managedEngines[engine.provider_id] || {state:'not_installed', managed:false};
+    var busy = ['downloading','verifying','extracting','provisioning','validating','cleaning'].indexOf(managed.state) >= 0;
+    active = active || busy;
+    var installed = !!managed.managed;
+    var labels = {
+      downloading:'下载中', verifying:'校验中', extracting:'解压中',
+      provisioning:'配置环境中', validating:'验证中', cleaning:'清理中'
+    };
+    if (fields.managedState) {
+      fields.managedState.className = 'settings-status ' + (installed ? 'ready' : 'warning');
+      fields.managedState.textContent = labels[managed.state] || (installed ? '已安装 · tag ' + managed.tag : '未安装');
+    }
+    if (fields.installHint) {
+      var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
+      if (busy && managed.total_bytes) {
+        detail += (detail ? ' · ' : '') + localOCRByteSize(managed.downloaded_bytes) + ' / ' + localOCRByteSize(managed.total_bytes);
+      }
+      fields.installHint.textContent = detail || (installed ? '运行时、模型与依赖均在 MEFinder 组件目录内。' : '安装包含模型，首次下载耗时取决于网络。');
+    }
+    if (fields.progress) {
+      fields.progress.hidden = !busy;
+      var bar = fields.progress.firstElementChild;
+      if (bar) bar.style.width = managed.progress == null ? '18%' : Math.round(managed.progress * 100) + '%';
+      fields.progress.classList.toggle('indeterminate', busy && managed.progress == null);
+    }
+    if (fields.install) { fields.install.hidden = installed || busy; fields.install.disabled = !installer.supported; }
+    if (fields.validate) fields.validate.hidden = !installed || busy;
+    if (fields.uninstall) fields.uninstall.hidden = !installed || busy;
+    if (fields.cancel) fields.cancel.hidden = !busy;
+    if (fields.enabled) fields.enabled.disabled = busy;
+    if (fields.python) fields.python.disabled = busy;
+    if (fields.script) fields.script.disabled = busy;
+  });
+  if (!installer.supported) {
+    var status = document.getElementById('local-ocr-status');
+    if (status) status.title = '当前平台不在安装矩阵中：' + (installer.platform || '未知');
+  }
+  if (localOCRPollTimer) clearTimeout(localOCRPollTimer);
+  localOCRPollTimer = active ? setTimeout(loadLocalOCRConfig, 700) : null;
 }
 
 function renderLocalOCRConfig(config) {
@@ -24,6 +89,7 @@ function renderLocalOCRConfig(config) {
     if (fields.script) fields.script.value = engine.script_path || '';
     if (fields.hint) fields.hint.textContent = engine.configured ? '入口已配置' : '';
   });
+  renderLocalOCRInstaller(config);
   var available = (config.engines || []).filter(function(engine) {
     return engine.enabled && engine.configured;
   }).length;
@@ -99,7 +165,29 @@ async function saveLocalOCRConfig() {
     if (hint) hint.textContent = '未保存：' + error.message;
   } finally {
     button.disabled = false;
-    button.textContent = '保存设置';
+    button.textContent = '保存启用与高级设置';
+  }
+}
+
+async function manageLocalOCRComponent(providerId, action, button) {
+  if (action === 'uninstall' && !await showAppConfirm(
+    '将删除该组件的模型、独立 Python 环境和自动填入的路径。',
+    {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
+  )) return;
+  if (button) button.disabled = true;
+  try {
+    var response = await fetch('/api/local-ocr/component', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({provider_id:providerId, action:action})
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '操作失败');
+    await loadLocalOCRConfig();
+  } catch (error) {
+    showToast('本地 OCR 组件操作失败：' + error.message, 'danger');
+  } finally {
+    if (button) button.disabled = false;
   }
 }
 
@@ -122,7 +210,7 @@ async function testLocalOCREngine(providerId, button) {
     if (fields.hint) fields.hint.textContent = '启动失败：' + error.message;
   } finally {
     button.disabled = false;
-    button.textContent = '测试启动';
+    button.textContent = '测试手动入口';
   }
 }
 

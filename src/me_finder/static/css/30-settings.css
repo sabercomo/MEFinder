@@ -860,6 +860,24 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .local-ocr-component-head > span { display: grid; gap: 4px; }
 .local-ocr-component-head strong { color: var(--text-primary); font-size: 14px; font-weight: 650; }
 .local-ocr-component-head small { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
+.local-ocr-head-actions { display: flex; align-items: center; gap: 12px; }
+.local-ocr-install-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 18px;
+}
+.local-ocr-install-copy { flex: 1 1 auto; min-width: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.local-ocr-install-actions { flex: 0 0 auto; margin-top: 0; }
+.local-ocr-install-actions .action-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 36%, var(--border-subtle)); }
+.local-ocr-progress { overflow: hidden; height: 5px; margin-top: 8px; border-radius: 999px; background: var(--surface-tertiary); }
+.local-ocr-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease-out; }
+.local-ocr-progress.indeterminate > span { animation: local-ocr-progress 1.2s ease-in-out infinite; }
+@keyframes local-ocr-progress { from { transform: translateX(-120%); } to { transform: translateX(560%); } }
+.local-ocr-manual { margin-top: 16px; border-top: 1px solid var(--border-subtle); }
+.local-ocr-manual > summary { padding-top: 14px; color: var(--text-tertiary); cursor: pointer; font-size: 11px; }
+.local-ocr-manual > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 .local-ocr-grid { margin-top: 16px; }
 .local-ocr-grid .settings-input { max-width: none; }
 .local-ocr-save-row {
@@ -868,6 +886,12 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   margin-top: 0;
   padding-top: 20px;
   border-top: 1px solid var(--border-subtle);
+}
+@media (max-width: 760px) {
+  .local-ocr-component-head,
+  .local-ocr-install-row { align-items: stretch; flex-direction: column; }
+  .local-ocr-head-actions { justify-content: space-between; }
+  .local-ocr-install-actions { justify-content: flex-start; }
 }
 #bib-completion-settings .auto-match-setting { width: 100%; max-width: none; }
 /* Lightweight account switcher (chips) + a plain settings form — replaces the
@@ -1478,6 +1502,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .appearance-pair { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
+  .local-ocr-progress.indeterminate > span { animation: none; transform: none; }
   .theme-option, .theme-option:hover, .appearance-seg-btn, .appearance-pair-slot, .appearance-btn, .theme-option-check, .appearance-custom-chevron {
     transition-duration: 1ms !important; transform: none !important;
   }

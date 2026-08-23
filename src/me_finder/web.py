@@ -84,6 +84,8 @@ from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
 )
+from .local_ocr_installer import LocalOCRInstaller
+from .local_ocr_settings import resolve_local_ocr_config_path
 from .parser_statistics import build_parser_statistics
 from .macos_update import check_macos_update
 from .vision_api import (
@@ -143,6 +145,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/mineru-config",
         "/api/mineru-local",
         "/api/local-ocr",
+        "/api/local-ocr/component",
         "/api/vision-providers",
         "/api/import",
         "/api/import-upload/start",
@@ -832,6 +835,10 @@ def make_handler(
             )
         ),
     )
+    local_ocr_installer = LocalOCRInstaller(
+        root,
+        resolve_local_ocr_config_path(root),
+    )
     parser_settings_controller = ParserSettingsController(
         context.paths,
         mineru_account_service,
@@ -881,6 +888,8 @@ def make_handler(
         save_vision_fallback=(
             lambda payload, path: save_vision_policy(payload, path)
         ),
+        summarize_local_ocr_installer=local_ocr_installer.summary,
+        manage_local_ocr_installer=local_ocr_installer.perform,
     )
     parser_settings_controller.migrate_legacy_mineru_account()
     controller_get_routes = {
@@ -969,6 +978,9 @@ def make_handler(
         ),
         "/api/local-ocr/test": (
             parser_settings_controller.test_local_ocr_config
+        ),
+        "/api/local-ocr/component": (
+            parser_settings_controller.manage_local_ocr_component
         ),
         "/api/vision-providers": (
             parser_settings_controller.update_vision_providers

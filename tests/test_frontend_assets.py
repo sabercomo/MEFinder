@@ -263,12 +263,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     """记录基线指纹。拆分前后此值必须一致；有意改动前端时同步更新。"""
 
     # 0.4.7 主题修正及本地 OCR 设置、导入状态接入后同步更新。
-    # 0.4.7 后续：解析方式单选按钮改自绘扁平点；本地 OCR 面板去外框，改为无框分组；
-    # 全主题主操作按钮统一「实色底 --accent-fill + 白字」；本地 OCR 保存右对齐；文案改写。
+    # 0.4.7 后续：本地 OCR 一键安装、进度、取消、重新验证和卸载入口。
     BASELINE_SHA256 = (
-        "fdc11664e79aaf5919644a84c6b119a8a7a5568c3af28cb3b663190a0f47cf27"
+        "8ee3e5d3ddeeece7b6c28df474601774648c5021bc0c662c3d1485f8015d2b23"
     )
-    BASELINE_BYTES = 821248
+    BASELINE_BYTES = 829743
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

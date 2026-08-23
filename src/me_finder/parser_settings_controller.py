@@ -29,6 +29,7 @@ from .mineru_local_settings import (
     test_mineru_local_connection,
 )
 from .import_resume import ResumeManifestError
+from .local_ocr_installer import LocalOCRInstallerError
 from .local_ocr_settings import (
     LocalOCRError,
     local_ocr_config_summary,
@@ -85,6 +86,8 @@ class ParserSettingsController:
         summarize_local_ocr: JSONOperation = local_ocr_config_summary,
         save_local_ocr: JSONOperation = save_local_ocr_config,
         test_local_ocr: JSONOperation = test_local_ocr_engine,
+        summarize_local_ocr_installer: JSONOperation | None = None,
+        manage_local_ocr_installer: JSONOperation | None = None,
     ) -> None:
         self._paths = paths
         self._mineru_account_service = mineru_account_service
@@ -112,6 +115,8 @@ class ParserSettingsController:
         self._summarize_local_ocr = summarize_local_ocr
         self._save_local_ocr = save_local_ocr
         self._test_local_ocr = test_local_ocr
+        self._summarize_local_ocr_installer = summarize_local_ocr_installer
+        self._manage_local_ocr_installer = manage_local_ocr_installer
         self._legacy_migration_error: Exception | None = None
 
     def mineru_accounts(self) -> ParserSettingsResponse:
@@ -418,8 +423,19 @@ class ParserSettingsController:
     def local_ocr_config(self) -> ParserSettingsResponse:
         path = self._resolve_local_ocr_config(self._paths.runtime_root)
         try:
-            return 200, self._summarize_local_ocr(path)
-        except (OSError, ResumeManifestError, LocalOCRError):
+            payload = self._summarize_local_ocr(path)
+            if self._summarize_local_ocr_installer is not None:
+                payload = {
+                    **payload,
+                    "installer": self._summarize_local_ocr_installer(),
+                }
+            return 200, payload
+        except (
+            OSError,
+            ResumeManifestError,
+            LocalOCRError,
+            LocalOCRInstallerError,
+        ):
             logging.exception("Local OCR configuration read failed")
             return 500, {"error": "本地 OCR 组件设置无法读取。"}
 
@@ -456,6 +472,23 @@ class ParserSettingsController:
         ) as exc:
             return 400, {"error": str(exc)}
         return 200, result
+
+    def manage_local_ocr_component(
+        self,
+        payload: object,
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "本地 OCR 组件操作必须是 JSON 对象。"}
+        if self._manage_local_ocr_installer is None:
+            return 400, {"error": "当前运行方式不支持一键安装。"}
+        try:
+            result = self._manage_local_ocr_installer(payload)
+        except (LocalOCRInstallerError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except OSError:
+            logging.exception("Local OCR component operation failed")
+            return 500, {"error": "本地 OCR 组件操作失败。"}
+        return 200, {"ok": True, "installer": result}
 
     def update_vision_providers(
         self,

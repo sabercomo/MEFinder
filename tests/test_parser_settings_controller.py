@@ -223,6 +223,32 @@ class ParserSettingsControllerTests(unittest.TestCase):
         save.assert_called_once_with(payload, expected)
         test.assert_called_once_with({"provider_id": "ndlocr-lite"}, expected)
 
+    def test_local_ocr_installer_status_and_actions_use_injected_boundary(self) -> None:
+        installer_summary = Mock(
+            return_value={"supported": True, "engines": []}
+        )
+        installer_action = Mock(
+            return_value={"supported": True, "engines": []}
+        )
+        controller = self._controller(
+            summarize_local_ocr=Mock(
+                return_value={"available": False, "engines": []}
+            ),
+            summarize_local_ocr_installer=installer_summary,
+            manage_local_ocr_installer=installer_action,
+        )
+        request = {"provider_id": "ndlocr-lite", "action": "install"}
+
+        status, config = controller.local_ocr_config()
+        self.assertEqual(status, 200)
+        self.assertEqual(config["installer"], installer_summary.return_value)
+        self.assertEqual(
+            controller.manage_local_ocr_component(request),
+            (200, {"ok": True, "installer": installer_action.return_value}),
+        )
+        installer_summary.assert_called_once_with()
+        installer_action.assert_called_once_with(request)
+
     def test_read_errors_keep_existing_status_and_messages(self) -> None:
         broken_statistics = self._controller(
             build_statistics=Mock(side_effect=sqlite3.OperationalError("damaged"))
