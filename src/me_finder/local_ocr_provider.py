@@ -6,7 +6,6 @@ import json
 import math
 import subprocess
 import sys
-import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from .local_ocr_settings import LocalOCREngineConfig
+from .local_ocr_runtime import local_ocr_engine_lock
 from .parser_provider import (
     NormalizedBlock,
     NormalizedPage,
@@ -59,12 +59,6 @@ PageRenderer = Callable[
 ]
 CancelCheck = Callable[[], bool]
 PageProgress = Callable[[int], None]
-
-
-_ENGINE_RUN_LOCKS = {
-    "ndlocr-lite": threading.Lock(),
-    "ndlkotenocr-lite": threading.Lock(),
-}
 
 
 class LocalOCRProvider(ParserProvider):
@@ -308,7 +302,7 @@ class LocalOCRProvider(ParserProvider):
         if self.provider_id == "ndlocr-lite":
             command.append("--json-only")
         stdout_path = Path(output_dir) / "runner.log"
-        run_lock = _ENGINE_RUN_LOCKS[self.provider_id]
+        run_lock = local_ocr_engine_lock(self.provider_id)
         while not run_lock.acquire(timeout=0.1):
             if self._cancel_requested():
                 raise _LocalOCRRunCancelled()

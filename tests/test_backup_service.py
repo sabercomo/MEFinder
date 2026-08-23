@@ -24,6 +24,25 @@ def _seed_runtime(root: Path) -> None:
         json.dumps({"documents": [{"source_file_id": "pdf-x", "page_mapping": {"segments": [1]}}]}, ensure_ascii=False),
         encoding="utf-8",
     )
+    (root / "config" / "local_ocr.json").write_text(
+        json.dumps(
+            {
+                "engines": {
+                    "ndlocr-lite": {
+                        "enabled": True,
+                        "python_path": "/Users/private-name/ocr/venv/python",
+                        "script_path": "/Users/private-name/ocr/src/ocr.py",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    component = root / "components" / "local-ocr" / "ndlocr-lite"
+    component.mkdir(parents=True)
+    (component / "installed.json").write_text(
+        '{"tag":"1.2.3"}', encoding="utf-8"
+    )
     manifests = root / "corpus" / "processed" / "mineru" / "manifests"
     manifests.mkdir(parents=True)
     (manifests / "segments-x.json").write_text(
@@ -94,6 +113,8 @@ class BackupServiceTests(unittest.TestCase):
             self.assertIn("backup.json", names)
             self.assertNotIn("corpus/processed/mineru/results/huge.bin", names)
             self.assertNotIn("corpus/processed/vision/manifests/work/active.json", names)
+            self.assertNotIn("config/local_ocr.json", names)
+            self.assertFalse(any(name.startswith("components/local-ocr/") for name in names))
             backed_manifest = zipfile.ZipFile(
                 io.BytesIO(archive)
             ).read(

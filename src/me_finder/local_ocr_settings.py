@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Tuple
 
 from .import_resume import atomic_write_json, load_json_object
+from .local_ocr_runtime import local_ocr_engine_lock
 
 
 LOCAL_OCR_SCHEMA_VERSION = 1
 LOCAL_OCR_CONFIG_FILE = "config/local_ocr.json"
+_CONFIG_LOCK = threading.RLock()
 
 
 class LocalOCRError(RuntimeError):
@@ -137,6 +140,14 @@ def save_local_ocr_config(
     payload: Mapping[str, object],
     config_path: Path,
 ) -> Dict[str, object]:
+    with _CONFIG_LOCK:
+        return _save_local_ocr_config(payload, config_path)
+
+
+def _save_local_ocr_config(
+    payload: Mapping[str, object],
+    config_path: Path,
+) -> Dict[str, object]:
     if not isinstance(payload, Mapping):
         raise LocalOCRError("本地 OCR 设置必须是 JSON 对象。")
     raw_engines = payload.get("engines")
@@ -179,6 +190,85 @@ def save_local_ocr_config(
     return local_ocr_config_summary(config_path)
 
 
+def configure_managed_local_ocr_engine(
+    config_path: Path,
+    provider_id: str,
+    *,
+    python_path: Path,
+    script_path: Path,
+) -> Dict[str, object]:
+    if provider_id not in _ENGINE_SPECS:
+        raise LocalOCRError("未知的本地 OCR 组件。")
+    with _CONFIG_LOCK:
+        config = load_local_ocr_config(config_path)
+        payload = _config_payload(config)
+        payload["engines"][provider_id] = {
+            "enabled": True,
+            "python_path": str(Path(python_path).resolve()),
+            "script_path": str(Path(script_path).resolve()),
+            "weights_sha256": "",
+        }
+        return _save_local_ocr_config(payload, config_path)
+
+
+def clear_managed_local_ocr_engine(
+    config_path: Path,
+    provider_id: str,
+    *,
+    python_path: Path,
+    script_path: Path,
+) -> Dict[str, object]:
+    if provider_id not in _ENGINE_SPECS:
+        raise LocalOCRError("未知的本地 OCR 组件。")
+    with _CONFIG_LOCK:
+        config = load_local_ocr_config(config_path)
+        current = next(
+            engine
+            for engine in config.engines
+            if engine.provider_id == provider_id
+        )
+        if (
+            current.python_path != Path(python_path).resolve()
+            or current.script_path != Path(script_path).resolve()
+        ):
+            return local_ocr_config_summary(config_path)
+        payload = _config_payload(config)
+        payload["engines"][provider_id] = {
+            "enabled": False,
+            "python_path": "",
+            "script_path": "",
+            "weights_sha256": "",
+        }
+        return _save_local_ocr_config(payload, config_path)
+
+
+def _config_payload(config: LocalOCRConfig) -> Dict[str, object]:
+    return {
+        "render_dpi": config.render_dpi,
+        "probe_pages": config.probe_pages,
+        "pages_per_slice": config.pages_per_slice,
+        "timeout_seconds_per_page": config.timeout_seconds_per_page,
+        "blank_ink_ratio": config.blank_ink_ratio,
+        "engines": {
+            engine.provider_id: {
+                "enabled": engine.enabled,
+                "python_path": (
+                    str(engine.python_path)
+                    if str(engine.python_path) != "."
+                    else ""
+                ),
+                "script_path": (
+                    str(engine.script_path)
+                    if str(engine.script_path) != "."
+                    else ""
+                ),
+                "weights_sha256": engine.weights_sha256 or "",
+            }
+            for engine in config.engines
+        },
+    }
+
+
 def test_local_ocr_engine(
     payload: Mapping[str, object],
     config_path: Path,
@@ -196,21 +286,27 @@ def test_local_ocr_engine(
         )
     if not engine.configured:
         raise LocalOCRError("请先填写有效的 Python 和 ocr.py 路径。")
+    engine_lock = local_ocr_engine_lock(provider_id)
+    if not engine_lock.acquire(blocking=False):
+        raise LocalOCRError("该组件正在安装或执行 OCR 任务。")
     started = time.perf_counter()
-    completed = subprocess.run(
-        [str(engine.python_path), str(engine.script_path), "--help"],
-        cwd=str(engine.script_path.parent),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=30,
-        creationflags=(
-            subprocess.CREATE_NO_WINDOW
-            if sys.platform == "win32"
-            else 0
-        ),
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            [str(engine.python_path), str(engine.script_path), "--help"],
+            cwd=str(engine.script_path.parent),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW
+                if sys.platform == "win32"
+                else 0
+            ),
+            check=False,
+        )
+    finally:
+        engine_lock.release()
     if completed.returncode != 0:
         detail = completed.stdout.decode("utf-8", "replace")[-1000:].strip()
         raise LocalOCRError(

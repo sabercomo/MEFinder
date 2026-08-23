@@ -8,11 +8,14 @@ from pathlib import Path
 
 from src.me_finder.local_ocr_settings import (
     LocalOCRError,
+    clear_managed_local_ocr_engine,
+    configure_managed_local_ocr_engine,
     load_local_ocr_config,
     local_ocr_config_summary,
     save_local_ocr_config,
     test_local_ocr_engine,
 )
+from src.me_finder.local_ocr_runtime import local_ocr_engine_lock
 
 
 class LocalOCRSettingsTests(unittest.TestCase):
@@ -97,6 +100,46 @@ class LocalOCRSettingsTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["provider_id"], "ndlocr-lite")
+
+    def test_engine_test_is_blocked_during_install_or_ocr(self) -> None:
+        script = self.root / "ocr.py"
+        script.write_text("print('ok')\n", encoding="utf-8")
+        engine_lock = local_ocr_engine_lock("ndlocr-lite")
+        engine_lock.acquire()
+        try:
+            with self.assertRaisesRegex(LocalOCRError, "正在安装"):
+                test_local_ocr_engine(
+                    {
+                        "provider_id": "ndlocr-lite",
+                        "python_path": sys.executable,
+                        "script_path": str(script),
+                    },
+                    self.config_path,
+                )
+        finally:
+            engine_lock.release()
+
+    def test_managed_install_and_uninstall_update_only_matching_paths(self) -> None:
+        python_path = Path(sys.executable).resolve()
+        script = self.root / "managed" / "src" / "ocr.py"
+        script.parent.mkdir(parents=True)
+        script.write_text("print('ok')\n", encoding="utf-8")
+
+        configure_managed_local_ocr_engine(
+            self.config_path,
+            "ndlocr-lite",
+            python_path=python_path,
+            script_path=script,
+        )
+        self.assertTrue(load_local_ocr_config(self.config_path).available_engines)
+
+        clear_managed_local_ocr_engine(
+            self.config_path,
+            "ndlocr-lite",
+            python_path=python_path,
+            script_path=script,
+        )
+        self.assertFalse(load_local_ocr_config(self.config_path).available_engines)
 
 
 if __name__ == "__main__":

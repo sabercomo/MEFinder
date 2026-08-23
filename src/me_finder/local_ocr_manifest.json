@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "uv_version": "0.12.1",
+  "engines": {
+    "ndlocr-lite": {
+      "display_name": "NDL 日文 OCR",
+      "version": "1.2.3",
+      "tag": "1.2.3",
+      "tarball_url": "https://codeload.github.com/ndl-lab/ndlocr-lite/tar.gz/refs/tags/1.2.3",
+      "tarball_size": 147906248,
+      "tarball_sha256": "c96f3ab5cd03bc46b5be939d8e31a7a63b059ae150b393d3fa9a76e78789d2ce",
+      "archive_root": "ndlocr-lite-1.2.3",
+      "script_path": "src/ocr.py",
+      "sample_path": "resource/yokogaki2026-04-24-103617.png",
+      "cli_extra_args": ["--json-only"],
+      "dependencies": [
+        "dill==0.3.8",
+        "lxml==5.4.0",
+        "networkx==3.3",
+        "numpy==2.2.2",
+        "opencv-python-headless==4.11.0.86",
+        "ordered-set==4.1.0",
+        "pillow==12.1.1",
+        "protobuf==6.31.1",
+        "pyparsing==3.1.2",
+        "PyYAML==6.0.1",
+        "tqdm==4.66.4"
+      ],
+      "license": "CC-BY-4.0",
+      "license_path": "LICENCE",
+      "attribution": "NDLOCR-Lite, Copyright (c) National Diet Library, Japan",
+      "modification_notice": "MEFinder 未修改上游源码；仅剪除 GUI 与 PDF 输出依赖，并在独立 venv 中运行页图 CLI。"
+    },
+    "ndlkotenocr-lite": {
+      "display_name": "NDL 古籍 OCR",
+      "version": "1.4.3",
+      "tag": "1.4.3",
+      "tarball_url": "https://codeload.github.com/ndl-lab/ndlkotenocr-lite/tar.gz/refs/tags/1.4.3",
+      "tarball_size": 80177931,
+      "tarball_sha256": "b33a09d45c4e4cc2f2e037f07fcd010275c89d30c7c78372e0f27c0fb659b163",
+      "archive_root": "ndlkotenocr-lite-1.4.3",
+      "script_path": "src/ocr.py",
+      "sample_path": "resource/10301438_0017.jpg",
+      "cli_extra_args": [],
+      "dependencies": [
+        "dill==0.3.8",
+        "lxml==5.4.0",
+        "networkx==3.3",
+        "numpy==2.2.2",
+        "ordered-set==4.1.0",
+        "pillow==12.1.1",
+        "protobuf==6.31.1",
+        "pyparsing==3.1.2",
+        "PyYAML==6.0.1",
+        "tqdm==4.66.4"
+      ],
+      "license": "CC-BY-4.0",
+      "license_path": "LICENCE",
+      "attribution": "NDL古典籍OCR-Lite, Copyright (c) National Diet Library, Japan",
+      "modification_notice": "MEFinder 未修改上游源码；仅剪除 GUI 与 PDF 输出依赖，并在独立 venv 中运行页图 CLI。"
+    }
+  },
+  "platforms": {
+    "darwin-arm64": {
+      "python": "3.11",
+      "venv_python": "venv/bin/python",
+      "onnxruntime": "onnxruntime==1.23.2",
+      "uv": {
+        "url": "https://releases.astral.sh/github/uv/releases/download/0.12.1/uv-aarch64-apple-darwin.tar.gz",
+        "size": 17679560,
+        "sha256": "77d2906988e8074fd43f2f329ec452ebbf9b0c257ba1c66451c71de70a6baf42",
+        "archive_type": "tar.gz",
+        "member": "uv-aarch64-apple-darwin/uv"
+      },
+      "notes": "Apple Silicon macOS 14+; onnxruntime 1.23.2 由 uv 选择 arm64 wheel。"
+    },
+    "darwin-x86_64": {
+      "python": "3.11",
+      "venv_python": "venv/bin/python",
+      "onnxruntime": "onnxruntime==1.23.2",
+      "uv": {
+        "url": "https://releases.astral.sh/github/uv/releases/download/0.12.1/uv-x86_64-apple-darwin.tar.gz",
+        "size": 19622543,
+        "sha256": "69d9f9a00337f25a50dcb13882052da08b8469bac11091c98c5694c3c6721467",
+        "archive_type": "tar.gz",
+        "member": "uv-x86_64-apple-darwin/uv"
+      },
+      "notes": "Intel macOS 12+; 需在 x86_64 真机完成 G4/G5 验证。"
+    },
+    "win32-x86_64": {
+      "python": "3.11",
+      "venv_python": "venv/Scripts/python.exe",
+      "onnxruntime": "onnxruntime==1.26.0",
+      "uv": {
+        "url": "https://releases.astral.sh/github/uv/releases/download/0.12.1/uv-x86_64-pc-windows-msvc.zip",
+        "size": 19073343,
+        "sha256": "8fcb0cb46e1229065e344758980924e569bef5882ef45f46fada8fb24e06b74a",
+        "archive_type": "zip",
+        "member": "uv-x86_64-pc-windows-msvc/uv.exe"
+      },
+      "notes": "Windows x64; 中文路径、取消与安装器入口需在 Windows 真机完成 G2/G4/G5。"
+    },
+    "linux-x86_64": {
+      "python": "3.11",
+      "venv_python": "venv/bin/python",
+      "onnxruntime": "onnxruntime==1.26.0",
+      "uv": {
+        "url": "https://releases.astral.sh/github/uv/releases/download/0.12.1/uv-x86_64-unknown-linux-gnu.tar.gz",
+        "size": 21760555,
+        "sha256": "90b2f223fb69d19db49e117da601f64978593417988530aa733d456141b4bcbb",
+        "archive_type": "tar.gz",
+        "member": "uv-x86_64-unknown-linux-gnu/uv"
+      },
+      "notes": "glibc x64 Linux; musl 与 ARM Linux 未列入首发四平台矩阵。"
+    }
+  }
+}
