@@ -27,6 +27,11 @@ PLACEHOLDERS = (
     "__APP_VERSION__",
 )
 
+TOP_LEVEL_JS_DECLARATION = re.compile(
+    r"^(?:(?:async\s+)?function\s*\*?|class|let|const|var)\s+"
+    r"([A-Za-z_$][\w$]*)"
+)
+
 def _split_dir_assets(subdir, suffix):
     """某个资源目录下的拆分文件，按文件名排序 —— 顺序即加载顺序。"""
 
@@ -221,16 +226,27 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             len(HTML) - len('data-theme="frost-blue"'),
         )
 
-    def test_no_duplicate_function_definitions(self):
-        """同名顶层函数只能定义一次：拆分时最容易犯的错是把一段代码复制两份。"""
+    def test_no_duplicate_top_level_js_identifiers(self):
+        """共享全局作用域中的函数、类和变量均不得重名。"""
 
-        names = re.findall(
-            r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
-            HTML,
-            re.MULTILINE,
+        definitions = {}
+        for relative in _existing(JS_ASSETS):
+            for line_number, line in enumerate(_read(relative).splitlines(), 1):
+                match = TOP_LEVEL_JS_DECLARATION.match(line)
+                if match:
+                    definitions.setdefault(match.group(1), []).append(
+                        f"{relative}:{line_number}"
+                    )
+        duplicates = {
+            name: locations
+            for name, locations in definitions.items()
+            if len(locations) > 1
+        }
+        self.assertEqual(
+            duplicates,
+            {},
+            f"顶层 JavaScript 标识符重名：{duplicates}",
         )
-        duplicates = sorted({n for n in names if names.count(n) > 1})
-        self.assertEqual(duplicates, [], f"顶层函数被重复定义：{duplicates}")
 
     def test_inline_handlers_have_definitions(self):
         """模板与 JS 生成的 on*= 处理器引用的函数必须真的存在。"""
