@@ -548,7 +548,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             brand_rules.index("{re: /bigmodel|zhipu/i"),
         )
         self.assertIn("base: 'https://api.deepseek.com'}", brand_rules)
-        self.assertNotIn("unsupported", brand_rules)
+        deepseek_rule = brand_rules[brand_rules.index("{re: /deepseek/i") :]
+        glm_rule = brand_rules[brand_rules.index("{re: /bigmodel|zhipu/i") :]
+        self.assertNotIn("unsupported", deepseek_rule.split("},", 1)[0])
+        self.assertIn("unsupported: true", glm_rule.split("},", 1)[0])
         self.assertIn(
             'vision-model-badge capability-unsupported">不支持图片',
             HTML,
