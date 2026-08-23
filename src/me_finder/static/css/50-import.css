@@ -133,7 +133,21 @@
 .pdf-parse-option:has(input:checked) { background: var(--accent-light); }
 .pdf-parse-option:active { background: var(--surface-selected); }
 .pdf-parse-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
-.pdf-parse-option input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
+.pdf-parse-option input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 3px 0 0;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border-control);
+  border-radius: 50%;
+  background: var(--surface-primary);
+  cursor: pointer;
+  transition: border-width var(--transition-fast), border-color var(--transition-fast);
+}
+.pdf-parse-option input:checked { border: 4px solid var(--accent); }
 .pdf-parse-card { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; }
 .pdf-parse-card-head { display: flex; align-items: center; gap: 8px; }
 .pdf-parse-option-vision .pdf-parse-card {

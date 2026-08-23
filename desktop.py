@@ -28,7 +28,11 @@ from src.me_finder.data_location import (
     default_macos_data_root,
     default_windows_data_root,
 )
-from src.me_finder.preferences import DEFAULT_THEME, read_preferences
+from src.me_finder.preferences import (
+    DEFAULT_THEME,
+    read_preferences,
+    resolve_native_shell_theme,
+)
 from src.me_finder import runtime_location
 
 APP_TITLE = "文献原句定位器"
@@ -242,6 +246,41 @@ def prepare_runtime_root(bundle_root: Path) -> Path:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
     return runtime_root
+
+
+def _os_prefers_dark() -> bool | None:
+    """现场探测操作系统是否处于深色外观（供「跟随系统」原生首帧使用）。
+
+    读取失败一律返回 ``None``（当作未知），绝不阻断启动。"""
+
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return int(value) == 0
+        except Exception:
+            logging.debug("could not read Windows apps light-theme setting", exc_info=True)
+            return None
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["defaults", "read", "-g", "AppleInterfaceStyle"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            return result.returncode == 0 and result.stdout.strip() == "Dark"
+        except Exception:
+            logging.debug("could not read macOS interface style", exc_info=True)
+            return None
+    return None
 
 
 def theme_palette(theme: str) -> dict[str, str]:
@@ -515,7 +554,12 @@ def main() -> None:
         os.environ.setdefault("ME_FINDER_VISION_CONFIG", str(root / "config" / "vision_api.local.json"))
         os.environ.setdefault("ME_FINDER_PREFERENCES", str(preferences_path))
     os.environ[DESKTOP_SHELL_ENV] = "macos" if sys.platform == "darwin" else sys.platform
-    theme = read_preferences(preferences_path)["theme"]
+    preferences = read_preferences(preferences_path)
+    # 原生首帧/标题栏须跟随「实际生效」的明暗：system 模式下现场探测系统色，
+    # 避免深色 HTML 周围露出浅色底的一圈白边（legacy theme 保存时退到浅色）。
+    theme = resolve_native_shell_theme(
+        preferences, os_prefers_dark=_os_prefers_dark()
+    )
     setup_logging(root)
     logging.info("app root: %s", root)
     if root != bundle_root:

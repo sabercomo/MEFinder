@@ -841,14 +841,29 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
 .mineru-local-enable-row { padding-top: 6px; }
 .mineru-local-enable-row > small { max-width: 62ch; }
-.local-ocr-component-list { display: grid; gap: 14px; margin-top: 16px; }
-.local-ocr-component {
-  padding: 18px; border: 1px solid var(--border-default); border-radius: 14px;
-  background: var(--surface-elevated); box-shadow: var(--shadow-card);
+/* 本地 OCR 组件：与 .pdf-open-options 同一套「连体扁平容器 + 分隔行」语言，
+   放弃浮动卡阴影/圆角，让本地 OCR 与解析设置面板视觉统一（去 vibe，统一设计）。 */
+.local-ocr-component-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-primary);
 }
+.local-ocr-component {
+  padding: 18px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+.local-ocr-component:first-child { border-top: 0; }
+.local-ocr-component:has(.ui-switch input:checked) { background: var(--surface-selected); }
 .local-ocr-component-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .local-ocr-component-head > span { display: grid; gap: 4px; }
-.local-ocr-component-head strong { color: var(--text-primary); font-size: 14px; }
+.local-ocr-component-head strong { color: var(--text-primary); font-size: 14px; font-weight: 650; }
 .local-ocr-component-head small { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 .local-ocr-grid { margin-top: 16px; }
 .local-ocr-grid .settings-input { max-width: none; }

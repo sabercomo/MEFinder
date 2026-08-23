@@ -76,6 +76,34 @@ def _builtin_fallback_theme(theme_id: str, custom_themes: dict, mode_hint: str) 
     return APPEARANCE_MODE_DEFAULT_THEME.get(mode, "frost-blue")
 
 
+def resolve_native_shell_theme(
+    preferences: Mapping[str, Any], *, os_prefers_dark: bool | None = None
+) -> str:
+    """决定原生窗口首帧/标题栏应使用的内置主题 id。
+
+    legacy ``theme`` 字段在保存时对 ``system`` 外观模式一律退到浅色选择（保存时
+    无从得知系统色）。这会让「跟随系统 + 系统深色」在原生首帧/标题栏露出浅色
+    （深色 HTML 周围的一圈白边）。原生启动时可以现场探测系统色，因此这里按
+    ``os_prefers_dark`` 把 ``system`` 归结为真正生效的明暗，再归约成内置主题。"""
+
+    appearance = preferences.get("appearance") if isinstance(preferences, Mapping) else None
+    legacy = str(preferences.get("theme") or DEFAULT_THEME) if isinstance(preferences, Mapping) else DEFAULT_THEME
+    if not isinstance(appearance, Mapping):
+        return legacy if legacy in VALID_THEMES else DEFAULT_THEME
+    mode = appearance.get("mode")
+    if mode not in VALID_APPEARANCE_MODES:
+        mode = DEFAULT_APPEARANCE_MODE
+    if mode == "system":
+        mode = "dark" if os_prefers_dark else "light"
+    selection = appearance.get(mode)
+    if not isinstance(selection, str) or not selection:
+        selection = APPEARANCE_MODE_DEFAULT_THEME.get(mode, DEFAULT_THEME)
+    custom = appearance.get("custom_themes")
+    return _builtin_fallback_theme(
+        selection, custom if isinstance(custom, dict) else {}, mode
+    )
+
+
 def _normalized_theme_def(value: Any) -> dict | None:
     if not isinstance(value, dict):
         return None

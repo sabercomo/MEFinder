@@ -26,9 +26,67 @@ from src.me_finder.preferences import (
     VALID_DOCUMENT_EXPORT_MODES,
     VALID_THEMES,
     read_preferences,
+    resolve_native_shell_theme,
     save_preferences,
 )
 from src.me_finder.web import HTML, render_html
+
+
+class NativeShellThemeResolutionTests(unittest.TestCase):
+    """原生首帧/标题栏须跟随「实际生效」的明暗，避免深色 HTML 周围露白边。"""
+
+    @staticmethod
+    def _prefs(mode: str, light: str = "frost-blue", dark: str = "gruvbox-dark", custom=None):
+        return {
+            "theme": "frost-blue",
+            "appearance": {
+                "schemaVersion": 2,
+                "mode": mode,
+                "light": light,
+                "dark": dark,
+                "custom_themes": custom or {},
+            },
+        }
+
+    def test_system_mode_with_os_dark_resolves_to_dark_builtin(self) -> None:
+        theme = resolve_native_shell_theme(
+            self._prefs("system"), os_prefers_dark=True
+        )
+        self.assertEqual(theme, "midnight")
+
+    def test_system_mode_with_os_light_resolves_to_light_builtin(self) -> None:
+        theme = resolve_native_shell_theme(
+            self._prefs("system"), os_prefers_dark=False
+        )
+        self.assertEqual(theme, "frost-blue")
+
+    def test_system_mode_unknown_os_falls_back_to_light(self) -> None:
+        theme = resolve_native_shell_theme(
+            self._prefs("system"), os_prefers_dark=None
+        )
+        self.assertEqual(theme, "frost-blue")
+
+    def test_explicit_dark_preset_reduces_to_dark_builtin(self) -> None:
+        theme = resolve_native_shell_theme(self._prefs("dark"))
+        self.assertEqual(theme, "midnight")
+
+    def test_custom_dark_theme_reduces_to_dark_builtin(self) -> None:
+        prefs = self._prefs(
+            "system",
+            dark="custom-x",
+            custom={"custom-x": {"mode": "dark"}},
+        )
+        self.assertEqual(
+            resolve_native_shell_theme(prefs, os_prefers_dark=True), "midnight"
+        )
+
+    def test_missing_appearance_uses_legacy_theme(self) -> None:
+        self.assertEqual(
+            resolve_native_shell_theme({"theme": "midnight"}), "midnight"
+        )
+        self.assertEqual(
+            resolve_native_shell_theme({"theme": "not-a-theme"}), DEFAULT_THEME
+        )
 
 
 class PreferencePersistenceTests(unittest.TestCase):
