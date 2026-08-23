@@ -808,9 +808,49 @@ async function importSelectedScanned() {
   }
 }
 
+function normalizePdfParseMode(mode) {
+  return ['auto','mineru','mineru-local','vision'].indexOf(mode) >= 0 ? mode : 'auto';
+}
+
+function renderPdfParseMode() {
+  document.querySelectorAll('input[name="pdf-parse-mode"]').forEach(function(input) {
+    input.checked = input.value === currentPdfParseMode;
+  });
+}
+
+async function setPdfParseMode(mode) {
+  mode = normalizePdfParseMode(mode);
+  if (pdfParseModeSaving || preferencesLoadPromise) {
+    renderPdfParseMode();
+    return;
+  }
+  var previousMode = currentPdfParseMode;
+  currentPdfParseMode = mode;
+  pdfParseModeSaving = true;
+  renderPdfParseMode();
+  try {
+    var resp = await fetch('/api/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pdf_parse_mode: mode})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
+    preferencesLoaded = true;
+    renderPdfParseMode();
+  } catch (e) {
+    currentPdfParseMode = previousMode;
+    renderPdfParseMode();
+    showToast('PDF 解析方式保存失败：' + e.message);
+  } finally {
+    pdfParseModeSaving = false;
+  }
+}
+
 function selectedPdfParseMode() {
   var selected = document.querySelector('input[name="pdf-parse-mode"]:checked');
-  return selected && ['auto','mineru','mineru-local','vision'].indexOf(selected.value) >= 0 ? selected.value : 'auto';
+  return selected ? normalizePdfParseMode(selected.value) : 'auto';
 }
 
 function selectedVisionProviderId() {

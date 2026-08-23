@@ -98,6 +98,8 @@ let appearanceState = { mode: 'system', light: 'frost-blue', dark: 'midnight', c
 let appearanceEditMode = 'light';   // 设置页当前正在编辑哪一套（浅/深）
 let appearanceReady = false;
 let currentPdfOpenMode = 'native';
+let currentPdfParseMode = 'auto';
+let pdfParseModeSaving = false;
 let currentDocumentExportMode = 'data_only';
 let autoUpdateEnabled = false;
 let updateAutoStarted = false;
@@ -105,4 +107,3 @@ let updateState = {status: 'idle', can_self_update: false};
 const desktopShell = document.documentElement.dataset.desktopShell || '';
 let dataLocationLoaded = false;
 let pendingDataLocation = '';
-

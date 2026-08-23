@@ -63,6 +63,8 @@ function syncMineruLocalImportOption(enabled) {
   if (!enabled && input && input.checked) {
     var automatic = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
     if (automatic) automatic.checked = true;
+  } else if (enabled && input && currentPdfParseMode === 'mineru-local') {
+    input.checked = true;
   }
 }
 

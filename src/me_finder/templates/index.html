@@ -359,28 +359,28 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </div>
           <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
             <label class="pdf-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="auto" checked>
+              <input type="radio" name="pdf-parse-mode" value="auto" checked onchange="setPdfParseMode(this.value)">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>自动选择</strong><span class="pdf-parse-tag pdf-parse-tag-default">默认</span></span>
                 <small>原生快速解析；文字层不可靠时自动转 MinerU，适合绝大多数文献</small>
               </span>
             </label>
             <label class="pdf-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="mineru">
+              <input type="radio" name="pdf-parse-mode" value="mineru" onchange="setPdfParseMode(this.value)">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>强制 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-free">免费</span></span>
                 <small>强制上传并 OCR，适合乱码、断字或复杂排版的扫描件</small>
               </span>
             </label>
             <label class="pdf-parse-option" id="mineru-local-parse-option" hidden>
-              <input type="radio" name="pdf-parse-mode" value="mineru-local">
+              <input type="radio" name="pdf-parse-mode" value="mineru-local" onchange="setPdfParseMode(this.value)">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>本地 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">高级</span></span>
                 <small>直接使用你在设置中启用的本地部署服务，不上传到 MinerU 在线服务</small>
               </span>
             </label>
             <label class="pdf-parse-option pdf-parse-option-vision" id="vision-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="vision">
+              <input type="radio" name="pdf-parse-mode" value="vision" onchange="setPdfParseMode(this.value)">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>其他视觉 API</strong></span>
                 <small>用已配置的视觉模型逐页强制解析</small>

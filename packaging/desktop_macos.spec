@@ -15,6 +15,7 @@ codesign_identity = os.environ.get("MEFINDER_CODESIGN_IDENTITY") or None
 app_version = os.environ.get("MEFINDER_APP_VERSION") or __version__
 minimum_system_version = "12.0" if target_arch == "x86_64" else "14.0"
 pdfkit_hiddenimports = collect_submodules("Quartz.PDFKit")
+third_party_license_data = ("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")
 
 required_stage_files = (
     stage_root / "data" / "index.sqlite3",
@@ -31,17 +32,26 @@ if missing_stage_files:
     )
 
 a = Analysis(
-    ["desktop.py"],
+    [str(project_root / "desktop.py")],
     pathex=[str(project_root)],
     binaries=[],
     datas=[
-        ("src/me_finder/templates", "src/me_finder/templates"),
-        ("src/me_finder/static", "src/me_finder/static"),
+        (
+            str(project_root / "src" / "me_finder" / "templates"),
+            "src/me_finder/templates",
+        ),
+        (
+            str(project_root / "src" / "me_finder" / "static"),
+            "src/me_finder/static",
+        ),
         (str(stage_root / "data"), "data"),
         (str(stage_root / "config"), "config"),
-        ("LICENSE", "."),
-        ("THIRD_PARTY_NOTICES.txt", "."),
-        ("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES"),
+        (str(project_root / "LICENSE"), "."),
+        (str(project_root / "THIRD_PARTY_NOTICES.txt"), "."),
+        (
+            str(project_root / third_party_license_data[0]),
+            third_party_license_data[1],
+        ),
         (
             str(stage_root / "Python-runtime-LICENSE.txt"),
             "THIRD_PARTY_LICENSES",

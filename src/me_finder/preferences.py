@@ -14,6 +14,7 @@ DEFAULT_THEME = "frost-blue"
 DEFAULT_LIBRARY_VIEW = "list"
 DEFAULT_CALIBRATION_VIEW = "grid"
 DEFAULT_PDF_OPEN_MODE = "native"
+DEFAULT_PDF_PARSE_MODE = "auto"
 DEFAULT_DOCUMENT_EXPORT_MODE = "data_only"
 DEFAULT_AUTO_UPDATE = False
 DEFAULT_CITATION_STYLES = ("chinese", "gb")
@@ -32,6 +33,7 @@ VALID_THEMES = frozenset(
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
+VALID_PDF_PARSE_MODES = frozenset({"auto", "mineru", "mineru-local", "vision"})
 VALID_DOCUMENT_EXPORT_MODES = frozenset({"data_only", "with_pdf"})
 # 文献默认语言与联网自动匹配阈值：此前只存 localStorage，换机/迁移/导入备份后
 # 会静默复位。纳入 preferences.json 后随数据一起备份迁移（C-01）。
@@ -214,6 +216,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     pdf_open_mode = payload.get("pdf_open_mode") if isinstance(payload, dict) else None
     if pdf_open_mode not in VALID_PDF_OPEN_MODES:
         pdf_open_mode = DEFAULT_PDF_OPEN_MODE
+    pdf_parse_mode = payload.get("pdf_parse_mode") if isinstance(payload, dict) else None
+    if pdf_parse_mode not in VALID_PDF_PARSE_MODES:
+        pdf_parse_mode = DEFAULT_PDF_PARSE_MODE
     document_export_mode = (
         payload.get("document_export_mode") if isinstance(payload, dict) else None
     )
@@ -247,6 +252,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "calibration_view": calibration_view,
         "scan_directories": scan_directories,
         "pdf_open_mode": pdf_open_mode,
+        "pdf_parse_mode": pdf_parse_mode,
         "document_export_mode": document_export_mode,
         "auto_update": auto_update,
         "citation_styles": citation_styles,
@@ -319,6 +325,11 @@ def _save_preferences_locked(
         if pdf_open_mode not in VALID_PDF_OPEN_MODES:
             raise ValueError("不支持的 PDF 打开方式")
         current["pdf_open_mode"] = str(pdf_open_mode)
+    if "pdf_parse_mode" in updates:
+        pdf_parse_mode = updates["pdf_parse_mode"]
+        if pdf_parse_mode not in VALID_PDF_PARSE_MODES:
+            raise ValueError("不支持的 PDF 解析方式")
+        current["pdf_parse_mode"] = str(pdf_parse_mode)
     if "document_export_mode" in updates:
         document_export_mode = updates["document_export_mode"]
         if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:

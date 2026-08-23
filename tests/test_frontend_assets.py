@@ -264,9 +264,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
 
     # 外观设置重做（明暗模式驱动画廊 + 白天/夜晚配对 + Aa 色板样张 + 自定义收起）后同步更新。
     BASELINE_SHA256 = (
-        "36c10185eca672fdb412e898cfe97827555b16a5eadb077cd27cbdabb84e70b5"
+        "6abd0e55b842f68d4bb80cc3e78d56db127b66999cfb6dca3d79b22b476cca7d"
     )
-    BASELINE_BYTES = 801880
+    BASELINE_BYTES = 803505
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

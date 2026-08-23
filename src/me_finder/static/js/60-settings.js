@@ -760,6 +760,7 @@ function applyPreferencesData(data, requestedThemeRevision) {
     syncOnlineAutoMatchControl();
   }
   currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+  currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
   currentDocumentExportMode = data.document_export_mode === 'with_pdf'
     ? 'with_pdf'
     : 'data_only';
@@ -771,6 +772,7 @@ function applyPreferencesData(data, requestedThemeRevision) {
   var autoUpdateInput = document.getElementById('auto-update-enabled');
   if (autoUpdateInput) autoUpdateInput.checked = autoUpdateEnabled;
   renderPdfOpenMode();
+  renderPdfParseMode();
   renderDocumentExportMode();
   renderCitationStylePreferences();
   scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
@@ -868,6 +870,7 @@ async function loadPreferences() {
   var requestedThemeRevision = themeRevision;
   renderThemeSelection();
   renderPdfOpenMode();
+  renderPdfParseMode();
   renderDocumentExportMode();
   renderCitationStylePreferences();
   syncOnlineAutoMatchControl();
