@@ -15,13 +15,13 @@ from pathlib import Path
 
 from contextlib import contextmanager
 
-from me_finder import document_groups as dg
-from me_finder.application.document_group_coordinator import (
+from src.me_finder import document_groups as dg
+from src.me_finder.application.document_group_coordinator import (
     DocumentGroupCoordinator,
 )
-from me_finder.database import DATABASE_SCHEMA_VERSION, build_database
-from me_finder.document_group_controller import DocumentGroupController
-from me_finder.document_group_metadata import member_display_name
+from src.me_finder.database import DATABASE_SCHEMA_VERSION, build_database
+from src.me_finder.document_group_controller import DocumentGroupController
+from src.me_finder.document_group_metadata import member_display_name
 
 
 def _make_v2_source_db(path: Path, sources) -> None:

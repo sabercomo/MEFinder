@@ -118,7 +118,10 @@ class BackupCoordinatorTests(unittest.TestCase):
             self.assertEqual(calls[0][0], root.resolve())
             self.assertEqual(calls[0][1], target.parent)
             self.assertEqual(calls[0][2], root / "app-data")
-            self.assertEqual(calls[0][3], root / "data" / "index.sqlite3")
+            self.assertEqual(
+                calls[0][3],
+                (root / "data" / "index.sqlite3").resolve(),
+            )
 
     def test_export_uses_selected_output_directory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -139,7 +142,13 @@ class BackupCoordinatorTests(unittest.TestCase):
             self.assertEqual(result["path"], str(target))
             self.assertEqual(
                 destinations,
-                [(selected, root / "app-data", root / "data" / "index.sqlite3")],
+                [
+                    (
+                        selected,
+                        root / "app-data",
+                        (root / "data" / "index.sqlite3").resolve(),
+                    )
+                ],
             )
 
     def test_restore_preserves_lock_order_and_job_messages(self) -> None:
@@ -162,7 +171,10 @@ class BackupCoordinatorTests(unittest.TestCase):
             def restore_groups(snapshot, index_path):
                 events.append("restore-groups")
                 self.assertEqual(snapshot["document_groups"], [])
-                self.assertEqual(index_path, root / "data" / "index.sqlite3")
+                self.assertEqual(
+                    index_path,
+                    (root / "data" / "index.sqlite3").resolve(),
+                )
 
             coordinator, jobs, events = self._coordinator(
                 root,

@@ -13,9 +13,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from me_finder.application.search_service import SearchRequest
-from me_finder.database import build_database
-from me_finder.search import SearchEngine
+from src.me_finder.application.search_service import SearchRequest
+from src.me_finder.database import build_database
+from src.me_finder.search import SearchEngine
 
 QUERY = "相互承认"
 
