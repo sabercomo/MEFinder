@@ -1,5 +1,8 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · tone: focused desktop utility
-   · palette: existing theme tokens · pre-emit critique: P5 H5 E5 S5 R5 V4.
+/* Hallmark · genre: modern-minimal · macrostructure: Settings Control Plane · tone: focused desktop utility
+   · palette: existing theme tokens · variation: right-anchored commit rows + inline status
+   · pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast: pass (40–41)
+   · nav: existing app rail · slop: pass (42–45) · honest: pass (46)
+   · chrome: pass (47) · tokens: pass (48) · responsive: pass (34, 49–57) · icons: pass (30).
    Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
    clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
    Left anchor: all categories share an 880px left-aligned column, expanding
@@ -595,6 +598,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .settings-advanced-body { display: grid; gap: 14px; margin-top: 14px; }
 .settings-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .settings-hint { font-size: 12px; color: var(--text-tertiary); margin-left: auto; }
+.settings-save-row { justify-content: flex-end; }
+.settings-save-row > .settings-hint { order: 0; margin-inline: 0 auto; }
+.settings-save-row > .action-btn:not(.primary) { order: 1; }
+.settings-save-row > .action-btn.primary { order: 2; white-space: nowrap; }
 .settings-check {
   display: inline-flex;
   align-items: center;
@@ -881,8 +888,6 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .local-ocr-grid { margin-top: 16px; }
 .local-ocr-grid .settings-input { max-width: none; }
 .local-ocr-save-row {
-  flex-direction: row-reverse;
-  justify-content: flex-start;
   margin-top: 0;
   padding-top: 20px;
   border-top: 1px solid var(--border-subtle);

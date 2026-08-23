@@ -485,6 +485,24 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('data-target="local-ocr-settings"', HTML)
         self.assertIn("fetch('/api/local-ocr'", HTML)
         self.assertIn("fetch('/api/local-ocr/test'", HTML)
+        self.assertIn("managed.download_speed_bps", HTML)
+        self.assertIn("managed.eta_seconds", HTML)
+        self.assertIn("正在检测网速…", HTML)
+        self.assertIn("'预计剩余约 '", HTML)
+        local_ocr_loader = HTML[
+            HTML.index("async function loadLocalOCRConfig()"):
+            HTML.index("function localOCRPayload()")
+        ]
+        self.assertIn("if (status && !localOCRConfig)", local_ocr_loader)
+        self.assertIn(
+            'class="settings-actions settings-save-row local-ocr-save-row"',
+            HTML,
+        )
+        self.assertEqual(
+            HTML.count('class="settings-control settings-actions settings-save-row"'),
+            3,
+        )
+        self.assertIn(".settings-save-row > .action-btn.primary", HTML)
         self.assertIn('"/api/local-ocr"', WEB_SOURCE)
         self.assertIn('"/api/local-ocr/test"', WEB_SOURCE)
         self.assertIn("pollImportJob(item.id)", HTML)

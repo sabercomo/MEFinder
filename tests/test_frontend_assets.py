@@ -264,10 +264,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
 
     # 0.4.7 主题修正及本地 OCR 设置、导入状态接入后同步更新。
     # 0.4.7 后续：本地 OCR 一键安装、进度、取消、重新验证和卸载入口。
+    # 0.4.7 后续：稳定安装状态，补充传输估时，并对齐解析设置保存操作。
     BASELINE_SHA256 = (
-        "8ee3e5d3ddeeece7b6c28df474601774648c5021bc0c662c3d1485f8015d2b23"
+        "8b033d4df8021761d96d6afcb1c89a535bc2076a3054366f54015f2117679786"
     )
-    BASELINE_BYTES = 829743
+    BASELINE_BYTES = 831419
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

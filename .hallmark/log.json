@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-08-23",
+    "macrostructure": "Settings Control Plane",
+    "theme": "existing MEFinder theme system",
+    "enrichment": "none",
+    "brief": "Right-anchored settings commits and local OCR transfer feedback"
+  },
+  {
     "date": "2026-08-13",
     "macrostructure": "Workbench",
     "theme": "existing MEFinder theme system",

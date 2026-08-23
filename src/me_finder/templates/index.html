@@ -551,7 +551,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <label class="settings-label" for="mineru-expires-at">到期日期</label>
                       <div class="settings-control"><input id="mineru-expires-at" class="settings-input settings-input-date" type="date"><small>仅作本地提醒，不影响解析调度</small></div>
                       <span class="settings-label"></span>
-                      <div class="settings-control settings-actions">
+                      <div class="settings-control settings-actions settings-save-row">
                         <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
                         <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
                         <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
@@ -576,7 +576,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <span class="settings-label">失败后切换</span>
                     <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页会显示“本地 MinerU”；在线 MinerU 失败后也可手动切换，不会自动切换</small></div>
                     <span class="settings-label"></span>
-                    <div class="settings-control settings-actions"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                    <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
                   </div>
                 </div>
               </details>
@@ -601,7 +601,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
               </div>
-              <div class="settings-actions local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存启用与高级设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存启用与高级设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
             </div>
           </section>
           <section class="settings-section" id="statistics-settings" role="tabpanel">
@@ -685,7 +685,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <small id="vision-model-hint" class="vision-model-hint">填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入</small>
                 </div>
                 <span class="settings-label"></span>
-                <div class="settings-control settings-actions">
+                <div class="settings-control settings-actions settings-save-row">
                   <button class="action-btn primary" type="button" onclick="saveVisionProvider()">保存接口</button>
                   <button class="action-btn" id="vision-cancel-edit" type="button" onclick="startAddVisionProvider()" hidden>取消编辑</button>
                   <span id="vision-save-hint" class="settings-hint"></span>

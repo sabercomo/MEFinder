@@ -30,6 +30,24 @@ function localOCRByteSize(value) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function localOCREstimatedWait(value) {
+  var seconds = Math.max(0, Number(value) || 0);
+  if (!seconds) return '即将完成';
+  if (seconds < 60) return '预计剩余约 ' + Math.max(10, Math.ceil(seconds / 10) * 10) + ' 秒';
+  if (seconds < 3600) return '预计剩余约 ' + Math.ceil(seconds / 60) + ' 分钟';
+  var hours = Math.floor(seconds / 3600);
+  var minutes = Math.ceil((seconds % 3600) / 60);
+  return '预计剩余约 ' + hours + ' 小时' + (minutes ? ' ' + minutes + ' 分钟' : '');
+}
+
+function localOCRTransferSummary(managed) {
+  if (!managed.total_bytes) return '';
+  var summary = localOCRByteSize(managed.downloaded_bytes) + ' / ' + localOCRByteSize(managed.total_bytes);
+  if (managed.downloaded_bytes >= managed.total_bytes) return summary + ' · 即将完成';
+  if (!managed.download_speed_bps || managed.eta_seconds == null) return summary + ' · 正在检测网速…';
+  return summary + ' · ' + localOCRByteSize(managed.download_speed_bps) + '/s · ' + localOCREstimatedWait(managed.eta_seconds);
+}
+
 function renderLocalOCRInstaller(config) {
   var installer = config.installer || {supported:false, engines:[]};
   var managedEngines = {};
@@ -54,7 +72,9 @@ function renderLocalOCRInstaller(config) {
     if (fields.installHint) {
       var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
       if (busy && managed.total_bytes) {
-        detail += (detail ? ' · ' : '') + localOCRByteSize(managed.downloaded_bytes) + ' / ' + localOCRByteSize(managed.total_bytes);
+        detail += (detail ? ' · ' : '') + localOCRTransferSummary(managed);
+      } else if (busy && managed.state === 'provisioning') {
+        detail += (detail ? ' · ' : '') + '预计时间：正在估算…';
       }
       fields.installHint.textContent = detail || (installed ? '运行时、模型与依赖均在 MEFinder 组件目录内。' : '安装包含模型，首次下载耗时取决于网络。');
     }
@@ -102,7 +122,7 @@ function renderLocalOCRConfig(config) {
 
 async function loadLocalOCRConfig() {
   var status = document.getElementById('local-ocr-status');
-  if (status) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+  if (status && !localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
   try {
     var response = await fetch('/api/local-ocr');
     var data = await response.json();

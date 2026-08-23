@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +44,16 @@ ACTIVE_INSTALL_STATES = frozenset(
         "cleaning",
     }
 )
+_UV_DOWNLOAD_PATTERN = re.compile(
+    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)$",
+    re.MULTILINE,
+)
+_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+)$", re.MULTILINE)
+_BINARY_SIZE_MULTIPLIERS = {
+    "KiB": 1024,
+    "MiB": 1024 * 1024,
+    "GiB": 1024 * 1024 * 1024,
+}
 
 
 class LocalOCRInstallerError(RuntimeError):
@@ -99,6 +111,9 @@ class _EngineInstallState:
     progress: Optional[float] = None
     downloaded_bytes: int = 0
     total_bytes: int = 0
+    download_speed_bps: float = 0.0
+    eta_seconds: Optional[int] = None
+    download_samples: list[tuple[float, int]] = field(default_factory=list)
     message: str = ""
     error: str = ""
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -281,6 +296,9 @@ class LocalOCRInstaller:
             state.progress = None
             state.downloaded_bytes = 0
             state.total_bytes = 0
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = []
             state.message = ""
             state.error = ""
             state.cancel_event = threading.Event()
@@ -443,6 +461,7 @@ class LocalOCRInstaller:
                 environment=environment,
                 log_path=install_log,
                 timeout=1800,
+                track_uv_downloads=True,
             )
             python_path = staging / self.platform.venv_python
             dependencies = (*engine.dependencies, self.platform.onnxruntime)
@@ -465,6 +484,7 @@ class LocalOCRInstaller:
                 environment=environment,
                 log_path=install_log,
                 timeout=1800,
+                track_uv_downloads=True,
             )
             self._write_sbom(provider_id, python_path, staging / "sbom.spdx.json")
             self._set_state(
@@ -545,6 +565,13 @@ class LocalOCRInstaller:
         expected_size: int,
     ) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
+        existing = target.stat().st_size if target.exists() else 0
+        if existing > expected_size:
+            target.unlink()
+            existing = 0
+        self._begin_download_progress(provider_id, existing, expected_size)
+        if existing == expected_size:
+            return
         attempts = 0
         while attempts < 4:
             self._raise_if_cancelled(provider_id)
@@ -554,6 +581,7 @@ class LocalOCRInstaller:
             if existing > expected_size:
                 target.unlink()
                 existing = 0
+                self._begin_download_progress(provider_id, 0, expected_size)
             headers = {"User-Agent": "MEFinder-local-ocr-installer"}
             if existing:
                 headers["Range"] = f"bytes={existing}-"
@@ -817,10 +845,12 @@ class LocalOCRInstaller:
         environment: Mapping[str, str],
         log_path: Path,
         timeout: int,
+        track_uv_downloads: bool = False,
     ) -> None:
         self._raise_if_cancelled(provider_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("ab") as output:
+            progress_log_offset = output.tell()
             process = subprocess.Popen(
                 list(command),
                 cwd=str(cwd),
@@ -835,17 +865,32 @@ class LocalOCRInstaller:
             with self._state_lock:
                 self._states[provider_id].process = process
             deadline = time.monotonic() + timeout
+            next_progress_update = 0.0
             try:
                 while process.poll() is None:
                     if self._states[provider_id].cancel_event.wait(0.1):
                         self._stop_process(process)
                         raise _InstallCancelled("操作已取消。")
-                    if time.monotonic() >= deadline:
+                    now = time.monotonic()
+                    if track_uv_downloads and now >= next_progress_update:
+                        self._update_uv_download_progress(
+                            provider_id,
+                            log_path,
+                            start_offset=progress_log_offset,
+                        )
+                        next_progress_update = now + 0.5
+                    if now >= deadline:
                         self._stop_process(process)
                         raise LocalOCRInstallerError("安装子进程超时。")
             finally:
                 with self._state_lock:
                     self._states[provider_id].process = None
+        if track_uv_downloads:
+            self._update_uv_download_progress(
+                provider_id,
+                log_path,
+                start_offset=progress_log_offset,
+            )
         if self._states[provider_id].cancel_event.is_set():
             raise _InstallCancelled("操作已取消。")
         if process.returncode:
@@ -1003,6 +1048,8 @@ class LocalOCRInstaller:
             "progress": state.progress,
             "downloaded_bytes": state.downloaded_bytes,
             "total_bytes": state.total_bytes,
+            "download_speed_bps": round(state.download_speed_bps),
+            "eta_seconds": state.eta_seconds,
             "message": state.message,
             "error": state.error,
             "managed": self._managed_install_is_valid(provider_id),
@@ -1024,16 +1071,17 @@ class LocalOCRInstaller:
             state = self._states[provider_id]
             state.state = install_state
             state.progress = progress
-            if downloaded_bytes is not None:
-                state.downloaded_bytes = downloaded_bytes
-            if total_bytes is not None:
-                state.total_bytes = total_bytes
+            state.downloaded_bytes = downloaded_bytes or 0
+            state.total_bytes = total_bytes or 0
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = []
             if message is not None:
                 state.message = message
             if error is not None:
                 state.error = error
 
-    def _set_download_progress(
+    def _begin_download_progress(
         self,
         provider_id: str,
         downloaded: int,
@@ -1044,6 +1092,76 @@ class LocalOCRInstaller:
             state.downloaded_bytes = downloaded
             state.total_bytes = total
             state.progress = min(1.0, downloaded / total)
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = [(time.monotonic(), downloaded)]
+
+    def _update_uv_download_progress(
+        self,
+        provider_id: str,
+        log_path: Path,
+        *,
+        start_offset: int = 0,
+    ) -> None:
+        with log_path.open("rb") as log:
+            log.seek(start_offset)
+            text = log.read().decode("utf-8", errors="replace")
+        announced = {
+            name: round(float(size) * _BINARY_SIZE_MULTIPLIERS[unit])
+            for name, size, unit in _UV_DOWNLOAD_PATTERN.findall(text)
+        }
+        if not announced:
+            return
+        completed_names = set(_UV_DOWNLOADED_PATTERN.findall(text))
+        completed = sum(
+            size for name, size in announced.items() if name in completed_names
+        )
+        total = sum(announced.values())
+        with self._state_lock:
+            has_samples = bool(self._states[provider_id].download_samples)
+        if not has_samples:
+            self._begin_download_progress(provider_id, 0, total)
+        self._set_download_progress(
+            provider_id,
+            completed,
+            total,
+            rolling_window=False,
+        )
+
+    def _set_download_progress(
+        self,
+        provider_id: str,
+        downloaded: int,
+        total: int,
+        *,
+        rolling_window: bool = True,
+    ) -> None:
+        with self._state_lock:
+            state = self._states[provider_id]
+            state.downloaded_bytes = downloaded
+            state.total_bytes = total
+            state.progress = min(1.0, downloaded / total)
+            now = time.monotonic()
+            state.download_samples.append((now, downloaded))
+            if rolling_window:
+                cutoff = now - 8
+                while (
+                    len(state.download_samples) > 2
+                    and state.download_samples[1][0] < cutoff
+                ):
+                    state.download_samples.pop(0)
+            started_at, started_bytes = state.download_samples[0]
+            elapsed = now - started_at
+            transferred = downloaded - started_bytes
+            if elapsed >= 0.5 and transferred > 0:
+                state.download_speed_bps = transferred / elapsed
+                remaining = max(0, total - downloaded)
+                state.eta_seconds = math.ceil(
+                    remaining / state.download_speed_bps
+                )
+            elif elapsed >= 0.5:
+                state.download_speed_bps = 0.0
+                state.eta_seconds = None
 
     def _cancel(self, provider_id: str) -> None:
         with self._state_lock:

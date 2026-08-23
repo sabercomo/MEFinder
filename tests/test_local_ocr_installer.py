@@ -291,6 +291,63 @@ else:
         self.assertEqual(target.read_bytes(), b"abcdef")
         self.assertEqual(opened.call_count, 1)
 
+    def test_download_summary_reports_speed_eta_and_clears_after_transfer(self) -> None:
+        installer = self._installer()
+        with mock.patch(
+            "src.me_finder.local_ocr_installer.time.monotonic",
+            side_effect=(100.0, 102.0, 111.0),
+        ):
+            installer._begin_download_progress("ndlocr-lite", 0, 10)
+            installer._set_download_progress("ndlocr-lite", 4, 10)
+            downloading = installer.summary()["engines"][0]
+            self.assertEqual(downloading["download_speed_bps"], 2)
+            self.assertEqual(downloading["eta_seconds"], 3)
+
+            installer._set_download_progress("ndlocr-lite", 4, 10)
+            stalled = installer.summary()["engines"][0]
+            self.assertEqual(stalled["download_speed_bps"], 0)
+            self.assertIsNone(stalled["eta_seconds"])
+
+        installer._set_state(
+            "ndlocr-lite",
+            "provisioning",
+            message="正在安装已固定的 CPU 依赖",
+        )
+        provisioning = installer.summary()["engines"][0]
+        self.assertEqual(provisioning["downloaded_bytes"], 0)
+        self.assertEqual(provisioning["total_bytes"], 0)
+        self.assertEqual(provisioning["download_speed_bps"], 0)
+        self.assertIsNone(provisioning["eta_seconds"])
+
+    def test_uv_log_reports_dependency_download_eta(self) -> None:
+        installer = self._installer()
+        log_path = self.root / "install.log"
+        previous_stage = (
+            "Downloading cpython-3.11 (download) (25.0MiB)\n"
+            " Downloaded cpython-3.11 (download)\n"
+        )
+        log_path.write_text(
+            previous_stage + "Downloading pillow (4.0MiB)\n"
+            "Downloading onnxruntime (16.0MiB)\n"
+            " Downloaded pillow\n",
+            encoding="utf-8",
+        )
+        with mock.patch(
+            "src.me_finder.local_ocr_installer.time.monotonic",
+            side_effect=(100.0, 102.0),
+        ):
+            installer._update_uv_download_progress(
+                "ndlocr-lite",
+                log_path,
+                start_offset=len(previous_stage.encode("utf-8")),
+            )
+
+        progress = installer.summary()["engines"][0]
+        self.assertEqual(progress["downloaded_bytes"], 4 * 1024 * 1024)
+        self.assertEqual(progress["total_bytes"], 20 * 1024 * 1024)
+        self.assertEqual(progress["download_speed_bps"], 2 * 1024 * 1024)
+        self.assertEqual(progress["eta_seconds"], 8)
+
 
 if __name__ == "__main__":
     unittest.main()
