@@ -70,6 +70,8 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn("tests.test_search_group_scope", self.macos_build)
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_LICENSES"):
             self.assertIn(name, self.macos_spec)
+        self.assertIn("local_ocr_manifest.json", self.macos_spec)
+        self.assertIn("tests.test_local_ocr_installer", self.macos_build)
         self.assertIn(
             'cryptography==46.0.3; platform_machine == "x86_64"',
             self.macos_requirements,

@@ -169,6 +169,9 @@ try {
         tests.test_mineru_accounts_web `
         tests.test_mineru_local_settings `
         tests.test_mineru_local_provider `
+        tests.test_local_ocr_settings `
+        tests.test_local_ocr_installer `
+        tests.test_local_ocr_provider `
         tests.test_mineru_engine_import_bridge `
         tests.test_parser_settings_controller `
         tests.test_import_job_controller `

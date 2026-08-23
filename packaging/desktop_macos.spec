@@ -44,6 +44,10 @@ a = Analysis(
             str(project_root / "src" / "me_finder" / "static"),
             "src/me_finder/static",
         ),
+        (
+            str(project_root / "src" / "me_finder" / "local_ocr_manifest.json"),
+            "src/me_finder",
+        ),
         (str(stage_root / "data"), "data"),
         (str(stage_root / "config"), "config"),
         (str(project_root / "LICENSE"), "."),

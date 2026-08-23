@@ -164,6 +164,7 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("src.me_finder.update_service", self.spec)
         self.assertIn("write_windows_version_info", self.spec)
         self.assertIn("version=str(version_info_path)", self.spec)
+        self.assertIn("local_ocr_manifest.json", self.spec)
 
     def test_windows_builds_gate_anchor_compatibility(self) -> None:
         for script in (
@@ -183,6 +184,7 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertIn("tests.test_preferences_concurrency", script)
             self.assertIn("tests.test_theme_system", script)
             self.assertIn("tests.test_desktop_portable", script)
+            self.assertIn("tests.test_local_ocr_installer", script)
 
     def test_windows_builds_gate_fts5_and_keep_loopback_local(self) -> None:
         for script in (

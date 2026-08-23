@@ -25,6 +25,7 @@ a = Analysis(
     datas=[
         (str(ROOT / 'src' / 'me_finder' / 'templates'), 'src/me_finder/templates'),
         (str(ROOT / 'src' / 'me_finder' / 'static'), 'src/me_finder/static'),
+        (str(ROOT / 'src' / 'me_finder' / 'local_ocr_manifest.json'), 'src/me_finder'),
     ],
     hiddenimports=[
         'src',
