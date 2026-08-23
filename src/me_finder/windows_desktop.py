@@ -59,7 +59,7 @@ _TITLEBAR_PALETTES = {
     "warm-sand": ("#FBF7F1", "#34251E", "#E7D9CC"),
     "rose-mist": ("#FDF6F8", "#2C2528", "#EBDCE2"),
     "lavender-purple": ("#F9F7FD", "#282532", "#DED8EB"),
-    "midnight": ("#08111D", "#EEF4FB", "#2A394A"),
+    "midnight": ("#0D1117", "#E6EDF3", "#30363D"),
 }
 
 

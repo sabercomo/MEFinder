@@ -919,7 +919,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
         self.assertIn(">晨<", html)
         self.assertIn(">desc<", html)
-        self.assertIn(">浅色<", html)
+        # 画廊已按明暗模式过滤，浅/深徽标是废话，已去掉；仅自定义主题才标徽标。
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

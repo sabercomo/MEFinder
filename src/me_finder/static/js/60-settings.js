@@ -21,15 +21,23 @@ function themeChoicesForMode(mode) {
   return list;
 }
 
+// 画廊当前编辑的是哪一套（浅/深）：由外观模式直接决定，绝不再是独立的第二维度。
+// 只有「跟随系统」需要同时管两套，此时才用 appearanceEditMode 作为「白天/夜晚」子开关。
+function currentSlot() {
+  if (appearanceState.mode === 'light') return 'light';
+  if (appearanceState.mode === 'dark') return 'dark';
+  return appearanceEditMode === 'dark' ? 'dark' : 'light';
+}
+
 function renderThemeOptions() {
   var container = document.getElementById('theme-options');
   if (!container) return;
-  container.innerHTML = themeChoicesForMode(appearanceEditMode).map(themeOptionMarkup).join('');
+  container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('');
   renderThemeSelection();
 }
 
 function renderThemeSelection() {
-  var selectedId = appearanceState[appearanceEditMode];
+  var selectedId = appearanceState[currentSlot()];
   document.querySelectorAll('.theme-option').forEach(function(option) {
     var selected = option.dataset.themeChoice === selectedId;
     option.classList.toggle('selected', selected);
@@ -55,26 +63,56 @@ function updateAppearanceSummary() {
   el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(modeLabel + ' · ' + themeDisplayName(activeId));
 }
 
-// 外观模式区、编辑标签、自定义输入全部与状态对齐。
+// 把某个模式预览 mock 涂成对应主题的真实配色（复用引擎派生，token 驱动）。
+function paintModePreview(elId, themeId) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  var def = teLookupThemeDef(themeId);
+  if (!def && THEME_PRESET_MAP[themeId]) def = THEME_PRESET_MAP[themeId];
+  if (!def) return;
+  el.style.cssText = (typeof themePreviewInlineStyle === 'function') ? themePreviewInlineStyle(def) : '';
+}
+
+// 三张模式卡：浅色卡显示用户当前浅色主题、深色卡显示深色主题，系统卡两者斜切并置。
+function renderModePreviews() {
+  paintModePreview('mode-mock-light', appearanceState.light);
+  paintModePreview('mode-mock-dark', appearanceState.dark);
+  paintModePreview('mode-mock-system-light', appearanceState.light);
+  paintModePreview('mode-mock-system-dark', appearanceState.dark);
+}
+
+// 只读回显（模式卡预览、白天/夜晚名字与选中态、摘要）——不碰自定义输入框，
+// 因此在拖拽调色途中调用也不会把用户正在改的值刷掉。
+function refreshAppearanceReadouts() {
+  renderModePreviews();
+  var pair = document.getElementById('appearance-pair');
+  if (pair) {
+    var slot = currentSlot();
+    var lightName = document.getElementById('appearance-pair-light');
+    var darkName = document.getElementById('appearance-pair-dark');
+    if (lightName) lightName.textContent = themeDisplayName(appearanceState.light);
+    if (darkName) darkName.textContent = themeDisplayName(appearanceState.dark);
+    pair.querySelectorAll('.appearance-pair-slot').forEach(function(btn) {
+      var on = btn.dataset.appearanceEdit === slot;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+  updateAppearanceSummary();
+}
+
+// 外观模式卡、白天/夜晚配对、自定义输入全部与状态对齐。
 function syncAppearanceControls() {
-  document.querySelectorAll('#appearance-mode-seg .appearance-seg-btn').forEach(function(btn) {
+  document.querySelectorAll('#appearance-mode-seg .appearance-mode-card').forEach(function(btn) {
     var on = btn.dataset.appearanceMode === appearanceState.mode;
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-checked', on ? 'true' : 'false');
   });
-  document.querySelectorAll('.appearance-edit-tab').forEach(function(btn) {
-    var on = btn.dataset.appearanceEdit === appearanceEditMode;
-    btn.classList.toggle('is-active', on);
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
-  });
-  var hint = document.getElementById('appearance-mode-hint');
-  if (hint) {
-    hint.textContent = appearanceState.mode === 'system'
-      ? '系统浅色时用你的浅色主题，系统深色时用你的深色主题'
-      : (appearanceState.mode === 'dark' ? '始终使用你的深色主题' : '始终使用你的浅色主题');
-  }
+  // 「白天/夜晚各用哪套」只在跟随系统时才有意义——只有它需要同时管两套主题。
+  var pair = document.getElementById('appearance-pair');
+  if (pair) pair.hidden = appearanceState.mode !== 'system';
+  refreshAppearanceReadouts();
   syncCustomInputs();
-  updateAppearanceSummary();
 }
 
 // 把当前编辑模式选中主题的基础色回填到自定义输入。
@@ -100,24 +138,29 @@ function normalizeHexForInput(hex) {
 
 // 当前编辑模式实际选中的主题定义（预设或自定义），始终返回一份可读对象。
 function activeEditDef() {
-  var id = appearanceState[appearanceEditMode];
+  var slot = currentSlot();
+  var id = appearanceState[slot];
   if (appearanceState.customThemes && appearanceState.customThemes[id]) {
     return appearanceState.customThemes[id];
   }
   var p = THEME_PRESET_MAP[id];
   if (p) return p;
-  return THEME_PRESET_MAP[THEME_MODE_DEFAULT[appearanceEditMode]];
+  return THEME_PRESET_MAP[THEME_MODE_DEFAULT[slot]];
 }
 
 /* ── 交互 ── */
 function setAppearanceMode(mode) {
   if (['system', 'light', 'dark'].indexOf(mode) < 0) return;
   appearanceState.mode = mode;
+  // 切进「跟随系统」时，把白天/夜晚子开关对准系统此刻的明暗，画廊即显示当下生效的那套。
+  if (mode === 'system') appearanceEditMode = teSystemPrefersDark() ? 'dark' : 'light';
   applyAppearance();
+  renderThemeOptions();
   syncAppearanceControls();
   persistAppearance();
 }
 
+// 仅「跟随系统」下有效：切换正在查看/编辑的是白天还是夜晚那一套。
 function setAppearanceEdit(mode) {
   if (mode !== 'light' && mode !== 'dark') return;
   appearanceEditMode = mode;
@@ -127,19 +170,30 @@ function setAppearanceEdit(mode) {
 
 // 选择某个预设/自定义主题作为当前编辑模式的主题。
 function selectThemeChoice(id) {
-  appearanceState[appearanceEditMode] = id;
+  appearanceState[currentSlot()] = id;
   renderThemeSelection();
   syncCustomInputs();
   if (isEditModeLive()) applyAppearance();
-  updateAppearanceSummary();
+  refreshAppearanceReadouts();
   persistAppearance();
 }
 
-// 当前编辑模式是否正是屏幕上生效的模式（据外观模式与系统偏好）。
+// 当前编辑的那一套是否正是屏幕上生效的（据外观模式与系统偏好）。
 function isEditModeLive() {
-  if (appearanceState.mode === 'light') return appearanceEditMode === 'light';
-  if (appearanceState.mode === 'dark') return appearanceEditMode === 'dark';
-  return appearanceEditMode === (teSystemPrefersDark() ? 'dark' : 'light');
+  if (appearanceState.mode === 'light') return currentSlot() === 'light';
+  if (appearanceState.mode === 'dark') return currentSlot() === 'dark';
+  return currentSlot() === (teSystemPrefersDark() ? 'dark' : 'light');
+}
+
+// 展开/收起自定义配色（默认收起——常用路径是选预设，微调是进阶）。
+function toggleAppearanceCustom() {
+  var toggle = document.getElementById('appearance-custom-toggle');
+  var body = document.getElementById('appearance-custom-body');
+  if (!toggle || !body) return;
+  var open = toggle.getAttribute('aria-expanded') === 'true';
+  toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+  body.hidden = open;
+  if (!open) syncCustomInputs();
 }
 
 // 稳定的自定义主题 id：每个模式一份「快速自定义」槽，避免无限增生。
@@ -152,16 +206,17 @@ function onCustomColorInput() {
   var foreground = document.getElementById('appearance-foreground');
   var contrast = document.getElementById('appearance-contrast');
   var contrastValue = document.getElementById('appearance-contrast-value');
+  var slot = currentSlot();
   var base = activeEditDef();
-  var id = quickCustomId(appearanceEditMode);
-  var wasCustom = appearanceState.customThemes && appearanceState.customThemes[appearanceState[appearanceEditMode]]
-    && appearanceState[appearanceEditMode].indexOf('custom') === 0;
+  var id = quickCustomId(slot);
+  var wasCustom = appearanceState.customThemes && appearanceState.customThemes[appearanceState[slot]]
+    && appearanceState[slot].indexOf('custom') === 0;
   var name = wasCustom ? (activeEditDef().name || '自定义主题') : ('自定义 · ' + (base.label || base.name || ''));
   var def = {
     schemaVersion: THEME_ENGINE_SCHEMA,
     id: id,
     name: name,
-    mode: appearanceEditMode,
+    mode: slot,
     accent: accent ? accent.value : base.accent,
     background: background ? background.value : base.background,
     foreground: foreground ? foreground.value : base.foreground,
@@ -170,31 +225,32 @@ function onCustomColorInput() {
   if (contrastValue && contrast) contrastValue.textContent = String(contrast.value);
   if (!appearanceState.customThemes) appearanceState.customThemes = {};
   appearanceState.customThemes[id] = def;
-  appearanceState[appearanceEditMode] = id;
+  appearanceState[slot] = id;
   renderThemeOptions();
   if (isEditModeLive()) applyAppearance();
-  updateAppearanceSummary();
+  refreshAppearanceReadouts();
   persistAppearance();
 }
 
 // 复制当前主题为一份带时间戳的自定义主题（不改内置定义）。
 function duplicateCurrentTheme() {
+  var slot = currentSlot();
   var base = activeEditDef();
-  var id = 'custom-' + appearanceEditMode + '-' + Date.now().toString(36);
+  var id = 'custom-' + slot + '-' + Date.now().toString(36);
   var def = {
     schemaVersion: THEME_ENGINE_SCHEMA, id: id,
     name: (base.label || base.name || '主题') + ' 副本',
-    mode: appearanceEditMode,
+    mode: slot,
     accent: base.accent, background: base.background,
     foreground: base.foreground, contrast: base.contrast || 55
   };
   if (!appearanceState.customThemes) appearanceState.customThemes = {};
   appearanceState.customThemes[id] = def;
-  appearanceState[appearanceEditMode] = id;
+  appearanceState[slot] = id;
   renderThemeOptions();
   syncCustomInputs();
   if (isEditModeLive()) applyAppearance();
-  updateAppearanceSummary();
+  refreshAppearanceReadouts();
   persistAppearance();
   showToast('已复制为自定义主题');
 }
@@ -235,11 +291,13 @@ function onThemeImportFile(event) {
     def.id = id;
     if (!appearanceState.customThemes) appearanceState.customThemes = {};
     appearanceState.customThemes[id] = def;
-    appearanceEditMode = def.mode;
     appearanceState[def.mode] = id;
+    // 切到导入主题所属的明暗模式，用户立刻能在画廊里看到并用上它，而不是被藏在另一套里。
+    appearanceState.mode = def.mode;
+    appearanceEditMode = def.mode;
+    applyAppearance();
     renderThemeOptions();
     syncAppearanceControls();
-    if (isEditModeLive()) applyAppearance();
     persistAppearance();
     showToast('已导入主题「' + def.name + '」');
   };

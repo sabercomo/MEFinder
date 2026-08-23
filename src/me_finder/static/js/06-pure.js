@@ -507,22 +507,17 @@ function bibliographicMissingText(meta) {
 // styleAttr 非空时（新预设/自定义主题）以内联派生 token 着色；内置 CSS 主题
 // 仍靠 data-preview-theme 的样式块，缩略图内部一律用 var(--token)，天然复用真实设计 token。
 function themePreviewMarkup(themeId, styleAttr) {
+  // 色板样张：一眼比出「纸色(背景) / 墨色(前景 Aa) / 强调色 / 卡片面」四件事——
+  // 深色三主题只差背景与强调，繁复的假骨架反而把差别糊掉，样张才看得清。
   return '<span class="theme-preview" data-preview-theme="' + themeId + '"' + (styleAttr ? ' style="' + styleAttr + '"' : '') + ' aria-hidden="true">'
-    + '<span class="theme-mini-sidebar">'
-    + '<span class="theme-mini-brand"><span class="theme-mini-brand-mark"></span><span class="theme-mini-brand-line"></span></span>'
-    + '<span class="theme-mini-nav">'
-    + '<span class="theme-mini-nav-item"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
-    + '<span class="theme-mini-nav-item is-selected"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
-    + '<span class="theme-mini-nav-item"><span class="theme-mini-nav-icon"></span><span class="theme-mini-nav-line"></span></span>'
-    + '</span></span>'
-    + '<span class="theme-mini-main">'
-    + '<span class="theme-mini-header"><span class="theme-mini-heading"><i class="theme-mini-title-line"></i><i class="theme-mini-subtitle-line"></i></span><span class="theme-mini-header-status"><i></i><b></b></span></span>'
-    + '<span class="theme-mini-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><span class="theme-mini-search-line"></span><span class="theme-mini-search-action"></span></span>'
-    + '<span class="theme-mini-cards">'
-    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-success"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-doc-meta"></i></span>'
-    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-danger"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-match"></i></span>'
-    + '<span class="theme-mini-doc-card"><span class="theme-mini-card-top"><i class="theme-mini-source"></i><i class="theme-mini-state is-success"></i></span><i class="theme-mini-doc-title"></i><i class="theme-mini-doc-title is-short"></i><i class="theme-mini-doc-meta"></i></span>'
-    + '</span></span></span>';
+    + '<span class="theme-swatch-top">'
+    + '<span class="theme-swatch-aa">Aa</span>'
+    + '<span class="theme-swatch-accent"></span>'
+    + '</span>'
+    + '<span class="theme-swatch-card">'
+    + '<span class="theme-swatch-line"></span>'
+    + '<span class="theme-swatch-line is-short"></span>'
+    + '</span></span>';
 }
 
 // 派生 token 的内联 style 串（新预设/自定义主题的缩略图与卡片着色用）。
@@ -539,15 +534,17 @@ function themePreviewInlineStyle(def) {
 // 主题选项按钮标记。现由 THEME_PRESETS/自定义主题驱动，点击走 selectThemeChoice。
 // preset: { id, name, label, mode, builtinCss, desc, accent, background, foreground, contrast }
 function themeOptionMarkup(preset) {
-  var tone = preset.mode === 'dark' ? '深色' : '浅色';
+  // 画廊已按当前明暗模式过滤，浅/深徽标是废话，去掉；仅自定义主题标一枚小徽标。
   var name = preset.label || preset.name || preset.id;
   var desc = preset.desc || '';
   var styleAttr = preset.builtinCss ? '' : themePreviewInlineStyle(preset);
+  var chip = preset.custom ? '<span class="theme-option-tag">自定义</span>' : '';
   return '<button class="theme-option" type="button" data-theme-choice="' + preset.id + '" role="radio" aria-checked="false" onclick="selectThemeChoice(\'' + preset.id + '\')">'
-    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span><span class="theme-option-tone">' + tone + '</span></span>'
-    + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
     + themePreviewMarkup(preset.id, styleAttr)
-    + '<span class="theme-option-description">' + esc(desc) + '</span></button>';
+    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span>' + chip + '</span>'
+    + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
+    + (desc ? '<span class="theme-option-description">' + esc(desc) + '</span>' : '')
+    + '</button>';
 }
 
 // 卷册索引：source_file_id → volume。原在 20-search.js，纯。

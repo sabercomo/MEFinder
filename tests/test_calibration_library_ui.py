@@ -551,7 +551,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('.status-stat--danger .status-stat__icon { color: var(--danger-icon); opacity: 1; }', HTML)
         self.assertIn('overflow: visible;', HTML)
         self.assertIn('--danger: #D62C3A;', HTML)
-        self.assertIn('--danger: #FF6673;', HTML)
+        self.assertIn('--danger: #F85149;', HTML)
         for token in ('--danger-soft:', '--danger-border:', '--danger-icon:', '--danger-contrast:'):
             self.assertEqual(HTML.count(token), 2)
         self.assertIn('.status-stat--success', HTML)

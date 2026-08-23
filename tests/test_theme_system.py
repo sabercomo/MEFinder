@@ -211,7 +211,7 @@ class ThemeMarkupTests(unittest.TestCase):
 
     def test_settings_uses_preview_cards_and_switches_without_reload(self) -> None:
         # 主题预设现由引擎的 THEME_PRESETS 驱动（每项 id/label/mode/desc）。
-        expected_order = ["晴蓝", "暖纸", "棕褐", "抹茶", "暖沙", "樱粉", "薰衣草", "午夜"]
+        expected_order = ["晴蓝", "雾灰", "棕褐", "抹茶", "暖沙", "樱粉", "薰衣草", "午夜"]
         positions = [HTML.index(f"label: '{name}'") for name in expected_order]
         self.assertEqual(positions, sorted(positions))
         for theme in self.THEMES:
@@ -220,22 +220,22 @@ class ThemeMarkupTests(unittest.TestCase):
         for preset in ("warm-paper", "sepia", "oled-black", "midnight-blue"):
             self.assertIn(f"id: '{preset}'", HTML)
         self.assertEqual(HTML.count('function themePreviewMarkup(themeId, styleAttr)'), 1)
-        self.assertEqual(HTML.count('class="theme-mini-sidebar"'), 1)
-        self.assertEqual(HTML.count('class="theme-mini-search"'), 1)
-        self.assertEqual(HTML.count('class="theme-mini-doc-card"'), 3)
-        self.assertIn('class="theme-mini-match"', HTML)
-        self.assertIn('class="theme-option-tone"', HTML)
+        # 预览缩略图现为「Aa 色板样张」：背景=纸、Aa=墨、圆丸=强调、卡片=面，
+        # 一眼比出四件事；旧的假骨架（侧栏/搜索/三卡片）已弃用。
+        self.assertIn('class="theme-swatch-aa"', HTML)
+        self.assertIn('class="theme-swatch-accent"', HTML)
+        self.assertIn('class="theme-swatch-card"', HTML)
         for description in (
             "清爽理性，适合日间使用", "低刺激、安静，适合长时间阅读",
             "温暖柔和，带轻微纸张气质", "清柔克制，带淡粉强调",
-            "优雅现代，使用柔和薰衣草紫", "低亮度深色主题，适合夜间使用",
+            "优雅现代，使用柔和薰衣草紫", "沉静蓝黑，克制专业（GitHub Dark）",
         ):
             self.assertIn(description, HTML)
         self.assertIn('.theme-option:focus-visible', HTML)
         self.assertIn('role="radiogroup"', HTML)
         self.assertIn('role="radio"', HTML)
-        # 网格由当前编辑模式（浅/深）筛选出的预设 + 自定义主题渲染。
-        self.assertIn("container.innerHTML = themeChoicesForMode(appearanceEditMode).map(themeOptionMarkup).join('')", HTML)
+        # 网格由当前生效的那一套（浅/深，由外观模式派生）筛选出的预设 + 自定义主题渲染。
+        self.assertIn("container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('')", HTML)
         # 引擎把选中主题真正落到 data-theme（内置切 id、自定义切 custom）。
         self.assertIn("document.documentElement.dataset.theme = id", HTML)
         self.assertIn("fetch('/api/preferences'", HTML)
@@ -248,9 +248,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertNotIn('theme-preview-line', HTML)
         self.assertNotIn('--preview-bg', HTML)
         self.assertNotIn('--preview-accent', HTML)
-        self.assertIn('@container (min-width: 640px)', HTML)
-        self.assertIn('@container (min-width: 720px)', HTML)
-        self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr));', HTML)
+        # 画廊改用 auto-fill 自适应列数（天然 2–3 列），不再依赖容器查询断点，
+        # 也就绝不会塌成一张巨卡。
+        self.assertIn('grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));', HTML)
         self.assertRegex(
             HTML,
             r"\.settings-section\s*\{[^}]*max-width:\s*none;[^}]*margin:\s*0;",
@@ -259,9 +259,10 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
             r"#appearance-card\.active\s*\{[^}]*max-width:\s*none",
         )
-        self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*20px")
-        self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*16px")
-        self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*height:\s*140px")
+        self.assertRegex(HTML, r"\.theme-options\s*\{[^}]*gap:\s*16px")
+        self.assertRegex(HTML, r"\.theme-option\s*\{[^}]*padding:\s*12px")
+        # 样张按固定比例（而非写死高度）自适应卡片宽度。
+        self.assertRegex(HTML, r"\.theme-preview\s*\{[^}]*aspect-ratio:\s*8 / 5")
 
     def test_large_desktop_settings_trade_density_for_legibility(self) -> None:
         self.assertIn(
@@ -370,13 +371,13 @@ class ThemeMarkupTests(unittest.TestCase):
     def test_theme_previews_reuse_the_real_design_tokens(self) -> None:
         for theme in self.THEMES:
             self.assertIn(f'.theme-preview[data-preview-theme="{theme}"]', HTML)
-        preview_rules = re.findall(r"\.theme-mini-[^{]+\{[^}]+\}", HTML, re.S)
+        # 色板样张（.theme-preview / .theme-swatch-*）只用语义 token 上色，绝不写死颜色，
+        # 因此任意主题（含运行时派生的自定义主题）都能自动正确显示。
+        preview_rules = re.findall(r"\.theme-(?:preview|swatch)[^{]*\{[^}]+\}", HTML, re.S)
         preview_css = "\n".join(preview_rules)
         for token in (
-            "--app-bg", "--sidebar-bg", "--surface-primary", "--surface-secondary",
-            "--text-primary", "--text-secondary", "--border-default", "--accent",
-            "--accent-soft", "--success", "--success-soft", "--danger", "--danger-soft",
-            "--match-block-accent", "--match-inline-bg", "--match-inline-border",
+            "--app-bg", "--surface-primary", "--text-primary",
+            "--text-secondary", "--accent",
         ):
             self.assertIn(f"var({token})", preview_css)
 
@@ -658,7 +659,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "warm-sand": "#F9DDC8",
             "rose-mist": "#F8DCE6",
             "lavender-purple": "#E8DFF7",
-            "midnight": "#13345B",
+            "midnight": "#17233A",
         }
         for theme, expected_background in expected_backgrounds.items():
             block = re.search(
@@ -686,9 +687,9 @@ class DesktopThemeShellTests(unittest.TestCase):
     def test_midnight_loading_and_error_pages_start_dark(self) -> None:
         loading = loading_html("midnight")
         error = error_html("测试", "详情", "midnight")
-        self.assertIn("#08111D", loading)
-        self.assertIn("#EEF4FB", loading)
-        self.assertIn("#08111D", error)
+        self.assertIn("#0D1117", loading)
+        self.assertIn("#E6EDF3", loading)
+        self.assertIn("#0D1117", error)
         self.assertNotIn("background: #F5F8FC", loading)
 
     def test_frost_blue_is_the_default_shell_theme(self) -> None:
@@ -701,7 +702,7 @@ class DesktopThemeShellTests(unittest.TestCase):
             "warm-sand": "#FBF7F1",
             "rose-mist": "#FDF6F8",
             "lavender-purple": "#F9F7FD",
-            "midnight": "#08111D",
+            "midnight": "#0D1117",
         }
         for theme, background in expected.items():
             self.assertIn(background, loading_html(theme))

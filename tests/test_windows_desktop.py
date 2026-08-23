@@ -229,9 +229,9 @@ class WindowsTitlebarTests(unittest.TestCase):
             calls,
             [
                 (321, 20, 1),
-                (321, 34, 0x4A392A),
-                (321, 35, 0x1D1108),
-                (321, 36, 0xFBF4EE),
+                (321, 34, 0x3D3630),
+                (321, 35, 0x17110D),
+                (321, 36, 0xF3EDE6),
             ],
         )
 
@@ -382,7 +382,7 @@ class WindowsPDFViewerTests(unittest.TestCase):
         self.assertEqual(len(webview.created), 1)
         title, kwargs, window = webview.created[0]
         self.assertIn("source.pdf", title)
-        self.assertEqual(kwargs["background_color"], "#08111D")
+        self.assertEqual(kwargs["background_color"], "#0D1117")
         self.assertTrue(str(kwargs["url"]).endswith("#page=10"))
         self.assertEqual(applied, [(window, "midnight")])
         self.assertEqual(window.urls, [second["url"]])

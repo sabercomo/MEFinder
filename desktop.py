@@ -251,7 +251,7 @@ def theme_palette(theme: str) -> dict[str, str]:
         "warm-sand": ("#FBF7F1", "#F6EFE5", "#FFFCF8", "#34251E", "#7C695E", "#E7D9CC", "#B85C2B"),
         "rose-mist": ("#FDF6F8", "#FAF0F3", "#FFFFFF", "#2C2528", "#71666A", "#EBDCE2", "#C9446A"),
         "lavender-purple": ("#F9F7FD", "#F3F0F9", "#FFFFFF", "#282532", "#6E697A", "#DED8EB", "#7B5EC7"),
-        "midnight": ("#08111D", "#091522", "#111C29", "#EEF4FB", "#A8B4C4", "#2A394A", "#2485FF"),
+        "midnight": ("#0D1117", "#010409", "#161B22", "#E6EDF3", "#8B949E", "#30363D", "#1F6FEB"),
     }
     app_bg, sidebar_bg, surface, text_primary, text_secondary, border, accent = palettes.get(
         theme, palettes[DEFAULT_THEME]
