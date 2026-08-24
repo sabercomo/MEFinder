@@ -337,6 +337,9 @@ function managedMineruErrorText(value) {
   if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
     return '无法连接 PyPI，请检查网络或代理后重试。';
   }
+  if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror)/i.test(message)) {
+    return '模型下载网络中断，请检查网络或代理后重试。';
+  }
   return message.length > 180 ? message.slice(0, 177) + '…' : message;
 }
 

@@ -12,6 +12,7 @@ from unittest import mock
 
 from src.me_finder.managed_mineru import (
     ManagedMinerU,
+    ManagedMinerUError,
     detect_mineru_hardware,
     load_managed_mineru_manifest,
 )
@@ -223,6 +224,86 @@ else:
             environment = manager._install_environment(staging)
         self.assertEqual(environment["HTTP_PROXY"], "http://127.0.0.1:1082")
         self.assertEqual(environment["HTTPS_PROXY"], "http://127.0.0.1:1082")
+
+    def test_model_download_retries_in_same_staging_directory(self) -> None:
+        manager = self._manager()
+        self.addCleanup(manager.close)
+        original_run_command = manager._run_command
+        model_attempts = []
+
+        def run_command(profile_id, command, **kwargs):
+            if Path(command[0]).name == "mineru-models-download":
+                model_attempts.append(kwargs["cwd"])
+                if len(model_attempts) == 1:
+                    partial = kwargs["cwd"] / "models/resume-marker.incomplete"
+                    partial.parent.mkdir(parents=True, exist_ok=True)
+                    partial.write_bytes(b"partial")
+                    raise ManagedMinerUError(
+                        "ConnectionError: Network error: Request middleware error"
+                    )
+            return original_run_command(profile_id, command, **kwargs)
+
+        with (
+            mock.patch.object(manager, "_run_command", side_effect=run_command),
+            mock.patch(
+                "src.me_finder.managed_mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
+                (0, 0),
+            ),
+        ):
+            manager.perform({"profile": "vlm", "action": "install"})
+            installed = self._wait(manager, "vlm")
+
+        self.assertTrue(installed["installed"])
+        self.assertEqual(len(model_attempts), 2)
+        self.assertEqual(model_attempts[0], model_attempts[1])
+        self.assertTrue(
+            (
+                manager.component_root
+                / "vlm/models/resume-marker.incomplete"
+            ).is_file()
+        )
+
+    def test_model_download_reports_concise_error_after_three_failures(self) -> None:
+        manager = self._manager()
+        original_run_command = manager._run_command
+        attempts = 0
+
+        def run_command(profile_id, command, **kwargs):
+            nonlocal attempts
+            if Path(command[0]).name == "mineru-models-download":
+                attempts += 1
+                raise ManagedMinerUError("ConnectionError: Network error")
+            return original_run_command(profile_id, command, **kwargs)
+
+        with (
+            mock.patch.object(manager, "_run_command", side_effect=run_command),
+            mock.patch(
+                "src.me_finder.managed_mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
+                (0, 0),
+            ),
+        ):
+            manager.perform({"profile": "vlm", "action": "install"})
+            failed = self._wait(manager, "vlm")
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(
+            failed["error"],
+            "模型下载网络连接中断，已自动重试 2 次。请检查网络或代理后重试。",
+        )
+        self.assertFalse(any(manager.component_root.glob(".staging-*")))
+
+    def test_install_removes_staging_directory_left_by_interrupted_run(self) -> None:
+        manager = self._manager()
+        self.addCleanup(manager.close)
+        stale = manager.component_root / ".staging-vlm-interrupted"
+        stale.mkdir(parents=True)
+        (stale / "partial-model.bin").write_bytes(b"partial")
+
+        manager.perform({"profile": "pipeline", "action": "install"})
+        installed = self._wait(manager, "pipeline")
+
+        self.assertTrue(installed["installed"])
+        self.assertFalse(stale.exists())
 
     def test_pipeline_install_starts_loopback_service_and_uninstalls(self) -> None:
         manager = self._manager()

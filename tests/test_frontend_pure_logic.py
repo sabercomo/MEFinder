@@ -1768,6 +1768,17 @@ class MineruLocalDisplayTests(unittest.TestCase):
             "无法连接 PyPI，请检查网络或代理后重试。",
         )
 
+    def test_huggingface_failure_is_presented_as_concise_chinese(self):
+        tail = r"""
+        return managedMineruErrorText(
+          'huggingface_hub/file_download.py xet_get ConnectionError: Network error for https://us.aws.cdn.hf.co/xorbs/file'
+        );
+        """
+        self.assertEqual(
+            _vision_eval(tail),
+            "模型下载网络中断，请检查网络或代理后重试。",
+        )
+
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CrossrefLookupConfigTests(unittest.TestCase):

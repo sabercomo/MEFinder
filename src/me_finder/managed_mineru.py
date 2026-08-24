@@ -57,6 +57,14 @@ _BINARY_SIZE_MULTIPLIERS = {
     "MiB": 1024 * 1024,
     "GiB": 1024 * 1024 * 1024,
 }
+_MODEL_DOWNLOAD_ATTEMPTS = 3
+_MODEL_DOWNLOAD_RETRY_DELAYS = (2, 5)
+_MODEL_NETWORK_ERROR_PATTERN = re.compile(
+    r"ConnectionError|Network error|Request middleware error|ConnectError|"
+    r"ReadTimeout|ReadError|Connection reset|Connection aborted|"
+    r"Temporary failure in name resolution",
+    re.IGNORECASE,
+)
 
 
 class ManagedMinerUError(RuntimeError):
@@ -508,6 +516,9 @@ class ManagedMinerU:
         if self._service_profile == profile_id:
             self.stop()
         profile = self.manifest.profiles[profile_id]
+        self.component_root.mkdir(parents=True, exist_ok=True)
+        for stale in self.component_root.glob(".staging-*"):
+            self._remove_tree(stale)
         staging = self.component_root / f".staging-{profile_id}-{uuid.uuid4().hex}"
         final = self.component_root / profile_id
         previous = self.component_root / f".previous-{profile_id}-{uuid.uuid4().hex}"
@@ -565,16 +576,35 @@ class ManagedMinerU:
                 total_bytes=profile.model_download_bytes,
                 total_is_estimate=True,
             )
-            self._run_command(
-                profile_id,
-                [str(downloader), "-s", "auto", "-m", profile.model_type],
-                cwd=staging,
-                environment=environment,
-                log_path=staging / "models.log",
-                timeout=14400,
-                track_directory=staging / "models",
-                estimated_total_bytes=profile.model_download_bytes,
-            )
+            for attempt in range(1, _MODEL_DOWNLOAD_ATTEMPTS + 1):
+                try:
+                    self._run_command(
+                        profile_id,
+                        [str(downloader), "-s", "auto", "-m", profile.model_type],
+                        cwd=staging,
+                        environment=environment,
+                        log_path=staging / "models.log",
+                        timeout=14400,
+                        track_directory=staging / "models",
+                        estimated_total_bytes=profile.model_download_bytes,
+                    )
+                    break
+                except ManagedMinerUError as exc:
+                    if not _MODEL_NETWORK_ERROR_PATTERN.search(str(exc)):
+                        raise
+                    if attempt == _MODEL_DOWNLOAD_ATTEMPTS:
+                        raise ManagedMinerUError(
+                            "模型下载网络连接中断，已自动重试 2 次。"
+                            "请检查网络或代理后重试。"
+                        ) from exc
+                    with self._lock:
+                        self._states[profile_id].message = (
+                            f"模型下载网络中断，正在自动重试（{attempt}/2）"
+                        )
+                    if self._states[profile_id].cancel_event.wait(
+                        _MODEL_DOWNLOAD_RETRY_DELAYS[attempt - 1]
+                    ):
+                        raise _Cancelled("操作已取消。")
             atomic_write_json(
                 staging / "installed.json",
                 {

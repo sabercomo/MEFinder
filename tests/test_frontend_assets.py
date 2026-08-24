@@ -287,10 +287,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：区分自行部署 MinerU 与 MEFinder 托管安装状态。
     # 0.4.7 后续：按硬件显示托管方案，并补充 MinerU 下载进度与估时。
     # 0.4.7 后续：传递系统代理并收敛 MinerU 安装失败文案。
+    # 0.4.7 后续：收敛 Hugging Face 模型下载失败文案。
     BASELINE_SHA256 = (
-        "9961d8a0d41bf10acabc1cd52ff746b57902af6bc95b655c094803aa89341a02"
+        "1c9b2b0579e2f87bf8521df17a0db54d7d9cd0ca41a0f7fc185142d910fde2da"
     )
-    BASELINE_BYTES = 848873
+    BASELINE_BYTES = 849143
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
