@@ -1718,7 +1718,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         self.assertEqual(_vision_eval(tail), {
             "state": "未由 MEFinder 安装",
             "install": "改用托管安装",
-            "auto": "改用推荐托管配置",
+            "auto": "改用托管配置（Pipeline）",
             "hint": (
                 "已配置自部署服务 http://127.0.0.1:8000；无需重复下载。"
                 "下方托管运行时为可选方案。"
@@ -1740,6 +1740,50 @@ class MineruLocalDisplayTests(unittest.TestCase):
         self.assertEqual(_vision_eval(tail), {
             "cpuOnly": True,
             "gpuCapable": False,
+        })
+
+    def test_auto_install_button_targets_every_pending_profile(self):
+        tail = r"""
+        function el() { return {textContent:'', className:'', hidden:false, disabled:false}; }
+        var elements = {};
+        [
+          'managed-mineru-hardware', 'managed-mineru-pipeline-state',
+          'managed-mineru-pipeline-install', 'managed-mineru-pipeline-cancel',
+          'managed-mineru-vlm-state', 'managed-mineru-vlm-install',
+          'managed-mineru-vlm-cancel', 'managed-mineru-auto-install',
+          'managed-mineru-hint'
+        ].forEach(function(id) { elements[id] = el(); });
+        var vlmSection = {hidden:false};
+        globalThis.document = {
+          getElementById:function(id) { return elements[id] || null; },
+          querySelector:function(selector) { return selector.indexOf('vlm') >= 0 ? vlmSection : null; }
+        };
+        mineruLocalConfig = {enabled:false, managed:false};
+        renderManagedMineru({
+          supported:true,
+          hardware:{name:'Apple M-series', vlm_supported:true, recommended_profile:'vlm'},
+          service:{running:false},
+          profiles:[
+            {profile:'pipeline', display_name:'Pipeline', supported:true, installed:false, state:'not_installed'},
+            {profile:'vlm', display_name:'VLM', supported:true, installed:false, state:'not_installed'}
+          ]
+        });
+        var both = elements['managed-mineru-auto-install'].textContent;
+        renderManagedMineru({
+          supported:true,
+          hardware:{name:'Apple M-series', vlm_supported:true, recommended_profile:'vlm'},
+          service:{running:false},
+          profiles:[
+            {profile:'pipeline', display_name:'Pipeline', supported:true, installed:true, state:'installed'},
+            {profile:'vlm', display_name:'VLM', supported:true, installed:false, state:'not_installed'}
+          ]
+        });
+        var vlmOnly = elements['managed-mineru-auto-install'].textContent;
+        return {both:both, vlmOnly:vlmOnly};
+        """
+        self.assertEqual(_vision_eval(tail), {
+            "both": "安装 Pipeline 与 VLM",
+            "vlmOnly": "安装 VLM",
         })
 
     def test_transfer_summary_uses_gigabytes_speed_and_estimated_total(self):

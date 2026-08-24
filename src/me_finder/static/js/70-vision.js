@@ -401,12 +401,20 @@ function renderManagedMineru(runtime) {
   });
   var autoButton = document.getElementById('managed-mineru-auto-install');
   if (autoButton) {
-    var recommended = hardware.recommended_profile || 'pipeline';
-    var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
-    autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
-    autoButton.textContent = recommendedProfile && recommendedProfile.installed
+    // One click installs every eligible profile at once (VLM only on capable
+    // hardware); both cards then show their own download progress in parallel.
+    var pending = (runtime.profiles || []).filter(function(item) {
+      if (!item.supported) return false;
+      if (item.profile === 'vlm' && !hardware.vlm_supported) return false;
+      return !item.installed;
+    });
+    var pendingNames = pending.map(function(item) {
+      return item.profile === 'vlm' ? 'VLM' : 'Pipeline';
+    }).join(' 与 ');
+    autoButton.disabled = active || !runtime.supported || !pending.length;
+    autoButton.textContent = !pending.length
       ? '推荐配置已安装'
-      : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
+      : externalConfigured ? '改用托管配置（' + pendingNames + '）' : '安装 ' + pendingNames;
   }
   var hint = document.getElementById('managed-mineru-hint');
   if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
@@ -434,8 +442,10 @@ async function loadManagedMineruStatus() {
 
 async function manageMineruComponent(profile, action, button) {
   if ((action === 'install' || action === 'update') && !await showAppConfirm(
-    '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘。',
-    {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
+    profile === 'all'
+      ? '将同时下载并安装 Pipeline 与 VLM，各自创建独立 Python 环境与本地模型，磁盘占用更大，请预留约 40GB。'
+      : '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘。',
+    {title: profile === 'all' ? '同时安装 Pipeline 与 VLM？' : '下载安装本地 MinerU？', confirmText:'开始安装'}
   )) return;
   if (action === 'uninstall' && !await showAppConfirm(
     '将删除该配置的 MinerU 运行时、依赖和本地模型。',
