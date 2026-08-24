@@ -328,7 +328,9 @@ function managedMineruTransferSummary(profile) {
   var total = (profile.total_is_estimate ? '约 ' : '') + localOCRByteSize(profile.total_bytes);
   var summary = '已下载 ' + localOCRByteSize(profile.downloaded_bytes) + ' / ' + total;
   if (profile.downloaded_bytes >= profile.total_bytes) return summary + ' · 即将完成';
-  if (!profile.download_speed_bps || profile.eta_seconds == null) return summary + ' · 正在检测网速…';
+  if (!profile.download_speed_bps || profile.eta_seconds == null) {
+    return summary + (profile.downloaded_bytes ? ' · 网络波动或正在处理分片…' : ' · 正在检测网速…');
+  }
   return summary + ' · ' + localOCRByteSize(profile.download_speed_bps) + '/s · ' + localOCREstimatedWait(profile.eta_seconds);
 }
 
@@ -337,7 +339,7 @@ function managedMineruErrorText(value) {
   if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
     return '无法连接 PyPI，请检查网络或代理后重试。';
   }
-  if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror)/i.test(message)) {
+  if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror|i\/o error|decoding response body)/i.test(message)) {
     return '模型下载网络中断，请检查网络或代理后重试。';
   }
   return message.length > 180 ? message.slice(0, 177) + '…' : message;

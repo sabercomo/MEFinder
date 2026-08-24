@@ -185,6 +185,22 @@ else:
         self.assertEqual(profile["download_speed_bps"], 2)
         self.assertEqual(profile["eta_seconds"], 3)
 
+    def test_download_speed_keeps_rolling_average_during_short_pause(self) -> None:
+        manager = self._manager()
+        with mock.patch(
+            "src.me_finder.managed_mineru.time.monotonic",
+            side_effect=[0.0, 2.0, 12.0],
+        ):
+            manager._begin_download_progress("vlm", 0, 100)
+            manager._set_download_progress("vlm", 20, 100)
+            manager._set_download_progress("vlm", 20, 100)
+        profile = next(
+            item for item in manager.summary()["profiles"]
+            if item["profile"] == "vlm"
+        )
+        self.assertGreater(profile["download_speed_bps"], 0)
+        self.assertIsNotNone(profile["eta_seconds"])
+
     def test_uv_log_progress_uses_announced_download_sizes(self) -> None:
         manager = self._manager()
         log = self.root / "install.log"
@@ -239,7 +255,7 @@ else:
                     partial.parent.mkdir(parents=True, exist_ok=True)
                     partial.write_bytes(b"partial")
                     raise ManagedMinerUError(
-                        "ConnectionError: Network error: Request middleware error"
+                        "模型下载连续 2 分钟无数据变化。"
                     )
             return original_run_command(profile_id, command, **kwargs)
 
@@ -272,7 +288,9 @@ else:
             nonlocal attempts
             if Path(command[0]).name == "mineru-models-download":
                 attempts += 1
-                raise ManagedMinerUError("ConnectionError: Network error")
+                raise ManagedMinerUError(
+                    "OSError: I/O error: error decoding response body"
+                )
             return original_run_command(profile_id, command, **kwargs)
 
         with (
@@ -291,6 +309,60 @@ else:
             "模型下载网络连接中断，已自动重试 2 次。请检查网络或代理后重试。",
         )
         self.assertFalse(any(manager.component_root.glob(".staging-*")))
+
+    def test_model_payload_size_excludes_xet_logs_and_locks(self) -> None:
+        manager = self._manager()
+        models = self.root / "models"
+        blob = models / "huggingface/hub/blobs/model.incomplete"
+        log = models / "huggingface/xet/logs/xet.log"
+        lock = models / "huggingface/hub/.locks/model.lock"
+        for path, content in (
+            (blob, b"payload"),
+            (log, b"log growth should not count"),
+            (lock, b"lock growth should not count"),
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+
+        self.assertEqual(manager._model_payload_size(models), len(b"payload"))
+
+    def test_run_command_stops_model_download_after_payload_stalls(self) -> None:
+        manager = self._manager()
+
+        class StalledProcess:
+            returncode = None
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+            def wait(self, timeout):
+                return self.returncode
+
+        process = StalledProcess()
+        manager.process_launcher = lambda *_args, **_kwargs: process
+        models = self.root / "models"
+        models.mkdir()
+
+        with self.assertRaisesRegex(
+            ManagedMinerUError,
+            "模型下载连续 2 分钟无数据变化",
+        ):
+            manager._run_command(
+                "vlm",
+                ["fake-model-downloader"],
+                cwd=self.root,
+                environment={},
+                log_path=self.root / "models.log",
+                timeout=10,
+                track_directory=models,
+                estimated_total_bytes=100,
+                stall_timeout=0.05,
+            )
+
+        self.assertEqual(process.returncode, -15)
 
     def test_install_removes_staging_directory_left_by_interrupted_run(self) -> None:
         manager = self._manager()

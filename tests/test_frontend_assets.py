@@ -288,10 +288,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：按硬件显示托管方案，并补充 MinerU 下载进度与估时。
     # 0.4.7 后续：传递系统代理并收敛 MinerU 安装失败文案。
     # 0.4.7 后续：收敛 Hugging Face 模型下载失败文案。
+    # 0.4.7 后续：区分模型分片处理与实时传输速度。
     BASELINE_SHA256 = (
-        "1c9b2b0579e2f87bf8521df17a0db54d7d9cd0ca41a0f7fc185142d910fde2da"
+        "41d3fa8347a4114b641c0db9d7460d14f4cf47c0e8b45f4b8abd499cc3485a8a"
     )
-    BASELINE_BYTES = 849143
+    BASELINE_BYTES = 849261
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

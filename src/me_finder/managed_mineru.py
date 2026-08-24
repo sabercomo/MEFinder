@@ -59,10 +59,14 @@ _BINARY_SIZE_MULTIPLIERS = {
 }
 _MODEL_DOWNLOAD_ATTEMPTS = 3
 _MODEL_DOWNLOAD_RETRY_DELAYS = (2, 5)
+_MODEL_DOWNLOAD_STALL_SECONDS = 120
+_DOWNLOAD_SPEED_WINDOW_SECONDS = 30
 _MODEL_NETWORK_ERROR_PATTERN = re.compile(
     r"ConnectionError|Network error|Request middleware error|ConnectError|"
     r"ReadTimeout|ReadError|Connection reset|Connection aborted|"
-    r"Temporary failure in name resolution",
+    r"Temporary failure in name resolution|I/O error|"
+    r"error decoding response body|IncompleteRead|ChunkedEncodingError|"
+    r"模型下载连续 2 分钟无数据变化",
     re.IGNORECASE,
 )
 
@@ -587,6 +591,7 @@ class ManagedMinerU:
                         timeout=14400,
                         track_directory=staging / "models",
                         estimated_total_bytes=profile.model_download_bytes,
+                        stall_timeout=_MODEL_DOWNLOAD_STALL_SECONDS,
                     )
                     break
                 except ManagedMinerUError as exc:
@@ -814,6 +819,7 @@ class ManagedMinerU:
         track_uv_downloads: bool = False,
         track_directory: Optional[Path] = None,
         estimated_total_bytes: int = 0,
+        stall_timeout: Optional[float] = None,
     ) -> None:
         self._raise_if_cancelled(profile_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -835,6 +841,12 @@ class ManagedMinerU:
             try:
                 deadline = time.monotonic() + timeout
                 next_progress_update = 0.0
+                tracked_bytes = (
+                    self._model_payload_size(track_directory)
+                    if track_directory is not None
+                    else 0
+                )
+                last_payload_change = time.monotonic()
                 while process.poll() is None:
                     if self._states[profile_id].cancel_event.wait(0.1):
                         self._stop_process(process)
@@ -848,12 +860,24 @@ class ManagedMinerU:
                                 start_offset=progress_log_offset,
                             )
                         elif track_directory is not None:
+                            current_bytes = self._model_payload_size(track_directory)
                             self._set_download_progress(
                                 profile_id,
-                                self._directory_size(track_directory),
+                                current_bytes,
                                 estimated_total_bytes,
                                 total_is_estimate=True,
                             )
+                            if current_bytes != tracked_bytes:
+                                tracked_bytes = current_bytes
+                                last_payload_change = now
+                            elif (
+                                stall_timeout is not None
+                                and now - last_payload_change >= stall_timeout
+                            ):
+                                self._stop_process(process)
+                                raise ManagedMinerUError(
+                                    "模型下载连续 2 分钟无数据变化。"
+                                )
                         next_progress_update = now + 0.5
                     if now >= deadline:
                         self._stop_process(process)
@@ -871,7 +895,7 @@ class ManagedMinerU:
         elif track_directory is not None:
             self._set_download_progress(
                 profile_id,
-                self._directory_size(track_directory),
+                self._model_payload_size(track_directory),
                 estimated_total_bytes,
                 total_is_estimate=True,
             )
@@ -1060,7 +1084,7 @@ class ManagedMinerU:
             state.progress = min(1.0, downloaded / total) if total else None
             now = time.monotonic()
             state.download_samples.append((now, downloaded))
-            cutoff = now - 8
+            cutoff = now - _DOWNLOAD_SPEED_WINDOW_SECONDS
             while (
                 len(state.download_samples) > 2
                 and state.download_samples[1][0] < cutoff
@@ -1080,12 +1104,15 @@ class ManagedMinerU:
                 state.eta_seconds = None
 
     @staticmethod
-    def _directory_size(root: Path) -> int:
+    def _model_payload_size(root: Path) -> int:
         if not root.exists():
             return 0
         total = 0
         for path in root.rglob("*"):
             if path.is_symlink() or not path.is_file():
+                continue
+            relative_parts = path.relative_to(root).parts
+            if "logs" in relative_parts or ".locks" in relative_parts:
                 continue
             try:
                 total += path.stat().st_size

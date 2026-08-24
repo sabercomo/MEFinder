@@ -1757,6 +1757,21 @@ class MineruLocalDisplayTests(unittest.TestCase):
             "已下载 1.00 GB / 约 2.00 GB · 10.0 MB/s · 预计剩余约 2 分钟",
         )
 
+    def test_transfer_summary_marks_paused_payload_as_network_or_processing(self):
+        tail = r"""
+        return managedMineruTransferSummary({
+          downloaded_bytes:686817280,
+          total_bytes:2328028720,
+          total_is_estimate:true,
+          download_speed_bps:0,
+          eta_seconds:null
+        });
+        """
+        self.assertEqual(
+            _vision_eval(tail),
+            "已下载 655.0 MB / 约 2.17 GB · 网络波动或正在处理分片…",
+        )
+
     def test_proxy_failure_is_presented_as_concise_chinese(self):
         tail = r"""
         return managedMineruErrorText(
@@ -1771,7 +1786,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
     def test_huggingface_failure_is_presented_as_concise_chinese(self):
         tail = r"""
         return managedMineruErrorText(
-          'huggingface_hub/file_download.py xet_get ConnectionError: Network error for https://us.aws.cdn.hf.co/xorbs/file'
+          'huggingface_hub/file_download.py xet_get OSError: I/O error: error decoding response body'
         );
         """
         self.assertEqual(
