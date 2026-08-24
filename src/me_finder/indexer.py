@@ -413,7 +413,11 @@ def build_index(
             ]
         )
     files = sorted(
-        [p for p in corpus_dir.iterdir() if p.is_file() and p.suffix.lower() in {".docx", ".doc"}],
+        [
+            p
+            for p in corpus_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in {".docx", ".doc", ".epub"}
+        ],
         key=word_source_sort_key,
     )
     source_files: List[Dict[str, object]] = []
@@ -498,6 +502,7 @@ def build_index(
             "notes": [
                 "第1卷 DOCX 页码为分节推断，尚未人工验证。",
                 "第2-10卷 DOC 页码为目录范围约束，非段落级精确页码。",
+                "EPUB 仅采用出版方 page-list/pagebreak，不按屏幕重排生成页码。",
             ],
         },
         "source_files": source_files,

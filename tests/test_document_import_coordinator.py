@@ -200,6 +200,24 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
         self.assertFalse(self.jobs.import_calls[0]["force_mineru"])
         self.assertIsNone(self.jobs.import_calls[0]["vision_provider_id"])
 
+    def test_epub_stream_is_stored_as_reflowable_text_and_queued_locally(self) -> None:
+        payload = b"PK\x03\x04epub-test"
+
+        result = self.coordinator.import_stream(
+            "folder/book.epub",
+            len(payload),
+            io.BytesIO(payload),
+        )
+
+        self.assertEqual(result["file_name"], "book.epub")
+        self.assertIsNone(result["parse_route"])
+        call = self.jobs.import_calls[0]
+        self.assertFalse(call["is_pdf"])
+        self.assertEqual(call["profile"]["detected_pdf_type"], "epub")
+        stored = list((self.root / "corpus" / "raw_docx").glob("*.epub"))
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0].read_bytes(), payload)
+
     def test_incomplete_stream_removes_temp_file_and_reservation(self) -> None:
         with self.assertRaisesRegex(MinerUError, "上传数据不完整"):
             self.coordinator.import_stream(
@@ -215,7 +233,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
     def test_stream_validates_type_options_and_size_with_original_messages(
         self,
     ) -> None:
-        with self.assertRaisesRegex(MinerUError, "只支持 PDF 或 DOCX"):
+        with self.assertRaisesRegex(MinerUError, "只支持 PDF、DOCX 或 EPUB"):
             self.coordinator.import_stream("paper.txt", 1, io.BytesIO(b"x"))
         with self.assertRaisesRegex(MinerUError, "PDF 解析方式无效"):
             self.coordinator.import_stream(

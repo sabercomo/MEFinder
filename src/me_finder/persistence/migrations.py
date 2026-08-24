@@ -27,11 +27,18 @@ def _install_document_groups(connection: sqlite3.Connection) -> bool:
     return install_document_group_schema(connection)
 
 
+def _install_text_alignment(connection: sqlite3.Connection) -> bool:
+    from ..text_alignment import install_text_alignment_schema
+
+    return install_text_alignment_schema(connection)
+
+
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 is pure additive DDL and belongs in this registry.
+# file atomically. v3 and v4 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=_install_document_groups),
+    Migration(target_version=4, apply=_install_text_alignment),
 )
 
 

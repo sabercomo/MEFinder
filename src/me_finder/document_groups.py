@@ -115,10 +115,7 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
 
 
 def ensure_document_group_schema(db_path: Path = DEFAULT_DATABASE_PATH) -> bool:
-    """Additive migration: install group tables and bump user_version to v3.
-
-    Never rebuilds content; an existing index only gains two empty tables.
-    """
+    """Run the registered additive index migrations without rebuilding text."""
 
     from .persistence.migrations import migrate_index_database
 
@@ -298,6 +295,11 @@ def add_group_member(
             previous_group = existing["document_group_id"]
             if previous_group != group_id:
                 connection.execute(
+                    "DELETE FROM alignment_runs WHERE pivot_source_file_id = ? "
+                    "OR target_source_file_id = ?",
+                    (source_id, source_id),
+                )
+                connection.execute(
                     "UPDATE document_groups SET base_source_file_id = NULL, "
                     "updated_at = ? WHERE document_group_id = ? "
                     "AND base_source_file_id = ?",
@@ -354,6 +356,11 @@ def remove_group_member(
             raise ValueError("该文献不在任何作品组中。")
         group_id = row["document_group_id"]
         connection.execute(
+            "DELETE FROM alignment_runs WHERE pivot_source_file_id = ? "
+            "OR target_source_file_id = ?",
+            (source_id, source_id),
+        )
+        connection.execute(
             "DELETE FROM document_group_members WHERE source_file_id = ?",
             (source_id,),
         )
@@ -401,6 +408,16 @@ def set_document_group_base(
             ).fetchone()
             if member is None:
                 raise ValueError("基准版本必须是该作品组的成员。")
+        previous_base = connection.execute(
+            "SELECT base_source_file_id FROM document_groups "
+            "WHERE document_group_id = ?",
+            (group_id,),
+        ).fetchone()[0]
+        if str(previous_base or "") != base_id:
+            connection.execute(
+                "DELETE FROM alignment_runs WHERE document_group_id = ?",
+                (group_id,),
+            )
         connection.execute(
             "UPDATE document_groups SET base_source_file_id = ?, updated_at = ? "
             "WHERE document_group_id = ?",
@@ -480,6 +497,25 @@ def list_document_groups(
         ).fetchall()
         result: List[Dict[str, object]] = []
         for group in groups:
+            alignment_rows = connection.execute(
+                "SELECT alignment_run_id, pivot_source_file_id, "
+                "target_source_file_id, status, algorithm, algorithm_version, "
+                "completed_at FROM alignment_runs "
+                "WHERE document_group_id = ? ORDER BY completed_at DESC",
+                (group["document_group_id"],),
+            ).fetchall()
+            alignments = [
+                {
+                    "alignment_run_id": row["alignment_run_id"],
+                    "pivot_source_file_id": row["pivot_source_file_id"],
+                    "target_source_file_id": row["target_source_file_id"],
+                    "status": row["status"],
+                    "algorithm": row["algorithm"],
+                    "algorithm_version": row["algorithm_version"],
+                    "completed_at": row["completed_at"],
+                }
+                for row in alignment_rows
+            ]
             members = connection.execute(
                 "SELECT m.source_file_id AS source_file_id, m.version_label AS "
                 "version_label, m.member_order AS member_order, "
@@ -497,6 +533,7 @@ def list_document_groups(
                     "base_source_file_id": group["base_source_file_id"],
                     "created_at": group["created_at"],
                     "updated_at": group["updated_at"],
+                    "alignments": alignments,
                     "members": [
                         {
                             "source_file_id": member["source_file_id"],

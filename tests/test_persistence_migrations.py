@@ -23,13 +23,13 @@ class PersistenceMigrationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._temporary.cleanup()
 
-    def test_v3_migration_is_registered_and_idempotent(self) -> None:
+    def test_v4_migrations_are_registered_and_idempotent(self) -> None:
         self.assertTrue(migrate_index_database(self.database_path))
         self.assertFalse(migrate_index_database(self.database_path))
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 3
+                connection.execute("PRAGMA user_version").fetchone()[0], 4
             )
             tables = {
                 row[0]
@@ -41,6 +41,8 @@ class PersistenceMigrationTests(unittest.TestCase):
             connection.close()
         self.assertIn("document_groups", tables)
         self.assertIn("document_group_members", tables)
+        self.assertIn("segment_sets", tables)
+        self.assertIn("alignment_runs", tables)
 
     def test_current_version_repairs_missing_additive_tables(self) -> None:
         connection = sqlite3.connect(str(self.database_path))

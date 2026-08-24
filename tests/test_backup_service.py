@@ -161,7 +161,8 @@ class BackupServiceTests(unittest.TestCase):
                 snapshot = json.loads(zipped.read("config/document_groups.json"))
                 manifest = json.loads(zipped.read("backup.json"))
 
-            self.assertEqual(manifest["version"], 2)
+            self.assertEqual(manifest["version"], 3)
+            self.assertIn("config/text_alignments.json", zipped.namelist())
             self.assertEqual(snapshot["document_groups"][0]["title"], "作品")
             self.assertEqual(
                 snapshot["document_group_members"][0]["version_label"], "原版"

@@ -48,6 +48,8 @@ _VERIFIED_PDF_SOURCE_TYPES = {
 }
 
 _VERIFIED_WORD_SOURCE_TYPES = {
+    "epub_page_list",
+    "epub_pagebreak",
     "section_break_verified",
     "word_rendered_page",
     "printed_page_marker",
@@ -71,6 +73,8 @@ _SOURCE_NOTES = {
     "section_break_verified": "分节页码，已验证",
     "word_rendered_page": "排版引擎页码",
     "printed_page_marker": "印刷页码锚点",
+    "epub_page_list": "EPUB 出版方页码表",
+    "epub_pagebreak": "EPUB 出版方分页标记",
     "toc_range_bound": "目录页码范围，非段落级精确页码",
     "unknown": "页码尚未解析",
 }

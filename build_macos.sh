@@ -144,6 +144,7 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_desktop_shell_controller \
   tests.test_document_package_import \
   tests.test_directory_scan \
+  tests.test_epub_import \
   tests.test_fts_search_scalability \
   tests.test_import_config_concurrency \
   tests.test_preferences_concurrency \
@@ -193,6 +194,8 @@ iconutil -c icns "$MEFINDER_ICONSET" -o "$MEFINDER_STAGE/app_icon.icns"
   tests.test_structured_reader \
   tests.test_structured_reader_frontend \
   tests.test_structured_reader_web \
+  tests.test_text_alignment \
+  tests.test_text_alignment_controller \
   tests.test_theme_system \
   tests.test_toast_presentation \
   tests.test_vision_api \

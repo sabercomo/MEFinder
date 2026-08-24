@@ -172,7 +172,7 @@ function searchDocumentView(source) {
   var bib = source.bibliographic || source.bibliographic_metadata || {};
   var title = source.title || bib.title || (volume && volume.display_title) || source.display_title || source.file_name || source.source_file_id;
   var author = source.author || bib.author || '';
-  return {title:title, author:author, sourceType:source.source_type === 'pdf' ? 'PDF' : 'Word'};
+  return {title:title, author:author, sourceType:sourceFormatLabel(source)};
 }
 
 function renderSearchDocumentOptions() {
@@ -312,7 +312,7 @@ function resultRowHTML(item, index) {
   const author = item.author_label ? esc(item.author_label) : '';
   const vol = item.volume_display ? esc(item.volume_display) : '';
   const page = esc(formatCitationPageLabel(item));
-  const sourceIcon = item.source_type === 'pdf' ? 'PDF' : 'Word';
+  const sourceIcon = sourceFormatLabel(item);
   const snippet = item.highlighted_html ? truncateHTML(item.highlighted_html, 100) : esc(truncate(item.paragraph_text || '', 100));
   return '<div class="result-row" data-index="' + index + '" onclick="selectResult(' + index + ')">'
     + '<div class="result-row-head">'
@@ -422,7 +422,7 @@ function showDetail(item) {
   const author = item.author_label ? esc(item.author_label) : '';
   const pageLabel = formatCitationPageLabel(item);
   const page = esc(pageLabel);
-  const sourceLabel = item.source_type === 'pdf' ? 'PDF' : 'Word';
+  const sourceLabel = sourceFormatLabel(item);
 
   const contextBefore = detailContextHTML(item.context_before, 'before');
   const contextAfter = detailContextHTML(item.context_after, 'after');

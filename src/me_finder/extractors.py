@@ -1,9 +1,10 @@
-"""Corpus extractors for DOCX and legacy DOC files."""
+"""Corpus extractors for DOCX, legacy DOC, and EPUB files."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import struct
 import zipfile
@@ -11,8 +12,10 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import unquote, urlsplit
 
 from .collection_metadata import infer_collection_metadata
 from .normalization import (
@@ -29,6 +32,11 @@ from .normalization import (
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS = {"w": W_NS, "r": R_NS}
+EPUB_NS = "http://www.idpf.org/2007/ops"
+EPUB_TEXT_BLOCKS = frozenset(
+    {"address", "blockquote", "dd", "dt", "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "li", "p", "pre"}
+)
+EPUB_MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
 
 
 def w_tag(name: str) -> str:
@@ -544,6 +552,485 @@ def extract_generic_docx(path: Path, root: Path) -> Dict[str, object]:
     }
 
 
+def _xml_local_name(value: object) -> str:
+    return str(value).rsplit("}", 1)[-1]
+
+
+def _epub_href(base_member: str, href: object) -> Tuple[str, str]:
+    parsed = urlsplit(str(href or ""))
+    member = posixpath.normpath(
+        posixpath.join(posixpath.dirname(base_member), unquote(parsed.path))
+    )
+    if not member or member == "." or member.startswith("../") or member.startswith("/"):
+        raise ValueError(f"EPUB 包含无效资源路径：{href}")
+    return member, unquote(parsed.fragment)
+
+
+def _epub_element_text(element: ET.Element) -> str:
+    return re.sub(r"\s+", " ", "".join(element.itertext())).strip()
+
+
+def _epub_metadata(opf: ET.Element) -> Dict[str, str]:
+    values: Dict[str, List[str]] = {}
+    for element in opf.iter():
+        name = _xml_local_name(element.tag).lower()
+        if name not in {
+            "creator",
+            "date",
+            "identifier",
+            "language",
+            "publisher",
+            "title",
+        }:
+            continue
+        text = _epub_element_text(element)
+        if text:
+            values.setdefault(name, []).append(text)
+    metadata = {
+        name: "；".join(dict.fromkeys(items))
+        for name, items in values.items()
+    }
+    if metadata.get("date"):
+        year = re.search(r"\b(?:1[5-9]|20|21)\d{2}\b", metadata["date"])
+        if year:
+            metadata["publish_year"] = year.group(0)
+    return metadata
+
+
+def _epub_page_label_from_marker(attributes: Dict[str, str]) -> Optional[str]:
+    for key in ("title", "aria-label"):
+        label = re.sub(r"\s+", " ", attributes.get(key, "")).strip()
+        if label:
+            return label
+    marker_id = attributes.get("id", "")
+    match = re.fullmatch(r"(?:page|pg|p)[-_:.]?(\d+|[ivxlcdm]+)", marker_id, re.I)
+    return match.group(1) if match else None
+
+
+class _EpubTextParser(HTMLParser):
+    def __init__(
+        self,
+        target_pages: Dict[str, Tuple[str, str]],
+        initial_page: Optional[Tuple[str, str]],
+    ) -> None:
+        super().__init__(convert_charrefs=True)
+        self.target_pages = target_pages
+        self.current_page = initial_page[0] if initial_page else None
+        self.current_page_source = initial_page[1] if initial_page else "unknown"
+        self.records: List[Dict[str, object]] = []
+        self.buffer: List[str] = []
+        self.block_tag: Optional[str] = None
+        self.skip_depth = 0
+
+    def _flush(self) -> None:
+        text = re.sub(r"\s+", " ", "".join(self.buffer)).strip()
+        self.buffer = []
+        if not text:
+            return
+        tag = self.block_tag or "p"
+        self.records.append(
+            {
+                "text": text,
+                "page_label": self.current_page,
+                "page_source_type": self.current_page_source,
+                "style_name": tag,
+                "is_title_candidate": tag in {"h1", "h2", "h3", "h4", "h5", "h6"},
+            }
+        )
+
+    def _set_page(self, page: Tuple[str, str]) -> None:
+        self._flush()
+        self.current_page, self.current_page_source = page
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: List[Tuple[str, Optional[str]]],
+    ) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        attributes = {
+            str(name).lower(): str(value or "") for name, value in attrs
+        }
+        target_id = attributes.get("id") or attributes.get("name")
+        page = self.target_pages.get(target_id or "")
+        epub_type = attributes.get("epub:type", attributes.get("type", ""))
+        if page is None and "pagebreak" in epub_type.split():
+            label = _epub_page_label_from_marker(attributes)
+            if label:
+                page = (label, "epub_pagebreak")
+        if page is not None:
+            self._set_page(page)
+        if tag in EPUB_TEXT_BLOCKS:
+            self._flush()
+            self.block_tag = tag
+        elif tag == "br":
+            self.buffer.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            if self.skip_depth:
+                self.skip_depth -= 1
+            return
+        if self.skip_depth:
+            return
+        if tag in EPUB_TEXT_BLOCKS:
+            self._flush()
+            self.block_tag = None
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip_depth:
+            self.buffer.append(data)
+
+    def finish(self) -> List[Dict[str, object]]:
+        self._flush()
+        return self.records
+
+
+def _epub_navigation_pages(
+    archive: zipfile.ZipFile,
+    nav_member: str,
+) -> List[Tuple[str, str, str]]:
+    nav = ET.fromstring(archive.read(nav_member))
+    pages: List[Tuple[str, str, str]] = []
+    for element in nav.iter():
+        if _xml_local_name(element.tag).lower() != "nav":
+            continue
+        nav_type = (
+            element.get(f"{{{EPUB_NS}}}type")
+            or element.get("epub:type")
+            or element.get("type")
+            or ""
+        )
+        if "page-list" not in nav_type.split():
+            continue
+        for link in element.iter():
+            if _xml_local_name(link.tag).lower() != "a" or not link.get("href"):
+                continue
+            label = _epub_element_text(link)
+            if not label:
+                continue
+            member, fragment = _epub_href(nav_member, link.get("href"))
+            pages.append((member, fragment, label))
+    return pages
+
+
+def _epub_ncx_pages(
+    archive: zipfile.ZipFile,
+    ncx_member: str,
+) -> List[Tuple[str, str, str]]:
+    ncx = ET.fromstring(archive.read(ncx_member))
+    pages: List[Tuple[str, str, str]] = []
+    for target in ncx.iter():
+        if _xml_local_name(target.tag).lower() != "pagetarget":
+            continue
+        label = ""
+        source = None
+        for child in target.iter():
+            name = _xml_local_name(child.tag).lower()
+            if name == "text" and not label:
+                label = _epub_element_text(child)
+            elif name == "content" and child.get("src") and source is None:
+                source = child.get("src")
+        label = label or str(target.get("value") or "").strip()
+        if label and source:
+            member, fragment = _epub_href(ncx_member, source)
+            pages.append((member, fragment, label))
+    return pages
+
+
+def extract_epub(path: Path, root: Path) -> Dict[str, object]:
+    """Extract EPUB reading-order text and publisher-defined print pages."""
+
+    digest = file_sha256(path)
+    identity = hashlib.sha256(
+        f"{path.name}\0{digest}".encode("utf-8", "ignore")
+    ).hexdigest()[:32]
+    source_id = f"epub-{identity}"
+    resolved_path = path.resolve()
+    try:
+        relative_path = resolved_path.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        relative_path = resolved_path.as_posix()
+
+    try:
+        archive = zipfile.ZipFile(path)
+    except zipfile.BadZipFile as exc:
+        raise ValueError("EPUB 文件不是有效的 ZIP 容器。") from exc
+    with archive:
+        if sum(info.file_size for info in archive.infolist()) > EPUB_MAX_UNCOMPRESSED_BYTES:
+            raise ValueError("EPUB 解压后的内容超过 512 MB 限制。")
+        try:
+            container = ET.fromstring(archive.read("META-INF/container.xml"))
+        except KeyError as exc:
+            raise ValueError("EPUB 缺少 META-INF/container.xml。") from exc
+        rootfile = next(
+            (
+                element.get("full-path")
+                for element in container.iter()
+                if _xml_local_name(element.tag).lower() == "rootfile"
+                and element.get("full-path")
+            ),
+            None,
+        )
+        if not rootfile:
+            raise ValueError("EPUB container.xml 缺少 OPF 路径。")
+        opf_member, _fragment = _epub_href("", rootfile)
+        try:
+            opf = ET.fromstring(archive.read(opf_member))
+        except KeyError as exc:
+            raise ValueError("EPUB 的 OPF 文件不存在。") from exc
+
+        metadata = _epub_metadata(opf)
+        manifest: Dict[str, Dict[str, str]] = {}
+        for element in opf.iter():
+            if _xml_local_name(element.tag).lower() != "item":
+                continue
+            item_id = str(element.get("id") or "").strip()
+            href = element.get("href")
+            if not item_id or not href:
+                continue
+            member, _fragment = _epub_href(opf_member, href)
+            manifest[item_id] = {
+                "member": member,
+                "media_type": str(element.get("media-type") or ""),
+                "properties": str(element.get("properties") or ""),
+            }
+        spine_items: List[str] = []
+        spine_toc_id = ""
+        for element in opf.iter():
+            name = _xml_local_name(element.tag).lower()
+            if name == "spine":
+                spine_toc_id = str(element.get("toc") or "")
+            elif name == "itemref" and str(element.get("linear") or "yes").lower() != "no":
+                item = manifest.get(str(element.get("idref") or ""))
+                if item and item["member"] not in spine_items:
+                    spine_items.append(item["member"])
+        if not spine_items:
+            spine_items = [
+                item["member"]
+                for item in manifest.values()
+                if item["media_type"] in {"application/xhtml+xml", "text/html"}
+                and "nav" not in item["properties"].split()
+            ]
+
+        page_references: List[Tuple[str, str, str]] = []
+        for item in manifest.values():
+            if "nav" in item["properties"].split():
+                page_references.extend(
+                    _epub_navigation_pages(archive, item["member"])
+                )
+        ncx_items = [
+            item["member"]
+            for item_id, item in manifest.items()
+            if item_id == spine_toc_id
+            or item["media_type"] == "application/x-dtbncx+xml"
+        ]
+        for ncx_member in dict.fromkeys(ncx_items):
+            page_references.extend(_epub_ncx_pages(archive, ncx_member))
+
+        pages_by_member: Dict[str, Dict[str, Tuple[str, str]]] = {}
+        for member, fragment, label in page_references:
+            pages_by_member.setdefault(member, {}).setdefault(
+                fragment,
+                (label, "epub_page_list"),
+            )
+
+        extracted_records: List[Dict[str, object]] = []
+        current_page: Optional[Tuple[str, str]] = None
+        for section_index, member in enumerate(spine_items):
+            member_pages = pages_by_member.get(member, {})
+            initial_page = member_pages.get("") or current_page
+            try:
+                document = archive.read(member).decode("utf-8-sig")
+            except KeyError as exc:
+                raise ValueError(f"EPUB spine 资源不存在：{member}") from exc
+            except UnicodeDecodeError:
+                document = archive.read(member).decode("utf-8", errors="replace")
+            parser = _EpubTextParser(
+                {key: value for key, value in member_pages.items() if key},
+                initial_page,
+            )
+            parser.feed(document)
+            for record in parser.finish():
+                record["section_index"] = section_index
+                record["spine_href"] = member
+                extracted_records.append(record)
+            if parser.current_page:
+                current_page = (
+                    parser.current_page,
+                    parser.current_page_source,
+                )
+
+    title = metadata.get("title") or path.stem
+    author = metadata.get("creator", "")
+    publisher = metadata.get("publisher", "")
+    publish_year = metadata.get("publish_year", "")
+    missing_fields = [
+        field
+        for field, value in (
+            ("author", author),
+            ("publisher", publisher),
+            ("publish_year", publish_year),
+        )
+        if not value
+    ]
+    bibliographic_metadata: Dict[str, object] = {
+        "title": title,
+        "document_type": "book",
+        "metadata_status": "partial" if missing_fields else "complete",
+        "metadata_source": "epub_package",
+        "metadata_confidence": 0.95,
+        "metadata_missing_fields": missing_fields,
+    }
+    for key, value in (
+        ("author", author),
+        ("publisher", publisher),
+        ("publish_year", publish_year),
+        ("isbn", metadata.get("identifier", "")),
+        ("language", metadata.get("language", "")),
+    ):
+        if value:
+            bibliographic_metadata[key] = value
+
+    source: Dict[str, object] = {
+        "source_file_id": source_id,
+        "source_type": "word",
+        "relative_path": relative_path,
+        "volume_number": None,
+        "file_format": "epub",
+        "container_format": "epub_zip",
+        "file_name": path.name,
+        "size_bytes": path.stat().st_size,
+        "sha256": digest,
+        "last_modified": datetime.fromtimestamp(
+            path.stat().st_mtime, timezone.utc
+        ).isoformat(),
+        "display_title": title,
+        "document_title": title,
+        "title": title,
+        "document_type": "book",
+        "bibliographic_metadata": bibliographic_metadata,
+        "open_source_url": f"/source/{source_id}",
+        "epub_page_count": len(
+            {
+                str(record["page_label"])
+                for record in extracted_records
+                if record.get("page_label")
+            }
+        ),
+    }
+    if author:
+        source["author"] = author
+    if publisher:
+        source["publisher"] = publisher
+    if publish_year:
+        source["publish_year"] = publish_year
+    if metadata.get("language"):
+        source["language"] = metadata["language"]
+
+    volume_id = f"{source_id}-document"
+    work_id_value = f"{source_id}-work"
+    volume = {
+        "volume_id": volume_id,
+        "source_file_id": source_id,
+        "source_type": "word",
+        "display_title": title,
+        "document_title": title,
+        "volume_number": None,
+        "primary_structure": "ebook",
+        "collection_author": author or None,
+        "document_type": "book",
+    }
+    work = {
+        "work_id": work_id_value,
+        "volume_id": volume_id,
+        "source_type": "word",
+        "parent_work_id": None,
+        "work_order": 1,
+        "title": title,
+        "subtitle": None,
+        "author_label": author or None,
+        "date_label": publish_year or None,
+        "title_source": "epub_metadata" if metadata.get("title") else "file_name",
+        "boundary_source": "whole_document",
+        "toc_page_start": None,
+        "toc_page_end": None,
+        "confidence": 0.95 if metadata.get("title") else 0.5,
+        "notes": "EPUB spine 阅读顺序。",
+    }
+    paragraphs: List[Dict[str, object]] = []
+    for index, record in enumerate(extracted_records):
+        label = record.get("page_label")
+        page_source_type = str(record.get("page_source_type") or "unknown")
+        paragraph: Dict[str, object] = {
+            "paragraph_id": f"{source_id}-P{index:06d}",
+            "source_file_id": source_id,
+            "source_type": "word",
+            "source_format": "epub",
+            "volume_id": volume_id,
+            "volume_number": None,
+            "volume_display": title,
+            "work_id": work_id_value,
+            "work_title": title,
+            "document_title": title,
+            "author_label": author or None,
+            "paragraph_index": index,
+            "section_index": record.get("section_index"),
+            "spine_href": record.get("spine_href"),
+            "text_raw": record["text"],
+            "style_name": record.get("style_name"),
+            "alignment": None,
+            "font_summary": {},
+            "is_title_candidate": bool(record.get("is_title_candidate")),
+            "is_toc_entry": False,
+            "is_index_entry": False,
+            "original_page_start": label,
+            "original_page_end": label,
+            "page_source_type": page_source_type if label else "unknown",
+            "page_confidence": 1.0 if label else 0.0,
+            "page_mapping_confidence": 1.0 if label else 0.0,
+            "mapping_confidence_level": "high" if label else None,
+            "page_display": str(label) if label else None,
+            "original_file_name": path.name,
+            "eligible_for_search": True,
+            "bibliographic_metadata": bibliographic_metadata,
+        }
+        enrich_paragraph_text(paragraph)
+        paragraphs.append(paragraph)
+
+    has_publisher_pages = any(
+        paragraph.get("original_page_start") for paragraph in paragraphs
+    )
+    audit_issues = [] if has_publisher_pages else [
+        {
+            "severity": "warning",
+            "issue_type": "epub_page_list_missing",
+            "message": (
+                "EPUB 未提供 page-list 或 pagebreak；已导入正文，"
+                "但不生成随排版变化的伪页码。"
+            ),
+            "source_file_id": source_id,
+        }
+    ]
+    return {
+        "source_file": source,
+        "volume": volume,
+        "works": [work],
+        "toc_entries": [],
+        "paragraphs": paragraphs,
+        "page_anchors": make_page_anchors_from_paragraphs(
+            paragraphs, volume_id, source_id
+        ),
+        "audit_issues": audit_issues,
+    }
+
+
 def read_docx_styles(archive: zipfile.ZipFile) -> Dict[Optional[str], str]:
     try:
         styles_root = ET.fromstring(archive.read("word/styles.xml"))
@@ -915,6 +1402,11 @@ def make_page_anchors_from_paragraphs(
             continue
         existing = anchors.get(str(label))
         if existing is None:
+            source_type = str(paragraph.get("page_source_type") or "unknown")
+            is_epub_page = source_type in {
+                "epub_page_list",
+                "epub_pagebreak",
+            }
             anchors[str(label)] = {
                 "page_anchor_id": f"{volume_id}-PAGE-{label}",
                 "volume_id": volume_id,
@@ -927,8 +1419,12 @@ def make_page_anchors_from_paragraphs(
                 "anchor_source_type": paragraph.get("page_source_type"),
                 "anchor_text": trim_for_display(str(paragraph.get("text_raw") or ""), 120),
                 "confidence": paragraph.get("page_confidence", 0.0),
-                "validated_by": "automatic",
-                "validation_notes": "MVP 自动分节推断，尚未人工抽样验证。",
+                "validated_by": "epub_publisher" if is_epub_page else "automatic",
+                "validation_notes": (
+                    "页码来自 EPUB 出版方提供的 page-list/pagebreak。"
+                    if is_epub_page
+                    else "MVP 自动分节推断，尚未人工抽样验证。"
+                ),
             }
         else:
             existing["end_paragraph_id"] = paragraph.get("paragraph_id")
@@ -936,6 +1432,8 @@ def make_page_anchors_from_paragraphs(
 
 
 def extract_source(path: Path, root: Path) -> Dict[str, object]:
+    if path.suffix.lower() == ".epub":
+        return extract_epub(path, root)
     if path.suffix.lower() == ".docx":
         if is_marx_engels_volume_name(path.name):
             return extract_docx(path, root)

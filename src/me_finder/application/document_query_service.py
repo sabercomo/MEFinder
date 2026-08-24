@@ -193,7 +193,7 @@ class DocumentQueryService:
         if target != root and root not in target.parents:
             raise DocumentQueryError("拒绝打开应用目录外的文件。")
         if (
-            target.suffix.lower() not in {".pdf", ".doc", ".docx"}
+            target.suffix.lower() not in {".pdf", ".doc", ".docx", ".epub"}
             or not target.exists()
         ):
             raise DocumentQueryError("原始文件不存在。")

@@ -64,7 +64,15 @@ class FakeJobs:
 
 
 class BackupCoordinatorTests(unittest.TestCase):
-    def _coordinator(self, root, *, write=None, restore=None, restore_groups=None):
+    def _coordinator(
+        self,
+        root,
+        *,
+        write=None,
+        restore=None,
+        restore_groups=None,
+        restore_alignments=None,
+    ):
         events = []
         jobs = FakeJobs(events)
 
@@ -86,6 +94,8 @@ class BackupCoordinatorTests(unittest.TestCase):
             kwargs["restore"] = restore
         if restore_groups is not None:
             kwargs["restore_groups"] = restore_groups
+        if restore_alignments is not None:
+            kwargs["restore_alignments"] = restore_alignments
         coordinator = BackupCoordinator(
             AppPaths.create(root),
             FakeIndex(events),
@@ -166,6 +176,7 @@ class BackupCoordinatorTests(unittest.TestCase):
                         "document_groups": [],
                         "document_group_members": [],
                     },
+                    "alignment_snapshot": {"alignment_pairs": []},
                 }
 
             def restore_groups(snapshot, index_path):
@@ -176,10 +187,20 @@ class BackupCoordinatorTests(unittest.TestCase):
                     (root / "data" / "index.sqlite3").resolve(),
                 )
 
+            def restore_alignments(snapshot, index_path):
+                events.append("restore-alignments")
+                self.assertEqual(snapshot["alignment_pairs"], [])
+                self.assertEqual(
+                    index_path,
+                    (root / "data" / "index.sqlite3").resolve(),
+                )
+                return 0
+
             coordinator, jobs, events = self._coordinator(
                 root,
                 restore=restore,
                 restore_groups=restore_groups,
+                restore_alignments=restore_alignments,
             )
             job_id = coordinator.start_restore(str(source))
 
@@ -193,6 +214,7 @@ class BackupCoordinatorTests(unittest.TestCase):
                     "restore",
                     "rebuild",
                     "restore-groups",
+                    "restore-alignments",
                     "config-exit",
                     "index-exit",
                     "durable-exit",

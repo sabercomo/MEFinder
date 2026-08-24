@@ -12,6 +12,7 @@ from typing import Callable, Dict, Mapping, Protocol
 from ..app_context import AppPaths
 from ..backup_service import restore_backup, write_backup
 from ..document_groups import replace_document_group_snapshot
+from ..text_alignment import replace_alignment_recipe_snapshot
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError
 from ..pdf_import_service import import_config_lock
@@ -47,6 +48,7 @@ BackupRoot = Callable[[], Path]
 BackupWriter = Callable[..., Path]
 BackupRestorer = Callable[..., Dict[str, object]]
 GroupSnapshotRestorer = Callable[[Dict[str, list], Path], None]
+AlignmentSnapshotRestorer = Callable[[Mapping[str, object], Path], int]
 ConfigLock = Callable[[], AbstractContextManager[None]]
 
 
@@ -68,6 +70,7 @@ class BackupCoordinator:
         write: BackupWriter = write_backup,
         restore: BackupRestorer = restore_backup,
         restore_groups: GroupSnapshotRestorer = replace_document_group_snapshot,
+        restore_alignments: AlignmentSnapshotRestorer = replace_alignment_recipe_snapshot,
         config_lock: ConfigLock = import_config_lock,
     ) -> None:
         self._paths = paths
@@ -78,6 +81,7 @@ class BackupCoordinator:
         self._write = write
         self._restore = restore
         self._restore_groups = restore_groups
+        self._restore_alignments = restore_alignments
         self._config_lock = config_lock
 
     def export(self, *, output_dir: Path | None = None) -> Dict[str, object]:
@@ -154,6 +158,12 @@ class BackupCoordinator:
                 group_snapshot = summary.get("document_group_snapshot")
                 if group_snapshot is not None:
                     self._restore_groups(group_snapshot, self._paths.index_path)
+                alignment_snapshot = summary.get("alignment_snapshot")
+                if alignment_snapshot is not None:
+                    self._restore_alignments(
+                        alignment_snapshot,
+                        self._paths.index_path,
+                    )
             self._jobs.update_import_job(
                 job_id,
                 status="completed",

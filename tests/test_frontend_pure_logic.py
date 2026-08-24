@@ -283,6 +283,7 @@ class MappingLabelTests(unittest.TestCase):
     def test_known_method_labels(self):
         self.assertEqual(_call("mappingMethodLabel", "manual_segment"), "人工分段")
         self.assertEqual(_call("mappingMethodLabel", "pdf_page_label"), "PDF标签")
+        self.assertEqual(_call("mappingMethodLabel", "epub_page_list"), "EPUB页码表")
 
     def test_unknown_method_is_passed_through(self):
         self.assertEqual(_call("mappingMethodLabel", "brand_new"), "brand_new")
@@ -751,6 +752,12 @@ class LibrarySortProjectionTests(unittest.TestCase):
                    "source_type": "pdf"}),
             {"title": "sid", "author": "", "imported_at": "2023",
              "modified_at": "2023", "source_type": "PDF"},
+        )
+
+    def test_epub_format_is_not_labeled_as_word(self):
+        self.assertEqual(
+            _call("sourceFormatLabel", {"source_type": "word", "file_format": "epub"}),
+            "EPUB",
         )
 
 
@@ -1298,6 +1305,16 @@ class ScanEntryRowTests(unittest.TestCase):
                      self._entry(file_type="word", needs_ocr=False), 0, True, True)
         self.assertIn(" checked", html)
         self.assertIn('<span class="type-badge word">DOCX</span>', html)
+
+    def test_epub_type(self):
+        html = _call(
+            "scanEntryRow",
+            self._entry(file_type="epub", needs_ocr=False, name="book.epub"),
+            0,
+            True,
+            False,
+        )
+        self.assertIn('<span class="type-badge word">EPUB</span>', html)
 
     def test_ocr_note_and_escaping(self):
         html = _call("scanEntryRow",

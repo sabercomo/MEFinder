@@ -690,6 +690,9 @@
 .grp-base-btn { flex: 0 0 auto; height: 28px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--surface-primary); color: var(--text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; }
 .grp-base-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .grp-base-btn.is-base { border-color: var(--accent); color: var(--accent); background: transparent; font-weight: 650; }
+.grp-align-btn { flex: 0 0 auto; height: 28px; padding: 0 10px; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.grp-align-btn:hover:not(:disabled) { background: var(--surface-hover); }
+.grp-align-btn:disabled { cursor: wait; opacity: .65; }
 .grp-remove-btn { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; color: var(--text-tertiary); font-size: 13px; cursor: pointer; }
 .grp-remove-btn:hover { background: var(--danger-soft); color: var(--danger); }
 

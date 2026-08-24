@@ -36,6 +36,7 @@ from .application.import_orchestrator import (
 from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .application.document_group_coordinator import DocumentGroupCoordinator
+from .application.text_alignment_coordinator import TextAlignmentCoordinator
 from .document_group_controller import DocumentGroupController
 from .component_catalog import ComponentCatalog
 from .document_groups import (
@@ -55,6 +56,7 @@ from .parser_settings_controller import ParserSettingsController
 from .preferences_controller import PreferencesController
 from .persistence import SQLiteDocumentReadRepository
 from .structured_reader_controller import StructuredReaderController
+from .text_alignment_controller import TextAlignmentController
 from .bibliographic_metadata import (
     METADATA_FIELDS,
     canonical_metadata,
@@ -127,6 +129,7 @@ from .import_resume import sha256_file
 from .lifecycle import DurableOperationGate
 from .search import SearchEngine
 from .structured_reader import get_document_citation, get_document_window
+from .text_alignment import list_alignment_targets, locate_alignment
 from .chunked_upload import ChunkedUploadError
 from .web_assets import HTML, _PACKAGE_DIR, render_html
 from .web_http import (
@@ -692,6 +695,22 @@ def make_handler(
     document_group_controller = DocumentGroupController(
         document_group_coordinator
     )
+    text_alignment_coordinator = TextAlignmentCoordinator(
+        context.paths,
+        index_runtime,
+        durable_operations,
+    )
+    text_alignment_controller = TextAlignmentController(
+        text_alignment_coordinator,
+        index_runtime.run_when_ready,
+        list_targets=(
+            lambda *args, **kwargs: list_alignment_targets(*args, **kwargs)
+        ),
+        locate=(
+            lambda *args, **kwargs: locate_alignment(*args, **kwargs)
+        ),
+        log_exception=lambda message: logging.exception(message),
+    )
     structured_reader_controller = StructuredReaderController(
         index_runtime.run_when_ready,
         get_window=(
@@ -886,6 +905,7 @@ def make_handler(
             lambda _params: import_job_controller.resumable()
         ),
         "/api/document/pages": structured_reader_controller.pages,
+        "/api/text-alignments/targets": text_alignment_controller.targets,
     }
     controller_post_routes = {
         "/api/preferences": preferences_controller.save_preferences,
@@ -981,6 +1001,8 @@ def make_handler(
         "/api/import-resume": import_job_controller.resume,
         "/api/import-resume-dismiss": import_job_controller.dismiss,
         "/api/document/citation": structured_reader_controller.citation,
+        "/api/text-alignments/generate": text_alignment_controller.generate,
+        "/api/text-alignments/locate": text_alignment_controller.locate,
         "/api/backup/export": archive_transfer_controller.export_backup,
         "/api/document/export": archive_transfer_controller.export_document,
         "/api/document/export-markdown": (

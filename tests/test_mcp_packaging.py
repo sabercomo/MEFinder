@@ -58,6 +58,17 @@ class MCPPackagingTests(unittest.TestCase):
 
         self.assertIn("must contain exactly two executables", self.windows_installer)
 
+    def test_release_gates_cover_v049_features(self) -> None:
+        for script in (
+            self.windows_dev,
+            self.windows_installer,
+            self.windows_portable,
+            self.macos_build,
+        ):
+            self.assertIn("tests.test_epub_import", script)
+            self.assertIn("tests.test_text_alignment", script)
+            self.assertIn("tests.test_text_alignment_controller", script)
+
     def test_macos_bundle_contains_signed_smoked_sidecar_and_licenses(self) -> None:
         self.assertIn("packaging/mcp_sidecar.spec", self.macos_build)
         self.assertIn("Contents/MacOS/MEFinderMCP", self.macos_build)
@@ -106,8 +117,8 @@ class MCPPackagingTests(unittest.TestCase):
             self.windows_workflow,
         )
         self.assertIn("gh release download v0.4.5", self.windows_workflow)
-        self.assertIn("MEFinder-v0.4.8-windows-setup.exe", self.windows_workflow)
-        self.assertIn("MEFinder-v0.4.8-windows-portable.zip", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.9-windows-setup.exe", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.9-windows-portable.zip", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
         self.assertIn("portable-moved", self.windows_workflow)

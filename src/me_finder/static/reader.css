@@ -47,15 +47,53 @@
   box-shadow: var(--shadow-popover);
 }
 
+.mef-reader-panel.is-comparing {
+  width: min(1680px, calc(100vw - 48px));
+}
+
 .mef-reader-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 18px;
   min-height: 72px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-elevated);
+}
+
+.mef-reader-comparison-launchers {
+  display: flex;
+  min-width: 0;
+}
+
+.mef-reader-comparison-launchers[hidden] {
+  display: none;
+}
+
+.mef-reader-comparison-launcher {
+  max-width: 240px;
+  min-height: 34px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-primary);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mef-reader-comparison-launcher:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.mef-reader-comparison-launcher:disabled {
+  cursor: wait;
+  opacity: .6;
 }
 
 .mef-reader-heading {
@@ -150,6 +188,7 @@
 }
 
 .mef-reader-citation-action,
+.mef-reader-alignment-action,
 .mef-reader-citation-clear {
   flex: 0 0 auto;
   min-height: 32px;
@@ -164,12 +203,14 @@
 }
 
 .mef-reader-citation-action:hover:not(:disabled),
+.mef-reader-alignment-action:hover:not(:disabled),
 .mef-reader-citation-clear:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--surface-hover);
 }
 
 .mef-reader-citation-action:disabled,
+.mef-reader-alignment-action:disabled,
 .mef-reader-citation-clear:disabled {
   cursor: wait;
   opacity: .6;
@@ -177,6 +218,20 @@
 
 .mef-reader-citation-clear {
   color: var(--text-secondary);
+}
+
+.mef-reader-alignment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mef-reader-alignment-actions[hidden] {
+  display: none;
+}
+
+.mef-reader-alignment-action {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .mef-reader-close:focus-visible,
@@ -206,6 +261,94 @@
 .mef-reader-alert[data-kind="error"] {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.mef-reader-body {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mef-reader-body.is-comparing {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mef-reader-source-pane,
+.mef-reader-comparison-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.mef-reader-comparison-pane {
+  border-left: 1px solid var(--border-default);
+}
+
+.mef-reader-comparison-pane[hidden],
+.mef-reader-pane-header[hidden] {
+  display: none;
+}
+
+.mef-reader-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+}
+
+.mef-reader-pane-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mef-reader-comparison-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.mef-reader-pane-action {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mef-reader-pane-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.mef-reader-pane-action.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mef-reader-pane-action:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.mef-reader-body.is-comparing .mef-reader-content {
+  width: calc(100% - 24px);
+  padding-top: 14px;
 }
 
 .mef-reader-viewport {
@@ -329,6 +472,18 @@
   pointer-events: none;
 }
 
+@media (max-width: 980px) {
+  .mef-reader-body.is-comparing {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .mef-reader-comparison-pane {
+    border-top: 1px solid var(--border-default);
+    border-left: 0;
+  }
+}
+
 @media (max-width: 720px) {
   .mef-reader-panel {
     width: 100%;
@@ -372,6 +527,24 @@
     padding: 18px;
     font-size: 15px;
   }
+
+  .mef-reader-comparison-launchers {
+    grid-column: 1 / -1;
+  }
+
+  .mef-reader-comparison-launcher {
+    max-width: 100%;
+  }
+
+  .mef-reader-pane-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mef-reader-comparison-navigation {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 
 /* Large desktop reading mode: increase type and measure together instead of
@@ -391,6 +564,7 @@
   .mef-reader-citation-bar { min-height: 58px; padding: 10px 24px; }
   .mef-reader-citation-context,
   .mef-reader-citation-action,
+  .mef-reader-alignment-action,
   .mef-reader-citation-clear,
   .mef-reader-alert,
   .mef-reader-loading { font-size: 13px; }

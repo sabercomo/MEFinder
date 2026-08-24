@@ -404,9 +404,9 @@ def make_http_handler(context: WebHTTPContext):
             if parsed.path == "/api/import":
                 filename = unquote(self.headers.get("X-File-Name", ""))
                 suffix = Path(filename).suffix.lower()
-                if suffix not in {".pdf", ".docx"}:
+                if suffix not in {".pdf", ".docx", ".epub"}:
                     self._send_json(
-                        {"error": "只支持 PDF 或 DOCX 文件。"},
+                        {"error": "只支持 PDF、DOCX 或 EPUB 文件。"},
                         status=400,
                     )
                     return
@@ -646,13 +646,14 @@ def make_http_handler(context: WebHTTPContext):
             if target != root and root not in target.parents:
                 self._send(403, b"Forbidden", "text/plain; charset=utf-8")
                 return
-            if target.suffix.lower() not in {".pdf", ".doc", ".docx"} or not target.exists():
+            if target.suffix.lower() not in {".pdf", ".doc", ".docx", ".epub"} or not target.exists():
                 self._send(404, b"Source not found", "text/plain; charset=utf-8")
                 return
             content_type = {
                 ".pdf": "application/pdf",
                 ".doc": "application/msword",
                 ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".epub": "application/epub+zip",
             }.get(target.suffix.lower(), "application/octet-stream")
             file_size = target.stat().st_size
             try:

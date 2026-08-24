@@ -312,7 +312,7 @@ def scan_directories_for_documents(
     detect_limit: int = 500,
     detect_time_budget: float = 8.0,
 ) -> Dict[str, object]:
-    """List PDF/DOCX files under the configured literature directories.
+    """List PDF/DOCX/EPUB files under configured literature directories.
 
     ``imported_names`` maps already-imported file names to size in bytes.
     Detection of the PDF text-layer type only runs for new files, and stops
@@ -342,7 +342,7 @@ def scan_directories_for_documents(
             continue
         for path in paths:
             suffix = path.suffix.lower()
-            if suffix not in {".pdf", ".docx"}:
+            if suffix not in {".pdf", ".docx", ".epub"}:
                 continue
             if path.name.startswith(("~$", ".")):
                 continue
@@ -371,7 +371,7 @@ def scan_directories_for_documents(
                 "name": path.name,
                 "directory": str(directory),
                 "size_bytes": size,
-                "file_type": "pdf" if suffix == ".pdf" else "docx",
+                "file_type": suffix.lstrip("."),
                 "status": status,
             }
             if suffix == ".pdf" and status == "new":
@@ -400,8 +400,8 @@ def copy_local_document(root: Path, source_path: Path) -> Path:
     root = Path(root)
     source_path = Path(source_path)
     suffix = source_path.suffix.lower()
-    if suffix not in {".pdf", ".docx"}:
-        raise MinerUError("只支持 PDF 或 DOCX 文件。")
+    if suffix not in {".pdf", ".docx", ".epub"}:
+        raise MinerUError("只支持 PDF、DOCX 或 EPUB 文件。")
     directory = root / "corpus" / ("raw_pdf" if suffix == ".pdf" else "raw_docx")
     target: Optional[Path] = None
     temp_path: Optional[Path] = None

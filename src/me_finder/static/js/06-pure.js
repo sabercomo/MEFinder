@@ -141,7 +141,7 @@ function batchLookupSourceFor(meta) {
 // ── 映射与页码标签 ─────────────────────────────────────────────
 // 枚举值转中文显示名的查表函数：未登记的值原样回吐，不猜不兜底。
 function mappingMethodLabel(m) {
-  const labels = {manual_segment:'人工分段',manual:'人工',manual_override:'人工覆盖',fixed_offset:'固定偏移',manual_page:'逐页校准',pdf_page_label:'PDF标签',numeric_bookmark_sequence:'PDF数字书签',native_pdf_edge_sequence:'页边数字序列',ocr_sequence:'OCR序列',ocr_sequence_with_structure:'OCR序列+结构',combined_sequence:'多来源序列',uncalibrated:'未校准',mixed:'混合'};
+  const labels = {manual_segment:'人工分段',manual:'人工',manual_override:'人工覆盖',fixed_offset:'固定偏移',manual_page:'逐页校准',pdf_page_label:'PDF标签',numeric_bookmark_sequence:'PDF数字书签',native_pdf_edge_sequence:'页边数字序列',ocr_sequence:'OCR序列',ocr_sequence_with_structure:'OCR序列+结构',combined_sequence:'多来源序列',epub_page_list:'EPUB页码表',epub_pagebreak:'EPUB分页标记',uncalibrated:'未校准',mixed:'混合'};
   return labels[m] || m || '';
 }
 function mappingStatusLabel(status) {
@@ -269,7 +269,7 @@ function pdfTypeLabel(type) {
 }
 
 function structureLabel(s) {
-  var labels = {article_collection:'文集',complete_works:'全集',selected_works:'选集',monograph:'专著',whole_pdf:'整本',pdf_document:'PDF 文献',manuscript_selection:'手稿选编',mixed:'混合',letters:'书信集'};
+  var labels = {article_collection:'文集',complete_works:'全集',selected_works:'选集',monograph:'专著',whole_pdf:'整本',pdf_document:'PDF 文献',ebook:'电子书',manuscript_selection:'手稿选编',mixed:'混合',letters:'书信集'};
   return labels[s] || s || '';
 }
 
@@ -448,6 +448,13 @@ function libraryDocType(source) {
   return value === 'journal_article' || value === 'thesis' ? value : 'book';
 }
 
+function sourceFormatLabel(source) {
+  if (source && source.source_type === 'pdf') return 'PDF';
+  var format = String((source && (source.file_format || source.source_format)) || '').toLowerCase();
+  var name = String((source && (source.file_name || source.original_file_name)) || '').toLowerCase();
+  return format === 'epub' || name.endsWith('.epub') ? 'EPUB' : 'Word';
+}
+
 // 原在 30-library.js，纯函数，前移以便单测。
 function librarySortProjection(source) {
   return {
@@ -455,7 +462,7 @@ function librarySortProjection(source) {
     author: source.author || '',
     imported_at: source.imported_at || source.last_modified || '',
     modified_at: source.modified_at || source.last_modified || '',
-    source_type: source.source_type === 'word' ? 'Word' : 'PDF'
+    source_type: sourceFormatLabel(source)
   };
 }
 
@@ -832,7 +839,7 @@ function scanEntryRow(entry, index, checkable, checked) {
     + (checkable
       ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
       : '<span class="scan-check-placeholder"></span>')
-    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : 'DOCX') + '</span>'
+    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : entry.file_type === 'epub' ? 'EPUB' : 'DOCX') + '</span>'
     + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
     + '<span class="scan-row-size">' + formatFileSize(entry.size_bytes) + '</span>'
     + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')

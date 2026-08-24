@@ -130,10 +130,10 @@ class DocumentDeletionService:
                         not self._is_within(
                             source_path, self.root / "corpus" / "raw_docx"
                         )
-                        or source_path.suffix.lower() not in {".doc", ".docx"}
+                        or source_path.suffix.lower() not in {".doc", ".docx", ".epub"}
                     ):
                         raise ValueError(
-                            "只允许删除应用 corpus/raw_docx 内保存的 Word 语料副本。"
+                            "只允许删除应用 corpus/raw_docx 内保存的文本语料副本。"
                         )
                     if source_path.exists():
                         internal_paths[source_file_id] = source_path

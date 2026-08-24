@@ -104,7 +104,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="search-control-label">来源</span>
               <div class="source-type-control" id="source-type-control" role="group" aria-label="来源类型">
                 <button class="source-type-btn active" type="button" data-source="all" onclick="setSearchSourceType('all')">全部</button>
-                <button class="source-type-btn" type="button" data-source="word" onclick="setSearchSourceType('word')">Word</button>
+                <button class="source-type-btn" type="button" data-source="word" onclick="setSearchSourceType('word')">Word / EPUB</button>
                 <button class="source-type-btn" type="button" data-source="pdf" onclick="setSearchSourceType('pdf')">PDF</button>
               </div>
             </div>
@@ -347,7 +347,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="page-header-row">
           <div>
             <div class="page-title">文献导入</div>
-            <div class="page-subtitle">导入 PDF 或 DOCX 文献到本地索引；PDF 默认自动解析，也可直接指定强制方式</div>
+            <div class="page-subtitle">导入 PDF、DOCX 或 EPUB 文献到本地索引；PDF 默认自动解析，也可直接指定强制方式</div>
           </div>
         </div>
       </div>
@@ -404,10 +404,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="drop-zone-formats">
             <span class="format-tag">PDF</span>
             <span class="format-tag">DOCX</span>
+            <span class="format-tag">EPUB</span>
             <span class="format-tag">MEFinder 文档包</span>
           </div>
         </div>
-        <input type="file" id="file-input" accept=".pdf,.docx,.mefinder.zip" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <input type="file" id="file-input" accept=".pdf,.docx,.epub,.mefinder.zip" multiple style="display:none" onchange="handleFileSelect(this.files)">
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>

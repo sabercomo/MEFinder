@@ -974,7 +974,12 @@ class ImportOrchestrator:
         result: List[Job] = []
         for job, context in self._job_store.resumable_snapshots():
             public_job = self.public_import_job(job)
-            public_job["file_type"] = "pdf" if context.get("is_pdf") else "docx"
+            target = Path(context.get("target") or "")
+            public_job["file_type"] = (
+                "pdf"
+                if context.get("is_pdf")
+                else target.suffix.lower().lstrip(".") or "docx"
+            )
             result.append(public_job)
         return sorted(
             result,

@@ -1,5 +1,4 @@
-"""Export and restore the user-curated runtime state (page calibration,
-bibliographic metadata, document groups, structured-parser manifests, preferences).
+"""Export and restore curated runtime state and alignment recipes.
 
 Deliberately excludes the large regenerable artifacts — the SQLite index,
 the corpus PDFs, and the OCR/VLM page results — so a backup is a few hundred
@@ -19,14 +18,16 @@ from typing import Dict, List, Optional
 
 from .document_groups import read_document_group_snapshot
 from .pdf_import_service import import_config_lock, save_import_config
+from .text_alignment import read_alignment_recipe_snapshot
 
 BACKUP_MARKER = "me_finder_backup"
-BACKUP_VERSION = 2
+BACKUP_VERSION = 3
 
 # Paths are relative to the runtime root unless noted. preferences.json lives
 # one level up (the LOCALAPPDATA/MEFinder dir), handled via app_data_root.
 _CONFIG_FILE = "config/pdf_imports.json"
 _DOCUMENT_GROUPS_FILE = "config/document_groups.json"
+_ALIGNMENTS_FILE = "config/text_alignments.json"
 _MANIFEST_DIRS = (
     "corpus/processed/mineru/manifests",
     "corpus/processed/vision/manifests",
@@ -147,6 +148,17 @@ def create_backup(
         )
         included.append(_DOCUMENT_GROUPS_FILE)
 
+        alignment_snapshot = (
+            read_alignment_recipe_snapshot(Path(index_path))
+            if index_path is not None
+            else {"alignment_pairs": []}
+        )
+        archive.writestr(
+            _ALIGNMENTS_FILE,
+            json.dumps(alignment_snapshot, ensure_ascii=False, indent=2),
+        )
+        included.append(_ALIGNMENTS_FILE)
+
         for relative_dir in _MANIFEST_DIRS:
             manifest_dir = runtime_root / relative_dir
             if manifest_dir.is_dir():
@@ -202,7 +214,11 @@ def _is_safe_member(name: str) -> bool:
     normalized = name.replace("\\", "/")
     if normalized.startswith("../") or ".." in normalized.split("/") or normalized.startswith("/"):
         return False
-    return normalized in {_CONFIG_FILE, _DOCUMENT_GROUPS_FILE} or any(
+    return normalized in {
+        _CONFIG_FILE,
+        _DOCUMENT_GROUPS_FILE,
+        _ALIGNMENTS_FILE,
+    } or any(
         normalized.startswith(f"{relative_dir}/")
         for relative_dir in _MANIFEST_DIRS
     )
@@ -258,10 +274,12 @@ def restore_backup(
         if not isinstance(meta, dict) or meta.get("marker") != BACKUP_MARKER:
             raise ValueError("这不是 ME_Finder 备份文件。")
         version = meta.get("version")
-        if version not in {1, BACKUP_VERSION}:
+        if version not in {1, 2, BACKUP_VERSION}:
             raise ValueError("不支持此备份版本。")
-        if version == BACKUP_VERSION and _DOCUMENT_GROUPS_FILE not in names:
+        if version in {2, BACKUP_VERSION} and _DOCUMENT_GROUPS_FILE not in names:
             raise ValueError("备份缺少作品组快照。")
+        if version == BACKUP_VERSION and _ALIGNMENTS_FILE not in names:
+            raise ValueError("备份缺少文本对齐快照。")
 
         for name in names:
             if not _is_safe_member(name):
@@ -269,6 +287,7 @@ def restore_backup(
 
         restored: List[str] = []
         group_snapshot = None
+        alignment_snapshot = None
 
         if _DOCUMENT_GROUPS_FILE in names:
             try:
@@ -286,6 +305,20 @@ def restore_backup(
             ):
                 raise ValueError("作品组快照格式无效。")
             restored.append(_DOCUMENT_GROUPS_FILE)
+
+        if _ALIGNMENTS_FILE in names:
+            try:
+                alignment_snapshot = json.loads(
+                    archive.read(_ALIGNMENTS_FILE).decode("utf-8")
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise ValueError("文本对齐快照损坏。") from exc
+            if (
+                not isinstance(alignment_snapshot, dict)
+                or not isinstance(alignment_snapshot.get("alignment_pairs"), list)
+            ):
+                raise ValueError("文本对齐快照格式无效。")
+            restored.append(_ALIGNMENTS_FILE)
 
         if _CONFIG_FILE in names:
             target = runtime_root / _CONFIG_FILE
@@ -330,4 +363,5 @@ def restore_backup(
         "created_at": meta.get("created_at"),
         "count": len(restored),
         "document_group_snapshot": group_snapshot,
+        "alignment_snapshot": alignment_snapshot,
     }

@@ -12,7 +12,7 @@ from src.me_finder.http_contract import GET_API_ROUTES, POST_API_ROUTES
 ROOT = Path(__file__).resolve().parents[1]
 WEB_PATH = ROOT / "src" / "me_finder" / "web.py"
 HTTP_PATH = ROOT / "src" / "me_finder" / "web_http.py"
-CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.4.8-http-api.json"
+CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.4.9-http-api.json"
 
 
 def _dictionary_keys(source_path: Path, names: set[str]) -> set[str]:
@@ -37,7 +37,7 @@ def _dictionary_keys(source_path: Path, names: set[str]) -> set[str]:
 class HTTPAPIContractTests(unittest.TestCase):
     def test_json_contract_matches_python_contract(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["release"], "0.4.8")
+        self.assertEqual(contract["release"], "0.4.9")
         self.assertEqual(contract["get"], sorted(GET_API_ROUTES))
         self.assertEqual(contract["post"], sorted(POST_API_ROUTES))
 

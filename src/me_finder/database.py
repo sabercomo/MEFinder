@@ -317,6 +317,12 @@ def optimize_database_storage(db_path: Path) -> bool:
             "audit_issues",
             "document_groups",
             "document_group_members",
+            "segment_sets",
+            "text_segments",
+            "text_segment_spans",
+            "alignment_runs",
+            "alignment_links",
+            "alignment_link_members",
         )
         for table_name in table_names:
             destination_columns = [
@@ -925,8 +931,13 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         read_document_group_snapshot,
         restore_document_group_snapshot,
     )
+    from .text_alignment import (
+        read_alignment_recipe_snapshot,
+        restore_alignment_recipe_snapshot,
+    )
 
     preserved_document_groups = read_document_group_snapshot(db_path)
+    preserved_alignments = read_alignment_recipe_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
     _sanitize_surrogates_in_place(index)
@@ -1168,6 +1179,12 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             values = [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows]
             if values:
                 connection.executemany(sql, values)
+
+        # Automatic links are derived from PDF text, but they are also a
+        # user-requested computation. Recreate the same completed pairs after
+        # the replacement index has published its fresh page text.
+        connection.row_factory = sqlite3.Row
+        restore_alignment_recipe_snapshot(connection, preserved_alignments)
 
         fts_installed = _install_fts5_search_index(connection, rebuild=True)
         connection.commit()

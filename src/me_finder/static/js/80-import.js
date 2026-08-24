@@ -868,7 +868,7 @@ function handleFileSelect(files) {
     var lowerName = file.name.toLowerCase();
     var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
     var isPackage = lowerName.endsWith('.mefinder.zip');
-    if (!isPackage && ['.pdf', '.docx'].indexOf(ext) === -1) {
+    if (!isPackage && ['.pdf', '.docx', '.epub'].indexOf(ext) === -1) {
       showToast('不支持的格式: ' + file.name);
       return;
     }
@@ -878,7 +878,7 @@ function handleFileSelect(files) {
       file: file,
       name: file.name,
       size: file.size,
-      type: isPackage ? 'document_package' : ext === '.pdf' ? 'pdf' : 'docx',
+      type: isPackage ? 'document_package' : ext.slice(1),
       importKind: isPackage ? 'document_package' : 'document',
       parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null,
       providerId: !isPackage && ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId
@@ -910,7 +910,7 @@ function renderImportQueue() {
   syncImportRecoveryPanel();
   itemsEl.innerHTML = importStore.queue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : q.type === 'document_package' ? 'package' : 'word';
-    var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'document_package' ? '文档包' : 'DOCX';
+    var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'epub' ? 'EPUB' : q.type === 'document_package' ? '文档包' : 'DOCX';
     var retryProvider = visionRetryProviderFor(q);
     var steps = importStepsFor(q);
     var stepsHTML = steps.map(function(label, i) {
@@ -1292,7 +1292,7 @@ async function loadResumableImports() {
         jobId: job.job_id,
         name: job.file_name || '未命名文献',
         size: Number(job.size_bytes || 0),
-        type: job.file_type === 'pdf' ? 'pdf' : 'docx',
+        type: job.file_type === 'pdf' ? 'pdf' : job.file_type === 'epub' ? 'epub' : 'docx',
         status: isPaused ? 'paused' : 'error',
         step: job.file_type === 'pdf' ? 2 : 1,
         route: job.parse_route || null,

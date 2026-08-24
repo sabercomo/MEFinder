@@ -155,12 +155,22 @@ function renderDocumentGroupManager() {
       html += '<div class="grp-members">' + members.map(function(m) {
         var sid = esc(m.source_file_id);
         var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
+        var baseSrc = libraryStore.sources.find(function(s) { return s.source_file_id === g.base_source_file_id; });
         var srcTitle = src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id;
         var isBase = m.source_file_id === g.base_source_file_id;
+        var canAlign = !isBase && baseSrc && src &&
+          String(baseSrc.source_type || '').toLowerCase() === 'pdf' &&
+          String(src.source_type || '').toLowerCase() === 'pdf';
+        var alignment = (g.alignments || []).find(function(item) {
+          return item.pivot_source_file_id === g.base_source_file_id &&
+            item.target_source_file_id === m.source_file_id &&
+            item.status === 'completed';
+        });
         return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
           + '<span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
           + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(m.display_name || '') + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
           + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button" onclick="setGroupBaseAction(\'' + gid + '\',\'' + (isBase ? '' : sid) + '\')">' + (isBase ? '★ 基准' : '设为基准') + '</button>'
+          + (canAlign ? '<button class="grp-align-btn" type="button" title="生成 Segment 并进行离线单调对齐" onclick="generateTextAlignmentAction(\'' + gid + '\',\'' + sid + '\',this)">' + (alignment ? '重新对齐' : '生成对齐') + '</button>' : '')
           + '<button class="grp-remove-btn" type="button" aria-label="从作品组移除" title="从作品组移除" onclick="removeGroupMemberAction(\'' + sid + '\')">✕</button>'
           + '</div>';
       }).join('') + '</div>';
@@ -318,7 +328,7 @@ function libFilterActiveList() {
   var out = [];
   if (libraryStore.documentTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libraryStore.documentTypeFilter)});
   if (libraryStore.languageFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libraryStore.languageFilter)});
-  if (libraryStore.typeFilter !== 'all') out.push({kind:'type', label:libraryStore.typeFilter === 'word' ? 'Word' : 'PDF'});
+  if (libraryStore.typeFilter !== 'all') out.push({kind:'type', label:libraryStore.typeFilter === 'word' ? 'Word / EPUB' : 'PDF'});
   return out;
 }
 
@@ -348,7 +358,7 @@ function renderLibraryFilterBar() {
 
   var typeOpts = [
     {v:'all', label:'全部', n:allCount},
-    {v:'word', label:'Word', n:wordCount},
+    {v:'word', label:'Word / EPUB', n:wordCount},
     {v:'pdf', label:'PDF', n:pdfCount}
   ];
 
@@ -539,6 +549,39 @@ function libraryGroupScopedSources() {
   return sources;
 }
 
+async function generateTextAlignmentAction(groupId, targetSourceId, button) {
+  var group = documentGroupById(groupId);
+  if (!group || !group.base_source_file_id) {
+    showToast('请先设置基准版本', 'warning');
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = '对齐中…';
+  }
+  try {
+    var response = await fetch('/api/text-alignments/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        document_group_id: groupId,
+        pivot_source_file_id: group.base_source_file_id,
+        target_source_file_id: targetSourceId
+      })
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
+    await loadDocumentGroups();
+    renderGroupScopeSelector();
+    renderDocumentGroupManager();
+    var result = data.result || {};
+    showToast('对齐完成：' + (result.alignment_link_count || 0) + ' 组对应关系', 'success');
+  } catch (e) {
+    renderDocumentGroupManager();
+    showToast(e.message || '自动对齐失败', 'danger');
+  }
+}
+
 function getFilteredSources() {
   // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
   let sources = libraryGroupScopedSources();
@@ -719,7 +762,7 @@ function renderLibraryList() {
   if (sources.length === 0) {
     // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
     listEl.innerHTML = libraryStore.sources.length === 0
-      ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF 或 DOCX 后即可检索、校准页码、补全书目</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
+      ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF、DOCX 或 EPUB 后即可检索、核对页码与上下文</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
       : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
     updateLibraryDeleteControls();
     return;
@@ -766,7 +809,7 @@ function libraryEntryHTML(src) {
   var isDeleteSelectable = isLibraryDeleteSelectable(src);
   var isDeleteSelected = libraryStore.deleteSelection.has(src.source_file_id);
   var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
-  var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
+  var typeLabel = isPdf ? (src.parser_label || 'PDF') : sourceFormatLabel(src);
   var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
   var statusGroup = isPdf ? calibrationStatusGroup(itemStatus) : '';
   var statusChip = isPdf
@@ -798,7 +841,7 @@ function libraryEntryHTML(src) {
       + '<div class="library-card-title">' + thesisIcon + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
       + (missingMetadataText ? bibliographicMissingBadge(bib) : '')
       + '<div class="library-card-meta">' + esc(countMeta + ' · ' + size) + '</div>'
-      + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || 'Word 文献')) + '</div>'
+      + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || typeLabel + ' 文献')) + '</div>'
       + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
   }
   return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
@@ -861,7 +904,7 @@ function drawerWorksHTML(works) {
 
 function drawerFileInfoHTML(src, vol) {
   var info = '';
-  info += drawerInfoRow('文件类型', src.source_type === 'pdf' ? 'PDF 文档' : 'Word 文档');
+  info += drawerInfoRow('文件类型', sourceFormatLabel(src) + ' 文档');
   info += drawerInfoRow('文件名', src.file_name);
   info += drawerInfoRow('大小', formatFileSize(src.size_bytes));
   if (src.source_type === 'pdf' && src.pdf_profile) {
@@ -1018,7 +1061,7 @@ async function exportSelectedLibraryDocuments() {
     updateLibraryDeleteControls();
   }
 
-  var skippedText = skippedWordCount ? '；已跳过 ' + skippedWordCount + ' 份 Word' : '';
+  var skippedText = skippedWordCount ? '；已跳过 ' + skippedWordCount + ' 份 Word / EPUB' : '';
   if (failures.length) {
     showToast('批量导出完成：成功 ' + exported.length + ' 本，失败 ' + failures.length + ' 本'
       + skippedText + '。首个失败：' + failures[0].title + '：' + failures[0].message, 'warning');
@@ -1067,7 +1110,7 @@ async function selectLibDoc(sourceId) {
     + '<div class="drawer-title" tabindex="-1">' + esc(title) + '</div>'
     + (corpusTitle ? '<div class="drawer-subtitle">' + esc(corpusTitle) + '</div>' : '')
     + '<div class="detail-pills" style="margin-top:12px">'
-    + '<span class="detail-pill">' + (src.source_type === 'pdf' ? 'PDF' : 'Word') + '</span>'
+    + '<span class="detail-pill">' + sourceFormatLabel(src) + '</span>'
     + (vol && vol.primary_structure ? '<span class="detail-pill">' + structureLabel(vol.primary_structure) + '</span>' : '')
     + drawerStatusPill(src)
     + '</div>'

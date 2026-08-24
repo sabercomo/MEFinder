@@ -161,6 +161,51 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("state.citationRange = null", READER_JS)
         self.assertNotIn("load all pages for selection", READER_JS)
 
+    def test_selection_can_locate_and_highlight_an_aligned_version(self) -> None:
+        self.assertIn(
+            "alignmentTargetsEndpoint: '/api/text-alignments/targets'",
+            READER_JS,
+        )
+        self.assertIn(
+            "alignmentLocateEndpoint: '/api/text-alignments/locate'",
+            READER_JS,
+        )
+        self.assertIn("async function locateInAlignedVersion", READER_JS)
+        for field in (
+            "source_file_id:",
+            "target_source_file_id:",
+            "start_page_index:",
+            "end_page_index:",
+            "start_offset:",
+            "end_offset:",
+        ):
+            self.assertIn(field, READER_JS)
+        self.assertIn("pageMatchSpans: payload.page_match_spans", READER_JS)
+        self.assertIn("在' + String(target.display_name", READER_JS)
+        self.assertIn(".mef-reader-alignment-action", READER_CSS)
+        self.assertIn("function generateTextAlignmentAction", APP_JS)
+        self.assertIn("'/api/text-alignments/generate'", APP_JS)
+        self.assertIn("pivot_source_file_id: group.base_source_file_id", APP_JS)
+        self.assertIn("result.alignment_link_count", APP_JS)
+
+    def test_aligned_pdf_versions_can_read_side_by_side_by_segment(self) -> None:
+        self.assertIn("function sourceCenterRange()", READER_JS)
+        self.assertIn("caretPositionFromPoint", READER_JS)
+        self.assertIn("function showComparison(payload, targetDisplayName)", READER_JS)
+        self.assertIn("function scheduleComparisonFollow()", READER_JS)
+        self.assertIn("function loadComparisonWindow", READER_JS)
+        self.assertIn("双栏对照 · ", READER_JS)
+        self.assertIn("自动跟随：开", READER_JS)
+        self.assertIn("dataset.readerComparison", READER_JS)
+        self.assertIn("payload.previous_start", READER_JS)
+        self.assertIn("payload.next_start", READER_JS)
+        self.assertIn(".mef-reader-body.is-comparing", READER_CSS)
+        self.assertIn(
+            "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);",
+            READER_CSS,
+        )
+        self.assertNotIn("scrollTop / scrollHeight", READER_JS)
+
     def test_deep_link_uses_stable_anchors_and_validated_recovery_fields(self) -> None:
         self.assertIn("function parseReaderDeepLink(locationValue)", READER_JS)
         self.assertIn("pathname !== '/reader'", READER_JS)

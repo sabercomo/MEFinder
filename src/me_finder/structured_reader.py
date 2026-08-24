@@ -1099,8 +1099,13 @@ def _word_window(
         page_verified = page_resolution.verified
         current_page_key = _word_page_key(payload)
         paragraph_id = str(row["paragraph_id"])
-        is_docx_page_start = (
-            display.page_source_type == "section_break_inferred"
+        is_text_page_start = (
+            display.page_source_type
+            in {
+                "section_break_inferred",
+                "epub_page_list",
+                "epub_pagebreak",
+            }
             and current_page_key is not None
             and current_page_key != previous_page_key
         )
@@ -1112,7 +1117,7 @@ def _word_window(
         items.append(
             {
                 "item_type": "word_paragraph",
-                "anchor_id": paragraph_id if is_docx_page_start else None,
+                "anchor_id": paragraph_id if is_text_page_start else None,
                 "paragraph_id": paragraph_id,
                 "paragraph_index": int(row["paragraph_index"]),
                 "text_raw": text_raw,

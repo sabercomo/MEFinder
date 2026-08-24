@@ -298,10 +298,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：MinerU 本地部署对齐本地 OCR 的扁平行式布局，自部署设置默认折叠。
     # 0.4.7 后续：MinerU 本地部署标题字号与本地 OCR 设置标题对齐。
     # 0.4.8：搜索、文献库、解析、设置和导入核心状态迁入领域 Store。
+    # 0.4.9：作品组自动对齐与结构化阅读器跨版本定位。
+    # 0.4.9 后续：两版本结构化阅读器双栏对照与按 Segment 自动跟随。
+    # 0.4.9 后续：导入、检索与文献库界面支持 EPUB。
     BASELINE_SHA256 = (
-        "94e23d9649d0f221fd401cf9d49bcc3845d8ee181318c2377b76e54c81daedf2"
+        "b341ae90b0324d60ec835246841727d050300b7fe3a490b209273de89420b0e0"
     )
-    BASELINE_BYTES = 860668
+    BASELINE_BYTES = 890279
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

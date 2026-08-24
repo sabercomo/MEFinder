@@ -167,8 +167,8 @@ class DocumentImportCoordinator:
     ) -> Dict[str, object]:
         with self._admission():
             suffix = Path(filename).suffix.lower()
-            if suffix not in {".pdf", ".docx"}:
-                raise MinerUError("只支持 PDF 或 DOCX 文件。")
+            if suffix not in {".pdf", ".docx", ".epub"}:
+                raise MinerUError("只支持 PDF、DOCX 或 EPUB 文件。")
             mode, provider_id = self._validated_parse_options(
                 pdf_parse_mode,
                 vision_provider_id,
@@ -210,7 +210,7 @@ class DocumentImportCoordinator:
             suffix = Path(filename).suffix.lower()
             kind = str(import_kind or "document").strip().lower()
             allowed = {
-                "document": {".pdf", ".docx"},
+                "document": {".pdf", ".docx", ".epub"},
                 "document_package": {".zip"},
             }
             if kind not in allowed or suffix not in allowed[kind]:
@@ -704,9 +704,10 @@ class DocumentImportCoordinator:
         if not safe_name or safe_name in {".", ".."}:
             raise MinerUError("无法识别文件名。")
         suffix = Path(safe_name).suffix.lower()
-        expected = ".pdf" if is_pdf else ".docx"
-        if suffix != expected:
-            raise MinerUError(f"导入文件必须是 {expected}。")
+        expected = {".pdf"} if is_pdf else {".docx", ".epub"}
+        if suffix not in expected:
+            label = "PDF" if is_pdf else "DOCX 或 EPUB"
+            raise MinerUError(f"导入文件必须是 {label}。")
         directory = self._paths.corpus_root / (
             "raw_pdf" if is_pdf else "raw_docx"
         )
@@ -825,8 +826,11 @@ class DocumentImportCoordinator:
                 )
                 reserved_source_id = source_file_id
             else:
-                profile = {"detected_pdf_type": "docx"}
-                source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+                source_format = target.suffix.lower().lstrip(".")
+                profile = {"detected_pdf_type": source_format}
+                source_file_id = (
+                    f"{source_format}-import-{uuid.uuid4().hex[:16]}"
+                )
             use_local_mineru = is_pdf and pdf_parse_mode == "mineru-local"
             if use_local_mineru:
                 profile["mineru_local"] = True
@@ -867,7 +871,7 @@ class DocumentImportCoordinator:
                 "import job queued upload_id=%s job_id=%s route=%s",
                 upload_id,
                 job_id,
-                parse_route or "docx",
+                parse_route or target.suffix.lower().lstrip("."),
             )
             return {
                 "ok": True,
@@ -940,8 +944,11 @@ class DocumentImportCoordinator:
                     )
                     item_reserved_source_id = source_file_id
                 else:
-                    profile = {"detected_pdf_type": "docx"}
-                    source_file_id = f"docx-import-{uuid.uuid4().hex[:16]}"
+                    source_format = target.suffix.lower().lstrip(".")
+                    profile = {"detected_pdf_type": source_format}
+                    source_file_id = (
+                        f"{source_format}-import-{uuid.uuid4().hex[:16]}"
+                    )
                 if source_file_id in prepared_source_ids:
                     raise MinerUError("同一批次中已有内容相同的文献。")
                 if self._jobs.job_for_source(
@@ -994,7 +1001,9 @@ class DocumentImportCoordinator:
                                 if is_pdf
                                 else None
                             ),
-                            "file_type": "pdf" if is_pdf else "docx",
+                            "file_type": (
+                                "pdf" if is_pdf else target.suffix.lower().lstrip(".")
+                            ),
                             "parse_route": parse_route,
                             "provider_id": (
                                 "mineru-local"
