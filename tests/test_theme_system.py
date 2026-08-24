@@ -326,7 +326,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('<span>强调色</span><input type="color" id="appearance-highlight"', HTML)
         self.assertIn('id="appearance-delete-custom"', HTML)
         self.assertIn("async function deleteCurrentCustomTheme()", HTML)
-        self.assertIn("appearanceState[slot] = THEME_MODE_DEFAULT[slot];", HTML)
+        self.assertIn("settingsStore.appearanceState[slot] = THEME_MODE_DEFAULT[slot];", HTML)
         # 网格由当前生效的那一套（浅/深，由外观模式派生）筛选出的预设 + 自定义主题渲染。
         self.assertIn("container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('')", HTML)
         # 引擎把选中主题真正落到 data-theme（内置切 id、自定义切 custom）。
@@ -396,14 +396,14 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("使用 macOS PDFKit", HTML)
         self.assertIn("macOS 预览", HTML)
         self.assertIn("function setPdfOpenMode(mode)", HTML)
-        self.assertIn("var preferencesLoadPromise = null;", HTML)
-        self.assertIn("if (preferencesLoadPromise) return preferencesLoadPromise;", HTML)
+        self.assertIn("preferencesLoadPromise: null", HTML)
+        self.assertIn("if (settingsStore.preferencesLoadPromise) return settingsStore.preferencesLoadPromise;", HTML)
         self.assertIn(
-            "if (pdfOpenModeSaving || documentExportModeSaving) return null;",
+            "if (settingsStore.pdfOpenModeSaving || settingsStore.documentExportModeSaving) return null;",
             HTML,
         )
         self.assertIn("setPdfOpenModeControlsDisabled(true);", HTML)
-        self.assertIn("if (pdfOpenModeSaving || preferencesLoadPromise)", HTML)
+        self.assertIn("if (settingsStore.pdfOpenModeSaving || settingsStore.preferencesLoadPromise)", HTML)
         self.assertIn("function applyPreferencesData(data, requestedThemeRevision)", HTML)
         self.assertIn("applyPreferencesData(data, requestedThemeRevision);", HTML)
         self.assertIn("failedStatus.textContent = '读取失败';", HTML)
@@ -422,7 +422,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "Edge WebView2",
             "系统默认 PDF 阅读器",
             "async function checkForUpdates(automatic)",
-            "auto_update:autoUpdateEnabled",
+            "auto_update:settingsStore.autoUpdateEnabled",
             "confirm_token:installToken",
             "autoInput.disabled = !state.can_self_update",
         ):
@@ -671,8 +671,8 @@ class ThemeMarkupTests(unittest.TestCase):
 
     def test_theme_switch_is_immediate_and_persisted(self) -> None:
         # 引擎状态：外观模式 + 浅/深各自选择 + 自定义主题。
-        self.assertIn("let appearanceState = {", HTML)
-        self.assertIn("let appearanceEditMode = 'light';", HTML)
+        self.assertIn("const settingsStore = {", HTML)
+        self.assertIn("appearanceEditMode: 'light'", HTML)
 
         # 选主题：先即时应用（若正是生效模式），再持久化。
         choice_start = HTML.index("function selectThemeChoice(id)")
@@ -682,9 +682,9 @@ class ThemeMarkupTests(unittest.TestCase):
         persist_at = choice_block.index("persistAppearance();")
         self.assertLess(apply_at, persist_at)
 
-        # applyAppearance 解析当前模式与系统偏好后落到 data-theme，且更新 currentTheme。
+        # applyAppearance 解析当前模式与系统偏好后落到 data-theme，且更新 settingsStore.currentTheme。
         self.assertIn("function applyAppearance()", HTML)
-        self.assertIn("currentTheme = activeId;", HTML)
+        self.assertIn("settingsStore.currentTheme = activeId;", HTML)
 
         # 持久化去抖，且同时写 appearance 完整状态与 legacy theme 内置回退。
         persist_start = HTML.index("function persistAppearance()")

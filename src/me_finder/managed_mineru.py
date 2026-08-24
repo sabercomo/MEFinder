@@ -37,6 +37,7 @@ from .mineru_local_settings import (
     configure_managed_mineru,
     mineru_local_config_summary,
 )
+from .tasks import TaskEvent
 
 
 MANAGED_MINERU_COMPONENT_DIR = "components/mineru"
@@ -285,6 +286,8 @@ def detect_mineru_hardware(
 
 
 class ManagedMinerU:
+    component_id = "mineru-local"
+
     def __init__(
         self,
         runtime_root: Path,
@@ -348,6 +351,18 @@ class ManagedMinerU:
         if self._catalog_summary is not None:
             result["catalog"] = self._catalog_summary()
         return result
+
+    def diagnostics(self) -> Dict[str, object]:
+        summary = self.summary()
+        profiles = summary["profiles"]
+        return {
+            "component_id": self.component_id,
+            "supported": summary["supported"],
+            "platform": summary["platform"],
+            "installed": sum(bool(item["installed"]) for item in profiles),
+            "active": sum(bool(item["operation"]) for item in profiles),
+            "service_running": bool(summary["service"]["running"]),
+        }
 
     def refresh_manifest(self) -> None:
         manifest = load_managed_mineru_manifest(
@@ -969,7 +984,7 @@ class ManagedMinerU:
     ) -> Dict[str, object]:
         profile = self.manifest.profiles[profile_id]
         receipt = self._receipt(profile_id)
-        return {
+        result = {
             "profile": profile_id,
             "display_name": profile.display_name,
             "backend": profile.backend,
@@ -992,6 +1007,10 @@ class ManagedMinerU:
             "message": state.message,
             "error": state.error,
         }
+        result["task_event"] = TaskEvent.from_mapping(
+            f"{self.component_id}:{profile_id}", result, unit="bytes"
+        ).to_dict()
+        return result
 
     def _receipt(self, profile_id: str) -> Mapping[str, object]:
         path = self.component_root / profile_id / "installed.json"

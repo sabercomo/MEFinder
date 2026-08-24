@@ -17,6 +17,7 @@ from src.me_finder.application.document_query_service import (
     DocumentQueryUnavailable,
 )
 from src.me_finder.database import build_database
+from src.me_finder.persistence import SQLiteDocumentReadRepository
 from src.me_finder.web import make_handler
 
 
@@ -157,6 +158,7 @@ class DocumentQueryServiceTests(unittest.TestCase):
                     {"source_files": sources, "volumes": [], "works": []},
                     paths.index_path,
                 ),
+                repository=SQLiteDocumentReadRepository(),
                 active_source_ids=lambda: {"importing"},
             )
 
@@ -225,7 +227,10 @@ class DocumentQueryServiceTests(unittest.TestCase):
                 paths.index_path,
             )
             service = DocumentQueryService(
-                paths, catalog, active_source_ids=lambda: set()
+                paths,
+                catalog,
+                repository=SQLiteDocumentReadRepository(),
+                active_source_ids=lambda: set(),
             )
 
             self.assertEqual(service.source_path("inside"), source.resolve())
@@ -245,7 +250,10 @@ class DocumentQueryServiceTests(unittest.TestCase):
             )
             catalog.ready = False
             service = DocumentQueryService(
-                paths, catalog, active_source_ids=lambda: set()
+                paths,
+                catalog,
+                repository=SQLiteDocumentReadRepository(),
+                active_source_ids=lambda: set(),
             )
 
             with self.assertRaisesRegex(DocumentQueryUnavailable, "正在重建"):
@@ -310,6 +318,7 @@ class DocumentQueryServiceTests(unittest.TestCase):
                     },
                     paths.index_path,
                 ),
+                repository=SQLiteDocumentReadRepository(),
                 active_source_ids=lambda: set(),
                 metadata_detector=detect,
             )
@@ -384,6 +393,7 @@ class DocumentQueryServiceTests(unittest.TestCase):
                     {"source_files": sources, "volumes": [], "works": []},
                     paths.index_path,
                 ),
+                repository=SQLiteDocumentReadRepository(),
                 active_source_ids=lambda: set(),
             )
 

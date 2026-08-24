@@ -1,14 +1,14 @@
 /* ═══ Library ═══ */
 function applyLibraryCatalog(data) {
-  libSources = data.items || [];
-  libVolumes = data.volumes || [];
-  libVolumeBySource = buildVolumeIndex(libVolumes);
-  libStats = data.stats || null;
-  libLoaded = true;
+  libraryStore.sources = data.items || [];
+  libraryStore.volumes = data.volumes || [];
+  libraryStore.volumeBySource = buildVolumeIndex(libraryStore.volumes);
+  libraryStore.stats = data.stats || null;
+  libraryStore.loaded = true;
   // 搜索下拉与文献库共用同一份摘要，避免两处各拉一次。
-  searchSourceFiles = libSources;
-  searchVolumes = libVolumes;
-  searchDocumentsLoaded = true;
+  searchStore.sourceFiles = libraryStore.sources;
+  searchStore.volumes = libraryStore.volumes;
+  searchStore.documentsLoaded = true;
 }
 
 async function loadLibrary(force) {
@@ -30,22 +30,22 @@ async function loadDocumentGroups() {
   try {
     var response = await fetch('/api/document-groups');
     var data = await response.json();
-    libDocumentGroups = (response.ok && !data.error && Array.isArray(data.document_groups))
+    libraryStore.documentGroups = (response.ok && !data.error && Array.isArray(data.document_groups))
       ? data.document_groups : [];
   } catch (_) {
-    libDocumentGroups = [];
+    libraryStore.documentGroups = [];
   }
-  if (libGroupScopeId && !libDocumentGroups.some(function(g) { return g.document_group_id === libGroupScopeId; })) {
-    libGroupScopeId = '';
+  if (libraryStore.groupScopeId && !libraryStore.documentGroups.some(function(g) { return g.document_group_id === libraryStore.groupScopeId; })) {
+    libraryStore.groupScopeId = '';
   }
-  if (searchGroupId && !libDocumentGroups.some(function(g) { return g.document_group_id === searchGroupId; })) {
-    searchGroupId = '';
+  if (searchStore.groupId && !libraryStore.documentGroups.some(function(g) { return g.document_group_id === searchStore.groupId; })) {
+    searchStore.groupId = '';
     updateSearchDocumentLabel();
   }
 }
 
 function documentGroupById(groupId) {
-  return libDocumentGroups.find(function(g) { return g.document_group_id === groupId; }) || null;
+  return libraryStore.documentGroups.find(function(g) { return g.document_group_id === groupId; }) || null;
 }
 
 function documentGroupMemberIdSet(groupId) {
@@ -64,7 +64,7 @@ function documentGroupMemberLabel(groupId, sourceId) {
 }
 
 function setLibraryGroupScope(groupId) {
-  libGroupScopeId = groupId || '';
+  libraryStore.groupScopeId = groupId || '';
   closeAppSelects();
   clearLibrarySelection();
   renderGroupScopeSelector();
@@ -78,17 +78,17 @@ function renderGroupScopeSelector() {
   var label = document.getElementById('library-group-scope-label');
   var wrap = document.getElementById('library-group-scope');
   if (!menu || !label) return;
-  var current = documentGroupById(libGroupScopeId);
+  var current = documentGroupById(libraryStore.groupScopeId);
   label.textContent = current ? current.title : '全部文献';
   if (wrap) wrap.classList.toggle('is-scoped', !!current);
-  var html = '<button class="app-select-option lib-group-opt' + (libGroupScopeId ? '' : ' is-selected')
+  var html = '<button class="app-select-option lib-group-opt' + (libraryStore.groupScopeId ? '' : ' is-selected')
     + '" type="button" role="option" onclick="setLibraryGroupScope(\'\')">'
     + '<span class="lib-group-name">全部文献</span></button>';
-  if (libDocumentGroups.length) {
+  if (libraryStore.documentGroups.length) {
     html += '<div class="lib-group-sep" role="separator"></div>';
-    html += libDocumentGroups.map(function(g) {
+    html += libraryStore.documentGroups.map(function(g) {
       var count = (g.members || []).length;
-      return '<button class="app-select-option lib-group-opt' + (g.document_group_id === libGroupScopeId ? ' is-selected' : '')
+      return '<button class="app-select-option lib-group-opt' + (g.document_group_id === libraryStore.groupScopeId ? ' is-selected' : '')
         + '" type="button" role="option" onclick="setLibraryGroupScope(\'' + esc(g.document_group_id) + '\')">'
         + '<span class="lib-group-name">' + esc(g.title) + '</span>'
         + '<span class="lib-group-count">' + count + ' 个版本</span></button>';
@@ -131,17 +131,17 @@ function groupManageBackdrop(event) {
 function renderDocumentGroupManager() {
   var body = document.getElementById('group-manage-body');
   if (!body) return;
-  var selectedCount = libDeleteSelection.size;
+  var selectedCount = libraryStore.deleteSelection.size;
   var html = '<div class="grp-create">'
     + '<input id="grp-create-input" class="grp-input" type="text" placeholder="新建作品组标题…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
     + '<button class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
   if (selectedCount) {
     html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组。</div>';
   }
-  if (!libDocumentGroups.length) {
+  if (!libraryStore.documentGroups.length) {
     html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹。</div>';
   }
-  libDocumentGroups.forEach(function(g) {
+  libraryStore.documentGroups.forEach(function(g) {
     var gid = esc(g.document_group_id);
     html += '<div class="grp-block"><div class="grp-head">'
       + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)">'
@@ -154,7 +154,7 @@ function renderDocumentGroupManager() {
     } else {
       html += '<div class="grp-members">' + members.map(function(m) {
         var sid = esc(m.source_file_id);
-        var src = libSources.find(function(s) { return s.source_file_id === m.source_file_id; });
+        var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
         var srcTitle = src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id;
         var isBase = m.source_file_id === g.base_source_file_id;
         return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
@@ -226,7 +226,7 @@ async function setMemberVersionLabelInline(sourceId, value) {
 }
 
 async function assignSelectedToGroupAction(groupId) {
-  var ids = Array.from(libDeleteSelection);
+  var ids = Array.from(libraryStore.deleteSelection);
   if (!ids.length) { showToast('请先在文献列表勾选文献', 'warning'); return; }
   try {
     for (var i = 0; i < ids.length; i += 1) {
@@ -248,39 +248,39 @@ async function assignSelectedToGroupAction(groupId) {
 
 // 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。
 function ensureLibraryDetail(sourceId) {
-  if (!sourceId || libDetailLoaded[sourceId]) return Promise.resolve();
-  if (libDetailPending[sourceId]) return libDetailPending[sourceId];
+  if (!sourceId || libraryStore.detailLoaded[sourceId]) return Promise.resolve();
+  if (libraryStore.detailPending[sourceId]) return libraryStore.detailPending[sourceId];
   var request = fetch('/api/library/document?source_id=' + encodeURIComponent(sourceId)).then(function(response) {
     return response.json().then(function(data) {
       if (!response.ok || data.error) throw new Error(data.error || '文献详情读取失败');
       applyLibraryDetail(sourceId, data);
     });
   }).then(function() {
-    delete libDetailPending[sourceId];
+    delete libraryStore.detailPending[sourceId];
   }, function(error) {
-    delete libDetailPending[sourceId];
+    delete libraryStore.detailPending[sourceId];
     throw error;
   });
-  libDetailPending[sourceId] = request;
+  libraryStore.detailPending[sourceId] = request;
   return request;
 }
 
 function applyLibraryDetail(sourceId, data) {
   var detail = data.item || {};
-  // libSources 与 searchSourceFiles 指向同一个数组，就地替换让两处同时拿到完整记录。
-  var index = libSources.findIndex(function(item) { return item.source_file_id === sourceId; });
-  if (index >= 0) libSources[index] = Object.assign({}, libSources[index], detail);
+  // libraryStore.sources 与 searchStore.sourceFiles 指向同一个数组，就地替换让两处同时拿到完整记录。
+  var index = libraryStore.sources.findIndex(function(item) { return item.source_file_id === sourceId; });
+  if (index >= 0) libraryStore.sources[index] = Object.assign({}, libraryStore.sources[index], detail);
   if (data.volume && data.volume.source_file_id) {
-    var volumeIndex = libVolumes.findIndex(function(item) { return item.source_file_id === sourceId; });
-    if (volumeIndex >= 0) libVolumes[volumeIndex] = data.volume;
-    else libVolumes.push(data.volume);
-    libVolumeBySource.set(sourceId, data.volume);
+    var volumeIndex = libraryStore.volumes.findIndex(function(item) { return item.source_file_id === sourceId; });
+    if (volumeIndex >= 0) libraryStore.volumes[volumeIndex] = data.volume;
+    else libraryStore.volumes.push(data.volume);
+    libraryStore.volumeBySource.set(sourceId, data.volume);
   }
   var volumeId = data.volume ? data.volume.volume_id : null;
   if (volumeId) {
-    libWorks = libWorks.filter(function(work) { return work.volume_id !== volumeId; }).concat(data.works || []);
+    libraryStore.works = libraryStore.works.filter(function(work) { return work.volume_id !== volumeId; }).concat(data.works || []);
   }
-  libDetailLoaded[sourceId] = true;
+  libraryStore.detailLoaded[sourceId] = true;
 }
 
 function renderLibraryStats() {
@@ -297,12 +297,12 @@ function renderLibraryStats() {
   });
   // W1：拆成「待处理」行动组（重）+「参考量」组（轻），一眼看出现在该处理什么。
   container.innerHTML = '<div class="stat-group stat-group--pending"><span class="stat-group__label">待处理</span>'
-    + statusStatButton('page_pending','页码待处理',current.page_pending,'warning','notice',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('page_pending','页码待处理',current.page_pending,'warning','notice',libraryStore.statusFilter,'applyLibStatusFilter')
+    + statusStatButton('bibliographic','书目待补全',current.bibliographic,'neutral','book',libraryStore.statusFilter,'applyLibStatusFilter')
     + '</div><span class="library-controls-spacer"></span>'
     + '<div class="stat-group stat-group--reference">'
-    + statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libStatusFilter,'applyLibStatusFilter')
-    + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libStatusFilter,'applyLibStatusFilter')
+    + statusStatButton('pdf_all','PDF 总数',current.total,'info','document',libraryStore.statusFilter,'applyLibStatusFilter')
+    + statusStatButton('calibrated','已校准',current.calibrated,'success','check',libraryStore.statusFilter,'applyLibStatusFilter')
     + '</div>';
 }
 
@@ -316,9 +316,9 @@ function libDocTypeLabel(v) {
 // 当前生效的（非「全部」）筛选，按「类型 → 语言 → 文件」次序，供角标与 chips 使用。
 function libFilterActiveList() {
   var out = [];
-  if (libDocTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libDocTypeFilter)});
-  if (libLangFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libLangFilter)});
-  if (libTypeFilter !== 'all') out.push({kind:'type', label:libTypeFilter === 'word' ? 'Word' : 'PDF'});
+  if (libraryStore.documentTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libraryStore.documentTypeFilter)});
+  if (libraryStore.languageFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libraryStore.languageFilter)});
+  if (libraryStore.typeFilter !== 'all') out.push({kind:'type', label:libraryStore.typeFilter === 'word' ? 'Word' : 'PDF'});
   return out;
 }
 
@@ -342,8 +342,8 @@ function renderLibraryFilterBar() {
   if (unknownCount > 0) doctypeOpts.push({v:'unknown', label:'未识别', n:unknownCount});
 
   // 语言细类只显示库内实际存在的语言；设置项仍只控制中文/外文两大类的先后。
-  var languageOptions = libraryLanguageFacetOptions(scopeSources, libDefaultLanguage);
-  if (libLangFilter !== 'all' && !languageOptions.some(function(option) { return option.v === libLangFilter; })) libLangFilter = 'all';
+  var languageOptions = libraryLanguageFacetOptions(scopeSources, libraryStore.defaultLanguage);
+  if (libraryStore.languageFilter !== 'all' && !languageOptions.some(function(option) { return option.v === libraryStore.languageFilter; })) libraryStore.languageFilter = 'all';
   var langOpts = [{v:'all', label:'全部语言', n:allCount}].concat(languageOptions);
 
   var typeOpts = [
@@ -352,9 +352,9 @@ function renderLibraryFilterBar() {
     {v:'pdf', label:'PDF', n:pdfCount}
   ];
 
-  renderLibraryFacet('filter-opts-doctype', doctypeOpts, libDocTypeFilter, 'doctype');
-  renderLibraryFacet('filter-opts-lang', langOpts, libLangFilter, 'lang');
-  renderLibraryFacet('filter-opts-type', typeOpts, libTypeFilter, 'type');
+  renderLibraryFacet('filter-opts-doctype', doctypeOpts, libraryStore.documentTypeFilter, 'doctype');
+  renderLibraryFacet('filter-opts-lang', langOpts, libraryStore.languageFilter, 'lang');
+  renderLibraryFacet('filter-opts-type', typeOpts, libraryStore.typeFilter, 'type');
 
   var active = libFilterActiveList();
   var badge = document.getElementById('library-filter-badge');
@@ -384,11 +384,11 @@ function renderLibraryFacet(containerId, options, active, kind) {
 async function setLibFacet(event, kind, value) {
   if (event) event.stopPropagation();
   if (!await guardLeaveDetail()) return;
-  if (kind === 'doctype') libDocTypeFilter = value;
-  else if (kind === 'lang') libLangFilter = value;
+  if (kind === 'doctype') libraryStore.documentTypeFilter = value;
+  else if (kind === 'lang') libraryStore.languageFilter = value;
   else if (kind === 'type') {
-    libTypeFilter = value;
-    if (libTypeFilter === 'word' && libStatusFilter !== 'all') { libStatusFilter = 'all'; renderLibraryStats(); }
+    libraryStore.typeFilter = value;
+    if (libraryStore.typeFilter === 'word' && libraryStore.statusFilter !== 'all') { libraryStore.statusFilter = 'all'; renderLibraryStats(); }
   }
   closeLibDrawer();
   renderLibraryList();
@@ -398,17 +398,17 @@ async function setLibFacet(event, kind, value) {
 async function removeLibFacet(event, kind) {
   if (event) event.stopPropagation();
   if (!await guardLeaveDetail()) return;
-  if (kind === 'doctype') libDocTypeFilter = 'all';
-  else if (kind === 'lang') libLangFilter = 'all';
-  else if (kind === 'type') libTypeFilter = 'all';
+  if (kind === 'doctype') libraryStore.documentTypeFilter = 'all';
+  else if (kind === 'lang') libraryStore.languageFilter = 'all';
+  else if (kind === 'type') libraryStore.typeFilter = 'all';
   closeLibDrawer();
   renderLibraryList();
 }
 
 // 切换排序方向（升/降），合并排序控件里的方向按钮。
 function toggleLibrarySortDirection() {
-  libSortDirection = libSortDirection === 'asc' ? 'desc' : 'asc';
-  try { localStorage.setItem('meFinderLibrarySortDirection', libSortDirection); } catch (_) {}
+  libraryStore.sortDirection = libraryStore.sortDirection === 'asc' ? 'desc' : 'asc';
+  try { localStorage.setItem('meFinderLibrarySortDirection', libraryStore.sortDirection); } catch (_) {}
   syncLibrarySortControls();
   closeAppSelects();
   renderLibraryList();
@@ -417,9 +417,9 @@ function toggleLibrarySortDirection() {
 async function applyLibStatusFilter(status) {
   if (!await guardLeaveDetail()) return;
   var requested = status || 'all';
-  libStatusFilter = requested === libStatusFilter ? 'all' : requested;
-  if (libStatusFilter !== 'all' && libTypeFilter === 'word') {
-    libTypeFilter = 'all';  // 筛选按钮/chips 由 renderLibraryFilterBar 随列表重绘刷新
+  libraryStore.statusFilter = requested === libraryStore.statusFilter ? 'all' : requested;
+  if (libraryStore.statusFilter !== 'all' && libraryStore.typeFilter === 'word') {
+    libraryStore.typeFilter = 'all';  // 筛选按钮/chips 由 renderLibraryFilterBar 随列表重绘刷新
   }
   closeLibDrawer();
   renderLibraryStats();
@@ -435,8 +435,8 @@ function loadLibDefaultLanguage() {
 function setLibDefaultLanguage(btn) {
   var value = btn && btn.dataset ? btn.dataset.deflang : btn;
   value = value === 'foreign' ? 'foreign' : 'chinese';
-  if (value === libDefaultLanguage) return;
-  libDefaultLanguage = value;
+  if (value === libraryStore.defaultLanguage) return;
+  libraryStore.defaultLanguage = value;
   try { localStorage.setItem('meFinderLibDefaultLanguage', value); } catch (_) {}
   persistDisplayPreference('lib_default_language', value);  // 随数据备份/迁移（C-01）
   syncLibDefaultLanguageControl();
@@ -445,17 +445,17 @@ function setLibDefaultLanguage(btn) {
 
 function syncLibDefaultLanguageControl() {
   document.querySelectorAll('#lib-default-lang-control .seg-btn').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.deflang === libDefaultLanguage);
+    b.classList.toggle('active', b.dataset.deflang === libraryStore.defaultLanguage);
   });
 }
 
 // 清空所有筛选与搜索，回到全部（空态「清除全部筛选」、筛选弹层「清除全部」用）。
 function clearLibraryFilters() {
-  libTypeFilter = 'all';
-  libLangFilter = 'all';
-  libDocTypeFilter = 'all';
-  libStatusFilter = 'all';
-  libGroupScopeId = '';
+  libraryStore.typeFilter = 'all';
+  libraryStore.languageFilter = 'all';
+  libraryStore.documentTypeFilter = 'all';
+  libraryStore.statusFilter = 'all';
+  libraryStore.groupScopeId = '';
   var search = document.getElementById('lib-search');
   if (search) search.value = '';
   renderGroupScopeSelector();
@@ -465,17 +465,17 @@ function clearLibraryFilters() {
 
 function filterLibrary() {
   // 输入法与连续输入下，91 份以上的列表每敲一个字重排一次会明显发涩。
-  if (libFilterTimer) clearTimeout(libFilterTimer);
-  libFilterTimer = setTimeout(function() {
-    libFilterTimer = null;
+  if (libraryStore.filterTimer) clearTimeout(libraryStore.filterTimer);
+  libraryStore.filterTimer = setTimeout(function() {
+    libraryStore.filterTimer = null;
     renderLibraryList();
   }, 160);
 }
 
 function setLibraryView(mode) {
-  libViewMode = mode === 'grid' ? 'grid' : 'list';
-  localStorage.setItem('meFinderLibraryView', libViewMode);
-  persistDisplayPreference('library_view', libViewMode);
+  libraryStore.viewMode = mode === 'grid' ? 'grid' : 'list';
+  localStorage.setItem('meFinderLibraryView', libraryStore.viewMode);
+  persistDisplayPreference('library_view', libraryStore.viewMode);
   syncLibraryViewButtons();
   renderLibraryList();
 }
@@ -484,7 +484,7 @@ function syncLibraryViewButtons() {
   ['list','grid'].forEach(function(mode) {
     var button = document.getElementById('library-view-' + mode);
     if (!button) return;
-    var active = libViewMode === mode;
+    var active = libraryStore.viewMode === mode;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   });
@@ -493,11 +493,11 @@ function syncLibraryViewButtons() {
 function setLibrarySortOption(event, control, value) {
   event.stopPropagation();
   if (control === 'direction') {
-    libSortDirection = value === 'asc' ? 'asc' : 'desc';
-    localStorage.setItem('meFinderLibrarySortDirection', libSortDirection);
+    libraryStore.sortDirection = value === 'asc' ? 'asc' : 'desc';
+    localStorage.setItem('meFinderLibrarySortDirection', libraryStore.sortDirection);
   } else {
-    libSortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(value) >= 0 ? value : 'imported_at';
-    localStorage.setItem('meFinderLibrarySortField', libSortField);
+    libraryStore.sortField = ['imported_at','title','author','modified_at','source_type','status'].indexOf(value) >= 0 ? value : 'imported_at';
+    localStorage.setItem('meFinderLibrarySortField', libraryStore.sortField);
   }
   syncLibrarySortControls();
   closeAppSelects();
@@ -507,17 +507,17 @@ function setLibrarySortOption(event, control, value) {
 function syncLibrarySortControls() {
   var labels = {imported_at:'导入时间',title:'书名',author:'作者',modified_at:'最近修改时间',source_type:'来源类型',status:'校准状态',desc:'降序',asc:'升序'};
   var fieldLabel = document.getElementById('library-sort-field-label');
-  if (fieldLabel) fieldLabel.textContent = labels[libSortField] || labels.imported_at;
+  if (fieldLabel) fieldLabel.textContent = labels[libraryStore.sortField] || labels.imported_at;
   document.querySelectorAll('#library-sort-field-select .app-select-option').forEach(function(option) {
-    option.classList.toggle('is-selected', option.dataset.value === libSortField);
+    option.classList.toggle('is-selected', option.dataset.value === libraryStore.sortField);
   });
   // 方向合并成一个可点按钮：文案随升/降切换，箭头方向靠 .is-asc 翻转。
   var dirBtn = document.getElementById('library-sort-dir');
   var dirLabel = document.getElementById('library-sort-dir-label');
-  if (dirLabel) dirLabel.textContent = labels[libSortDirection] || labels.desc;
+  if (dirLabel) dirLabel.textContent = labels[libraryStore.sortDirection] || labels.desc;
   if (dirBtn) {
-    dirBtn.classList.toggle('is-asc', libSortDirection === 'asc');
-    dirBtn.setAttribute('aria-label', libSortDirection === 'asc' ? '升序，点击改为降序' : '降序，点击改为升序');
+    dirBtn.classList.toggle('is-asc', libraryStore.sortDirection === 'asc');
+    dirBtn.setAttribute('aria-label', libraryStore.sortDirection === 'asc' ? '升序，点击改为降序' : '降序，点击改为升序');
   }
 }
 
@@ -527,13 +527,13 @@ function compareLibraryDates(a, b) {
   if (!av && !bv) return 0;
   if (!av) return 1;
   if (!bv) return -1;
-  return libSortDirection === 'desc' ? bv - av : av - bv;
+  return libraryStore.sortDirection === 'desc' ? bv - av : av - bv;
 }
 
 function libraryGroupScopedSources() {
-  var sources = libSources.slice();
-  if (libGroupScopeId) {
-    var groupMemberIds = documentGroupMemberIdSet(libGroupScopeId);
+  var sources = libraryStore.sources.slice();
+  if (libraryStore.groupScopeId) {
+    var groupMemberIds = documentGroupMemberIdSet(libraryStore.groupScopeId);
     sources = sources.filter(function(s) { return groupMemberIds.has(s.source_file_id); });
   }
   return sources;
@@ -542,29 +542,29 @@ function libraryGroupScopedSources() {
 function getFilteredSources() {
   // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
   let sources = libraryGroupScopedSources();
-  if (libTypeFilter !== 'all') {
-    sources = sources.filter(s => s.source_type === libTypeFilter);
+  if (libraryStore.typeFilter !== 'all') {
+    sources = sources.filter(s => s.source_type === libraryStore.typeFilter);
   }
-  if (libLangFilter !== 'all') {
-    sources = sources.filter(s => libraryLanguageCode(s) === libLangFilter);
+  if (libraryStore.languageFilter !== 'all') {
+    sources = sources.filter(s => libraryLanguageCode(s) === libraryStore.languageFilter);
   }
-  if (libDocTypeFilter === 'unknown') {
+  if (libraryStore.documentTypeFilter === 'unknown') {
     // 未识别：从未跑过书目识别的 PDF（类型只是默认回落成 book，并非真的判定过）。
     sources = sources.filter(s => s.source_type === 'pdf' && !isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)));
-  } else if (libDocTypeFilter === 'book') {
+  } else if (libraryStore.documentTypeFilter === 'book') {
     // 著作：仅已确认类型的图书 PDF；不再把 Word 文集和未识别 PDF 混进来。
     sources = sources.filter(s => s.source_type === 'pdf' && isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book');
-  } else if (libDocTypeFilter !== 'all') {
-    sources = sources.filter(s => libraryDocType(s) === libDocTypeFilter);
+  } else if (libraryStore.documentTypeFilter !== 'all') {
+    sources = sources.filter(s => libraryDocType(s) === libraryStore.documentTypeFilter);
   }
-  if (libStatusFilter === 'pdf_all') {
+  if (libraryStore.statusFilter === 'pdf_all') {
     sources = sources.filter(s => s.source_type === 'pdf');
-  } else if (libStatusFilter === 'page_pending') {
+  } else if (libraryStore.statusFilter === 'page_pending') {
     sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) !== 'calibrated');
-  } else if (libStatusFilter === 'bibliographic') {
+  } else if (libraryStore.statusFilter === 'bibliographic') {
     sources = sources.filter(s => s.source_type === 'pdf' && bibliographicMissingFields(sourceBibliographicMetadata(s)).length > 0);
-  } else if (libStatusFilter !== 'all') {
-    sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) === libStatusFilter);
+  } else if (libraryStore.statusFilter !== 'all') {
+    sources = sources.filter(s => s.source_type === 'pdf' && calibrationStatusGroup(s.status) === libraryStore.statusFilter);
   }
   const q = (document.getElementById('lib-search').value || '').trim().toLowerCase().replace(/\s+/g, '');
   if (q) {
@@ -579,15 +579,15 @@ function getFilteredSources() {
     var left = librarySortProjection(a);
     var right = librarySortProjection(b);
     var result;
-    if (libSortField === 'imported_at' || libSortField === 'modified_at') {
-      result = compareLibraryDates(left[libSortField], right[libSortField]);
-    } else if (libSortField === 'status') {
+    if (libraryStore.sortField === 'imported_at' || libraryStore.sortField === 'modified_at') {
+      result = compareLibraryDates(left[libraryStore.sortField], right[libraryStore.sortField]);
+    } else if (libraryStore.sortField === 'status') {
       var order = {manual_mapped:0,auto_mapped_high:1,unmapped:2,needs_review:3,auto_mapping_failed:4,source_missing:5,mapping:6};
       var av = a.source_type === 'pdf' && order[a.status] != null ? order[a.status] : 99;
       var bv = b.source_type === 'pdf' && order[b.status] != null ? order[b.status] : 99;
-      result = libSortDirection === 'desc' ? bv - av : av - bv;
+      result = libraryStore.sortDirection === 'desc' ? bv - av : av - bv;
     } else {
-      result = calibrationSortText(left[libSortField], right[libSortField], libSortDirection);
+      result = calibrationSortText(left[libraryStore.sortField], right[libraryStore.sortField], libraryStore.sortDirection);
     }
     return result || calibrationSortText(left.title, right.title, 'asc');
   });
@@ -602,9 +602,9 @@ function updateLibraryDeleteControls() {
   var removeButton = document.getElementById('library-remove-selected-btn');
   var exportButton = document.getElementById('library-export-selected-btn');
   var selectVisibleButton = document.getElementById('library-select-visible-btn');
-  var selectedCount = libDeleteSelection.size;
-  var selectedPdfCount = libSources.filter(function(item) {
-    return item.source_type === 'pdf' && libDeleteSelection.has(item.source_file_id);
+  var selectedCount = libraryStore.deleteSelection.size;
+  var selectedPdfCount = libraryStore.sources.filter(function(item) {
+    return item.source_type === 'pdf' && libraryStore.deleteSelection.has(item.source_file_id);
   }).length;
   var active = selectedCount > 0;
   // Selection alone drives the contextual action bar: no persistent mode toggle.
@@ -613,8 +613,8 @@ function updateLibraryDeleteControls() {
   if (count) count.textContent = '已选 ' + selectedCount + ' 项';
   if (removeButton) removeButton.disabled = selectedCount === 0;
   if (exportButton) {
-    exportButton.disabled = libraryExportRunning || selectedPdfCount === 0;
-    if (!libraryExportRunning) {
+    exportButton.disabled = libraryStore.exportRunning || selectedPdfCount === 0;
+    if (!libraryStore.exportRunning) {
       exportButton.textContent = selectedPdfCount
         ? '导出所选 PDF（' + selectedPdfCount + '）'
         : '导出所选 PDF';
@@ -623,7 +623,7 @@ function updateLibraryDeleteControls() {
   if (selectVisibleButton) {
     var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
     var allSelected = selectable.length > 0 && selectable.every(function(item) {
-      return libDeleteSelection.has(item.source_file_id);
+      return libraryStore.deleteSelection.has(item.source_file_id);
     });
     selectVisibleButton.textContent = allSelected ? '取消全选' : '全选当前';
     selectVisibleButton.disabled = selectable.length === 0;
@@ -632,7 +632,7 @@ function updateLibraryDeleteControls() {
 
 function syncLibraryDeleteSelectionUI() {
   document.querySelectorAll('#library-list .library-entry').forEach(function(entry) {
-    var selected = libDeleteSelection.has(entry.dataset.id);
+    var selected = libraryStore.deleteSelection.has(entry.dataset.id);
     entry.classList.toggle('delete-selected', selected);
     entry.setAttribute('aria-selected', selected ? 'true' : 'false');
     var input = entry.querySelector('.library-delete-check');
@@ -642,31 +642,31 @@ function syncLibraryDeleteSelectionUI() {
 }
 
 function clearLibrarySelection() {
-  if (libDeleteSelection.size === 0) return;
-  libDeleteSelection.clear();
+  if (libraryStore.deleteSelection.size === 0) return;
+  libraryStore.deleteSelection.clear();
   syncLibraryDeleteSelectionUI();
 }
 
 function toggleLibraryDeleteSelection(sourceId, force) {
-  var source = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var source = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
   if (!isLibraryDeleteSelectable(source)) {
     showToast('当前来源类型暂不支持从文献库移除', 'warning');
     return;
   }
-  var selected = typeof force === 'boolean' ? force : !libDeleteSelection.has(sourceId);
-  if (selected) libDeleteSelection.add(sourceId);
-  else libDeleteSelection.delete(sourceId);
+  var selected = typeof force === 'boolean' ? force : !libraryStore.deleteSelection.has(sourceId);
+  if (selected) libraryStore.deleteSelection.add(sourceId);
+  else libraryStore.deleteSelection.delete(sourceId);
   syncLibraryDeleteSelectionUI();
 }
 
 function toggleSelectVisibleLibraryDocuments() {
   var selectable = getFilteredSources().filter(isLibraryDeleteSelectable);
   var allSelected = selectable.length > 0 && selectable.every(function(item) {
-    return libDeleteSelection.has(item.source_file_id);
+    return libraryStore.deleteSelection.has(item.source_file_id);
   });
   selectable.forEach(function(item) {
-    if (allSelected) libDeleteSelection.delete(item.source_file_id);
-    else libDeleteSelection.add(item.source_file_id);
+    if (allSelected) libraryStore.deleteSelection.delete(item.source_file_id);
+    else libraryStore.deleteSelection.add(item.source_file_id);
   });
   syncLibraryDeleteSelectionUI();
 }
@@ -693,7 +693,7 @@ function setupLibraryKeyboardNav() {
 }
 
 function handleLibraryEntryClick(event, sourceId) {
-  if (suppressLibrarySelectionClick) {
+  if (libraryStore.suppressSelectionClick) {
     event.preventDefault();
     event.stopPropagation();
     return;
@@ -706,19 +706,19 @@ function handleLibraryEntryClick(event, sourceId) {
 function renderLibraryList() {
   const sources = getFilteredSources();
   const listEl = document.getElementById('library-list');
-  listEl.className = 'library-list-container library-view-' + libViewMode;
-  libDeleteSelection.forEach(function(sourceId) {
-    if (!libSources.some(function(source) { return source.source_file_id === sourceId; })) {
-      libDeleteSelection.delete(sourceId);
+  listEl.className = 'library-list-container library-view-' + libraryStore.viewMode;
+  libraryStore.deleteSelection.forEach(function(sourceId) {
+    if (!libraryStore.sources.some(function(source) { return source.source_file_id === sourceId; })) {
+      libraryStore.deleteSelection.delete(sourceId);
     }
   });
   // 筛选按钮角标 + 生效 chips + 弹层三组分面（含实时计数），一处渲染。
   renderLibraryFilterBar();
 
-  libraryRenderToken += 1;
+  libraryStore.renderToken += 1;
   if (sources.length === 0) {
     // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
-    listEl.innerHTML = libSources.length === 0
+    listEl.innerHTML = libraryStore.sources.length === 0
       ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF 或 DOCX 后即可检索、校准页码、补全书目</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
       : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
     updateLibraryDeleteControls();
@@ -728,7 +728,7 @@ function renderLibraryList() {
   listEl.innerHTML = sources.slice(0, LIBRARY_RENDER_BATCH).map(libraryEntryHTML).join('');
   syncLibraryDeleteSelectionUI();
   if (sources.length > LIBRARY_RENDER_BATCH) {
-    appendLibraryEntries(sources, LIBRARY_RENDER_BATCH, libraryRenderToken);
+    appendLibraryEntries(sources, LIBRARY_RENDER_BATCH, libraryStore.renderToken);
   }
 }
 
@@ -741,7 +741,7 @@ function scheduleLibraryChunk(callback) {
 
 function appendLibraryEntries(sources, start, token) {
   scheduleLibraryChunk(function() {
-    if (token !== libraryRenderToken) return;
+    if (token !== libraryStore.renderToken) return;
     var listEl = document.getElementById('library-list');
     if (!listEl) return;
     var end = Math.min(start + LIBRARY_RENDER_BATCH, sources.length);
@@ -762,9 +762,9 @@ function libraryEntryHTML(src) {
   var bib = sourceBibliographicMetadata(src);
   var missingMetadataText = isPdf ? bibliographicMissingText(bib) : '';
   var size = formatFileSize(src.size_bytes);
-  var isSelected = src.source_file_id === libSelectedId;
+  var isSelected = src.source_file_id === libraryStore.selectedId;
   var isDeleteSelectable = isLibraryDeleteSelectable(src);
-  var isDeleteSelected = libDeleteSelection.has(src.source_file_id);
+  var isDeleteSelected = libraryStore.deleteSelection.has(src.source_file_id);
   var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
   var typeLabel = isPdf ? (src.parser_label || 'PDF') : 'Word';
   var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
@@ -790,7 +790,7 @@ function libraryEntryHTML(src) {
   var selectionControl = isDeleteSelectable
     ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
     : '';
-  if (libViewMode === 'grid') {
+  if (libraryStore.viewMode === 'grid') {
     var imported = formatCalDate(src.imported_at || src.last_modified);
     var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
     return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
@@ -933,7 +933,7 @@ async function exportLibraryDocument(sourceId) {
 async function requestLibraryDocumentExport(sourceId, outputDirectory) {
   var payload = {
     source_id: sourceId,
-    include_source_pdf: currentDocumentExportMode === 'with_pdf'
+    include_source_pdf: settingsStore.currentDocumentExportMode === 'with_pdf'
   };
   if (outputDirectory) payload.output_dir = outputDirectory;
   var response = await fetch('/api/document/export', {
@@ -974,9 +974,9 @@ async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
 }
 
 async function exportSelectedLibraryDocuments() {
-  if (libraryExportRunning) return;
-  var items = libSources.filter(function(item) {
-    return item.source_type === 'pdf' && libDeleteSelection.has(item.source_file_id);
+  if (libraryStore.exportRunning) return;
+  var items = libraryStore.sources.filter(function(item) {
+    return item.source_type === 'pdf' && libraryStore.deleteSelection.has(item.source_file_id);
   });
   if (!items.length) {
     showToast('所选文献中没有可导出的 PDF', 'warning');
@@ -992,11 +992,11 @@ async function exportSelectedLibraryDocuments() {
   }
   if (outputDirectory === null) return;
 
-  libraryExportRunning = true;
+  libraryStore.exportRunning = true;
   var exportButton = document.getElementById('library-export-selected-btn');
   var exported = [];
   var failures = [];
-  var skippedWordCount = libDeleteSelection.size - items.length;
+  var skippedWordCount = libraryStore.deleteSelection.size - items.length;
   updateLibraryDeleteControls();
   try {
     for (var index = 0; index < items.length; index += 1) {
@@ -1014,7 +1014,7 @@ async function exportSelectedLibraryDocuments() {
       }
     }
   } finally {
-    libraryExportRunning = false;
+    libraryStore.exportRunning = false;
     updateLibraryDeleteControls();
   }
 
@@ -1026,20 +1026,20 @@ async function exportSelectedLibraryDocuments() {
   }
   outputDirectory = outputDirectory || exported[0].path.replace(/[\\/][^\\/]+$/, '');
   showToast('已导出 ' + exported.length + ' 个文档包'
-    + (currentDocumentExportMode === 'with_pdf' ? '（包含原 PDF）' : '') + skippedText
+    + (settingsStore.currentDocumentExportMode === 'with_pdf' ? '（包含原 PDF）' : '') + skippedText
     + '，每本一个文档包。保存到：' + outputDirectory, 'success');
 }
 
 async function selectLibDoc(sourceId) {
   // 切到别的文献前拦一道未保存修改；同一文献的重选（识别/保存后刷新）不打扰。
-  var switchingDoc = sourceId !== libSelectedId;
+  var switchingDoc = sourceId !== libraryStore.selectedId;
   if (switchingDoc && !await guardLeaveDetail()) return;
   if (switchingDoc) bibEditMode[sourceId] = false;  // 新文献默认查看态
-  libSelectedId = sourceId;
+  libraryStore.selectedId = sourceId;
   document.querySelectorAll('#library-list .library-entry').forEach(function(row) {
     row.classList.toggle('selected', row.dataset.id === sourceId);
   });
-  if (!libSources.some(function(s) { return s.source_file_id === sourceId; })) return;
+  if (!libraryStore.sources.some(function(s) { return s.source_file_id === sourceId; })) return;
   try {
     await ensureLibraryDetail(sourceId);
   } catch (error) {
@@ -1047,11 +1047,11 @@ async function selectLibDoc(sourceId) {
     return;
   }
   // 详情是异步补齐的，期间用户可能已经关掉抽屉或换了一份文献。
-  if (libSelectedId !== sourceId) return;
-  var src = libSources.find(function(s) { return s.source_file_id === sourceId; });
+  if (libraryStore.selectedId !== sourceId) return;
+  var src = libraryStore.sources.find(function(s) { return s.source_file_id === sourceId; });
   if (!src) return;
   var vol = volumeForSource(sourceId);
-  var works = vol ? libWorks.filter(function(w) { return w.volume_id === vol.volume_id; }) : [];
+  var works = vol ? libraryStore.works.filter(function(w) { return w.volume_id === vol.volume_id; }) : [];
   var title = vol ? vol.display_title : (src.file_name || sourceId);
   var corpusTitle = vol ? (vol.corpus_title || '') : '';
 
@@ -1121,17 +1121,17 @@ async function toggleDrawerCalibration(forceOpen) {
   host.classList.toggle('expanded', open);
   var toggle = document.getElementById('cal-collapse-toggle');
   if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (open && libSelectedId && calSelectedSourceId !== libSelectedId) {
-    calSelectedSourceId = libSelectedId;
-    await loadCalibrationDoc(libSelectedId);
+  if (open && libraryStore.selectedId && calSelectedSourceId !== libraryStore.selectedId) {
+    calSelectedSourceId = libraryStore.selectedId;
+    await loadCalibrationDoc(libraryStore.selectedId);
   }
 }
 
 function updateLibraryEntry(sourceId) {
   renderLibraryStats();
   renderLibraryList();
-  if (libSelectedId === sourceId) {
-    var src = libSources.find(function(s) { return s.source_file_id === sourceId; });
+  if (libraryStore.selectedId === sourceId) {
+    var src = libraryStore.sources.find(function(s) { return s.source_file_id === sourceId; });
     if (src && src.source_type === 'pdf') renderDrawerCalibrationSummary(src);
   }
 }

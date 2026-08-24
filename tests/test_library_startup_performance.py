@@ -133,10 +133,16 @@ class LibraryFirstScreenLoadingTests(unittest.TestCase):
 
     def test_library_requests_are_shared_between_dropdown_and_library_page(self) -> None:
         self.assertIn("function fetchLibraryCatalog(force)", HTML)
-        self.assertIn("if (libraryCatalogPromise) return libraryCatalogPromise;", HTML)
-        self.assertIn("if (libraryCatalog) return Promise.resolve(libraryCatalog);", HTML)
+        self.assertIn(
+            "if (searchStore.libraryCatalogPromise) return searchStore.libraryCatalogPromise;",
+            HTML,
+        )
+        self.assertIn(
+            "if (searchStore.libraryCatalog) return Promise.resolve(searchStore.libraryCatalog);",
+            HTML,
+        )
         self.assertIn("function invalidateLibraryCatalog()", HTML)
-        self.assertIn("searchSourceFiles = libSources;", HTML)
+        self.assertIn("searchStore.sourceFiles = libraryStore.sources;", HTML)
 
     def test_library_list_uses_the_summary_view_and_lazy_detail(self) -> None:
         self.assertIn("fetch('/api/library?view=summary')", HTML)
@@ -148,8 +154,11 @@ class LibraryFirstScreenLoadingTests(unittest.TestCase):
         self.assertIn("const LIBRARY_RENDER_BATCH = 50;", HTML)
         self.assertIn("function appendLibraryEntries(sources, start, token)", HTML)
         self.assertIn("function libraryEntryHTML(src)", HTML)
-        self.assertIn("if (token !== libraryRenderToken) return;", HTML)
-        self.assertIn("if (libFilterTimer) clearTimeout(libFilterTimer);", HTML)
+        self.assertIn("if (token !== libraryStore.renderToken) return;", HTML)
+        self.assertIn(
+            "if (libraryStore.filterTimer) clearTimeout(libraryStore.filterTimer);",
+            HTML,
+        )
 
     def test_hidden_window_still_finishes_appending_the_list(self) -> None:
         # 隐藏文档不触发 requestAnimationFrame；没有定时器兜底就会只剩首批。
@@ -160,7 +169,7 @@ class LibraryFirstScreenLoadingTests(unittest.TestCase):
     def test_volume_lookup_uses_a_map_instead_of_scanning_per_row(self) -> None:
         self.assertIn("function buildVolumeIndex(volumes)", HTML)
         self.assertIn("function volumeForSource(sourceId)", HTML)
-        self.assertNotIn("libVolumes.find(function(v)", HTML)
+        self.assertNotIn("libraryStore.volumes.find(function(v)", HTML)
         self.assertNotIn("searchVolumes.find(function(item)", HTML)
 
 

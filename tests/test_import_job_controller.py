@@ -136,7 +136,7 @@ class ImportJobControllerTests(unittest.TestCase):
             },
         )
 
-    def test_status_and_resumable_preserve_public_shapes(self) -> None:
+    def test_status_and_resumable_add_the_shared_task_event(self) -> None:
         self.assertEqual(
             self.controller.status(None),
             (404, {"error": "导入任务不存在。"}),
@@ -145,7 +145,13 @@ class ImportJobControllerTests(unittest.TestCase):
 
         public_job = {"job_id": "job-one", "status": "processing"}
         self.imports.status_result = public_job
-        self.assertEqual(self.controller.status("job-one"), (200, public_job))
+        status, response = self.controller.status("job-one")
+        self.assertEqual(status, 200)
+        self.assertEqual(response["job_id"], "job-one")
+        self.assertEqual(response["status"], "processing")
+        self.assertEqual(response["task_event"]["task_id"], "job-one")
+        self.assertEqual(response["task_event"]["unit"], "pages")
+        self.assertNotIn("task_event", public_job)
         self.assertEqual(self.imports.calls, [("status", "job-one")])
 
         self.imports.status_result = None
@@ -156,9 +162,11 @@ class ImportJobControllerTests(unittest.TestCase):
         self.imports.resumable_result = [
             {"job_id": "paused-one", "status": "paused"}
         ]
+        status, response = self.controller.resumable()
+        self.assertEqual(status, 200)
+        self.assertEqual(response["jobs"][0]["job_id"], "paused-one")
         self.assertEqual(
-            self.controller.resumable(),
-            (200, {"jobs": self.imports.resumable_result}),
+            response["jobs"][0]["task_event"]["status"], "paused"
         )
 
     def test_reparse_rejects_invalid_or_non_pdf_sources(self) -> None:

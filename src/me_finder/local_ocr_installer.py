@@ -30,6 +30,7 @@ from .local_ocr_settings import (
     clear_managed_local_ocr_engine,
     configure_managed_local_ocr_engine,
 )
+from .tasks import TaskEvent
 
 
 LOCAL_OCR_MANIFEST_FILE = Path(__file__).with_name("local_ocr_manifest.json")
@@ -206,6 +207,8 @@ def load_local_ocr_installer_manifest(
 
 
 class LocalOCRInstaller:
+    component_id = "local-ocr"
+
     def __init__(
         self,
         runtime_root: Path,
@@ -256,6 +259,17 @@ class LocalOCRInstaller:
         if self._catalog_summary is not None:
             summary["catalog"] = self._catalog_summary()
         return summary
+
+    def diagnostics(self) -> Dict[str, object]:
+        summary = self.summary()
+        engines = summary["engines"]
+        return {
+            "component_id": self.component_id,
+            "supported": summary["supported"],
+            "platform": summary["platform"],
+            "installed": sum(bool(item["managed"]) for item in engines),
+            "active": sum(bool(item["operation"]) for item in engines),
+        }
 
     def refresh_manifest(self) -> None:
         engines, selected = load_local_ocr_installer_manifest(
@@ -1092,7 +1106,7 @@ class LocalOCRInstaller:
                     installed_tag = receipt.get("tag")
             except (OSError, json.JSONDecodeError):
                 pass
-        return {
+        result = {
             "provider_id": provider_id,
             "display_name": engine.display_name,
             "version": engine.version,
@@ -1111,6 +1125,10 @@ class LocalOCRInstaller:
             "installed_tag": installed_tag,
             "update_available": self._update_available(provider_id),
         }
+        result["task_event"] = TaskEvent.from_mapping(
+            f"{self.component_id}:{provider_id}", result, unit="bytes"
+        ).to_dict()
+        return result
 
     def _update_available(self, provider_id: str) -> bool:
         if not self._managed_install_is_valid(provider_id):

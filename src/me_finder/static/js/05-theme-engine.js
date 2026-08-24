@@ -402,8 +402,8 @@ function themeDefToExport(def) {
 
 // 按 id 找到主题定义（自定义优先，其次官方预设）。
 function teLookupThemeDef(id) {
-  if (typeof appearanceState !== 'undefined' && appearanceState.customThemes && appearanceState.customThemes[id]) {
-    return appearanceState.customThemes[id];
+  if (typeof settingsStore.appearanceState !== 'undefined' && settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[id]) {
+    return settingsStore.appearanceState.customThemes[id];
   }
   return THEME_PRESET_MAP[id] || null;
 }
@@ -450,15 +450,15 @@ function applyThemeById(id) {
 
 // 解析并应用当前外观状态；返回实际生效的主题 id。
 function applyAppearance() {
-  var activeId = resolveActiveThemeId(appearanceState, teSystemPrefersDark());
+  var activeId = resolveActiveThemeId(settingsStore.appearanceState, teSystemPrefersDark());
   applyThemeById(activeId);
-  currentTheme = activeId;
+  settingsStore.currentTheme = activeId;
   return activeId;
 }
 
 // 活动主题归约成一个内置 CSS 主题 id（POST 给后端做首帧/原生回退）。
 function activeBuiltinFallback() {
-  var id = resolveActiveThemeId(appearanceState, teSystemPrefersDark());
+  var id = resolveActiveThemeId(settingsStore.appearanceState, teSystemPrefersDark());
   var preset = THEME_PRESET_MAP[id];
   if (preset && preset.builtinCss) return id;
   var def = teLookupThemeDef(id);
@@ -470,7 +470,7 @@ function activeBuiltinFallback() {
 function initAppearanceSystemWatch() {
   try {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
-    var handler = function() { if (appearanceState.mode === 'system') applyAppearance(); };
+    var handler = function() { if (settingsStore.appearanceState.mode === 'system') applyAppearance(); };
     if (mq.addEventListener) mq.addEventListener('change', handler);
     else if (mq.addListener) mq.addListener(handler);
   } catch (_) {}

@@ -256,6 +256,43 @@ class ParserSettingsControllerTests(unittest.TestCase):
         self.assertEqual(installer_summary.call_count, 2)
         installer_action.assert_called_once_with(request)
 
+    def test_managed_component_mapping_drives_actions_and_diagnostics(self) -> None:
+        local_component = Mock()
+        local_component.summary.return_value = {
+            "supported": True,
+            "engines": [],
+        }
+        local_component.perform.return_value = {
+            "supported": True,
+            "engines": [],
+        }
+        local_component.diagnostics.return_value = {
+            "component_id": "local-ocr"
+        }
+        controller = self._controller(
+            summarize_local_ocr=Mock(
+                return_value={"available": False, "engines": []}
+            ),
+            managed_components={"local-ocr": local_component},
+        )
+        request = {"provider_id": "ndlocr-lite", "action": "validate"}
+
+        status, config = controller.local_ocr_config()
+        self.assertEqual(status, 200)
+        self.assertEqual(config["installer"], local_component.summary.return_value)
+        self.assertEqual(
+            controller.manage_local_ocr_component(request),
+            (
+                200,
+                {"ok": True, "installer": local_component.perform.return_value},
+            ),
+        )
+        self.assertEqual(
+            controller.component_diagnostics(),
+            (200, {"components": [{"component_id": "local-ocr"}]}),
+        )
+        local_component.perform.assert_called_once_with(request)
+
     def test_managed_mineru_status_and_actions_share_local_deployment_payload(self) -> None:
         runtime_summary = Mock(
             return_value={"supported": True, "profiles": [], "service": {}}

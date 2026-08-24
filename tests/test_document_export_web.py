@@ -236,7 +236,10 @@ class DocumentExportHTTPTests(unittest.TestCase):
             source,
         )
         self.assertIn("fetch('/api/document/export'", source)
-        self.assertIn("include_source_pdf: currentDocumentExportMode === 'with_pdf'", source)
+        self.assertIn(
+            "include_source_pdf: settingsStore.currentDocumentExportMode === 'with_pdf'",
+            source,
+        )
         self.assertIn("payload.output_dir = outputDirectory", source)
 
     def test_http_markdown_endpoint_exports_utf8_file(self) -> None:

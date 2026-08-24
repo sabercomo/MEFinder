@@ -8,7 +8,7 @@ var appearanceSaveTimer = null;
 // 组装当前编辑模式下可选的主题（官方预设 + 该模式的自定义主题）。
 function themeChoicesForMode(mode) {
   var list = THEME_PRESETS.filter(function(p) { return p.mode === mode; });
-  var custom = appearanceState.customThemes || {};
+  var custom = settingsStore.appearanceState.customThemes || {};
   Object.keys(custom).forEach(function(id) {
     var def = custom[id];
     if (def && def.mode === mode) {
@@ -23,11 +23,11 @@ function themeChoicesForMode(mode) {
 }
 
 // 画廊当前编辑的是哪一套（浅/深）：由外观模式直接决定，绝不再是独立的第二维度。
-// 只有「跟随系统」需要同时管两套，此时才用 appearanceEditMode 作为「白天/夜晚」子开关。
+// 只有「跟随系统」需要同时管两套，此时才用 settingsStore.appearanceEditMode 作为「白天/夜晚」子开关。
 function currentSlot() {
-  if (appearanceState.mode === 'light') return 'light';
-  if (appearanceState.mode === 'dark') return 'dark';
-  return appearanceEditMode === 'dark' ? 'dark' : 'light';
+  if (settingsStore.appearanceState.mode === 'light') return 'light';
+  if (settingsStore.appearanceState.mode === 'dark') return 'dark';
+  return settingsStore.appearanceEditMode === 'dark' ? 'dark' : 'light';
 }
 
 function renderThemeOptions() {
@@ -38,7 +38,7 @@ function renderThemeOptions() {
 }
 
 function renderThemeSelection() {
-  var selectedId = appearanceState[currentSlot()];
+  var selectedId = settingsStore.appearanceState[currentSlot()];
   document.querySelectorAll('.theme-option').forEach(function(option) {
     var selected = option.dataset.themeChoice === selectedId;
     option.classList.toggle('selected', selected);
@@ -48,8 +48,8 @@ function renderThemeSelection() {
 
 // 主题元数据（名字）用于摘要显示：预设查表，自定义查 customThemes。
 function themeDisplayName(id) {
-  if (appearanceState.customThemes && appearanceState.customThemes[id]) {
-    return appearanceState.customThemes[id].name || '自定义主题';
+  if (settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[id]) {
+    return settingsStore.appearanceState.customThemes[id].name || '自定义主题';
   }
   var p = THEME_PRESET_MAP[id];
   return p ? (p.label || p.name) : id;
@@ -58,9 +58,9 @@ function themeDisplayName(id) {
 function updateAppearanceSummary() {
   var el = document.getElementById('appearance-current');
   if (!el) return;
-  var modeLabel = appearanceState.mode === 'system' ? '跟随系统'
-    : (appearanceState.mode === 'dark' ? '深色' : '浅色');
-  var activeId = resolveActiveThemeId(appearanceState, teSystemPrefersDark());
+  var modeLabel = settingsStore.appearanceState.mode === 'system' ? '跟随系统'
+    : (settingsStore.appearanceState.mode === 'dark' ? '深色' : '浅色');
+  var activeId = resolveActiveThemeId(settingsStore.appearanceState, teSystemPrefersDark());
   el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(modeLabel + ' · ' + themeDisplayName(activeId));
 }
 
@@ -76,10 +76,10 @@ function paintModePreview(elId, themeId) {
 
 // 三张模式卡：浅色卡显示用户当前浅色主题、深色卡显示深色主题，系统卡两者斜切并置。
 function renderModePreviews() {
-  paintModePreview('mode-mock-light', appearanceState.light);
-  paintModePreview('mode-mock-dark', appearanceState.dark);
-  paintModePreview('mode-mock-system-light', appearanceState.light);
-  paintModePreview('mode-mock-system-dark', appearanceState.dark);
+  paintModePreview('mode-mock-light', settingsStore.appearanceState.light);
+  paintModePreview('mode-mock-dark', settingsStore.appearanceState.dark);
+  paintModePreview('mode-mock-system-light', settingsStore.appearanceState.light);
+  paintModePreview('mode-mock-system-dark', settingsStore.appearanceState.dark);
 }
 
 // 只读回显（模式卡预览、白天/夜晚名字与选中态、摘要）——不碰自定义输入框，
@@ -91,8 +91,8 @@ function refreshAppearanceReadouts() {
     var slot = currentSlot();
     var lightName = document.getElementById('appearance-pair-light');
     var darkName = document.getElementById('appearance-pair-dark');
-    if (lightName) lightName.textContent = themeDisplayName(appearanceState.light);
-    if (darkName) darkName.textContent = themeDisplayName(appearanceState.dark);
+    if (lightName) lightName.textContent = themeDisplayName(settingsStore.appearanceState.light);
+    if (darkName) darkName.textContent = themeDisplayName(settingsStore.appearanceState.dark);
     pair.querySelectorAll('.appearance-pair-slot').forEach(function(btn) {
       var on = btn.dataset.appearanceEdit === slot;
       btn.classList.toggle('is-active', on);
@@ -105,13 +105,13 @@ function refreshAppearanceReadouts() {
 // 外观模式卡、白天/夜晚配对、自定义输入全部与状态对齐。
 function syncAppearanceControls() {
   document.querySelectorAll('#appearance-mode-seg .appearance-mode-card').forEach(function(btn) {
-    var on = btn.dataset.appearanceMode === appearanceState.mode;
+    var on = btn.dataset.appearanceMode === settingsStore.appearanceState.mode;
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-checked', on ? 'true' : 'false');
   });
   // 「白天/夜晚各用哪套」只在跟随系统时才有意义——只有它需要同时管两套主题。
   var pair = document.getElementById('appearance-pair');
-  if (pair) pair.hidden = appearanceState.mode !== 'system';
+  if (pair) pair.hidden = settingsStore.appearanceState.mode !== 'system';
   refreshAppearanceReadouts();
   syncCustomInputs();
 }
@@ -137,8 +137,8 @@ function syncCustomInputs() {
 function syncCustomDeleteButton() {
   var deleteButton = document.getElementById('appearance-delete-custom');
   if (!deleteButton) return;
-  var selectedId = appearanceState[currentSlot()];
-  deleteButton.hidden = !(appearanceState.customThemes && appearanceState.customThemes[selectedId]);
+  var selectedId = settingsStore.appearanceState[currentSlot()];
+  deleteButton.hidden = !(settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[selectedId]);
 }
 
 // <input type=color> 只吃 #rrggbb；把 #rgb 或异常值补齐。
@@ -150,9 +150,9 @@ function normalizeHexForInput(hex) {
 // 当前编辑模式实际选中的主题定义（预设或自定义），始终返回一份可读对象。
 function activeEditDef() {
   var slot = currentSlot();
-  var id = appearanceState[slot];
-  if (appearanceState.customThemes && appearanceState.customThemes[id]) {
-    return appearanceState.customThemes[id];
+  var id = settingsStore.appearanceState[slot];
+  if (settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[id]) {
+    return settingsStore.appearanceState.customThemes[id];
   }
   var p = THEME_PRESET_MAP[id];
   if (p) return p;
@@ -162,9 +162,9 @@ function activeEditDef() {
 /* ── 交互 ── */
 function setAppearanceMode(mode) {
   if (['system', 'light', 'dark'].indexOf(mode) < 0) return;
-  appearanceState.mode = mode;
+  settingsStore.appearanceState.mode = mode;
   // 切进「跟随系统」时，把白天/夜晚子开关对准系统此刻的明暗，画廊即显示当下生效的那套。
-  if (mode === 'system') appearanceEditMode = teSystemPrefersDark() ? 'dark' : 'light';
+  if (mode === 'system') settingsStore.appearanceEditMode = teSystemPrefersDark() ? 'dark' : 'light';
   applyAppearance();
   renderThemeOptions();
   syncAppearanceControls();
@@ -174,14 +174,14 @@ function setAppearanceMode(mode) {
 // 仅「跟随系统」下有效：切换正在查看/编辑的是白天还是夜晚那一套。
 function setAppearanceEdit(mode) {
   if (mode !== 'light' && mode !== 'dark') return;
-  appearanceEditMode = mode;
+  settingsStore.appearanceEditMode = mode;
   renderThemeOptions();
   syncAppearanceControls();
 }
 
 // 选择某个预设/自定义主题作为当前编辑模式的主题。
 function selectThemeChoice(id) {
-  appearanceState[currentSlot()] = id;
+  settingsStore.appearanceState[currentSlot()] = id;
   renderThemeSelection();
   syncCustomInputs();
   if (isEditModeLive()) applyAppearance();
@@ -191,8 +191,8 @@ function selectThemeChoice(id) {
 
 // 当前编辑的那一套是否正是屏幕上生效的（据外观模式与系统偏好）。
 function isEditModeLive() {
-  if (appearanceState.mode === 'light') return currentSlot() === 'light';
-  if (appearanceState.mode === 'dark') return currentSlot() === 'dark';
+  if (settingsStore.appearanceState.mode === 'light') return currentSlot() === 'light';
+  if (settingsStore.appearanceState.mode === 'dark') return currentSlot() === 'dark';
   return currentSlot() === (teSystemPrefersDark() ? 'dark' : 'light');
 }
 
@@ -221,8 +221,8 @@ function onCustomColorInput() {
   var slot = currentSlot();
   var base = activeEditDef();
   var id = quickCustomId(slot);
-  var wasCustom = appearanceState.customThemes && appearanceState.customThemes[appearanceState[slot]]
-    && appearanceState[slot].indexOf('custom') === 0;
+  var wasCustom = settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[settingsStore.appearanceState[slot]]
+    && settingsStore.appearanceState[slot].indexOf('custom') === 0;
   var name = wasCustom ? (activeEditDef().name || '自定义主题') : ('自定义 · ' + (base.label || base.name || ''));
   var def = {
     schemaVersion: THEME_ENGINE_SCHEMA,
@@ -236,9 +236,9 @@ function onCustomColorInput() {
     contrast: contrast ? Number(contrast.value) : (base.contrast || 55)
   };
   if (contrastValue && contrast) contrastValue.textContent = String(contrast.value);
-  if (!appearanceState.customThemes) appearanceState.customThemes = {};
-  appearanceState.customThemes[id] = def;
-  appearanceState[slot] = id;
+  if (!settingsStore.appearanceState.customThemes) settingsStore.appearanceState.customThemes = {};
+  settingsStore.appearanceState.customThemes[id] = def;
+  settingsStore.appearanceState[slot] = id;
   syncCustomDeleteButton();
   renderThemeOptions();
   if (isEditModeLive()) applyAppearance();
@@ -259,9 +259,9 @@ function duplicateCurrentTheme() {
     background: base.background,
     foreground: base.foreground, contrast: base.contrast || 55
   };
-  if (!appearanceState.customThemes) appearanceState.customThemes = {};
-  appearanceState.customThemes[id] = def;
-  appearanceState[slot] = id;
+  if (!settingsStore.appearanceState.customThemes) settingsStore.appearanceState.customThemes = {};
+  settingsStore.appearanceState.customThemes[id] = def;
+  settingsStore.appearanceState[slot] = id;
   renderThemeOptions();
   syncCustomInputs();
   if (isEditModeLive()) applyAppearance();
@@ -273,8 +273,8 @@ function duplicateCurrentTheme() {
 // 只删除当前选中的自定义主题；内置主题没有删除入口。删除后回到该模式默认主题。
 async function deleteCurrentCustomTheme() {
   var slot = currentSlot();
-  var id = appearanceState[slot];
-  var custom = appearanceState.customThemes || {};
+  var id = settingsStore.appearanceState[slot];
+  var custom = settingsStore.appearanceState.customThemes || {};
   var def = custom[id];
   if (!def) return;
   var confirmed = await showAppConfirm(
@@ -283,7 +283,7 @@ async function deleteCurrentCustomTheme() {
   );
   if (!confirmed) return;
   delete custom[id];
-  appearanceState[slot] = THEME_MODE_DEFAULT[slot];
+  settingsStore.appearanceState[slot] = THEME_MODE_DEFAULT[slot];
   if (isEditModeLive()) applyAppearance();
   renderThemeOptions();
   syncAppearanceControls();
@@ -325,12 +325,12 @@ function onThemeImportFile(event) {
     var def = result.def;
     var id = 'custom-' + def.mode + '-' + Date.now().toString(36);
     def.id = id;
-    if (!appearanceState.customThemes) appearanceState.customThemes = {};
-    appearanceState.customThemes[id] = def;
-    appearanceState[def.mode] = id;
+    if (!settingsStore.appearanceState.customThemes) settingsStore.appearanceState.customThemes = {};
+    settingsStore.appearanceState.customThemes[id] = def;
+    settingsStore.appearanceState[def.mode] = id;
     // 切到导入主题所属的明暗模式，用户立刻能在画廊里看到并用上它，而不是被藏在另一套里。
-    appearanceState.mode = def.mode;
-    appearanceEditMode = def.mode;
+    settingsStore.appearanceState.mode = def.mode;
+    settingsStore.appearanceEditMode = def.mode;
     applyAppearance();
     renderThemeOptions();
     syncAppearanceControls();
@@ -341,10 +341,10 @@ function onThemeImportFile(event) {
   reader.readAsText(file);
 }
 
-// 把 appearanceState 序列化成后端 appearance 结构。
+// 把 settingsStore.appearanceState 序列化成后端 appearance 结构。
 function serializeAppearance() {
   var custom = {};
-  var src = appearanceState.customThemes || {};
+  var src = settingsStore.appearanceState.customThemes || {};
   Object.keys(src).forEach(function(id) {
     var d = src[id];
     custom[id] = {
@@ -359,16 +359,16 @@ function serializeAppearance() {
   });
   return {
     schemaVersion: THEME_ENGINE_SCHEMA,
-    mode: appearanceState.mode,
-    light: appearanceState.light,
-    dark: appearanceState.dark,
+    mode: settingsStore.appearanceState.mode,
+    light: settingsStore.appearanceState.light,
+    dark: settingsStore.appearanceState.dark,
     custom_themes: custom
   };
 }
 
 // 去抖持久化：同时写 appearance（完整状态）与 legacy theme（内置回退，供首帧/原生）。
 function persistAppearance() {
-  if (!appearanceReady) return;
+  if (!settingsStore.appearanceReady) return;
   try { localStorage.setItem('meFinderTheme', activeBuiltinFallback()); } catch (_) {}
   if (appearanceSaveTimer) clearTimeout(appearanceSaveTimer);
   appearanceSaveTimer = setTimeout(function() {
@@ -438,10 +438,6 @@ function openVisionSettings() {
   });
 }
 
-var preferencesLoadPromise = null;
-var pdfOpenModeSaving = false;
-var documentExportModeSaving = false;
-var citationStylesSaving = false;
 
 function normalizeCitationStyles(styles) {
   var requested = Array.isArray(styles) ? styles : DEFAULT_CITATION_STYLES;
@@ -503,7 +499,7 @@ function renderCitationStylePreferences() {
 
 async function setCitationStyleEnabled(style, checked) {
   if (!CITATION_STYLE_IDS.has(style)) return;
-  if (citationStylesSaving || preferencesLoadPromise) {
+  if (settingsStore.citationStylesSaving || settingsStore.preferencesLoadPromise) {
     renderCitationStylePreferences();
     return;
   }
@@ -521,7 +517,7 @@ async function setCitationStyleEnabled(style, checked) {
   ensureEnabledCitationStyle();
   renderCitationStylePreferences();
   if (selectedResult()) showDetail();
-  citationStylesSaving = true;
+  settingsStore.citationStylesSaving = true;
   setCitationStyleControlsDisabled(true);
   try {
     var resp = await fetch('/api/preferences', {
@@ -546,8 +542,8 @@ async function setCitationStyleEnabled(style, checked) {
     if (selectedResult()) showDetail();
     showToast('引文格式保存失败：' + e.message);
   } finally {
-    citationStylesSaving = false;
-    if (!preferencesLoadPromise) setCitationStyleControlsDisabled(false);
+    settingsStore.citationStylesSaving = false;
+    if (!settingsStore.preferencesLoadPromise) setCitationStyleControlsDisabled(false);
   }
 }
 
@@ -564,7 +560,7 @@ function setPdfOpenModeControlsDisabled(disabled) {
 
 function renderPdfOpenMode() {
   document.querySelectorAll('.pdf-open-option').forEach(function(option) {
-    var selected = option.dataset.pdfOpenChoice === currentPdfOpenMode;
+    var selected = option.dataset.pdfOpenChoice === settingsStore.currentPdfOpenMode;
     option.classList.toggle('selected', selected);
     var input = option.querySelector('input[name="pdf-open-mode"]');
     if (input) input.checked = selected;
@@ -573,7 +569,7 @@ function renderPdfOpenMode() {
   if (current) {
     current.className = 'settings-status';
     var systemName = desktopShell === 'win32' ? 'Windows 默认阅读器' : 'macOS 预览';
-    current.textContent = currentPdfOpenMode === 'system' ? systemName : '应用内阅读器';
+    current.textContent = settingsStore.currentPdfOpenMode === 'system' ? systemName : '应用内阅读器';
   }
 }
 
@@ -590,7 +586,7 @@ function setDocumentExportModeControlsDisabled(disabled) {
 
 function renderDocumentExportMode() {
   document.querySelectorAll('.document-export-option').forEach(function(option) {
-    var selected = option.dataset.documentExportChoice === currentDocumentExportMode;
+    var selected = option.dataset.documentExportChoice === settingsStore.currentDocumentExportMode;
     option.classList.toggle('selected', selected);
     var input = option.querySelector('input[name="document-export-mode"]');
     if (input) input.checked = selected;
@@ -598,7 +594,7 @@ function renderDocumentExportMode() {
   var current = document.getElementById('document-export-current');
   if (current) {
     current.className = 'settings-status';
-    current.textContent = currentDocumentExportMode === 'with_pdf'
+    current.textContent = settingsStore.currentDocumentExportMode === 'with_pdf'
       ? '包含原 PDF'
       : '仅文档数据';
   }
@@ -682,7 +678,7 @@ async function loadDataLocation() {
     var data = await resp.json();
     if (resp.status === 404 || data.available === false) {
       delete document.documentElement.dataset.dataLocationAvailable;
-      dataLocationLoaded = true;
+      settingsStore.dataLocationLoaded = true;
       ensureVisibleSettingsCategory();
       return;
     }
@@ -690,7 +686,7 @@ async function loadDataLocation() {
     document.documentElement.dataset.dataLocationAvailable = 'true';
     if (errorBox) errorBox.hidden = true;
     renderDataLocation(data);
-    dataLocationLoaded = true;
+    settingsStore.dataLocationLoaded = true;
   } catch (e) {
     // No more dead end: surface the reason in the content area with a retry.
     if (badge) { badge.className = 'settings-status warning'; badge.textContent = '读取失败'; }
@@ -703,13 +699,13 @@ async function loadDataLocation() {
 }
 
 function renderPendingDataLocation(targetPath) {
-  pendingDataLocation = targetPath || '';
+  settingsStore.pendingDataLocation = targetPath || '';
   var pending = document.getElementById('data-location-pending');
   var target = document.getElementById('data-location-target');
-  if (pending) pending.style.display = pendingDataLocation ? 'flex' : 'none';
+  if (pending) pending.style.display = settingsStore.pendingDataLocation ? 'flex' : 'none';
   if (target) {
-    target.textContent = pendingDataLocation;
-    target.title = pendingDataLocation;
+    target.textContent = settingsStore.pendingDataLocation;
+    target.title = settingsStore.pendingDataLocation;
   }
 }
 
@@ -743,10 +739,10 @@ async function chooseDataLocation() {
 }
 
 async function migrateDataLocation() {
-  if (!pendingDataLocation) return;
+  if (!settingsStore.pendingDataLocation) return;
   if (!await showAppConfirm(
     '将把索引、语料和本机设置复制到：\n\n'
-    + pendingDataLocation
+    + settingsStore.pendingDataLocation
     + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留',
     {title:'迁移数据位置？', confirmText:'开始迁移', tone:'warning'}
   )) return;
@@ -761,7 +757,7 @@ async function migrateDataLocation() {
     var resp = await fetch('/api/data-location/migrate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({target_path: pendingDataLocation})
+      body: JSON.stringify({target_path: settingsStore.pendingDataLocation})
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '迁移失败');
@@ -788,12 +784,12 @@ async function migrateDataLocation() {
 function applyPreferencesData(data, requestedThemeRevision) {
   // 从后端 appearance 恢复外观引擎状态，并即时解析生效（覆盖服务端首帧回退）。
   loadAppearanceFromPreferences(data.appearance);
-  if (data.library_view === 'list' || data.library_view === 'grid') libViewMode = data.library_view;
-  else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libViewMode = data.calibration_view;
+  if (data.library_view === 'list' || data.library_view === 'grid') libraryStore.viewMode = data.library_view;
+  else if (data.calibration_view === 'list' || data.calibration_view === 'grid') libraryStore.viewMode = data.calibration_view;
   // 后端为准（随数据迁移）：文献默认语言与联网自动匹配阈值（C-01）。
   if (data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign') {
-    libDefaultLanguage = data.lib_default_language;
-    try { localStorage.setItem('meFinderLibDefaultLanguage', libDefaultLanguage); } catch (_) {}
+    libraryStore.defaultLanguage = data.lib_default_language;
+    try { localStorage.setItem('meFinderLibDefaultLanguage', libraryStore.defaultLanguage); } catch (_) {}
     syncLibDefaultLanguageControl();
   }
   if (typeof data.online_auto_match_threshold === 'number') {
@@ -801,27 +797,27 @@ function applyPreferencesData(data, requestedThemeRevision) {
     try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(Math.round(onlineMetadataAutoMatchThreshold * 100))); } catch (_) {}
     syncOnlineAutoMatchControl();
   }
-  currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
-  currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
-  currentDocumentExportMode = data.document_export_mode === 'with_pdf'
+  settingsStore.currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+  settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
+  settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
     ? 'with_pdf'
     : 'data_only';
-  autoUpdateEnabled = data.auto_update === true;
+  settingsStore.autoUpdateEnabled = data.auto_update === true;
   enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
   saveLocalCitationStyles(enabledCitationStyles);
   setCitationStyle(loadLocalSelectedCitationStyle() || data.citation_style || enabledCitationStyles[0], false);
   ensureEnabledCitationStyle();
   var autoUpdateInput = document.getElementById('auto-update-enabled');
-  if (autoUpdateInput) autoUpdateInput.checked = autoUpdateEnabled;
+  if (autoUpdateInput) autoUpdateInput.checked = settingsStore.autoUpdateEnabled;
   renderPdfOpenMode();
   renderPdfParseMode();
   renderDocumentExportMode();
   renderCitationStylePreferences();
-  scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
+  settingsStore.scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
   renderScanDirectories();
   syncLibraryViewButtons();
-  if (libLoaded) renderLibraryList();
-  preferencesLoaded = true;
+  if (libraryStore.loaded) renderLibraryList();
+  settingsStore.preferencesLoaded = true;
 }
 
 function configureDesktopPlatformOptions() {
@@ -841,13 +837,13 @@ function configureDesktopPlatformOptions() {
 
 async function setPdfOpenMode(mode) {
   if (mode !== 'native' && mode !== 'system') return;
-  if (pdfOpenModeSaving || preferencesLoadPromise) {
+  if (settingsStore.pdfOpenModeSaving || settingsStore.preferencesLoadPromise) {
     renderPdfOpenMode();
     return;
   }
-  var previousMode = currentPdfOpenMode;
-  currentPdfOpenMode = mode;
-  pdfOpenModeSaving = true;
+  var previousMode = settingsStore.currentPdfOpenMode;
+  settingsStore.currentPdfOpenMode = mode;
+  settingsStore.pdfOpenModeSaving = true;
   setPdfOpenModeControlsDisabled(true);
   renderPdfOpenMode();
   try {
@@ -858,29 +854,29 @@ async function setPdfOpenMode(mode) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
-    preferencesLoaded = true;
+    settingsStore.currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
+    settingsStore.preferencesLoaded = true;
     renderPdfOpenMode();
     // Visible success: the radio已经跳过去了，无需再弹 Toast。只在失败时提示。
   } catch (e) {
-    currentPdfOpenMode = previousMode;
+    settingsStore.currentPdfOpenMode = previousMode;
     renderPdfOpenMode();
     showToast('PDF 打开方式保存失败：' + e.message);
   } finally {
-    pdfOpenModeSaving = false;
-    if (!preferencesLoadPromise) setPdfOpenModeControlsDisabled(false);
+    settingsStore.pdfOpenModeSaving = false;
+    if (!settingsStore.preferencesLoadPromise) setPdfOpenModeControlsDisabled(false);
   }
 }
 
 async function setDocumentExportMode(mode) {
   if (mode !== 'data_only' && mode !== 'with_pdf') return;
-  if (documentExportModeSaving || preferencesLoadPromise) {
+  if (settingsStore.documentExportModeSaving || settingsStore.preferencesLoadPromise) {
     renderDocumentExportMode();
     return;
   }
-  var previousMode = currentDocumentExportMode;
-  currentDocumentExportMode = mode;
-  documentExportModeSaving = true;
+  var previousMode = settingsStore.currentDocumentExportMode;
+  settingsStore.currentDocumentExportMode = mode;
+  settingsStore.documentExportModeSaving = true;
   setDocumentExportModeControlsDisabled(true);
   renderDocumentExportMode();
   try {
@@ -891,25 +887,25 @@ async function setDocumentExportMode(mode) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    currentDocumentExportMode = data.document_export_mode === 'with_pdf'
+    settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
       ? 'with_pdf'
       : 'data_only';
-    preferencesLoaded = true;
+    settingsStore.preferencesLoaded = true;
     renderDocumentExportMode();
   } catch (e) {
-    currentDocumentExportMode = previousMode;
+    settingsStore.currentDocumentExportMode = previousMode;
     renderDocumentExportMode();
     showToast('文档包导出设置保存失败：' + e.message);
   } finally {
-    documentExportModeSaving = false;
-    if (!preferencesLoadPromise) setDocumentExportModeControlsDisabled(false);
+    settingsStore.documentExportModeSaving = false;
+    if (!settingsStore.preferencesLoadPromise) setDocumentExportModeControlsDisabled(false);
   }
 }
 
 async function loadPreferences() {
-  if (preferencesLoadPromise) return preferencesLoadPromise;
-  if (pdfOpenModeSaving || documentExportModeSaving) return null;
-  var requestedThemeRevision = themeRevision;
+  if (settingsStore.preferencesLoadPromise) return settingsStore.preferencesLoadPromise;
+  if (settingsStore.pdfOpenModeSaving || settingsStore.documentExportModeSaving) return null;
+  var requestedThemeRevision = settingsStore.themeRevision;
   renderThemeSelection();
   renderPdfOpenMode();
   renderPdfParseMode();
@@ -925,7 +921,7 @@ async function loadPreferences() {
     current.className = 'settings-status';
     current.textContent = '读取中…';
   }
-  preferencesLoadPromise = (async function() {
+  settingsStore.preferencesLoadPromise = (async function() {
     try {
       var resp = await fetch('/api/preferences');
       var data = await resp.json();
@@ -933,8 +929,8 @@ async function loadPreferences() {
       applyPreferencesData(data, requestedThemeRevision);
       if (desktopShell === 'win32') {
         loadUpdateStatus().then(function(state) {
-          if (autoUpdateEnabled && state && state.can_self_update && !updateAutoStarted) {
-            updateAutoStarted = true;
+          if (settingsStore.autoUpdateEnabled && state && state.can_self_update && !settingsStore.updateAutoStarted) {
+            settingsStore.updateAutoStarted = true;
             checkForUpdates(true);
           }
         });
@@ -947,18 +943,18 @@ async function loadPreferences() {
       }
       showToast('读取应用设置失败：' + e.message);
     } finally {
-      preferencesLoadPromise = null;
-      if (!pdfOpenModeSaving) setPdfOpenModeControlsDisabled(false);
-      if (!documentExportModeSaving) setDocumentExportModeControlsDisabled(false);
-      if (!citationStylesSaving) setCitationStyleControlsDisabled(false);
+      settingsStore.preferencesLoadPromise = null;
+      if (!settingsStore.pdfOpenModeSaving) setPdfOpenModeControlsDisabled(false);
+      if (!settingsStore.documentExportModeSaving) setDocumentExportModeControlsDisabled(false);
+      if (!settingsStore.citationStylesSaving) setCitationStyleControlsDisabled(false);
     }
   })();
-  return preferencesLoadPromise;
+  return settingsStore.preferencesLoadPromise;
 }
 
 function renderUpdateState(state) {
   if (!state) return;
-  updateState = state;
+  settingsStore.updateState = state;
   var current = document.getElementById('update-current-version');
   var message = document.getElementById('update-message');
   var badge = document.getElementById('update-status-badge');
@@ -1019,7 +1015,7 @@ async function loadUpdateStatus() {
 
 async function checkForUpdates(automatic) {
   if (desktopShell !== 'win32') return;
-  renderUpdateState(Object.assign({}, updateState, {status:'checking', message:'正在检查 GitHub Releases…'}));
+  renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'checking', message:'正在检查 GitHub Releases…'}));
   try {
     var resp = await fetch('/api/update/check', {
       method: 'POST',
@@ -1031,14 +1027,14 @@ async function checkForUpdates(automatic) {
     renderUpdateState(data);
     if (!automatic) showToast(data.message || '更新检查完成');
   } catch (e) {
-    renderUpdateState(Object.assign({}, updateState, {status:'error', message:'检查更新失败：' + e.message}));
+    renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'error', message:'检查更新失败：' + e.message}));
     if (!automatic) showToast('检查更新失败：' + e.message);
   }
 }
 
 async function runUpdateAction() {
-  if (updateState.status === 'available') {
-    renderUpdateState(Object.assign({}, updateState, {status:'downloading', message:'正在下载并校验更新…'}));
+  if (settingsStore.updateState.status === 'available') {
+    renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'downloading', message:'正在下载并校验更新…'}));
     try {
       var downloadResp = await fetch('/api/update/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
       var downloadData = await downloadResp.json();
@@ -1046,22 +1042,22 @@ async function runUpdateAction() {
       renderUpdateState(downloadData);
       showToast(downloadData.message || '更新已下载');
     } catch (e) {
-      renderUpdateState(Object.assign({}, updateState, {status:'error', message:'下载更新失败：' + e.message}));
+      renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'error', message:'下载更新失败：' + e.message}));
       showToast('下载更新失败：' + e.message);
     }
     return;
   }
-  if (updateState.status !== 'ready') return;
+  if (settingsStore.updateState.status !== 'ready') return;
   if (!await showAppConfirm(
     '安装更新会关闭 MEFinder，完成后自动重新打开',
     {title:'现在安装更新？', confirmText:'安装并重启', tone:'warning'}
   )) return;
-  var installToken = updateState.install_token;
+  var installToken = settingsStore.updateState.install_token;
   if (!installToken) {
     showToast('安装确认已失效，请重新下载更新');
     return;
   }
-  renderUpdateState(Object.assign({}, updateState, {
+  renderUpdateState(Object.assign({}, settingsStore.updateState, {
     status:'installing', install_token:null, message:'正在重新校验安装包并启动安装程序…'
   }));
   try {
@@ -1074,47 +1070,46 @@ async function runUpdateAction() {
     if (!installResp.ok || installData.error) throw new Error(installData.error || '安装失败');
     renderUpdateState(installData);
   } catch (e) {
-    renderUpdateState(Object.assign({}, updateState, {status:'error', message:'启动安装程序失败：' + e.message}));
+    renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'error', message:'启动安装程序失败：' + e.message}));
     showToast('启动安装程序失败：' + e.message);
   }
 }
 
 async function setAutoUpdate(enabled) {
-  var previous = autoUpdateEnabled;
-  autoUpdateEnabled = enabled === true;
+  var previous = settingsStore.autoUpdateEnabled;
+  settingsStore.autoUpdateEnabled = enabled === true;
   try {
     var resp = await fetch('/api/preferences', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({auto_update:autoUpdateEnabled})
+      body:JSON.stringify({auto_update:settingsStore.autoUpdateEnabled})
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    autoUpdateEnabled = data.auto_update === true;
-    document.getElementById('auto-update-enabled').checked = autoUpdateEnabled;
+    settingsStore.autoUpdateEnabled = data.auto_update === true;
+    document.getElementById('auto-update-enabled').checked = settingsStore.autoUpdateEnabled;
     // Visible success: the switch itself已是反馈，无需 Toast。
-    if (autoUpdateEnabled) {
-      updateAutoStarted = true;
+    if (settingsStore.autoUpdateEnabled) {
+      settingsStore.updateAutoStarted = true;
       checkForUpdates(true);
     } else {
-      updateAutoStarted = false;
+      settingsStore.updateAutoStarted = false;
     }
   } catch (e) {
-    autoUpdateEnabled = previous;
+    settingsStore.autoUpdateEnabled = previous;
     document.getElementById('auto-update-enabled').checked = previous;
     showToast('自动更新设置保存失败：' + e.message);
   }
 }
 
-let scanDirectories = [];
 
 function renderScanDirectories() {
   var container = document.getElementById('scan-dir-list');
   if (!container) return;
-  if (!scanDirectories.length) {
+  if (!settingsStore.scanDirectories.length) {
     container.innerHTML = '<div class="scan-dir-empty">还没有添加文献文件夹</div>';
     return;
   }
-  container.innerHTML = scanDirectories.map(function(dir, index) {
+  container.innerHTML = settingsStore.scanDirectories.map(function(dir, index) {
     return '<div class="scan-dir-row" title="' + esc(dir) + '">'
       + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
       + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
@@ -1170,18 +1165,18 @@ async function addScanDirectoryPaths(values) {
   var added = [];
   candidates.forEach(function(value) {
     var path = String(value || '').trim();
-    if (!path || scanDirectories.indexOf(path) !== -1 || added.indexOf(path) !== -1) return;
+    if (!path || settingsStore.scanDirectories.indexOf(path) !== -1 || added.indexOf(path) !== -1) return;
     added.push(path);
   });
   if (!added.length) {
     showToast('该文件夹已在列表中');
     return;
   }
-  var previous = scanDirectories.slice();
-  scanDirectories = scanDirectories.concat(added);
+  var previous = settingsStore.scanDirectories.slice();
+  settingsStore.scanDirectories = settingsStore.scanDirectories.concat(added);
   try {
     await persistScanDirectories();
-    var savedCount = scanDirectories.filter(function(path) {
+    var savedCount = settingsStore.scanDirectories.filter(function(path) {
       return previous.indexOf(path) === -1;
     }).length;
     var omittedCount = added.length - savedCount;
@@ -1194,7 +1189,7 @@ async function addScanDirectoryPaths(values) {
       showToast(savedCount === 1 ? '已添加文献文件夹' : '已添加 ' + savedCount + ' 个文献文件夹');
     }
   } catch (e) {
-    scanDirectories = previous;
+    settingsStore.scanDirectories = previous;
     renderScanDirectories();
     throw e;
   }
@@ -1208,11 +1203,11 @@ async function persistScanDirectories() {
   var resp = await fetch('/api/preferences', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({scan_directories: scanDirectories})
+    body: JSON.stringify({scan_directories: settingsStore.scanDirectories})
   });
   var data = await resp.json();
   if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-  scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : scanDirectories;
+  settingsStore.scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : settingsStore.scanDirectories;
   renderScanDirectories();
 }
 
@@ -1229,13 +1224,13 @@ async function addScanDirectory() {
 }
 
 async function removeScanDirectory(index) {
-  var removed = scanDirectories[index];
-  scanDirectories = scanDirectories.filter(function(_, i) { return i !== index; });
+  var removed = settingsStore.scanDirectories[index];
+  settingsStore.scanDirectories = settingsStore.scanDirectories.filter(function(_, i) { return i !== index; });
   try {
     await persistScanDirectories();
     showToast('已移除目录');
   } catch (e) {
-    if (removed != null) scanDirectories.splice(index, 0, removed);
+    if (removed != null) settingsStore.scanDirectories.splice(index, 0, removed);
     renderScanDirectories();
     showToast('移除失败：' + e.message);
   }
@@ -1261,9 +1256,9 @@ function persistDisplayPreference(key, value) {
 // 从后端 appearance 恢复外观状态。缺字段则退回安全默认，绝不因坏数据崩溃。
 function loadAppearanceFromPreferences(appearance) {
   if (appearance && typeof appearance === 'object') {
-    appearanceState.mode = ['system', 'light', 'dark'].indexOf(appearance.mode) >= 0 ? appearance.mode : 'system';
-    appearanceState.light = typeof appearance.light === 'string' && appearance.light ? appearance.light : 'frost-blue';
-    appearanceState.dark = typeof appearance.dark === 'string' && appearance.dark ? appearance.dark : 'midnight';
+    settingsStore.appearanceState.mode = ['system', 'light', 'dark'].indexOf(appearance.mode) >= 0 ? appearance.mode : 'system';
+    settingsStore.appearanceState.light = typeof appearance.light === 'string' && appearance.light ? appearance.light : 'frost-blue';
+    settingsStore.appearanceState.dark = typeof appearance.dark === 'string' && appearance.dark ? appearance.dark : 'midnight';
     var custom = {};
     var src = appearance.custom_themes;
     if (src && typeof src === 'object') {
@@ -1272,20 +1267,20 @@ function loadAppearanceFromPreferences(appearance) {
         if (result.ok) { result.def.id = id; custom[id] = result.def; }
       });
     }
-    appearanceState.customThemes = custom;
+    settingsStore.appearanceState.customThemes = custom;
   }
   // 选中主题若已不存在（如被清理），退回该模式默认，避免空引用。
   ['light', 'dark'].forEach(function(m) {
-    var id = appearanceState[m];
-    if (!THEME_PRESET_MAP[id] && !(appearanceState.customThemes && appearanceState.customThemes[id])) {
-      appearanceState[m] = THEME_MODE_DEFAULT[m];
+    var id = settingsStore.appearanceState[m];
+    if (!THEME_PRESET_MAP[id] && !(settingsStore.appearanceState.customThemes && settingsStore.appearanceState.customThemes[id])) {
+      settingsStore.appearanceState[m] = THEME_MODE_DEFAULT[m];
     }
   });
-  appearanceReady = true;
+  settingsStore.appearanceReady = true;
   // 编辑标签默认对准当前生效的模式。
-  appearanceEditMode = appearanceState.mode === 'dark'
+  settingsStore.appearanceEditMode = settingsStore.appearanceState.mode === 'dark'
     ? 'dark'
-    : (appearanceState.mode === 'light' ? 'light' : (teSystemPrefersDark() ? 'dark' : 'light'));
+    : (settingsStore.appearanceState.mode === 'light' ? 'light' : (teSystemPrefersDark() ? 'dark' : 'light'));
   applyAppearance();
   renderThemeOptions();
   syncAppearanceControls();

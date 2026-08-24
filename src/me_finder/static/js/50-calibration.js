@@ -91,7 +91,7 @@ async function runAutoDetection(sourceId) {
     if (!resp.ok || !data.ok) throw new Error(data.error || '页码自动检测失败');
     calAutoResult = data.result;
     renderAutoDetectionResult(calAutoResult);
-    var current = libSources.find(function(item) { return item.source_file_id === sourceId; });
+    var current = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
     var segments = (calAutoResult.selected_segments || []).filter(function(item) { return item && item.confidence_level !== 'low'; });
     calTransientStatus[sourceId] = current && current.status === 'manual_mapped' ? 'manual_mapped' : (segments.length ? 'needs_review' : 'auto_mapping_failed');
   } catch(e) {
@@ -437,7 +437,7 @@ function scrollToManualMapping() {
 }
 
 function showCalibrationEvidence() {
-  var item = libSources.find(function(value) { return value.source_file_id === calSelectedSourceId; });
+  var item = libraryStore.sources.find(function(value) { return value.source_file_id === calSelectedSourceId; });
   if (!item) return;
   var panel = document.getElementById('cal-auto-preview');
   var evidence = item.mapping_evidence || [];
@@ -456,15 +456,15 @@ function showCalibrationEvidence() {
 
 function openRemoveDocumentModal(sourceId) {
   if (sourceId && typeof sourceId === 'string') calSelectedSourceId = sourceId;
-  var targetId = calSelectedSourceId || libSelectedId;
-  var item = libSources.find(function(value) { return value.source_file_id === targetId; });
+  var targetId = calSelectedSourceId || libraryStore.selectedId;
+  var item = libraryStore.sources.find(function(value) { return value.source_file_id === targetId; });
   if (!item) return;
   openRemoveDocumentsModal([item]);
 }
 
 function openRemoveSelectedDocumentsModal() {
-  var items = libSources.filter(function(item) {
-    return libDeleteSelection.has(item.source_file_id) && isLibraryDeleteSelectable(item);
+  var items = libraryStore.sources.filter(function(item) {
+    return libraryStore.deleteSelection.has(item.source_file_id) && isLibraryDeleteSelectable(item);
   });
   if (!items.length) {
     showToast('请先选择要删除的文献', 'warning');
@@ -582,7 +582,7 @@ async function confirmRemoveDocument() {
     (result.removed_source_ids || []).forEach(function(sourceId) {
       removedIds.push(sourceId);
       delete calTransientStatus[sourceId];
-      libDeleteSelection.delete(sourceId);
+      libraryStore.deleteSelection.delete(sourceId);
     });
     sourceIds.forEach(function(sourceId) {
       if (removedIds.indexOf(sourceId) < 0 && !reported[sourceId]) {
@@ -611,19 +611,19 @@ async function confirmRemoveDocument() {
     var removedSet = new Set(removedIds);
     closeRemoveDocumentModal();
     closeLibDrawer();
-    if (removedSet.has(searchDocumentId)) searchDocumentId = '';
+    if (removedSet.has(searchStore.documentId)) searchStore.documentId = '';
     await loadMeta();
     // 一次强制刷新同时喂给文献库与搜索下拉。
     await loadLibrary(true);
     updateSearchDocumentLabel();
     window.dispatchEvent(new CustomEvent('library_changed', {detail:{source_ids:removedIds}}));
     var query = document.getElementById('query').value.trim();
-    if (query && searchResults.some(function(item) { return removedSet.has(item.source_file_id); })) await runSearch();
+    if (query && searchStore.results.some(function(item) { return removedSet.has(item.source_file_id); })) await runSearch();
   }
 
   if (failures.length) {
     // Keep the failed items selected so the action bar stays up for a retry.
-    failures.forEach(function(item) { libDeleteSelection.add(item.source_id); });
+    failures.forEach(function(item) { libraryStore.deleteSelection.add(item.source_id); });
     renderLibraryList();
     if (!removedIds.length) {
       button.disabled = false;
@@ -631,7 +631,7 @@ async function confirmRemoveDocument() {
     }
     showToast((removedIds.length ? '已移除 ' + removedIds.length + ' 篇；' : '') + failures.length + ' 篇移除失败：' + failures[0].message, 'danger');
   } else {
-    libDeleteSelection.clear();
+    libraryStore.deleteSelection.clear();
     renderLibraryList();
     var successMessage;
     if (hasWordTargets && deleteInternalRequested) {

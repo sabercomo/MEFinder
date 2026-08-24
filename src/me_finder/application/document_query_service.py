@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import sqlite3
 from pathlib import Path
 from typing import (
     Callable,
@@ -30,6 +28,7 @@ from ..calibration_library import (
     summarize_library,
 )
 from ..pdf_import_service import load_import_config
+from .document_read_port import DocumentReadPort
 
 
 T = TypeVar("T")
@@ -82,6 +81,7 @@ class DocumentQueryService:
         paths: AppPaths,
         index: DocumentIndexPort,
         *,
+        repository: DocumentReadPort,
         active_source_ids: ActiveSourceIds,
         config_loader: ConfigLoader = load_import_config,
         metadata_detector: MetadataDetector = detect_pdf_bibliographic_metadata,
@@ -91,6 +91,7 @@ class DocumentQueryService:
         self._active_source_ids = active_source_ids
         self._config_loader = config_loader
         self._metadata_detector = metadata_detector
+        self._repository = repository
 
     @property
     def config_path(self) -> Path:
@@ -161,7 +162,9 @@ class DocumentQueryService:
         )
 
     def latest_pdf_import_runs(self) -> Dict[str, Dict[str, object]]:
-        result = self._index.run_when_ready(self._read_latest_pdf_import_runs)
+        result = self._index.run_when_ready(
+            self._repository.latest_pdf_import_runs
+        )
         if result is None:
             raise DocumentQueryUnavailable("索引正在重建，请稍后再加载文献。")
         return result
@@ -171,7 +174,7 @@ class DocumentQueryService:
     ) -> Dict[str, str]:
         source_ids = tuple(dict.fromkeys(str(value) for value in source_file_ids))
         result = self._index.run_when_ready(
-            lambda database_path: self._read_language_samples(
+            lambda database_path: self._repository.language_samples(
                 database_path, source_ids
             )
         )
@@ -224,7 +227,7 @@ class DocumentQueryService:
         """Return opening pages plus trailing colophon pages."""
 
         result = self._index.run_when_ready(
-            lambda database_path: self._read_front_matter_pages(
+            lambda database_path: self._repository.front_matter_pages(
                 database_path,
                 source_file_id,
                 limit=limit,
@@ -234,37 +237,6 @@ class DocumentQueryService:
         if result is None:
             raise DocumentQueryUnavailable("索引正在重建，请稍后再读取文献。")
         return result
-
-    @staticmethod
-    def _read_front_matter_pages(
-        database_path: Path,
-        source_file_id: str,
-        *,
-        limit: int,
-        tail: int,
-    ) -> List[Dict[str, object]]:
-        connection = sqlite3.connect(str(database_path))
-        try:
-            total_row = connection.execute(
-                "SELECT MAX(pdf_page_index) FROM pdf_pages "
-                "WHERE source_file_id = ?",
-                (source_file_id,),
-            ).fetchone()
-            total = (
-                int(total_row[0]) + 1
-                if total_row and total_row[0] is not None
-                else 0
-            )
-            rows = connection.execute(
-                "SELECT payload_json FROM pdf_pages "
-                "WHERE source_file_id = ? "
-                "AND (pdf_page_index < ? OR pdf_page_index >= ?) "
-                "ORDER BY pdf_page_index",
-                (source_file_id, limit, max(limit, total - tail)),
-            ).fetchall()
-            return [json.loads(row[0]) for row in rows]
-        finally:
-            connection.close()
 
     def detect_bibliographic_metadata(
         self,
@@ -346,49 +318,3 @@ class DocumentQueryService:
             config.get("documents", []),
             active,
         )
-
-    @staticmethod
-    def _read_latest_pdf_import_runs(
-        database_path: Path,
-    ) -> Dict[str, Dict[str, object]]:
-        connection = sqlite3.connect(str(database_path))
-        try:
-            rows = connection.execute(
-                "SELECT source_file_id, payload_json "
-                "FROM pdf_import_runs ORDER BY row_id"
-            ).fetchall()
-        finally:
-            connection.close()
-
-        result: Dict[str, Dict[str, object]] = {}
-        for source_id, payload_json in rows:
-            try:
-                payload = json.loads(payload_json)
-            except (TypeError, json.JSONDecodeError):
-                continue
-            result[str(source_id)] = payload
-        return result
-
-    @staticmethod
-    def _read_language_samples(
-        database_path: Path,
-        source_file_ids: Sequence[str],
-    ) -> Dict[str, str]:
-        """Read a bounded opening sample from each indexed document."""
-
-        connection = sqlite3.connect(str(database_path))
-        try:
-            samples: Dict[str, str] = {}
-            for source_id in source_file_ids:
-                rows = connection.execute(
-                    "SELECT substr(text_raw, 1, 1000) FROM paragraphs "
-                    "WHERE source_file_id = ? AND eligible_for_search = 1 "
-                    "AND text_raw <> '' ORDER BY paragraph_index LIMIT 16",
-                    (source_id,),
-                ).fetchall()
-                text = "\n".join(str(row[0]) for row in rows if row[0])
-                if text:
-                    samples[source_id] = text
-            return samples
-        finally:
-            connection.close()

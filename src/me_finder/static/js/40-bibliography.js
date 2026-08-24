@@ -202,7 +202,7 @@ function renderBibliographicSection(src) {
 }
 
 function enterBibEdit(sourceId, focusFieldId) {
-  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var src = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
   var host = document.getElementById('bib-host');
   if (!src || !host) return;
   bibEditMode[sourceId] = true;
@@ -214,7 +214,7 @@ function enterBibEdit(sourceId, focusFieldId) {
 
 // 取消编辑：放弃表单里未保存的输入，清脏，回到查看态（显示当前已保存值）。
 function exitBibEdit(sourceId) {
-  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var src = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
   var host = document.getElementById('bib-host');
   bibEditMode[sourceId] = false;
   bibEditorDirty = false;
@@ -251,7 +251,7 @@ function toggleCitationPanel() {
 function bibEffectiveSource(sid) {
   var source = bibLookupSource[sid] || 'auto';
   if (source !== 'auto') return source;
-  var src = libSources.find(function(item) { return item.source_file_id === sid; });
+  var src = libraryStore.sources.find(function(item) { return item.source_file_id === sid; });
   var meta = src ? sourceBibliographicMetadata(src) : {};
   return isForeignTitle(meta.title) ? 'crossref' : 'cnki';
 }
@@ -316,7 +316,7 @@ function setBibliographicType(sourceId, docType) {
   var current = collectBibliographicForm();
   bibEditorDirty = true;
   bibEditorTypeOverride[sourceId] = docType;
-  var src = libSources.find(function(item) { return item.source_file_id === sourceId; });
+  var src = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
   var editor = document.getElementById('bibliographic-editor');
   if (!src || !editor) return;
   var template = document.createElement('template');
@@ -335,7 +335,7 @@ function setBibliographicType(sourceId, docType) {
 
 
 function collectBibliographicForm() {
-  var cache = (libSelectedId && bibFieldCache[libSelectedId]) || {};
+  var cache = (libraryStore.selectedId && bibFieldCache[libraryStore.selectedId]) || {};
   // 可见字段以实时 DOM 值为准（尊重清空）；当前类型不含的字段回退到缓存里上次
   // 已知的值，保存时随类型一并提交，杜绝切类型后另一类型字段被静默写空。
   function value(id, field) {
@@ -352,10 +352,10 @@ function collectBibliographicForm() {
     publisher: value('publisher', 'publisher'), publish_year: value('publish-year', 'publish_year'), isbn: value('isbn', 'isbn'),
     journal_name: value('journal-name', 'journal_name'), volume: value('volume', 'volume'),
     issue: value('issue', 'issue'), page_range: value('page-range', 'page_range'), doi: value('doi', 'doi'), issn: value('issn', 'issn'),
-    metadata_evidence: bibliographicPendingEvidence[libSelectedId] || {}
+    metadata_evidence: bibliographicPendingEvidence[libraryStore.selectedId] || {}
   };
-  if (libSelectedId) {
-    var store = bibFieldCache[libSelectedId] || (bibFieldCache[libSelectedId] = {});
+  if (libraryStore.selectedId) {
+    var store = bibFieldCache[libraryStore.selectedId] || (bibFieldCache[libraryStore.selectedId] = {});
     BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { store[field] = result[field]; });
   }
   return result;
@@ -692,7 +692,7 @@ async function parseCnkiCitationText() {
       var value = String(data.metadata[key] || '').trim();
       if (value) citationEvidence[key] = {source:'cnki_citation', evidence_text:citationText.slice(0,500), value:value};
     });
-    var applied = applyBibliographicLookupMetadata(libSelectedId, data.metadata, citationEvidence);
+    var applied = applyBibliographicLookupMetadata(libraryStore.selectedId, data.metadata, citationEvidence);
     var filled = applied.filled;
     var preserved = applied.preserved;
     var messages = [];
@@ -723,7 +723,7 @@ async function detectBibliographicMetadata(sourceId, force) {
     var resp = await fetch('/api/bibliographic-metadata/detect', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,force:!!force})});
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '识别失败');
-    var src = libSources.find(function(item){return item.source_file_id === sourceId;});
+    var src = libraryStore.sources.find(function(item){return item.source_file_id === sourceId;});
     if (src) {
       src.bibliographic_metadata = data.metadata;
       Object.keys(data.metadata).forEach(function(key){src[key]=data.metadata[key];});
@@ -756,7 +756,7 @@ async function openMetadataForSource(sourceId) {
   // 从检索结果跳来的：给一条返回搜索的路（S-03）。navigateTo 会先清掉横幅，这里再点亮。
   var banner = document.getElementById('library-return-banner');
   if (banner) banner.hidden = false;
-  if (!libLoaded) await loadLibrary();
+  if (!libraryStore.loaded) await loadLibrary();
   await selectLibDoc(sourceId);
 }
 
@@ -789,7 +789,7 @@ async function requestCloseLibDrawer() {
 }
 
 function closeLibDrawer() {
-  libSelectedId = null;
+  libraryStore.selectedId = null;
   calSelectedSourceId = null;
   bibEditorDirty = false;
   document.getElementById('library-drawer').classList.remove('open');
@@ -815,7 +815,7 @@ async function submitMineruReparse(sourceId) {
     '将把这份 PDF 上传到 MinerU 在线服务重新解析。现有结果会保留到新结果成功写入',
     {title:'重新解析 PDF？', confirmText:'上传并重新解析', tone:'warning'}
   )) return;
-  var source = (libSources || []).find(function(item) { return item.source_file_id === sourceId; }) || {};
+  var source = (libraryStore.sources || []).find(function(item) { return item.source_file_id === sourceId; }) || {};
   var queueItem = {
     id: 'mineru-reparse-' + Date.now(),
     sourceFileId: sourceId,
@@ -829,7 +829,7 @@ async function submitMineruReparse(sourceId) {
     detectedType: source.pdf_profile && source.pdf_profile.detected_pdf_type,
     message: '正在提交 MinerU 在线解析…'
   };
-  importQueue.push(queueItem);
+  importStore.queue.push(queueItem);
   navigateTo('import');
   renderImportQueue();
   requestAnimationFrame(function() {
@@ -844,11 +844,11 @@ async function submitMineruReparse(sourceId) {
     });
     var data = await resp.json();
     if (!resp.ok || !data.ok) throw new Error(data.error || '提交失败');
-    var tracked = importQueue.find(function(item) {
+    var tracked = importStore.queue.find(function(item) {
       return item !== queueItem && item.jobId === data.job_id;
     });
     if (tracked) {
-      importQueue = importQueue.filter(function(item) { return item !== queueItem; });
+      importStore.queue = importStore.queue.filter(function(item) { return item !== queueItem; });
       tracked.status = 'processing';
       tracked.route = 'mineru';
       tracked.message = 'MinerU 解析已在进行中…';
@@ -893,7 +893,7 @@ async function acceptAutoMapping(sourceId) {
 }
 
 function showAutoMappingExceptions(sourceId) {
-  var src = libSources.find(function(s) { return s.source_file_id === sourceId; });
+  var src = libraryStore.sources.find(function(s) { return s.source_file_id === sourceId; });
   var autoMap = src && src.pdf_profile ? src.pdf_profile.auto_page_mapping : null;
   var pages = autoMap && autoMap.exception_pages ? autoMap.exception_pages : [];
   if (!pages.length) {
@@ -908,7 +908,7 @@ function showAutoMappingExceptions(sourceId) {
 
 async function openCalibrationForSource(sourceId) {
   navigateTo('library');
-  if (!libLoaded) await loadLibrary();
+  if (!libraryStore.loaded) await loadLibrary();
   await selectLibDoc(sourceId);
   await toggleDrawerCalibration(true);
   var host = document.getElementById('library-drawer-calibration');

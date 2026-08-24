@@ -19,8 +19,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .database import DEFAULT_DATABASE_PATH, DATABASE_SCHEMA_VERSION
 from .document_group_metadata import canonical_version_label, member_display_name
+from .persistence.connection import open_writable_index
+from .persistence.index_schema import DEFAULT_DATABASE_PATH
 
 TITLE_MAX_LENGTH = 200
 
@@ -119,33 +120,13 @@ def ensure_document_group_schema(db_path: Path = DEFAULT_DATABASE_PATH) -> bool:
     Never rebuilds content; an existing index only gains two empty tables.
     """
 
-    path = Path(db_path)
-    if not path.exists():
-        return False
-    connection = sqlite3.connect(str(path))
-    try:
-        connection.execute("PRAGMA busy_timeout = 30000")
-        connection.execute("BEGIN IMMEDIATE")
-        changed = install_document_group_schema(connection)
-        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-        if version < DATABASE_SCHEMA_VERSION:
-            connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
-            changed = True
-        connection.commit()
-        return changed
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    from .persistence.migrations import migrate_index_database
+
+    return migrate_index_database(Path(db_path))
 
 
 def _connect_writable(db_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(str(db_path))
-    connection.execute("PRAGMA busy_timeout = 30000")
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.row_factory = sqlite3.Row
-    return connection
+    return open_writable_index(db_path)
 
 
 def _clean_title(value: object) -> str:

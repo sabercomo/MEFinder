@@ -7,7 +7,10 @@ from pathlib import Path
 from src.me_finder.web import HTML
 
 
-WEB_SOURCE = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+WEB_SOURCE = "\n".join(
+    Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
+    for name in ("web.py", "web_http.py")
+)
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
 ).read_text(encoding="utf-8")
@@ -46,15 +49,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="filter-limit"', HTML)
         self.assertIn('data-value="200"', HTML)
         self.assertIn('data-value="all"', HTML)
-        self.assertIn("searchLimit = limit === 'all'", HTML)
+        self.assertIn("searchStore.limit = limit === 'all'", HTML)
 
     def test_search_surfaces_missing_document_group_scope(self) -> None:
         self.assertIn("if (!resp.ok || data.error) throw new Error", HTML)
         self.assertIn(
-            "if (searchGroupId && !libDocumentGroups.some(function(g) { return g.document_group_id === searchGroupId; }))",
+            "if (searchStore.groupId && !libraryStore.documentGroups.some(function(g) { return g.document_group_id === searchStore.groupId; }))",
             HTML,
         )
-        self.assertIn("searchGroupId = '';\n    updateSearchDocumentLabel();", HTML)
+        self.assertIn("searchStore.groupId = '';\n    updateSearchDocumentLabel();", HTML)
 
     def test_primary_search_and_library_dropdowns_use_application_menus(self) -> None:
         self.assertIn('id="library-sort-field-select"', HTML)
@@ -218,9 +221,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         # 语言与文件类型是筛选弹层里的两组分面（不再是平铺分段控件）。
         self.assertIn('id="filter-opts-lang"', HTML)
         self.assertIn('id="filter-opts-type"', HTML)
-        self.assertIn("else if (kind === 'lang') libLangFilter = value;", HTML)
-        self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
-        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
+        self.assertIn("else if (kind === 'lang') libraryStore.languageFilter = value;", HTML)
+        self.assertIn("libraryLanguageCode(s) === libraryStore.languageFilter", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libraryStore.defaultLanguage)", HTML)
 
     def test_library_filters_by_document_type(self) -> None:
         self.assertIn('id="filter-opts-doctype"', HTML)
@@ -231,9 +234,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             HTML.index("{v:'journal_article', label:'期刊论文'"),
             HTML.index("{v:'thesis', label:'学位论文'"),
         )
-        self.assertIn("if (kind === 'doctype') libDocTypeFilter = value;", HTML)
+        self.assertIn("if (kind === 'doctype') libraryStore.documentTypeFilter = value;", HTML)
         self.assertIn("function libraryDocType(source)", HTML)
-        self.assertIn("libraryDocType(s) === libDocTypeFilter", HTML)
+        self.assertIn("libraryDocType(s) === libraryStore.documentTypeFilter", HTML)
 
     def test_library_filter_lives_in_one_button_before_the_toolbar(self) -> None:
         # 三个筛选收进一个「筛选」按钮，位于视图切换/排序之前（Notion / Linear 范式）。
@@ -264,7 +267,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertIn("function submitMineruReparse(sourceId)", HTML)
         self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
-        self.assertIn("importQueue.push(queueItem)", HTML)
+        self.assertIn("importStore.queue.push(queueItem)", HTML)
         self.assertIn("navigateTo('import')", HTML)
         self.assertIn("pollImportJob(queueItem.id)", HTML)
         self.assertIn("queue.scrollIntoView({behavior: 'smooth', block: 'start'})", HTML)
@@ -284,14 +287,14 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function selectedPdfParseMode()", HTML)
         self.assertIn("function setPdfParseMode(mode)", HTML)
         self.assertIn("pdf_parse_mode: mode", HTML)
-        self.assertIn("currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode)", HTML)
+        self.assertIn("settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode)", HTML)
         self.assertIn('onchange="setPdfParseMode(this.value)"', HTML)
         self.assertIn("['auto','mineru','mineru-local','vision']", HTML)
         self.assertIn("syncMineruLocalImportOption(!!config.enabled)", HTML)
         self.assertIn("option.hidden = !enabled", HTML)
         self.assertIn(".pdf-parse-option[hidden] { display: none; }", HTML)
         self.assertIn("if (!enabled && input && input.checked)", HTML)
-        self.assertIn("if (!mineruConfigLoaded) loadMineruConfig()", HTML)
+        self.assertIn("if (!parserStore.mineruConfigLoaded) loadMineruConfig()", HTML)
         self.assertIn("parse_mode: q.parseMode || 'auto'", HTML)
         self.assertIn("parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null", HTML)
         self.assertIn("/api/import-upload/start", HTML)
@@ -452,8 +455,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function showMineruEditor()", HTML)
         self.assertIn("function hideMineruEditor()", HTML)
         self.assertIn('id="mineru-add-account"', HTML)
-        self.assertIn("addButton.hidden = !mineruAccounts.length", HTML)
-        self.assertIn("if (!mineruAccounts.length) startAddMineruAccount(false);", HTML)
+        self.assertIn("addButton.hidden = !parserStore.mineruAccounts.length", HTML)
+        self.assertIn("if (!parserStore.mineruAccounts.length) startAddMineruAccount(false);", HTML)
         self.assertIn("'mineru-editor-title').textContent = '添加账号'", HTML)
         self.assertIn("document.getElementById('mineru-account-cancel').hidden = firstAccount", HTML)
         self.assertIn('id="parser-provider-list"', HTML)
@@ -510,7 +513,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             HTML.index("async function loadLocalOCRConfig()"):
             HTML.index("function localOCRPayload()")
         ]
-        self.assertIn("if (status && !localOCRConfig)", local_ocr_loader)
+        self.assertIn("if (status && !parserStore.localOCRConfig)", local_ocr_loader)
         self.assertIn(
             'class="settings-actions settings-save-row local-ocr-save-row"',
             HTML,
@@ -639,7 +642,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('value="with_pdf"', HTML)
         self.assertIn("function setDocumentExportMode(mode)", HTML)
         self.assertIn(
-            "include_source_pdf: currentDocumentExportMode === 'with_pdf'",
+            "include_source_pdf: settingsStore.currentDocumentExportMode === 'with_pdf'",
             HTML,
         )
 
@@ -783,17 +786,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('function renderSearchDocumentOptions()', HTML)
         self.assertIn('function selectSearchDocument(event, sourceId)', HTML)
         self.assertIn("fetch('/api/library?view=summary')", HTML)
-        self.assertIn("searchSourceFiles = data.items || []", HTML)
+        self.assertIn("searchStore.sourceFiles = data.items || []", HTML)
         self.assertNotIn("fetch('/api/sources')", HTML)
         self.assertIn("var bib = source.bibliographic || source.bibliographic_metadata || {}", HTML)
-        self.assertIn('source_file_id: searchDocumentId || null', HTML)
+        self.assertIn('source_file_id: searchStore.documentId || null', HTML)
         self.assertIn('payload.get("source_file_id")', SEARCH_SERVICE_SOURCE)
 
     def test_library_has_persistent_list_and_card_views(self) -> None:
         self.assertIn('aria-label="文献库显示方式"', HTML)
         self.assertIn('id="library-view-list"', HTML)
         self.assertIn('id="library-view-grid"', HTML)
-        self.assertIn("localStorage.setItem('meFinderLibraryView', libViewMode)", HTML)
+        self.assertIn("localStorage.setItem('meFinderLibraryView', libraryStore.viewMode)", HTML)
         self.assertIn('library-view-grid', HTML)
         self.assertIn('class="library-card library-entry', HTML)
 
@@ -802,7 +805,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('aria-label="页码校准显示方式"', HTML)
         self.assertNotIn("meFinderCalibrationView", HTML)
         self.assertIn('id="library-drawer-calibration"', HTML)
-        self.assertIn("persistDisplayPreference('library_view', libViewMode)", HTML)
+        self.assertIn("persistDisplayPreference('library_view', libraryStore.viewMode)", HTML)
 
 
 if __name__ == "__main__":

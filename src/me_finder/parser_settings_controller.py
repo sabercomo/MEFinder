@@ -38,6 +38,7 @@ from .local_ocr_settings import (
     save_local_ocr_config,
     test_local_ocr_engine,
 )
+from .managed_component import ManagedComponent
 from .parser_provider import ParserProviderError
 from .parser_statistics import build_parser_statistics
 from .vision_api import (
@@ -91,6 +92,7 @@ class ParserSettingsController:
         manage_local_ocr_installer: JSONOperation | None = None,
         summarize_managed_mineru: JSONOperation | None = None,
         manage_managed_mineru: JSONOperation | None = None,
+        managed_components: Mapping[str, ManagedComponent] | None = None,
     ) -> None:
         self._paths = paths
         self._mineru_account_service = mineru_account_service
@@ -118,11 +120,38 @@ class ParserSettingsController:
         self._summarize_local_ocr = summarize_local_ocr
         self._save_local_ocr = save_local_ocr
         self._test_local_ocr = test_local_ocr
-        self._summarize_local_ocr_installer = summarize_local_ocr_installer
-        self._manage_local_ocr_installer = manage_local_ocr_installer
-        self._summarize_managed_mineru = summarize_managed_mineru
-        self._manage_managed_mineru = manage_managed_mineru
+        self._managed_components = dict(managed_components or {})
+        local_ocr_component = self._managed_components.get("local-ocr")
+        mineru_component = self._managed_components.get("mineru-local")
+        self._summarize_local_ocr_installer = (
+            local_ocr_component.summary
+            if local_ocr_component is not None
+            else summarize_local_ocr_installer
+        )
+        self._manage_local_ocr_installer = (
+            local_ocr_component.perform
+            if local_ocr_component is not None
+            else manage_local_ocr_installer
+        )
+        self._summarize_managed_mineru = (
+            mineru_component.summary
+            if mineru_component is not None
+            else summarize_managed_mineru
+        )
+        self._manage_managed_mineru = (
+            mineru_component.perform
+            if mineru_component is not None
+            else manage_managed_mineru
+        )
         self._legacy_migration_error: Exception | None = None
+
+    def component_diagnostics(self) -> ParserSettingsResponse:
+        return 200, {
+            "components": [
+                component.diagnostics()
+                for component in self._managed_components.values()
+            ]
+        }
 
     def mineru_accounts(self) -> ParserSettingsResponse:
         try:

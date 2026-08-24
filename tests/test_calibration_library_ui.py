@@ -342,14 +342,14 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertNotIn("statusStatButton('pending','待校准'", HTML)
         self.assertNotIn("statusStatButton('review','待确认'", HTML)
         self.assertNotIn("statusStatButton('failed','页码自动检测失败'", HTML)
-        self.assertIn("libStatusFilter = requested === libStatusFilter ? 'all' : requested", HTML)
-        self.assertIn("if (libStatusFilter === 'pdf_all')", HTML)
+        self.assertIn("libraryStore.statusFilter = requested === libraryStore.statusFilter ? 'all' : requested", HTML)
+        self.assertIn("if (libraryStore.statusFilter === 'pdf_all')", HTML)
         self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
-        self.assertIn("libStatusFilter === 'page_pending'", HTML)
+        self.assertIn("libraryStore.statusFilter === 'page_pending'", HTML)
         self.assertIn("calibrationStatusGroup(s.status) !== 'calibrated'", HTML)
-        self.assertIn("libStatusFilter === 'bibliographic'", HTML)
+        self.assertIn("libraryStore.statusFilter === 'bibliographic'", HTML)
         self.assertIn("bibliographicMissingFields(sourceBibliographicMetadata(s)).length > 0", HTML)
-        self.assertIn("calibrationStatusGroup(s.status) === libStatusFilter", HTML)
+        self.assertIn("calibrationStatusGroup(s.status) === libraryStore.statusFilter", HTML)
         self.assertIn("libraryGroupScopedSources().forEach(function(item)", HTML)
         self.assertIn("var scopeSources = libraryGroupScopedSources();", HTML)
 
@@ -387,7 +387,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 关闭按钮走带确认的入口，程序化 closeLibDrawer 仍可静默关闭。
         self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
         # 切到别的文献前拦截；同一文献重选不打扰。
-        self.assertIn("var switchingDoc = sourceId !== libSelectedId;", HTML)
+        self.assertIn("var switchingDoc = sourceId !== libraryStore.selectedId;", HTML)
         self.assertIn("if (switchingDoc && !await guardLeaveDetail()) return;", HTML)
         # 顶部状态筛选、筛选弹层选档、移除 chip 离开详情前都拦截。
         self.assertIn("async function applyLibStatusFilter(status)", HTML)
@@ -442,13 +442,13 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         """L-13 三态空状态 + L-15 著作正向计数与未识别档。"""
 
         # 三态空状态：库空 → 去导入；筛选无果 → 清除筛选。
-        self.assertIn("libSources.length === 0", HTML)
+        self.assertIn("libraryStore.sources.length === 0", HTML)
         self.assertIn("文献库还是空的", HTML)
         self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
         self.assertIn("当前筛选没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
         clear_filters = HTML.split("function clearLibraryFilters()", 1)[1].split("}", 1)[0]
-        self.assertIn("libGroupScopeId = '';", clear_filters)
+        self.assertIn("libraryStore.groupScopeId = '';", clear_filters)
         self.assertIn("renderGroupScopeSelector();", clear_filters)
         self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
@@ -491,8 +491,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("实际存在的简体中文、繁体中文等中文细类排在外语前", HTML)
 
     def test_language_facets_are_dynamic_and_filter_card_fits_document_types(self) -> None:
-        self.assertIn("libraryLanguageFacetOptions(scopeSources, libDefaultLanguage)", HTML)
-        self.assertIn("libraryLanguageCode(s) === libLangFilter", HTML)
+        self.assertIn("libraryLanguageFacetOptions(scopeSources, libraryStore.defaultLanguage)", HTML)
+        self.assertIn("libraryLanguageCode(s) === libraryStore.languageFilter", HTML)
         self.assertIn("width: 408px; max-width: calc(100vw - 48px)", HTML)
         self.assertIn("typeof data.online_auto_match_threshold === 'number'", HTML)
 
@@ -511,7 +511,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertNotIn("z-index: 9999;", HTML)
         # Esc 栈：从下拉 → 弹窗 → 选择态 → 抽屉逐层。
         self.assertIn("document.querySelector('.app-select.is-open, .bib-menu.open')", HTML)
-        self.assertIn("libDeleteSelection.size > 0) {\n    event.preventDefault();\n    clearLibrarySelection();", HTML)
+        self.assertIn("libraryStore.deleteSelection.size > 0) {\n    event.preventDefault();\n    clearLibrarySelection();", HTML)
         self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
 
     def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
@@ -621,7 +621,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         importing = HTML.index('data-page="import"')
         self.assertLess(library, importing)
         self.assertNotIn("navigateTo('calibration')", HTML)
-        self.assertIn("navigateTo('library');\n  if (!libLoaded) await loadLibrary();", HTML)
+        self.assertIn("navigateTo('library');\n  if (!libraryStore.loaded) await loadLibrary();", HTML)
 
     def test_completed_import_refreshes_an_open_library_without_restart(self) -> None:
         self.assertIn("var refreshPromise = currentPage === 'library'", HTML)
@@ -693,7 +693,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('function toggleLibraryDeleteSelection(sourceId, force)', HTML)
         self.assertIn('function toggleSelectVisibleLibraryDocuments()', HTML)
         self.assertIn('function exportSelectedLibraryDocuments()', HTML)
-        self.assertIn("item.source_type === 'pdf' && libDeleteSelection.has", HTML)
+        self.assertIn("item.source_type === 'pdf' && libraryStore.deleteSelection.has", HTML)
         self.assertIn('function setupLibraryDragSelection()', HTML)
         # marquee 建框收尾抽入 begin/endDragSelectionMarquee 共用助手后，类名经调用点传入。
         self.assertIn("beginDragSelectionMarquee(state, list, 'library-selection-marquee', event)", HTML)

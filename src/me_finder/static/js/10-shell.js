@@ -139,7 +139,7 @@ document.addEventListener('keydown', function(event) {
     return;
   }
   // 5. 文献库批量选择态：先退选择。
-  if (typeof libDeleteSelection !== 'undefined' && libDeleteSelection && libDeleteSelection.size > 0) {
+  if (typeof libraryStore.deleteSelection !== 'undefined' && libraryStore.deleteSelection && libraryStore.deleteSelection.size > 0) {
     event.preventDefault();
     clearLibrarySelection();
     return;
@@ -164,17 +164,17 @@ function navigateTo(page) {
   if (target) target.classList.add('active');
   const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
   if (link) link.classList.add('active');
-  if (page === 'library' && !libLoaded) loadLibrary();
+  if (page === 'library' && !libraryStore.loaded) loadLibrary();
   if (page === 'import') {
-    if (!visionConfigLoaded) loadVisionProviders();
-    if (!mineruConfigLoaded) loadMineruConfig();
+    if (!parserStore.visionConfigLoaded) loadVisionProviders();
+    if (!parserStore.mineruConfigLoaded) loadMineruConfig();
   }
   if (page === 'settings') {
     ensureVisibleSettingsCategory();
-    if (!preferencesLoaded) loadPreferences();
-    if (!mineruConfigLoaded) loadMineruConfig();
-    if (!visionConfigLoaded) loadVisionProviders();
-    if (!dataLocationLoaded) loadDataLocation();
+    if (!settingsStore.preferencesLoaded) loadPreferences();
+    if (!parserStore.mineruConfigLoaded) loadMineruConfig();
+    if (!parserStore.visionConfigLoaded) loadVisionProviders();
+    if (!settingsStore.dataLocationLoaded) loadDataLocation();
   }
 }
 

@@ -211,7 +211,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertTrue(split[0].endswith("00-state.js"), split[:1])
         self.assertTrue(split[-1].endswith("90-init.js"), split[-1:])
         self.assertLess(
-            HTML.index("let currentMode"),
+            HTML.index("const searchStore = {"),
             HTML.index("async function loadMeta"),
         )
 
@@ -297,10 +297,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：MinerU 本地部署默认展开，并同步托管服务停止后的汇总状态。
     # 0.4.7 后续：MinerU 本地部署对齐本地 OCR 的扁平行式布局，自部署设置默认折叠。
     # 0.4.7 后续：MinerU 本地部署标题字号与本地 OCR 设置标题对齐。
+    # 0.4.8：搜索、文献库、解析、设置和导入核心状态迁入领域 Store。
     BASELINE_SHA256 = (
-        "a0e175ea9258f4acb5b887e2694a6aabc402c81ff522673fa04cc05b476ddba3"
+        "23540226a7c0eb3ec075cc7bf42d466fdb2aae318fcc2780b8c60b0071bf8e8e"
     )
-    BASELINE_BYTES = 853669
+    BASELINE_BYTES = 860528
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

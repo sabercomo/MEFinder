@@ -10,6 +10,7 @@ from .application.import_job_lifecycle import ImportJobRetrySwapFailed
 from .application.import_orchestrator import ImportOrchestrator
 from .import_resume import ResumeManifestError
 from .mineru_api import MinerUError
+from .tasks import TaskEvent
 from .vision_api import VisionAPIError
 
 
@@ -47,10 +48,21 @@ class ImportJobController:
         )
         if not public_job:
             return 404, {"error": "导入任务不存在。"}
-        return 200, public_job
+        response = dict(public_job)
+        response["task_event"] = TaskEvent.from_mapping(
+            str(response["job_id"]), response, unit="pages"
+        ).to_dict()
+        return 200, response
 
     def resumable(self) -> ImportJobResponse:
-        return 200, {"jobs": self._imports.resumable_import_jobs()}
+        jobs = []
+        for public_job in self._imports.resumable_import_jobs():
+            response = dict(public_job)
+            response["task_event"] = TaskEvent.from_mapping(
+                str(response["job_id"]), response, unit="pages"
+            ).to_dict()
+            jobs.append(response)
+        return 200, {"jobs": jobs}
 
     def reparse_with_mineru(self, payload: object) -> ImportJobResponse:
         if not isinstance(payload, Mapping):

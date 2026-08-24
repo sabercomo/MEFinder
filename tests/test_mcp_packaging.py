@@ -106,8 +106,8 @@ class MCPPackagingTests(unittest.TestCase):
             self.windows_workflow,
         )
         self.assertIn("gh release download v0.4.5", self.windows_workflow)
-        self.assertIn("MEFinder-v0.4.7-windows-setup.exe", self.windows_workflow)
-        self.assertIn("MEFinder-v0.4.7-windows-portable.zip", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.8-windows-setup.exe", self.windows_workflow)
+        self.assertIn("MEFinder-v0.4.8-windows-portable.zip", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
         self.assertIn("portable-moved", self.windows_workflow)

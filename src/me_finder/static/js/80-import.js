@@ -1,6 +1,4 @@
 /* ═══ Import ═══ */
-let importQueue = [];
-
 function visionRetryProviderFor(q) {
   if (!q || q.status !== 'error') return null;
   // 索引阶段失败不给切换（重解析救不了重建索引错误）。中断态不再一律屏蔽：
@@ -18,7 +16,7 @@ function visionRetryProviderFor(q) {
 }
 
 function importQueueNeedsRecoverySelector() {
-  return importQueue.some(function(q) {
+  return importStore.queue.some(function(q) {
     return q && q.type === 'pdf' && q.status === 'error' && q.failureStage !== 'index'
       && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed);
   });
@@ -114,7 +112,7 @@ let cnkiBatchOpenUrl = '';
 // isForeignTitle / batchLookupSourceFor 已抽到 06-pure.js（纯逻辑，可单测）。
 
 function cnkiBatchLookupTargets() {
-  return (libSources || []).filter(function(src) {
+  return (libraryStore.sources || []).filter(function(src) {
     if (!src || String(src.source_type || '') !== 'pdf') return false;
     var meta = sourceBibliographicMetadata(src);
     // 人工维护的文献也纳入：applyBatchCandidateToSource 只补当前为空的字段，
@@ -364,14 +362,14 @@ let suppressScanSelectionClick = false;
 async function runDirectoryScan() {
   var statusEl = document.getElementById('scan-status');
   var button = document.getElementById('scan-run-btn');
-  if (!scanDirectories.length) {
+  if (!settingsStore.scanDirectories.length) {
     statusEl.textContent = desktopShell
       ? '尚未添加文献文件夹：先点击“选择文件夹”'
       : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可';
     return;
   }
   button.disabled = true;
-  statusEl.textContent = '正在扫描 ' + scanDirectories.length + ' 个目录…';
+  statusEl.textContent = '正在扫描 ' + settingsStore.scanDirectories.length + ' 个目录…';
   try {
     var resp = await fetch('/api/scan-directories');
     var data = await resp.json();
@@ -533,7 +531,7 @@ function libraryScrollContainer() {
 }
 
 function updateLibraryDragSelection() {
-  var state = libraryDragSelection;
+  var state = libraryStore.dragSelection;
   if (!state || !state.started) return;
   var box = dragSelectionBox(state);
   paintDragSelectionMarquee(state, box);
@@ -545,10 +543,10 @@ function updateLibraryDragSelection() {
     if (hit) hitIds.push(entry.dataset.id);
   });
 
-  libDeleteSelection = new Set(state.initial);
+  libraryStore.deleteSelection = new Set(state.initial);
   hitIds.forEach(function(sourceId) {
-    if (state.targetSelected) libDeleteSelection.add(sourceId);
-    else libDeleteSelection.delete(sourceId);
+    if (state.targetSelected) libraryStore.deleteSelection.add(sourceId);
+    else libraryStore.deleteSelection.delete(sourceId);
   });
   syncLibraryDeleteSelectionUI();
 }
@@ -561,20 +559,20 @@ function setupLibraryDragSelection() {
   list.addEventListener('pointerdown', function(event) {
     // Drag-marquee extends an existing selection; start it with a checkbox
     // click so ordinary browsing (click to open a doc) is never hijacked.
-    if (libDeleteSelection.size === 0 || event.button !== 0 || libraryDragSelection) return;
+    if (libraryStore.deleteSelection.size === 0 || event.button !== 0 || libraryStore.dragSelection) return;
     var entry = event.target.closest('.library-entry[data-delete-selectable="1"]');
     if (!entry || !list.contains(entry)) return;
     var scroller = libraryScrollContainer();
     if (!scroller) return;
-    libraryDragSelection = Object.assign({
+    libraryStore.dragSelection = Object.assign({
       pointerId: event.pointerId,
       scroller: scroller,
       pointerX: event.clientX,
       pointerY: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
-      targetSelected: !libDeleteSelection.has(entry.dataset.id),
-      initial: new Set(libDeleteSelection),
+      targetSelected: !libraryStore.deleteSelection.has(entry.dataset.id),
+      initial: new Set(libraryStore.deleteSelection),
       active: true,
       started: false,
       marquee: null,
@@ -583,14 +581,14 @@ function setupLibraryDragSelection() {
   });
 
   list.addEventListener('click', function(event) {
-    if (!suppressLibrarySelectionClick) return;
-    suppressLibrarySelectionClick = false;
+    if (!libraryStore.suppressSelectionClick) return;
+    libraryStore.suppressSelectionClick = false;
     event.preventDefault();
     event.stopPropagation();
   }, true);
 
   document.addEventListener('pointermove', function(event) {
-    var state = libraryDragSelection;
+    var state = libraryStore.dragSelection;
     if (!state || event.pointerId !== state.pointerId) return;
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
@@ -605,14 +603,14 @@ function setupLibraryDragSelection() {
   }, {passive:false});
 
   function finishLibraryDragSelection(event) {
-    var state = libraryDragSelection;
+    var state = libraryStore.dragSelection;
     if (!state || event.pointerId !== state.pointerId) return;
     stopDragSelectionAutoScroll(state);
-    libraryDragSelection = null;
+    libraryStore.dragSelection = null;
     endDragSelectionMarquee(state, list, '.library-entry', event);
     if (state.started) {
-      suppressLibrarySelectionClick = true;
-      setTimeout(function() { suppressLibrarySelectionClick = false; }, 0);
+      libraryStore.suppressSelectionClick = true;
+      setTimeout(function() { libraryStore.suppressSelectionClick = false; }, 0);
     }
     syncLibraryDeleteSelectionUI();
   }
@@ -769,7 +767,7 @@ async function importSelectedScanned() {
         providerId: job.provider_id || null,
         providerName: job.provider_id === 'mineru-local' ? '本地 MinerU'
           : localOCRProviderName(job.provider_id)
-          || ((visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
+          || ((parserStore.visionConfig.providers || []).find(function(item) { return item.id === job.provider_id; }) || {}).name || null,
         message: '文件已复制，正在处理…'
       };
       if (job.file_type === 'pdf' && job.detected_pdf_type) {
@@ -784,7 +782,7 @@ async function importSelectedScanned() {
       } else if (job.file_type !== 'pdf') {
         q.step = 1;
       }
-      importQueue.push(q);
+      importStore.queue.push(q);
       pollImportJob(q.id);
     });
     renderImportQueue();
@@ -816,19 +814,19 @@ function normalizePdfParseMode(mode) {
 
 function renderPdfParseMode() {
   document.querySelectorAll('input[name="pdf-parse-mode"]').forEach(function(input) {
-    input.checked = input.value === currentPdfParseMode;
+    input.checked = input.value === settingsStore.currentPdfParseMode;
   });
 }
 
 async function setPdfParseMode(mode) {
   mode = normalizePdfParseMode(mode);
-  if (pdfParseModeSaving || preferencesLoadPromise) {
+  if (settingsStore.pdfParseModeSaving || settingsStore.preferencesLoadPromise) {
     renderPdfParseMode();
     return;
   }
-  var previousMode = currentPdfParseMode;
-  currentPdfParseMode = mode;
-  pdfParseModeSaving = true;
+  var previousMode = settingsStore.currentPdfParseMode;
+  settingsStore.currentPdfParseMode = mode;
+  settingsStore.pdfParseModeSaving = true;
   renderPdfParseMode();
   try {
     var resp = await fetch('/api/preferences', {
@@ -838,15 +836,15 @@ async function setPdfParseMode(mode) {
     });
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-    currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
-    preferencesLoaded = true;
+    settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
+    settingsStore.preferencesLoaded = true;
     renderPdfParseMode();
   } catch (e) {
-    currentPdfParseMode = previousMode;
+    settingsStore.currentPdfParseMode = previousMode;
     renderPdfParseMode();
     showToast('PDF 解析方式保存失败：' + e.message);
   } finally {
-    pdfParseModeSaving = false;
+    settingsStore.pdfParseModeSaving = false;
   }
 }
 
@@ -865,7 +863,7 @@ function handleFileSelect(files) {
   var selectedFiles = Array.prototype.slice.call(files);
   var pdfParseMode = selectedPdfParseMode();
   var selectedProviderId = selectedVisionProviderId();
-  var selectedProvider = (visionConfig.providers || []).find(function(item) { return item.id === selectedProviderId; });
+  var selectedProvider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === selectedProviderId; });
   selectedFiles.forEach(function(file, i) {
     var lowerName = file.name.toLowerCase();
     var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
@@ -875,7 +873,7 @@ function handleFileSelect(files) {
       return;
     }
     var id = 'import-' + Date.now() + '-' + i;
-    importQueue.push({
+    importStore.queue.push({
       id: id,
       file: file,
       name: file.name,
@@ -894,7 +892,7 @@ function handleFileSelect(files) {
   });
   document.getElementById('file-input').value = '';
   renderImportQueue();
-  importQueue.filter(function(q) { return q.status === 'queued'; }).forEach(function(q) {
+  importStore.queue.filter(function(q) { return q.status === 'queued'; }).forEach(function(q) {
     uploadImport(q.id);
   });
 }
@@ -902,7 +900,7 @@ function handleFileSelect(files) {
 function renderImportQueue() {
   var queueEl = document.getElementById('import-queue');
   var itemsEl = document.getElementById('import-items');
-  if (importQueue.length === 0) {
+  if (importStore.queue.length === 0) {
     queueEl.style.display = 'none';
     syncImportRecoveryPanel();
     syncResumeAllButton();
@@ -910,7 +908,7 @@ function renderImportQueue() {
   }
   queueEl.style.display = 'block';
   syncImportRecoveryPanel();
-  itemsEl.innerHTML = importQueue.map(function(q) {
+  itemsEl.innerHTML = importStore.queue.map(function(q) {
     var typeCls = q.type === 'pdf' ? 'pdf' : q.type === 'document_package' ? 'package' : 'word';
     var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'document_package' ? '文档包' : 'DOCX';
     var retryProvider = visionRetryProviderFor(q);
@@ -974,14 +972,14 @@ function renderImportQueue() {
 
 // 队列里可继续的任务多于一个时，才值得给一个「全部继续导入」的批量入口。
 function resumableImportQueue() {
-  return importQueue.filter(function(item) {
+  return importStore.queue.filter(function(item) {
     return item.jobId && item.canResume
       && (item.status === 'paused' || item.status === 'error');
   });
 }
 
 function cancellableImportQueue() {
-  return importQueue.filter(function(item) {
+  return importStore.queue.filter(function(item) {
     return item.status !== 'done';
   });
 }
@@ -1055,7 +1053,7 @@ async function cancelAllImports() {
 
 async function removeImport(id, options) {
   options = options || {};
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (q && q.jobId && q.status === 'processing' && !options.skipConfirm) {
     var serviceName = q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
     if (!await showAppConfirm(
@@ -1095,7 +1093,7 @@ async function removeImport(id, options) {
       return false;
     }
   }
-  importQueue = importQueue.filter(function(item) { return item.id !== id; });
+  importStore.queue = importStore.queue.filter(function(item) { return item.id !== id; });
   if (!options.deferRender) renderImportQueue();
   return true;
 }
@@ -1162,7 +1160,7 @@ async function uploadImportFile(q, importKind, progressLabel) {
 }
 
 async function uploadImport(id) {
-  var q = importQueue.find(function(q) { return q.id === id; });
+  var q = importStore.queue.find(function(q) { return q.id === id; });
   if (!q) return;
   q.status = 'processing';
   q.step = 0;
@@ -1219,7 +1217,7 @@ async function uploadImport(id) {
 }
 
 function pollImportJob(id) {
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId) return;
   fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
     .then(function(resp) { return resp.json(); })
@@ -1287,9 +1285,9 @@ async function loadResumableImports() {
     var data = await resp.json();
     if (!resp.ok || data.error) throw new Error(data.error || '读取恢复任务失败');
     (data.jobs || []).forEach(function(job) {
-      if (importQueue.some(function(item) { return item.jobId === job.job_id; })) return;
+      if (importStore.queue.some(function(item) { return item.jobId === job.job_id; })) return;
       var isPaused = job.status === 'paused';
-      importQueue.push({
+      importStore.queue.push({
         id: 'resume-' + job.job_id,
         jobId: job.job_id,
         name: job.file_name || '未命名文献',
@@ -1323,7 +1321,7 @@ async function loadResumableImports() {
 
 async function resumeImport(id, options) {
   options = options || {};
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || !q.canResume) return;
   var serviceName = q.providerId === 'mineru-local' ? '本地 MinerU' : q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
   if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
@@ -1354,7 +1352,7 @@ async function resumeImport(id, options) {
 }
 
 async function retryImportWithVision(id) {
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId) return;
   var provider = visionRetryProviderFor(q);
   if (!provider) {
@@ -1394,7 +1392,7 @@ async function retryImportWithVision(id) {
 }
 
 async function retryImportWithMinerU(id) {
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || q.type !== 'pdf') return;
   if (!await showAppConfirm(
     '将保留原文件，停止使用当前视觉 API，改由免费 MinerU 解析',
@@ -1426,7 +1424,7 @@ async function retryImportWithMinerU(id) {
 }
 
 async function retryImportWithLocalMinerU(id) {
-  var q = importQueue.find(function(item) { return item.id === id; });
+  var q = importStore.queue.find(function(item) { return item.id === id; });
   if (!q || !q.jobId || q.type !== 'pdf' || !q.canRetryLocalMineru) return;
   if (!await showAppConfirm(
     '将保留原文件，停止在线 MinerU 任务，改由你已运行的本地 MinerU 服务重新解析',

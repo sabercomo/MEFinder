@@ -1418,6 +1418,26 @@ const expr = fs.readFileSync(process.argv[3], 'utf8');
 process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
 """
 
+_FRONTEND_STORE_STUB = r"""
+var searchStore = {documentId:'', groupId:'', sourceFiles:[], libraryCatalog:null};
+var libraryStore = {
+  sources:[], volumes:[], volumeBySource:new Map(), works:[], stats:null,
+  documentGroups:[], detailLoaded:{}, detailPending:{}, deleteSelection:new Set()
+};
+var parserStore = {
+  visionConfig:{providers:[], default_provider_id:null, auto_fallback_from_mineru:false},
+  visionTestResults:{}, visionModelOptions:[], visionModelRequestSerial:0,
+  mineruAccounts:[], mineruStatistics:{}, parserStatistics:{},
+  mineruSelectedAccountId:'', localOCRConfig:null, localOCRPollTimer:null,
+  managedMineruPollTimer:null, managedMineruWasBusy:false, mineruLocalConfig:{}
+};
+var settingsStore = {
+  scanDirectories:[], currentPdfParseMode:'auto', pdfParseModeSaving:false,
+  preferencesLoadPromise:null, preferencesLoaded:false
+};
+var importStore = {queue:[]};
+"""
+
 
 def _module_eval(expr):
     """在同一次 eval 中执行 06-pure.js + 表达式，可引用其中的 const/let。"""
@@ -1449,7 +1469,11 @@ def _config_call(config_name, method, *args):
     call = "%s.%s(%s)" % (
         config_name, method, ",".join(json.dumps(a) for a in args)
     )
-    expr = "(function(){%s\nreturn %s;})()" % (bib.read_text(encoding="utf-8"), call)
+    expr = "(function(){%s\n%s\nreturn %s;})()" % (
+        _FRONTEND_STORE_STUB,
+        bib.read_text(encoding="utf-8"),
+        call,
+    )
     return _module_eval(expr)
 
 
@@ -1462,7 +1486,11 @@ def _bib_eval(tail):
     cnkiLookupState，两者都要靠这条通道验证。"""
 
     bib = ROOT / "src" / "me_finder" / "static" / "js" / "40-bibliography.js"
-    expr = "(function(){%s\n%s})()" % (bib.read_text(encoding="utf-8"), tail)
+    expr = "(function(){%s\n%s\n%s})()" % (
+        _FRONTEND_STORE_STUB,
+        bib.read_text(encoding="utf-8"),
+        tail,
+    )
     return _module_eval(expr)
 
 
@@ -1474,7 +1502,11 @@ def _import_eval(tail):
     语句，单独 eval 只登记函数声明，只调这两个助手不牵动其它模块。"""
 
     imp = ROOT / "src" / "me_finder" / "static" / "js" / "80-import.js"
-    expr = "(function(){%s\n%s})()" % (imp.read_text(encoding="utf-8"), tail)
+    expr = "(function(){%s\n%s\n%s})()" % (
+        _FRONTEND_STORE_STUB,
+        imp.read_text(encoding="utf-8"),
+        tail,
+    )
     return _module_eval(expr)
 
 
@@ -1485,7 +1517,11 @@ def _vision_eval(tail):
     70-vision.js 顶层无执行语句，单独 eval 只登记函数声明。"""
 
     vis = ROOT / "src" / "me_finder" / "static" / "js" / "70-vision.js"
-    expr = "(function(){%s\n%s})()" % (vis.read_text(encoding="utf-8"), tail)
+    expr = "(function(){%s\n%s\n%s})()" % (
+        _FRONTEND_STORE_STUB,
+        vis.read_text(encoding="utf-8"),
+        tail,
+    )
     return _module_eval(expr)
 
 
@@ -1701,7 +1737,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
           getElementById:function(id) { return elements[id] || null; },
           querySelector:function(selector) { return selector.indexOf('vlm') >= 0 ? vlmSection : null; }
         };
-        mineruLocalConfig = {enabled:true, managed:false, endpoint:'http://127.0.0.1:8000'};
+        parserStore.mineruLocalConfig = {enabled:true, managed:false, endpoint:'http://127.0.0.1:8000'};
         renderManagedMineru({
           supported:true,
           hardware:{name:'CPU', recommended_profile:'pipeline'},
@@ -1740,7 +1776,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
           getElementById:function(id) { return elements[id] || null; },
           querySelector:function() { return {hidden:false}; }
         };
-        mineruLocalConfig = {enabled:true, managed:true};
+        parserStore.mineruLocalConfig = {enabled:true, managed:true};
         var profile = {profile:'pipeline', display_name:'Pipeline', supported:true, installed:true, state:'installed'};
         renderManagedMineru({
           supported:true,
