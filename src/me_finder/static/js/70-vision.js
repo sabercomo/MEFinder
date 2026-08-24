@@ -70,7 +70,7 @@ function renderLocalOCRInstaller(config) {
       } else if (busy && managed.state === 'provisioning') {
         detail += (detail ? ' · ' : '') + '预计时间：正在估算…';
       }
-      fields.installHint.textContent = detail || (installed ? '运行时、模型与依赖均在 MEFinder 组件目录内。' : '安装包含模型，首次下载耗时取决于网络。');
+      fields.installHint.textContent = detail || (installed ? '运行时和模型都装在 MEFinder 组件目录，不改动系统 Python 环境' : '安装时会一并下载模型，首次耗时取决于网络');
     }
     if (fields.progress) {
       fields.progress.hidden = !busy;
@@ -193,7 +193,7 @@ async function saveLocalOCRConfig() {
     if (hint) hint.textContent = '未保存：' + error.message;
   } finally {
     button.disabled = false;
-    button.textContent = '保存启用与高级设置';
+    button.textContent = '保存设置';
   }
 }
 
@@ -349,7 +349,7 @@ function renderManagedMineru(runtime) {
     hardwareText.textContent = hardware.detection_error
       ? hardware.detection_error + ' · 默认推荐 Pipeline'
       : hardware.name
-      ? hardware.name + memory + ' · 推荐 ' + (hardware.recommended_profile === 'vlm' ? 'VLM' : 'Pipeline')
+      ? '当前设备：' + hardware.name + memory + ' · 推荐 ' + (hardware.recommended_profile === 'vlm' ? 'VLM' : 'Pipeline')
       : '未检测到可用的本地推理硬件';
   }
   var service = runtime.service || {};
@@ -386,7 +386,9 @@ function renderManagedMineru(runtime) {
     if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
     if (fields.cancel) fields.cancel.hidden = !busy;
     if (fields.progressHint) {
-      var detail = profile.error ? '安装失败：' + managedMineruErrorText(profile.error) : (profile.message || '');
+      var detail = running && service.endpoint
+        ? '运行于 ' + service.endpoint
+        : profile.error ? '安装失败：' + managedMineruErrorText(profile.error) : (profile.message || '');
       var transfer = busy ? managedMineruTransferSummary(profile) : '';
       if (transfer) detail += (detail ? ' · ' : '') + transfer;
       fields.progressHint.hidden = !detail;
@@ -405,15 +407,15 @@ function renderManagedMineru(runtime) {
     var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
     autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
     autoButton.textContent = recommendedProfile && recommendedProfile.installed
-      ? '推荐配置已安装'
+      ? '已安装'
       : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
   }
   var hint = document.getElementById('managed-mineru-hint');
   if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
-    ? '本地服务运行于 ' + service.endpoint
-    : active ? '安装需要约 20GB 可用空间，请保持应用开启。'
-    : externalConfigured ? '已配置自部署服务 ' + parserStore.mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案。'
-    : '组件按需下载，不会随主程序更新自动安装。');
+    ? ''
+    : active ? '安装需要约 20GB 可用空间，请保持应用开启'
+    : externalConfigured ? '已配置自部署服务 ' + parserStore.mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案'
+    : '组件按需下载，不会随主程序更新自动安装');
   if (parserStore.mineruLocalConfig.managed) {
     updateMineruLocalStatus(
       !!parserStore.mineruLocalConfig.enabled,
@@ -510,7 +512,7 @@ async function saveMineruLocalSettings() {
     importStore.queue.filter(function(item) {
       return item.jobId && (item.status === 'failed' || item.status === 'paused');
     }).forEach(function(item) { pollImportJob(item.id); });
-    if (hint) hint.textContent = data.enabled ? '已保存；导入时可直接选择“本地 MinerU”' : '已关闭本地部署选项';
+    if (hint) hint.textContent = data.enabled ? '已保存；导入时可直接选择「本地 MinerU」' : '已关闭本地部署选项';
   } catch (error) {
     if (hint) hint.textContent = '未保存：' + error.message;
   } finally {
@@ -689,7 +691,7 @@ function renderParserProviderBooks(provider) {
 }
 
 function renderMineruCredentialAttribution(credentials) {
-  if (!Array.isArray(credentials) || !credentials.length) return '<div class="parser-credential-empty">这些 MinerU 文献没有可匹配的本地账号归属记录。</div>';
+  if (!Array.isArray(credentials) || !credentials.length) return '<div class="parser-credential-empty">这些 MinerU 文献没有可匹配的本地账号归属记录</div>';
   return '<div class="parser-detail-label mineru-attribution-label">MinerU 账号归属 <small>本地记录，不是官网用量或计费数据</small></div><div class="parser-credential-list">' + credentials.map(function(item) {
     var bookRows = (Array.isArray(item.books) ? item.books : []).map(function(book) {
       return '<div class="parser-credential-book"><span><strong>' + esc(book.source_file_name || book.document_id || '未命名文献') + '</strong><small>原书页 ' + esc(mineruPageRangesLabel(book.page_ranges)) + '</small></span><b>' + Number(book.parsed_page_count || 0).toLocaleString() + ' 页</b></div>';
@@ -706,7 +708,7 @@ function renderParserStatistics() {
   var list = document.getElementById('parser-provider-list');
   var providers = Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : [];
   if (!providers.length) {
-    list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数。</small></div>';
+    list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
     return;
   }
   var orderedProviders = providers.slice().sort(function(a, b) {
@@ -788,7 +790,7 @@ async function importBackup() {
     if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
     if (chosen.cancelled) return;
     if (!await showAppConfirm(
-      '将从“' + (chosen.name || '所选备份') + '”恢复，并覆盖当前的页码映射与书目信息。',
+      '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息。',
       {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
     )) return;
     if (button) button.textContent = '正在导入…';
@@ -932,7 +934,7 @@ async function toggleMineruAccountEnabled(input) {
 async function deleteMineruAccount(accountId) {
   var item = parserStore.mineruAccounts.find(function(account) { return account.account_id === accountId; });
   if (!item || !await showAppConfirm(
-    '将删除 MinerU 账号“' + item.display_name + '”及其在本机保存的 Token。已完成的解析统计会保留。',
+    '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留。',
     {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
   )) return;
   try {
@@ -1737,7 +1739,7 @@ function renderVisionProviders() {
       list.innerHTML = '<div class="vision-provider-empty">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 3 7.5 12 12l9-4.5L12 3z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>'
         + '<strong>尚未添加其他解析接口</strong>'
-        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角“添加接口”可接入通义千问等视觉模型</span>'
+        + '<span>MinerU 会继续作为默认的免费解析服务；点右上角「添加接口」可接入通义千问等视觉模型</span>'
         + '</div>';
     } else {
       var usageByProvider = {};
@@ -1755,10 +1757,10 @@ function renderVisionProviders() {
           + '<label class="ui-switch mineru-row-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
           + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
           + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label></span></td>'
-          + '<td data-label="本地解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>'
+          + '<td data-label="已解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>'
           + '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">测试</button><button class="mineru-text-action" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button><button class="mineru-text-action danger" type="button" onclick="deleteVisionProvider(\'' + provider.id + '\')">删除</button></span></td></tr>';
       }).join('');
-      list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table vision-provider-table"><thead><tr><th>接口</th><th>状态</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table vision-provider-table"><thead><tr><th>接口</th><th>状态</th><th>已解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
   }
   if (autoFallback) {
@@ -1769,9 +1771,9 @@ function renderVisionProviders() {
     if (!fallbackProvider) {
       fallbackSummary.textContent = '请先添加并启用一个解析接口，之后即可开启自动切换';
     } else if (parserStore.visionConfig.auto_fallback_from_mineru) {
-      fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用“' + fallbackProvider.name + '”，可能产生调用费用';
+      fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用「' + fallbackProvider.name + '」，可能产生调用费用';
     } else {
-      fallbackSummary.textContent = '已关闭；开启后将使用“' + fallbackProvider.name + '”，可能产生调用费用';
+      fallbackSummary.textContent = '已关闭；开启后将使用「' + fallbackProvider.name + '」，可能产生调用费用';
     }
   }
   syncImportVisionProviders();
@@ -1956,9 +1958,9 @@ async function saveVisionProvider() {
     document.getElementById('vision-model').focus();
     return;
   }
-  if (!provider.name) {
+  if (!provider.name || provider.name === visionNameAutoValue) {
     var brand = visionBrandFromBase(provider.api_base);
-    provider.name = brand ? brand.name : visionHostLabel(provider.api_base) || '自定义接口';
+    provider.name = (brand ? brand.name : visionHostLabel(provider.api_base) || '自定义接口') + ' · ' + provider.model;
     document.getElementById('vision-provider-name').value = provider.name;
   }
   if (hint) hint.textContent = '正在保存…';
@@ -1984,7 +1986,7 @@ async function saveVisionProvider() {
 async function deleteVisionProvider(providerId) {
   var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === providerId; });
   if (!provider || !await showAppConfirm(
-    '将删除解析接口“' + provider.name + '”',
+    '将删除解析接口「' + provider.name + '」',
     {title:'删除解析接口？', confirmText:'删除', tone:'danger'}
   )) return;
   try {
@@ -2012,7 +2014,7 @@ async function testVisionProvider(providerId) {
     return;
   }
   if (!await showAppConfirm(
-    '测试会向“' + provider.name + '”发送一张极小的测试图片，确认模型确实支持视觉输入',
+    '测试会向「' + provider.name + '」发送一张极小的测试图片，确认模型确实支持视觉输入',
     {title:'测试视觉接口？', confirmText:'发送测试图片'}
   )) return;
   showToast('正在测试 ' + provider.name + '…');

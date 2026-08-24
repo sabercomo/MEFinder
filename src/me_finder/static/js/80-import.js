@@ -364,7 +364,7 @@ async function runDirectoryScan() {
   var button = document.getElementById('scan-run-btn');
   if (!settingsStore.scanDirectories.length) {
     statusEl.textContent = desktopShell
-      ? '尚未添加文献文件夹：先点击“选择文件夹”'
+      ? '尚未添加文献文件夹：先点击「选择文件夹」'
       : '尚未添加文献文件夹：在上方输入框粘贴路径并回车即可';
     return;
   }
@@ -1363,7 +1363,7 @@ async function retryImportWithVision(id) {
   var providerId = provider.id;
   var providerName = provider.name || '其他解析 API';
   if (!await showAppConfirm(
-    '将改用“' + providerName + '”重新解析这份 PDF，可能产生费用',
+    '将改用「' + providerName + '」重新解析这份 PDF，可能产生费用',
     {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
   )) return;
   try {

@@ -1159,7 +1159,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765, index_path: Path = DEFAULT_
         raise ValueError("本地 Web 服务只能绑定 loopback 地址。")
     handler = make_handler(index_path)
     server = ManagedThreadingHTTPServer((host, port), handler)
-    print(f"ME Finder running at http://{host}:{port}/")
+    print(f"MEFinder running at http://{host}:{port}/")
     try:
         server.serve_forever()
     finally:

@@ -299,9 +299,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：MinerU 本地部署标题字号与本地 OCR 设置标题对齐。
     # 0.4.8：搜索、文献库、解析、设置和导入核心状态迁入领域 Store。
     BASELINE_SHA256 = (
-        "23540226a7c0eb3ec075cc7bf42d466fdb2aae318fcc2780b8c60b0071bf8e8e"
+        "94e23d9649d0f221fd401cf9d49bcc3845d8ee181318c2377b76e54c81daedf2"
     )
-    BASELINE_BYTES = 860528
+    BASELINE_BYTES = 860668
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

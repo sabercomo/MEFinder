@@ -1757,7 +1757,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
             "auto": "改用推荐托管配置",
             "hint": (
                 "已配置自部署服务 http://127.0.0.1:8000；无需重复下载。"
-                "下方托管运行时为可选方案。"
+                "下方托管运行时为可选方案"
             ),
         })
 
@@ -1766,11 +1766,12 @@ class MineruLocalDisplayTests(unittest.TestCase):
         function el() { return {textContent:'', className:'', hidden:false, disabled:false}; }
         var elements = {};
         [
-          'mineru-local-status', 'managed-mineru-pipeline-state',
+          'mineru-local-status', 'managed-mineru-hardware',
+          'managed-mineru-pipeline-state',
           'managed-mineru-pipeline-install', 'managed-mineru-pipeline-start',
           'managed-mineru-pipeline-stop', 'managed-mineru-pipeline-uninstall',
           'managed-mineru-pipeline-cancel', 'managed-mineru-auto-install',
-          'managed-mineru-hint'
+          'managed-mineru-pipeline-progress', 'managed-mineru-hint'
         ].forEach(function(id) { elements[id] = el(); });
         globalThis.document = {
           getElementById:function(id) { return elements[id] || null; },
@@ -1785,6 +1786,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
           profiles:[profile]
         });
         var whileRunning = elements['mineru-local-status'].textContent;
+        var runningEndpoint = elements['managed-mineru-pipeline-progress'].textContent;
+        var runningEndpointHidden = elements['managed-mineru-pipeline-progress'].hidden;
+        var hardware = elements['managed-mineru-hardware'].textContent;
+        var autoInstall = elements['managed-mineru-auto-install'].textContent;
+        var runningHint = elements['managed-mineru-hint'].textContent;
         var whileVlmRunning = managedMineruSummaryLabel(
           {enabled:true, managed:true, managed_profile:'vlm'},
           {service:{running:true, profile:'vlm'}}
@@ -1797,6 +1803,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
         });
         return {
           whileRunning:whileRunning,
+          runningEndpoint:runningEndpoint,
+          runningEndpointHidden:runningEndpointHidden,
+          hardware:hardware,
+          autoInstall:autoInstall,
+          runningHint:runningHint,
           whileVlmRunning:whileVlmRunning,
           afterStop:elements['mineru-local-status'].textContent,
           state:elements['managed-mineru-pipeline-state'].textContent,
@@ -1806,12 +1817,48 @@ class MineruLocalDisplayTests(unittest.TestCase):
         """
         self.assertEqual(_vision_eval(tail), {
             "whileRunning": "Pipeline 运行中",
+            "runningEndpoint": "运行于 http://127.0.0.1:8000",
+            "runningEndpointHidden": False,
+            "hardware": "当前设备：CPU · 推荐 Pipeline",
+            "autoInstall": "已安装",
+            "runningHint": "",
             "whileVlmRunning": "VLM 运行中",
             "afterStop": "已配置，未启动",
             "state": "已安装",
             "startHidden": False,
             "stopHidden": True,
         })
+
+    def test_save_generates_provider_and_model_name(self):
+        tail = r"""
+        var fields = {
+          'vision-provider-id':{value:''},
+          'vision-provider-name':{value:''},
+          'vision-api-base':{value:'https://dashscope.aliyuncs.com/compatible-mode/v1'},
+          'vision-model':{value:'qwen-vl-ocr'},
+          'vision-api-key':{value:'secret'},
+          'vision-provider-enabled':{checked:true},
+          'vision-save-hint':{textContent:''}
+        };
+        globalThis.document = {
+          getElementById:function(id) { return fields[id] || null; }
+        };
+        var savedNames = [];
+        globalThis.fetch = function(url, options) {
+          savedNames.push(JSON.parse(options.body).provider.name);
+          return new Promise(function() {});
+        };
+        globalThis.showToast = function() {};
+        saveVisionProvider();
+        fields['vision-provider-name'].value = '通义千问';
+        visionNameAutoValue = '通义千问';
+        saveVisionProvider();
+        return savedNames;
+        """
+        self.assertEqual(
+            _vision_eval(tail),
+            ["通义千问 · qwen-vl-ocr", "通义千问 · qwen-vl-ocr"],
+        )
 
     def test_vlm_option_is_hidden_only_when_hardware_is_not_qualified(self):
         tail = r"""

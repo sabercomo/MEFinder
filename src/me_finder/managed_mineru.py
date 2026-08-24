@@ -488,7 +488,7 @@ class ManagedMinerU:
                 message = "安装并启动完成"
             elif action == "start":
                 self._start_service(profile_id)
-                message = "本地服务已启动"
+                message = f"运行于 {self._service_endpoint}"
             elif action == "validate":
                 self._validate(profile_id)
                 message = "组件验证通过"

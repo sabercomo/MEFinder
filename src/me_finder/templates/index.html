@@ -552,7 +552,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                         </div>
                         <div class="settings-field-aside">
                           <a id="mineru-token-link" class="settings-field-link" href="javascript:void(0)" onclick="openMineruTokenPage()">前往 MinerU 获取 Token</a>
-                          <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机。</small>
+                          <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机</small>
                         </div>
                       </div>
                       <div class="settings-field">
@@ -576,20 +576,20 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span id="local-ocr-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
-              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>安装并启用后，导入 PDF 时保持“自动选择”即可：扫描类日文 PDF 和古籍 PDF 会分别优先使用日文 OCR、古籍 OCR；本地识别失败时自动转入 MinerU。点击下载会自动安装独立 Python 环境与 CPU 模型；组件和路径只保存在本机，不进入备份。</span></div>
+              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</span></div>
               <div class="local-ocr-component-list">
                 <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
                   <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装包含模型，首次下载耗时取决于网络。</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装时会一并下载模型，首次耗时取决于网络</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
                   <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
                 <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
                   <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><div class="local-ocr-head-actions"><span id="local-ocr-ancient-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用。</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
                   <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
               </div>
-              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存启用与高级设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
               <section class="mineru-local-settings" id="mineru-local-settings">
                 <div class="mineru-local-section-head">
                   <span class="mineru-local-summary-copy"><strong>MinerU 本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
@@ -597,7 +597,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
                 <div class="mineru-local-body">
                   <section class="managed-mineru" aria-labelledby="managed-mineru-title">
-                    <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">ME Finder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><button id="managed-mineru-auto-install" class="action-btn primary" type="button" onclick="manageMineruComponent('auto','install',this)">安装推荐配置</button></div>
+                    <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">MEFinder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><button id="managed-mineru-auto-install" class="action-btn primary" type="button" onclick="manageMineruComponent('auto','install',this)">安装推荐配置</button></div>
                     <div class="managed-mineru-profile-list">
                       <article class="managed-mineru-profile" data-mineru-profile="pipeline">
                         <div><strong>Pipeline</strong><small>兼容性优先 · 支持纯 CPU</small><small id="managed-mineru-pipeline-progress" class="managed-mineru-profile-progress" role="status" aria-live="polite" hidden></small><div id="managed-mineru-pipeline-progress-bar" class="managed-mineru-progress" hidden><span></span></div></div>
@@ -615,14 +615,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <details class="mineru-local-advanced">
                     <summary><span>高级：连接自部署服务</span><svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
                     <div class="mineru-local-advanced-body">
-                      <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>也可以连接你自行部署的兼容服务。服务需提供 <code>GET /health</code>、<code>POST /tasks</code> 等官方异步接口。</span></div>
+                      <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>也可以连接你自己部署的 MinerU 兼容服务，服务需实现 <code>GET /health</code>、<code>POST /tasks</code> 等官方异步接口</span></div>
                       <div class="settings-grid mineru-local-grid">
                         <label class="settings-label" for="mineru-local-endpoint">服务地址</label>
-                        <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>通常为 http://127.0.0.1:8000</small></div>
+                        <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>自部署服务通常为 http://127.0.0.1:8000；使用托管运行时时会自动填写</small></div>
                         <label class="settings-label" for="mineru-local-backend">解析后端</label>
                         <div class="settings-control"><input id="mineru-local-backend" class="settings-input" type="text" value="pipeline" spellcheck="false"><small>传给本地 MinerU 服务的 backend 参数</small></div>
-                        <span class="settings-label">失败后切换</span>
-                        <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页会显示“本地 MinerU”；在线 MinerU 失败后也可手动切换，不会自动切换</small></div>
+                        <span class="settings-label">本地部署选项</span>
+                        <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页可以选择「本地 MinerU」；在线 MinerU 失败后可手动切换，不会自动切换</small></div>
                         <span class="settings-label"></span>
                         <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
                       </div>
@@ -640,7 +640,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             <div class="settings-collapse-body" id="statistics-settings-body">
               <section class="parser-overview" aria-labelledby="parser-overview-title">
-                <div class="parser-stat-section-head"><div><strong id="parser-overview-title">总览</strong><small>统计当前文献库中已产生页级结果的 PDF</small></div></div>
+                <div class="parser-stat-section-head"><div><strong id="parser-overview-title">总览</strong><small>统计文献库中已完成逐页解析的 PDF</small></div></div>
                 <dl class="parser-overview-metrics">
                   <div><dt>文献</dt><dd id="parser-stat-books">0</dd><span>本</span></div>
                   <div><dt>解析页</dt><dd id="parser-stat-pages">0</dd><span>页</span></div>
@@ -648,7 +648,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </dl>
               </section>
               <section class="parser-provider-breakdown" aria-labelledby="parser-provider-title">
-                <div class="parser-stat-section-head"><div><strong id="parser-provider-title">按解析服务</strong><small>展开后可查看哪些书由该服务解析；MinerU 额外显示本地账号归属</small></div></div>
+                <div class="parser-stat-section-head"><div><strong id="parser-provider-title">按解析服务</strong><small>展开可查看每本书由哪个服务解析；MinerU 还会显示对应的账号</small></div></div>
                 <div class="parser-provider-columns" aria-hidden="true"><span>解析服务</span><span>文献</span><span>页数</span><span></span></div>
                 <div id="parser-provider-list" class="parser-provider-list" aria-live="polite"></div>
               </section>
@@ -656,13 +656,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="vision-api-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">其他解析 API</span><span class="settings-section-note">可选的 OpenAI 兼容视觉模型与中转接口</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">其他解析 API</span><span class="settings-section-note">可选的视觉模型接口，兼容 OpenAI 协议，支持中转服务</span></span>
             <span id="vision-config-status" class="settings-status">读取中…</span>
             <button class="action-btn vision-add-btn" type="button" onclick="startAddVisionProvider()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
             </div>
             <div class="settings-collapse-body" id="vision-api-body">
             <div class="vision-provider-layout">
-            <div class="mineru-table-heading"><div><strong>接口</strong><small>API Key 不会显示或返回到界面</small></div><span id="vision-provider-count">0 个接口</span></div>
+            <div class="mineru-table-heading"><div><strong>接口</strong><small>API Key 只保存在本机，保存后不再回显</small></div><span id="vision-provider-count">0 个接口</span></div>
             <div id="vision-provider-list" class="vision-provider-list"></div>
             <div class="settings-editor vision-editor-card" id="vision-editor-card">
               <div class="settings-editor-head">
@@ -682,7 +682,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" onclick="toggleVisionBaseList(event)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div id="vision-base-pop" class="vision-model-pop" hidden></div>
                   </div>
-                  <small>选服务商会自动带出名称，也可粘贴 OpenAI 兼容地址。</small>
+                  <small>选择服务商会自动填写名称和地址；也可以直接粘贴 OpenAI 兼容接口地址</small>
                 </div>
                 <div class="settings-field">
                   <label for="vision-api-key">API Key</label>
@@ -690,7 +690,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <input id="vision-api-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key">
                     <button id="vision-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('vision-api-key','vision-key-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
                   </div>
-                  <small>只保存在本机；编辑时留空即保留原密钥。</small>
+                  <small>只保存在本机；编辑时留空即保留原密钥</small>
                 </div>
                 <div class="settings-field">
                   <label for="vision-provider-name">显示名称 <span class="settings-field-optional">（可选）</span></label>
@@ -705,7 +705,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                     <button id="vision-model-refresh" class="action-btn settings-model-fetch" type="button" onclick="fetchVisionModels()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button>
                   </div>
-                  <small id="vision-model-hint" class="vision-model-hint">填好地址和 Key 后自动读取；接口不支持时手动输入。</small>
+                  <small id="vision-model-hint" class="vision-model-hint">填好地址和 Key 后会自动读取模型列表；读取失败也可以手动输入型号</small>
                 </div>
                 <div class="settings-editor-actions">
                   <span id="vision-save-hint" class="settings-hint"></span>
@@ -730,7 +730,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="citation-format-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">引文格式</span><span class="settings-section-note">选择搜索结果“复制出处”下拉中显示的格式</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">引文格式</span><span class="settings-section-note">选择搜索结果「复制出处」下拉中显示的格式</span></span>
             <span class="settings-status" id="citation-formats-current">已启用 2 种</span>
             </div>
             <div class="settings-collapse-body" id="citation-format-body">
@@ -760,7 +760,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="bib-completion-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">书目补全</span><span class="settings-section-note">联网补全（知网 / Crossref / 图书目录）自动采用候选的匹配门槛</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">书目补全</span><span class="settings-section-note">联网补全（知网 / Crossref / 图书目录）时，自动采用候选的匹配门槛</span></span>
             </div>
             <div class="settings-collapse-body" id="bib-completion-body">
             <div class="auto-match-setting">
@@ -770,7 +770,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               </div>
               <input class="auto-match-range" id="online-auto-match-range" type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="setOnlineAutoMatchThreshold(this.value)">
               <div class="auto-match-scale"><span>80%（更宽松）</span><span>100%（最严格）</span></div>
-              <small class="auto-match-hint">批量联网补全时，唯一候选的匹配分达到或超过此值才自动采用；低于此值只弹出候选列表，由你人工核对后选择。调低更省事，调高更稳妥。</small>
+              <small class="auto-match-hint">批量补全时，如果只有一个候选且匹配分达到此值，就自动采用；低于此值则弹出候选列表，由你核对后选择。调低更省事，调高更稳妥</small>
             </div>
             <div class="auto-match-setting">
               <div class="auto-match-head">
@@ -780,7 +780,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <button class="seg-btn active" type="button" data-deflang="chinese" onclick="setLibDefaultLanguage(this)">中文</button>
                 <button class="seg-btn" type="button" data-deflang="foreign" onclick="setLibDefaultLanguage(this)">外文</button>
               </div>
-              <small class="auto-match-hint">选「中文」时，实际存在的简体中文、繁体中文等中文细类排在外语前；选「外文」时，实际存在的英语、德语等外文细类排在中文前。只影响文献库语言筛选的主次顺序，不改变联网数据源的选择——中文期刊始终查知网。</small>
+              <small class="auto-match-hint">选「中文」时，简体中文、繁体中文等细类排在外语前；选「外文」时，英语、德语等排在中文前。这里只影响文献库语言筛选的排序，不改变联网补全的数据源——中文期刊始终查知网</small>
             </div>
             </div>
           </section>

@@ -136,10 +136,10 @@ function renderDocumentGroupManager() {
     + '<input id="grp-create-input" class="grp-input" type="text" placeholder="新建作品组标题…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
     + '<button class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
   if (selectedCount) {
-    html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组。</div>';
+    html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组</div>';
   }
   if (!libraryStore.documentGroups.length) {
-    html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹。</div>';
+    html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹</div>';
   }
   libraryStore.documentGroups.forEach(function(g) {
     var gid = esc(g.document_group_id);
@@ -150,7 +150,7 @@ function renderDocumentGroupManager() {
       + '</div>';
     var members = g.members || [];
     if (!members.length) {
-      html += '<div class="grp-empty grp-empty--sm">尚无成员。在文献列表勾选后用底部「设置作品组」加入。</div>';
+      html += '<div class="grp-empty grp-empty--sm">尚无成员。在文献列表勾选后用底部「设置作品组」加入</div>';
     } else {
       html += '<div class="grp-members">' + members.map(function(m) {
         var sid = esc(m.source_file_id);
@@ -205,7 +205,7 @@ async function renameDocumentGroupInline(groupId, value) {
 async function deleteDocumentGroupAction(groupId) {
   var group = documentGroupById(groupId);
   var name = group ? group.title : '';
-  if (!await showAppConfirm('删除作品组“' + name + '”只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
+  if (!await showAppConfirm('删除作品组「' + name + '」只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
   try { await postGroupOp('/api/document-groups/delete', {document_group_id: groupId}, '作品组已删除（文献仍保留）'); }
   catch (e) { showToast(e.message || '删除失败', 'danger'); }
 }

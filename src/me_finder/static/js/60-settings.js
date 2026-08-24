@@ -278,7 +278,7 @@ async function deleteCurrentCustomTheme() {
   var def = custom[id];
   if (!def) return;
   var confirmed = await showAppConfirm(
-    '将删除自定义主题“' + (def.name || '自定义主题') + '”。此操作无法撤销。',
+    '将删除自定义主题「' + (def.name || '自定义主题') + '」。此操作无法撤销。',
     { title: '删除自定义主题？', confirmText: '删除', tone: 'danger' }
   );
   if (!confirmed) return;

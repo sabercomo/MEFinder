@@ -488,7 +488,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);", HTML)
         # 加载时以后端为准。
         self.assertIn("data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign'", HTML)
-        self.assertIn("实际存在的简体中文、繁体中文等中文细类排在外语前", HTML)
+        self.assertIn("简体中文、繁体中文等细类排在外语前", HTML)
 
     def test_language_facets_are_dynamic_and_filter_card_fits_document_types(self) -> None:
         self.assertIn("libraryLanguageFacetOptions(scopeSources, libraryStore.defaultLanguage)", HTML)

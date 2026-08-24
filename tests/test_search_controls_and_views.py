@@ -492,7 +492,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('<details class="mineru-local-advanced" open', HTML)
         self.assertNotIn('<details class="mineru-local-settings"', HTML)
         self.assertIn('高级：连接自部署服务', HTML)
-        self.assertIn('ME Finder 托管运行时', HTML)
+        self.assertIn('MEFinder 托管运行时', HTML)
         self.assertIn('安装推荐配置', HTML)
         self.assertIn('VLM 高精度', HTML)
         self.assertIn("fetch('/api/mineru-local'", HTML)
@@ -506,9 +506,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("managed.eta_seconds", HTML)
         self.assertIn("正在检测网速…", HTML)
         self.assertIn("'预计剩余约 '", HTML)
-        self.assertIn("导入 PDF 时保持“自动选择”即可", HTML)
-        self.assertIn("扫描类日文 PDF 和古籍 PDF 会分别优先使用日文 OCR、古籍 OCR", HTML)
-        self.assertIn("本地识别失败时自动转入 MinerU", HTML)
+        self.assertIn("导入 PDF 时保持「自动选择」即可", HTML)
+        self.assertIn("日文扫描件优先走日文 OCR，古籍优先走古籍 OCR", HTML)
+        self.assertIn("本地识别失败会自动改用 MinerU 完成", HTML)
         local_ocr_loader = HTML[
             HTML.index("async function loadLocalOCRConfig()"):
             HTML.index("function localOCRPayload()")
