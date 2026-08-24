@@ -107,26 +107,6 @@ class _ProfileState:
     thread: Optional[threading.Thread] = None
 
 
-class _InstallGroup:
-    """Coordinates a one-click install of several profiles at once.
-
-    Each profile installs on its own worker thread (no service auto-start); once
-    the last one finishes, the recommended profile's service is started.
-    """
-
-    def __init__(self, pending: set[str], start_profile: str) -> None:
-        self._pending = set(pending)
-        self._start_profile = start_profile
-        self._lock = threading.Lock()
-
-    def notify(self, profile_id: str, manager: "ManagedMinerU") -> None:
-        with self._lock:
-            self._pending.discard(profile_id)
-            done = not self._pending
-        if done:
-            manager._finish_group(self._start_profile)
-
-
 def load_managed_mineru_manifest(
     path: Path,
     *,
@@ -320,13 +300,7 @@ class ManagedMinerU:
             self._current_manifest_path(), platform_key=self.platform_key
         )
         self._lock = threading.RLock()
-        # Per-profile operation locks let Pipeline and VLM install concurrently;
-        # a single shared bootstrap lock still serialises the steps that write to
-        # the shared _tools/_python directories (uv download and venv creation).
-        self._operation_locks = {
-            profile_id: threading.Lock() for profile_id in self.manifest.profiles
-        }
-        self._bootstrap_lock = threading.Lock()
+        self._operation_lock = threading.Lock()
         self._service_process: Optional[subprocess.Popen] = None
         self._service_profile = ""
         self._service_endpoint = ""
@@ -381,21 +355,15 @@ class ManagedMinerU:
                 )
                 for profile_id in manifest.profiles
             }
-            self._operation_locks = {
-                profile_id: self._operation_locks.get(profile_id, threading.Lock())
-                for profile_id in manifest.profiles
-            }
 
     def perform(self, payload: Mapping[str, object]) -> Dict[str, object]:
         requested = str(payload.get("profile") or "auto").strip().lower()
-        action = str(payload.get("action") or "").strip().lower()
-        if requested == "all":
-            return self._perform_group_install(action)
         profile_id = (
             str(self._hardware["recommended_profile"])
             if requested == "auto"
             else requested
         )
+        action = str(payload.get("action") or "").strip().lower()
         if profile_id not in self.manifest.profiles:
             raise ManagedMinerUError("未知的 MinerU 本地组件。")
         if profile_id not in self.manifest.supported_profiles:
@@ -412,50 +380,6 @@ class ManagedMinerU:
             raise ManagedMinerUError("不支持的 MinerU 本地组件操作。")
         self._start_operation(profile_id, action)
         return self.summary()
-
-    def _perform_group_install(self, action: str) -> Dict[str, object]:
-        if action not in {"install", "update"}:
-            raise ManagedMinerUError("不支持的 MinerU 本地组件操作。")
-        targets = []
-        for profile_id in self.manifest.supported_profiles:
-            if profile_id == "vlm" and not self._hardware["vlm_supported"]:
-                continue
-            if action == "install" and self._installed(profile_id):
-                continue
-            if action == "update" and not self._update_available(profile_id):
-                continue
-            targets.append(profile_id)
-        if not targets:
-            raise ManagedMinerUError("所选 MinerU 组件均已安装，无需重复下载。")
-        with self._lock:
-            busy = [
-                profile_id
-                for profile_id in targets
-                if self._states[profile_id].operation is not None
-            ]
-        if busy:
-            raise ManagedMinerUError("另一个 MinerU 组件正在操作。")
-        recommended = str(self._hardware["recommended_profile"])
-        start_profile = recommended if recommended in targets else targets[0]
-        if len(targets) == 1:
-            # Only one eligible profile (e.g. CPU-only hardware): keep the normal
-            # single-profile flow that auto-starts the service on completion.
-            self._start_operation(targets[0], action)
-            return self.summary()
-        group = _InstallGroup(set(targets), start_profile)
-        for profile_id in targets:
-            self._start_operation(profile_id, action, auto_start=False, group=group)
-        return self.summary()
-
-    def _finish_group(self, start_profile: str) -> None:
-        # Called once every profile in a combined install has finished. A single
-        # local MinerU service runs at a time, so we start only the recommended
-        # profile that actually installed successfully.
-        if start_profile and self._installed(start_profile):
-            try:
-                self._start_operation(start_profile, "start")
-            except ManagedMinerUError:
-                pass
 
     def start_installed_if_managed(self) -> bool:
         config = mineru_local_config_summary(self.config_path)
@@ -487,14 +411,7 @@ class ManagedMinerU:
                         self._stop_process(state.process)
         self.stop()
 
-    def _start_operation(
-        self,
-        profile_id: str,
-        action: str,
-        *,
-        auto_start: bool = True,
-        group: Optional["_InstallGroup"] = None,
-    ) -> None:
+    def _start_operation(self, profile_id: str, action: str) -> None:
         installed = self._installed(profile_id)
         update_available = self._update_available(profile_id)
         if action == "install" and installed:
@@ -503,8 +420,8 @@ class ManagedMinerU:
             raise ManagedMinerUError("该 MinerU 组件没有可安装的更新。")
         if action in {"start", "validate", "uninstall"} and not installed:
             raise ManagedMinerUError("该 MinerU 组件尚未安装。")
-        if not self._operation_locks[profile_id].acquire(blocking=False):
-            raise ManagedMinerUError("该 MinerU 组件正在操作。")
+        if not self._operation_lock.acquire(blocking=False):
+            raise ManagedMinerUError("另一个 MinerU 组件正在操作。")
         initial = {
             "install": "provisioning",
             "update": "provisioning",
@@ -528,28 +445,19 @@ class ManagedMinerU:
             state.cancel_event = threading.Event()
             thread = threading.Thread(
                 target=self._operation_worker,
-                args=(profile_id, action, auto_start, group),
+                args=(profile_id, action),
                 name=f"managed-mineru-{action}-{profile_id}",
                 daemon=True,
             )
             state.thread = thread
         thread.start()
 
-    def _operation_worker(
-        self,
-        profile_id: str,
-        action: str,
-        auto_start: bool = True,
-        group: Optional["_InstallGroup"] = None,
-    ) -> None:
+    def _operation_worker(self, profile_id: str, action: str) -> None:
         try:
             if action in {"install", "update"}:
                 self._install(profile_id)
-                if auto_start:
-                    self._start_service(profile_id)
-                    message = "安装并启动完成"
-                else:
-                    message = "安装完成"
+                self._start_service(profile_id)
+                message = "安装并启动完成"
             elif action == "start":
                 self._start_service(profile_id)
                 message = "本地服务已启动"
@@ -591,9 +499,7 @@ class ManagedMinerU:
                 state.process = None
                 state.operation = None
                 state.thread = None
-            self._operation_locks[profile_id].release()
-            if group is not None:
-                group.notify(profile_id, self)
+            self._operation_lock.release()
 
     def _install(self, profile_id: str) -> None:
         platform_manifest = self.manifest.platform
@@ -608,34 +514,27 @@ class ManagedMinerU:
         published = False
         staging.mkdir(parents=True)
         try:
-            install_log = staging / "install.log"
+            uv_path = self._ensure_uv(profile_id, platform_manifest)
             environment = self._install_environment(staging)
-            # uv itself and the managed CPython land in the shared _tools/_python
-            # directories, so serialise this bootstrap while concurrent installs
-            # (Pipeline + VLM) run their per-staging downloads in parallel.
-            with self._bootstrap_lock:
-                self._raise_if_cancelled(profile_id)
-                uv_path = self._ensure_uv(profile_id, platform_manifest)
-                self._set_state(
-                    profile_id, "provisioning", message="正在创建独立 Python 环境"
-                )
-                self._run_command(
-                    profile_id,
-                    [
-                        str(uv_path),
-                        "venv",
-                        "--python",
-                        self.manifest.python,
-                        "--managed-python",
-                        "--relocatable",
-                        str(staging / "venv"),
-                    ],
-                    cwd=staging,
-                    environment=environment,
-                    log_path=install_log,
-                    timeout=1800,
-                    track_uv_downloads=True,
-                )
+            install_log = staging / "install.log"
+            self._set_state(profile_id, "provisioning", message="正在创建独立 Python 环境")
+            self._run_command(
+                profile_id,
+                [
+                    str(uv_path),
+                    "venv",
+                    "--python",
+                    self.manifest.python,
+                    "--managed-python",
+                    "--relocatable",
+                    str(staging / "venv"),
+                ],
+                cwd=staging,
+                environment=environment,
+                log_path=install_log,
+                timeout=1800,
+                track_uv_downloads=True,
+            )
             python_path = staging / platform_manifest.venv_python
             self._set_state(
                 profile_id,

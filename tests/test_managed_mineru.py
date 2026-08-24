@@ -243,48 +243,6 @@ else:
         self.assertFalse(removed["installed"])
         self.assertFalse(mineru_local_config_summary(self.config)["enabled"])
 
-    def test_install_all_installs_both_profiles_and_starts_recommended(self) -> None:
-        manager = self._manager()
-        self.addCleanup(manager.close)
-        manager.perform({"profile": "all", "action": "install"})
-        pipeline = self._wait(manager, "pipeline")
-        vlm = self._wait(manager, "vlm")
-        self.assertTrue(pipeline["installed"])
-        self.assertTrue(vlm["installed"])
-        # A single local service runs at a time: only the recommended VLM starts.
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline:
-            service = manager.summary()["service"]
-            if service["running"]:
-                break
-            time.sleep(0.05)
-        self.assertTrue(service["running"])
-        self.assertEqual(service["profile"], "vlm")
-        self.assertEqual(mineru_local_config_summary(self.config)["managed_profile"], "vlm")
-
-    def test_install_all_falls_back_to_single_profile_without_vlm(self) -> None:
-        manager = ManagedMinerU(
-            self.runtime,
-            self.config,
-            manifest_path=self._manifest(),
-            platform_key="test-platform",
-            hardware_detector=lambda: {
-                "kind": "cpu",
-                "name": "CPU only",
-                "vlm_supported": False,
-                "recommended_profile": "pipeline",
-            },
-        )
-        self.addCleanup(manager.close)
-        manager.perform({"profile": "all", "action": "install"})
-        pipeline = self._wait(manager, "pipeline")
-        self.assertTrue(pipeline["installed"])
-        vlm = next(
-            item for item in manager.summary()["profiles"] if item["profile"] == "vlm"
-        )
-        self.assertFalse(vlm["installed"])
-        self.assertTrue(manager.summary()["service"]["running"])
-
     def test_auto_selects_vlm_on_qualified_gpu(self) -> None:
         manager = self._manager()
         self.addCleanup(manager.close)
