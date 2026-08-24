@@ -12,6 +12,7 @@ from src.me_finder.local_ocr_provider import (
     LocalOCRProvider,
     LocalOCRProbeEvidence,
     RenderedOCRPage,
+    _text_band_counts,
     choose_local_ocr_engine,
     normalize_ndl_page,
     sample_page_indices,
@@ -254,8 +255,12 @@ source = Path(args.sourceimg)
 
         def strong_ancient(provider, *_args, **_kwargs):
             if provider.provider_id == "ndlocr-lite":
-                return LocalOCRProbeEvidence("ndlocr-lite", 10, 100, 8, 3)
-            return LocalOCRProbeEvidence("ndlkotenocr-lite", 8, 80, 8, 3)
+                return LocalOCRProbeEvidence(
+                    "ndlocr-lite", 10, 100, 8, 3, 20, 1, 20
+                )
+            return LocalOCRProbeEvidence(
+                "ndlkotenocr-lite", 8, 80, 8, 3, 0, 1, 20
+            )
 
         with (
             mock.patch("fitz.open", return_value=fake_document),
@@ -282,8 +287,12 @@ source = Path(args.sourceimg)
 
         def weak_ancient(provider, *_args, **_kwargs):
             if provider.provider_id == "ndlocr-lite":
-                return LocalOCRProbeEvidence("ndlocr-lite", 10, 100, 8, 3)
-            return LocalOCRProbeEvidence("ndlkotenocr-lite", 2, 10, 2, 3)
+                return LocalOCRProbeEvidence(
+                    "ndlocr-lite", 10, 100, 8, 3, 20, 1, 20
+                )
+            return LocalOCRProbeEvidence(
+                "ndlkotenocr-lite", 2, 10, 2, 3, 0, 1, 20
+            )
 
         with (
             mock.patch("fitz.open", return_value=fake_document),
@@ -305,7 +314,116 @@ source = Path(args.sourceimg)
             )
 
         self.assertEqual(selected.provider_id, "ndlocr-lite")
-        self.assertEqual(evidence["strategy"], "modern_default")
+        self.assertEqual(evidence["strategy"], "japanese_script")
+
+    def test_single_ancient_engine_rejects_horizontal_modern_book(self) -> None:
+        ancient = self._engine("ndlkotenocr-lite")
+        fake_document = mock.MagicMock()
+        fake_document.__len__.return_value = 184
+
+        with (
+            mock.patch("fitz.open", return_value=fake_document),
+            mock.patch.object(
+                LocalOCRProvider,
+                "probe",
+                autospec=True,
+                return_value=LocalOCRProbeEvidence(
+                    "ndlkotenocr-lite", 120, 2400, 4, 3, 0, 20, 1
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ParserProviderError,
+                "抽样页不是日文文本，也不是竖排古籍版式",
+            ):
+                choose_local_ocr_engine(
+                    (ancient,),
+                    pdf_path=self.source,
+                    work_dir=self.root / "probe-horizontal",
+                    render_dpi=200,
+                    probe_pages=3,
+                    timeout_seconds_per_page=30,
+                    blank_ink_ratio=0.001,
+                )
+
+    def test_single_ancient_engine_accepts_vertical_book(self) -> None:
+        ancient = self._engine("ndlkotenocr-lite")
+        fake_document = mock.MagicMock()
+        fake_document.__len__.return_value = 120
+
+        with (
+            mock.patch("fitz.open", return_value=fake_document),
+            mock.patch.object(
+                LocalOCRProvider,
+                "probe",
+                autospec=True,
+                return_value=LocalOCRProbeEvidence(
+                    "ndlkotenocr-lite", 80, 1600, 70, 3, 0, 1, 20
+                ),
+            ),
+        ):
+            selected, evidence = choose_local_ocr_engine(
+                (ancient,),
+                pdf_path=self.source,
+                work_dir=self.root / "probe-vertical",
+                render_dpi=200,
+                probe_pages=3,
+                timeout_seconds_per_page=30,
+                blank_ink_ratio=0.001,
+            )
+
+        self.assertEqual(selected.provider_id, "ndlkotenocr-lite")
+        self.assertEqual(evidence["strategy"], "vertical_geometry")
+
+    def test_single_modern_engine_rejects_horizontal_non_japanese_book(self) -> None:
+        modern = self._engine("ndlocr-lite")
+        fake_document = mock.MagicMock()
+        fake_document.__len__.return_value = 184
+
+        with (
+            mock.patch("fitz.open", return_value=fake_document),
+            mock.patch.object(
+                LocalOCRProvider,
+                "probe",
+                autospec=True,
+                return_value=LocalOCRProbeEvidence(
+                    "ndlocr-lite", 120, 2400, 4, 3, 0, 20, 1
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ParserProviderError,
+                "抽样页不是日文文本，也不是竖排古籍版式",
+            ):
+                choose_local_ocr_engine(
+                    (modern,),
+                    pdf_path=self.source,
+                    work_dir=self.root / "probe-non-japanese",
+                    render_dpi=200,
+                    probe_pages=3,
+                    timeout_seconds_per_page=30,
+                    blank_ink_ratio=0.001,
+                )
+
+    def test_text_band_counts_distinguish_horizontal_and_vertical_lines(self) -> None:
+        width = 30
+        height = 30
+        horizontal = bytearray([255] * (width * height))
+        vertical = bytearray([255] * (width * height))
+        for anchor in (5, 15, 25):
+            for offset in (0, 1):
+                for position in range(2, 28):
+                    horizontal[(anchor + offset) * width + position] = 0
+                    vertical[position * width + anchor + offset] = 0
+
+        self.assertEqual(
+            _text_band_counts(bytes(horizontal), width, height, 1),
+            (3, 1),
+        )
+        self.assertEqual(
+            _text_band_counts(bytes(vertical), width, height, 1),
+            (1, 3),
+        )
 
 
 if __name__ == "__main__":

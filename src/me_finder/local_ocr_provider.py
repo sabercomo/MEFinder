@@ -38,6 +38,8 @@ class RenderedOCRPage:
     pdf_width: float
     pdf_height: float
     ink_ratio: float
+    horizontal_text_bands: int = 0
+    vertical_text_bands: int = 0
 
 
 @dataclass(frozen=True)
@@ -47,10 +49,25 @@ class LocalOCRProbeEvidence:
     character_count: int
     vertical_lines: int
     page_count: int
+    kana_characters: int = 0
+    horizontal_text_bands: int = 0
+    vertical_text_bands: int = 0
 
     @property
     def vertical_ratio(self) -> float:
         return self.vertical_lines / max(self.valid_lines, 1)
+
+    @property
+    def kana_ratio(self) -> float:
+        return self.kana_characters / max(self.character_count, 1)
+
+    @property
+    def vertical_layout(self) -> bool:
+        return (
+            self.vertical_text_bands >= 3
+            and self.vertical_text_bands
+            >= self.horizontal_text_bands * 1.5
+        )
 
 
 PageRenderer = Callable[
@@ -255,8 +272,21 @@ class LocalOCRProvider(ParserProvider):
         valid_lines = 0
         character_count = 0
         vertical_lines = 0
+        kana_characters = 0
+        horizontal_text_bands = sum(
+            page.horizontal_text_bands for page in rendered
+        )
+        vertical_text_bands = sum(
+            page.vertical_text_bands for page in rendered
+        )
+        vertical_layout = (
+            vertical_text_bands >= 3
+            and vertical_text_bands >= horizontal_text_bands * 1.5
+        )
         for page in rendered:
             if page.ink_ratio <= self.blank_ink_ratio:
+                continue
+            if self.provider_id == "ndlkotenocr-lite" and not vertical_layout:
                 continue
             page_output = Path(output_dir) / f"raw-{page.local_page_index:06d}"
             page_output.mkdir(parents=True, exist_ok=True)
@@ -279,6 +309,13 @@ class LocalOCRProvider(ParserProvider):
                     continue
                 valid_lines += 1
                 character_count += len(text)
+                kana_characters += sum(
+                    1
+                    for character in text
+                    if "\u3040" <= character <= "\u30ff"
+                    or "\u31f0" <= character <= "\u31ff"
+                    or "\uff66" <= character <= "\uff9d"
+                )
                 min_x, min_y, max_x, max_y = polygon
                 if max_y - min_y > max_x - min_x:
                     vertical_lines += 1
@@ -288,6 +325,9 @@ class LocalOCRProvider(ParserProvider):
             character_count=character_count,
             vertical_lines=vertical_lines,
             page_count=len(rendered),
+            kana_characters=kana_characters,
+            horizontal_text_bands=horizontal_text_bands,
+            vertical_text_bands=vertical_text_bands,
         )
 
     def _run_page(self, image_path: Path, output_dir: Path) -> None:
@@ -474,6 +514,12 @@ def render_pdf_pages(
                 alpha=False,
                 colorspace=fitz.csRGB,
             )
+            horizontal_text_bands, vertical_text_bands = _text_band_counts(
+                pixmap.samples,
+                int(pixmap.width),
+                int(pixmap.height),
+                int(pixmap.n),
+            )
             image_path = output / f"page-{page_index + 1:06d}.png"
             image_path.write_bytes(pixmap.tobytes("png"))
             pages.append(
@@ -490,6 +536,8 @@ def render_pdf_pages(
                         int(pixmap.height),
                         int(pixmap.n),
                     ),
+                    horizontal_text_bands=horizontal_text_bands,
+                    vertical_text_bands=vertical_text_bands,
                 )
             )
         return pages
@@ -533,8 +581,6 @@ def choose_local_ocr_engine(
             "no local OCR engine is available",
             provider_id="local-ocr",
         )
-    if len(candidates) == 1:
-        return candidates[0], {"strategy": "only_available"}
     try:
         import fitz  # type: ignore
     except Exception as exc:
@@ -588,20 +634,38 @@ def choose_local_ocr_engine(
             + "; ".join(f"{key}: {value}" for key, value in failures.items()),
             provider_id="local-ocr",
         )
-    selected = modern if modern_evidence is not None else ancient
-    strategy = "modern_default"
-    if (
+    layout_evidence = modern_evidence or ancient_evidence
+    ancient_matches = bool(
         ancient is not None
-        and modern_evidence is not None
         and ancient_evidence is not None
-        and modern_evidence.vertical_ratio >= 0.55
-        and ancient_evidence.valid_lines
-        >= max(1, math.floor(modern_evidence.valid_lines * 0.6))
-        and ancient_evidence.character_count
-        >= math.floor(modern_evidence.character_count * 0.5)
-    ):
+        and layout_evidence is not None
+        and layout_evidence.vertical_layout
+        and (
+            modern_evidence is None
+            or (
+                ancient_evidence.valid_lines
+                >= max(1, math.floor(modern_evidence.valid_lines * 0.6))
+                and ancient_evidence.character_count
+                >= math.floor(modern_evidence.character_count * 0.5)
+            )
+        )
+    )
+    modern_matches = bool(
+        modern_evidence is not None
+        and modern_evidence.kana_characters >= 3
+        and modern_evidence.kana_ratio >= 0.05
+    )
+    if ancient_matches:
         selected = ancient
         strategy = "vertical_geometry"
+    elif modern_matches:
+        selected = modern
+        strategy = "japanese_script"
+    else:
+        raise ParserProviderError(
+            "抽样页不是日文文本，也不是竖排古籍版式",
+            provider_id="local-ocr",
+        )
     assert selected is not None
     return selected, {
         "strategy": strategy,
@@ -612,6 +676,10 @@ def choose_local_ocr_engine(
                 "character_count": item.character_count,
                 "vertical_lines": item.vertical_lines,
                 "vertical_ratio": round(item.vertical_ratio, 4),
+                "kana_characters": item.kana_characters,
+                "kana_ratio": round(item.kana_ratio, 4),
+                "horizontal_text_bands": item.horizontal_text_bands,
+                "vertical_text_bands": item.vertical_text_bands,
             }
             for provider_id, item in evidence.items()
         },
@@ -662,6 +730,57 @@ def _ink_ratio(samples: bytes, width: int, height: int, channels: int) -> float:
             dark += 1
         sampled += 1
     return dark / max(sampled, 1)
+
+
+def _text_band_counts(
+    samples: bytes,
+    width: int,
+    height: int,
+    channels: int,
+) -> Tuple[int, int]:
+    step = max(1, max(width, height) // 1000)
+    sampled_width = len(range(0, width, step))
+    sampled_height = len(range(0, height, step))
+    row_counts = [0] * sampled_height
+    column_counts = [0] * sampled_width
+    color_channels = min(channels, 3)
+    for sampled_y, y in enumerate(range(0, height, step)):
+        row_offset = y * width * channels
+        for sampled_x, x in enumerate(range(0, width, step)):
+            pixel_offset = row_offset + x * channels
+            if (
+                sum(
+                    samples[
+                        pixel_offset : pixel_offset + color_channels
+                    ]
+                )
+                < 190 * color_channels
+            ):
+                row_counts[sampled_y] += 1
+                column_counts[sampled_x] += 1
+    return (
+        _count_density_bands(
+            row_counts,
+            max(2, math.ceil(sampled_width * 0.01)),
+        ),
+        _count_density_bands(
+            column_counts,
+            max(2, math.ceil(sampled_height * 0.01)),
+        ),
+    )
+
+
+def _count_density_bands(values: Sequence[int], threshold: int) -> int:
+    bands = 0
+    inactive = 2
+    for value in values:
+        if value >= threshold:
+            if inactive >= 2:
+                bands += 1
+            inactive = 0
+        else:
+            inactive += 1
+    return bands
 
 
 def _blank_payload(page: RenderedOCRPage) -> Dict[str, object]:

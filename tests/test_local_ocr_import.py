@@ -61,7 +61,7 @@ output = Path(args.output)
 (output / f'{source.stem}.json').write_text(json.dumps({
     'contents': [[{
         'id': 1,
-        'text': '識別本文',
+        'text': 'これは識別本文です',
         'boundingBox': [[20, 30], [20, 80], [100, 80], [100, 30]],
         'isVertical': 'false',
         'confidence': 0.9,
@@ -98,7 +98,7 @@ output = Path(args.output)
             )
 
             self.assertEqual(result["provider_id"], "ndlocr-lite")
-            self.assertEqual(result["selection"]["strategy"], "only_available")
+            self.assertEqual(result["selection"]["strategy"], "japanese_script")
             self.assertEqual(progress[-1]["completed"], 1)
             attachment = load_import_config(config_path)["documents"][0][
                 "parser_results"
@@ -114,7 +114,7 @@ output = Path(args.output)
                     / "content_list.json"
                 ).read_text(encoding="utf-8")
             )
-            self.assertEqual(content[0]["text"], "識別本文")
+            self.assertEqual(content[0]["text"], "これは識別本文です")
             self.assertEqual(content[0]["page_idx"], 0)
 
 
