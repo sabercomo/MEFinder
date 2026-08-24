@@ -289,10 +289,18 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：传递系统代理并收敛 MinerU 安装失败文案。
     # 0.4.7 后续：收敛 Hugging Face 模型下载失败文案。
     # 0.4.7 后续：区分模型分片处理与实时传输速度。
+    # 0.4.7 后续：MinerU 与其他解析 API 设置页改为使用完整内容宽度。
+    # 0.4.7 后续：解析接口/账号的添加编辑器改为卡片 + 标签左/控件右两栏 + 底部操作条。
+    # 0.4.7 后续：收敛编辑器说明文案，MinerU Token 增加"前往获取"外链（系统浏览器）。
+    # 0.4.7 后续：编辑器说明与外链统一移到输入框下方（右列），左列只留标签。
+    # 0.4.7 后续：导入队列“全部取消”覆盖所有未完成任务，并仅进行一次批量确认。
+    # 0.4.7 后续：MinerU 本地部署默认展开，并同步托管服务停止后的汇总状态。
+    # 0.4.7 后续：MinerU 本地部署对齐本地 OCR 的扁平行式布局，自部署设置默认折叠。
+    # 0.4.7 后续：MinerU 本地部署标题字号与本地 OCR 设置标题对齐。
     BASELINE_SHA256 = (
-        "41d3fa8347a4114b641c0db9d7460d14f4cf47c0e8b45f4b8abd499cc3485a8a"
+        "a0e175ea9258f4acb5b887e2694a6aabc402c81ff522673fa04cc05b476ddba3"
     )
-    BASELINE_BYTES = 849261
+    BASELINE_BYTES = 853669
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

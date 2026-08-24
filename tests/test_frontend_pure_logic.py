@@ -1725,6 +1725,58 @@ class MineruLocalDisplayTests(unittest.TestCase):
             ),
         })
 
+    def test_managed_summary_stops_reporting_running_after_service_stops(self):
+        tail = r"""
+        function el() { return {textContent:'', className:'', hidden:false, disabled:false}; }
+        var elements = {};
+        [
+          'mineru-local-status', 'managed-mineru-pipeline-state',
+          'managed-mineru-pipeline-install', 'managed-mineru-pipeline-start',
+          'managed-mineru-pipeline-stop', 'managed-mineru-pipeline-uninstall',
+          'managed-mineru-pipeline-cancel', 'managed-mineru-auto-install',
+          'managed-mineru-hint'
+        ].forEach(function(id) { elements[id] = el(); });
+        globalThis.document = {
+          getElementById:function(id) { return elements[id] || null; },
+          querySelector:function() { return {hidden:false}; }
+        };
+        mineruLocalConfig = {enabled:true, managed:true};
+        var profile = {profile:'pipeline', display_name:'Pipeline', supported:true, installed:true, state:'installed'};
+        renderManagedMineru({
+          supported:true,
+          hardware:{name:'CPU', recommended_profile:'pipeline'},
+          service:{running:true, profile:'pipeline', endpoint:'http://127.0.0.1:8000'},
+          profiles:[profile]
+        });
+        var whileRunning = elements['mineru-local-status'].textContent;
+        var whileVlmRunning = managedMineruSummaryLabel(
+          {enabled:true, managed:true, managed_profile:'vlm'},
+          {service:{running:true, profile:'vlm'}}
+        );
+        renderManagedMineru({
+          supported:true,
+          hardware:{name:'CPU', recommended_profile:'pipeline'},
+          service:{running:false},
+          profiles:[profile]
+        });
+        return {
+          whileRunning:whileRunning,
+          whileVlmRunning:whileVlmRunning,
+          afterStop:elements['mineru-local-status'].textContent,
+          state:elements['managed-mineru-pipeline-state'].textContent,
+          startHidden:elements['managed-mineru-pipeline-start'].hidden,
+          stopHidden:elements['managed-mineru-pipeline-stop'].hidden
+        };
+        """
+        self.assertEqual(_vision_eval(tail), {
+            "whileRunning": "Pipeline 运行中",
+            "whileVlmRunning": "VLM 运行中",
+            "afterStop": "已配置，未启动",
+            "state": "已安装",
+            "startHidden": False,
+            "stopHidden": True,
+        })
+
     def test_vlm_option_is_hidden_only_when_hardware_is_not_qualified(self):
         tail = r"""
         var vlmSection = {hidden:null};

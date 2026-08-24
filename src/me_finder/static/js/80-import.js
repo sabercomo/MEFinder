@@ -980,18 +980,25 @@ function resumableImportQueue() {
   });
 }
 
+function cancellableImportQueue() {
+  return importQueue.filter(function(item) {
+    return item.status !== 'done';
+  });
+}
+
 function syncResumeAllButton() {
   var resumeButton = document.getElementById('import-resume-all-btn');
   var cancelButton = document.getElementById('import-cancel-all-btn');
   if (!resumeButton && !cancelButton) return;
-  var count = resumableImportQueue().length;
+  var resumeCount = resumableImportQueue().length;
+  var cancelCount = cancellableImportQueue().length;
   if (resumeButton) {
-    resumeButton.style.display = count > 1 ? 'inline-flex' : 'none';
-    resumeButton.textContent = '全部继续导入（' + count + '）';
+    resumeButton.style.display = resumeCount > 1 ? 'inline-flex' : 'none';
+    resumeButton.textContent = '全部继续导入（' + resumeCount + '）';
   }
   if (cancelButton) {
-    cancelButton.style.display = count > 1 ? 'inline-flex' : 'none';
-    cancelButton.textContent = '全部取消（' + count + '）';
+    cancelButton.style.display = cancelCount > 0 ? 'inline-flex' : 'none';
+    cancelButton.textContent = '全部取消（' + cancelCount + '）';
   }
 }
 
@@ -1017,11 +1024,11 @@ async function resumeAllImports() {
 }
 
 async function cancelAllImports() {
-  var pending = resumableImportQueue();
+  var pending = cancellableImportQueue();
   if (!pending.length) return;
   if (!await showAppConfirm(
-    '将取消 ' + pending.length + ' 个中断任务。原始文件不会被删除',
-    {title:'全部取消中断任务？', confirmText:'全部取消', tone:'danger'}
+    '将取消 ' + pending.length + ' 个未完成的导入任务。原始文件不会被删除',
+    {title:'全部取消导入任务？', confirmText:'全部取消', tone:'danger'}
   )) return;
   var resumeButton = document.getElementById('import-resume-all-btn');
   var cancelButton = document.getElementById('import-cancel-all-btn');
@@ -1030,15 +1037,19 @@ async function cancelAllImports() {
   var failedCount = 0;
   for (var index = 0; index < pending.length; index += 1) {
     // 复用每条右上角 × 的持久化移除逻辑，串行处理以免并发改写任务日志。
-    if (!await removeImport(pending[index].id, {silent: true, deferRender: true})) {
+    if (!await removeImport(pending[index].id, {
+      silent: true,
+      deferRender: true,
+      skipConfirm: true
+    })) {
       failedCount += 1;
     }
   }
   renderImportQueue();
   if (failedCount) {
-    showToast('有 ' + failedCount + ' 个中断任务取消失败，请重试', 'warning');
+    showToast('有 ' + failedCount + ' 个导入任务取消失败，请重试', 'warning');
   } else {
-    showToast('已取消 ' + pending.length + ' 个中断任务', 'success');
+    showToast('已取消 ' + pending.length + ' 个导入任务', 'success');
   }
 }
 

@@ -348,6 +348,11 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
             r"\.settings-section\s*\{[^}]*max-width:\s*none;[^}]*margin:\s*0;",
         )
+        self.assertNotRegex(
+            HTML,
+            r"#(?:mineru-api|vision-api)-settings\.active[^{}]*\{[^}]*"
+            r"max-width:\s*\d",
+        )
         self.assertRegex(
             HTML,
             r"#appearance-card\.active\s*\{[^}]*max-width:\s*none",

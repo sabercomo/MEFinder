@@ -45,10 +45,10 @@ ACTIVE_INSTALL_STATES = frozenset(
     }
 )
 _UV_DOWNLOAD_PATTERN = re.compile(
-    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)$",
+    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)\r?$",
     re.MULTILINE,
 )
-_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+)$", re.MULTILINE)
+_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+?)\r?$", re.MULTILINE)
 _BINARY_SIZE_MULTIPLIERS = {
     "KiB": 1024,
     "MiB": 1024 * 1024,
@@ -214,12 +214,14 @@ class LocalOCRInstaller:
         manifest_path: Path | Callable[[], Path] = LOCAL_OCR_MANIFEST_FILE,
         platform_key: Optional[str] = None,
         catalog_summary: Optional[Callable[[], Dict[str, object]]] = None,
+        process_launcher: Callable = subprocess.Popen,
     ) -> None:
         self.runtime_root = Path(runtime_root).resolve()
         self.config_path = Path(config_path).resolve()
         self.component_root = self.runtime_root / LOCAL_OCR_COMPONENT_DIR
         self._manifest_path = manifest_path
         self._catalog_summary = catalog_summary
+        self.process_launcher = process_launcher
         self.engines, self.platform = load_local_ocr_installer_manifest(
             self._current_manifest_path(),
             platform_key=platform_key,
@@ -901,7 +903,7 @@ class LocalOCRInstaller:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("ab") as output:
             progress_log_offset = output.tell()
-            process = subprocess.Popen(
+            process = self.process_launcher(
                 list(command),
                 cwd=str(cwd),
                 env=dict(environment),

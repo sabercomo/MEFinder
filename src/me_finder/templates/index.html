@@ -550,7 +550,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                           <input id="mineru-token" class="settings-input settings-input--mono" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token">
                           <button id="mineru-token-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
                         </div>
-                        <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机。</small>
+                        <div class="settings-field-aside">
+                          <a id="mineru-token-link" class="settings-field-link" href="javascript:void(0)" onclick="openMineruTokenPage()">前往 MinerU 获取 Token</a>
+                          <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机。</small>
+                        </div>
                       </div>
                       <div class="settings-field">
                         <label for="mineru-expires-at">到期日期 <span class="settings-field-optional">（可选）</span></label>
@@ -565,12 +568,33 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                   </div>
               </section>
-              <details class="mineru-local-settings" id="mineru-local-settings">
-                <summary>
-                  <span class="mineru-local-summary-copy"><strong>本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
+            </div>
+          </section>
+          <section class="settings-section" id="local-ocr-settings" role="tabpanel">
+            <div class="settings-section-head">
+              <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
+              <span id="local-ocr-status" class="settings-status">读取中…</span>
+            </div>
+            <div class="settings-collapse-body" id="local-ocr-body">
+              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>安装并启用后，导入 PDF 时保持“自动选择”即可：扫描类日文 PDF 和古籍 PDF 会分别优先使用日文 OCR、古籍 OCR；本地识别失败时自动转入 MinerU。点击下载会自动安装独立 Python 环境与 CPU 模型；组件和路径只保存在本机，不进入备份。</span></div>
+              <div class="local-ocr-component-list">
+                <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
+                  <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装包含模型，首次下载耗时取决于网络。</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
+                </section>
+                <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
+                  <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><div class="local-ocr-head-actions"><span id="local-ocr-ancient-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用。</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
+                </section>
+              </div>
+              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存启用与高级设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              <section class="mineru-local-settings" id="mineru-local-settings">
+                <div class="mineru-local-section-head">
+                  <span class="mineru-local-summary-copy"><strong>MinerU 本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
                   <span id="mineru-local-status" class="settings-status">未启用</span>
-                  <svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
-                </summary>
+                </div>
                 <div class="mineru-local-body">
                   <section class="managed-mineru" aria-labelledby="managed-mineru-title">
                     <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">ME Finder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><button id="managed-mineru-auto-install" class="action-btn primary" type="button" onclick="manageMineruComponent('auto','install',this)">安装推荐配置</button></div>
@@ -588,41 +612,24 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                     <small id="managed-mineru-hint" class="settings-hint" role="status" aria-live="polite"></small>
                   </section>
-                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>高级：也可以连接你自行部署的兼容服务。服务需提供 <code>GET /health</code>、<code>POST /tasks</code> 等官方异步接口。</span></div>
-                  <div class="settings-grid mineru-local-grid">
-                    <label class="settings-label" for="mineru-local-endpoint">服务地址</label>
-                    <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>通常为 http://127.0.0.1:8000</small></div>
-                    <label class="settings-label" for="mineru-local-backend">解析后端</label>
-                    <div class="settings-control"><input id="mineru-local-backend" class="settings-input" type="text" value="pipeline" spellcheck="false"><small>传给本地 MinerU 服务的 backend 参数</small></div>
-                    <span class="settings-label">失败后切换</span>
-                    <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页会显示“本地 MinerU”；在线 MinerU 失败后也可手动切换，不会自动切换</small></div>
-                    <span class="settings-label"></span>
-                    <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
-                  </div>
+                  <details class="mineru-local-advanced">
+                    <summary><span>高级：连接自部署服务</span><svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+                    <div class="mineru-local-advanced-body">
+                      <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>也可以连接你自行部署的兼容服务。服务需提供 <code>GET /health</code>、<code>POST /tasks</code> 等官方异步接口。</span></div>
+                      <div class="settings-grid mineru-local-grid">
+                        <label class="settings-label" for="mineru-local-endpoint">服务地址</label>
+                        <div class="settings-control"><input id="mineru-local-endpoint" class="settings-input" type="url" value="http://127.0.0.1:8000" spellcheck="false"><small>通常为 http://127.0.0.1:8000</small></div>
+                        <label class="settings-label" for="mineru-local-backend">解析后端</label>
+                        <div class="settings-control"><input id="mineru-local-backend" class="settings-input" type="text" value="pipeline" spellcheck="false"><small>传给本地 MinerU 服务的 backend 参数</small></div>
+                        <span class="settings-label">失败后切换</span>
+                        <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页会显示“本地 MinerU”；在线 MinerU 失败后也可手动切换，不会自动切换</small></div>
+                        <span class="settings-label"></span>
+                        <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                      </div>
+                    </div>
+                  </details>
                 </div>
-              </details>
-            </div>
-          </section>
-          <section class="settings-section" id="local-ocr-settings" role="tabpanel">
-            <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
-              <span id="local-ocr-status" class="settings-status">读取中…</span>
-            </div>
-            <div class="settings-collapse-body" id="local-ocr-body">
-              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>安装并启用后，导入 PDF 时保持“自动选择”即可：扫描类日文 PDF 会优先使用本地 OCR，本地识别失败时自动转入 MinerU。点击下载会自动安装独立 Python 环境与 CPU 模型；组件和路径只保存在本机，不进入备份。</span></div>
-              <div class="local-ocr-component-list">
-                <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
-                  <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装包含模型，首次下载耗时取决于网络。</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
-                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
-                </section>
-                <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
-                  <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><div class="local-ocr-head-actions"><span id="local-ocr-ancient-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用。</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
-                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
-                </section>
-              </div>
-              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存启用与高级设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              </section>
             </div>
           </section>
           <section class="settings-section" id="statistics-settings" role="tabpanel">

@@ -480,6 +480,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("async function deleteMineruAccount(accountId)", HTML)
         self.assertIn("onclick=\"deleteMineruAccount(this.dataset.accountId)\"", HTML)
         self.assertIn('id="mineru-local-settings"', HTML)
+        self.assertIn(
+            '<section class="mineru-local-settings" id="mineru-local-settings">',
+            HTML,
+        )
+        self.assertIn('<strong>MinerU 本地部署</strong>', HTML)
+        self.assertIn('<details class="mineru-local-advanced">', HTML)
+        self.assertNotIn('<details class="mineru-local-advanced" open', HTML)
+        self.assertNotIn('<details class="mineru-local-settings"', HTML)
+        self.assertIn('高级：连接自部署服务', HTML)
         self.assertIn('ME Finder 托管运行时', HTML)
         self.assertIn('安装推荐配置', HTML)
         self.assertIn('VLM 高精度', HTML)
@@ -495,6 +504,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("正在检测网速…", HTML)
         self.assertIn("'预计剩余约 '", HTML)
         self.assertIn("导入 PDF 时保持“自动选择”即可", HTML)
+        self.assertIn("扫描类日文 PDF 和古籍 PDF 会分别优先使用日文 OCR、古籍 OCR", HTML)
         self.assertIn("本地识别失败时自动转入 MinerU", HTML)
         local_ocr_loader = HTML[
             HTML.index("async function loadLocalOCRConfig()"):

@@ -132,7 +132,7 @@
         "size": 19073343,
         "sha256": "8fcb0cb46e1229065e344758980924e569bef5882ef45f46fada8fb24e06b74a",
         "archive_type": "zip",
-        "member": "uv-x86_64-pc-windows-msvc/uv.exe"
+        "member": "uv.exe"
       },
       "notes": "Windows x64; 中文路径、取消与安装器入口需在 Windows 真机完成 G2/G4/G5。"
     },

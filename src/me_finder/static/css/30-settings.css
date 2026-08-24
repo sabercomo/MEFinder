@@ -5,8 +5,8 @@
    · chrome: pass (47) · tokens: pass (48) · responsive: pass (34, 49–57) · icons: pass (30).
    Contrast: text/border/accent tokens reworked in 00-themes.css so muted text
    clears 4.5:1 and control borders clear 3:1 across all six themes (2026-08).
-   Left anchor: all categories share an 880px left-aligned column, expanding
-   to 1040px only when a desktop viewport has room for larger type. */
+   Left anchor: all categories share the full content area beside the settings
+   navigation, with larger desktop viewports increasing type and spacing. */
 .settings-page-content {
   flex: 1;
   min-height: 0;
@@ -84,11 +84,6 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .settings-section.active { display: block; }
 #appearance-card.active { max-width: none; }
 #statistics-settings.active { max-width: none; }
-/* Parsing sections read as a single capped content column — header, service
-   address, account table and the inline editor all share one left/right edge,
-   so whitespace lands outside the column instead of as a hole inside it. */
-#mineru-api-settings.active,
-#vision-api-settings.active { max-width: 880px; }
 .settings-section-head {
   display: flex;
   align-items: baseline;
@@ -815,36 +810,28 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-service-control .settings-input { flex: 1 1 auto; width: auto; min-width: 0; height: 42px; }
 .mineru-service-control .action-btn { flex: 0 0 auto; min-height: 42px; padding-inline: 12px; white-space: nowrap; }
 .mineru-account-management { margin-top: 22px; }
+/* Hallmark · component: MinerU deployment settings · genre: utilitarian · theme: existing MEFinder
+ * structure: flat settings ledger · pre-emit critique: P5 H5 E4 S5 R5 V4 */
 .mineru-local-settings {
   margin-top: 24px;
   border-top: 1px solid var(--divider);
 }
-.mineru-local-settings > summary {
+.mineru-local-section-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   min-height: 68px;
-  cursor: pointer;
-  list-style: none;
+  padding: 20px 0 12px;
 }
-.mineru-local-settings > summary::-webkit-details-marker { display: none; }
-.mineru-local-settings > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
 .mineru-local-summary-copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
-.mineru-local-summary-copy strong { color: var(--text-primary); font-size: 13px; }
+.mineru-local-summary-copy strong { color: var(--text-primary); font-size: 16px; }
 .mineru-local-summary-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
-.mineru-local-settings[open] > summary .settings-collapse-chevron { transform: rotate(180deg); }
-.mineru-local-body { padding: 2px 0 20px; }
+.mineru-local-body { padding-bottom: 20px; }
 .managed-mineru {
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-secondary);
+  gap: 0;
 }
-.managed-mineru-heading,
-.managed-mineru-profile { display: flex; align-items: center; gap: 12px; }
+.managed-mineru-heading { display: flex; align-items: center; gap: 20px; padding: 0 0 20px; }
 .managed-mineru-heading > span,
 .managed-mineru-profile > div:first-child {
   display: grid;
@@ -854,18 +841,37 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .managed-mineru-heading small,
 .managed-mineru-profile small { color: var(--text-secondary); }
-.managed-mineru-profile-list { display: grid; gap: 8px; }
+.managed-mineru-profile-list { display: flex; flex-direction: column; border-top: 1px solid var(--border-subtle); }
 .managed-mineru-profile {
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .managed-mineru-profile-progress { font-variant-numeric: tabular-nums; }
 .managed-mineru-progress { overflow: hidden; width: 100%; height: 5px; margin-top: 5px; border-radius: 999px; background: var(--surface-tertiary); }
 .managed-mineru-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease-out; }
 .managed-mineru-progress.indeterminate > span { animation: local-ocr-progress 1.2s ease-in-out infinite; }
 .managed-mineru-profile .settings-actions { flex: 0 0 auto; }
+.managed-mineru > .settings-hint { display: block; padding: 12px 0 18px; text-align: end; }
+.mineru-local-advanced { border-top: 1px solid var(--border-subtle); }
+.mineru-local-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+}
+.mineru-local-advanced > summary::-webkit-details-marker { display: none; }
+.mineru-local-advanced > summary span { flex: 1; }
+.mineru-local-advanced > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.mineru-local-advanced[open] > summary .settings-collapse-chevron { transform: rotate(180deg); }
+.mineru-local-advanced-body { padding-bottom: 20px; }
 .mineru-local-notice {
   display: flex;
   align-items: flex-start;
@@ -886,10 +892,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-enable-row { padding-top: 6px; }
 .mineru-local-enable-row > small { max-width: 62ch; }
 @media (max-width: 760px) {
-  .managed-mineru-heading,
-  .managed-mineru-profile { align-items: flex-start; flex-wrap: wrap; }
-  .managed-mineru-profile > div:first-child { flex: 1 1 220px; }
-  .managed-mineru-profile .settings-actions { width: 100%; }
+  .managed-mineru-heading { align-items: flex-start; flex-wrap: wrap; }
+  .managed-mineru-heading > span { flex: 1 1 220px; }
+  .managed-mineru-profile { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .managed-mineru-profile .settings-actions { grid-column: 1 / -1; width: 100%; justify-content: flex-start; }
 }
 /* 本地 OCR 组件：无外框分组（对齐 macOS 系统设置 / GitHub Settings 的主流做法）——
    不套卡片、不套容器，每个组件直接成组，组间仅用一条发丝线分隔；输入框保留自身
@@ -1240,13 +1246,26 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .parser-provider-number:first-of-type { display: none; }
   .parser-provider-detail { padding-inline-start: 12px; }
   .parser-detail-label small { display: block; margin: 3px 0 0; }
+  /* Editor fields collapse back to a single stacked column. */
+  .settings-editor-form .settings-field { grid-template-columns: 1fr; }
+  .settings-editor-form .settings-field > label,
+  .settings-editor-form .settings-field > small,
+  .settings-editor-form .settings-field > :not(label):not(small) {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 0;
+  }
+  .settings-editor-form .settings-field > label { padding-top: 0; }
 }
-/* Inline editor — frameless: fields sit directly on the settings panel,
-   separated by a hairline, no nested card. */
+/* Inline editor — a recessed card (same recipe as the managed-runtime panel)
+   spanning the full content width. Fields are two-column: label + hint on the
+   left, control on the right; actions sit in a full-bleed footer. */
 .settings-editor {
-  border-top: 1px solid var(--border-subtle);
-  margin-top: 6px;
-  padding-top: 18px;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  overflow: hidden;
 }
 .settings-editor[hidden] { display: none; }
 .settings-editor-head {
@@ -1254,16 +1273,64 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 .settings-editor-head strong { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.settings-editor-form { max-width: none; }
+.settings-editor-form { max-width: none; gap: 16px; padding: 18px 20px 0; }
+/* Two-column field: label (+ hint) left, control right. Scoped to the editor so
+   other .settings-field uses are untouched. */
+.settings-editor-form .settings-field {
+  grid-template-columns: minmax(112px, 150px) minmax(0, 1fr);
+  column-gap: 24px;
+  row-gap: 4px;
+  align-items: start;
+}
+.settings-editor-form .settings-field > label {
+  grid-column: 1;
+  grid-row: 1;
+  padding-top: 9px;
+}
+/* Field hints sit under the control in the right column, not beside the label. */
+.settings-editor-form .settings-field > small {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 6px;
+}
+.settings-editor-form .settings-field > :not(label):not(small):not(.settings-field-aside) {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin-top: 7px;
+}
+/* Under-input helper row: a "go get it" link on the left, the state note on the
+   right — sits directly below the control in the right column. */
+.settings-editor-form .settings-field > .settings-field-aside {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.settings-editor-form .settings-field > .settings-field-aside > small { margin: 0; }
+.settings-field-link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.settings-field-link:hover { text-decoration: underline; }
+/* Action footer — full-bleed hairline, buttons right-aligned. */
 .settings-editor-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 6px;
+  margin: 4px -20px 0;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-subtle);
 }
 .settings-editor-actions > .settings-hint { margin-inline: 0 auto; }
 .settings-editor-actions > .action-btn.primary { white-space: nowrap; }
@@ -1711,8 +1778,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .mineru-service-control .action-btn { min-height: 46px; }
   .mineru-service-copy strong,
   .mineru-table-heading strong,
-  .mineru-local-summary-copy strong,
   .mineru-account-empty strong { font-size: 15px; }
+  .mineru-local-summary-copy strong { font-size: 20px; }
   .mineru-service-copy small,
   .mineru-table-heading small,
   .mineru-local-summary-copy small,

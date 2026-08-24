@@ -377,10 +377,16 @@ class ImportJobLifecycle:
         phase = str(update.get("phase") or "")
         message = "正在处理…"
         if phase == "mineru_processing":
-            message = (
-                f"MinerU 解析中：{update.get('completed', 0)}/"
-                f"{update.get('total', 0)} 个分段"
-            )
+            if update.get("waiting_for_credential"):
+                message = (
+                    f"等待可用的 MinerU 账号：{update.get('completed', 0)}/"
+                    f"{update.get('total', 0)} 个分段已完成"
+                )
+            else:
+                message = (
+                    f"MinerU 解析中：{update.get('completed', 0)}/"
+                    f"{update.get('total', 0)} 个分段"
+                )
         elif phase == "vision_processing":
             provider_name = str(update.get("provider_name") or "其他视觉 API")
             message = (

@@ -101,6 +101,26 @@ class ImportJobLifecycleTests(unittest.TestCase):
         self.assertTrue(snapshot["can_resume"])
         self.assertFalse(self.store.has_active_jobs())
 
+    def test_mineru_waiting_for_credential_has_an_accurate_message(self) -> None:
+        self._seed("mineru-waiting", "processing")
+        captured: dict[str, object] = {}
+
+        self.lifecycle.progress_job(
+            "mineru-waiting",
+            {
+                "phase": "mineru_processing",
+                "completed": 0,
+                "total": 2,
+                "waiting_for_credential": True,
+            },
+            lambda _job_id, **updates: captured.update(updates),
+        )
+
+        self.assertEqual(
+            captured["message"],
+            "等待可用的 MinerU 账号：0/2 个分段已完成",
+        )
+
     def test_resume_hides_inactive_state_until_journal_is_durable(self) -> None:
         self._seed("resume-order", "failed")
         journal_entered = threading.Event()

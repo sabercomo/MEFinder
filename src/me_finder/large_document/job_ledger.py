@@ -692,12 +692,16 @@ class JobLedger:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT credential_id, COUNT(*)
-                FROM slice_jobs
-                WHERE provider_id = ? AND credential_id IS NOT NULL
-                  AND remote_task_id IS NOT NULL
-                  AND status IN ('submitted', 'waiting', 'retryable_failure')
-                GROUP BY credential_id
+                SELECT sj.credential_id, COUNT(*)
+                FROM slice_jobs AS sj
+                JOIN document_jobs AS dj ON dj.id = sj.document_job_id
+                WHERE sj.provider_id = ? AND sj.credential_id IS NOT NULL
+                  AND sj.remote_task_id IS NOT NULL
+                  AND sj.status IN ('submitted', 'waiting', 'retryable_failure')
+                  AND dj.status NOT IN (
+                    'cancelled', 'permanent_failure', 'validated', 'published'
+                  )
+                GROUP BY sj.credential_id
                 """,
                 (provider_id,),
             ).fetchall()

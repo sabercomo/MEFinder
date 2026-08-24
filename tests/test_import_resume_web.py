@@ -175,7 +175,10 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             APP_SOURCE,
         )
         # 只有多于一个可继续任务时才显示批量按钮。
-        self.assertIn("resumeButton.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
+        self.assertIn(
+            "resumeButton.style.display = resumeCount > 1 ? 'inline-flex' : 'none';",
+            APP_SOURCE,
+        )
         # 文案改成自然中文，不再是「从断点继续」翻译腔。
         self.assertNotIn("从断点继续", APP_SOURCE)
 
@@ -184,13 +187,19 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertIn('onclick="cancelAllImports()"', TEMPLATE_SOURCE)
         self.assertIn(">全部取消</button>", TEMPLATE_SOURCE)
         self.assertIn("function cancelAllImports()", APP_SOURCE)
-        self.assertIn("全部取消中断任务？", APP_SOURCE)
+        self.assertIn("function cancellableImportQueue()", APP_SOURCE)
+        self.assertIn("var pending = cancellableImportQueue();", APP_SOURCE)
+        self.assertIn("全部取消导入任务？", APP_SOURCE)
         self.assertIn("原始文件不会被删除", APP_SOURCE)
         self.assertIn(
-            "await removeImport(pending[index].id, {silent: true, deferRender: true})",
+            "await removeImport(pending[index].id, {",
             APP_SOURCE,
         )
-        self.assertIn("cancelButton.style.display = count > 1 ? 'inline-flex' : 'none';", APP_SOURCE)
+        self.assertIn("skipConfirm: true", APP_SOURCE)
+        self.assertIn(
+            "cancelButton.style.display = cancelCount > 0 ? 'inline-flex' : 'none';",
+            APP_SOURCE,
+        )
         # 每条任务右上角的 × 和逐项继续入口必须继续存在。
         self.assertIn('class="import-item-remove" onclick="removeImport(', APP_SOURCE)
         self.assertIn("onclick=\"resumeImport(\\'", APP_SOURCE)

@@ -197,17 +197,23 @@ class LargeDocumentJobEngine:
         job = self.ledger.refresh_progress(job.id)
         slices = self.ledger.list_slice_jobs(job.id)
         if any(item.status == "cancelled" for item in slices):
-            return self.ledger.update_document(
+            job = self.ledger.update_document(
                 job.id,
                 status="cancelled",
                 error_summary=None,
             )
+            if self.credential_pool is not None:
+                self.credential_pool.reconcile_in_flight()
+            return job
         if any(item.status == "permanent_failure" for item in slices):
-            return self.ledger.update_document(
+            job = self.ledger.update_document(
                 job.id,
                 status="permanent_failure",
                 error_summary="one or more slices failed permanently",
             )
+            if self.credential_pool is not None:
+                self.credential_pool.reconcile_in_flight()
+            return job
         if all(item.status == "completed" for item in slices):
             try:
                 merge_normalized_result_files(
@@ -444,15 +450,24 @@ class LargeDocumentJobEngine:
         self, slice_job: SliceJob, exc: ParserProviderError
     ) -> None:
         updates: Dict[str, object] = {"last_error": str(exc)[:2000]}
+        released_remote = False
         if exc.remote_task_missing:
             # Only an explicit upstream "task missing" classification permits a
             # new submission.  Network ambiguity keeps remote-task affinity.
             updates["remote_task_id"] = None
             if self.credential_pool is not None:
                 self.credential_pool.finish_remote(slice_job.credential_id)
+                released_remote = True
         if self.credential_pool is not None:
             self.credential_pool.record_error(slice_job.credential_id, exc)
         can_retry = exc.retryable and slice_job.attempt_count < self.max_attempts
+        if (
+            not can_retry
+            and slice_job.remote_task_id
+            and self.credential_pool is not None
+            and not released_remote
+        ):
+            self.credential_pool.finish_remote(slice_job.credential_id)
         updates["status"] = "retryable_failure" if can_retry else "permanent_failure"
         self.ledger.update_slice(slice_job.id, **updates)
 

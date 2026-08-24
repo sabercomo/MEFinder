@@ -331,6 +331,23 @@ def open_path_with_default_app(target: Path) -> None:
     subprocess.Popen(command, close_fds=True)
 
 
+MINERU_TOKEN_URL = "https://mineru.net/apiManage/token"
+
+
+def open_mineru_token_page() -> None:
+    """Open the MinerU API-token page in the system browser (fixed URL)."""
+
+    if sys.platform == "win32":
+        os.startfile(MINERU_TOKEN_URL)  # type: ignore[attr-defined]
+        return
+    command = (
+        ["open", MINERU_TOKEN_URL]
+        if sys.platform == "darwin"
+        else ["xdg-open", MINERU_TOKEN_URL]
+    )
+    subprocess.Popen(command, close_fds=True)
+
+
 def open_external_cnki_url(value: object) -> None:
     """Open one validated public CNKI page in the system browser."""
 
@@ -1113,6 +1130,14 @@ def make_handler(
         app_data_root=app_data_root,
         default_app_data_root=default_app_data_root,
     )
+    def _open_mineru_token_route():
+        try:
+            open_mineru_token_page()
+            return (200, {"ok": True})
+        except Exception:  # noqa: BLE001 - surface a friendly toast, log details
+            logging.exception("打开 MinerU Token 页面失败")
+            return (500, {"ok": False, "error": "打开 MinerU 失败，请手动访问。"})
+
     shell_get_routes = {
         "/api/update/status": desktop_shell_controller.update_status,
         "/api/macos-update": desktop_shell_controller.macos_update,
@@ -1143,6 +1168,7 @@ def make_handler(
         "/api/bibliographic-metadata/open-cnki": (
             desktop_shell_controller.open_cnki
         ),
+        "/api/open-mineru-token": lambda _payload: _open_mineru_token_route(),
     }
 
     class Handler(BaseHTTPRequestHandler):

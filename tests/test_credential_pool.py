@@ -83,6 +83,21 @@ class AffinityProvider(ParserProvider):
         )
 
 
+class PartiallyFailingAffinityProvider(AffinityProvider):
+    def poll(self, remote_task_id, *, credential=None):
+        credential_id = credential.credential_id if credential else None
+        self.polled.append((remote_task_id, credential_id))
+        if credential_id != self.submitted[remote_task_id]:
+            raise AssertionError("remote task was polled with the wrong credential")
+        if remote_task_id == "task-1":
+            raise ParserProviderError(
+                "parsing failed, please try again later",
+                provider_id=self.provider_id,
+                retryable=False,
+            )
+        return ParserPollResult(ParserTaskStatus.SUBMITTED)
+
+
 class CredentialPoolTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -269,6 +284,67 @@ class CredentialPoolTests(unittest.TestCase):
         )
         self.assertEqual(restarted.run_once(job.id).status, "validated")
         self.assertEqual(dict(provider.polled), affinities)
+
+    def test_restart_reconcile_ignores_remote_tasks_from_terminal_job(self) -> None:
+        self.add_credential(1)
+        source = self.root / "source.pdf"
+        source.write_bytes(b"pdf")
+        engine = LargeDocumentJobEngine(
+            ledger=self.ledger,
+            provider=AffinityProvider(asynchronous=True),
+            work_dir=self.root / "work",
+            page_counter=lambda path: 2,
+            credential_pool=self.pool(),
+        )
+        job = engine.prepare(
+            source_path=source,
+            source_file_id="pdf-1",
+            document_id="doc",
+        )
+        self.assertEqual(engine.run_once(job.id).status, "waiting")
+        self.assertEqual(
+            self.ledger.get_credential("credential-1").current_in_flight,
+            1,
+        )
+
+        self.ledger.update_document(job.id, status="permanent_failure")
+        self.pool().reconcile_in_flight()
+
+        self.assertEqual(
+            self.ledger.get_credential("credential-1").current_in_flight,
+            0,
+        )
+
+    def test_terminal_slice_failure_releases_all_document_credentials(self) -> None:
+        self.add_credential(1)
+        self.add_credential(2)
+        source = self.root / "source.pdf"
+        source.write_bytes(b"pdf")
+        engine = LargeDocumentJobEngine(
+            ledger=self.ledger,
+            provider=PartiallyFailingAffinityProvider(asynchronous=True),
+            work_dir=self.root / "work",
+            slicer=PhysicalPDFSlicer(writer),
+            page_counter=lambda path: 4,
+            credential_pool=self.pool(),
+        )
+        job = engine.prepare(
+            source_path=source,
+            source_file_id="pdf-1",
+            document_id="doc",
+        )
+        self.assertEqual(engine.run_once(job.id).status, "waiting")
+
+        failed = engine.run_once(job.id)
+
+        self.assertEqual(failed.status, "permanent_failure")
+        self.assertEqual(
+            [
+                self.ledger.get_credential(f"credential-{index}").current_in_flight
+                for index in (1, 2)
+            ],
+            [0, 0],
+        )
 
     def test_recovered_credential_rejoins_pool(self) -> None:
         self.add_credential(1, enabled=False)

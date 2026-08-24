@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -18,6 +19,15 @@ from src.me_finder.local_ocr_installer import (
     load_local_ocr_installer_manifest,
 )
 from src.me_finder.local_ocr_settings import load_local_ocr_config
+
+
+def _test_process_launcher(command, **kwargs):
+    executable = Path(command[0])
+    if sys.platform == "win32" and executable.is_symlink():
+        command = [sys.executable, *command[1:]]
+    elif sys.platform == "win32" and executable.read_bytes().startswith(b"#!"):
+        command = [sys.executable, *command]
+    return subprocess.Popen(command, **kwargs)
 
 
 class _DownloadResponse(io.BytesIO):
@@ -140,6 +150,7 @@ else:
             self.config_path,
             manifest_path=manifest_path,
             platform_key="test-platform",
+            process_launcher=_test_process_launcher,
         )
 
     def _wait(self, installer: LocalOCRInstaller, timeout: float = 15) -> dict:
@@ -169,6 +180,10 @@ else:
             self.assertEqual(engines["ndlkotenocr-lite"].tag, "1.4.3")
         release = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding="utf-8"))
         self.assertEqual(release["mineru"]["version"], "3.4.5")
+        self.assertEqual(
+            release["platforms"]["win32-x86_64"]["uv"]["member"],
+            "uv.exe",
+        )
         self.assertEqual(
             release["mineru"]["profiles"]["vlm"]["backend"],
             "vlm-auto-engine",
@@ -213,6 +228,7 @@ else:
             self.config_path,
             manifest_path=lambda: manifest_path,
             platform_key="test-platform",
+            process_launcher=_test_process_launcher,
         )
         installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
         self._wait(installer)
@@ -242,6 +258,7 @@ else:
             self.config_path,
             manifest_path=manifest_path,
             platform_key="test-platform",
+            process_launcher=_test_process_launcher,
         )
         installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
         self._wait(installer)

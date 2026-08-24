@@ -1356,6 +1356,10 @@ def _parse_pdf_with_mineru_accounts(
         job = engine.run_once(job.id)
         if on_progress:
             slices = ledger.list_slice_jobs(job.id)
+            waiting_for_credential = any(
+                item.status == "waiting" and not item.remote_task_id
+                for item in slices
+            )
             completed_pages = [
                 page
                 for item in slices
@@ -1371,6 +1375,7 @@ def _parse_pdf_with_mineru_accounts(
                     "completed_pages": completed_pages,
                     "failed_pages": [],
                     "document_job_id": job.id,
+                    "waiting_for_credential": waiting_for_credential,
                 }
             )
         if job.status in {"validated", "permanent_failure", "cancelled"}:

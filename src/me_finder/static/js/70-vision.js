@@ -302,11 +302,16 @@ function renderMineruLocalSettings(config) {
   if (enabled) enabled.checked = !!config.enabled;
   renderManagedMineru(config.managed_runtime || {});
   syncMineruLocalImportOption(!!config.enabled);
-  var service = (config.managed_runtime || {}).service || {};
-  var label = config.managed
-    ? (service.running ? '托管运行中' : '托管已配置')
-    : config.enabled ? '自部署已配置' : '';
+  var label = managedMineruSummaryLabel(config, config.managed_runtime || {});
   updateMineruLocalStatus(!!config.enabled, label);
+}
+
+function managedMineruSummaryLabel(config, runtime) {
+  if (!config.managed) return config.enabled ? '自部署已配置' : '';
+  var service = (runtime || {}).service || {};
+  if (!service.running) return '已配置，未启动';
+  var profile = service.profile || config.managed_profile;
+  return (profile === 'vlm' ? 'VLM' : 'Pipeline') + ' 运行中';
 }
 
 function managedMineruFields(profileId) {
@@ -419,6 +424,12 @@ function renderManagedMineru(runtime) {
     : active ? '安装需要约 20GB 可用空间，请保持应用开启。'
     : externalConfigured ? '已配置自部署服务 ' + mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案。'
     : '组件按需下载，不会随主程序更新自动安装。');
+  if (mineruLocalConfig.managed) {
+    updateMineruLocalStatus(
+      !!mineruLocalConfig.enabled,
+      managedMineruSummaryLabel(mineruLocalConfig, runtime)
+    );
+  }
   if (managedMineruPollTimer) clearTimeout(managedMineruPollTimer);
   managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
   if (managedMineruWasBusy && !active) loadMineruConfig();
@@ -533,7 +544,11 @@ async function testMineruLocalConnection() {
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '连接失败');
     if (hint) hint.textContent = '连接成功 · ' + data.latency_ms + ' ms';
-    updateMineruLocalStatus(true, mineruLocalConfig.managed ? '托管运行中' : '自部署运行中');
+    var runtime = mineruLocalConfig.managed_runtime || {};
+    var service = runtime.service || {};
+    updateMineruLocalStatus(true, mineruLocalConfig.managed
+      ? managedMineruSummaryLabel(mineruLocalConfig, {service:{running:true, profile:service.profile || mineruLocalConfig.managed_profile}})
+      : '自部署运行中');
   } catch (error) {
     if (hint) hint.textContent = '连接失败：' + error.message;
     var status = document.getElementById('mineru-local-status');
@@ -603,6 +618,18 @@ function mineruEditorPrep() {
   var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
 }
 
+async function openMineruTokenPage() {
+  try {
+    var resp = await fetch('/api/open-mineru-token', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || '打开失败');
+  } catch (e) {
+    showToast('打开 MinerU 失败：' + e.message, 'danger');
+  }
+}
+
 function startAddMineruAccount(shouldFocus) {
   var firstAccount = mineruAccounts.length === 0;
   mineruSelectedAccountId = '';
@@ -612,7 +639,7 @@ function startAddMineruAccount(shouldFocus) {
   document.getElementById('mineru-expires-at').value = '';
   document.getElementById('mineru-account-enabled').checked = true;
   document.getElementById('mineru-editor-title').textContent = '添加账号';
-  document.getElementById('mineru-token-help').textContent = '新账号必填；可粘贴原始 Token 或完整 Bearer 值。Token 只保存在本机';
+  document.getElementById('mineru-token-help').textContent = '新账号必填，只存本机';
   document.getElementById('mineru-account-save').textContent = firstAccount ? '保存配置' : '保存账号';
   document.getElementById('mineru-account-cancel').hidden = firstAccount;
   mineruEditorPrep();
@@ -630,7 +657,7 @@ function selectMineruAccount(accountId) {
   document.getElementById('mineru-expires-at').value = item.expires_at || '';
   document.getElementById('mineru-account-enabled').checked = !!item.enabled;
   document.getElementById('mineru-editor-title').textContent = '编辑 ' + item.display_name;
-  document.getElementById('mineru-token-help').textContent = '留空会保留已保存的 Token';
+  document.getElementById('mineru-token-help').textContent = '留空即保留原 Token';
   document.getElementById('mineru-account-save').textContent = '保存更改';
   document.getElementById('mineru-account-cancel').hidden = false;
   mineruEditorPrep();

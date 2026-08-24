@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -17,6 +18,13 @@ from src.me_finder.managed_mineru import (
     load_managed_mineru_manifest,
 )
 from src.me_finder.mineru_local_settings import mineru_local_config_summary
+
+
+def _test_process_launcher(command, **kwargs):
+    executable = Path(command[0])
+    if sys.platform == "win32" and executable.read_bytes().startswith(b"#!"):
+        command = [sys.executable, *command]
+    return subprocess.Popen(command, **kwargs)
 
 
 class ManagedMinerUTests(unittest.TestCase):
@@ -133,6 +141,7 @@ else:
             self.config,
             manifest_path=self._manifest(),
             platform_key="test-platform",
+            process_launcher=_test_process_launcher,
             hardware_detector=lambda: {
                 "kind": "nvidia",
                 "name": "Test GPU",
@@ -240,6 +249,34 @@ else:
             environment = manager._install_environment(staging)
         self.assertEqual(environment["HTTP_PROXY"], "http://127.0.0.1:1082")
         self.assertEqual(environment["HTTPS_PROXY"], "http://127.0.0.1:1082")
+
+    def test_missing_uv_archive_member_reports_failure_instead_of_staying_busy(self) -> None:
+        manifest_path = self._manifest()
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        payload["platforms"]["test-platform"]["uv"]["member"] = "missing/uv"
+        manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        manager = ManagedMinerU(
+            self.runtime,
+            self.config,
+            manifest_path=manifest_path,
+            platform_key="test-platform",
+            process_launcher=_test_process_launcher,
+            hardware_detector=lambda: {
+                "kind": "nvidia",
+                "name": "Test GPU",
+                "vlm_supported": True,
+                "recommended_profile": "vlm",
+                "vram_mb": 24576,
+                "compute_capability": 8.9,
+            },
+        )
+
+        manager.perform({"profile": "pipeline", "action": "install"})
+        failed = self._wait(manager, "pipeline")
+
+        self.assertEqual(failed["state"], "not_installed")
+        self.assertEqual(failed["error"], "uv 归档缺少清单指定的可执行文件。")
+        self.assertFalse(any(manager.component_root.iterdir()))
 
     def test_model_download_retries_in_same_staging_directory(self) -> None:
         manager = self._manager()
@@ -360,6 +397,45 @@ else:
                 track_directory=models,
                 estimated_total_bytes=100,
                 stall_timeout=0.05,
+            )
+
+        self.assertEqual(process.returncode, -15)
+
+    def test_run_command_stops_pypi_install_after_output_and_cache_stall(self) -> None:
+        manager = self._manager()
+
+        class StalledProcess:
+            returncode = None
+
+            def poll(self):
+                return self.returncode
+
+            def terminate(self):
+                self.returncode = -15
+
+            def wait(self, timeout):
+                return self.returncode
+
+        process = StalledProcess()
+        manager.process_launcher = lambda *_args, **_kwargs: process
+        cache = self.root / ".uv-cache"
+        cache.mkdir()
+
+        with self.assertRaisesRegex(
+            ManagedMinerUError,
+            "PyPI 安装依赖连续 5 分钟无数据变化",
+        ):
+            manager._run_command(
+                "vlm",
+                ["fake-uv", "pip", "install"],
+                cwd=self.root,
+                environment={},
+                log_path=self.root / "install.log",
+                timeout=10,
+                track_uv_downloads=True,
+                track_directory=cache,
+                stall_timeout=0.05,
+                stall_message="从 PyPI 安装依赖连续 5 分钟无数据变化。",
             )
 
         self.assertEqual(process.returncode, -15)

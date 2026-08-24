@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "me-finder",
-      "runtimeExecutable": "py",
+      "runtimeExecutable": ".venv-windows/Scripts/python.exe",
       "runtimeArgs": ["-m", "src.me_finder", "serve"],
       "port": 8765
     }

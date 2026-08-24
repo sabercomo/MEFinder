@@ -42,7 +42,7 @@ _PLATFORM_RUNTIME = {
         "venv/Scripts/python.exe",
         "zip",
         "uv-x86_64-pc-windows-msvc.zip",
-        "uv-x86_64-pc-windows-msvc/uv.exe",
+        "uv.exe",
     ),
     "linux-x86_64": (
         "venv/bin/python",

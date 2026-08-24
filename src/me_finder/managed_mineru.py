@@ -48,10 +48,10 @@ _MODEL_DOWNLOAD_ESTIMATES = {
     "vlm": 2_328_028_720,
 }
 _UV_DOWNLOAD_PATTERN = re.compile(
-    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)$",
+    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)\r?$",
     re.MULTILINE,
 )
-_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+)$", re.MULTILINE)
+_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+?)\r?$", re.MULTILINE)
 _BINARY_SIZE_MULTIPLIERS = {
     "KiB": 1024,
     "MiB": 1024 * 1024,
@@ -60,6 +60,7 @@ _BINARY_SIZE_MULTIPLIERS = {
 _MODEL_DOWNLOAD_ATTEMPTS = 3
 _MODEL_DOWNLOAD_RETRY_DELAYS = (2, 5)
 _MODEL_DOWNLOAD_STALL_SECONDS = 120
+_PYPI_INSTALL_STALL_SECONDS = 300
 _DOWNLOAD_SPEED_WINDOW_SECONDS = 30
 _MODEL_NETWORK_ERROR_PATTERN = re.compile(
     r"ConnectionError|Network error|Request middleware error|ConnectError|"
@@ -554,7 +555,7 @@ class ManagedMinerU:
             self._set_state(
                 profile_id,
                 "provisioning",
-                message=f"正在连接 PyPI 并安装 MinerU {self.manifest.version}",
+                message=f"正在解析并安装 MinerU {self.manifest.version} 依赖",
             )
             self._run_command(
                 profile_id,
@@ -571,6 +572,12 @@ class ManagedMinerU:
                 log_path=install_log,
                 timeout=3600,
                 track_uv_downloads=True,
+                track_directory=staging / ".uv-cache",
+                stall_timeout=_PYPI_INSTALL_STALL_SECONDS,
+                stall_message=(
+                    "从 PyPI 安装依赖连续 5 分钟无数据变化。"
+                    "请检查网络或代理后重试。"
+                ),
             )
             downloader = self._venv_executable(staging, "mineru-models-download")
             self._set_state(
@@ -760,13 +767,22 @@ class ManagedMinerU:
             extracted = staging / executable.name
             if platform_manifest.uv.archive_type == "zip":
                 with zipfile.ZipFile(archive) as bundle:
-                    with bundle.open(platform_manifest.uv.member) as source, extracted.open(
-                        "wb"
-                    ) as output:
+                    try:
+                        member = bundle.getinfo(platform_manifest.uv.member)
+                    except KeyError as exc:
+                        raise ManagedMinerUError(
+                            "uv 归档缺少清单指定的可执行文件。"
+                        ) from exc
+                    with bundle.open(member) as source, extracted.open("wb") as output:
                         shutil.copyfileobj(source, output)
             else:
                 with tarfile.open(archive, "r:gz") as bundle:
-                    member = bundle.getmember(platform_manifest.uv.member)
+                    try:
+                        member = bundle.getmember(platform_manifest.uv.member)
+                    except KeyError as exc:
+                        raise ManagedMinerUError(
+                            "uv 归档缺少清单指定的可执行文件。"
+                        ) from exc
                     source = bundle.extractfile(member)
                     if source is None:
                         raise ManagedMinerUError("uv 归档入口无法读取。")
@@ -820,6 +836,7 @@ class ManagedMinerU:
         track_directory: Optional[Path] = None,
         estimated_total_bytes: int = 0,
         stall_timeout: Optional[float] = None,
+        stall_message: str = "模型下载连续 2 分钟无数据变化。",
     ) -> None:
         self._raise_if_cancelled(profile_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -846,7 +863,8 @@ class ManagedMinerU:
                     if track_directory is not None
                     else 0
                 )
-                last_payload_change = time.monotonic()
+                tracked_log_size = progress_log_offset
+                last_activity_change = time.monotonic()
                 while process.poll() is None:
                     if self._states[profile_id].cancel_event.wait(0.1):
                         self._stop_process(process)
@@ -859,25 +877,28 @@ class ManagedMinerU:
                                 log_path,
                                 start_offset=progress_log_offset,
                             )
-                        elif track_directory is not None:
+                            current_log_size = log_path.stat().st_size
+                            if current_log_size != tracked_log_size:
+                                tracked_log_size = current_log_size
+                                last_activity_change = now
+                        if track_directory is not None:
                             current_bytes = self._model_payload_size(track_directory)
-                            self._set_download_progress(
-                                profile_id,
-                                current_bytes,
-                                estimated_total_bytes,
-                                total_is_estimate=True,
-                            )
+                            if not track_uv_downloads:
+                                self._set_download_progress(
+                                    profile_id,
+                                    current_bytes,
+                                    estimated_total_bytes,
+                                    total_is_estimate=True,
+                                )
                             if current_bytes != tracked_bytes:
                                 tracked_bytes = current_bytes
-                                last_payload_change = now
+                                last_activity_change = now
                             elif (
                                 stall_timeout is not None
-                                and now - last_payload_change >= stall_timeout
+                                and now - last_activity_change >= stall_timeout
                             ):
                                 self._stop_process(process)
-                                raise ManagedMinerUError(
-                                    "模型下载连续 2 分钟无数据变化。"
-                                )
+                                raise ManagedMinerUError(stall_message)
                         next_progress_update = now + 0.5
                     if now >= deadline:
                         self._stop_process(process)
