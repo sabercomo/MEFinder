@@ -207,6 +207,23 @@ else:
         self.assertEqual(profile["download_speed_bps"], 1024**2)
         self.assertEqual(profile["eta_seconds"], 1)
 
+    def test_install_environment_inherits_system_proxy_for_uv(self) -> None:
+        manager = self._manager()
+        staging = self.root / "staging"
+        with (
+            mock.patch.dict("os.environ", {}, clear=True),
+            mock.patch(
+                "src.me_finder.managed_mineru.getproxies",
+                return_value={
+                    "http": "http://127.0.0.1:1082",
+                    "https": "http://127.0.0.1:1082",
+                },
+            ),
+        ):
+            environment = manager._install_environment(staging)
+        self.assertEqual(environment["HTTP_PROXY"], "http://127.0.0.1:1082")
+        self.assertEqual(environment["HTTPS_PROXY"], "http://127.0.0.1:1082")
+
     def test_pipeline_install_starts_loopback_service_and_uninstalls(self) -> None:
         manager = self._manager()
         self.addCleanup(manager.close)

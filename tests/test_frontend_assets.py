@@ -286,10 +286,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：本地 MinerU Pipeline/VLM 托管安装与组件清单更新入口。
     # 0.4.7 后续：区分自行部署 MinerU 与 MEFinder 托管安装状态。
     # 0.4.7 后续：按硬件显示托管方案，并补充 MinerU 下载进度与估时。
+    # 0.4.7 后续：传递系统代理并收敛 MinerU 安装失败文案。
     BASELINE_SHA256 = (
-        "d79a48fe7437bb97b54cab89efc88bfea3edc40cef104b01af86027bda9b196d"
+        "9961d8a0d41bf10acabc1cd52ff746b57902af6bc95b655c094803aa89341a02"
     )
-    BASELINE_BYTES = 848419
+    BASELINE_BYTES = 848873
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -1757,6 +1757,17 @@ class MineruLocalDisplayTests(unittest.TestCase):
             "已下载 1.00 GB / 约 2.00 GB · 10.0 MB/s · 预计剩余约 2 分钟",
         )
 
+    def test_proxy_failure_is_presented_as_concise_chinese(self):
+        tail = r"""
+        return managedMineruErrorText(
+          'MinerU 安装子进程退出 2：Failed to fetch: `https://pypi.org/simple/mineru/` Caused by: tunnel error: unsuccessful'
+        );
+        """
+        self.assertEqual(
+            _vision_eval(tail),
+            "无法连接 PyPI，请检查网络或代理后重试。",
+        )
+
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CrossrefLookupConfigTests(unittest.TestCase):

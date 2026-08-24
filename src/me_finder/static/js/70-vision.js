@@ -332,6 +332,14 @@ function managedMineruTransferSummary(profile) {
   return summary + ' · ' + localOCRByteSize(profile.download_speed_bps) + '/s · ' + localOCREstimatedWait(profile.eta_seconds);
 }
 
+function managedMineruErrorText(value) {
+  var message = String(value || '').replace(/\s+/g, ' ').trim();
+  if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
+    return '无法连接 PyPI，请检查网络或代理后重试。';
+  }
+  return message.length > 180 ? message.slice(0, 177) + '…' : message;
+}
+
 function renderManagedMineru(runtime) {
   var externalConfigured = !!mineruLocalConfig.enabled && !mineruLocalConfig.managed;
   var hardware = runtime.hardware || {};
@@ -355,7 +363,7 @@ function renderManagedMineru(runtime) {
     var busy = ['provisioning','downloading_models','validating','starting','cleaning'].indexOf(profile.state) >= 0;
     var running = !!service.running && service.profile === profile.profile;
     active = active || busy;
-    if (profile.error) errors.push(profile.display_name + '：' + profile.error);
+    if (profile.error) errors.push(profile.display_name);
     var labels = {
       provisioning:'安装依赖中', downloading_models:'下载模型中', validating:'验证中',
       starting:'启动中', cleaning:'清理中'
@@ -363,7 +371,7 @@ function renderManagedMineru(runtime) {
     if (fields.state) {
       fields.state.className = 'settings-status ' + (profile.installed ? 'ready' : 'warning');
       fields.state.textContent = labels[profile.state]
-        || (running ? '运行中' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? (externalConfigured ? '未由 MEFinder 安装' : '未安装') : '平台不支持');
+        || (running ? '运行中' : profile.error ? '安装失败' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? (externalConfigured ? '未由 MEFinder 安装' : '未安装') : '平台不支持');
     }
     if (fields.install) {
       fields.install.hidden = (profile.installed && !profile.update_available) || busy;
@@ -378,7 +386,7 @@ function renderManagedMineru(runtime) {
     if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
     if (fields.cancel) fields.cancel.hidden = !busy;
     if (fields.progressHint) {
-      var detail = profile.error ? '上次操作失败：' + profile.error : (profile.message || '');
+      var detail = profile.error ? '安装失败：' + managedMineruErrorText(profile.error) : (profile.message || '');
       var transfer = busy ? managedMineruTransferSummary(profile) : '';
       if (transfer) detail += (detail ? ' · ' : '') + transfer;
       fields.progressHint.hidden = !detail;
@@ -401,7 +409,7 @@ function renderManagedMineru(runtime) {
       : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
   }
   var hint = document.getElementById('managed-mineru-hint');
-  if (hint) hint.textContent = errors[0] || (service.running
+  if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
     ? '本地服务运行于 ' + service.endpoint
     : active ? '安装需要约 20GB 可用空间，请保持应用开启。'
     : externalConfigured ? '已配置自部署服务 ' + mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案。'

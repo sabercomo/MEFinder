@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Mapping, Optional, Sequence
-from urllib.request import Request, urlopen
+from urllib.request import Request, getproxies, urlopen
 
 from .import_resume import atomic_write_json
 from .local_ocr_installer import (
@@ -539,7 +539,7 @@ class ManagedMinerU:
             self._set_state(
                 profile_id,
                 "provisioning",
-                message=f"正在安装 MinerU {self.manifest.version}",
+                message=f"正在连接 PyPI 并安装 MinerU {self.manifest.version}",
             )
             self._run_command(
                 profile_id,
@@ -853,6 +853,14 @@ class ManagedMinerU:
 
     def _install_environment(self, staging: Path) -> Dict[str, str]:
         environment = os.environ.copy()
+        proxies = getproxies()
+        for scheme in ("http", "https"):
+            upper = f"{scheme.upper()}_PROXY"
+            lower = f"{scheme}_proxy"
+            if upper not in environment and lower not in environment:
+                proxy = str(proxies.get(scheme) or "").strip()
+                if proxy:
+                    environment[upper] = proxy
         environment.update(
             {
                 "UV_CACHE_DIR": str(staging / ".uv-cache"),
