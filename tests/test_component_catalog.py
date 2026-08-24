@@ -121,6 +121,13 @@ class ComponentCatalogTests(unittest.TestCase):
         with self.assertRaises(ComponentCatalogError):
             validate_component_catalog(unsafe)
 
+        excessive_model = json.loads(json.dumps(self.payload))
+        excessive_model["mineru"]["profiles"]["vlm"][
+            "model_download_bytes"
+        ] = 21 * 1024**3
+        with self.assertRaises(ComponentCatalogError):
+            validate_component_catalog(excessive_model)
+
 
 if __name__ == "__main__":
     unittest.main()

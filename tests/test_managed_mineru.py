@@ -162,6 +162,50 @@ else:
         self.assertEqual(manifest.version, "3.4.5")
         self.assertEqual(manifest.supported_profiles, ("pipeline", "vlm"))
         self.assertEqual(manifest.profiles["vlm"].backend, "vlm-auto-engine")
+        self.assertGreater(manifest.profiles["vlm"].model_download_bytes, 2 * 1024**3)
+
+    def test_download_progress_reports_speed_and_eta(self) -> None:
+        manager = self._manager()
+        with mock.patch(
+            "src.me_finder.managed_mineru.time.monotonic",
+            side_effect=[0.0, 2.0],
+        ):
+            manager._begin_download_progress("vlm", 0, 10, total_is_estimate=True)
+            manager._set_download_progress(
+                "vlm", 4, 10, total_is_estimate=True
+            )
+        profile = next(
+            item for item in manager.summary()["profiles"]
+            if item["profile"] == "vlm"
+        )
+        self.assertEqual(profile["downloaded_bytes"], 4)
+        self.assertEqual(profile["total_bytes"], 10)
+        self.assertTrue(profile["total_is_estimate"])
+        self.assertEqual(profile["download_speed_bps"], 2)
+        self.assertEqual(profile["eta_seconds"], 3)
+
+    def test_uv_log_progress_uses_announced_download_sizes(self) -> None:
+        manager = self._manager()
+        log = self.root / "install.log"
+        log.write_text(
+            "Downloading torch (2.0MiB)\n"
+            "Downloading mineru (1.0MiB)\n"
+            " Downloaded torch\n",
+            encoding="utf-8",
+        )
+        with mock.patch(
+            "src.me_finder.managed_mineru.time.monotonic",
+            side_effect=[0.0, 2.0],
+        ):
+            manager._update_uv_download_progress("vlm", log, start_offset=0)
+        profile = next(
+            item for item in manager.summary()["profiles"]
+            if item["profile"] == "vlm"
+        )
+        self.assertEqual(profile["downloaded_bytes"], 2 * 1024**2)
+        self.assertEqual(profile["total_bytes"], 3 * 1024**2)
+        self.assertEqual(profile["download_speed_bps"], 1024**2)
+        self.assertEqual(profile["eta_seconds"], 1)
 
     def test_pipeline_install_starts_loopback_service_and_uninstalls(self) -> None:
         manager = self._manager()

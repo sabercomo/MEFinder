@@ -1696,7 +1696,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
           'managed-mineru-pipeline-cancel', 'managed-mineru-auto-install',
           'managed-mineru-hint'
         ].forEach(function(id) { elements[id] = el(); });
-        globalThis.document = {getElementById:function(id) { return elements[id] || null; }};
+        var vlmSection = {hidden:false};
+        globalThis.document = {
+          getElementById:function(id) { return elements[id] || null; },
+          querySelector:function(selector) { return selector.indexOf('vlm') >= 0 ? vlmSection : null; }
+        };
         mineruLocalConfig = {enabled:true, managed:false, endpoint:'http://127.0.0.1:8000'};
         renderManagedMineru({
           supported:true,
@@ -1720,6 +1724,38 @@ class MineruLocalDisplayTests(unittest.TestCase):
                 "下方托管运行时为可选方案。"
             ),
         })
+
+    def test_vlm_option_is_hidden_only_when_hardware_is_not_qualified(self):
+        tail = r"""
+        var vlmSection = {hidden:null};
+        globalThis.document = {
+          getElementById:function() { return null; },
+          querySelector:function() { return vlmSection; }
+        };
+        renderManagedMineru({hardware:{vlm_supported:false}, profiles:[], service:{}});
+        var cpuOnly = vlmSection.hidden;
+        renderManagedMineru({hardware:{vlm_supported:true}, profiles:[], service:{}});
+        return {cpuOnly:cpuOnly, gpuCapable:vlmSection.hidden};
+        """
+        self.assertEqual(_vision_eval(tail), {
+            "cpuOnly": True,
+            "gpuCapable": False,
+        })
+
+    def test_transfer_summary_uses_gigabytes_speed_and_estimated_total(self):
+        tail = r"""
+        return managedMineruTransferSummary({
+          downloaded_bytes:1073741824,
+          total_bytes:2147483648,
+          total_is_estimate:true,
+          download_speed_bps:10485760,
+          eta_seconds:103
+        });
+        """
+        self.assertEqual(
+            _vision_eval(tail),
+            "已下载 1.00 GB / 约 2.00 GB · 10.0 MB/s · 预计剩余约 2 分钟",
+        )
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

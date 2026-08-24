@@ -861,6 +861,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   border-radius: 10px;
   background: var(--surface);
 }
+.managed-mineru-profile-progress { font-variant-numeric: tabular-nums; }
+.managed-mineru-progress { overflow: hidden; width: 100%; height: 5px; margin-top: 5px; border-radius: 999px; background: var(--surface-tertiary); }
+.managed-mineru-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease-out; }
+.managed-mineru-progress.indeterminate > span { animation: local-ocr-progress 1.2s ease-in-out infinite; }
 .managed-mineru-profile .settings-actions { flex: 0 0 auto; }
 .mineru-local-notice {
   display: flex;
@@ -1584,7 +1588,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .appearance-pair { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .local-ocr-progress.indeterminate > span { animation: none; transform: none; }
+  .local-ocr-progress.indeterminate > span,
+  .managed-mineru-progress.indeterminate > span { animation: none; transform: none; }
   .theme-option, .theme-option:hover, .appearance-seg-btn, .appearance-pair-slot, .appearance-btn, .theme-option-check, .appearance-custom-chevron {
     transition-duration: 1ms !important; transform: none !important;
   }

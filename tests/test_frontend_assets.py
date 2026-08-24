@@ -285,10 +285,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.7 后续：补充本地 OCR 自动路由说明，收紧未配置的视觉 API 入口。
     # 0.4.7 后续：本地 MinerU Pipeline/VLM 托管安装与组件清单更新入口。
     # 0.4.7 后续：区分自行部署 MinerU 与 MEFinder 托管安装状态。
+    # 0.4.7 后续：按硬件显示托管方案，并补充 MinerU 下载进度与估时。
     BASELINE_SHA256 = (
-        "42c3c3e04cd3becc34ada86897817267888366667589c766ef28d2b194139a84"
+        "d79a48fe7437bb97b54cab89efc88bfea3edc40cef104b01af86027bda9b196d"
     )
-    BASELINE_BYTES = 845609
+    BASELINE_BYTES = 848419
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

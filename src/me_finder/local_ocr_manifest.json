@@ -11,6 +11,7 @@
         "package": "mineru[pipeline]==3.4.5",
         "model_type": "pipeline",
         "backend": "pipeline",
+        "model_download_bytes": 2595586833,
         "minimum_memory_gb": 16,
         "minimum_disk_gb": 20
       },
@@ -23,6 +24,7 @@
         },
         "model_type": "vlm",
         "backend": "vlm-auto-engine",
+        "model_download_bytes": 2328028720,
         "minimum_vram_gb": 8,
         "minimum_memory_gb": 16,
         "minimum_disk_gb": 20

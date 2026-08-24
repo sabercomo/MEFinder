@@ -30,6 +30,7 @@ function localOCREngineFields(providerId) {
 function localOCRByteSize(value) {
   var bytes = Number(value) || 0;
   if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
@@ -316,8 +317,19 @@ function managedMineruFields(profileId) {
     start: document.getElementById(prefix + '-start'),
     stop: document.getElementById(prefix + '-stop'),
     uninstall: document.getElementById(prefix + '-uninstall'),
-    cancel: document.getElementById(prefix + '-cancel')
+    cancel: document.getElementById(prefix + '-cancel'),
+    progressHint: document.getElementById(prefix + '-progress'),
+    progress: document.getElementById(prefix + '-progress-bar')
   };
+}
+
+function managedMineruTransferSummary(profile) {
+  if (!profile.total_bytes) return '';
+  var total = (profile.total_is_estimate ? '约 ' : '') + localOCRByteSize(profile.total_bytes);
+  var summary = '已下载 ' + localOCRByteSize(profile.downloaded_bytes) + ' / ' + total;
+  if (profile.downloaded_bytes >= profile.total_bytes) return summary + ' · 即将完成';
+  if (!profile.download_speed_bps || profile.eta_seconds == null) return summary + ' · 正在检测网速…';
+  return summary + ' · ' + localOCRByteSize(profile.download_speed_bps) + '/s · ' + localOCREstimatedWait(profile.eta_seconds);
 }
 
 function renderManagedMineru(runtime) {
@@ -333,6 +345,9 @@ function renderManagedMineru(runtime) {
       : '未检测到可用的本地推理硬件';
   }
   var service = runtime.service || {};
+  var vlmProfile = (runtime.profiles || []).find(function(item) { return item.profile === 'vlm'; });
+  var vlmSection = document.querySelector('[data-mineru-profile="vlm"]');
+  if (vlmSection) vlmSection.hidden = !hardware.vlm_supported && !(vlmProfile && vlmProfile.installed);
   var active = false;
   var errors = [];
   (runtime.profiles || []).forEach(function(profile) {
@@ -362,6 +377,19 @@ function renderManagedMineru(runtime) {
     if (fields.stop) fields.stop.hidden = !running || busy;
     if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
     if (fields.cancel) fields.cancel.hidden = !busy;
+    if (fields.progressHint) {
+      var detail = profile.error ? '上次操作失败：' + profile.error : (profile.message || '');
+      var transfer = busy ? managedMineruTransferSummary(profile) : '';
+      if (transfer) detail += (detail ? ' · ' : '') + transfer;
+      fields.progressHint.hidden = !detail;
+      fields.progressHint.textContent = detail;
+    }
+    if (fields.progress) {
+      fields.progress.hidden = !busy;
+      var bar = fields.progress.firstElementChild;
+      if (bar) bar.style.width = profile.progress == null ? '18%' : Math.round(profile.progress * 100) + '%';
+      fields.progress.classList.toggle('indeterminate', busy && profile.progress == null);
+    }
   });
   var autoButton = document.getElementById('managed-mineru-auto-install');
   if (autoButton) {
@@ -375,7 +403,7 @@ function renderManagedMineru(runtime) {
   var hint = document.getElementById('managed-mineru-hint');
   if (hint) hint.textContent = errors[0] || (service.running
     ? '本地服务运行于 ' + service.endpoint
-    : active ? '安装可能下载约 20GB 数据，请保持应用开启。'
+    : active ? '安装需要约 20GB 可用空间，请保持应用开启。'
     : externalConfigured ? '已配置自部署服务 ' + mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案。'
     : '组件按需下载，不会随主程序更新自动安装。');
   if (managedMineruPollTimer) clearTimeout(managedMineruPollTimer);

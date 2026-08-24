@@ -144,6 +144,10 @@ def validate_component_catalog(payload: object) -> None:
         pipeline = profiles["pipeline"]
         vlm = profiles["vlm"]
         packages = vlm.get("packages") if isinstance(vlm, Mapping) else None
+        model_sizes = (
+            pipeline.get("model_download_bytes") if isinstance(pipeline, Mapping) else None,
+            vlm.get("model_download_bytes") if isinstance(vlm, Mapping) else None,
+        )
         if (
             not isinstance(pipeline, Mapping)
             or pipeline.get("package") != f"mineru[pipeline]=={version}"
@@ -164,6 +168,11 @@ def validate_component_catalog(payload: object) -> None:
                 "win32-x86_64": ["pipeline", "vlm"],
                 "linux-x86_64": ["pipeline", "vlm"],
             }
+            or any(
+                size is not None
+                and (not isinstance(size, int) or size <= 0 or size > 20 * 1024**3)
+                for size in model_sizes
+            )
         ):
             raise ComponentCatalogError("MinerU 安装包未固定到清单版本。")
 

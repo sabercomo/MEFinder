@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -41,6 +43,20 @@ MANAGED_MINERU_COMPONENT_DIR = "components/mineru"
 ACTIVE_STATES = frozenset(
     {"provisioning", "downloading_models", "validating", "starting", "cleaning"}
 )
+_MODEL_DOWNLOAD_ESTIMATES = {
+    "pipeline": 2_595_586_833,
+    "vlm": 2_328_028_720,
+}
+_UV_DOWNLOAD_PATTERN = re.compile(
+    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)$",
+    re.MULTILINE,
+)
+_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+)$", re.MULTILINE)
+_BINARY_SIZE_MULTIPLIERS = {
+    "KiB": 1024,
+    "MiB": 1024 * 1024,
+    "GiB": 1024 * 1024 * 1024,
+}
 
 
 class ManagedMinerUError(RuntimeError):
@@ -61,6 +77,7 @@ class MinerUProfile:
     minimum_memory_gb: int
     minimum_disk_gb: int
     minimum_vram_gb: int = 0
+    model_download_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -76,6 +93,13 @@ class MinerUManifest:
 class _ProfileState:
     state: str = "not_installed"
     operation: Optional[str] = None
+    progress: Optional[float] = None
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    total_is_estimate: bool = False
+    download_speed_bps: float = 0.0
+    eta_seconds: Optional[int] = None
+    download_samples: list[tuple[float, int]] = field(default_factory=list)
     message: str = ""
     error: str = ""
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -130,6 +154,10 @@ def load_managed_mineru_manifest(
             minimum_memory_gb=int(item.get("minimum_memory_gb") or 0),
             minimum_disk_gb=int(item.get("minimum_disk_gb") or 0),
             minimum_vram_gb=int(item.get("minimum_vram_gb") or 0),
+            model_download_bytes=int(
+                item.get("model_download_bytes")
+                or _MODEL_DOWNLOAD_ESTIMATES.get(profile_id, 0)
+            ),
         )
     if any(
         not isinstance(item, str) or item not in profiles for item in supported
@@ -405,6 +433,13 @@ class ManagedMinerU:
             state = self._states[profile_id]
             state.state = initial
             state.operation = action
+            state.progress = None
+            state.downloaded_bytes = 0
+            state.total_bytes = 0
+            state.total_is_estimate = False
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = []
             state.message = ""
             state.error = ""
             state.cancel_event = threading.Event()
@@ -498,6 +533,7 @@ class ManagedMinerU:
                 environment=environment,
                 log_path=install_log,
                 timeout=1800,
+                track_uv_downloads=True,
             )
             python_path = staging / platform_manifest.venv_python
             self._set_state(
@@ -519,12 +555,15 @@ class ManagedMinerU:
                 environment=environment,
                 log_path=install_log,
                 timeout=3600,
+                track_uv_downloads=True,
             )
             downloader = self._venv_executable(staging, "mineru-models-download")
             self._set_state(
                 profile_id,
                 "downloading_models",
                 message=f"正在下载 {profile.display_name} 模型",
+                total_bytes=profile.model_download_bytes,
+                total_is_estimate=True,
             )
             self._run_command(
                 profile_id,
@@ -533,6 +572,8 @@ class ManagedMinerU:
                 environment=environment,
                 log_path=staging / "models.log",
                 timeout=14400,
+                track_directory=staging / "models",
+                estimated_total_bytes=profile.model_download_bytes,
             )
             atomic_write_json(
                 staging / "installed.json",
@@ -714,6 +755,8 @@ class ManagedMinerU:
         expected_sha256: str,
     ) -> None:
         request = Request(url, headers={"User-Agent": "MEFinder-MinerU-installer"})
+        self._begin_download_progress(profile_id, 0, expected_size)
+        downloaded = 0
         with self.opener(request, timeout=30) as response, target.open("wb") as output:
             while True:
                 self._raise_if_cancelled(profile_id)
@@ -721,6 +764,8 @@ class ManagedMinerU:
                 if not chunk:
                     break
                 output.write(chunk)
+                downloaded += len(chunk)
+                self._set_download_progress(profile_id, downloaded, expected_size)
         if target.stat().st_size != expected_size:
             raise ManagedMinerUError("uv 下载文件大小与清单不一致。")
         digest = hashlib.sha256(target.read_bytes()).hexdigest()
@@ -736,10 +781,14 @@ class ManagedMinerU:
         environment: Mapping[str, str],
         log_path: Path,
         timeout: int,
+        track_uv_downloads: bool = False,
+        track_directory: Optional[Path] = None,
+        estimated_total_bytes: int = 0,
     ) -> None:
         self._raise_if_cancelled(profile_id)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("ab") as output:
+            progress_log_offset = output.tell()
             process = self.process_launcher(
                 list(command),
                 cwd=str(cwd),
@@ -755,17 +804,47 @@ class ManagedMinerU:
                 self._states[profile_id].process = process
             try:
                 deadline = time.monotonic() + timeout
+                next_progress_update = 0.0
                 while process.poll() is None:
                     if self._states[profile_id].cancel_event.wait(0.1):
                         self._stop_process(process)
                         raise _Cancelled("操作已取消。")
-                    if time.monotonic() >= deadline:
+                    now = time.monotonic()
+                    if now >= next_progress_update:
+                        if track_uv_downloads:
+                            self._update_uv_download_progress(
+                                profile_id,
+                                log_path,
+                                start_offset=progress_log_offset,
+                            )
+                        elif track_directory is not None:
+                            self._set_download_progress(
+                                profile_id,
+                                self._directory_size(track_directory),
+                                estimated_total_bytes,
+                                total_is_estimate=True,
+                            )
+                        next_progress_update = now + 0.5
+                    if now >= deadline:
                         self._stop_process(process)
                         raise ManagedMinerUError("MinerU 安装子进程超时。")
             finally:
                 with self._lock:
                     if self._states[profile_id].process is process:
                         self._states[profile_id].process = None
+        if track_uv_downloads:
+            self._update_uv_download_progress(
+                profile_id,
+                log_path,
+                start_offset=progress_log_offset,
+            )
+        elif track_directory is not None:
+            self._set_download_progress(
+                profile_id,
+                self._directory_size(track_directory),
+                estimated_total_bytes,
+                total_is_estimate=True,
+            )
         if process.returncode:
             detail = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
             raise ManagedMinerUError(
@@ -821,6 +900,12 @@ class ManagedMinerU:
             "minimum_disk_gb": profile.minimum_disk_gb,
             "state": state.state,
             "operation": state.operation,
+            "progress": state.progress,
+            "downloaded_bytes": state.downloaded_bytes,
+            "total_bytes": state.total_bytes,
+            "total_is_estimate": state.total_is_estimate,
+            "download_speed_bps": round(state.download_speed_bps),
+            "eta_seconds": state.eta_seconds,
             "message": state.message,
             "error": state.error,
         }
@@ -855,14 +940,120 @@ class ManagedMinerU:
         profile_id: str,
         state_name: str,
         *,
+        progress: Optional[float] = None,
+        downloaded_bytes: Optional[int] = None,
+        total_bytes: Optional[int] = None,
+        total_is_estimate: bool = False,
         message: str,
         error: str = "",
     ) -> None:
         with self._lock:
             state = self._states[profile_id]
             state.state = state_name
+            state.progress = progress
+            state.downloaded_bytes = downloaded_bytes or 0
+            state.total_bytes = total_bytes or 0
+            state.total_is_estimate = total_is_estimate
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = []
             state.message = message
             state.error = error
+
+    def _begin_download_progress(
+        self,
+        profile_id: str,
+        downloaded: int,
+        total: int,
+        *,
+        total_is_estimate: bool = False,
+    ) -> None:
+        with self._lock:
+            state = self._states[profile_id]
+            state.downloaded_bytes = downloaded
+            state.total_bytes = total
+            state.total_is_estimate = total_is_estimate
+            state.progress = min(1.0, downloaded / total) if total else None
+            state.download_speed_bps = 0.0
+            state.eta_seconds = None
+            state.download_samples = [(time.monotonic(), downloaded)]
+
+    def _update_uv_download_progress(
+        self,
+        profile_id: str,
+        log_path: Path,
+        *,
+        start_offset: int,
+    ) -> None:
+        with log_path.open("rb") as log:
+            log.seek(start_offset)
+            text = log.read().decode("utf-8", errors="replace")
+        announced = {
+            name: round(float(size) * _BINARY_SIZE_MULTIPLIERS[unit])
+            for name, size, unit in _UV_DOWNLOAD_PATTERN.findall(text)
+        }
+        if not announced:
+            return
+        completed_names = set(_UV_DOWNLOADED_PATTERN.findall(text))
+        completed = sum(
+            size for name, size in announced.items() if name in completed_names
+        )
+        total = sum(announced.values())
+        with self._lock:
+            has_samples = bool(self._states[profile_id].download_samples)
+        if not has_samples:
+            self._begin_download_progress(profile_id, 0, total)
+        self._set_download_progress(profile_id, completed, total)
+
+    def _set_download_progress(
+        self,
+        profile_id: str,
+        downloaded: int,
+        total: int,
+        *,
+        total_is_estimate: bool = False,
+    ) -> None:
+        with self._lock:
+            state = self._states[profile_id]
+            downloaded = max(0, downloaded)
+            state.downloaded_bytes = downloaded
+            state.total_bytes = total
+            state.total_is_estimate = total_is_estimate
+            state.progress = min(1.0, downloaded / total) if total else None
+            now = time.monotonic()
+            state.download_samples.append((now, downloaded))
+            cutoff = now - 8
+            while (
+                len(state.download_samples) > 2
+                and state.download_samples[1][0] < cutoff
+            ):
+                state.download_samples.pop(0)
+            started_at, started_bytes = state.download_samples[0]
+            elapsed = now - started_at
+            transferred = downloaded - started_bytes
+            if elapsed >= 0.5 and transferred > 0:
+                state.download_speed_bps = transferred / elapsed
+                state.eta_seconds = (
+                    math.ceil(max(0, total - downloaded) / state.download_speed_bps)
+                    if total else None
+                )
+            elif elapsed >= 0.5:
+                state.download_speed_bps = 0.0
+                state.eta_seconds = None
+
+    @staticmethod
+    def _directory_size(root: Path) -> int:
+        if not root.exists():
+            return 0
+        total = 0
+        for path in root.rglob("*"):
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                total += path.stat().st_size
+            except FileNotFoundError:
+                continue
+        return total
 
     def _cancel(self, profile_id: str) -> None:
         with self._lock:
