@@ -9,6 +9,7 @@ from src.me_finder.archive_transfer_controller import (
     ArchiveTransferController,
 )
 from src.me_finder.document_export import DocumentExportError
+from src.me_finder.markdown_export_normalize import ExportOptions
 from src.me_finder.mineru_api import MinerUError
 
 
@@ -143,6 +144,8 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                     "runtime_root": Path("/runtime"),
                     "source_file_id": " pdf-one ",
                     "output_dir": Path("/app-data/exports"),
+                    # No export_options in the payload → safe defaults.
+                    "options": ExportOptions(),
                 }
             ],
         )
@@ -152,6 +155,32 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                 {"source_id": "pdf-two", "output_dir": str(output_dir)}
             )
         self.assertEqual(self.markdown_calls[-1]["output_dir"], output_dir)
+
+    def test_markdown_export_forwards_export_options(self) -> None:
+        self.controller.export_document_markdown(
+            {
+                "source_id": "pdf-one",
+                "export_options": {
+                    "page_marker_mode": "full",
+                    "remove_running_headers": False,
+                },
+            }
+        )
+        options = self.markdown_calls[-1]["options"]
+        self.assertEqual(options.page_marker_mode, "full")
+        self.assertFalse(options.remove_running_headers)
+        # Unspecified flags keep their safe defaults.
+        self.assertTrue(options.remove_visible_page_numbers)
+        self.assertTrue(options.remove_running_footers)
+
+    def test_markdown_export_rejects_invalid_marker_mode(self) -> None:
+        self.controller.export_document_markdown(
+            {"source_id": "pdf-one", "export_options": {"page_marker_mode": "xml"}}
+        )
+        # Invalid values fall back to the default rather than erroring.
+        self.assertEqual(
+            self.markdown_calls[-1]["options"].page_marker_mode, "printed"
+        )
 
     def test_markdown_export_invalid_payload_fails_before_service(self) -> None:
         self.assertEqual(

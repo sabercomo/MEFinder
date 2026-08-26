@@ -320,6 +320,7 @@ def optimize_database_storage(db_path: Path) -> bool:
             "segment_sets",
             "text_segments",
             "text_segment_spans",
+            "text_segment_paragraph_spans",
             "alignment_runs",
             "alignment_links",
             "alignment_link_members",

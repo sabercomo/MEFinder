@@ -9,6 +9,7 @@ from typing import Callable, Dict, Mapping, Protocol, Tuple
 
 from .document_export import DocumentExportError
 from .document_export_service import export_indexed_pdf, export_indexed_pdf_markdown
+from .markdown_export_normalize import ExportOptions
 from .mineru_api import MinerUError
 
 
@@ -92,12 +93,16 @@ class ArchiveTransferController:
             )
         except ValueError as exc:
             return 400, {"error": str(exc)}
+        # Format-neutral export view: the request may carry the page-anchor
+        # policy and page-cleanup flags (defaults = printed marker + cleanup on).
+        options = ExportOptions.from_mapping(payload.get("export_options"))
         try:
             result = self._export_document_markdown(
                 database_path=self._database_path,
                 runtime_root=self._runtime_root,
                 source_file_id=str(payload.get("source_id") or ""),
                 output_dir=output_dir,
+                options=options,
             )
         except DocumentExportError as exc:
             return 400, {"error": str(exc)}

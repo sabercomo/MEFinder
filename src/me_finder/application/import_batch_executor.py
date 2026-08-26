@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Protocol, Sequence
 
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
-from ..mineru_api import MinerUError
 from .import_job_lifecycle import ImportJobCleanupFailed
 from .import_job_store import ImportJobCancelled
 
@@ -46,6 +45,9 @@ class ImportBatchJobPort(Protocol):
         *,
         backup_existing: bool = False,
     ) -> None:
+        ...
+
+    def index_text_document(self, job_id: str, target: Path) -> str:
         ...
 
     def rebuild_runtime_index(
@@ -146,7 +148,6 @@ class ImportBatchExecutor:
     ) -> None:
         job_ids = [str(item["job_id"]) for item in queued_items]
         batch_size = len(job_ids)
-        pdf_only = all(bool(item["is_pdf"]) for item in queued_items)
         active_items: List[BatchItem] = []
         for item in queued_items:
             job_id = str(item["job_id"])
@@ -154,93 +155,39 @@ class ImportBatchExecutor:
                 continue
             jobs.update_import_job(
                 job_id,
-                phase="text_parsing" if pdf_only else "rebuilding_index",
+                phase="text_parsing",
                 message=(
-                    f"正在逐份解析并写入索引（共 {batch_size} 个 PDF）…"
-                    if pdf_only
-                    else f"正在批量建立索引（共 {batch_size} 个文件）…"
+                    f"正在逐份解析并写入索引（共 {batch_size} 个文件）…"
                 ),
                 parse_route="native",
             )
             if not ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
                 active_items.append(item)
-        if pdf_only:
-            for item in active_items:
-                job_id = str(item["job_id"])
-                try:
+        for item in active_items:
+            job_id = str(item["job_id"])
+            if ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
+                continue
+            try:
+                if bool(item["is_pdf"]):
                     jobs.index_registered_pdf(
                         job_id,
                         str(item["source_file_id"]),
                         backup_existing=False,
                     )
-                except ImportJobCancelled:
-                    ImportBatchExecutor._finish_cancelled(jobs, job_id)
-                    continue
-                except Exception as exc:
-                    if not ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
-                        ImportBatchExecutor._fail_if_active(jobs, job_id, exc)
-                    continue
-                if ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
-                    continue
-                try:
-                    jobs.finalize_import_job(
+                    source_file_id = str(item["source_file_id"])
+                else:
+                    source_file_id = jobs.index_text_document(
                         job_id,
-                        str(item["source_file_id"]),
-                        True,
+                        Path(item["target"]),
                     )
-                except ImportJobCancelled:
-                    ImportBatchExecutor._finish_cancelled(jobs, job_id)
-                    continue
-                ImportBatchExecutor._finish_if_cancelled(jobs, job_id)
-            return
-
-        while active_items:
-            active_items = [
-                item
-                for item in active_items
-                if not ImportBatchExecutor._finish_if_cancelled(
-                    jobs,
-                    str(item["job_id"]),
-                )
-            ]
-            if not active_items:
-                return
-            anchor_job_id = str(active_items[0]["job_id"])
-            expected_source_ids = [
-                str(item["source_file_id"])
-                for item in active_items
-                if bool(item["is_pdf"])
-            ]
-            try:
-                missing_source_ids = jobs.rebuild_runtime_index(
-                    anchor_job_id,
-                    expected_source_ids,
-                )
-                break
             except ImportJobCancelled:
-                ImportBatchExecutor._finish_cancelled(jobs, anchor_job_id)
-                active_items = active_items[1:]
-            except Exception as exc:
-                for item in active_items:
-                    job_id = str(item["job_id"])
-                    if ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
-                        continue
-                    ImportBatchExecutor._fail_if_active(jobs, job_id, exc)
-                return
-        for item in active_items:
-            job_id = str(item["job_id"])
-            if ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
+                ImportBatchExecutor._finish_cancelled(jobs, job_id)
                 continue
-            source_file_id = str(item["source_file_id"])
-            if source_file_id in missing_source_ids:
-                ImportBatchExecutor._fail_if_active(
-                    jobs,
-                    job_id,
-                    MinerUError(
-                        f"{item.get('display_file_name') or Path(item['target']).name} "
-                        "未能进入索引：重建后未找到文献记录。"
-                    ),
-                )
+            except Exception as exc:
+                if not ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
+                    ImportBatchExecutor._fail_if_active(jobs, job_id, exc)
+                continue
+            if ImportBatchExecutor._finish_if_cancelled(jobs, job_id):
                 continue
             try:
                 jobs.finalize_import_job(

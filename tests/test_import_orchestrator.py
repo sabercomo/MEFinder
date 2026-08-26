@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Mapping, Sequence, Tuple
@@ -146,7 +147,17 @@ class ImportOrchestratorTests(unittest.TestCase):
 
     def _target(self, name: str = "sample.docx") -> Path:
         target = self.root / name
-        target.write_bytes(b"document-body")
+        if target.suffix.lower() == ".docx":
+            document_xml = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                '<w:body><w:p><w:r><w:t>document body</w:t></w:r></w:p></w:body>'
+                '</w:document>'
+            )
+            with zipfile.ZipFile(target, "w") as archive:
+                archive.writestr("word/document.xml", document_xml)
+        else:
+            target.write_bytes(b"document-body")
         return target
 
     def test_startup_restores_without_submitting_work(self) -> None:
@@ -244,7 +255,8 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertEqual(status["status"], "completed")
         self.assertEqual(status["phase"], "completed")
         self.assertEqual(status["message"], "导入完成，已自动更新索引")
-        self.assertEqual(len(self.runtime.rebuild_calls), 1)
+        self.assertEqual(len(self.runtime.replace_calls), 1)
+        self.assertEqual(self.runtime.rebuild_calls, [])
         self.assertIsNone(self.journal.get_job(job_id))
         self.assertEqual(self.mineru_calls, 0)
         self.assertEqual(self.provider_calls, 0)
@@ -873,10 +885,7 @@ class ImportOrchestratorTests(unittest.TestCase):
             False,
         )
 
-        def cancel_then_fail(
-            current_job_id: str,
-            _expected_source_ids: object = None,
-        ) -> set[str]:
+        def cancel_then_fail(current_job_id: str, _target: Path) -> str:
             self.assertEqual(
                 orchestrator.dismiss_import_job(current_job_id),
                 "cancelling",
@@ -885,7 +894,7 @@ class ImportOrchestratorTests(unittest.TestCase):
 
         with mock.patch.object(
             orchestrator,
-            "rebuild_runtime_index",
+            "index_text_document",
             side_effect=cancel_then_fail,
         ):
             self.queue.run_next()
@@ -1224,7 +1233,7 @@ class ImportOrchestratorTests(unittest.TestCase):
             "is_pdf": False,
         }
 
-    def test_native_word_batch_uses_one_rebuild(self) -> None:
+    def test_native_word_batch_replaces_each_document_without_full_rebuild(self) -> None:
         orchestrator = self._orchestrator()
         first = self._target("first.docx")
         second = self._target("second.docx")
@@ -1250,7 +1259,8 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertEqual(len(self.queue.tasks), 1)
         self.queue.run_next()
 
-        self.assertEqual(len(self.runtime.rebuild_calls), 1)
+        self.assertEqual(len(self.runtime.replace_calls), 2)
+        self.assertEqual(self.runtime.rebuild_calls, [])
         self.assertEqual(
             [orchestrator.job_status(job_id)["status"] for job_id in job_ids],
             ["completed", "completed"],
@@ -1287,7 +1297,8 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertIsNone(orchestrator.job_status(job_ids[0]))
         self.assertIsNone(self.journal.get_job(job_ids[0]))
         self.assertEqual(orchestrator.job_status(job_ids[1])["status"], "completed")
-        self.assertEqual(len(self.runtime.rebuild_calls), 1)
+        self.assertEqual(len(self.runtime.replace_calls), 1)
+        self.assertEqual(self.runtime.rebuild_calls, [])
 
     def test_native_batch_finalization_cannot_complete_a_cancelled_job(self) -> None:
         orchestrator = self._orchestrator()

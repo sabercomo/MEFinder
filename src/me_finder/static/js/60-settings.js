@@ -802,6 +802,7 @@ function applyPreferencesData(data, requestedThemeRevision) {
   settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
     ? 'with_pdf'
     : 'data_only';
+  settingsStore.exportPageCleanup = normalizeExportPageCleanup(data.export_page_cleanup);
   settingsStore.autoUpdateEnabled = data.auto_update === true;
   enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
   saveLocalCitationStyles(enabledCitationStyles);
@@ -812,6 +813,7 @@ function applyPreferencesData(data, requestedThemeRevision) {
   renderPdfOpenMode();
   renderPdfParseMode();
   renderDocumentExportMode();
+  renderExportPageCleanup();
   renderCitationStylePreferences();
   settingsStore.scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
   renderScanDirectories();
@@ -902,6 +904,97 @@ async function setDocumentExportMode(mode) {
   }
 }
 
+function normalizeExportPageCleanup(value) {
+  var defaults = {
+    page_marker_mode: 'printed',
+    remove_visible_page_numbers: true,
+    remove_running_headers: true,
+    remove_running_footers: true
+  };
+  if (!value || typeof value !== 'object') return defaults;
+  var mode = value.page_marker_mode;
+  if (mode === 'none' || mode === 'printed' || mode === 'full') defaults.page_marker_mode = mode;
+  ['remove_visible_page_numbers', 'remove_running_headers', 'remove_running_footers'].forEach(function(key) {
+    if (typeof value[key] === 'boolean') defaults[key] = value[key];
+  });
+  return defaults;
+}
+
+function setExportPageCleanupControlsDisabled(disabled) {
+  document.querySelectorAll('#export-cleanup-toggles input, input[name="page-marker-mode"]').forEach(function(input) {
+    input.disabled = disabled;
+  });
+}
+
+function renderExportPageCleanup() {
+  var cleanup = settingsStore.exportPageCleanup || {};
+  var map = {
+    remove_visible_page_numbers: 'export-remove-visible-page-numbers',
+    remove_running_headers: 'export-remove-running-headers',
+    remove_running_footers: 'export-remove-running-footers'
+  };
+  Object.keys(map).forEach(function(key) {
+    var input = document.getElementById(map[key]);
+    if (input) input.checked = cleanup[key] !== false;
+  });
+  document.querySelectorAll('.page-marker-mode').forEach(function(option) {
+    var selected = option.dataset.pageMarkerChoice === cleanup.page_marker_mode;
+    option.classList.toggle('selected', selected);
+    var input = option.querySelector('input[name="page-marker-mode"]');
+    if (input) input.checked = selected;
+  });
+}
+
+async function saveExportPageCleanup(patch, previous) {
+  if (settingsStore.exportPageCleanupSaving || settingsStore.preferencesLoadPromise) {
+    settingsStore.exportPageCleanup = previous;
+    renderExportPageCleanup();
+    return;
+  }
+  settingsStore.exportPageCleanupSaving = true;
+  setExportPageCleanupControlsDisabled(true);
+  renderExportPageCleanup();
+  try {
+    var resp = await fetch('/api/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({export_page_cleanup: patch})
+    });
+    var data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+    settingsStore.exportPageCleanup = normalizeExportPageCleanup(data.export_page_cleanup);
+    settingsStore.preferencesLoaded = true;
+    renderExportPageCleanup();
+  } catch (e) {
+    settingsStore.exportPageCleanup = previous;
+    renderExportPageCleanup();
+    showToast('导出清理设置保存失败：' + e.message);
+  } finally {
+    settingsStore.exportPageCleanupSaving = false;
+    if (!settingsStore.preferencesLoadPromise) setExportPageCleanupControlsDisabled(false);
+  }
+}
+
+function setExportCleanupFlag(key, checked) {
+  if (['remove_visible_page_numbers', 'remove_running_headers', 'remove_running_footers'].indexOf(key) < 0) return;
+  var previous = Object.assign({}, settingsStore.exportPageCleanup);
+  var next = Object.assign({}, previous);
+  next[key] = !!checked;
+  settingsStore.exportPageCleanup = next;
+  var patch = {};
+  patch[key] = !!checked;
+  saveExportPageCleanup(patch, previous);
+}
+
+function setPageMarkerMode(mode) {
+  if (mode !== 'none' && mode !== 'printed' && mode !== 'full') return;
+  var previous = Object.assign({}, settingsStore.exportPageCleanup);
+  var next = Object.assign({}, previous);
+  next.page_marker_mode = mode;
+  settingsStore.exportPageCleanup = next;
+  saveExportPageCleanup({page_marker_mode: mode}, previous);
+}
+
 async function loadPreferences() {
   if (settingsStore.preferencesLoadPromise) return settingsStore.preferencesLoadPromise;
   if (settingsStore.pdfOpenModeSaving || settingsStore.documentExportModeSaving) return null;
@@ -910,11 +1003,13 @@ async function loadPreferences() {
   renderPdfOpenMode();
   renderPdfParseMode();
   renderDocumentExportMode();
+  renderExportPageCleanup();
   renderCitationStylePreferences();
   syncOnlineAutoMatchControl();
   syncLibDefaultLanguageControl();
   setPdfOpenModeControlsDisabled(true);
   setDocumentExportModeControlsDisabled(true);
+  setExportPageCleanupControlsDisabled(true);
   setCitationStyleControlsDisabled(true);
   var current = document.getElementById('pdf-reader-current');
   if (current) {
@@ -946,6 +1041,7 @@ async function loadPreferences() {
       settingsStore.preferencesLoadPromise = null;
       if (!settingsStore.pdfOpenModeSaving) setPdfOpenModeControlsDisabled(false);
       if (!settingsStore.documentExportModeSaving) setDocumentExportModeControlsDisabled(false);
+      if (!settingsStore.exportPageCleanupSaving) setExportPageCleanupControlsDisabled(false);
       if (!settingsStore.citationStylesSaving) setCitationStyleControlsDisabled(false);
     }
   })();

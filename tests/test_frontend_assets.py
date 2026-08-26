@@ -301,10 +301,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.9：作品组自动对齐与结构化阅读器跨版本定位。
     # 0.4.9 后续：两版本结构化阅读器双栏对照与按 Segment 自动跟随。
     # 0.4.9 后续：导入、检索与文献库界面支持 EPUB。
+    # 0.4.9 后续：中英直连对照、作品组工作台、Word/EPUB 分栏与双栏阅读修正。
+    # 0.4.9 后续：双栏对照阅读器与跨版本语义定位前端接线（reader.js locate 流程等）。
+    # 0.4.9 后续：设置页新增“导出清理与页码锚点”（格式中立，Markdown/未来 EPUB 共用）。
     BASELINE_SHA256 = (
-        "b341ae90b0324d60ec835246841727d050300b7fe3a490b209273de89420b0e0"
+        "31933798bca59f9884982694c757f3392697e7f64341e44d8f3197ce098a230d"
     )
-    BASELINE_BYTES = 890279
+    BASELINE_BYTES = 913739
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

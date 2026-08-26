@@ -1,32 +1,65 @@
-"""Persisted PDF text segments and monotonic two-document alignment."""
+"""Persisted document segments and monotonic two-document alignment."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 import sqlite3
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
+import numpy as np
+
+from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
 from .calibration_library import _item_language_code
 from .document_group_metadata import member_display_name
+from .edition_folio_anchors import (
+    FolioBoundaryCandidate,
+    detect_folio_boundary_candidates,
+    verify_folio_boundary_candidates,
+)
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.connection import open_writable_index
+from .semantic_alignment import (
+    EMBEDDING_MODEL,
+    EMBEDDING_RUNTIME_VERSION,
+    HeadingAnchor,
+    LOW_CONFIDENCE_THRESHOLD,
+    NOTE_BLOCK_CONFIDENCE_THRESHOLD,
+    NOTE_CANDIDATE_MARGIN,
+    SEMANTIC_ALIGNMENT_VERSION,
+    EmbeddingProvider,
+    SemanticLink,
+    align_semantic_sequences,
+    alignment_transitions,
+    cached_text_sequence_vectors,
+    embed_text_sequences,
+    mutual_nearest_target_index,
+)
 
 
 SEGMENTER = "me-finder-multilingual-sentence"
-SEGMENTER_VERSION = "1"
-ALIGNMENT_ALGORITHM = "monotonic-length-dp"
-ALIGNMENT_ALGORITHM_VERSION = "1"
+SEGMENTER_VERSION = "12"
+ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
+ALIGNMENT_ALGORITHM_VERSION = "15"
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
 _CLOSING_PUNCTUATION = frozenset("”’\"'）)]】》〉」』")
+_STRUCTURAL_MARKER_LINE = re.compile(
+    r"(?:"
+    r"(?:§\s*[0-9IlOoSs]{1,4}|第\s*[零〇一二两三四五六七八九十百0-9IlOoSs]{1,5}\s*节)"
+    r"\s*[.．、:]?"
+    r"|第\s*[零〇一二两三四五六七八九十百0-9]{1,5}\s*(?:章|篇|部).*"
+    r"|PART\s+(?:ONE|TWO|THREE|FOUR|[IVX]{1,4}|\d{1,2})"
+    r")",
+    re.IGNORECASE,
+)
 _ABBREVIATIONS = frozenset(
     {
         "dr",
@@ -46,19 +79,35 @@ _ABBREVIATIONS = frozenset(
         "z.b",
     }
 )
-_TRANSITIONS: Tuple[Tuple[int, int, float], ...] = (
-    (1, 1, 0.0),
-    (1, 2, 0.55),
-    (2, 1, 0.55),
-    (2, 2, 0.85),
-    (1, 3, 1.1),
-    (3, 1, 1.1),
-    (2, 3, 1.25),
-    (3, 2, 1.25),
-    (3, 3, 1.45),
-    (1, 0, 4.5),
-    (0, 1, 4.5),
+_NON_ALIGNMENT_BLOCK_ROLES = frozenset(
+    {
+        "discarded_block",
+        "footer",
+        "header",
+        "page_footnote",
+        "page_footer",
+        "page_header",
+        "page_number",
+    }
 )
+_LAYOUT_NUMBER = re.compile(r"\s*[0-9]{1,4}\s*\Z")
+
+
+def _is_confirmed_parser_placeholder(text: str) -> bool:
+    normalized = " ".join(text.split()).casefold()
+    return (
+        normalized == "[no text detected]"
+        or normalized == "the following table provides the information in english:"
+        or normalized.startswith("the image contains no discernible text or characters")
+        or (
+            normalized.startswith("the ocr result ")
+            and " is a hallucination" in normalized
+        )
+        or normalized.startswith(
+            "therefore, the correct ocr output must reflect the absence"
+        )
+    )
+WriteWindow = Callable[[], AbstractContextManager[None]]
 
 
 class TextAlignmentError(RuntimeError):
@@ -83,9 +132,34 @@ class PageText:
 
 
 @dataclass(frozen=True)
+class ParagraphText:
+    paragraph_id: str
+    paragraph_index: int
+    payload: Dict[str, object]
+    text: str
+
+
+@dataclass(frozen=True)
 class SegmentDraft:
     text: str
     spans: Tuple[Tuple[int, int, int], ...]
+
+
+@dataclass(frozen=True)
+class ParagraphSegmentDraft:
+    text: str
+    spans: Tuple[Tuple[str, int, int, int], ...]
+
+
+@dataclass(frozen=True)
+class AlignmentPreparation:
+    pivot_set_id: str
+    target_set_id: str
+    pivot_segments: Tuple[Tuple[str, str], ...]
+    target_segments: Tuple[Tuple[str, str], ...]
+    pivot_reusable_texts: Tuple[str, ...] = ()
+    target_reusable_texts: Tuple[str, ...] = ()
+    folio_candidates: Tuple[FolioBoundaryCandidate, ...] = ()
 
 
 def _now() -> str:
@@ -99,11 +173,11 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
 
 
 def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
-    """Install the additive v4 segmentation/alignment tables."""
+    """Install the additive segmentation/alignment tables."""
 
-    if _table_exists(connection, "segment_sets"):
-        return False
-    statements = (
+    changed = False
+    if not _table_exists(connection, "segment_sets"):
+        statements = (
         """
         CREATE TABLE segment_sets (
             segment_set_id TEXT PRIMARY KEY,
@@ -176,10 +250,26 @@ def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
         "CREATE INDEX idx_segment_spans_source_page ON text_segment_spans(source_file_id, pdf_page_index, page_char_start, page_char_end)",
         "CREATE INDEX idx_alignment_runs_pair ON alignment_runs(document_group_id, pivot_source_file_id, target_source_file_id, status)",
         "CREATE INDEX idx_alignment_members_segment ON alignment_link_members(segment_id, side)",
+        )
+        for statement in statements:
+            connection.execute(statement)
+        changed = True
+    if not _table_exists(connection, "text_segment_paragraph_spans"):
+        connection.execute(
+            "CREATE TABLE text_segment_paragraph_spans ("
+            "segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE, "
+            "source_file_id TEXT NOT NULL, paragraph_id TEXT NOT NULL, "
+            "paragraph_index INTEGER NOT NULL, paragraph_char_start INTEGER NOT NULL, "
+            "paragraph_char_end INTEGER NOT NULL, span_order INTEGER NOT NULL, "
+            "PRIMARY KEY(segment_id, span_order))"
+        )
+        changed = True
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_segment_paragraph_spans_source_position "
+        "ON text_segment_paragraph_spans(source_file_id, paragraph_index, "
+        "paragraph_char_start, paragraph_char_end)"
     )
-    for statement in statements:
-        connection.execute(statement)
-    return True
+    return changed
 
 
 def _json_object(value: object) -> Dict[str, object]:
@@ -219,9 +309,21 @@ def _source_row(connection: sqlite3.Connection, source_id: str) -> sqlite3.Row:
     ).fetchone()
     if row is None:
         raise InvalidAlignmentRequest("文献不存在。")
-    if str(row["source_type"] or "").casefold() != "pdf":
-        raise InvalidAlignmentRequest("0.4.9 的自动对齐只支持 PDF 文献。")
+    _source_kind(row)
     return row
+
+
+def _source_kind(row: Mapping[str, object]) -> str:
+    source_type = str(row["source_type"] or "").casefold()
+    if source_type == "pdf":
+        return "pdf"
+    payload = _json_object(row["payload_json"])
+    source_format = str(
+        payload.get("file_format") or payload.get("source_format") or ""
+    ).casefold()
+    if source_type == "epub" or (source_type == "word" and source_format == "epub"):
+        return "epub"
+    raise InvalidAlignmentRequest("自动对齐只支持 PDF 和 EPUB 文献。")
 
 
 def _load_pages(
@@ -238,9 +340,31 @@ def _load_pages(
     for row in rows:
         payload = _json_object(row["payload_json"])
         text = str(payload.get("text_raw") or "")
+        blocks = payload.get("blocks")
+        if isinstance(blocks, list):
+            attach_page_block_offsets(text, blocks)
         if pieces:
-            pieces.append("\n")
-            cursor += 1
+            previous_text = pages[-1].text
+            toc_boundary = (
+                re.search(
+                    r"(?im)^\s*(?:(?:contents|table of contents|inhalt(?:sverzeichnis)?)\b|目录|目錄)",
+                    previous_text,
+                )
+                or re.search(
+                    r"(?im)^\s*(?:(?:contents|table of contents|inhalt(?:sverzeichnis)?)\b|目录|目錄)",
+                    text,
+                )
+                or len(re.findall(r"(?:\.\s*){4,}", previous_text)) >= 2
+            )
+            required_newlines = 2 if toc_boundary else 1
+            trailing_newlines = len(previous_text) - len(previous_text.rstrip("\n"))
+            leading_newlines = len(text) - len(text.lstrip("\n"))
+            separator = "\n" * max(
+                0,
+                required_newlines - trailing_newlines - leading_newlines,
+            )
+            pieces.append(separator)
+            cursor += len(separator)
         start = cursor
         pieces.append(text)
         cursor += len(text)
@@ -256,7 +380,26 @@ def _load_pages(
     return "".join(pieces), pages
 
 
-def _source_text_hash(pages: Sequence[PageText]) -> str:
+def _load_paragraphs(
+    connection: sqlite3.Connection, source_id: str
+) -> List[ParagraphText]:
+    rows = connection.execute(
+        "SELECT paragraph_id, paragraph_index, text_raw, payload_json "
+        "FROM paragraphs WHERE source_file_id = ? ORDER BY paragraph_index, rowid",
+        (source_id,),
+    ).fetchall()
+    return [
+        ParagraphText(
+            paragraph_id=str(row["paragraph_id"]),
+            paragraph_index=int(row["paragraph_index"]),
+            payload=_json_object(row["payload_json"]),
+            text=str(row["text_raw"] or ""),
+        )
+        for row in rows
+    ]
+
+
+def _pdf_source_text_hash(pages: Sequence[PageText]) -> str:
     digest = hashlib.sha256()
     for page in pages:
         digest.update(str(page.page_index).encode("ascii"))
@@ -270,10 +413,24 @@ def _source_text_hash(pages: Sequence[PageText]) -> str:
     return digest.hexdigest()
 
 
+def _paragraph_source_text_hash(paragraphs: Sequence[ParagraphText]) -> str:
+    digest = hashlib.sha256()
+    for paragraph in paragraphs:
+        digest.update(paragraph.paragraph_id.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(paragraph.paragraph_index).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(paragraph.text.encode("utf-8")).digest())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def _period_ends_sentence(text: str, index: int) -> bool:
     before = text[index - 1] if index else ""
     after = text[index + 1] if index + 1 < len(text) else ""
     if before.isdigit() and after.isdigit():
+        return False
+    if re.search(r"\.\s*\Z", text[:index]) or re.match(r"\s*\.", text[index + 1 :]):
         return False
     word_match = re.search(r"([A-Za-zÀ-ÖØ-öø-ÿ.]+)\Z", text[:index])
     word = word_match.group(1).casefold() if word_match else ""
@@ -299,6 +456,14 @@ def _raw_segment_ranges(text: str) -> Iterable[Tuple[int, int]]:
             index = end
             continue
         if char == "\n":
+            line_start = text.rfind("\n", 0, index) + 1
+            if _STRUCTURAL_MARKER_LINE.fullmatch(text[line_start:index].strip()):
+                if start < line_start:
+                    yield start, line_start
+                yield max(start, line_start), index
+                index += 1
+                start = index
+                continue
             match = re.match(r"\n[ \t]*\n+", text[index:])
             if match:
                 yield start, index
@@ -329,33 +494,164 @@ def segment_pdf_text(full_text: str, pages: Sequence[PageText]) -> List[SegmentD
     """Split reading-order PDF text and retain exact page-codepoint spans."""
 
     drafts: List[SegmentDraft] = []
-    for raw_start, raw_end in _raw_segment_ranges(full_text):
-        for bounded_start, bounded_end in _bounded_ranges(
-            full_text, raw_start, raw_end
-        ):
-            while bounded_start < bounded_end and full_text[bounded_start].isspace():
-                bounded_start += 1
-            while bounded_end > bounded_start and full_text[bounded_end - 1].isspace():
-                bounded_end -= 1
-            if bounded_start >= bounded_end:
+    page_cursor = 0
+    excluded_ranges: List[Tuple[int, int]] = []
+    margin_text_counts: Dict[str, int] = {}
+    page_metrics: Dict[int, Tuple[float, float]] = {}
+    for page in pages:
+        blocks = page.payload.get("blocks")
+        if not isinstance(blocks, list):
+            continue
+        width, height = _layout_bbox_scale(
+            blocks,
+            float(page.payload.get("page_width") or 1000.0),
+            float(page.payload.get("page_height") or 1000.0),
+        )
+        page_metrics[page.page_index] = (width, height)
+        seen: set[str] = set()
+        for block in blocks:
+            if not isinstance(block, dict):
                 continue
-            spans: List[Tuple[int, int, int]] = []
-            for page in pages:
-                overlap_start = max(bounded_start, page.global_start)
-                overlap_end = min(bounded_end, page.global_end)
-                if overlap_end > overlap_start:
-                    spans.append(
-                        (
-                            page.page_index,
-                            overlap_start - page.global_start,
-                            overlap_end - page.global_start,
+            bbox = _normalized_page_bbox(block, width, height)
+            text = " ".join(str(block.get("text") or "").split())
+            if not text or bbox is None:
+                continue
+            y_center = (bbox[1] + bbox[3]) / 2.0
+            if 0.14 < y_center < 0.86:
+                continue
+            key = re.sub(r"[0-9]+", "#", text.casefold())
+            if len(key) <= 160:
+                seen.add(key)
+        for key in seen:
+            margin_text_counts[key] = margin_text_counts.get(key, 0) + 1
+    repeated_margin_texts = {
+        key for key, count in margin_text_counts.items() if count >= 3
+    }
+    for page in pages:
+        blocks = page.payload.get("blocks")
+        if not isinstance(blocks, list):
+            continue
+        width, height = page_metrics.get(page.page_index, (1000.0, 1000.0))
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            role = str(
+                block.get("mineru_type")
+                or block.get("parser_type")
+                or block.get("type")
+                or ""
+            ).strip().casefold()
+            excluded = role in _NON_ALIGNMENT_BLOCK_ROLES
+            text = " ".join(str(block.get("text") or "").split())
+            bbox = _normalized_page_bbox(block, width, height)
+            if bbox is not None and text:
+                x_center = (bbox[0] + bbox[2]) / 2.0
+                y_center = (bbox[1] + bbox[3]) / 2.0
+                key = re.sub(r"[0-9]+", "#", text.casefold())
+                excluded = excluded or bool(
+                    key in repeated_margin_texts
+                    and (y_center <= 0.14 or y_center >= 0.86)
+                )
+                excluded = excluded or bool(
+                    _LAYOUT_NUMBER.fullmatch(text)
+                    and (
+                        x_center < 0.12
+                        or x_center > 0.82
+                        or y_center < 0.14
+                        or y_center > 0.86
+                    )
+                )
+            if not excluded:
+                continue
+            start = int(block.get("page_char_start") or 0)
+            end = int(block.get("page_char_end") or start)
+            if 0 <= start < end <= len(page.text):
+                excluded_ranges.append(
+                    (page.global_start + start, page.global_start + end)
+                )
+    for raw_start, raw_end in _raw_segment_ranges(full_text):
+        clean_ranges = [(raw_start, raw_end)]
+        for excluded_start, excluded_end in excluded_ranges:
+            next_ranges: List[Tuple[int, int]] = []
+            for clean_start, clean_end in clean_ranges:
+                if excluded_end <= clean_start or excluded_start >= clean_end:
+                    next_ranges.append((clean_start, clean_end))
+                    continue
+                if clean_start < excluded_start:
+                    next_ranges.append((clean_start, excluded_start))
+                if excluded_end < clean_end:
+                    next_ranges.append((excluded_end, clean_end))
+            clean_ranges = next_ranges
+        for clean_start, clean_end in clean_ranges:
+            for bounded_start, bounded_end in _bounded_ranges(
+                full_text, clean_start, clean_end
+            ):
+                while bounded_start < bounded_end and full_text[bounded_start].isspace():
+                    bounded_start += 1
+                while bounded_end > bounded_start and full_text[bounded_end - 1].isspace():
+                    bounded_end -= 1
+                if bounded_start >= bounded_end:
+                    continue
+                segment_text = full_text[bounded_start:bounded_end]
+                if _is_confirmed_parser_placeholder(segment_text):
+                    continue
+                spans: List[Tuple[int, int, int]] = []
+                while (
+                    page_cursor < len(pages)
+                    and pages[page_cursor].global_end <= bounded_start
+                ):
+                    page_cursor += 1
+                overlap_cursor = page_cursor
+                while (
+                    overlap_cursor < len(pages)
+                    and pages[overlap_cursor].global_start < bounded_end
+                ):
+                    page = pages[overlap_cursor]
+                    overlap_start = max(bounded_start, page.global_start)
+                    overlap_end = min(bounded_end, page.global_end)
+                    if overlap_end > overlap_start:
+                        spans.append(
+                            (
+                                page.page_index,
+                                overlap_start - page.global_start,
+                                overlap_end - page.global_start,
+                            )
+                        )
+                    overlap_cursor += 1
+                if spans:
+                    drafts.append(
+                        SegmentDraft(
+                            text=segment_text,
+                            spans=tuple(spans),
                         )
                     )
-            if spans:
+    return drafts
+
+
+def segment_paragraph_text(
+    paragraphs: Sequence[ParagraphText],
+) -> List[ParagraphSegmentDraft]:
+    """Split EPUB paragraphs locally and retain exact paragraph-codepoint spans."""
+
+    drafts: List[ParagraphSegmentDraft] = []
+    for paragraph in paragraphs:
+        for raw_start, raw_end in _raw_segment_ranges(paragraph.text):
+            for start, end in _bounded_ranges(paragraph.text, raw_start, raw_end):
+                while start < end and paragraph.text[start].isspace():
+                    start += 1
+                while end > start and paragraph.text[end - 1].isspace():
+                    end -= 1
+                if start >= end:
+                    continue
                 drafts.append(
-                    SegmentDraft(
-                        text=full_text[bounded_start:bounded_end],
-                        spans=tuple(spans),
+                    ParagraphSegmentDraft(
+                        text=paragraph.text[start:end],
+                        spans=((
+                            paragraph.paragraph_id,
+                            paragraph.paragraph_index,
+                            start,
+                            end,
+                        ),),
                     )
                 )
     return drafts
@@ -365,10 +661,18 @@ def _segment_set(
     connection: sqlite3.Connection, source_id: str
 ) -> Tuple[str, List[Tuple[str, str]]]:
     source = _source_row(connection, source_id)
-    full_text, pages = _load_pages(connection, source_id)
+    source_kind = _source_kind(source)
+    pages: List[PageText] = []
+    paragraphs: List[ParagraphText] = []
+    if source_kind == "pdf":
+        full_text, pages = _load_pages(connection, source_id)
+        text_hash = _pdf_source_text_hash(pages)
+    else:
+        paragraphs = _load_paragraphs(connection, source_id)
+        full_text = "\n".join(paragraph.text for paragraph in paragraphs)
+        text_hash = _paragraph_source_text_hash(paragraphs)
     if not full_text.strip():
-        raise InvalidAlignmentRequest("文献没有可用于对齐的 PDF 文本。")
-    text_hash = _source_text_hash(pages)
+        raise InvalidAlignmentRequest("文献没有可用于对齐的文本。")
     existing = connection.execute(
         "SELECT segment_set_id FROM segment_sets WHERE source_file_id = ? "
         "AND source_text_hash = ? AND segmenter = ? AND segmenter_version = ?",
@@ -386,10 +690,11 @@ def _segment_set(
         ]
         return segment_set_id, segments
 
-    connection.execute(
-        "DELETE FROM segment_sets WHERE source_file_id = ?",
-        (source_id,),
-    )
+    drafts: Sequence[SegmentDraft | ParagraphSegmentDraft]
+    if source_kind == "pdf":
+        drafts = segment_pdf_text(full_text, pages)
+    else:
+        drafts = segment_paragraph_text(paragraphs)
     payload = _json_object(source["payload_json"])
     language_code = str(payload.get("language_code") or "").strip()
     if not language_code:
@@ -418,170 +723,135 @@ def _segment_set(
         ),
     )
     segments: List[Tuple[str, str]] = []
-    for order_index, draft in enumerate(segment_pdf_text(full_text, pages)):
+    segment_rows: List[Tuple[object, ...]] = []
+    page_span_rows: List[Tuple[object, ...]] = []
+    paragraph_span_rows: List[Tuple[object, ...]] = []
+    for order_index, draft in enumerate(drafts):
         segment_digest = hashlib.sha256(
             f"{segment_set_id}\0{order_index}\0{draft.text}".encode("utf-8")
         ).hexdigest()[:24]
         segment_id = f"segment-{segment_digest}"
-        connection.execute(
-            "INSERT INTO text_segments(segment_id, segment_set_id, order_index, text_raw) "
-            "VALUES (?, ?, ?, ?)",
-            (segment_id, segment_set_id, order_index, draft.text),
-        )
+        segment_rows.append((segment_id, segment_set_id, order_index, draft.text))
+        if source_kind == "pdf":
+            page_span_rows.extend(
+                (segment_id, source_id, page, start, end, span_order)
+                for span_order, (page, start, end) in enumerate(draft.spans)
+            )
+        else:
+            paragraph_span_rows.extend(
+                (
+                    segment_id,
+                    source_id,
+                    paragraph_id,
+                    paragraph_index,
+                    start,
+                    end,
+                    span_order,
+                )
+                for span_order, (
+                    paragraph_id,
+                    paragraph_index,
+                    start,
+                    end,
+                ) in enumerate(draft.spans)
+            )
+        segments.append((segment_id, draft.text))
+    if not segments:
+        raise InvalidAlignmentRequest("文献没有可用于对齐的 Segment。")
+    connection.executemany(
+        "INSERT INTO text_segments(segment_id, segment_set_id, order_index, text_raw) "
+        "VALUES (?, ?, ?, ?)",
+        segment_rows,
+    )
+    if page_span_rows:
         connection.executemany(
             "INSERT INTO text_segment_spans(segment_id, source_file_id, "
             "pdf_page_index, page_char_start, page_char_end, span_order) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (segment_id, source_id, page, start, end, span_order)
-                for span_order, (page, start, end) in enumerate(draft.spans)
-            ],
+            page_span_rows,
         )
-        segments.append((segment_id, draft.text))
-    if not segments:
-        raise InvalidAlignmentRequest("文献没有可用于对齐的 Segment。")
+    if paragraph_span_rows:
+        connection.executemany(
+            "INSERT INTO text_segment_paragraph_spans(segment_id, source_file_id, "
+            "paragraph_id, paragraph_index, paragraph_char_start, "
+            "paragraph_char_end, span_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            paragraph_span_rows,
+        )
     return segment_set_id, segments
 
 
-def _effective_length(text: str) -> int:
-    return max(1, sum(not character.isspace() for character in text))
-
-
-def _transition_cost(
-    source_lengths: Sequence[int],
-    target_lengths: Sequence[int],
-    source_start: int,
-    target_start: int,
-    source_count: int,
-    target_count: int,
-    ratio: float,
-    penalty: float,
-) -> float:
-    source_length = sum(
-        source_lengths[source_start : source_start + source_count]
+def _previous_segment_texts(
+    connection: sqlite3.Connection,
+    source_id: str,
+    current_segment_set_id: str,
+) -> Tuple[str, ...]:
+    row = connection.execute(
+        "SELECT segment_set_id FROM segment_sets "
+        "WHERE source_file_id = ? AND segmenter = ? "
+        "AND segment_set_id <> ? AND segmenter_version <> ? "
+        "ORDER BY created_at DESC LIMIT 1",
+        (source_id, SEGMENTER, current_segment_set_id, SEGMENTER_VERSION),
+    ).fetchone()
+    if row is None:
+        return ()
+    return tuple(
+        str(segment["text_raw"])
+        for segment in connection.execute(
+            "SELECT text_raw FROM text_segments WHERE segment_set_id = ? "
+            "ORDER BY order_index",
+            (row["segment_set_id"],),
+        )
     )
-    target_length = sum(
-        target_lengths[target_start : target_start + target_count]
-    )
-    if source_count == 0 or target_count == 0:
-        return penalty + math.log1p(source_length + target_length) / 2.0
-    expected = max(ratio * source_length, 1.0)
-    length_cost = abs(target_length - expected) / math.sqrt(
-        target_length + expected
-    )
-    return penalty + length_cost
 
 
 def align_segment_sequences(
-    source_texts: Sequence[str], target_texts: Sequence[str]
-) -> List[Tuple[int, int, int, int, float]]:
-    """Return monotonic 0..3-by-0..3 links using a bounded length DP."""
+    source_texts: Sequence[str],
+    target_texts: Sequence[str],
+    *,
+    cache_dir: Path,
+    embedding_provider: EmbeddingProvider | None = None,
+    reusable_sequences: Sequence[Sequence[str]] = (),
+    folio_candidates: Sequence[FolioBoundaryCandidate] = (),
+) -> Tuple[List[SemanticLink], list]:
+    """Return chapter-anchored semantic links and the anchors used."""
 
-    source_lengths = [_effective_length(text) for text in source_texts]
-    target_lengths = [_effective_length(text) for text in target_texts]
-    source_count = len(source_lengths)
-    target_count = len(target_lengths)
-    if not source_count or not target_count:
-        raise InvalidAlignmentRequest("两本文献都必须至少包含一个 Segment。")
-    ratio = sum(target_lengths) / max(sum(source_lengths), 1)
-    full_matrix = source_count * target_count <= 400_000
-    band = max(96, abs(target_count - source_count) // 20)
-    row_bounds: List[Tuple[int, int]] = []
-    back_rows: List[bytearray] = []
-    recent_costs: Dict[int, Tuple[int, List[float]]] = {}
-
-    def bounds(source_index: int) -> Tuple[int, int]:
-        if full_matrix:
-            return 0, target_count
-        expected = round(source_index * target_count / source_count)
-        return max(0, expected - band), min(target_count, expected + band)
-
-    for source_index in range(source_count + 1):
-        row_start, row_end = bounds(source_index)
-        row_bounds.append((row_start, row_end))
-        costs = [math.inf] * (row_end - row_start + 1)
-        backs = bytearray([255]) * len(costs)
-        if source_index == 0 and row_start == 0:
-            costs[0] = 0.0
-        recent_costs[source_index] = (row_start, costs)
-        for target_index in range(row_start, row_end + 1):
-            cell_offset = target_index - row_start
-            if source_index == 0 and target_index == 0:
-                continue
-            best = math.inf
-            best_transition = 255
-            for transition_index, (di, dj, penalty) in enumerate(_TRANSITIONS):
-                previous_source = source_index - di
-                previous_target = target_index - dj
-                if previous_source < 0 or previous_target < 0:
-                    continue
-                previous_row = recent_costs.get(previous_source)
-                if previous_row is None:
-                    continue
-                previous_start, previous_costs = previous_row
-                previous_offset = previous_target - previous_start
-                if previous_offset < 0 or previous_offset >= len(previous_costs):
-                    continue
-                previous_cost = previous_costs[previous_offset]
-                if math.isinf(previous_cost):
-                    continue
-                candidate = previous_cost + _transition_cost(
-                    source_lengths,
-                    target_lengths,
-                    previous_source,
-                    previous_target,
-                    di,
-                    dj,
-                    ratio,
-                    penalty,
-                )
-                if candidate < best:
-                    best = candidate
-                    best_transition = transition_index
-            costs[cell_offset] = best
-            backs[cell_offset] = best_transition
-        back_rows.append(backs)
-        for expired in tuple(recent_costs):
-            if expired < source_index - 3:
-                del recent_costs[expired]
-
-    destination_start, destination_costs = recent_costs[source_count]
-    destination_offset = target_count - destination_start
-    if (
-        destination_offset < 0
-        or destination_offset >= len(destination_costs)
-        or math.isinf(destination_costs[destination_offset])
-    ):
-        raise TextAlignmentError("对齐路径超出单调搜索带。")
-
-    links: List[Tuple[int, int, int, int, float]] = []
-    source_index = source_count
-    target_index = target_count
-    while source_index or target_index:
-        row_start, _row_end = row_bounds[source_index]
-        transition_index = back_rows[source_index][target_index - row_start]
-        if transition_index == 255:
-            raise TextAlignmentError("无法回溯完整的对齐路径。")
-        di, dj, penalty = _TRANSITIONS[transition_index]
-        previous_source = source_index - di
-        previous_target = target_index - dj
-        cost = _transition_cost(
-            source_lengths,
-            target_lengths,
-            previous_source,
-            previous_target,
-            di,
-            dj,
-            ratio,
-            penalty,
+    if embedding_provider is None:
+        source_vectors, target_vectors = embed_text_sequences(
+            [source_texts, target_texts],
+            cache_dir,
+            reusable_sequences=reusable_sequences,
         )
-        links.append(
-            (previous_source, source_index, previous_target, target_index, cost)
-        )
-        source_index = previous_source
-        target_index = previous_target
-    links.reverse()
-    return links
+        embeddings = np.vstack([source_vectors, target_vectors])
+    else:
+        embeddings = embedding_provider([*source_texts, *target_texts], cache_dir)
+        source_vectors = embeddings[: len(source_texts)]
+        target_vectors = embeddings[len(source_texts) :]
+    verified_folios = verify_folio_boundary_candidates(
+        folio_candidates, source_vectors, target_vectors
+    )
+    return align_semantic_sequences(
+        source_texts,
+        target_texts,
+        embeddings,
+        [
+            HeadingAnchor(
+                candidate.pivot_segment_index,
+                candidate.target_segment_index,
+                candidate.key,
+            )
+            for candidate in verified_folios
+        ],
+    )
+
+
+def _default_alignment_model_cache(db_path: Path) -> Path:
+    index_path = Path(db_path).resolve()
+    runtime_root = (
+        index_path.parent.parent
+        if index_path.parent.name.casefold() == "data"
+        else index_path.parent
+    )
+    return runtime_root / "components" / "text-alignment" / "models"
 
 
 def _require_pair(
@@ -591,15 +861,13 @@ def _require_pair(
     target_source_id: str,
 ) -> None:
     group = connection.execute(
-        "SELECT base_source_file_id FROM document_groups WHERE document_group_id = ?",
+        "SELECT 1 FROM document_groups WHERE document_group_id = ?",
         (document_group_id,),
     ).fetchone()
     if group is None:
         raise InvalidAlignmentRequest("作品组不存在。")
-    if str(group["base_source_file_id"] or "") != pivot_source_id:
-        raise InvalidAlignmentRequest("请先把基准文献设为作品组的基准版本。")
     if pivot_source_id == target_source_id:
-        raise InvalidAlignmentRequest("基准版本和目标版本不能相同。")
+        raise InvalidAlignmentRequest("两个对齐版本不能相同。")
     member_ids = {
         str(row["source_file_id"])
         for row in connection.execute(
@@ -617,26 +885,96 @@ def _generate_alignment_on_connection(
     document_group_id: str,
     pivot_source_id: str,
     target_source_id: str,
+    *,
+    model_cache_dir: Path,
+    embedding_provider: EmbeddingProvider | None = None,
+    preparation: AlignmentPreparation | None = None,
+    computed: Tuple[List[SemanticLink], List[HeadingAnchor]] | None = None,
 ) -> Dict[str, object]:
     _require_pair(
         connection, document_group_id, pivot_source_id, target_source_id
     )
-    pivot_set_id, pivot_segments = _segment_set(connection, pivot_source_id)
-    target_set_id, target_segments = _segment_set(connection, target_source_id)
-    aligned = align_segment_sequences(
-        [text for _segment_id, text in pivot_segments],
-        [text for _segment_id, text in target_segments],
-    )
+    if preparation is None:
+        pivot_set_id, pivot_segments = _segment_set(connection, pivot_source_id)
+        target_set_id, target_segments = _segment_set(connection, target_source_id)
+        preparation = AlignmentPreparation(
+            pivot_set_id,
+            target_set_id,
+            tuple(pivot_segments),
+            tuple(target_segments),
+            _previous_segment_texts(connection, pivot_source_id, pivot_set_id),
+            _previous_segment_texts(connection, target_source_id, target_set_id),
+            tuple(
+                detect_folio_boundary_candidates(
+                    connection,
+                    pivot_source_id,
+                    target_source_id,
+                    pivot_set_id,
+                    target_set_id,
+                )
+            ),
+        )
+    pivot_set_id = preparation.pivot_set_id
+    target_set_id = preparation.target_set_id
+    pivot_segments = preparation.pivot_segments
+    target_segments = preparation.target_segments
+    if computed is None:
+        computed = align_segment_sequences(
+            [text for _segment_id, text in pivot_segments],
+            [text for _segment_id, text in target_segments],
+            cache_dir=model_cache_dir,
+            embedding_provider=embedding_provider,
+            reusable_sequences=(
+                preparation.pivot_reusable_texts,
+                preparation.target_reusable_texts,
+            ),
+            folio_candidates=preparation.folio_candidates,
+        )
+    aligned, anchors = computed
     connection.execute(
-        "DELETE FROM alignment_runs WHERE document_group_id = ? "
-        "AND pivot_source_file_id = ? AND target_source_file_id = ?",
+        "UPDATE alignment_runs SET status = 'superseded' "
+        "WHERE document_group_id = ? AND pivot_source_file_id = ? "
+        "AND target_source_file_id = ? AND status = 'completed'",
         (document_group_id, pivot_source_id, target_source_id),
     )
     run_id = f"alignment-run-{uuid.uuid4().hex}"
     timestamp = _now()
+    candidate_by_key = {
+        candidate.key: candidate for candidate in preparation.folio_candidates
+    }
+    folio_anchors = [anchor for anchor in anchors if anchor.key.startswith("folio:")]
     parameters = {
-        "transitions": [[di, dj] for di, dj, _penalty in _TRANSITIONS],
+        "transitions": alignment_transitions(),
         "length_unit": "non_whitespace_unicode_codepoint",
+        "embedding_model": EMBEDDING_MODEL,
+        "embedding_runtime_version": EMBEDDING_RUNTIME_VERSION,
+        "semantic_alignment_version": SEMANTIC_ALIGNMENT_VERSION,
+        "similarity": "cosine",
+        "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
+        "note_block_confidence_threshold": NOTE_BLOCK_CONFIDENCE_THRESHOLD,
+        "note_candidate_margin": NOTE_CANDIDATE_MARGIN,
+        "heading_anchors": [
+            {
+                "key": anchor.key,
+                "pivot_order_index": anchor.source_index,
+                "target_order_index": anchor.target_index,
+            }
+            for anchor in anchors
+        ],
+        "edition_folio_anchors": [
+            {
+                "key": anchor.key,
+                "folio_number": candidate_by_key[anchor.key].folio_number,
+                "pivot_order_index": anchor.source_index,
+                "target_order_index": anchor.target_index,
+                "target_pdf_page_index": candidate_by_key[
+                    anchor.key
+                ].target_pdf_page_index,
+                "target_bbox": list(candidate_by_key[anchor.key].target_bbox),
+                "semantic_verified": True,
+            }
+            for anchor in folio_anchors
+        ],
     }
     connection.execute(
         "INSERT INTO alignment_runs(alignment_run_id, document_group_id, "
@@ -658,25 +996,52 @@ def _generate_alignment_on_connection(
             timestamp,
         ),
     )
-    for order_index, (ps, pe, ts, te, cost) in enumerate(aligned):
+    link_rows: List[Tuple[object, ...]] = []
+    member_rows: List[Tuple[object, ...]] = []
+    for order_index, link in enumerate(aligned):
         link_id = f"alignment-link-{uuid.uuid4().hex}"
-        connection.execute(
-            "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "
-            "order_index, cost, review_status) VALUES (?, ?, ?, ?, ?)",
-            (link_id, run_id, order_index, round(cost, 6), "automatic"),
+        link_rows.append(
+            (
+                link_id,
+                run_id,
+                order_index,
+                round(link.cost, 6),
+                link.review_status,
+            )
         )
-        connection.executemany(
-            "INSERT INTO alignment_link_members(alignment_link_id, side, "
-            "segment_id, member_order) VALUES (?, ?, ?, ?)",
+        member_rows.extend(
             [
-                (link_id, "pivot", pivot_segments[index][0], index - ps)
-                for index in range(ps, pe)
+                (
+                    link_id,
+                    "pivot",
+                    pivot_segments[index][0],
+                    index - link.source_start,
+                )
+                for index in range(link.source_start, link.source_end)
             ]
             + [
-                (link_id, "target", target_segments[index][0], index - ts)
-                for index in range(ts, te)
-            ],
+                (
+                    link_id,
+                    "target",
+                    target_segments[index][0],
+                    index - link.target_start,
+                )
+                for index in range(link.target_start, link.target_end)
+            ]
         )
+    connection.executemany(
+        "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "
+        "order_index, cost, review_status) VALUES (?, ?, ?, ?, ?)",
+        link_rows,
+    )
+    connection.executemany(
+        "INSERT INTO alignment_link_members(alignment_link_id, side, "
+        "segment_id, member_order) VALUES (?, ?, ?, ?)",
+        member_rows,
+    )
+    rejected_count = sum(link.review_status == "rejected" for link in aligned)
+    unmatched_count = sum(link.review_status == "unmatched" for link in aligned)
+    note_count = sum(link.review_status == "note_automatic" for link in aligned)
     return {
         "alignment_run_id": run_id,
         "document_group_id": document_group_id,
@@ -685,9 +1050,16 @@ def _generate_alignment_on_connection(
         "pivot_segment_count": len(pivot_segments),
         "target_segment_count": len(target_segments),
         "alignment_link_count": len(aligned),
+        "accepted_link_count": len(aligned) - rejected_count - unmatched_count,
+        "rejected_link_count": rejected_count,
+        "unmatched_link_count": unmatched_count,
+        "numbered_note_link_count": note_count,
+        "heading_anchor_count": len(anchors) - len(folio_anchors),
+        "folio_anchor_count": len(folio_anchors),
         "algorithm": ALIGNMENT_ALGORITHM,
         "algorithm_version": ALIGNMENT_ALGORITHM_VERSION,
         "status": "completed",
+        "reused": False,
     }
 
 
@@ -696,26 +1068,174 @@ def generate_alignment(
     document_group_id: object,
     pivot_source_file_id: object,
     target_source_file_id: object,
+    *,
+    model_cache_dir: Path | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
+    write_window: WriteWindow | None = None,
 ) -> Dict[str, object]:
     group_id = str(document_group_id or "").strip()
     if not group_id:
         raise InvalidAlignmentRequest("document_group_id is required")
     pivot_id = _validate_source_id(pivot_source_file_id)
     target_id = _validate_source_id(target_source_file_id)
-    connection = open_writable_index(Path(db_path))
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        install_text_alignment_schema(connection)
-        result = _generate_alignment_on_connection(
-            connection, group_id, pivot_id, target_id
-        )
-        connection.commit()
-        return result
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    cache_dir = (
+        Path(model_cache_dir)
+        if model_cache_dir is not None
+        else _default_alignment_model_cache(Path(db_path))
+    )
+    transaction_window = write_window or nullcontext
+    with transaction_window():
+        connection = open_writable_index(Path(db_path))
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            install_text_alignment_schema(connection)
+            _require_pair(connection, group_id, pivot_id, target_id)
+            pivot_set_id, pivot_segments = _segment_set(connection, pivot_id)
+            target_set_id, target_segments = _segment_set(connection, target_id)
+            preparation = AlignmentPreparation(
+                pivot_set_id,
+                target_set_id,
+                tuple(pivot_segments),
+                tuple(target_segments),
+                _previous_segment_texts(connection, pivot_id, pivot_set_id),
+                _previous_segment_texts(connection, target_id, target_set_id),
+                tuple(
+                    detect_folio_boundary_candidates(
+                        connection,
+                        pivot_id,
+                        target_id,
+                        pivot_set_id,
+                        target_set_id,
+                    )
+                ),
+            )
+            existing = connection.execute(
+                "SELECT alignment_run_id, parameters_json FROM alignment_runs "
+                "WHERE document_group_id = ? AND pivot_source_file_id = ? "
+                "AND target_source_file_id = ? AND pivot_segment_set_id = ? "
+                "AND target_segment_set_id = ? AND algorithm = ? "
+                "AND algorithm_version = ? AND status = 'completed' "
+                "ORDER BY completed_at DESC LIMIT 1",
+                (
+                    group_id,
+                    pivot_id,
+                    target_id,
+                    pivot_set_id,
+                    target_set_id,
+                    ALIGNMENT_ALGORITHM,
+                    ALIGNMENT_ALGORITHM_VERSION,
+                ),
+            ).fetchone()
+            if existing is not None:
+                counts = {
+                    str(row["review_status"]): int(row["link_count"])
+                    for row in connection.execute(
+                        "SELECT review_status, COUNT(*) AS link_count "
+                        "FROM alignment_links WHERE alignment_run_id = ? "
+                        "GROUP BY review_status",
+                        (existing["alignment_run_id"],),
+                    )
+                }
+                parameters = _json_object(existing["parameters_json"])
+                connection.commit()
+                return {
+                    "alignment_run_id": str(existing["alignment_run_id"]),
+                    "document_group_id": group_id,
+                    "pivot_source_file_id": pivot_id,
+                    "target_source_file_id": target_id,
+                    "pivot_segment_count": len(pivot_segments),
+                    "target_segment_count": len(target_segments),
+                    "alignment_link_count": sum(counts.values()),
+                    "accepted_link_count": counts.get("automatic", 0)
+                    + counts.get("note_automatic", 0),
+                    "rejected_link_count": counts.get("rejected", 0),
+                    "unmatched_link_count": counts.get("unmatched", 0),
+                    "numbered_note_link_count": counts.get("note_automatic", 0),
+                    "heading_anchor_count": len(
+                        [
+                            anchor
+                            for anchor in parameters.get("heading_anchors", [])
+                            if not str(anchor.get("key") or "").startswith("folio:")
+                        ]
+                    ),
+                    "folio_anchor_count": len(
+                        parameters.get("edition_folio_anchors", [])
+                    ),
+                    "algorithm": ALIGNMENT_ALGORITHM,
+                    "algorithm_version": ALIGNMENT_ALGORITHM_VERSION,
+                    "status": "completed",
+                    "reused": True,
+                }
+            connection.commit()
+        except (OSError, sqlite3.Error, RuntimeError, ValueError):
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    computed = align_segment_sequences(
+        [text for _segment_id, text in preparation.pivot_segments],
+        [text for _segment_id, text in preparation.target_segments],
+        cache_dir=cache_dir,
+        embedding_provider=embedding_provider,
+        reusable_sequences=(
+            preparation.pivot_reusable_texts,
+            preparation.target_reusable_texts,
+        ),
+        folio_candidates=preparation.folio_candidates,
+    )
+
+    with transaction_window():
+        connection = open_writable_index(Path(db_path))
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            result = _generate_alignment_on_connection(
+                connection,
+                group_id,
+                pivot_id,
+                target_id,
+                model_cache_dir=cache_dir,
+                embedding_provider=embedding_provider,
+                preparation=preparation,
+                computed=computed,
+            )
+            connection.commit()
+            return result
+        except (OSError, sqlite3.Error, RuntimeError, ValueError):
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+
+def _latest_pair_run(
+    connection: sqlite3.Connection,
+    document_group_id: str,
+    left_source_id: str,
+    right_source_id: str,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM alignment_runs WHERE document_group_id = ? "
+        "AND status = 'completed' AND "
+        "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
+        "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
+        "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
+        (
+            document_group_id,
+            left_source_id,
+            right_source_id,
+            right_source_id,
+            left_source_id,
+        ),
+    ).fetchone()
+
+
+def _segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str:
+    if str(run["pivot_source_file_id"]) == source_id:
+        return str(run["pivot_segment_set_id"])
+    if str(run["target_source_file_id"]) == source_id:
+        return str(run["target_segment_set_id"])
+    raise TextAlignmentError("对齐记录不包含指定版本。")
 
 
 def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, object]:
@@ -724,48 +1244,91 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
     connection.row_factory = sqlite3.Row
     try:
         source = connection.execute(
-            "SELECT source_type FROM source_files WHERE source_file_id = ?",
+            "SELECT source_type, payload_json FROM source_files WHERE source_file_id = ?",
             (source_id,),
         ).fetchone()
         if source is None:
             raise InvalidAlignmentRequest("文献不存在。")
-        if str(source["source_type"] or "").casefold() != "pdf":
+        try:
+            _source_kind(source)
+        except InvalidAlignmentRequest:
             return {"source_file_id": source_id, "targets": []}
         if not _table_exists(connection, "alignment_runs"):
             return {"source_file_id": source_id, "targets": []}
-        rows = connection.execute(
-            "SELECT r.alignment_run_id, r.pivot_source_file_id, "
-            "r.target_source_file_id, r.algorithm, r.algorithm_version, "
-            "m.version_label, s.file_name, s.payload_json "
-            "FROM alignment_runs r "
-            "JOIN document_group_members m ON m.document_group_id = r.document_group_id "
-            "AND m.source_file_id = CASE WHEN r.pivot_source_file_id = ? "
-            "THEN r.target_source_file_id ELSE r.pivot_source_file_id END "
-            "JOIN source_files s ON s.source_file_id = m.source_file_id "
-            "WHERE r.status = 'completed' AND "
-            "(r.pivot_source_file_id = ? OR r.target_source_file_id = ?) "
-            "ORDER BY m.member_order",
-            (source_id, source_id, source_id),
+        group = connection.execute(
+            "SELECT g.document_group_id, g.base_source_file_id "
+            "FROM document_group_members m JOIN document_groups g "
+            "ON g.document_group_id = m.document_group_id "
+            "WHERE m.source_file_id = ?",
+            (source_id,),
+        ).fetchone()
+        if group is None or not str(group["base_source_file_id"] or ""):
+            return {"source_file_id": source_id, "targets": []}
+        group_id = str(group["document_group_id"])
+        pivot_id = str(group["base_source_file_id"])
+        members = connection.execute(
+            "SELECT m.source_file_id, m.version_label, s.source_type, "
+            "s.file_name, s.payload_json "
+            "FROM document_group_members m JOIN source_files s "
+            "ON s.source_file_id = m.source_file_id "
+            "WHERE m.document_group_id = ? ORDER BY m.member_order",
+            (group_id,),
         ).fetchall()
         targets: List[Dict[str, object]] = []
-        for row in rows:
-            target_id = (
-                str(row["target_source_file_id"])
-                if str(row["pivot_source_file_id"]) == source_id
-                else str(row["pivot_source_file_id"])
+        for member in members:
+            target_id = str(member["source_file_id"])
+            if target_id == source_id:
+                continue
+            direct_run = _latest_pair_run(
+                connection, group_id, source_id, target_id
             )
-            payload = _json_object(row["payload_json"])
+            route_runs = [direct_run] if direct_run is not None else []
+            if not route_runs and source_id != pivot_id and target_id != pivot_id:
+                source_run = _latest_pair_run(
+                    connection, group_id, source_id, pivot_id
+                )
+                target_run = _latest_pair_run(
+                    connection, group_id, pivot_id, target_id
+                )
+                if (
+                    source_run is not None
+                    and target_run is not None
+                    and _segment_set_id_for_source(source_run, pivot_id)
+                    == _segment_set_id_for_source(target_run, pivot_id)
+                ):
+                    route_runs = [source_run, target_run]
+            if not route_runs:
+                continue
+            final_run = route_runs[-1]
+            payload = _json_object(member["payload_json"])
             payload.setdefault("source_file_id", target_id)
-            payload.setdefault("file_name", row["file_name"])
+            payload.setdefault("file_name", member["file_name"])
+            language_code = str(payload.get("language_code") or "").strip()
+            if not language_code:
+                language_code = _item_language_code(
+                    "",
+                    payload.get("title"),
+                    payload.get("author"),
+                    member["file_name"],
+                )
             targets.append(
                 {
                     "source_file_id": target_id,
                     "display_name": member_display_name(
-                        row["version_label"], payload
+                        member["version_label"], payload
                     ),
-                    "alignment_run_id": row["alignment_run_id"],
-                    "algorithm": row["algorithm"],
-                    "algorithm_version": row["algorithm_version"],
+                    "alignment_run_id": final_run["alignment_run_id"],
+                    "alignment_run_ids": [
+                        str(route_run["alignment_run_id"])
+                        for route_run in route_runs
+                    ],
+                    "via_source_file_id": (
+                        pivot_id if len(route_runs) == 2 else None
+                    ),
+                    "algorithm": final_run["algorithm"],
+                    "algorithm_version": final_run["algorithm_version"],
+                    "language_code": language_code or "und",
+                    "source_format": _source_kind(member),
                 }
             )
         return {"source_file_id": source_id, "targets": targets}
@@ -773,7 +1336,7 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
         connection.close()
 
 
-def _selection_segment_ids(
+def _selection_pdf_segment_ids(
     connection: sqlite3.Connection,
     segment_set_id: str,
     source_id: str,
@@ -820,6 +1383,53 @@ def _selection_segment_ids(
     return [str(row["segment_id"]) for row in rows]
 
 
+def _selection_paragraph_segment_ids(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    source_id: str,
+    start_paragraph: int,
+    end_paragraph: int,
+    start_offset: int,
+    end_offset: int,
+) -> List[str]:
+    if start_paragraph == end_paragraph:
+        rows = connection.execute(
+            "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+            "JOIN text_segment_paragraph_spans p ON p.segment_id = s.segment_id "
+            "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
+            "AND p.paragraph_index = ? AND p.paragraph_char_end > ? "
+            "AND p.paragraph_char_start < ? ORDER BY s.order_index",
+            (
+                segment_set_id,
+                source_id,
+                start_paragraph,
+                start_offset,
+                end_offset,
+            ),
+        ).fetchall()
+        return [str(row["segment_id"]) for row in rows]
+    rows = connection.execute(
+        "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+        "JOIN text_segment_paragraph_spans p ON p.segment_id = s.segment_id "
+        "WHERE s.segment_set_id = ? AND p.source_file_id = ? AND ("
+        "(p.paragraph_index = ? AND p.paragraph_char_end > ?) OR "
+        "(p.paragraph_index > ? AND p.paragraph_index < ?) OR "
+        "(p.paragraph_index = ? AND p.paragraph_char_start < ?)) "
+        "ORDER BY s.order_index",
+        (
+            segment_set_id,
+            source_id,
+            start_paragraph,
+            start_offset,
+            start_paragraph,
+            end_paragraph,
+            end_paragraph,
+            end_offset,
+        ),
+    ).fetchall()
+    return [str(row["segment_id"]) for row in rows]
+
+
 def _merge_page_spans(
     rows: Sequence[sqlite3.Row], page_payloads: Mapping[int, Dict[str, object]]
 ) -> List[Dict[str, object]]:
@@ -853,6 +1463,40 @@ def _merge_page_spans(
                         or pdf_page_text_hash(text)
                     ),
                     "match_quote": text[start:end],
+                }
+            )
+    return result
+
+
+def _merge_paragraph_spans(
+    rows: Sequence[sqlite3.Row],
+    paragraphs: Mapping[int, ParagraphText],
+) -> List[Dict[str, object]]:
+    grouped: Dict[int, List[Tuple[int, int]]] = {}
+    for row in rows:
+        grouped.setdefault(int(row["paragraph_index"]), []).append(
+            (int(row["paragraph_char_start"]), int(row["paragraph_char_end"]))
+        )
+    result: List[Dict[str, object]] = []
+    for paragraph_index in sorted(grouped):
+        paragraph = paragraphs[paragraph_index]
+        merged: List[List[int]] = []
+        for start, end in sorted(grouped[paragraph_index]):
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        for start, end in merged:
+            result.append(
+                {
+                    "anchor_id": paragraph.paragraph_id,
+                    "paragraph_id": paragraph.paragraph_id,
+                    "paragraph_index": paragraph_index,
+                    "paragraph_char_start": start,
+                    "paragraph_char_end": end,
+                    "char_start": start,
+                    "char_end": end,
+                    "match_quote": paragraph.text[start:end],
                 }
             )
     return result
@@ -901,6 +1545,260 @@ def _bbox_refs(
     return refs
 
 
+def _map_segments_through_run(
+    connection: sqlite3.Connection,
+    run: sqlite3.Row,
+    source_id: str,
+    source_segments: Sequence[str],
+    model_cache_dir: Path,
+) -> List[str]:
+    if str(run["pivot_source_file_id"]) == source_id:
+        source_side = "pivot"
+        target_side = "target"
+    elif str(run["target_source_file_id"]) == source_id:
+        source_side = "target"
+        target_side = "pivot"
+    else:
+        raise TextAlignmentError("对齐记录不包含请求的源版本。")
+    placeholders = ",".join("?" for _ in source_segments)
+    link_rows = connection.execute(
+        "SELECT DISTINCT l.alignment_link_id, l.order_index, l.review_status "
+        "FROM alignment_links l JOIN alignment_link_members m "
+        "ON m.alignment_link_id = l.alignment_link_id "
+        f"WHERE l.alignment_run_id = ? AND m.side = ? AND m.segment_id IN ({placeholders}) "
+        "ORDER BY l.order_index",
+        (run["alignment_run_id"], source_side, *source_segments),
+    ).fetchall()
+    structural_fallback = _paragraph_anchor_fallback(
+        connection, run, source_id, source_segments
+    )
+    if not link_rows:
+        if structural_fallback:
+            return structural_fallback
+        raise AlignmentNotFound("所选 Segment 没有对应的译文。")
+    note_rows = [
+        row for row in link_rows if str(row["review_status"]) == "note_automatic"
+    ]
+    if note_rows:
+        link_rows = note_rows
+    elif any(str(row["review_status"]) == "rejected" for row in link_rows):
+        semantic_fallback = _semantic_paragraph_fallback(
+            connection,
+            run,
+            source_id,
+            source_segments,
+            model_cache_dir,
+        )
+        if semantic_fallback:
+            return semantic_fallback
+        if structural_fallback:
+            return structural_fallback
+        raise AlignmentNotFound(
+            "所选文字的跨语言对应关系置信度过低，已拒绝自动定位。"
+        )
+    elif any(str(row["review_status"]) == "unmatched" for row in link_rows):
+        if structural_fallback:
+            return structural_fallback
+        raise AlignmentNotFound("所选文字在另一版本中没有可靠的对应段落。")
+    link_ids = [str(row["alignment_link_id"]) for row in link_rows]
+    link_placeholders = ",".join("?" for _ in link_ids)
+    member_rows = connection.execute(
+        "SELECT m.alignment_link_id, m.side, m.segment_id, s.order_index "
+        "FROM alignment_link_members m "
+        "JOIN text_segments s ON s.segment_id = m.segment_id "
+        f"WHERE m.alignment_link_id IN ({link_placeholders}) "
+        "ORDER BY m.alignment_link_id, s.order_index",
+        link_ids,
+    ).fetchall()
+    source_selected = set(source_segments)
+    members_by_link: Dict[str, Dict[str, List[Tuple[int, str]]]] = {}
+    for member in member_rows:
+        bucket = members_by_link.setdefault(
+            str(member["alignment_link_id"]), {"source": [], "target": []}
+        )
+        side = "source" if str(member["side"]) == source_side else "target"
+        bucket[side].append((int(member["order_index"]), str(member["segment_id"])))
+    # A single alignment link may bundle several source and target segments
+    # (an n:m block).  When only part of that block's source segments are
+    # selected, restrict the result to the target segments that positionally
+    # correspond to the selection, instead of returning the whole block.  This
+    # keeps a selected Remark from dragging in the neighbouring paragraph that
+    # is aligned to an unselected source segment (visible only for paragraph
+    # targets such as EPUB; PDF targets are additionally narrowed by character
+    # offset within the page).
+    chosen_orders: Dict[str, int] = {}
+    for link_id in link_ids:
+        bucket = members_by_link.get(link_id)
+        if bucket is None:
+            continue
+        source_members = bucket["source"]
+        target_members = bucket["target"]
+        if not target_members:
+            continue
+        selected_ranks = [
+            rank
+            for rank, (_order, segment_id) in enumerate(source_members)
+            if segment_id in source_selected
+        ]
+        source_count = len(source_members)
+        target_count = len(target_members)
+        if not selected_ranks or source_count <= 1:
+            narrowed = target_members
+        else:
+            low = selected_ranks[0]
+            high = selected_ranks[-1]
+            target_low = (low * target_count) // source_count
+            target_high = -(-((high + 1) * target_count) // source_count) - 1
+            target_high = max(target_low, min(target_high, target_count - 1))
+            narrowed = target_members[target_low : target_high + 1]
+        for order_index, segment_id in narrowed:
+            chosen_orders.setdefault(segment_id, order_index)
+    if not chosen_orders:
+        raise AlignmentNotFound("所选 Segment 对应的是一个空译文区间。")
+    return [
+        segment_id
+        for segment_id, _order in sorted(
+            chosen_orders.items(), key=lambda item: item[1]
+        )
+    ]
+
+
+def _semantic_paragraph_fallback(
+    connection: sqlite3.Connection,
+    run: sqlite3.Row,
+    source_id: str,
+    source_segments: Sequence[str],
+    model_cache_dir: Path,
+) -> List[str]:
+    source_is_pivot = str(run["pivot_source_file_id"]) == source_id
+    source_order_key = "pivot_order_index" if source_is_pivot else "target_order_index"
+    target_order_key = "target_order_index" if source_is_pivot else "pivot_order_index"
+    anchors = sorted(
+        (
+            anchor
+            for anchor in _json_object(run["parameters_json"]).get(
+                "heading_anchors", []
+            )
+            if isinstance(anchor, dict)
+            and str(anchor.get("key") or "").startswith("paragraph:")
+        ),
+        key=lambda anchor: int(anchor[source_order_key]),
+    )
+    if not anchors:
+        return []
+    placeholders = ",".join("?" for _ in source_segments)
+    selected_rows = connection.execute(
+        "SELECT order_index FROM text_segments "
+        f"WHERE segment_id IN ({placeholders}) ORDER BY order_index",
+        tuple(source_segments),
+    ).fetchall()
+    if not selected_rows:
+        return []
+    selected_orders = [int(row["order_index"]) for row in selected_rows]
+    preceding = [
+        anchor
+        for anchor in anchors
+        if int(anchor[source_order_key]) <= selected_orders[0]
+    ]
+    if not preceding:
+        return []
+    anchor = preceding[-1]
+    anchor_index = anchors.index(anchor)
+    next_anchor = anchors[anchor_index + 1] if anchor_index + 1 < len(anchors) else None
+    source_set_id = str(
+        run["pivot_segment_set_id"] if source_is_pivot else run["target_segment_set_id"]
+    )
+    target_set_id = str(
+        run["target_segment_set_id"] if source_is_pivot else run["pivot_segment_set_id"]
+    )
+    source_rows = connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? ORDER BY order_index",
+        (source_set_id,),
+    ).fetchall()
+    target_rows = connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? ORDER BY order_index",
+        (target_set_id,),
+    ).fetchall()
+    source_start = int(anchor[source_order_key])
+    target_start = int(anchor[target_order_key])
+    source_end = (
+        int(next_anchor[source_order_key]) if next_anchor is not None else len(source_rows)
+    )
+    target_end = (
+        int(next_anchor[target_order_key]) if next_anchor is not None else len(target_rows)
+    )
+    if selected_orders[-1] >= source_end:
+        return []
+    source_vectors = cached_text_sequence_vectors(
+        [str(row["text_raw"]) for row in source_rows], model_cache_dir
+    )
+    target_vectors = cached_text_sequence_vectors(
+        [str(row["text_raw"]) for row in target_rows], model_cache_dir
+    )
+    if source_vectors is None or target_vectors is None:
+        return []
+    target_index = mutual_nearest_target_index(
+        source_vectors[source_start:source_end],
+        target_vectors[target_start:target_end],
+        [order - source_start for order in selected_orders],
+    )
+    if target_index is None:
+        return []
+    return [str(target_rows[target_start + target_index]["segment_id"])]
+
+
+def _paragraph_anchor_fallback(
+    connection: sqlite3.Connection,
+    run: sqlite3.Row,
+    source_id: str,
+    source_segments: Sequence[str],
+) -> List[str]:
+    source_is_pivot = str(run["pivot_source_file_id"]) == source_id
+    source_order_key = "pivot_order_index" if source_is_pivot else "target_order_index"
+    target_order_key = "target_order_index" if source_is_pivot else "pivot_order_index"
+    target_set_id = str(
+        run["target_segment_set_id"] if source_is_pivot else run["pivot_segment_set_id"]
+    )
+    placeholders = ",".join("?" for _ in source_segments)
+    selected = connection.execute(
+        "SELECT MIN(order_index) AS first_order FROM text_segments "
+        f"WHERE segment_id IN ({placeholders})",
+        tuple(source_segments),
+    ).fetchone()
+    if selected is None or selected["first_order"] is None:
+        return []
+    selected_order = int(selected["first_order"])
+    anchors = [
+        anchor
+        for anchor in _json_object(run["parameters_json"]).get("heading_anchors", [])
+        if isinstance(anchor, dict)
+        and str(anchor.get("key") or "").startswith("paragraph:")
+    ]
+    preceding = [
+        anchor
+        for anchor in anchors
+        if int(anchor[source_order_key]) <= selected_order
+    ]
+    if not preceding:
+        return []
+    anchor = max(preceding, key=lambda item: int(item[source_order_key]))
+    next_orders = [
+        int(item[source_order_key])
+        for item in anchors
+        if int(item[source_order_key]) > int(anchor[source_order_key])
+    ]
+    if next_orders and selected_order >= min(next_orders):
+        return []
+    row = connection.execute(
+        "SELECT segment_id FROM text_segments WHERE segment_set_id = ? "
+        "AND order_index = ?",
+        (target_set_id, int(anchor[target_order_key])),
+    ).fetchone()
+    return [str(row["segment_id"])] if row is not None else []
+
+
 def locate_alignment(
     db_path: Path,
     source_file_id: object,
@@ -925,100 +1823,176 @@ def locate_alignment(
     connection = sqlite3.connect(str(db_path))
     connection.row_factory = sqlite3.Row
     try:
-        _source_row(connection, source_id)
+        source = _source_row(connection, source_id)
+        source_kind = _source_kind(source)
+        target_source = _source_row(connection, target_id)
+        target_kind = _source_kind(target_source)
         endpoint_indices = [start_page]
         if end_page != start_page:
             endpoint_indices.append(end_page)
         endpoint_placeholders = ",".join("?" for _ in endpoint_indices)
-        endpoint_rows = connection.execute(
-            "SELECT pdf_page_index, payload_json FROM pdf_pages "
-            f"WHERE source_file_id = ? AND pdf_page_index IN ({endpoint_placeholders})",
-            (source_id, *endpoint_indices),
-        ).fetchall()
-        endpoint_payloads = {
-            int(row["pdf_page_index"]): _json_object(row["payload_json"])
-            for row in endpoint_rows
-        }
+        if source_kind == "pdf":
+            endpoint_rows = connection.execute(
+                "SELECT pdf_page_index, payload_json FROM pdf_pages "
+                f"WHERE source_file_id = ? AND pdf_page_index IN ({endpoint_placeholders})",
+                (source_id, *endpoint_indices),
+            ).fetchall()
+            endpoint_payloads = {
+                int(row["pdf_page_index"]): _json_object(row["payload_json"])
+                for row in endpoint_rows
+            }
+            missing_endpoint_message = "选区所在的 PDF 页不存在。"
+            offset_boundary = "页文本"
+        else:
+            endpoint_rows = connection.execute(
+                "SELECT paragraph_index, text_raw FROM paragraphs "
+                f"WHERE source_file_id = ? AND paragraph_index IN ({endpoint_placeholders})",
+                (source_id, *endpoint_indices),
+            ).fetchall()
+            endpoint_payloads = {
+                int(row["paragraph_index"]): {"text_raw": str(row["text_raw"] or "")}
+                for row in endpoint_rows
+            }
+            missing_endpoint_message = "选区所在的 EPUB 段落不存在。"
+            offset_boundary = "段落文本"
         if set(endpoint_payloads) != set(endpoint_indices):
-            raise InvalidAlignmentRequest("选区所在的 PDF 页不存在。")
+            raise InvalidAlignmentRequest(missing_endpoint_message)
         if first_offset > len(str(endpoint_payloads[start_page].get("text_raw") or "")):
-            raise InvalidAlignmentRequest("start_offset 超出页文本范围。")
+            raise InvalidAlignmentRequest(f"start_offset 超出{offset_boundary}范围。")
         if last_offset > len(str(endpoint_payloads[end_page].get("text_raw") or "")):
-            raise InvalidAlignmentRequest("end_offset 超出页文本范围。")
-        run = connection.execute(
+            raise InvalidAlignmentRequest(f"end_offset 超出{offset_boundary}范围。")
+        direct_run = connection.execute(
             "SELECT * FROM alignment_runs WHERE status = 'completed' AND "
             "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
             "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
-            "ORDER BY completed_at DESC LIMIT 1",
+            "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
             (source_id, target_id, target_id, source_id),
         ).fetchone()
-        if run is None:
-            raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
-        source_is_pivot = str(run["pivot_source_file_id"]) == source_id
-        source_side = "pivot" if source_is_pivot else "target"
-        target_side = "target" if source_is_pivot else "pivot"
-        source_set_id = str(
-            run["pivot_segment_set_id"]
-            if source_is_pivot
-            else run["target_segment_set_id"]
+        route_runs: List[sqlite3.Row]
+        via_source_id: str | None
+        if direct_run is not None:
+            route_runs = [direct_run]
+            via_source_id = None
+        else:
+            group = connection.execute(
+                "SELECT g.document_group_id, g.base_source_file_id "
+                "FROM document_groups g "
+                "JOIN document_group_members source_member "
+                "ON source_member.document_group_id = g.document_group_id "
+                "JOIN document_group_members target_member "
+                "ON target_member.document_group_id = g.document_group_id "
+                "WHERE source_member.source_file_id = ? "
+                "AND target_member.source_file_id = ?",
+                (source_id, target_id),
+            ).fetchone()
+            if group is None or not str(group["base_source_file_id"] or ""):
+                raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
+            via_source_id = str(group["base_source_file_id"])
+            if source_id == via_source_id or target_id == via_source_id:
+                raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
+            group_id = str(group["document_group_id"])
+            source_run = _latest_pair_run(
+                connection, group_id, source_id, via_source_id
+            )
+            target_run = _latest_pair_run(
+                connection, group_id, via_source_id, target_id
+            )
+            if source_run is None or target_run is None:
+                raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
+            route_runs = [source_run, target_run]
+            if _segment_set_id_for_source(
+                route_runs[0], via_source_id
+            ) != _segment_set_id_for_source(route_runs[1], via_source_id):
+                raise AlignmentNotFound(
+                    "两个对齐使用的基准 Segment 版本不一致，请重新对齐后再定位。"
+                )
+        source_run = route_runs[0]
+        source_set_id = _segment_set_id_for_source(source_run, source_id)
+        selection_function = (
+            _selection_pdf_segment_ids
+            if source_kind == "pdf"
+            else _selection_paragraph_segment_ids
         )
-        source_segments = _selection_segment_ids(
-            connection,
-            source_set_id,
-            source_id,
-            start_page,
-            end_page,
-            first_offset,
-            last_offset,
+        source_segments = selection_function(
+            connection, source_set_id, source_id, start_page, end_page,
+            first_offset, last_offset,
         )
         if not source_segments:
             raise AlignmentNotFound("所选文字没有落入可对齐的 Segment。")
-        placeholders = ",".join("?" for _ in source_segments)
-        link_rows = connection.execute(
-            "SELECT DISTINCT l.alignment_link_id, l.order_index "
-            "FROM alignment_links l JOIN alignment_link_members m "
-            "ON m.alignment_link_id = l.alignment_link_id "
-            f"WHERE l.alignment_run_id = ? AND m.side = ? AND m.segment_id IN ({placeholders}) "
-            "ORDER BY l.order_index",
-            (run["alignment_run_id"], source_side, *source_segments),
-        ).fetchall()
-        if not link_rows:
-            raise AlignmentNotFound("所选 Segment 没有对应的译文。")
-        link_ids = [str(row["alignment_link_id"]) for row in link_rows]
-        link_placeholders = ",".join("?" for _ in link_ids)
-        target_segments = connection.execute(
-            "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
-            "JOIN alignment_link_members m ON m.segment_id = s.segment_id "
-            "JOIN alignment_links l ON l.alignment_link_id = m.alignment_link_id "
-            f"WHERE m.side = ? AND l.alignment_link_id IN ({link_placeholders}) "
-            "ORDER BY s.order_index",
-            (target_side, *link_ids),
-        ).fetchall()
-        if not target_segments:
-            raise AlignmentNotFound("所选 Segment 对应的是一个空译文区间。")
-        target_segment_ids = [str(row["segment_id"]) for row in target_segments]
+        model_cache_dir = _default_alignment_model_cache(Path(db_path))
+        target_segment_ids = _map_segments_through_run(
+            connection,
+            source_run,
+            source_id,
+            source_segments,
+            model_cache_dir,
+        )
+        if len(route_runs) == 2:
+            target_segment_ids = _map_segments_through_run(
+                connection,
+                route_runs[1],
+                str(via_source_id),
+                target_segment_ids,
+                model_cache_dir,
+            )
         segment_placeholders = ",".join("?" for _ in target_segment_ids)
-        span_rows = connection.execute(
-            "SELECT p.pdf_page_index, p.page_char_start, p.page_char_end, "
-            "s.order_index, p.span_order FROM text_segment_spans p "
-            "JOIN text_segments s ON s.segment_id = p.segment_id "
-            f"WHERE p.segment_id IN ({segment_placeholders}) "
-            "ORDER BY s.order_index, p.span_order",
-            target_segment_ids,
-        ).fetchall()
-        page_indices = sorted({int(row["pdf_page_index"]) for row in span_rows})
-        page_placeholders = ",".join("?" for _ in page_indices)
-        page_rows = connection.execute(
-            "SELECT pdf_page_index, payload_json FROM pdf_pages "
-            f"WHERE source_file_id = ? AND pdf_page_index IN ({page_placeholders})",
-            (target_id, *page_indices),
-        ).fetchall()
-        page_payloads = {
-            int(row["pdf_page_index"]): _json_object(row["payload_json"])
-            for row in page_rows
-        }
-        page_spans = _merge_page_spans(span_rows, page_payloads)
-        target_source = _source_row(connection, target_id)
+        if target_kind == "pdf":
+            span_rows = connection.execute(
+                "SELECT p.pdf_page_index, p.page_char_start, p.page_char_end, "
+                "s.order_index, p.span_order FROM text_segment_spans p "
+                "JOIN text_segments s ON s.segment_id = p.segment_id "
+                f"WHERE p.segment_id IN ({segment_placeholders}) "
+                "ORDER BY s.order_index, p.span_order",
+                target_segment_ids,
+            ).fetchall()
+            target_indices = sorted({int(row["pdf_page_index"]) for row in span_rows})
+            if not target_indices:
+                raise AlignmentNotFound("对应 Segment 没有 PDF 位置信息。")
+            target_placeholders = ",".join("?" for _ in target_indices)
+            page_rows = connection.execute(
+                "SELECT pdf_page_index, payload_json FROM pdf_pages "
+                f"WHERE source_file_id = ? AND pdf_page_index IN ({target_placeholders})",
+                (target_id, *target_indices),
+            ).fetchall()
+            page_payloads = {
+                int(row["pdf_page_index"]): _json_object(row["payload_json"])
+                for row in page_rows
+            }
+            match_spans = _merge_page_spans(span_rows, page_payloads)
+            bbox_refs = _bbox_refs(match_spans, page_payloads)
+            target_item_type = "pdf_page"
+        else:
+            span_rows = connection.execute(
+                "SELECT p.paragraph_id, p.paragraph_index, "
+                "p.paragraph_char_start, p.paragraph_char_end, "
+                "s.order_index, p.span_order FROM text_segment_paragraph_spans p "
+                "JOIN text_segments s ON s.segment_id = p.segment_id "
+                f"WHERE p.segment_id IN ({segment_placeholders}) "
+                "ORDER BY s.order_index, p.span_order",
+                target_segment_ids,
+            ).fetchall()
+            target_indices = sorted({int(row["paragraph_index"]) for row in span_rows})
+            if not target_indices:
+                raise AlignmentNotFound("对应 Segment 没有 EPUB 段落位置信息。")
+            target_placeholders = ",".join("?" for _ in target_indices)
+            paragraph_rows = connection.execute(
+                "SELECT paragraph_id, paragraph_index, text_raw, payload_json "
+                "FROM paragraphs WHERE source_file_id = ? "
+                f"AND paragraph_index IN ({target_placeholders})",
+                (target_id, *target_indices),
+            ).fetchall()
+            paragraphs = {
+                int(row["paragraph_index"]): ParagraphText(
+                    paragraph_id=str(row["paragraph_id"]),
+                    paragraph_index=int(row["paragraph_index"]),
+                    payload=_json_object(row["payload_json"]),
+                    text=str(row["text_raw"] or ""),
+                )
+                for row in paragraph_rows
+            }
+            match_spans = _merge_paragraph_spans(span_rows, paragraphs)
+            bbox_refs = []
+            target_item_type = "word_paragraph"
         target_payload = _json_object(target_source["payload_json"])
         title = str(
             target_payload.get("title")
@@ -1026,16 +2000,22 @@ def locate_alignment(
             or target_source["file_name"]
             or target_id
         )
+        final_run = route_runs[-1]
         return {
-            "alignment_run_id": run["alignment_run_id"],
-            "algorithm": run["algorithm"],
-            "algorithm_version": run["algorithm_version"],
+            "alignment_run_id": final_run["alignment_run_id"],
+            "alignment_run_ids": [
+                str(route_run["alignment_run_id"]) for route_run in route_runs
+            ],
+            "via_source_file_id": via_source_id,
+            "algorithm": final_run["algorithm"],
+            "algorithm_version": final_run["algorithm_version"],
             "source_file_id": source_id,
             "target_source_file_id": target_id,
             "target_title": title,
-            "target_index": page_indices[0],
-            "page_match_spans": page_spans,
-            "bbox_refs": _bbox_refs(page_spans, page_payloads),
+            "target_item_type": target_item_type,
+            "target_index": target_indices[0],
+            "page_match_spans": match_spans,
+            "bbox_refs": bbox_refs,
             "match_offset_unit": "unicode_codepoint",
             "precise_highlight_available": True,
         }
@@ -1077,9 +2057,16 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
 
 
 def restore_alignment_recipe_snapshot(
-    connection: sqlite3.Connection, snapshot: Mapping[str, object]
+    connection: sqlite3.Connection,
+    snapshot: Mapping[str, object],
+    *,
+    model_cache_dir: Path | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
 ) -> int:
     install_text_alignment_schema(connection)
+    if model_cache_dir is None:
+        database_file = str(connection.execute("PRAGMA database_list").fetchone()[2])
+        model_cache_dir = _default_alignment_model_cache(Path(database_file))
     restored = 0
     for pair in snapshot.get("alignment_pairs", []):
         if not isinstance(pair, Mapping):
@@ -1103,21 +2090,39 @@ def restore_alignment_recipe_snapshot(
         if present != 2 or group_present is None:
             continue
         _generate_alignment_on_connection(
-            connection, group_id, pivot_id, target_id
+            connection,
+            group_id,
+            pivot_id,
+            target_id,
+            model_cache_dir=model_cache_dir,
+            embedding_provider=embedding_provider,
         )
         restored += 1
     return restored
 
 
 def replace_alignment_recipe_snapshot(
-    snapshot: Mapping[str, object], db_path: Path
+    snapshot: Mapping[str, object],
+    db_path: Path,
+    *,
+    model_cache_dir: Path | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
 ) -> int:
     connection = open_writable_index(Path(db_path))
     try:
         connection.execute("BEGIN IMMEDIATE")
         install_text_alignment_schema(connection)
         connection.execute("DELETE FROM alignment_runs")
-        restored = restore_alignment_recipe_snapshot(connection, snapshot)
+        restored = restore_alignment_recipe_snapshot(
+            connection,
+            snapshot,
+            model_cache_dir=(
+                Path(model_cache_dir)
+                if model_cache_dir is not None
+                else _default_alignment_model_cache(Path(db_path))
+            ),
+            embedding_provider=embedding_provider,
+        )
         connection.commit()
         return restored
     except Exception:

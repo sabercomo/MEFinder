@@ -16,6 +16,7 @@ from src.me_finder.preferences import (
     DEFAULT_CITATION_STYLE,
     DEFAULT_CITATION_STYLES,
     DEFAULT_DOCUMENT_EXPORT_MODE,
+    DEFAULT_EXPORT_PAGE_CLEANUP,
     DEFAULT_LIBRARY_LANGUAGE,
     DEFAULT_LIBRARY_VIEW,
     DEFAULT_ONLINE_AUTO_MATCH,
@@ -115,6 +116,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "pdf_open_mode": DEFAULT_PDF_OPEN_MODE,
             "pdf_parse_mode": DEFAULT_PDF_PARSE_MODE,
             "document_export_mode": DEFAULT_DOCUMENT_EXPORT_MODE,
+            "export_page_cleanup": dict(DEFAULT_EXPORT_PAGE_CLEANUP),
             "auto_update": DEFAULT_AUTO_UPDATE,
             "citation_styles": list(DEFAULT_CITATION_STYLES),
             "citation_style": DEFAULT_CITATION_STYLE,
@@ -215,6 +217,36 @@ class PreferencePersistenceTests(unittest.TestCase):
             self.assertEqual(read_preferences(path)["pdf_open_mode"], "system")
             with self.assertRaises(ValueError):
                 save_preferences({"pdf_open_mode": "browser"}, path)
+
+    def test_export_page_cleanup_defaults_merges_and_validates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            self.assertEqual(
+                read_preferences(path)["export_page_cleanup"],
+                dict(DEFAULT_EXPORT_PAGE_CLEANUP),
+            )
+            # A partial update keeps the other flags (merge, not replace).
+            saved = save_preferences(
+                {"export_page_cleanup": {"page_marker_mode": "full"}}, path
+            )
+            self.assertEqual(saved["export_page_cleanup"]["page_marker_mode"], "full")
+            self.assertTrue(
+                saved["export_page_cleanup"]["remove_visible_page_numbers"]
+            )
+            merged = save_preferences(
+                {"export_page_cleanup": {"remove_running_headers": False}}, path
+            )
+            # Earlier marker mode survives the second partial write.
+            self.assertEqual(merged["export_page_cleanup"]["page_marker_mode"], "full")
+            self.assertFalse(merged["export_page_cleanup"]["remove_running_headers"])
+            with self.assertRaises(ValueError):
+                save_preferences(
+                    {"export_page_cleanup": {"page_marker_mode": "xml"}}, path
+                )
+            with self.assertRaises(ValueError):
+                save_preferences(
+                    {"export_page_cleanup": {"remove_running_footers": "no"}}, path
+                )
 
     def test_auto_update_defaults_off_and_requires_a_boolean(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

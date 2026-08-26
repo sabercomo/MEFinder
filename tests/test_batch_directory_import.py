@@ -331,7 +331,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     handler.close_runtime()
                 os.chdir(previous_cwd)
 
-    def test_two_local_documents_share_one_index_rebuild(self) -> None:
+    def test_two_local_documents_are_incrementally_indexed(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "app"
             source_dir = Path(temp_dir) / "library"
@@ -382,7 +382,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         [status["status"] for status in statuses],
                         ["completed", "completed"],
                     )
-                    self.assertEqual(rebuild.call_count, 1)
+                    self.assertEqual(rebuild.call_count, 0)
                     connection = sqlite3.connect(root / "data" / "index.sqlite3")
                     try:
                         indexed_count = connection.execute(
@@ -725,7 +725,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         handler.close_runtime()
                     os.chdir(previous_cwd)
 
-    def test_native_pdf_is_not_failed_by_a_word_batch_rebuild_error(
+    def test_native_pdf_is_not_failed_by_a_word_extraction_error(
         self,
     ) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -761,9 +761,9 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 "src.me_finder.web.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
-                "src.me_finder.web.rebuild_local_index",
-                side_effect=RuntimeError("Word index rebuild failed"),
-            ) as rebuild:
+                "src.me_finder.application.import_orchestrator.extract_source",
+                side_effect=RuntimeError("Word extraction failed"),
+            ):
                 try:
                     os.chdir(root)
                     handler = make_handler(root / "data" / "index.sqlite3")
@@ -794,8 +794,6 @@ class BatchDirectoryImportTests(unittest.TestCase):
                         by_name[document.name]["phase"],
                         "index_failed",
                     )
-                    self.assertEqual(rebuild.call_count, 1)
-
                     connection = sqlite3.connect(
                         root / "data" / "index.sqlite3"
                     )

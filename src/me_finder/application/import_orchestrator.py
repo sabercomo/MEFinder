@@ -9,6 +9,7 @@ from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence, 
 
 from ..app_context import AppPaths
 from ..bibliographic_metadata import metadata_missing_fields
+from ..extractors import extract_source
 from ..import_job_journal import ImportJobJournal
 from ..import_queue import (
     ImportQueueClosedError,
@@ -190,6 +191,40 @@ class ImportOrchestrator:
                 source_file_id,
                 backup_existing=False,
             )
+
+    def index_text_document(self, job_id: str, target: Path) -> str:
+        """Parse and publish one DOCX/EPUB without rebuilding the whole library."""
+
+        self.update_import_job(
+            job_id,
+            phase="text_parsing",
+            message="正在解析正文…",
+        )
+        extracted = extract_source(target, self._root)
+        source = dict(extracted["source_file"])
+        source.setdefault("source_type", "word")
+        volume = dict(extracted["volume"])
+        volume.setdefault("source_type", "word")
+        works = [dict(item) for item in extracted.get("works", [])]
+        paragraphs = [dict(item) for item in extracted.get("paragraphs", [])]
+        for item in [*works, *paragraphs]:
+            item.setdefault("source_type", "word")
+        source_file_id = str(source["source_file_id"])
+        targeted = {
+            "source_files": [source],
+            "volumes": [volume],
+            "works": works,
+            "toc_entries": list(extracted.get("toc_entries", [])),
+            "paragraphs": paragraphs,
+            "page_anchors": list(extracted.get("page_anchors", [])),
+            "pdf_pages": [],
+            "pdf_page_mappings": [],
+            "pdf_import_runs": [],
+            "audit_issues": list(extracted.get("audit_issues", [])),
+        }
+        self.update_import_job(job_id, source_file_id=source_file_id)
+        self.replace_imported_source(job_id, targeted, source_file_id)
+        return source_file_id
 
     def progress_import_job(self, job_id: str, update: Dict[str, object]) -> None:
         self._job_lifecycle.progress_job(
@@ -466,7 +501,7 @@ class ImportOrchestrator:
             if is_pdf:
                 self.index_registered_pdf(job_id, source_file_id)
             else:
-                self.rebuild_runtime_index(job_id)
+                source_file_id = self.index_text_document(job_id, target)
             self.ensure_import_not_cancelled(job_id)
             self.finalize_import_job(job_id, source_file_id, is_pdf)
             self.ensure_import_not_cancelled(job_id)

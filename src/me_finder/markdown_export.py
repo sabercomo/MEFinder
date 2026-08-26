@@ -8,11 +8,19 @@ consults MinerU output directories.
 from __future__ import annotations
 
 import re
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import Iterable, List, Mapping, Optional
+
+from .markdown_export_normalize import (
+    ExportOptions,
+    PageArtifactProfile,
+    PageMarker,
+    build_page_artifact_profile,
+    iter_export_page_blocks,
+    resolve_page_marker,
+)
 
 
 SOURCE_NAME = "MEFinder"
-MAX_HEADING_LEVEL = 6
 _ILLEGAL_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]+')
 _YAML_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -34,32 +42,69 @@ def document_to_markdown(
     *,
     title: object = None,
     author: object = None,
+    options: Optional[ExportOptions] = None,
 ) -> str:
-    """Convert persisted pages into one UTF-8 Markdown document string."""
+    """Convert persisted pages into one UTF-8 Markdown document string.
+
+    The export runs a normalization pass (see ``markdown_export_normalize``) that
+    strips visible page numbers and repeated running headers/footers, and by
+    default emits only the hidden ``<!-- printed_page: N -->`` anchor.  This view
+    never mutates the persisted pages or the page-number anchors themselves.
+    """
+
+    options = options or ExportOptions()
+    # Materialize once so the artifact profile (cross-page statistics) and the
+    # per-page rendering can share the same page objects.  The Markdown builder
+    # already holds the whole document in memory when joining chunks, so this is
+    # not a new scaling constraint.
+    materialized = [page for page in pages if isinstance(page, Mapping)]
+    profile = build_page_artifact_profile(materialized, options)
 
     chunks = [_frontmatter(title=title, author=author)]
-    for page in pages:
-        rendered = page_to_markdown(page)
+    for page in materialized:
+        rendered = page_to_markdown(page, profile=profile, options=options)
         if rendered:
             chunks.append(rendered)
     return "\n\n".join(chunks).strip() + "\n"
 
 
-def page_to_markdown(page: Mapping[str, object]) -> str:
+def page_to_markdown(
+    page: Mapping[str, object],
+    *,
+    profile: Optional[PageArtifactProfile] = None,
+    options: Optional[ExportOptions] = None,
+) -> str:
     """Render one persisted page payload, page marker first, body after."""
 
-    text_raw = str(page.get("text_raw") or "")
-    blocks = page.get("blocks")
-    body = _render_body(
-        text_raw,
-        blocks if isinstance(blocks, (list, tuple)) else None,
-    )
+    options = options or ExportOptions()
+    body = _render_body(page, profile=profile, options=options)
     if not body:
         return ""
-    marker = _page_marker(page)
+    marker = render_markdown_page_marker(resolve_page_marker(page, options))
     if marker:
         return f"{marker}\n\n{body}"
     return body
+
+
+def render_markdown_page_marker(marker: Optional[PageMarker]) -> Optional[str]:
+    """Serialize a semantic :class:`PageMarker` as a hidden Markdown anchor.
+
+    This is the *only* place the ``<!-- printed_page: N -->`` HTML-comment syntax
+    lives.  A future EPUB renderer takes the same :class:`PageMarker` and emits an
+    EPUB ``pagebreak`` anchor instead — the marker itself carries no format.
+    Standard Markdown/Pandoc keeps the comment hidden, so the printed folio never
+    shows up as body text.
+    """
+
+    if marker is None or marker.is_empty:
+        return None
+    printed = marker.printed_page
+    physical = marker.physical_page
+    if physical is None:
+        return f"<!-- printed_page: {printed} -->"
+    if printed is None:
+        return f"<!-- pdf_page: {physical} -->"
+    return f"<!-- pdf_page: {physical} | printed_page: {printed} -->"
 
 
 def _frontmatter(*, title: object, author: object) -> str:
@@ -92,119 +137,15 @@ def _yaml_scalar(value: object) -> str:
 
 
 def _render_body(
-    text_raw: str,
-    blocks: Optional[Sequence[object]],
+    page: Mapping[str, object],
+    *,
+    profile: Optional[PageArtifactProfile],
+    options: ExportOptions,
 ) -> str:
-    if blocks is not None and _blocks_aligned_with_text(blocks, text_raw):
-        rendered: list[str] = []
-        for block in blocks:
-            if not isinstance(block, Mapping):
-                continue
-            block_text = str(block.get("text") or "").strip()
-            if not block_text:
-                continue
-            level = _canonical_heading_level(block)
-            if level is None:
-                rendered.append(block_text)
-            else:
-                rendered.append(f"{'#' * level} {block_text}")
-        return "\n\n".join(rendered)
-    return text_raw.strip()
-
-
-def _blocks_aligned_with_text(
-    blocks: Sequence[object],
-    text_raw: str,
-) -> bool:
-    usable = [
-        block
-        for block in blocks
-        if isinstance(block, Mapping) and str(block.get("text") or "").strip()
-    ]
-    if not usable:
-        return False
-    page_text = str(text_raw or "").strip()
-    if not page_text:
-        return False
-    if all(_has_valid_offsets(block, page_text) for block in usable):
-        return True
-    reconstructed = "\n".join(
-        str(block.get("text") or "").strip() for block in usable
-    )
-    return reconstructed.strip() == page_text
-
-
-def _has_valid_offsets(block: Mapping[str, object], page_text: str) -> bool:
-    start = block.get("page_char_start")
-    end = block.get("page_char_end")
-    if start in (None, "") or end in (None, ""):
-        return False
-    try:
-        start_index = int(start)
-        end_index = int(end)
-    except (TypeError, ValueError):
-        return False
-    if start_index < 0 or end_index < start_index or end_index > len(page_text):
-        return False
-    block_text = str(block.get("text") or "").strip()
-    return bool(block_text) and page_text[start_index:end_index].strip() == block_text
-
-
-def _canonical_heading_level(block: Mapping[str, object]) -> Optional[int]:
-    """Prefer the canonical document heading level, fall back to raw text_level.
-
-    Priority mirrors the import pipeline: ``document_heading_level`` (from a
-    semantic PDF outline or MinerU v2 title) wins; otherwise the parser's raw
-    ``text_level`` is used; otherwise the block renders as ordinary body text.
-    """
-
-    level = _heading_level(block.get("document_heading_level"))
-    if level is not None:
-        return level
-    return _heading_level(block.get("text_level"))
-
-
-def _heading_level(value: object) -> Optional[int]:
-    if value in (None, ""):
-        return None
-    try:
-        level = int(value)
-    except (TypeError, ValueError):
-        return None
-    if 1 <= level <= MAX_HEADING_LEVEL:
-        return level
-    return None
-
-
-def _page_marker(page: Mapping[str, object]) -> Optional[str]:
-    physical = _first_nonempty(
-        page.get("pdf_page_number_1based"),
-        page.get("physical_pdf_page"),
-    )
-    if physical is None and page.get("pdf_page_index") not in (None, ""):
-        try:
-            physical = int(page["pdf_page_index"]) + 1
-        except (TypeError, ValueError):
-            physical = None
-    if physical is None:
-        return None
-    try:
-        physical_text = str(int(physical))
-    except (TypeError, ValueError):
-        return None
-    printed = _first_nonempty(
-        page.get("citation_page"),
-        page.get("printed_page"),
-        page.get("logical_page"),
-        page.get("book_page"),
-    )
-    if printed is None:
-        return f"<!-- pdf_page: {physical_text} -->"
-    return f"<!-- pdf_page: {physical_text} | printed_page: {printed} -->"
-
-
-def _first_nonempty(*values: object) -> Optional[object]:
-    for value in values:
-        if value not in (None, ""):
-            return value
-    return None
+    rendered: List[str] = []
+    for block in iter_export_page_blocks(page, profile=profile, options=options):
+        if block.level is None:
+            rendered.append(block.text)
+        else:
+            rendered.append(f"{'#' * block.level} {block.text}")
+    return "\n\n".join(rendered)

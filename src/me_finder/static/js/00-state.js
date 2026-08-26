@@ -116,6 +116,14 @@ const settingsStore = {
   currentPdfParseMode: 'auto',
   pdfParseModeSaving: false,
   currentDocumentExportMode: 'data_only',
+  // 格式中立的导出清理与页码锚点策略（Markdown 现用，未来 EPUB 复用同一套）。
+  exportPageCleanup: {
+    page_marker_mode: 'printed',
+    remove_visible_page_numbers: true,
+    remove_running_headers: true,
+    remove_running_footers: true
+  },
+  exportPageCleanupSaving: false,
   autoUpdateEnabled: false,
   updateAutoStarted: false,
   updateState: {status: 'idle', can_self_update: false},

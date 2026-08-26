@@ -89,7 +89,7 @@ class MarkdownExportCoreTests(unittest.TestCase):
         self.assertIn("牛津通识读本·批判理论", loaded)
         self.assertIn("斯蒂芬·埃里克·布朗纳", loaded)
 
-    def test_page_markers_use_existing_mapping(self) -> None:
+    def test_page_markers_default_to_printed_only(self) -> None:
         page = {
             "pdf_page_index": 30,
             "pdf_page_number_1based": 31,
@@ -99,9 +99,12 @@ class MarkdownExportCoreTests(unittest.TestCase):
             "blocks": [{"text": "正文"}],
         }
         markdown = page_to_markdown(page)
-        self.assertIn("<!-- pdf_page: 31 | printed_page: 23 -->", markdown)
+        # Default 'printed' mode hides the physical PDF page entirely.
+        self.assertIn("<!-- printed_page: 23 -->", markdown)
+        self.assertNotIn("pdf_page:", markdown)
         self.assertLess(markdown.index("<!--"), markdown.index("正文"))
 
+        # A page with only a physical PDF page (no printed folio) gets no marker.
         plain = page_to_markdown(
             {
                 "pdf_page_index": 31,
@@ -109,7 +112,40 @@ class MarkdownExportCoreTests(unittest.TestCase):
                 "blocks": [{"text": "另一页"}],
             }
         )
-        self.assertIn("<!-- pdf_page: 32 -->", plain)
+        self.assertNotIn("<!--", plain)
+        self.assertNotIn("pdf_page", plain)
+
+    def test_full_marker_mode_keeps_pdf_page(self) -> None:
+        from src.me_finder.markdown_export_normalize import ExportOptions
+
+        page = {
+            "pdf_page_index": 30,
+            "pdf_page_number_1based": 31,
+            "printed_page": "23",
+            "citation_page": "23",
+            "text_raw": "正文",
+            "blocks": [{"text": "正文"}],
+        }
+        markdown = page_to_markdown(
+            page, options=ExportOptions(page_marker_mode="full")
+        )
+        self.assertIn("<!-- pdf_page: 31 | printed_page: 23 -->", markdown)
+
+    def test_none_marker_mode_emits_no_anchor(self) -> None:
+        from src.me_finder.markdown_export_normalize import ExportOptions
+
+        page = {
+            "pdf_page_index": 30,
+            "pdf_page_number_1based": 31,
+            "printed_page": "23",
+            "text_raw": "正文",
+            "blocks": [{"text": "正文"}],
+        }
+        markdown = page_to_markdown(
+            page, options=ExportOptions(page_marker_mode="none")
+        )
+        self.assertNotIn("<!--", markdown)
+        self.assertIn("正文", markdown)
 
     def test_missing_author_and_title_are_omitted_from_frontmatter(self) -> None:
         markdown = document_to_markdown([], title="只有标题")
@@ -277,11 +313,11 @@ class MarkdownExportServiceTests(unittest.TestCase):
             self.assertIn("正文第一页", content)
             self.assertIn("# 第二章 方法问题", content)
             self.assertIn("正文第二页", content)
-            self.assertIn(
-                "<!-- pdf_page: 1 | printed_page: 1 -->",
-                content,
-            )
-            self.assertIn("<!-- pdf_page: 2 -->", content)
+            # Default export hides the physical PDF page and only keeps the
+            # printed folio when one is known.
+            self.assertIn("<!-- printed_page: 1 -->", content)
+            self.assertNotIn("pdf_page:", content)
+            # Page 2 has no printed folio, so it gets no page anchor at all.
             self.assertFalse(Path(str(result["path"]) + ".partial").exists())
 
     def test_service_missing_and_unsupported_sources_have_clear_errors(self) -> None:
@@ -300,6 +336,199 @@ class MarkdownExportServiceTests(unittest.TestCase):
                     source_file_id="source-markdown-1",
                     output_dir=root / "exports",
                 )
+
+
+def _block(text, *, bbox=None, level=None, role=None):
+    block = {"text": text}
+    if bbox is not None:
+        block["bbox"] = bbox
+    if level is not None:
+        block["document_heading_level"] = level
+    if role is not None:
+        block["mineru_type"] = role
+    return block
+
+
+def _page(index, printed, blocks, *, pdf_page=None):
+    page = {
+        "pdf_page_index": index,
+        "pdf_page_number_1based": (pdf_page if pdf_page is not None else index + 1),
+        "page_width": 1000,
+        "page_height": 1000,
+        "text_raw": "\n".join(str(b["text"]).strip() for b in blocks),
+        "blocks": blocks,
+    }
+    if printed is not None:
+        page["printed_page"] = printed
+        page["citation_page"] = printed
+    return page
+
+
+# bbox bands on the 1000-unit canvas: top ~0.02, middle ~0.5, bottom ~0.95.
+TOP = [100, 10, 400, 40]
+MID = [100, 480, 900, 520]
+MID2 = [100, 560, 900, 600]
+BOT = [100, 950, 400, 980]
+
+
+class MarkdownExportNormalizationTests(unittest.TestCase):
+    def test_case1_visible_page_number_and_running_header_removed(self) -> None:
+        header = "德国哲学1760—1860：观念论的遗产"
+        pages = [
+            _page(
+                i,
+                str(135 + i),
+                [
+                    _block(header, bbox=TOP),
+                    _block(str(135 + i), bbox=[470, 10, 520, 40]),
+                    _block(f"正文 A 第{i}页", bbox=MID),
+                    _block(f"正文 B 第{i}页", bbox=MID2),
+                ],
+                pdf_page=138 + i,
+            )
+            for i in range(4)
+        ]
+        markdown = document_to_markdown(pages)
+        # Running header repeated on every page is gone.
+        self.assertNotIn(header, markdown)
+        # The visible folio copies are gone; the hidden anchor stays.
+        self.assertIn("<!-- printed_page: 135 -->", markdown)
+        self.assertNotIn("pdf_page:", markdown)
+        self.assertIn("正文 A 第0页", markdown)
+        self.assertIn("正文 B 第0页", markdown)
+        # The standalone "135" line no longer appears on its own.
+        self.assertNotIn("\n135\n", markdown)
+
+    def test_case2_only_pdf_page_emits_no_marker(self) -> None:
+        page = _page(2, None, [_block("封面正文", bbox=MID)], pdf_page=3)
+        markdown = document_to_markdown([page])
+        self.assertNotIn("pdf_page", markdown)
+        self.assertNotIn("printed_page", markdown)
+        self.assertIn("封面正文", markdown)
+
+    def test_case3_roman_printed_page_is_preserved(self) -> None:
+        page = _page(
+            8,
+            "ix",
+            [_block("ix", bbox=TOP), _block("导言正文", bbox=MID)],
+        )
+        markdown = document_to_markdown([page])
+        self.assertIn("<!-- printed_page: ix -->", markdown)
+        self.assertIn("导言正文", markdown)
+        # The visible "ix" folio at the top is removed, not the body.
+        self.assertNotIn("\nix\n", markdown)
+
+    def test_case4_body_year_is_not_removed(self) -> None:
+        page = _page(
+            10,
+            "135",
+            [
+                _block("正文开始", bbox=MID),
+                _block("1848", bbox=MID2),
+                _block("正文结束", bbox=[100, 640, 900, 680]),
+            ],
+        )
+        markdown = document_to_markdown([page])
+        self.assertIn("1848", markdown)
+
+    def test_case5_inline_number_is_not_removed(self) -> None:
+        page = _page(
+            11,
+            "20",
+            [_block("康德在这里区分了 12 个范畴。", bbox=MID)],
+        )
+        markdown = document_to_markdown([page])
+        self.assertIn("康德在这里区分了 12 个范畴。", markdown)
+
+    def test_case6_real_heading_survives_running_header_rule(self) -> None:
+        title = "第一部分 康德与哲学革命"
+        # Chapter-start page: the title is a real heading (has a heading level).
+        start = _page(
+            0,
+            "1",
+            [_block(title, bbox=TOP, level=1), _block("部分正文", bbox=MID)],
+        )
+        # Later pages repeat the title as a plain running header at the top.
+        followers = [
+            _page(
+                i,
+                str(i + 1),
+                [_block(title, bbox=TOP), _block(f"后续正文{i}", bbox=MID)],
+            )
+            for i in range(1, 4)
+        ]
+        markdown = document_to_markdown([start, *followers])
+        # The real heading is kept exactly once; the plain copies are removed.
+        self.assertIn(f"# {title}", markdown)
+        self.assertEqual(markdown.count(title), 1)
+        self.assertIn("部分正文", markdown)
+        self.assertIn("后续正文1", markdown)
+
+    def test_case7_heading_folio_prefix_stripped_only_when_matching(self) -> None:
+        matching = _page(
+            23,
+            "24",
+            [_block("24 纯粹直观", bbox=TOP, level=2), _block("小节正文", bbox=MID)],
+        )
+        markdown = document_to_markdown([matching])
+        self.assertIn("## 纯粹直观", markdown)
+        self.assertNotIn("## 24 纯粹直观", markdown)
+
+        # A real title that merely starts with a year is never altered.
+        yearish = _page(
+            50,
+            "51",
+            [_block("1844年经济学哲学手稿", bbox=TOP, level=1)],
+        )
+        markdown2 = document_to_markdown([yearish])
+        self.assertIn("# 1844年经济学哲学手稿", markdown2)
+
+    def test_case8_frontmatter_page_without_printed_page(self) -> None:
+        page = _page(
+            0,
+            None,
+            [_block("版权页内容", bbox=MID), _block("ISBN 7-5366-0898-5", bbox=MID2)],
+            pdf_page=1,
+        )
+        markdown = document_to_markdown([page])
+        self.assertNotIn("printed_page", markdown)
+        self.assertNotIn("pdf_page", markdown)
+        self.assertIn("版权页内容", markdown)
+        self.assertIn("ISBN 7-5366-0898-5", markdown)
+
+    def test_parser_tagged_page_number_role_is_removed(self) -> None:
+        page = _page(
+            5,
+            "6",
+            [
+                _block("6", bbox=MID, role="page_number"),
+                _block("正文内容", bbox=MID2),
+            ],
+        )
+        markdown = document_to_markdown([page])
+        self.assertIn("正文内容", markdown)
+        self.assertNotIn("\n6\n", markdown)
+
+    def test_old_library_pages_export_without_enrichment(self) -> None:
+        # Pages with neither document_heading_* nor bbox still export cleanly via
+        # the reading-order fallback for top/bottom regions.
+        pages = [
+            {
+                "pdf_page_index": 0,
+                "pdf_page_number_1based": 1,
+                "printed_page": "1",
+                "citation_page": "1",
+                "text_raw": "第一章 标题\n正文",
+                "blocks": [
+                    {"text_level": 1, "text": "第一章 标题"},
+                    {"text": "正文"},
+                ],
+            }
+        ]
+        markdown = document_to_markdown(pages)
+        self.assertIn("<!-- printed_page: 1 -->", markdown)
+        self.assertIn("# 第一章 标题", markdown)
+        self.assertIn("正文", markdown)
 
 
 if __name__ == "__main__":

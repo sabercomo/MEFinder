@@ -11,6 +11,11 @@ def open_readonly_index(db_path: Path) -> sqlite3.Connection:
 
     connection = sqlite3.connect(str(db_path), check_same_thread=False)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA busy_timeout = 30000")
+    # Touch the schema before query_only so SQLite can recover a hot rollback
+    # journal left by an interrupted importer.  Without this, desktop startup
+    # can fail immediately at its first sqlite_master query.
+    connection.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
     connection.execute("PRAGMA query_only = ON")
     return connection
 

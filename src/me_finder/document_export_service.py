@@ -26,6 +26,7 @@ from .document_heading import (
 )
 from .database import _sanitize_surrogates_in_place
 from .markdown_export import document_to_markdown, safe_markdown_filename
+from .markdown_export_normalize import ExportOptions
 from .pdf_extractors import file_sha256
 
 
@@ -239,8 +240,16 @@ def export_indexed_pdf_markdown(
     source_file_id: str,
     output_dir: Path,
     runtime_root: Optional[Path] = None,
+    options: Optional[ExportOptions] = None,
 ) -> Dict[str, object]:
-    """Export one indexed PDF's persisted structured data as UTF-8 Markdown."""
+    """Export one indexed PDF's persisted structured data as UTF-8 Markdown.
+
+    ``options`` carries the format-neutral page-anchor policy and page-cleanup
+    flags (see :class:`ExportOptions`); the default is the ``printed`` marker
+    mode with visible page numbers and running headers/footers removed.
+    """
+
+    options = options or ExportOptions()
 
     source_id = str(source_file_id or "").strip()
     if not source_id or len(source_id) > 256:
@@ -303,6 +312,7 @@ def export_indexed_pdf_markdown(
         iter_indexed_pdf_pages(database, source_id),
         title=title,
         author=author,
+        options=options,
     )
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)

@@ -71,9 +71,34 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         render_end = READER_JS.index("function findAnchorNode(", render_start)
         render_body = READER_JS[render_start:render_end]
         self.assertLess(
-            render_body.index("target.scrollIntoView"),
+            render_body.index("positionSourceTarget(target)"),
             render_body.index("state.boundaryObserver = createBoundaryObserver()"),
         )
+        self.assertNotIn("scrollIntoView", render_body)
+
+    def test_search_hit_is_centered_and_seeds_the_first_comparison(self) -> None:
+        position_start = READER_JS.index("function positionSourceTarget(target)")
+        position_end = READER_JS.index("function responseItems(", position_start)
+        position_body = READER_JS[position_start:position_end]
+        self.assertIn("target.querySelector('mark') || target", position_body)
+        self.assertIn("viewport.scrollTop", position_body)
+        self.assertIn("viewport.scrollLeft = 0", position_body)
+        self.assertNotIn("scrollIntoView", position_body)
+
+        self.assertIn("function visibleSourceHighlightRange()", READER_JS)
+        self.assertIn("state.resolvedHighlights.get(itemAnchor(item, index))", READER_JS)
+        locate_start = READER_JS.index("async function locateInAlignedVersion")
+        locate_end = READER_JS.index("function toggleCitationMenu", locate_start)
+        locate_body = READER_JS[locate_start:locate_end]
+        self.assertIn(
+            "visibleSourceHighlightRange() || sourceCenterRange()",
+            locate_body,
+        )
+        comparison_start = READER_JS.index("function showComparison(")
+        comparison_end = READER_JS.index("function closeComparison()", comparison_start)
+        comparison_body = READER_JS[comparison_start:comparison_end]
+        self.assertIn("var sourceHighlight = visibleSourceHighlightRange()", comparison_body)
+        self.assertIn("positionSourceTarget(state.elements.content.querySelector", comparison_body)
 
     def test_home_and_end_jump_to_document_boundaries_without_blank_spacers(
         self,
@@ -181,12 +206,47 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         ):
             self.assertIn(field, READER_JS)
         self.assertIn("pageMatchSpans: payload.page_match_spans", READER_JS)
-        self.assertIn("在' + String(target.display_name", READER_JS)
+        self.assertIn("'在' + alignmentTargetDisplayLabel(target) + '中定位'", READER_JS)
+        self.assertIn("function alignmentTargetDisplayLabel(target)", READER_JS)
         self.assertIn(".mef-reader-alignment-action", READER_CSS)
         self.assertIn("function generateTextAlignmentAction", APP_JS)
         self.assertIn("'/api/text-alignments/generate'", APP_JS)
-        self.assertIn("pivot_source_file_id: group.base_source_file_id", APP_JS)
-        self.assertIn("result.alignment_link_count", APP_JS)
+        self.assertIn("pivot_source_file_id: pivotSourceId", APP_JS)
+        self.assertIn("generateSelectedTextAlignmentAction", APP_JS)
+        self.assertIn("grp-pair-left-", APP_JS)
+        self.assertIn("grp-pair-right-", APP_JS)
+        self.assertIn("result.accepted_link_count", APP_JS)
+        self.assertIn("result.rejected_link_count", APP_JS)
+        self.assertIn("result.unmatched_link_count", APP_JS)
+        comparison_start = READER_JS.index("function renderComparisonWindow()")
+        comparison_end = READER_JS.index("async function loadComparisonWindow", comparison_start)
+        comparison_body = READER_JS[comparison_start:comparison_end]
+        self.assertIn("target.querySelector('mark')", comparison_body)
+        self.assertIn("viewport.scrollTop", comparison_body)
+        self.assertIn("viewport.scrollLeft = 0", comparison_body)
+        self.assertNotIn("scrollIntoView", comparison_body)
+
+    def test_group_alignment_accepts_pdf_and_epub_but_not_docx(self) -> None:
+        helper = re.search(
+            r"function documentSupportsTextAlignment\(source\) \{"
+            r"(?P<body>.*?)\n\}",
+            APP_JS,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(helper)
+        body = helper.group("body")
+        self.assertIn("libraryFileFacet(source)", body)
+        self.assertIn("facet === 'pdf' || facet === 'epub'", body)
+        self.assertNotIn("'word'", body)
+        self.assertIn("documentSupportsTextAlignment(src)", APP_JS)
+
+    def test_group_manager_has_a_fixed_shell_and_one_vertical_scroll_region(self) -> None:
+        self.assertIn("height: min(760px, calc(100dvh - 48px))", APP_CSS)
+        self.assertIn(".group-manage-body { flex: 1 1 auto; min-height: 0; overflow-y: auto", APP_CSS)
+        self.assertIn("scrollbar-gutter: stable", APP_CSS)
+        self.assertIn(".grp-remove-btn { grid-column: 2; grid-row: 2; }", APP_CSS)
+        self.assertNotIn(".grp-remove-btn:active { transform", APP_CSS)
+        self.assertIn(".group-manage-foot { flex: 0 0 auto", APP_CSS)
 
     def test_aligned_pdf_versions_can_read_side_by_side_by_segment(self) -> None:
         self.assertIn("function sourceCenterRange()", READER_JS)
@@ -205,6 +265,29 @@ class StructuredReaderFrontendTests(unittest.TestCase):
             READER_CSS,
         )
         self.assertNotIn("scrollTop / scrollHeight", READER_JS)
+
+    def test_aligned_epub_uses_paragraph_spans_and_labels(self) -> None:
+        highlight_start = READER_JS.index("function setComparisonHighlights(spans)")
+        highlight_end = READER_JS.index("function comparisonItemAnchor(", highlight_start)
+        highlight_body = READER_JS[highlight_start:highlight_end]
+        for field in (
+            "span.paragraph_id",
+            "span.paragraph_char_start",
+            "span.paragraph_char_end",
+            "span.page_char_start",
+            "span.page_char_end",
+        ):
+            self.assertIn(field, highlight_body)
+
+        anchor_start = highlight_end
+        anchor_end = READER_JS.index("function renderComparisonItem(", anchor_start)
+        self.assertIn("item.paragraph_id", READER_JS[anchor_start:anchor_end])
+
+        render_end = READER_JS.index("function updateComparisonControls(", anchor_end)
+        render_body = READER_JS[anchor_end:render_end]
+        self.assertIn("item.item_type === 'word_paragraph'", render_body)
+        self.assertIn("'段落 ' + (absoluteIndex + 1)", render_body)
+        self.assertIn("'本段无可显示文本'", render_body)
 
     def test_deep_link_uses_stable_anchors_and_validated_recovery_fields(self) -> None:
         self.assertIn("function parseReaderDeepLink(locationValue)", READER_JS)

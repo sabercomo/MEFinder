@@ -64,6 +64,9 @@
 
 .mef-reader-comparison-launchers {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -72,6 +75,7 @@
 }
 
 .mef-reader-comparison-launcher {
+  flex: 0 1 220px;
   max-width: 240px;
   min-height: 34px;
   padding: 0 12px;
@@ -91,9 +95,18 @@
   background: var(--accent-soft);
 }
 
+.mef-reader-comparison-launcher:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mef-reader-comparison-launcher:active:not(:disabled) {
+  background: var(--surface-selected);
+}
+
 .mef-reader-comparison-launcher:disabled {
-  cursor: wait;
-  opacity: .6;
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .mef-reader-heading {
@@ -533,6 +546,7 @@
   }
 
   .mef-reader-comparison-launcher {
+    flex: 1 1 100%;
     max-width: 100%;
   }
 

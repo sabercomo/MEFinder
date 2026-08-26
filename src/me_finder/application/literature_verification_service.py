@@ -12,7 +12,7 @@ from .search_service import SearchRequest, SearchService
 
 RuntimeRootProvider = Callable[[], Path]
 SCHEMA_VERSION = "1"
-SOURCE_TYPES = {"all", "pdf", "word"}
+SOURCE_TYPES = {"all", "pdf", "word", "epub"}
 SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
 SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 
@@ -234,7 +234,7 @@ class LiteratureVerificationService:
 
 def _validate_source_type(source_type: object) -> None:
     if not isinstance(source_type, str) or source_type not in SOURCE_TYPES:
-        raise ValueError("source_type 必须是 all、pdf 或 word")
+        raise ValueError("source_type 必须是 all、pdf、word 或 epub")
 
 
 def _validate_source_id(source_file_id: object) -> str:

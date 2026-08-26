@@ -63,6 +63,11 @@ function documentGroupMemberLabel(groupId, sourceId) {
   return member ? (member.display_name || '') : '';
 }
 
+function documentSupportsTextAlignment(source) {
+  var facet = libraryFileFacet(source);
+  return facet === 'pdf' || facet === 'epub';
+}
+
 function setLibraryGroupScope(groupId) {
   libraryStore.groupScopeId = groupId || '';
   closeAppSelects();
@@ -126,14 +131,50 @@ function groupManageBackdrop(event) {
   if (event.target && event.target.id === 'group-manage-modal') closeGroupManageModal();
 }
 
-// 单一「管理作品组」弹窗承载全部管理：新建 / 重命名 / 删除 / 加入所选 / 移除 /
-// 设/换基准 / 编辑 version_label。成员展示复用 B 的 display_name fallback。
+function documentGroupAlignmentForPair(group, leftSourceId, rightSourceId) {
+  return (group.alignments || []).find(function(item) {
+    return item.status === 'completed' && (
+      (item.pivot_source_file_id === leftSourceId && item.target_source_file_id === rightSourceId) ||
+      (item.pivot_source_file_id === rightSourceId && item.target_source_file_id === leftSourceId)
+    );
+  });
+}
+
+function syncDocumentGroupPairAction(groupId) {
+  var group = documentGroupById(groupId);
+  var left = document.getElementById('grp-pair-left-' + groupId);
+  var right = document.getElementById('grp-pair-right-' + groupId);
+  var button = document.getElementById('grp-pair-generate-' + groupId);
+  var status = document.getElementById('grp-pair-status-' + groupId);
+  if (!group || !left || !right || !button || !status) return;
+  var distinct = left.value && right.value && left.value !== right.value;
+  var existing = distinct
+    ? documentGroupAlignmentForPair(group, left.value, right.value)
+    : null;
+  button.disabled = !distinct;
+  button.textContent = existing ? '重新生成' : '生成对照';
+  status.textContent = distinct
+    ? (existing ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
+    : '请选择两个不同版本';
+}
+
+function generateSelectedTextAlignmentAction(groupId, button) {
+  var left = document.getElementById('grp-pair-left-' + groupId);
+  var right = document.getElementById('grp-pair-right-' + groupId);
+  if (!left || !right) return;
+  generateTextAlignmentAction(groupId, left.value, right.value, button);
+}
+
+// 单一「管理作品组」弹窗承载成员管理，并把默认基准与任意两版的直接对照分开。
 function renderDocumentGroupManager() {
   var body = document.getElementById('group-manage-body');
   if (!body) return;
   var selectedCount = libraryStore.deleteSelection.size;
-  var html = '<div class="grp-create">'
-    + '<input id="grp-create-input" class="grp-input" type="text" placeholder="新建作品组标题…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
+  var pairGroups = [];
+  var html = '<div class="grp-create"><label class="grp-create-field">'
+    + '<span class="grp-field-label">作品组标题</span>'
+    + '<input id="grp-create-input" class="grp-input" type="text" placeholder="例如：法哲学原理" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
+    + '</label>'
     + '<button class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
   if (selectedCount) {
     html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组</div>';
@@ -155,29 +196,69 @@ function renderDocumentGroupManager() {
       html += '<div class="grp-members">' + members.map(function(m) {
         var sid = esc(m.source_file_id);
         var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
-        var baseSrc = libraryStore.sources.find(function(s) { return s.source_file_id === g.base_source_file_id; });
         var srcTitle = src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id;
         var isBase = m.source_file_id === g.base_source_file_id;
-        var canAlign = !isBase && baseSrc && src &&
-          String(baseSrc.source_type || '').toLowerCase() === 'pdf' &&
-          String(src.source_type || '').toLowerCase() === 'pdf';
-        var alignment = (g.alignments || []).find(function(item) {
-          return item.pivot_source_file_id === g.base_source_file_id &&
-            item.target_source_file_id === m.source_file_id &&
-            item.status === 'completed';
-        });
+        var language = src ? libLangChipLabel(libraryLanguageCode(src)) : '未识别语言';
+        var format = src ? sourceFormatLabel(src) : '未知格式';
         return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
-          + '<span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
+          + '<span class="grp-member-main"><span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
+          + '<span class="grp-member-meta"><span>' + esc(language) + '</span><span>' + esc(format) + '</span></span></span>'
           + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(m.display_name || '') + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
-          + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button" onclick="setGroupBaseAction(\'' + gid + '\',\'' + (isBase ? '' : sid) + '\')">' + (isBase ? '★ 基准' : '设为基准') + '</button>'
-          + (canAlign ? '<button class="grp-align-btn" type="button" title="生成 Segment 并进行离线单调对齐" onclick="generateTextAlignmentAction(\'' + gid + '\',\'' + sid + '\',this)">' + (alignment ? '重新对齐' : '生成对齐') + '</button>' : '')
+          + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button"'
+          + (isBase ? ' disabled' : ' onclick="setGroupBaseAction(\'' + gid + '\',\'' + sid + '\')"')
+          + '>' + (isBase ? '默认基准' : '设为默认') + '</button>'
           + '<button class="grp-remove-btn" type="button" aria-label="从作品组移除" title="从作品组移除" onclick="removeGroupMemberAction(\'' + sid + '\')">✕</button>'
           + '</div>';
       }).join('') + '</div>';
     }
+    var supported = members.map(function(m) {
+      var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
+      return src && documentSupportsTextAlignment(src) ? {member:m, source:src} : null;
+    }).filter(Boolean);
+    if (supported.length >= 2) {
+      var chinese = supported.find(function(item) {
+        return libraryLanguageCode(item.source).indexOf('zh') === 0;
+      });
+      var english = supported.find(function(item) {
+        return libraryLanguageCode(item.source) === 'en';
+      });
+      var leftId = chinese && english
+        ? chinese.member.source_file_id
+        : (supported.find(function(item) {
+          return item.member.source_file_id === g.base_source_file_id;
+        }) || supported[0]).member.source_file_id;
+      var rightId = chinese && english
+        ? english.member.source_file_id
+        : supported.find(function(item) {
+          return item.member.source_file_id !== leftId;
+        }).member.source_file_id;
+      var optionHtml = function(selectedId) {
+        return supported.map(function(item) {
+          var source = item.source;
+          var member = item.member;
+          var version = member.version_label || member.display_name || source.title || source.file_name;
+          var label = version + ' · ' + libLangChipLabel(libraryLanguageCode(source)) + ' · ' + sourceFormatLabel(source);
+          return '<option value="' + esc(member.source_file_id) + '"' + (member.source_file_id === selectedId ? ' selected' : '') + '>' + esc(label) + '</option>';
+        }).join('');
+      };
+      var existingPair = documentGroupAlignmentForPair(g, leftId, rightId);
+      html += '<div class="grp-pair"><div class="grp-pair-copy">'
+        + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
+        + (existingPair ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
+        + '</span></div><div class="grp-pair-controls">'
+        + '<label><span class="visually-hidden">左栏版本</span><select id="grp-pair-left-' + gid + '" class="grp-pair-select" onchange="syncDocumentGroupPairAction(\'' + gid + '\')">' + optionHtml(leftId) + '</select></label>'
+        + '<span class="grp-pair-arrow" aria-hidden="true">↔</span>'
+        + '<label><span class="visually-hidden">右栏版本</span><select id="grp-pair-right-' + gid + '" class="grp-pair-select" onchange="syncDocumentGroupPairAction(\'' + gid + '\')">' + optionHtml(rightId) + '</select></label>'
+        + '<button id="grp-pair-generate-' + gid + '" class="grp-align-btn" type="button" onclick="generateSelectedTextAlignmentAction(\'' + gid + '\',this)">' + (existingPair ? '重新生成' : '生成对照') + '</button>'
+        + '</div></div>';
+      pairGroups.push(g.document_group_id);
+    } else if (members.length) {
+      html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成双栏对照</div>';
+    }
     html += '</div>';
   });
   body.innerHTML = html;
+  pairGroups.forEach(syncDocumentGroupPairAction);
 }
 
 async function postGroupOp(path, payload, successMessage) {
@@ -323,20 +404,26 @@ function libDocTypeLabel(v) {
     : v === 'thesis' ? '学位论文' : v === 'unknown' ? '未识别' : '全部类型';
 }
 
+function libraryFileFacet(source) {
+  if (source && source.source_type === 'pdf') return 'pdf';
+  return sourceFormatLabel(source) === 'EPUB' ? 'epub' : 'word';
+}
+
 // 当前生效的（非「全部」）筛选，按「类型 → 语言 → 文件」次序，供角标与 chips 使用。
 function libFilterActiveList() {
   var out = [];
   if (libraryStore.documentTypeFilter !== 'all') out.push({kind:'doctype', label:libDocTypeLabel(libraryStore.documentTypeFilter)});
   if (libraryStore.languageFilter !== 'all') out.push({kind:'lang', label:libLangChipLabel(libraryStore.languageFilter)});
-  if (libraryStore.typeFilter !== 'all') out.push({kind:'type', label:libraryStore.typeFilter === 'word' ? 'Word / EPUB' : 'PDF'});
+  if (libraryStore.typeFilter !== 'all') out.push({kind:'type', label:libraryStore.typeFilter === 'word' ? 'Word' : libraryStore.typeFilter === 'epub' ? 'EPUB' : 'PDF'});
   return out;
 }
 
 function renderLibraryFilterBar() {
   var scopeSources = libraryGroupScopedSources();
   var allCount = scopeSources.length;
-  var wordCount = scopeSources.filter(function(s){ return s.source_type === 'word'; }).length;
-  var pdfCount = scopeSources.filter(function(s){ return s.source_type === 'pdf'; }).length;
+  var wordCount = scopeSources.filter(function(s){ return libraryFileFacet(s) === 'word'; }).length;
+  var epubCount = scopeSources.filter(function(s){ return libraryFileFacet(s) === 'epub'; }).length;
+  var pdfCount = scopeSources.filter(function(s){ return libraryFileFacet(s) === 'pdf'; }).length;
   var journalCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'journal_article'; }).length;
   var thesisCount = scopeSources.filter(function(s){ return libraryDocType(s) === 'thesis'; }).length;
   // 著作正向计数：已确认类型的图书 PDF；未识别单列一档（L-15）。
@@ -358,7 +445,8 @@ function renderLibraryFilterBar() {
 
   var typeOpts = [
     {v:'all', label:'全部', n:allCount},
-    {v:'word', label:'Word / EPUB', n:wordCount},
+    {v:'word', label:'Word', n:wordCount},
+    {v:'epub', label:'EPUB', n:epubCount},
     {v:'pdf', label:'PDF', n:pdfCount}
   ];
 
@@ -398,7 +486,7 @@ async function setLibFacet(event, kind, value) {
   else if (kind === 'lang') libraryStore.languageFilter = value;
   else if (kind === 'type') {
     libraryStore.typeFilter = value;
-    if (libraryStore.typeFilter === 'word' && libraryStore.statusFilter !== 'all') { libraryStore.statusFilter = 'all'; renderLibraryStats(); }
+    if (['word','epub'].indexOf(libraryStore.typeFilter) >= 0 && libraryStore.statusFilter !== 'all') { libraryStore.statusFilter = 'all'; renderLibraryStats(); }
   }
   closeLibDrawer();
   renderLibraryList();
@@ -428,7 +516,7 @@ async function applyLibStatusFilter(status) {
   if (!await guardLeaveDetail()) return;
   var requested = status || 'all';
   libraryStore.statusFilter = requested === libraryStore.statusFilter ? 'all' : requested;
-  if (libraryStore.statusFilter !== 'all' && libraryStore.typeFilter === 'word') {
+  if (libraryStore.statusFilter !== 'all' && ['word','epub'].indexOf(libraryStore.typeFilter) >= 0) {
     libraryStore.typeFilter = 'all';  // 筛选按钮/chips 由 renderLibraryFilterBar 随列表重绘刷新
   }
   closeLibDrawer();
@@ -549,10 +637,14 @@ function libraryGroupScopedSources() {
   return sources;
 }
 
-async function generateTextAlignmentAction(groupId, targetSourceId, button) {
+async function generateTextAlignmentAction(groupId, pivotSourceId, targetSourceId, button) {
   var group = documentGroupById(groupId);
-  if (!group || !group.base_source_file_id) {
-    showToast('请先设置基准版本', 'warning');
+  if (!group || !pivotSourceId || !targetSourceId) {
+    showToast('请选择两个要对照的版本', 'warning');
+    return;
+  }
+  if (pivotSourceId === targetSourceId) {
+    showToast('请选择两个不同版本', 'warning');
     return;
   }
   if (button) {
@@ -565,7 +657,7 @@ async function generateTextAlignmentAction(groupId, targetSourceId, button) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         document_group_id: groupId,
-        pivot_source_file_id: group.base_source_file_id,
+        pivot_source_file_id: pivotSourceId,
         target_source_file_id: targetSourceId
       })
     });
@@ -575,7 +667,14 @@ async function generateTextAlignmentAction(groupId, targetSourceId, button) {
     renderGroupScopeSelector();
     renderDocumentGroupManager();
     var result = data.result || {};
-    showToast('对齐完成：' + (result.alignment_link_count || 0) + ' 组对应关系', 'success');
+    var rejected = Number(result.rejected_link_count || 0);
+    var unmatched = Number(result.unmatched_link_count || 0);
+    showToast(
+      '对齐完成：' + Number(result.accepted_link_count || 0) + ' 组可定位'
+        + (rejected ? '，' + rejected + ' 组低置信度已拒绝' : '')
+        + (unmatched ? '，' + unmatched + ' 组为单版附加内容' : ''),
+      'success'
+    );
   } catch (e) {
     renderDocumentGroupManager();
     showToast(e.message || '自动对齐失败', 'danger');
@@ -586,7 +685,7 @@ function getFilteredSources() {
   // 作品组 scope：只保留成员，再照常走类型/语言/状态/搜索/排序。
   let sources = libraryGroupScopedSources();
   if (libraryStore.typeFilter !== 'all') {
-    sources = sources.filter(s => s.source_type === libraryStore.typeFilter);
+    sources = sources.filter(function(source) { return libraryFileFacet(source) === libraryStore.typeFilter; });
   }
   if (libraryStore.languageFilter !== 'all') {
     sources = sources.filter(s => libraryLanguageCode(s) === libraryStore.languageFilter);
@@ -1006,6 +1105,8 @@ async function exportLibraryDocumentMarkdown(sourceId) {
 async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
   var payload = {source_id: sourceId};
   if (outputDirectory) payload.output_dir = outputDirectory;
+  // Carry the user's format-neutral page-anchor + cleanup preferences.
+  if (settingsStore.exportPageCleanup) payload.export_options = settingsStore.exportPageCleanup;
   var response = await fetch('/api/document/export-markdown', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},

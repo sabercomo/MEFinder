@@ -573,13 +573,29 @@
     state.elements.citationContext.textContent = context;
   }
 
+  function alignmentTargetDisplayLabel(target) {
+    var languageLabels = {
+      'zh-Hans': '简体中文',
+      'zh-Hant': '繁体中文',
+      en: '英语',
+      de: '德语',
+      fr: '法语',
+      ja: '日语',
+      ko: '韩语'
+    };
+    var language = languageLabels[String(target.language_code || '')] || '未识别语言';
+    var format = String(target.source_format || '').toUpperCase();
+    var displayName = String(target.display_name || '另一版本');
+    return language + (format ? ' · ' + format : '') + ' · ' + displayName;
+  }
+
   function renderAlignmentActions() {
     if (!state.elements) return;
     state.elements.alignmentActions.replaceChildren();
     state.elements.comparisonLaunchers.replaceChildren();
     state.alignmentTargets.forEach(function (target) {
       var button = createButton(
-        '在' + String(target.display_name || '另一版本') + '中定位',
+        '在' + alignmentTargetDisplayLabel(target) + '中定位',
         'mef-reader-alignment-action',
         'locate-alignment'
       );
@@ -587,7 +603,7 @@
       state.elements.alignmentActions.appendChild(button);
 
       var launcher = createButton(
-        '双栏对照 · ' + String(target.display_name || '另一版本'),
+        '双栏对照 · ' + alignmentTargetDisplayLabel(target),
         'mef-reader-comparison-launcher',
         'open-comparison'
       );
@@ -703,12 +719,58 @@
     };
   }
 
+  function visibleSourceHighlightRange() {
+    if (!state.elements || !state.open || !state.resolvedHighlights.size) return null;
+    var viewportRect = state.elements.viewport.getClientRects()[0];
+    if (!viewportRect) return null;
+    var visibleMark = Array.from(
+      state.elements.content.querySelectorAll('.mef-reader-item.has-highlight mark')
+    ).some(function (mark) {
+      return Array.from(mark.getClientRects()).some(function (rect) {
+        return rect.bottom > viewportRect.top && rect.top < viewportRect.bottom;
+      });
+    });
+    if (!visibleMark) return null;
+
+    var boundaries = [];
+    state.items.forEach(function (item, index) {
+      var ranges = state.resolvedHighlights.get(itemAnchor(item, index)) || [];
+      ranges.forEach(function (range) {
+        boundaries.push({index: index, start: range.start, end: range.end});
+      });
+    });
+    boundaries.sort(function (left, right) {
+      return left.index === right.index
+        ? left.start - right.start
+        : left.index - right.index;
+    });
+    if (!boundaries.length) return null;
+    var first = boundaries[0];
+    var last = boundaries[boundaries.length - 1];
+    return {
+      startIndex: first.index,
+      endIndex: last.index,
+      startOffset: first.start,
+      endOffset: last.end
+    };
+  }
+
   function setComparisonHighlights(spans) {
     state.comparison.highlights.clear();
     (Array.isArray(spans) ? spans : []).forEach(function (span) {
-      var anchorId = String(span.pdf_page_id || span.anchor_id || '');
-      var start = Number(span.page_char_start);
-      var end = Number(span.page_char_end);
+      var anchorId = String(
+        span.pdf_page_id || span.paragraph_id || span.anchor_id || ''
+      );
+      var start = Number(
+        span.paragraph_char_start != null
+          ? span.paragraph_char_start
+          : span.page_char_start
+      );
+      var end = Number(
+        span.paragraph_char_end != null
+          ? span.paragraph_char_end
+          : span.page_char_end
+      );
       if (!anchorId || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
         return;
       }
@@ -723,6 +785,7 @@
     return String(
       item.anchor_id ||
       item.pdf_page_id ||
+      item.paragraph_id ||
       (state.comparison.targetSourceId + '-ITEM-' + String(absoluteIndex).padStart(6, '0'))
     );
   }
@@ -738,8 +801,11 @@
     meta.className = 'mef-reader-item-meta';
     var label = document.createElement('span');
     label.className = 'mef-reader-item-label';
+    var isParagraph = item.item_type === 'word_paragraph';
     label.textContent = item.page_display ||
-      ('PDF 第 ' + (absoluteIndex + 1) + ' 页，引用页码尚未校准');
+      (isParagraph
+        ? '段落 ' + (absoluteIndex + 1)
+        : 'PDF 第 ' + (absoluteIndex + 1) + ' 页，引用页码尚未校准');
     meta.appendChild(label);
 
     var body = document.createElement('div');
@@ -747,7 +813,7 @@
     var text = String(item.text_raw || '');
     if (item.is_empty || !text) {
       body.classList.add('is-empty');
-      body.textContent = '本页无文本层';
+      body.textContent = isParagraph ? '本段无可显示文本' : '本页无文本层';
     } else {
       var ranges = state.comparison.highlights.get(anchorId) || [];
       appendHighlightedText(body, text, ranges);
@@ -789,7 +855,21 @@
     var target = state.elements.comparisonContent.querySelector(
       '[data-reader-index="' + state.comparison.currentIndex + '"]'
     );
-    if (target) target.scrollIntoView({block: 'center'});
+    var focal = target && (target.querySelector('mark') || target);
+    var viewport = state.elements.comparisonViewport;
+    if (focal && viewport) {
+      var focalRect = focal.getClientRects()[0];
+      var viewportRect = viewport.getClientRects()[0];
+      if (focalRect && viewportRect) {
+        viewport.scrollTop = Math.max(
+          0,
+          viewport.scrollTop + focalRect.top + focalRect.height / 2 -
+            viewportRect.top - viewportRect.height / 2
+        );
+      }
+      viewport.scrollLeft = 0;
+    }
+    state.elements.viewport.scrollLeft = 0;
   }
 
   async function loadComparisonWindow(centerIndex, requestedStart) {
@@ -854,6 +934,7 @@
 
   function showComparison(payload, targetDisplayName) {
     var comparison = state.comparison;
+    var sourceHighlight = visibleSourceHighlightRange();
     var targetSourceId = String(payload.targetSourceId || payload.target_source_file_id || '');
     var changedTarget = comparison.targetSourceId !== targetSourceId;
     comparison.open = true;
@@ -876,6 +957,11 @@
     state.elements.sourcePaneHeader.hidden = false;
     state.elements.sourcePaneTitle.textContent = state.title || '当前版本';
     state.elements.comparisonTitle.textContent = comparison.targetDisplayName;
+    if (sourceHighlight) {
+      positionSourceTarget(state.elements.content.querySelector(
+        '[data-reader-index="' + sourceHighlight.startIndex + '"]'
+      ));
+    }
     updateComparisonControls();
     return loadComparisonWindow(comparison.currentIndex);
   }
@@ -946,7 +1032,8 @@
   }
 
   async function locateInAlignedVersion(targetSourceId, requestedSelection, automatic) {
-    var selection = requestedSelection || state.citationRange || sourceCenterRange();
+    var selection = requestedSelection || state.citationRange ||
+      visibleSourceHighlightRange() || sourceCenterRange();
     if (!selection || !targetSourceId || (!automatic && state.alignmentLoading)) {
       return false;
     }
@@ -1758,7 +1845,9 @@
     var showItemPageLabel = !documentOnlyPage && !inferredPageContinuation;
     label.textContent = documentOnlyPage
       ? (item.document_page_range || item.page_display ||
-         '页码尚未解析')
+         (item.item_type === 'word_paragraph'
+           ? '段落 ' + (absoluteIndex + 1)
+           : '页码尚未解析'))
       : ((showItemPageLabel && item.page_display) || (
         item.item_type === 'word_paragraph'
           ? '段落 ' + (absoluteIndex + 1)
@@ -1847,7 +1936,7 @@
     /*
      * Position the requested anchor before observing boundaries.  Observing
      * first lets the newly mounted top sentinel report as visible before
-     * scrollIntoView runs, which can pull an initial deep jump back toward
+     * the requested focal range is positioned, which can pull an initial jump back toward
      * the beginning of a long document.
      */
     var targetAnchor = scrollAnchorId || state.targetAnchorId;
@@ -1858,8 +1947,7 @@
       );
     }
     if (target) {
-      target.scrollIntoView({block: 'center'});
-      setCurrentItem(Number(target.dataset.readerIndex));
+      positionSourceTarget(target);
     }
 
     state.pageObserver = createPageObserver();
@@ -1882,6 +1970,23 @@
       if (!found && node.dataset.readerAnchor === anchorId) found = node;
     });
     return found;
+  }
+
+  function positionSourceTarget(target) {
+    if (!target || !state.elements) return;
+    var viewport = state.elements.viewport;
+    var focal = target.querySelector('mark') || target;
+    var focalRect = focal.getClientRects()[0];
+    var viewportRect = viewport.getClientRects()[0];
+    if (focalRect && viewportRect) {
+      viewport.scrollTop = Math.max(
+        0,
+        viewport.scrollTop + focalRect.top + focalRect.height / 2 -
+          viewportRect.top - viewportRect.height / 2
+      );
+    }
+    viewport.scrollLeft = 0;
+    setCurrentItem(Number(target.dataset.readerIndex));
   }
 
   function responseItems(payload) {
@@ -2059,8 +2164,7 @@
   async function loadWindow(centerIndex, scrollAnchorId) {
     var local = scrollAnchorId ? findAnchorNode(scrollAnchorId) : null;
     if (local) {
-      local.scrollIntoView({block: 'center'});
-      setCurrentItem(Number(local.dataset.readerIndex));
+      positionSourceTarget(local);
       return true;
     }
     var bounds = windowBounds(centerIndex);
@@ -2256,8 +2360,7 @@
     if (anchorId) {
       var local = findAnchorNode(anchorId);
       if (local) {
-        local.scrollIntoView({block: 'center'});
-        setCurrentItem(Number(local.dataset.readerIndex));
+        positionSourceTarget(local);
         return true;
       }
       var inferred = inferIndexFromAnchor(anchorId);

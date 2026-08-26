@@ -37,6 +37,13 @@ SEARCH_MODES = {"auto", "exact", "compact", "punctuation", "fuzzy"}
 MAX_FTS_QUERY_TRIGRAMS = 48
 SQL_CANDIDATE_FLOOR = 64
 SQL_CANDIDATE_MULTIPLIER = 8
+# The FTS trigram MATCH already surfaces up to ~700 candidates ordered by
+# relevance, but the per-candidate SequenceMatcher window search is expensive
+# on long (footnote-heavy) pages — scoring all of them made a single fuzzy
+# query take 30s+.  Cheap n-gram overlap ranks the candidates first so the
+# window search only runs on the strongest few; the weaker ones cannot clear
+# the ratio gate anyway.
+FUZZY_RESCORE_LIMIT = 64
 
 
 class SearchEngine:
@@ -136,7 +143,7 @@ class SearchEngine:
         )
         if mode not in SEARCH_MODES:
             mode = "auto"
-        if source_type not in {"all", "word", "pdf"}:
+        if source_type not in {"all", "word", "epub", "pdf"}:
             source_type = "all"
         return_all = str(limit or "").strip().lower() in {"all", "0"}
         normalized_limit = None if return_all else max(1, min(int(limit or 10), 200))
@@ -257,7 +264,17 @@ class SearchEngine:
         prefix = f"{alias}." if alias else ""
         clauses: List[str] = []
         args: List[object] = []
-        if source_type != "all":
+        if source_type == "epub":
+            clauses.append(f"{prefix}source_type = 'word'")
+            clauses.append(
+                f"json_extract({prefix}payload_json, '$.source_format') = 'epub'"
+            )
+        elif source_type == "word":
+            clauses.append(f"{prefix}source_type = 'word'")
+            clauses.append(
+                f"COALESCE(json_extract({prefix}payload_json, '$.source_format'), 'word') <> 'epub'"
+            )
+        elif source_type != "all":
             clauses.append(f"{prefix}source_type = ?")
             args.append(source_type)
         scope_ids = getattr(self, "_scope_source_ids", None)
@@ -464,16 +481,20 @@ class SearchEngine:
                 + source_clause
                 + " ORDER BY bm25(paragraphs_fts) LIMIT 701",
                 [fts_query, *source_args],
-            )
-            processed = 0
-            truncated = False
+            ).fetchall()
+            truncated = len(rows) >= 701
+            query_grams = set(self._ngrams(q_plain))
+            prefiltered: List[Tuple[int, Dict[str, object], str]] = []
             for row in rows:
-                if processed >= 700:
-                    truncated = True
-                    break
-                processed += 1
                 paragraph = paragraph_from_database_row(row)
                 plain = str(paragraph.get("plain_text") or "")
+                overlap = len(query_grams.intersection(self._ngrams_set(plain)))
+                if overlap:
+                    prefiltered.append((overlap, paragraph, plain))
+            prefiltered.sort(key=lambda item: item[0], reverse=True)
+            if len(prefiltered) > FUZZY_RESCORE_LIMIT:
+                truncated = True
+            for _overlap, paragraph, plain in prefiltered[:FUZZY_RESCORE_LIMIT]:
                 ratio, start, end = best_window_ratio(q_plain, plain)
                 if ratio < 0.58:
                     continue
@@ -516,7 +537,7 @@ class SearchEngine:
                     )
                 )
         ranked.sort(key=lambda item: item[0], reverse=True)
-        for _, _, paragraph in ranked[:700]:
+        for _, _, paragraph in ranked[:FUZZY_RESCORE_LIMIT]:
             plain = str(paragraph.get("plain_text") or "")
             ratio, start, end = best_window_ratio(q_plain, plain)
             if ratio < 0.58:
@@ -536,7 +557,7 @@ class SearchEngine:
                 spans[end][1],
                 candidates,
             )
-        return len(ranked) > 700
+        return len(ranked) > FUZZY_RESCORE_LIMIT
 
     @staticmethod
     def _ngrams_set(text: str, n: int = 2) -> set[str]:
@@ -1552,7 +1573,15 @@ class SearchEngine:
         source_type: str,
         source_file_id: Optional[str],
     ) -> bool:
-        if source_type != "all" and str(paragraph.get("source_type") or "word") != source_type:
+        paragraph_type = str(paragraph.get("source_type") or "word")
+        paragraph_format = str(paragraph.get("source_format") or "").casefold()
+        if source_type == "epub":
+            if paragraph_type != "word" or paragraph_format != "epub":
+                return False
+        elif source_type == "word":
+            if paragraph_type != "word" or paragraph_format == "epub":
+                return False
+        elif source_type != "all" and paragraph_type != source_type:
             return False
         scope_ids = getattr(self, "_scope_source_ids", None)
         if scope_ids is not None:
@@ -1596,12 +1625,34 @@ def best_window_ratio(query_plain: str, plain: str) -> Tuple[float, int, int]:
     if len(plain) <= q_len + 8:
         return difflib.SequenceMatcher(None, query_plain, plain).ratio(), 0, max(0, len(plain) - 1)
     window_sizes = sorted(set([q_len, int(q_len * 1.25) + 1, int(q_len * 1.6) + 1, q_len + 8]))
-    best = (0.0, 0, min(len(plain) - 1, q_len))
     step = max(1, q_len // 3)
+    # A fine window scan across a whole book page (footnote-dense, 2000+ chars)
+    # is O(len) SequenceMatcher calls and dominates fuzzy search time.  For long
+    # paragraphs, first locate the promising region with a coarse stride, then
+    # refine only around it.  Short paragraphs keep the exhaustive scan so their
+    # behaviour (and the regression fixtures) is unchanged.
+    if len(plain) > 600:
+        primary = window_sizes[0]
+        coarse_step = max(step, q_len)
+        anchor = 0
+        anchor_ratio = -1.0
+        for start in range(0, max(1, len(plain) - primary + 1), coarse_step):
+            ratio = difflib.SequenceMatcher(
+                None, query_plain, plain[start : start + primary]
+            ).ratio()
+            if ratio > anchor_ratio:
+                anchor_ratio = ratio
+                anchor = start
+        region_lo = max(0, anchor - q_len)
+        region_hi = min(len(plain), anchor + primary + q_len)
+    else:
+        region_lo = 0
+        region_hi = len(plain)
+    best = (0.0, 0, min(len(plain) - 1, q_len))
     for size in window_sizes:
         if size <= 0:
             continue
-        for start in range(0, max(1, len(plain) - size + 1), step):
+        for start in range(region_lo, max(region_lo + 1, region_hi - size + 1), step):
             window = plain[start : start + size]
             ratio = difflib.SequenceMatcher(None, query_plain, window).ratio()
             if ratio > best[0]:

@@ -2,4 +2,5 @@ pywebview==6.2.1
 PyInstaller==6.21.0
 PyMuPDF==1.26.5
 certifi==2026.7.22
+fastembed==0.8.0
 mcp==2.0.0

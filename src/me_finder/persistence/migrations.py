@@ -33,12 +33,43 @@ def _install_text_alignment(connection: sqlite3.Connection) -> bool:
     return install_text_alignment_schema(connection)
 
 
+def _install_text_segment_paragraph_spans(
+    connection: sqlite3.Connection,
+) -> bool:
+    table_name = "text_segment_paragraph_spans"
+    index_name = "idx_segment_paragraph_spans_source_position"
+    changed = not _table_exists(connection, table_name) or not _index_exists(
+        connection, index_name
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS text_segment_paragraph_spans (
+            segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE,
+            source_file_id TEXT NOT NULL,
+            paragraph_id TEXT NOT NULL,
+            paragraph_index INTEGER NOT NULL,
+            paragraph_char_start INTEGER NOT NULL,
+            paragraph_char_end INTEGER NOT NULL,
+            span_order INTEGER NOT NULL,
+            PRIMARY KEY(segment_id, span_order)
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_segment_paragraph_spans_source_position "
+        "ON text_segment_paragraph_spans("
+        "source_file_id, paragraph_index, paragraph_char_start, paragraph_char_end)"
+    )
+    return changed
+
+
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 and v4 are pure additive DDL and belong here.
+# file atomically. v3 through v5 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=_install_document_groups),
     Migration(target_version=4, apply=_install_text_alignment),
+    Migration(target_version=5, apply=_install_text_segment_paragraph_spans),
 )
 
 
@@ -100,6 +131,15 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
     return (
         connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _index_exists(connection: sqlite3.Connection, name: str) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (name,)
         ).fetchone()
         is not None
     )

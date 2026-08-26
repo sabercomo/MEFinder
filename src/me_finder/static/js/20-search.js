@@ -13,13 +13,13 @@ function rerunSearchAfterFilterChange() {
 }
 
 function setSearchSourceType(sourceType) {
-  searchStore.sourceType = ['all','word','pdf'].indexOf(sourceType) >= 0 ? sourceType : 'all';
+  searchStore.sourceType = ['all','word','epub','pdf'].indexOf(sourceType) >= 0 ? sourceType : 'all';
   document.querySelectorAll('#source-type-control .source-type-btn').forEach(function(button) {
     button.classList.toggle('active', button.dataset.source === searchStore.sourceType);
   });
   if (searchStore.documentId) {
     var selected = searchStore.sourceFiles.find(function(item) { return item.source_file_id === searchStore.documentId; });
-    if (selected && searchStore.sourceType !== 'all' && selected.source_type !== searchStore.sourceType) searchStore.documentId = '';
+    if (selected && searchStore.sourceType !== 'all' && searchSourceFacet(selected) !== searchStore.sourceType) searchStore.documentId = '';
   }
   updateSearchDocumentLabel();
   renderSearchDocumentOptions();
@@ -175,6 +175,11 @@ function searchDocumentView(source) {
   return {title:title, author:author, sourceType:sourceFormatLabel(source)};
 }
 
+function searchSourceFacet(source) {
+  if (source && source.source_type === 'pdf') return 'pdf';
+  return sourceFormatLabel(source) === 'EPUB' ? 'epub' : 'word';
+}
+
 function renderSearchDocumentOptions() {
   var options = document.getElementById('document-options');
   if (!options) return;
@@ -185,7 +190,7 @@ function renderSearchDocumentOptions() {
   var queryInput = document.getElementById('document-filter-query');
   var query = String(queryInput ? queryInput.value : '').trim().toLowerCase().replace(/\s+/g, '');
   var sources = searchStore.sourceFiles.filter(function(source) {
-    if (searchStore.sourceType !== 'all' && source.source_type !== searchStore.sourceType) return false;
+    if (searchStore.sourceType !== 'all' && searchSourceFacet(source) !== searchStore.sourceType) return false;
     var view = searchDocumentView(source);
     var haystack = [view.title, view.author, source.file_name].join('|').toLowerCase().replace(/\s+/g, '');
     return !query || haystack.indexOf(query) >= 0;

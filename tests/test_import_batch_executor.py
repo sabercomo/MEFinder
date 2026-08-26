@@ -51,6 +51,7 @@ class _Jobs:
         self.prepare_barrier: Optional[threading.Barrier] = None
         self.index_calls: List[Tuple[str, str, bool]] = []
         self.index_failures: Dict[str, Exception] = {}
+        self.text_index_calls: List[Tuple[str, Path]] = []
         self.rebuild_calls: List[Tuple[str, List[str]]] = []
         self.rebuild_result: set[str] = set()
         self.index_failures_recorded: List[Tuple[str, Exception, bool]] = []
@@ -60,6 +61,8 @@ class _Jobs:
         self.finished_cancelled: List[str] = []
         self.cancel_cleanup_failures: set[str] = set()
         self.cancel_during_index: set[str] = set()
+        self.cancel_during_text_index: set[str] = set()
+        self.cancel_sibling_during_text_index: Dict[str, str] = {}
         self.cancel_during_finalize: set[str] = set()
         self.cancel_during_rebuild: set[str] = set()
         self.cancel_during_update: set[str] = set()
@@ -126,6 +129,16 @@ class _Jobs:
         failure = self.index_failures.get(job_id)
         if failure is not None:
             raise failure
+
+    def index_text_document(self, job_id: str, target: Path) -> str:
+        self.text_index_calls.append((job_id, target))
+        cancelled_sibling = self.cancel_sibling_during_text_index.get(job_id)
+        if cancelled_sibling is not None:
+            self.cancelled.add(cancelled_sibling)
+        if job_id in self.cancel_during_text_index:
+            self.cancelled.add(job_id)
+            raise ImportJobCancelled("cancelled during text indexing")
+        return target.stem
 
     def rebuild_runtime_index(
         self,
@@ -247,7 +260,7 @@ class ImportBatchExecutorTests(unittest.TestCase):
     def test_native_word_batch_finishes_cancelled_non_first_job(self) -> None:
         queue = _RecordingQueue()
         jobs = _Jobs()
-        jobs.cancelled.add("job-second")
+        jobs.cancel_sibling_during_text_index["job-first"] = "job-second"
         executor = ImportBatchExecutor(queue)
 
         executor.submit_native(
@@ -260,7 +273,11 @@ class ImportBatchExecutorTests(unittest.TestCase):
         queue.run_all()
 
         self.assertEqual(jobs.finished_cancelled, ["job-second"])
-        self.assertEqual(jobs.rebuild_calls, [("job-first", [])])
+        self.assertEqual(
+            jobs.text_index_calls,
+            [("job-first", Path("/tmp/word-first.docx"))],
+        )
+        self.assertEqual(jobs.rebuild_calls, [])
         self.assertEqual(jobs.finalized, [("job-first", "word-first", False)])
 
     def test_native_cancel_cleanup_failure_does_not_block_siblings(self) -> None:
@@ -281,15 +298,19 @@ class ImportBatchExecutorTests(unittest.TestCase):
             queue.run_all()
 
         self.assertIn("job-first", "\n".join(logs.output))
-        self.assertEqual(jobs.rebuild_calls, [("job-second", [])])
+        self.assertEqual(
+            jobs.text_index_calls,
+            [("job-second", Path("/tmp/word-second.docx"))],
+        )
+        self.assertEqual(jobs.rebuild_calls, [])
         self.assertEqual(jobs.finalized, [("job-second", "word-second", False)])
 
-    def test_native_word_batch_retries_with_next_anchor_when_first_is_cancelled(
+    def test_native_word_batch_continues_when_first_text_index_is_cancelled(
         self,
     ) -> None:
         queue = _RecordingQueue()
         jobs = _Jobs()
-        jobs.cancel_during_rebuild.add("job-first")
+        jobs.cancel_during_text_index.add("job-first")
         executor = ImportBatchExecutor(queue)
 
         executor.submit_native(
@@ -303,9 +324,13 @@ class ImportBatchExecutorTests(unittest.TestCase):
 
         self.assertEqual(jobs.finished_cancelled, ["job-first"])
         self.assertEqual(
-            jobs.rebuild_calls,
-            [("job-first", []), ("job-second", [])],
+            jobs.text_index_calls,
+            [
+                ("job-first", Path("/tmp/word-first.docx")),
+                ("job-second", Path("/tmp/word-second.docx")),
+            ],
         )
+        self.assertEqual(jobs.rebuild_calls, [])
         self.assertEqual(jobs.finalized, [("job-second", "word-second", False)])
 
     def test_remote_batch_finishes_cancelled_pdf_and_word_jobs(self) -> None:
@@ -357,10 +382,10 @@ class ImportBatchExecutorTests(unittest.TestCase):
         self.assertEqual(jobs.finalized, [("job-first", "word-first", False)])
         self.assertEqual(jobs.finished_cancelled, ["job-first"])
 
-    def test_native_mixed_batch_rebuilds_once_and_reports_missing_pdf(self) -> None:
+    def test_native_mixed_batch_isolates_a_pdf_index_failure(self) -> None:
         queue = _RecordingQueue()
         jobs = _Jobs()
-        jobs.rebuild_result = {"pdf-missing"}
+        jobs.index_failures["job-pdf"] = MinerUError("missing PDF")
         executor = ImportBatchExecutor(queue)
 
         executor.submit_native(
@@ -372,7 +397,15 @@ class ImportBatchExecutorTests(unittest.TestCase):
         )
         queue.run_all()
 
-        self.assertEqual(jobs.rebuild_calls, [("job-word", ["pdf-missing"])])
+        self.assertEqual(
+            jobs.text_index_calls,
+            [("job-word", Path("/tmp/word-one.docx"))],
+        )
+        self.assertEqual(
+            jobs.index_calls,
+            [("job-pdf", "pdf-missing", False)],
+        )
+        self.assertEqual(jobs.rebuild_calls, [])
         self.assertEqual(jobs.finalized, [("job-word", "word-one", False)])
         self.assertEqual(jobs.index_failures_recorded[0][0], "job-pdf")
         self.assertIsInstance(jobs.index_failures_recorded[0][1], MinerUError)
@@ -467,22 +500,25 @@ class ImportBatchExecutorTests(unittest.TestCase):
         queue = _RecordingQueue()
         jobs = _Jobs()
         executor = ImportBatchExecutor(queue)
-        replacement_calls: List[Tuple[str, List[str]]] = []
+        replacement_calls: List[Tuple[str, Path]] = []
 
         executor.submit_native(
             [_item("job-word", "word-one", is_pdf=False)],
             jobs=jobs,
         )
 
-        def replacement(job_id: str, expected: Optional[List[str]] = None) -> set[str]:
-            replacement_calls.append((job_id, list(expected or [])))
-            return set()
+        def replacement(job_id: str, target: Path) -> str:
+            replacement_calls.append((job_id, target))
+            return "word-one"
 
-        jobs.rebuild_runtime_index = replacement  # type: ignore[method-assign]
+        jobs.index_text_document = replacement  # type: ignore[method-assign]
         queue.run_all()
 
-        self.assertEqual(replacement_calls, [("job-word", [])])
-        self.assertEqual(jobs.rebuild_calls, [])
+        self.assertEqual(
+            replacement_calls,
+            [("job-word", Path("/tmp/word-one.docx"))],
+        )
+        self.assertEqual(jobs.text_index_calls, [])
 
 
 if __name__ == "__main__":

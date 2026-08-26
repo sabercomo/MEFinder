@@ -4,13 +4,13 @@ from pathlib import Path
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 4
+DATABASE_SCHEMA_VERSION = 5
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
@@ -135,6 +135,17 @@ CREATE TABLE text_segment_spans (
     PRIMARY KEY(segment_id, span_order)
 );
 
+CREATE TABLE text_segment_paragraph_spans (
+    segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE,
+    source_file_id TEXT NOT NULL,
+    paragraph_id TEXT NOT NULL,
+    paragraph_index INTEGER NOT NULL,
+    paragraph_char_start INTEGER NOT NULL,
+    paragraph_char_end INTEGER NOT NULL,
+    span_order INTEGER NOT NULL,
+    PRIMARY KEY(segment_id, span_order)
+);
+
 CREATE TABLE alignment_runs (
     alignment_run_id TEXT PRIMARY KEY,
     document_group_id TEXT NOT NULL REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
@@ -195,6 +206,7 @@ CREATE INDEX idx_paragraphs_source_position ON paragraphs(source_file_id, paragr
 CREATE INDEX idx_pdf_pages_source_page ON pdf_pages(source_file_id, pdf_page_index);
 CREATE INDEX idx_segment_sets_source ON segment_sets(source_file_id);
 CREATE INDEX idx_segment_spans_source_page ON text_segment_spans(source_file_id, pdf_page_index, page_char_start, page_char_end);
+CREATE INDEX idx_segment_paragraph_spans_source_position ON text_segment_paragraph_spans(source_file_id, paragraph_index, paragraph_char_start, paragraph_char_end);
 CREATE INDEX idx_alignment_runs_pair ON alignment_runs(document_group_id, pivot_source_file_id, target_source_file_id, status);
 CREATE INDEX idx_alignment_members_segment ON alignment_link_members(segment_id, side);
 """

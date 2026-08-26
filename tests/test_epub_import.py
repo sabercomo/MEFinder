@@ -10,6 +10,7 @@ from src.me_finder.extractors import extract_epub
 from src.me_finder.indexer import build_index
 from src.me_finder.page_display import build_page_display, resolve_citation_page
 from src.me_finder.pdf_import_service import scan_directories_for_documents
+from src.me_finder.search import SearchEngine
 from src.me_finder.structured_reader import (
     get_document_citation,
     get_document_window,
@@ -223,6 +224,29 @@ class EpubIndexIntegrationTests(unittest.TestCase):
         self.assertEqual(result["source_files"][0]["file_format"], "epub")
         self.assertEqual(row, ("word", "indexed.epub"))
         self.assertEqual(paragraph_count, 6)
+
+    def test_epub_and_word_search_filters_are_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            corpus = root / "corpus" / "raw_docx"
+            corpus.mkdir(parents=True)
+            write_epub(corpus / "filtered.epub")
+            database = root / "data" / "index.sqlite3"
+            build_index(
+                corpus_dir=corpus,
+                index_path=root / "data" / "index.json",
+                database_path=database,
+                root=root,
+            )
+            engine = SearchEngine(database)
+            try:
+                epub_result = engine.search("第三页正文", source_type="epub")
+                word_result = engine.search("第三页正文", source_type="word")
+            finally:
+                engine.close()
+
+        self.assertEqual(epub_result["total"], 1)
+        self.assertEqual(word_result["total"], 0)
 
     def test_epub_publisher_pages_reach_structured_reader_and_citations(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

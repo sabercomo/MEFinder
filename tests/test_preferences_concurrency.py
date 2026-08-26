@@ -39,6 +39,12 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "pdf_open_mode": "system",
             "pdf_parse_mode": "mineru",
             "document_export_mode": "with_pdf",
+            "export_page_cleanup": {
+                "page_marker_mode": "printed",
+                "remove_visible_page_numbers": True,
+                "remove_running_headers": True,
+                "remove_running_footers": True,
+            },
             "auto_update": True,
             "citation_styles": ["chinese", "gb", "apa"],
             "citation_style": "chinese",

@@ -35,6 +35,16 @@ VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
 VALID_PDF_PARSE_MODES = frozenset({"auto", "mineru", "mineru-local", "vision"})
 VALID_DOCUMENT_EXPORT_MODES = frozenset({"data_only", "with_pdf"})
+# 导出页面清理与页码锚点策略：格式中立，Markdown 与未来 EPUB 导出共用同一套。
+# page_marker_mode: none / printed(默认) / full(仅高级调试)。三个清理开关默认开启。
+DEFAULT_PAGE_MARKER_MODE = "printed"
+VALID_PAGE_MARKER_MODES = frozenset({"none", "printed", "full"})
+DEFAULT_EXPORT_PAGE_CLEANUP: dict[str, Any] = {
+    "page_marker_mode": DEFAULT_PAGE_MARKER_MODE,
+    "remove_visible_page_numbers": True,
+    "remove_running_headers": True,
+    "remove_running_footers": True,
+}
 # 文献默认语言与联网自动匹配阈值：此前只存 localStorage，换机/迁移/导入备份后
 # 会静默复位。纳入 preferences.json 后随数据一起备份迁移（C-01）。
 DEFAULT_LIBRARY_LANGUAGE = "chinese"
@@ -276,6 +286,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         payload.get("appearance") if isinstance(payload, dict) else None,
         theme,
     )
+    export_page_cleanup = _normalized_export_page_cleanup(
+        payload.get("export_page_cleanup") if isinstance(payload, dict) else None
+    )
     return {
         "theme": theme,
         "appearance": appearance,
@@ -285,12 +298,37 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "pdf_open_mode": pdf_open_mode,
         "pdf_parse_mode": pdf_parse_mode,
         "document_export_mode": document_export_mode,
+        "export_page_cleanup": export_page_cleanup,
         "auto_update": auto_update,
         "citation_styles": citation_styles,
         "citation_style": citation_style,
         "lib_default_language": library_language,
         "online_auto_match_threshold": online_auto_match,
     }
+
+
+def _normalized_export_page_cleanup(value: Any) -> dict[str, Any]:
+    """Coerce the format-neutral export cleanup block, filling safe defaults.
+
+    Shared by Markdown export today and any future exporter (e.g. EPUB); unknown
+    or malformed values fall back to the defaults (printed marker + cleanup on).
+    """
+
+    result = dict(DEFAULT_EXPORT_PAGE_CLEANUP)
+    if not isinstance(value, dict):
+        return result
+    mode = value.get("page_marker_mode")
+    if mode in VALID_PAGE_MARKER_MODES:
+        result["page_marker_mode"] = str(mode)
+    for key in (
+        "remove_visible_page_numbers",
+        "remove_running_headers",
+        "remove_running_footers",
+    ):
+        flag = value.get(key)
+        if isinstance(flag, bool):
+            result[key] = flag
+    return result
 
 
 def _normalized_scan_directories(value: Any) -> list[str]:
@@ -366,6 +404,34 @@ def _save_preferences_locked(
         if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
             raise ValueError("不支持的文档包导出方式")
         current["document_export_mode"] = str(document_export_mode)
+    if "export_page_cleanup" in updates:
+        cleanup = updates["export_page_cleanup"]
+        if not isinstance(cleanup, Mapping):
+            raise ValueError("导出页面清理设置必须是对象")
+        if "page_marker_mode" in cleanup and (
+            cleanup["page_marker_mode"] not in VALID_PAGE_MARKER_MODES
+        ):
+            raise ValueError("不支持的页码锚点方式")
+        for key in (
+            "remove_visible_page_numbers",
+            "remove_running_headers",
+            "remove_running_footers",
+        ):
+            if key in cleanup and not isinstance(cleanup[key], bool):
+                raise ValueError("导出页面清理开关必须为布尔值")
+        # Merge onto the current block so a partial update only touches the keys
+        # it actually provides, keeping every other flag as it was on disk.
+        merged = dict(current.get("export_page_cleanup") or DEFAULT_EXPORT_PAGE_CLEANUP)
+        if "page_marker_mode" in cleanup:
+            merged["page_marker_mode"] = str(cleanup["page_marker_mode"])
+        for key in (
+            "remove_visible_page_numbers",
+            "remove_running_headers",
+            "remove_running_footers",
+        ):
+            if key in cleanup:
+                merged[key] = bool(cleanup[key])
+        current["export_page_cleanup"] = _normalized_export_page_cleanup(merged)
     if "auto_update" in updates:
         auto_update = updates["auto_update"]
         if not isinstance(auto_update, bool):

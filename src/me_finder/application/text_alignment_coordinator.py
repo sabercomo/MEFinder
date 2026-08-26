@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
 
@@ -28,7 +29,6 @@ class TextAlignmentCoordinator:
         target_source_file_id: object,
     ):
         with self._index_runtime.mutation():
-            self._index_runtime.suspend()
             try:
                 with self._durable_operations.operation():
                     result = generate_alignment(
@@ -36,17 +36,30 @@ class TextAlignmentCoordinator:
                         document_group_id,
                         pivot_source_file_id,
                         target_source_file_id,
+                        model_cache_dir=(
+                            self._paths.runtime_root
+                            / "components"
+                            / "text-alignment"
+                            / "models"
+                        ),
+                        write_window=self._write_window,
                     )
             except InvalidAlignmentRequest as exc:
-                self._index_runtime.reopen(attempts=5)
                 raise TextAlignmentRejected(str(exc)) from exc
             except (OSError, sqlite3.Error, RuntimeError) as exc:
-                self._index_runtime.reopen(attempts=5)
                 raise TextAlignmentFailed(str(exc)) from exc
+        return result
+
+    @contextmanager
+    def _write_window(self):
+        self._index_runtime.suspend()
+        try:
+            yield
+        except (OSError, sqlite3.Error, RuntimeError, ValueError) as write_error:
             try:
                 self._index_runtime.reopen(attempts=5)
-            except (OSError, sqlite3.Error, ValueError) as exc:
-                raise TextAlignmentFailed(
-                    "自动对齐已写入，但索引未能重新加载。"
-                ) from exc
-        return result
+            except (OSError, sqlite3.Error, RuntimeError, ValueError) as reopen_error:
+                write_error.add_note(f"runtime reopen also failed: {reopen_error}")
+                raise write_error.with_traceback(write_error.__traceback__)
+            raise
+        self._index_runtime.reopen(attempts=5)
