@@ -181,22 +181,29 @@ class EPUBExportCoreTests(unittest.TestCase):
                 ["10", "11", "12", "13"],
             )
 
-    def test_default_never_fabricates_printed_page_from_pdf_page(self) -> None:
+    def test_default_full_mode_keeps_physical_page_without_fabricating_printed(self) -> None:
         page = _page(30, None, [{"text": "只有物理页"}])
         with _archive(build_epub_bytes([page], title="默认")) as archive:
             content = ElementTree.fromstring(archive.read("OEBPS/content.xhtml"))
-            self.assertEqual(content.findall(".//x:span", XHTML), [])
+            pagebreak = content.find(".//x:span", XHTML)
+            self.assertEqual(pagebreak.attrib["aria-label"], "31")
+            self.assertEqual(pagebreak.attrib["data-pdf-page"], "31")
+            self.assertNotIn("data-printed-page", pagebreak.attrib)
 
+    def test_full_mode_retains_printed_and_physical_page_metadata(self) -> None:
+        page = _page(30, "xiv", [{"text": "正文"}])
         with _archive(
             build_epub_bytes(
                 [page],
-                title="完整模式",
+                title="完整页码",
                 options=ExportOptions(page_marker_mode="full"),
             )
         ) as archive:
             content = ElementTree.fromstring(archive.read("OEBPS/content.xhtml"))
             pagebreak = content.find(".//x:span", XHTML)
-            self.assertEqual(pagebreak.attrib["aria-label"], "31")
+            self.assertEqual(pagebreak.attrib["aria-label"], "xiv")
+            self.assertEqual(pagebreak.attrib["data-printed-page"], "xiv")
+            self.assertEqual(pagebreak.attrib["data-pdf-page"], "31")
 
     def test_filename_and_atomic_write(self) -> None:
         self.assertEqual(safe_epub_filename(""), "MEFinder-document.epub")

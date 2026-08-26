@@ -184,7 +184,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
         self.assertTrue(options.remove_visible_page_numbers)
         self.assertTrue(options.remove_running_footers)
 
-    def test_epub_export_passes_arguments_and_shared_export_options(self) -> None:
+    def test_epub_export_uses_marker_mode_and_forces_page_cleanup(self) -> None:
         self.assertEqual(
             self.controller.export_document_epub(
                 {
@@ -192,6 +192,8 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                     "export_options": {
                         "page_marker_mode": "full",
                         "remove_running_headers": False,
+                        "remove_visible_page_numbers": False,
+                        "remove_running_footers": False,
                     },
                 }
             ),
@@ -211,10 +213,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                 "runtime_root": Path("/runtime"),
                 "source_file_id": " pdf-one ",
                 "output_dir": Path("/app-data/exports"),
-                "options": ExportOptions(
-                    page_marker_mode="full",
-                    remove_running_headers=False,
-                ),
+                "options": ExportOptions(page_marker_mode="full"),
             },
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -230,7 +229,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
         )
         # Invalid values fall back to the default rather than erroring.
         self.assertEqual(
-            self.markdown_calls[-1]["options"].page_marker_mode, "printed"
+            self.markdown_calls[-1]["options"].page_marker_mode, "full"
         )
 
     def test_markdown_export_invalid_payload_fails_before_service(self) -> None:

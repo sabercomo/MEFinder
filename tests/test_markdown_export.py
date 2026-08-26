@@ -89,7 +89,7 @@ class MarkdownExportCoreTests(unittest.TestCase):
         self.assertIn("牛津通识读本·批判理论", loaded)
         self.assertIn("斯蒂芬·埃里克·布朗纳", loaded)
 
-    def test_page_markers_default_to_printed_only(self) -> None:
+    def test_page_markers_default_to_full(self) -> None:
         page = {
             "pdf_page_index": 30,
             "pdf_page_number_1based": 31,
@@ -99,12 +99,10 @@ class MarkdownExportCoreTests(unittest.TestCase):
             "blocks": [{"text": "正文"}],
         }
         markdown = page_to_markdown(page)
-        # Default 'printed' mode hides the physical PDF page entirely.
-        self.assertIn("<!-- printed_page: 23 -->", markdown)
-        self.assertNotIn("pdf_page:", markdown)
+        self.assertIn("<!-- pdf_page: 31 | printed_page: 23 -->", markdown)
         self.assertLess(markdown.index("<!--"), markdown.index("正文"))
 
-        # A page with only a physical PDF page (no printed folio) gets no marker.
+        # A page with only a physical PDF page still gets the complete anchor.
         plain = page_to_markdown(
             {
                 "pdf_page_index": 31,
@@ -112,8 +110,7 @@ class MarkdownExportCoreTests(unittest.TestCase):
                 "blocks": [{"text": "另一页"}],
             }
         )
-        self.assertNotIn("<!--", plain)
-        self.assertNotIn("pdf_page", plain)
+        self.assertIn("<!-- pdf_page: 32 -->", plain)
 
     def test_full_marker_mode_keeps_pdf_page(self) -> None:
         from src.me_finder.markdown_export_normalize import ExportOptions
@@ -313,11 +310,8 @@ class MarkdownExportServiceTests(unittest.TestCase):
             self.assertIn("正文第一页", content)
             self.assertIn("# 第二章 方法问题", content)
             self.assertIn("正文第二页", content)
-            # Default export hides the physical PDF page and only keeps the
-            # printed folio when one is known.
-            self.assertIn("<!-- printed_page: 1 -->", content)
-            self.assertNotIn("pdf_page:", content)
-            # Page 2 has no printed folio, so it gets no page anchor at all.
+            self.assertIn("<!-- pdf_page: 1 | printed_page: 1 -->", content)
+            self.assertIn("<!-- pdf_page: 2 -->", content)
             self.assertFalse(Path(str(result["path"]) + ".partial").exists())
 
     def test_service_missing_and_unsupported_sources_have_clear_errors(self) -> None:
@@ -391,18 +385,17 @@ class MarkdownExportNormalizationTests(unittest.TestCase):
         markdown = document_to_markdown(pages)
         # Running header repeated on every page is gone.
         self.assertNotIn(header, markdown)
-        # The visible folio copies are gone; the hidden anchor stays.
-        self.assertIn("<!-- printed_page: 135 -->", markdown)
-        self.assertNotIn("pdf_page:", markdown)
+        # The visible folio copies are gone; the complete hidden anchor stays.
+        self.assertIn("<!-- pdf_page: 138 | printed_page: 135 -->", markdown)
         self.assertIn("正文 A 第0页", markdown)
         self.assertIn("正文 B 第0页", markdown)
         # The standalone "135" line no longer appears on its own.
         self.assertNotIn("\n135\n", markdown)
 
-    def test_case2_only_pdf_page_emits_no_marker(self) -> None:
+    def test_case2_only_pdf_page_keeps_physical_anchor(self) -> None:
         page = _page(2, None, [_block("封面正文", bbox=MID)], pdf_page=3)
         markdown = document_to_markdown([page])
-        self.assertNotIn("pdf_page", markdown)
+        self.assertIn("<!-- pdf_page: 3 -->", markdown)
         self.assertNotIn("printed_page", markdown)
         self.assertIn("封面正文", markdown)
 
@@ -413,7 +406,7 @@ class MarkdownExportNormalizationTests(unittest.TestCase):
             [_block("ix", bbox=TOP), _block("导言正文", bbox=MID)],
         )
         markdown = document_to_markdown([page])
-        self.assertIn("<!-- printed_page: ix -->", markdown)
+        self.assertIn("<!-- pdf_page: 9 | printed_page: ix -->", markdown)
         self.assertIn("导言正文", markdown)
         # The visible "ix" folio at the top is removed, not the body.
         self.assertNotIn("\nix\n", markdown)
@@ -483,7 +476,7 @@ class MarkdownExportNormalizationTests(unittest.TestCase):
         markdown2 = document_to_markdown([yearish])
         self.assertIn("# 1844年经济学哲学手稿", markdown2)
 
-    def test_case8_frontmatter_page_without_printed_page(self) -> None:
+    def test_case8_frontmatter_without_printed_page_keeps_physical_anchor(self) -> None:
         page = _page(
             0,
             None,
@@ -492,7 +485,7 @@ class MarkdownExportNormalizationTests(unittest.TestCase):
         )
         markdown = document_to_markdown([page])
         self.assertNotIn("printed_page", markdown)
-        self.assertNotIn("pdf_page", markdown)
+        self.assertIn("<!-- pdf_page: 1 -->", markdown)
         self.assertIn("版权页内容", markdown)
         self.assertIn("ISBN 7-5366-0898-5", markdown)
 
@@ -526,7 +519,7 @@ class MarkdownExportNormalizationTests(unittest.TestCase):
             }
         ]
         markdown = document_to_markdown(pages)
-        self.assertIn("<!-- printed_page: 1 -->", markdown)
+        self.assertIn("<!-- pdf_page: 1 | printed_page: 1 -->", markdown)
         self.assertIn("# 第一章 标题", markdown)
         self.assertIn("正文", markdown)
 

@@ -36,8 +36,8 @@ VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
 VALID_PDF_PARSE_MODES = frozenset({"auto", "mineru", "mineru-local", "vision"})
 VALID_DOCUMENT_EXPORT_MODES = frozenset({"data_only", "with_pdf"})
 # 导出页面清理与页码锚点策略：格式中立，Markdown 与未来 EPUB 导出共用同一套。
-# page_marker_mode: none / printed(默认) / full(仅高级调试)。三个清理开关默认开启。
-DEFAULT_PAGE_MARKER_MODE = "printed"
+# page_marker_mode: none / printed / full(默认)。三个清理项固定开启。
+DEFAULT_PAGE_MARKER_MODE = "full"
 VALID_PAGE_MARKER_MODES = frozenset({"none", "printed", "full"})
 DEFAULT_EXPORT_PAGE_CLEANUP: dict[str, Any] = {
     "page_marker_mode": DEFAULT_PAGE_MARKER_MODE,
@@ -311,7 +311,7 @@ def _normalized_export_page_cleanup(value: Any) -> dict[str, Any]:
     """Coerce the format-neutral export cleanup block, filling safe defaults.
 
     Shared by Markdown export today and any future exporter (e.g. EPUB); unknown
-    or malformed values fall back to the defaults (printed marker + cleanup on).
+    or malformed values fall back to the defaults (full marker + cleanup on).
     """
 
     result = dict(DEFAULT_EXPORT_PAGE_CLEANUP)

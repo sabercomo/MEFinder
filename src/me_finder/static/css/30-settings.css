@@ -299,13 +299,9 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .pdf-open-option.selected .pdf-open-option-check,
 .document-export-option.selected .document-export-option-check { border: 4px solid var(--accent); }
 @media (max-width: 760px) { .pdf-open-options, .document-export-options { max-width: none; } }
-/* 导出清理与页码锚点（格式中立，Markdown / 未来 EPUB 共用） */
+/* 导出页码锚点（Markdown / EPUB 共用；页面噪声固定清理） */
 .export-cleanup-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle); display: grid; gap: 12px; }
 .export-cleanup-head { display: grid; gap: 3px; }
-.export-cleanup-toggles { display: grid; gap: 8px; }
-.export-cleanup-toggle { display: flex; align-items: center; gap: 9px; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
-.export-cleanup-toggle input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
-.export-cleanup-toggle input:disabled { cursor: default; }
 .page-marker-modes { display: grid; gap: 8px; }
 .page-marker-mode { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; cursor: pointer; }
 .page-marker-mode:hover { background: var(--surface-hover); }
@@ -316,8 +312,6 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .page-marker-mode-copy strong { display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 13px; font-weight: 620; }
 .page-marker-mode-copy strong em { padding: 2px 6px; border-radius: 999px; color: var(--accent-text); background: var(--accent-soft); font-size: 11px; font-style: normal; font-weight: 600; }
 .page-marker-mode-copy small { color: var(--text-tertiary); font-size: 12px; line-height: 1.45; word-break: break-all; }
-.export-cleanup-advanced > summary { color: var(--text-tertiary); font-size: 12px; cursor: pointer; padding: 2px 0; }
-.export-cleanup-advanced[open] > summary { margin-bottom: 8px; }
 .citation-format-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -906,7 +906,7 @@ async function setDocumentExportMode(mode) {
 
 function normalizeExportPageCleanup(value) {
   var defaults = {
-    page_marker_mode: 'printed',
+    page_marker_mode: 'full',
     remove_visible_page_numbers: true,
     remove_running_headers: true,
     remove_running_footers: true
@@ -914,29 +914,17 @@ function normalizeExportPageCleanup(value) {
   if (!value || typeof value !== 'object') return defaults;
   var mode = value.page_marker_mode;
   if (mode === 'none' || mode === 'printed' || mode === 'full') defaults.page_marker_mode = mode;
-  ['remove_visible_page_numbers', 'remove_running_headers', 'remove_running_footers'].forEach(function(key) {
-    if (typeof value[key] === 'boolean') defaults[key] = value[key];
-  });
   return defaults;
 }
 
 function setExportPageCleanupControlsDisabled(disabled) {
-  document.querySelectorAll('#export-cleanup-toggles input, input[name="page-marker-mode"]').forEach(function(input) {
+  document.querySelectorAll('input[name="page-marker-mode"]').forEach(function(input) {
     input.disabled = disabled;
   });
 }
 
 function renderExportPageCleanup() {
   var cleanup = settingsStore.exportPageCleanup || {};
-  var map = {
-    remove_visible_page_numbers: 'export-remove-visible-page-numbers',
-    remove_running_headers: 'export-remove-running-headers',
-    remove_running_footers: 'export-remove-running-footers'
-  };
-  Object.keys(map).forEach(function(key) {
-    var input = document.getElementById(map[key]);
-    if (input) input.checked = cleanup[key] !== false;
-  });
   document.querySelectorAll('.page-marker-mode').forEach(function(option) {
     var selected = option.dataset.pageMarkerChoice === cleanup.page_marker_mode;
     option.classList.toggle('selected', selected);
@@ -973,17 +961,6 @@ async function saveExportPageCleanup(patch, previous) {
     settingsStore.exportPageCleanupSaving = false;
     if (!settingsStore.preferencesLoadPromise) setExportPageCleanupControlsDisabled(false);
   }
-}
-
-function setExportCleanupFlag(key, checked) {
-  if (['remove_visible_page_numbers', 'remove_running_headers', 'remove_running_footers'].indexOf(key) < 0) return;
-  var previous = Object.assign({}, settingsStore.exportPageCleanup);
-  var next = Object.assign({}, previous);
-  next[key] = !!checked;
-  settingsStore.exportPageCleanup = next;
-  var patch = {};
-  patch[key] = !!checked;
-  saveExportPageCleanup(patch, previous);
 }
 
 function setPageMarkerMode(mode) {

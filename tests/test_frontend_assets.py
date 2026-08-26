@@ -305,10 +305,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.9 后续：双栏对照阅读器与跨版本语义定位前端接线（reader.js locate 流程等）。
     # 0.4.9 后续：设置页新增“导出清理与页码锚点”（格式中立，Markdown/未来 EPUB 共用）。
     # 0.4.9 后续：单书 EPUB 3 导出作为共享规范化层的第二个 renderer 接入。
+    # 0.4.9 后续：三种页码锚点合并展示，Markdown/EPUB 页面噪声固定清理。
+    # 0.4.9 后续：完整页码锚点改为 Markdown/EPUB 的统一默认。
     BASELINE_SHA256 = (
-        "4ef3339cdbeb744500f7901f1b825aefb6224b7a4e585f27284412f8907174ab"
+        "975c38b3ebdc0b178914c283c98e49123fbe2e043bd7d308beba01fa1247b849"
     )
-    BASELINE_BYTES = 915095
+    BASELINE_BYTES = 912452
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

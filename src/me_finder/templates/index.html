@@ -913,31 +913,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               </div>
               <div class="export-cleanup-group" id="export-cleanup-group">
                 <div class="export-cleanup-head">
-                  <span class="settings-section-title">导出清理与页码锚点</span>
-                  <span class="settings-section-note">导出 Markdown（及未来 EPUB）时清理页面噪声，不影响书库数据、搜索定位与页码锚点</span>
-                </div>
-                <div class="export-cleanup-toggles" id="export-cleanup-toggles" role="group" aria-label="页面清理">
-                  <label class="export-cleanup-toggle"><input type="checkbox" id="export-remove-visible-page-numbers" onchange="setExportCleanupFlag('remove_visible_page_numbers', this.checked)"><span>删除正文中的可见页码</span></label>
-                  <label class="export-cleanup-toggle"><input type="checkbox" id="export-remove-running-headers" onchange="setExportCleanupFlag('remove_running_headers', this.checked)"><span>删除重复页眉</span></label>
-                  <label class="export-cleanup-toggle"><input type="checkbox" id="export-remove-running-footers" onchange="setExportCleanupFlag('remove_running_footers', this.checked)"><span>删除重复页脚</span></label>
+                  <span class="settings-section-title">导出页码锚点</span>
+                  <span class="settings-section-note">Markdown 与 EPUB 始终删除可见页码、重复页眉和重复页脚；这里只选择导出中保留的页码锚点信息</span>
                 </div>
                 <div class="page-marker-modes" id="page-marker-modes" role="radiogroup" aria-label="页码锚点方式">
                   <label class="page-marker-mode" data-page-marker-choice="printed">
                     <input type="radio" name="page-marker-mode" value="printed" onchange="setPageMarkerMode(this.value)">
-                    <span class="page-marker-mode-copy"><strong>只保留印刷页码锚点<em>默认</em></strong><small>以隐藏的 &lt;!-- printed_page: N --&gt; 注释保存，正文不显示页码</small></span>
+                    <span class="page-marker-mode-copy"><strong>只保留印刷页码锚点</strong><small>Markdown 写入隐藏注释，EPUB 写入 pagebreak 锚点；正文均不显示页码</small></span>
                   </label>
                   <label class="page-marker-mode" data-page-marker-choice="none">
                     <input type="radio" name="page-marker-mode" value="none" onchange="setPageMarkerMode(this.value)">
                     <span class="page-marker-mode-copy"><strong>不写入页码锚点</strong><small>导出中完全不保留任何页码信息</small></span>
                   </label>
-                </div>
-                <details class="export-cleanup-advanced">
-                  <summary>高级 / 调试</summary>
                   <label class="page-marker-mode" data-page-marker-choice="full">
                     <input type="radio" name="page-marker-mode" value="full" onchange="setPageMarkerMode(this.value)">
-                    <span class="page-marker-mode-copy"><strong>同时写入 PDF 物理页与印刷页码</strong><small>调试用：&lt;!-- pdf_page: P | printed_page: N --&gt;</small></span>
+                    <span class="page-marker-mode-copy"><strong>同时写入 PDF 物理页与印刷页码<em>默认</em></strong><small>保留完整页码锚点信息，便于校对与调试</small></span>
                   </label>
-                </details>
+                </div>
               </div>
             </div>
           </section>

@@ -136,10 +136,20 @@ def _render_content(
                 anchor = f"pagebreak-{page_seq:04d}"
                 page_entries.append(_PageEntry(anchor, label))
                 # EPUB 3 semantic page anchor; the reader exposes it as page N and
-                # the page-list nav points here.  Hidden in body via CSS.
+                # the page-list nav points here.  Full/debug mode retains both
+                # source fields as data attributes without changing the visible
+                # page-list label. Hidden in body via CSS.
+                source_pages = ""
+                if marker.printed_page not in (None, ""):
+                    source_pages += (
+                        f" data-printed-page={quoteattr(str(marker.printed_page))}"
+                    )
+                if marker.physical_page is not None:
+                    source_pages += f" data-pdf-page={quoteattr(str(marker.physical_page))}"
                 lines.append(
                     f'<span epub:type="pagebreak" role="doc-pagebreak" '
-                    f'id={quoteattr(anchor)} aria-label={quoteattr(label)}></span>'
+                    f'id={quoteattr(anchor)} aria-label={quoteattr(label)}'
+                    f'{source_pages}></span>'
                 )
         for block in blocks:
             if block.level is None:

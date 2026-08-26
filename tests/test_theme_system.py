@@ -464,6 +464,27 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
         )
 
+    def test_export_settings_group_all_marker_modes_and_fix_page_cleanup(self) -> None:
+        self.assertIn("导出页码锚点", HTML)
+        self.assertIn("Markdown 与 EPUB 始终删除可见页码、重复页眉和重复页脚", HTML)
+        for mode in ("printed", "none", "full"):
+            self.assertEqual(HTML.count(f'data-page-marker-choice="{mode}"'), 1)
+        full_option = re.search(
+            r'data-page-marker-choice="full".*?</label>', HTML, re.S
+        ).group(0)
+        printed_option = re.search(
+            r'data-page-marker-choice="printed".*?</label>', HTML, re.S
+        ).group(0)
+        self.assertIn("<em>默认</em>", full_option)
+        self.assertNotIn("<em>默认</em>", printed_option)
+        self.assertNotIn('id="export-cleanup-toggles"', HTML)
+        self.assertNotIn('class="export-cleanup-advanced"', HTML)
+        self.assertNotIn("function setExportCleanupFlag", HTML)
+        self.assertIn(
+            "payload.export_options = normalizeExportPageCleanup(settingsStore.exportPageCleanup);",
+            HTML,
+        )
+
     def test_macos_settings_offer_manual_updates_and_data_location_migration(self) -> None:
         self.assertIn('id="macos-update-settings"', HTML)
         self.assertIn('id="macos-update-body"', HTML)
