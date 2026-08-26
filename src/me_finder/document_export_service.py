@@ -25,6 +25,7 @@ from .document_heading import (
     find_content_list_v2,
 )
 from .database import _sanitize_surrogates_in_place
+from .epub_export import safe_epub_filename, write_epub
 from .markdown_export import document_to_markdown, safe_markdown_filename
 from .markdown_export_normalize import ExportOptions
 from .pdf_extractors import file_sha256
@@ -326,6 +327,96 @@ def export_indexed_pdf_markdown(
         "path": str(destination.resolve()),
         "size_bytes": destination.stat().st_size,
         "page_count": page_count,
+    }
+
+
+def export_indexed_pdf_epub(
+    *,
+    database_path: Path,
+    source_file_id: str,
+    output_dir: Path,
+    runtime_root: Optional[Path] = None,
+    options: Optional[ExportOptions] = None,
+) -> Dict[str, object]:
+    """Export one indexed PDF's persisted structured data as EPUB 3."""
+
+    options = options or ExportOptions()
+
+    source_id = str(source_file_id or "").strip()
+    if not source_id or len(source_id) > 256:
+        raise IndexedDocumentNotFound("缺少要导出的文献标识。")
+    database = Path(database_path)
+    if not database.is_file():
+        raise IndexedDocumentNotFound("当前文献索引不存在。")
+
+    if runtime_root is not None:
+        ensure_document_headings(
+            database_path=database,
+            runtime_root=runtime_root,
+            source_file_id=source_id,
+        )
+
+    with closing(_connect(database)) as connection:
+        source = _payload_row(
+            connection,
+            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+            (source_id,),
+        )
+        if source is None:
+            raise IndexedDocumentNotFound("文献不存在或已从文献库移除。")
+        if str(source.get("source_type") or "") != "pdf":
+            raise UnsupportedDocumentExport("EPUB 导出仅支持已解析的 PDF 文献。")
+        volume = _payload_row(
+            connection,
+            "SELECT payload_json FROM volumes WHERE source_file_id = ? "
+            "ORDER BY volume_number, volume_id LIMIT 1",
+            (source_id,),
+        ) or {}
+        page_count = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        if page_count < 1:
+            raise UnsupportedDocumentExport(
+                "这份 PDF 还没有可导出的页级解析结果。"
+            )
+
+    bibliographic = (
+        source.get("bibliographic_metadata")
+        if isinstance(source.get("bibliographic_metadata"), Mapping)
+        else {}
+    )
+    title = str(
+        bibliographic.get("title")
+        or source.get("display_title")
+        or volume.get("display_title")
+        or Path(str(source.get("file_name") or source_id)).stem
+    )
+    language = (
+        source.get("language_code")
+        or bibliographic.get("language_code")
+        or bibliographic.get("language")
+    )
+    destination_dir = Path(output_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / safe_epub_filename(title)
+    write_epub(
+        destination,
+        iter_indexed_pdf_pages(database, source_id),
+        title=title,
+        author=bibliographic.get("author"),
+        language=language,
+        options=options,
+    )
+    return {
+        "ok": True,
+        "source_file_id": source_id,
+        "path": str(destination.resolve()),
+        "size_bytes": destination.stat().st_size,
+        "page_count": page_count,
+        "epub_version": "3.0",
     }
 
 

@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Protocol, Tuple
 
 from .document_export import DocumentExportError
-from .document_export_service import export_indexed_pdf, export_indexed_pdf_markdown
+from .document_export_service import (
+    export_indexed_pdf,
+    export_indexed_pdf_epub,
+    export_indexed_pdf_markdown,
+)
 from .markdown_export_normalize import ExportOptions
 from .mineru_api import MinerUError
 
@@ -37,6 +41,7 @@ class ArchiveTransferController:
         document_output_dir: Path,
         export_document: DocumentExporter = export_indexed_pdf,
         export_document_markdown: DocumentExporter = export_indexed_pdf_markdown,
+        export_document_epub: DocumentExporter = export_indexed_pdf_epub,
     ) -> None:
         self._backup = backup
         self._database_path = Path(database_path)
@@ -44,6 +49,7 @@ class ArchiveTransferController:
         self._document_output_dir = Path(document_output_dir)
         self._export_document = export_document
         self._export_document_markdown = export_document_markdown
+        self._export_document_epub = export_document_epub
 
     def export_backup(self, payload: object) -> ArchiveTransferResponse:
         try:
@@ -110,6 +116,33 @@ class ArchiveTransferController:
             logging.exception("single-document markdown export failed")
             return 500, {
                 "error": "单书 Markdown 导出失败，请检查应用数据目录和可用磁盘空间。"
+            }
+        return 200, result
+
+    def export_document_epub(self, payload: object) -> ArchiveTransferResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "单书 EPUB 导出请求必须是 JSON 对象。"}
+        try:
+            output_dir = (
+                _requested_output_directory(payload) or self._document_output_dir
+            )
+        except ValueError as exc:
+            return 400, {"error": str(exc)}
+        options = ExportOptions.from_mapping(payload.get("export_options"))
+        try:
+            result = self._export_document_epub(
+                database_path=self._database_path,
+                runtime_root=self._runtime_root,
+                source_file_id=str(payload.get("source_id") or ""),
+                output_dir=output_dir,
+                options=options,
+            )
+        except DocumentExportError as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, sqlite3.Error):
+            logging.exception("single-document EPUB export failed")
+            return 500, {
+                "error": "单书 EPUB 导出失败，请检查应用数据目录和可用磁盘空间。"
             }
         return 200, result
 

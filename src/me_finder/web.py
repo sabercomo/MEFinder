@@ -1008,6 +1008,7 @@ def make_handler(
         "/api/document/export-markdown": (
             archive_transfer_controller.export_document_markdown
         ),
+        "/api/document/export-epub": archive_transfer_controller.export_document_epub,
         "/api/backup/import": archive_transfer_controller.restore_backup,
     }
 

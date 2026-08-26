@@ -1046,6 +1046,7 @@ function drawerMainActionsHTML(src) {
     if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
     items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档包</button>';
     items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">导出 Markdown</button>';
+    items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentEpub(\'' + sid + '\')">导出 EPUB</button>';
     items += '<div class="bib-menu-sep"></div>';
   }
   items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
@@ -1108,6 +1109,34 @@ async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
   // Carry the user's format-neutral page-anchor + cleanup preferences.
   if (settingsStore.exportPageCleanup) payload.export_options = settingsStore.exportPageCleanup;
   var response = await fetch('/api/document/export-markdown', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  var data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || '导出失败');
+  return data;
+}
+
+async function exportLibraryDocumentEpub(sourceId) {
+  if (!sourceId) return;
+  try {
+    var outputDirectory = await chooseDesktopExportDirectory();
+    if (outputDirectory === null) return;
+    showToast('正在导出 EPUB…');
+    var data = await requestLibraryDocumentEpubExport(sourceId, outputDirectory);
+    showToast('已导出 ' + Number(data.page_count || 0).toLocaleString()
+      + ' 页到：' + data.path + '（' + formatFileSize(data.size_bytes) + '）');
+  } catch (error) {
+    showToast('导出 EPUB 失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
+  }
+}
+
+async function requestLibraryDocumentEpubExport(sourceId, outputDirectory) {
+  var payload = {source_id: sourceId};
+  if (outputDirectory) payload.output_dir = outputDirectory;
+  if (settingsStore.exportPageCleanup) payload.export_options = settingsStore.exportPageCleanup;
+  var response = await fetch('/api/document/export-epub', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)

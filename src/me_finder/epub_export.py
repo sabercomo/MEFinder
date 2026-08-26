@@ -58,6 +58,7 @@ _CONTENT_PATH = "OEBPS/content.xhtml"
 _STYLE_PATH = "OEBPS/style.css"
 
 _STYLESHEET = """\
+@namespace epub "http://www.idpf.org/2007/ops";
 html { font-size: 100%; }
 body { margin: 0 5%; line-height: 1.5; }
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.4em 0 0.6em; }
@@ -157,11 +158,12 @@ def _render_content(
 # --------------------------------------------------------------------------- #
 # XHTML documents
 # --------------------------------------------------------------------------- #
-def _content_xhtml(title: str, body_html: str) -> str:
+def _content_xhtml(title: str, language: str, body_html: str) -> str:
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml" '
-        'xmlns:epub="http://www.idpf.org/2007/ops" lang="und">\n'
+        'xmlns:epub="http://www.idpf.org/2007/ops" '
+        f'lang={quoteattr(language)} xml:lang={quoteattr(language)}>\n'
         "<head>\n"
         f"<title>{escape(title)}</title>\n"
         '<meta charset="utf-8"/>\n'
@@ -204,6 +206,7 @@ def _render_toc_list(nodes: list) -> str:
 
 def _nav_xhtml(
     title: str,
+    language: str,
     headings: List[_HeadingEntry],
     page_entries: List[_PageEntry],
 ) -> str:
@@ -237,7 +240,8 @@ def _nav_xhtml(
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml" '
-        'xmlns:epub="http://www.idpf.org/2007/ops" lang="und">\n'
+        'xmlns:epub="http://www.idpf.org/2007/ops" '
+        f'lang={quoteattr(language)} xml:lang={quoteattr(language)}>\n'
         "<head>\n"
         f"<title>{escape(title)}</title>\n"
         '<meta charset="utf-8"/>\n'
@@ -271,9 +275,7 @@ def _content_opf(
         f"<dc:title>{escape(title)}</dc:title>",
         f"<dc:language>{escape(language)}</dc:language>",
         f'<meta property="dcterms:modified">{escape(modified)}</meta>',
-        f"<meta>{escape(SOURCE_NAME)}</meta>".replace(
-            "<meta>", '<meta property="dc:source">'
-        ),
+        f"<dc:source>{escape(SOURCE_NAME)}</dc:source>",
     ]
     if author:
         meta.insert(2, f'<dc:creator id="creator">{escape(author)}</dc:creator>')
@@ -281,7 +283,7 @@ def _content_opf(
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" '
-        'unique-identifier="pub-id" xml:lang="und">\n'
+        f'unique-identifier="pub-id" xml:lang={quoteattr(language)}>\n'
         '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/" '
         'xmlns:dcterms="http://purl.org/dc/terms/">\n'
         f"{metadata}\n"
@@ -345,9 +347,13 @@ def build_epub_bytes(
             ),
         )
         archive.writestr(
-            _NAV_PATH, _nav_xhtml(title_text, content.headings, content.pages)
+            _NAV_PATH,
+            _nav_xhtml(title_text, language_text, content.headings, content.pages),
         )
-        archive.writestr(_CONTENT_PATH, _content_xhtml(title_text, content.body_html))
+        archive.writestr(
+            _CONTENT_PATH,
+            _content_xhtml(title_text, language_text, content.body_html),
+        )
         archive.writestr(_STYLE_PATH, _STYLESHEET)
     return buffer.getvalue()
 

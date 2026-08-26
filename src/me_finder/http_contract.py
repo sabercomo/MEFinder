@@ -61,6 +61,7 @@ POST_API_ROUTES = frozenset(
         "/api/text-alignments/generate",
         "/api/text-alignments/locate",
         "/api/document/export",
+        "/api/document/export-epub",
         "/api/document/export-markdown",
         "/api/documents/remove",
         "/api/documents/remove-batch",

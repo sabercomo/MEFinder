@@ -5,6 +5,7 @@ import json
 import tempfile
 import threading
 import unittest
+import zipfile
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -279,6 +280,46 @@ class DocumentExportHTTPTests(unittest.TestCase):
         self.assertIn("导出 Markdown", source)
         self.assertIn("function exportLibraryDocumentMarkdown(sourceId)", source)
         self.assertIn("fetch('/api/document/export-markdown'", source)
+
+    def test_http_epub_endpoint_exports_epub3_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database, source_id = export_fixture(root)
+            selected_output = root / "selected-output"
+            selected_output.mkdir()
+            context = AppContext.create(root, index_path=database)
+            handler = make_handler(database, app_context=context)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                status, payload = self._post(
+                    server,
+                    {"source_id": source_id, "output_dir": str(selected_output)},
+                    path="/api/document/export-epub",
+                )
+            finally:
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                thread.join(timeout=2)
+
+            path = Path(payload["path"])
+            self.assertEqual(status, 200)
+            self.assertEqual(payload["epub_version"], "3.0")
+            self.assertEqual(payload["page_count"], 3)
+            self.assertEqual(path.parent, selected_output.resolve())
+            with zipfile.ZipFile(path, "r") as archive:
+                content = archive.read("OEBPS/content.xhtml").decode("utf-8")
+                self.assertIn("第一页简体", content)
+                self.assertIn("第二頁繁體", content)
+
+        source = Path("src/me_finder/static/js/30-library.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("导出 EPUB", source)
+        self.assertIn("function exportLibraryDocumentEpub(sourceId)", source)
+        self.assertIn("fetch('/api/document/export-epub'", source)
 
 
 if __name__ == "__main__":

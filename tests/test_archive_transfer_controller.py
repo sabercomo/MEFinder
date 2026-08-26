@@ -61,6 +61,16 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                 "source_file_id": kwargs["source_file_id"],
             }
 
+        self.epub_calls: list[dict[str, object]] = []
+
+        def export_epub(**kwargs):
+            self.epub_calls.append(dict(kwargs))
+            return {
+                "ok": True,
+                "path": "/data/exports/book.epub",
+                "source_file_id": kwargs["source_file_id"],
+            }
+
         self.controller = ArchiveTransferController(
             self.backup,
             database_path=Path("/runtime/data/index.sqlite3"),
@@ -68,6 +78,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
             document_output_dir=Path("/app-data/exports"),
             export_document=export_document,
             export_document_markdown=export_markdown,
+            export_document_epub=export_epub,
         )
 
     def test_success_responses_preserve_archive_arguments(self) -> None:
@@ -173,6 +184,46 @@ class ArchiveTransferControllerTests(unittest.TestCase):
         self.assertTrue(options.remove_visible_page_numbers)
         self.assertTrue(options.remove_running_footers)
 
+    def test_epub_export_passes_arguments_and_shared_export_options(self) -> None:
+        self.assertEqual(
+            self.controller.export_document_epub(
+                {
+                    "source_id": " pdf-one ",
+                    "export_options": {
+                        "page_marker_mode": "full",
+                        "remove_running_headers": False,
+                    },
+                }
+            ),
+            (
+                200,
+                {
+                    "ok": True,
+                    "path": "/data/exports/book.epub",
+                    "source_file_id": " pdf-one ",
+                },
+            ),
+        )
+        self.assertEqual(
+            self.epub_calls[0],
+            {
+                "database_path": Path("/runtime/data/index.sqlite3"),
+                "runtime_root": Path("/runtime"),
+                "source_file_id": " pdf-one ",
+                "output_dir": Path("/app-data/exports"),
+                "options": ExportOptions(
+                    page_marker_mode="full",
+                    remove_running_headers=False,
+                ),
+            },
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            self.controller.export_document_epub(
+                {"source_id": "pdf-two", "output_dir": str(output_dir)}
+            )
+        self.assertEqual(self.epub_calls[-1]["output_dir"], output_dir)
+
     def test_markdown_export_rejects_invalid_marker_mode(self) -> None:
         self.controller.export_document_markdown(
             {"source_id": "pdf-one", "export_options": {"page_marker_mode": "xml"}}
@@ -188,6 +239,13 @@ class ArchiveTransferControllerTests(unittest.TestCase):
             (400, {"error": "单书 Markdown 导出请求必须是 JSON 对象。"}),
         )
         self.assertEqual(self.markdown_calls, [])
+
+    def test_epub_export_invalid_payload_fails_before_service(self) -> None:
+        self.assertEqual(
+            self.controller.export_document_epub(None),
+            (400, {"error": "单书 EPUB 导出请求必须是 JSON 对象。"}),
+        )
+        self.assertEqual(self.epub_calls, [])
 
     def test_invalid_payloads_fail_before_archive_services(self) -> None:
         for payload in (None, [], "pdf-one"):
