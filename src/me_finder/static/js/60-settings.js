@@ -585,7 +585,7 @@ function setDocumentExportModeControlsDisabled(disabled) {
 }
 
 function renderDocumentExportMode() {
-  document.querySelectorAll('.document-export-option').forEach(function(option) {
+  document.querySelectorAll('[data-document-export-choice]').forEach(function(option) {
     var selected = option.dataset.documentExportChoice === settingsStore.currentDocumentExportMode;
     option.classList.toggle('selected', selected);
     var input = option.querySelector('input[name="document-export-mode"]');
@@ -918,6 +918,9 @@ function normalizeExportPageCleanup(value) {
 }
 
 function setExportPageCleanupControlsDisabled(disabled) {
+  var options = document.getElementById('page-marker-modes');
+  options.classList.toggle('is-busy', disabled);
+  options.setAttribute('aria-busy', disabled ? 'true' : 'false');
   document.querySelectorAll('input[name="page-marker-mode"]').forEach(function(input) {
     input.disabled = disabled;
   });

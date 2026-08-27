@@ -57,6 +57,9 @@ class IndexRuntimePort(Protocol):
     def mutation(self) -> AbstractContextManager[None]:
         ...
 
+    def catalog(self) -> Dict[str, List[Dict[str, object]]]:
+        ...
+
     def rebuild(
         self,
         on_progress: ProgressCallback,
@@ -640,8 +643,21 @@ class ImportOrchestrator:
         *,
         original_file_name: Optional[str] = None,
     ) -> Tuple[Dict[str, object], str, Path]:
-        predicted_source_id = f"pdf-import-{sha256_file(target)[:16]}"
+        content_sha256 = sha256_file(target)
+        predicted_source_id = f"pdf-import-{content_sha256[:16]}"
         with self._index_runtime.mutation(), import_config_lock():
+            # A different parser is still the same document, including books
+            # indexed before source IDs were derived from the file hash.
+            matching_ids = [
+                str(source["source_file_id"])
+                for source in self._index_runtime.catalog()["source_files"]
+                if source.get("source_type") == "pdf"
+                and source.get("sha256") == content_sha256
+            ]
+            if matching_ids and predicted_source_id not in matching_ids:
+                if len(matching_ids) != 1:
+                    raise MinerUError("书库中已有多条相同 PDF 的记录，请先确认要保留的文献。")
+                predicted_source_id = matching_ids[0]
             with self._job_store.atomic():
                 self._job_store.reserve_source(predicted_source_id)
                 try:
@@ -649,6 +665,7 @@ class ImportOrchestrator:
                         self._root,
                         target,
                         original_file_name=original_file_name,
+                        existing_source_file_id=predicted_source_id if matching_ids else None,
                     )
                     source_file_id = str(document["source_file_id"])
                     if source_file_id != predicted_source_id:

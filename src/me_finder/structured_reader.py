@@ -871,6 +871,7 @@ def _source_metadata(
     source_row: sqlite3.Row,
 ) -> Dict[str, object]:
     payload = _json_object(source_row["payload_json"])
+    profile = payload.get("pdf_profile") or {}
     volume_row = connection.execute(
         """
         SELECT display_title, payload_json
@@ -909,6 +910,10 @@ def _source_metadata(
         ),
         "display_title": display_title,
         "document_title": document_title,
+        "parser_label": (
+            "原生文本" if profile.get("detected_pdf_type") == "native_text"
+            else _first_nonempty(profile.get("parser_label"), profile.get("provider_name"))
+        ),
         "volume_number": (
             source_row["volume_number"]
             if source_row["volume_number"] is not None

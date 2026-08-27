@@ -917,6 +917,7 @@ def register_pdf(
     config_path: Optional[Path] = None,
     *,
     original_file_name: Optional[str] = None,
+    existing_source_file_id: Optional[str] = None,
 ) -> Dict[str, object]:
     """Add or update one PDF in the configured corpus without overwriting originals."""
 
@@ -927,7 +928,7 @@ def register_pdf(
         display_file_name = pdf_path.name
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
     content_sha256 = file_sha256(pdf_path)
-    source_file_id = f"pdf-import-{content_sha256[:16]}"
+    source_file_id = existing_source_file_id or f"pdf-import-{content_sha256[:16]}"
     with _IMPORT_CONFIG_LOCK:
         data = load_import_config(config_path)
         documents = data["documents"]

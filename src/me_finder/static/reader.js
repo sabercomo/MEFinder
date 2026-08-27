@@ -462,6 +462,7 @@
       root: root,
       panel: panel,
       title: title,
+      eyebrow: eyebrow,
       current: current,
       comparisonLaunchers: comparisonLaunchers,
       citationBar: citationBar,
@@ -2102,6 +2103,9 @@
         ? Math.max(0, Math.floor(Number(payload.last_position)))
         : null;
       state.source = payload.source || state.source;
+      state.elements.eyebrow.textContent = state.source && state.source.parser_label
+        ? '结构化文本 · ' + state.source.parser_label
+        : '结构化文本';
       if (!state.title && state.source) {
         state.title = state.source.display_title ||
           state.source.document_title ||
@@ -2324,6 +2328,7 @@
     prepareHighlights(options);
 
     state.elements.title.textContent = state.title || '文献阅读';
+    state.elements.eyebrow.textContent = '结构化文本';
     state.elements.current.textContent = '正在载入…';
     state.elements.current.disabled = true;
     state.elements.root.hidden = false;

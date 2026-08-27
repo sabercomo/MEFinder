@@ -368,7 +368,8 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             "def release_import_reservation(", helper_start
         )
         helper_block = ORCHESTRATOR_SOURCE[helper_start:helper_end]
-        self.assertIn("sha256_file(target)[:16]", helper_block)
+        self.assertIn("content_sha256 = sha256_file(target)", helper_block)
+        self.assertIn("content_sha256[:16]", helper_block)
         self.assertIn(
             "with self._index_runtime.mutation(), import_config_lock():",
             helper_block,

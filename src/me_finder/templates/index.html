@@ -916,18 +916,24 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <span class="settings-section-title">导出页码锚点</span>
                   <span class="settings-section-note">Markdown 与 EPUB 始终删除可见页码、重复页眉和重复页脚；这里只选择导出中保留的页码锚点信息</span>
                 </div>
-                <div class="page-marker-modes" id="page-marker-modes" role="radiogroup" aria-label="页码锚点方式">
-                  <label class="page-marker-mode" data-page-marker-choice="printed">
-                    <input type="radio" name="page-marker-mode" value="printed" onchange="setPageMarkerMode(this.value)">
-                    <span class="page-marker-mode-copy"><strong>只保留印刷页码锚点</strong><small>Markdown 写入隐藏注释，EPUB 写入 pagebreak 锚点；正文均不显示页码</small></span>
-                  </label>
-                  <label class="page-marker-mode" data-page-marker-choice="none">
-                    <input type="radio" name="page-marker-mode" value="none" onchange="setPageMarkerMode(this.value)">
-                    <span class="page-marker-mode-copy"><strong>不写入页码锚点</strong><small>导出中完全不保留任何页码信息</small></span>
-                  </label>
-                  <label class="page-marker-mode" data-page-marker-choice="full">
+                <div class="document-export-options page-marker-modes" id="page-marker-modes" role="radiogroup" aria-label="页码锚点方式">
+                  <label class="document-export-option page-marker-mode" data-page-marker-choice="full">
                     <input type="radio" name="page-marker-mode" value="full" onchange="setPageMarkerMode(this.value)">
-                    <span class="page-marker-mode-copy"><strong>同时写入 PDF 物理页与印刷页码<em>默认</em></strong><small>保留完整页码锚点信息，便于校对与调试</small></span>
+                    <span class="document-export-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h12v16H8zM4 7v14h12M12 7h4M12 11h4M12 15h2"/></svg></span>
+                    <span class="document-export-option-copy"><strong>同时写入 PDF 物理页与印刷页码<em>默认</em></strong><small>保留完整页码锚点信息，便于校对与调试</small></span>
+                    <span class="document-export-option-check" aria-hidden="true"></span>
+                  </label>
+                  <label class="document-export-option page-marker-mode" data-page-marker-choice="printed">
+                    <input type="radio" name="page-marker-mode" value="printed" onchange="setPageMarkerMode(this.value)">
+                    <span class="document-export-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4zM10 7h4M10 11h4"/></svg></span>
+                    <span class="document-export-option-copy"><strong>只保留印刷页码锚点</strong><small>Markdown 写入隐藏注释，EPUB 写入 pagebreak 锚点；正文均不显示页码</small></span>
+                    <span class="document-export-option-check" aria-hidden="true"></span>
+                  </label>
+                  <label class="document-export-option page-marker-mode" data-page-marker-choice="none">
+                    <input type="radio" name="page-marker-mode" value="none" onchange="setPageMarkerMode(this.value)">
+                    <span class="document-export-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4zM9 8l6 6M15 8l-6 6"/></svg></span>
+                    <span class="document-export-option-copy"><strong>不写入页码锚点</strong><small>导出中完全不保留任何页码信息</small></span>
+                    <span class="document-export-option-check" aria-hidden="true"></span>
                   </label>
                 </div>
               </div>

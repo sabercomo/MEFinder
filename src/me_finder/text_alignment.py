@@ -46,7 +46,9 @@ from .semantic_alignment import (
 SEGMENTER = "me-finder-multilingual-sentence"
 SEGMENTER_VERSION = "12"
 ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
-ALIGNMENT_ALGORITHM_VERSION = "15"
+ALIGNMENT_ALGORITHM_VERSION = "17"
+# Version 17 improves heading discovery without changing stored span semantics.
+READABLE_ALIGNMENT_VERSIONS = frozenset({"16", ALIGNMENT_ALGORITHM_VERSION})
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
@@ -1906,6 +1908,14 @@ def locate_alignment(
                 raise AlignmentNotFound(
                     "两个对齐使用的基准 Segment 版本不一致，请重新对齐后再定位。"
                 )
+        if any(
+            run["algorithm"] != ALIGNMENT_ALGORITHM
+            or run["algorithm_version"] not in READABLE_ALIGNMENT_VERSIONS
+            for run in route_runs
+        ):
+            raise AlignmentNotFound(
+                "对齐算法已更新，请在作品组中重新生成对照后再定位。"
+            )
         source_run = route_runs[0]
         source_set_id = _segment_set_id_for_source(source_run, source_id)
         selection_function = (
@@ -2073,7 +2083,7 @@ def restore_alignment_recipe_snapshot(
             continue
         if (
             pair.get("algorithm") != ALIGNMENT_ALGORITHM
-            or pair.get("algorithm_version") != ALIGNMENT_ALGORITHM_VERSION
+            or pair.get("algorithm_version") not in READABLE_ALIGNMENT_VERSIONS
         ):
             continue
         group_id = str(pair.get("document_group_id") or "")

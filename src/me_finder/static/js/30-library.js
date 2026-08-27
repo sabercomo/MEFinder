@@ -166,6 +166,12 @@ function generateSelectedTextAlignmentAction(groupId, button) {
 }
 
 // 单一「管理作品组」弹窗承载成员管理，并把默认基准与任意两版的直接对照分开。
+function documentGroupSourceLabel(source) {
+  var format = sourceFormatLabel(source);
+  var parser = source.parser_type === 'native_text' ? '原生文本' : source.parser_label;
+  return parser && parser !== format ? format + ' · ' + parser : format;
+}
+
 function renderDocumentGroupManager() {
   var body = document.getElementById('group-manage-body');
   if (!body) return;
@@ -175,7 +181,7 @@ function renderDocumentGroupManager() {
     + '<span class="grp-field-label">作品组标题</span>'
     + '<input id="grp-create-input" class="grp-input" type="text" placeholder="例如：法哲学原理" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
     + '</label>'
-    + '<button class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
+    + '<button id="grp-create-btn" class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
   if (selectedCount) {
     html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组</div>';
   }
@@ -186,8 +192,8 @@ function renderDocumentGroupManager() {
     var gid = esc(g.document_group_id);
     html += '<div class="grp-block"><div class="grp-head">'
       + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)">'
-      + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\')">加入所选（' + selectedCount + '）</button>' : '')
-      + '<button class="action-btn sm danger-outline" type="button" onclick="deleteDocumentGroupAction(\'' + gid + '\')">删除组</button>'
+      + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\',this)">加入所选（' + selectedCount + '）</button>' : '')
+      + '<button class="action-btn sm danger-outline" type="button" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
       + '</div>';
     var members = g.members || [];
     if (!members.length) {
@@ -199,7 +205,7 @@ function renderDocumentGroupManager() {
         var srcTitle = src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id;
         var isBase = m.source_file_id === g.base_source_file_id;
         var language = src ? libLangChipLabel(libraryLanguageCode(src)) : '未识别语言';
-        var format = src ? sourceFormatLabel(src) : '未知格式';
+        var format = src ? documentGroupSourceLabel(src) : '未知格式';
         return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
           + '<span class="grp-member-main"><span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
           + '<span class="grp-member-meta"><span>' + esc(language) + '</span><span>' + esc(format) + '</span></span></span>'
@@ -237,7 +243,7 @@ function renderDocumentGroupManager() {
           var source = item.source;
           var member = item.member;
           var version = member.version_label || member.display_name || source.title || source.file_name;
-          var label = version + ' · ' + libLangChipLabel(libraryLanguageCode(source)) + ' · ' + sourceFormatLabel(source);
+          var label = version + ' · ' + libLangChipLabel(libraryLanguageCode(source)) + ' · ' + documentGroupSourceLabel(source);
           return '<option value="' + esc(member.source_file_id) + '"' + (member.source_file_id === selectedId ? ' selected' : '') + '>' + esc(label) + '</option>';
         }).join('');
       };
@@ -276,14 +282,19 @@ async function postGroupOp(path, payload, successMessage) {
 }
 
 async function createDocumentGroupInline() {
+  var button = document.getElementById('grp-create-btn');
+  if (button.disabled) return;
   var input = document.getElementById('grp-create-input');
   var title = input ? input.value.trim() : '';
   if (!title) { showToast('请输入作品组标题', 'warning'); return; }
+  button.disabled = true;
+  button.textContent = '创建中…';
   try {
     await postGroupOp('/api/document-groups/create', {title: title}, '作品组已创建');
     var again = document.getElementById('grp-create-input');
     if (again) again.focus();
   } catch (e) { showToast(e.message || '创建失败', 'danger'); }
+  finally { button.disabled = false; button.textContent = '新建'; }
 }
 
 async function renameDocumentGroupInline(groupId, value) {
@@ -293,12 +304,19 @@ async function renameDocumentGroupInline(groupId, value) {
   catch (e) { showToast(e.message || '重命名失败', 'danger'); }
 }
 
-async function deleteDocumentGroupAction(groupId) {
+async function deleteDocumentGroupAction(groupId, button) {
+  if (button.disabled) return;
   var group = documentGroupById(groupId);
   var name = group ? group.title : '';
-  if (!await showAppConfirm('删除作品组「' + name + '」只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
-  try { await postGroupOp('/api/document-groups/delete', {document_group_id: groupId}, '作品组已删除（文献仍保留）'); }
+  button.disabled = true;
+  button.textContent = '等待确认…';
+  try {
+    if (!await showAppConfirm('删除作品组「' + name + '」只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
+    button.textContent = '删除中…';
+    await postGroupOp('/api/document-groups/delete', {document_group_id: groupId}, '作品组已删除（文献仍保留）');
+  }
   catch (e) { showToast(e.message || '删除失败', 'danger'); }
+  finally { button.disabled = false; button.textContent = '删除组'; }
 }
 
 async function setGroupBaseAction(groupId, sourceId) {
@@ -316,9 +334,13 @@ async function setMemberVersionLabelInline(sourceId, value) {
   catch (e) { showToast(e.message || '更新失败', 'danger'); }
 }
 
-async function assignSelectedToGroupAction(groupId) {
+async function assignSelectedToGroupAction(groupId, button) {
+  if (button.disabled) return;
   var ids = Array.from(libraryStore.deleteSelection);
   if (!ids.length) { showToast('请先在文献列表勾选文献', 'warning'); return; }
+  var label = button.textContent;
+  button.disabled = true;
+  button.textContent = '加入中…';
   try {
     for (var i = 0; i < ids.length; i += 1) {
       var response = await fetch('/api/document-groups/add-member', {
@@ -335,6 +357,7 @@ async function assignSelectedToGroupAction(groupId) {
     renderLibraryList();
     showToast('已将 ' + ids.length + ' 份文献加入作品组', 'success');
   } catch (e) { showToast(e.message || '加入失败', 'danger'); }
+  finally { button.disabled = false; button.textContent = label; }
 }
 
 // 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。

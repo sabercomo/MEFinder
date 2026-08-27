@@ -19,6 +19,7 @@
 .app-dialog-backdrop.open,
 .remove-modal-backdrop.open,
 .cnki-batch-backdrop.open { display: grid; }
+.app-dialog-backdrop { z-index: var(--z-confirm); }
 .app-dialog,
 .remove-modal,
 .cnki-batch-modal {

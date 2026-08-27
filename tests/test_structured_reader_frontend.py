@@ -27,6 +27,14 @@ APP_JS = _read_split_source("js", ".js", "app.js")
 
 
 class StructuredReaderFrontendTests(unittest.TestCase):
+    def test_reader_header_identifies_the_current_parsing_record(self) -> None:
+        self.assertIn("eyebrow: eyebrow", READER_JS)
+        self.assertIn("state.source.parser_label", READER_JS)
+        self.assertIn("'结构化文本 · ' + state.source.parser_label", READER_JS)
+        open_start = READER_JS.index("async function openReader(")
+        open_end = READER_JS.index("function openForSearchResult(", open_start)
+        self.assertIn("state.elements.eyebrow.textContent = '结构化文本'", READER_JS[open_start:open_end])
+
     def test_exposes_a_small_non_module_api_for_app_js(self) -> None:
         self.assertIn("global.MEFinderReader = Object.freeze", READER_JS)
         for method in (

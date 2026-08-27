@@ -469,6 +469,14 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn("Markdown 与 EPUB 始终删除可见页码、重复页眉和重复页脚", HTML)
         for mode in ("printed", "none", "full"):
             self.assertEqual(HTML.count(f'data-page-marker-choice="{mode}"'), 1)
+        self.assertEqual(
+            re.findall(r'data-page-marker-choice="([^"]+)"', HTML),
+            ["full", "printed", "none"],
+        )
+        self.assertIn('class="document-export-options page-marker-modes"', HTML)
+        self.assertEqual(HTML.count('class="document-export-option page-marker-mode"'), 3)
+        self.assertNotIn('.page-marker-mode {', HTML)
+        self.assertIn("document.querySelectorAll('[data-document-export-choice]')", HTML)
         full_option = re.search(
             r'data-page-marker-choice="full".*?</label>', HTML, re.S
         ).group(0)
@@ -757,6 +765,20 @@ class ThemeMarkupTests(unittest.TestCase):
         group_card = HTML.split(".group-manage-card {", 1)[1].split("}", 1)[0]
         self.assertIn("background: var(--dialog-bg)", group_card)
         self.assertIn("box-shadow: var(--shadow-popover)", group_card)
+
+    def test_document_group_menu_is_taller_but_viewport_limited(self) -> None:
+        group_menu = HTML.split(".library-group-scope-menu {", 1)[1].split("}", 1)[0]
+        self.assertIn("max-height: min(560px, calc(100dvh - 160px))", group_menu)
+        self.assertIn("overflow-y: auto", group_menu)
+
+    def test_confirmation_is_above_parent_modals_but_below_toasts(self) -> None:
+        layers = {
+            key: int(re.search(r"--z-" + key + r":\s*(\d+)", HTML).group(1))
+            for key in ("modal", "confirm", "toast")
+        }
+        self.assertLess(layers["modal"], layers["confirm"])
+        self.assertLess(layers["confirm"], layers["toast"])
+        self.assertIn(".app-dialog-backdrop { z-index: var(--z-confirm); }", HTML)
 
     def test_browser_shell_does_not_show_the_macos_titlebar(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):

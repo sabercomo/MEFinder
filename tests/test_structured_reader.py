@@ -57,6 +57,42 @@ class StructuredReaderTests(unittest.TestCase):
     def _build(self, index: dict[str, object]) -> None:
         build_database(index, self.database_path)
 
+    def test_same_file_parsing_records_keep_their_own_text_and_parser_label(self) -> None:
+        sources = [
+            {
+                "source_file_id": "pdf-native",
+                "source_type": "pdf",
+                "file_name": "same-book.pdf",
+                "sha256": "a" * 64,
+                "pdf_profile": {"detected_pdf_type": "native_text", "parser": "pymupdf"},
+            },
+            {
+                "source_file_id": "pdf-mineru",
+                "source_type": "pdf",
+                "file_name": "same-book.pdf",
+                "sha256": "a" * 64,
+                "pdf_profile": {"detected_pdf_type": "mineru_structured", "parser_label": "MinerU"},
+            },
+        ]
+        self._build({
+            "metadata": {}, "source_files": sources, "volumes": [],
+            "works": [], "paragraphs": [],
+            "pdf_pages": [
+                {"source_file_id": source["source_file_id"], "pdf_page_index": 0,
+                 "text_raw": text}
+                for source, text in zip(sources, ("Native text.", "MinerU text with different offsets."))
+            ],
+        })
+        for source_id, label, text in (
+            ("pdf-native", "原生文本", "Native text."),
+            ("pdf-mineru", "MinerU", "MinerU text with different offsets."),
+        ):
+            with self.subTest(source_id=source_id):
+                result = get_document_window(self.database_path, source_id, start=0, count=1)
+                self.assertEqual(result["source"]["source_file_id"], source_id)
+                self.assertEqual(result["source"]["parser_label"], label)
+                self.assertEqual(result["items"][0]["text_raw"], text)
+
     def test_pdf_window_has_stable_anchors_page_states_and_empty_page(self) -> None:
         source_id = "pdf-reader"
         pages = [

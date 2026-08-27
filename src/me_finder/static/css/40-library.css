@@ -654,7 +654,7 @@
 .library-group-scope .app-select-value { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .library-group-scope.is-scoped .app-select-trigger { border-color: var(--accent); color: var(--accent); }
 .library-group-scope.is-scoped .library-group-scope-icon { color: var(--accent); }
-.library-group-scope-menu { min-width: 224px; max-height: 340px; overflow-y: auto; }
+.library-group-scope-menu { min-width: 224px; max-height: min(560px, calc(100dvh - 160px)); overflow-y: auto; }
 .lib-group-opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lib-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-group-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }

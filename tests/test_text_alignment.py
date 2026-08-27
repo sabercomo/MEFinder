@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -16,10 +17,11 @@ from src.me_finder.database import (
     optimize_database_storage,
     replace_source_in_database,
 )
-from src.me_finder.document_groups import set_document_group_base
+from src.me_finder.document_groups import add_group_member, set_document_group_base
 from src.me_finder.persistence.index_schema import SCHEMA
 from src.me_finder.persistence.connection import open_readonly_index
 from src.me_finder.text_alignment import (
+    ALIGNMENT_ALGORITHM_VERSION,
     AlignmentNotFound,
     InvalidAlignmentRequest,
     align_segment_sequences,
@@ -27,6 +29,7 @@ from src.me_finder.text_alignment import (
     list_alignment_targets,
     locate_alignment,
     read_alignment_recipe_snapshot,
+    replace_alignment_recipe_snapshot,
     segment_paragraph_text,
     segment_pdf_text,
     PageText,
@@ -600,6 +603,45 @@ class TextAlignmentTests(unittest.TestCase):
                 end_offset=10_000,
             )
 
+    def test_same_pdf_reparse_gets_its_own_alignment_without_reusing_old_offsets(self) -> None:
+        original = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        new_id = "pdf-zh-mineru"
+        new_text = "\n\n精神是现实的。\n\n真理是全体。"
+        with closing(sqlite3.connect(str(self.db))) as connection, connection:
+            source = json.loads(connection.execute(
+                "SELECT payload_json FROM source_files WHERE source_file_id='pdf-zh'"
+            ).fetchone()[0])
+            source["sha256"] = "a" * 64
+            connection.execute(
+                "UPDATE source_files SET payload_json=? WHERE source_file_id='pdf-zh'",
+                (json.dumps(source),),
+            )
+            source["source_file_id"] = new_id
+            connection.execute(
+                "INSERT INTO source_files(source_file_id, source_type, file_name, payload_json) "
+                "VALUES (?, 'pdf', ?, ?)", (new_id, source["file_name"], json.dumps(source)),
+            )
+            connection.execute(
+                "INSERT INTO pdf_pages(source_file_id, pdf_page_index, payload_json) VALUES (?, 0, ?)",
+                (new_id, json.dumps(_page(new_id, 0, new_text))),
+            )
+        self.assertEqual(list_alignment_targets(self.db, new_id)["targets"], [])
+        add_group_member("work-one", new_id, self.db)
+        self.assertEqual(list_alignment_targets(self.db, new_id)["targets"], [])
+        generated = generate_alignment(self.db, "work-one", "pdf-de", new_id)
+        self.assertNotEqual(generated["alignment_run_id"], original["alignment_run_id"])
+        self.assertIn("pdf-de", {t["source_file_id"] for t in list_alignment_targets(self.db, new_id)["targets"]})
+        located = locate_alignment(
+            self.db, new_id, "pdf-de", start_page_index=0, end_page_index=0,
+            start_offset=new_text.index("精神"), end_offset=new_text.index("。") + 1,
+        )
+        self.assertEqual(located["alignment_run_ids"], [generated["alignment_run_id"]])
+        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Der Geist ist wirklich.")
+        self.assertEqual(
+            list_alignment_targets(self.db, "pdf-zh")["targets"][0]["alignment_run_id"],
+            original["alignment_run_id"],
+        )
+
     def test_numbered_note_link_takes_priority_over_conflicting_monotonic_link(self) -> None:
         generated = generate_alignment(
             self.db, "work-one", "pdf-de", "pdf-zh"
@@ -689,6 +731,66 @@ class TextAlignmentTests(unittest.TestCase):
             )
         finally:
             connection.close()
+
+    def test_old_alignment_requires_regeneration_and_is_not_reused(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        connection = sqlite3.connect(str(self.db))
+        try:
+            connection.execute(
+                "UPDATE alignment_runs SET algorithm_version = 'obsolete'"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        with self.assertRaisesRegex(AlignmentNotFound, "重新生成对照"):
+            locate_alignment(
+                self.db, "pdf-de", "epub-en",
+                start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
+            )
+
+        second = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        self.assertNotEqual(second["alignment_run_id"], first["alignment_run_id"])
+        located = locate_alignment(
+            self.db, "pdf-de", "epub-en",
+            start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
+        )
+        self.assertEqual(located["target_item_type"], "word_paragraph")
+
+    def test_version16_alignment_remains_readable_but_regenerates_when_requested(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            connection.execute("UPDATE alignment_runs SET algorithm_version = '16'")
+            connection.commit()
+
+        located = locate_alignment(
+            self.db, "pdf-de", "epub-en",
+            start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
+        )
+        self.assertEqual(located["alignment_run_id"], first["alignment_run_id"])
+        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Spirit is actual.")
+
+        regenerated = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        self.assertFalse(regenerated["reused"])
+        self.assertNotEqual(regenerated["alignment_run_id"], first["alignment_run_id"])
+        self.assertEqual(regenerated["algorithm_version"], ALIGNMENT_ALGORITHM_VERSION)
+
+    def test_version16_recipe_is_restored_using_current_algorithm(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            connection.execute("UPDATE alignment_runs SET algorithm_version = '16'")
+            connection.commit()
+        snapshot = read_alignment_recipe_snapshot(self.db)
+
+        self.assertEqual(replace_alignment_recipe_snapshot(snapshot, self.db), 1)
+        restored = read_alignment_recipe_snapshot(self.db)["alignment_pairs"]
+        self.assertEqual(len(restored), 1)
+        self.assertEqual(restored[0]["algorithm_version"], ALIGNMENT_ALGORITHM_VERSION)
+        located = locate_alignment(
+            self.db, "pdf-de", "epub-en",
+            start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
+        )
+        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Spirit is actual.")
 
     def test_pdf_and_epub_alignment_locates_both_directions(self) -> None:
         result = generate_alignment(

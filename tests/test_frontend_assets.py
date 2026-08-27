@@ -307,10 +307,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.9 后续：单书 EPUB 3 导出作为共享规范化层的第二个 renderer 接入。
     # 0.4.9 后续：三种页码锚点合并展示，Markdown/EPUB 页面噪声固定清理。
     # 0.4.9 后续：完整页码锚点改为 Markdown/EPUB 的统一默认。
+    # 0.4.9 后续：作品组操作防重复提交，确认弹窗位于父弹窗上方。
+    # 0.4.9 后续：作品组下拉菜单加高，并按窗口高度限制滚动区域。
     BASELINE_SHA256 = (
-        "975c38b3ebdc0b178914c283c98e49123fbe2e043bd7d308beba01fa1247b849"
+        "07a8fcc34bbec9b3be23d90666336d2831a238318f9c5505d152bbbf10527df7"
     )
-    BASELINE_BYTES = 912452
+    BASELINE_BYTES = 914040
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

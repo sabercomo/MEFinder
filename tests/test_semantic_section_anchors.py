@@ -13,6 +13,98 @@ from src.me_finder.semantic_alignment import (
 
 
 class SemanticSectionAnchorTests(unittest.TestCase):
+    def test_decimal_body_headings_align_without_using_toc_or_endnote_titles(self) -> None:
+        german = [
+            "Inhalt\n1.1 Lebensform: Begriff und Phänomen 67\n6.1 Kritik eines neuen Typs 278",
+            "Vorwort\nEinleitung zum Buch.",
+            "1.1 Lebensform: Begriff und Phänomen\nWas ist eine Lebensform?",
+            "6.1 Kritik eines neuen Typs\nDie Kritik ist theoriegeleitet.",
+            "6.2 Die Strategie immanenter Kritik\nEin weiterer Absatz.",
+            "$^{159}$\n10.3 »Fortschritt und Regression«\nDie Geschichte.",
+            "Anmerkungen\nVorwort\n1. Eine Anmerkung.",
+        ]
+        english = [
+            "Preface ix\nI. An Ensemble of Practices 33\n1.1.", "Form of Life: Concept and Phenomenon 35\n6.1.",
+            "Criticism of a New Type 191",
+            "The preface heading was not preserved, but its text was.",
+            "1.1 Form of Life: Concept and Phenomenon\nWhat is a form of life?",
+            "6. 1 Criticism of a New Type\nImmanent criticism is guided by theory.",
+            "6.2 The Strategy of Immanent Criticism\nAnother paragraph.",
+            "$^{44}$\n10.3 The Source of Progress and of Degeneration\nHistory.",
+            "Preface\n1. This is a note about the preface; the Notes heading was omitted.",
+        ]
+        self.assertEqual(find_heading_anchors(german, english), [
+            HeadingAnchor(2, 4, "chapter:1:section:1"),
+            HeadingAnchor(3, 5, "chapter:6:section:1"),
+            HeadingAnchor(4, 6, "chapter:6:section:2"),
+            HeadingAnchor(5, 7, "chapter:10:section:3"),
+        ])
+
+    def test_decimal_numbers_in_prose_dates_and_notes_are_not_headings(self) -> None:
+        texts = [
+            "1.1 This is a numbered sentence.", "10.3.2014", "1.2", "1.2 A TOC entry 42",
+            "1.1 A Section\nActual body.", "Notes", "2.1 A Reference Title",
+        ]
+        self.assertEqual(find_heading_anchors(texts, texts), [HeadingAnchor(4, 4, "chapter:1:section:1")])
+
+    def test_compact_toc_recovers_missing_ordinals_without_anchoring_numbered_notes(self) -> None:
+        source = ["第一章", "本文。", "第二章", "本文。", "第三章", "本文。", "第四章"]
+        target = [
+            "目录\n01 御宅的精神病理\n02 御宅来信\n03 日本之外的情况\n04 达格的奇妙王国",
+            "御宅的精神病理\n正文。",
+            "1 IRC 是一种网络实时会议系统。", "2 动画人形指各种角色模型。",
+            "02 御宅来信\n正文。", "3 这种类型近年来日益多样化。",
+            "03日本之外的情况\n正文。", "4 这是另一条注释。",
+            "达格的奇妙王国\n正文。",
+        ]
+
+        self.assertEqual(
+            [(a.source_index, a.target_index, a.key) for a in find_heading_anchors(source, target)],
+            [(0, 1, "chapter:1"), (2, 4, "chapter:2"),
+             (4, 6, "chapter:3"), (6, 8, "chapter:4")],
+        )
+
+    def test_split_japanese_toc_uses_body_chapters_not_numbered_subsections(self) -> None:
+        source = [
+            "目 次",
+            "第一章 オタクたちの疑似日本",
+            "１ オタク系文化とは何か",
+            "２ オタクたちの疑似日本",
+            "第二章 データベース的動物",
+            "３ 大きな非物語",
+            "第三章 超平面性と多重人格",
+            "第一章 オタクたちの疑似日本",
+            "１ オタク系文化とは何か",
+            "本書ではオタク系文化について述べる。",
+            "２ オタクたちの疑似日本",
+            "第二章 データベース的動物",
+            "３ 大きな非物語",
+            "第三章 超平面性と多重人格",
+        ]
+        target = [
+            "目录", "第一章", "御宅族们的似日本", "第二章", "数据库动物",
+            "第一章", "御宅族们的似日本", "正文。", "第二章", "正文。", "第三章",
+        ]
+
+        anchors = find_heading_anchors(source, target)
+
+        self.assertEqual(
+            [(a.source_index, a.target_index, a.key) for a in anchors],
+            [(7, 5, "chapter:1"), (11, 8, "chapter:2"), (13, 10, "chapter:3")],
+        )
+
+    def test_cjk_chapter_hierarchy_keeps_ascii_and_fullwidth_subsection_numbers(self) -> None:
+        source = ["第一章 日本語", "1 物語消費", "２ 大きな非物語", "第二章 日本語"]
+        target = ["第一章 中文", "第一节 物语消费", "第二节 大的非物语", "第二章 中文"]
+
+        anchors = find_heading_anchors(source, target)
+
+        self.assertEqual(
+            [(a.source_index, a.target_index, a.key) for a in anchors],
+            [(0, 0, "chapter:1"), (1, 1, "chapter:1:section:1"),
+             (2, 2, "chapter:1:section:2"), (3, 3, "chapter:2")],
+        )
+
     def test_mutual_nearest_fallback_rejects_a_forward_only_false_friend(self) -> None:
         source = np.asarray(
             [

@@ -18,7 +18,7 @@ EMBEDDING_RUNTIME_VERSION = "fastembed-0.8.0-mean-pooling"
 LOW_CONFIDENCE_THRESHOLD = 0.56
 NOTE_BLOCK_CONFIDENCE_THRESHOLD = 0.64
 NOTE_CANDIDATE_MARGIN = 0.05
-SEMANTIC_ALIGNMENT_VERSION = "14"
+SEMANTIC_ALIGNMENT_VERSION = "16"
 _MAX_HEADING_NUMBER = 30
 _MAX_PARAGRAPH_NUMBER = 9999
 _MIN_COLLECTED_NOTE_RUN = 5
@@ -59,6 +59,8 @@ _CHINESE_HEADING = re.compile(
 _LATIN_CHAPTER = re.compile(
     r"^(?:chapter\s+)?(\d{1,2})\s+(.{3,})$", re.IGNORECASE
 )
+_PADDED_CHAPTER = re.compile(r"^(0[1-9])\s*(\D.{2,})$")
+_DECIMAL_SECTION = re.compile(r"^(\d{1,2})\.\s*(\d{1,2})\.?\s+(\D.*)$")
 _LATIN_SECTION = re.compile(r"^([ivxlc]{1,5})[.)]\s+(.{3,})$", re.IGNORECASE)
 _LATIN_TOC_SECTION = re.compile(r"^([ivxlc]{1,5})[.)]?\s+(.{3,})$", re.IGNORECASE)
 _FRENCH_PART = re.compile(
@@ -86,7 +88,7 @@ _CHINESE_PARAGRAPH_HEADING = re.compile(
 _TOC_LEADER = re.compile(
     r"(?:\.{3,}|…{2,}|·{3,})\s*[\[(（]?\d*[\])）]?\s*$"
 )
-_CONTENTS_HEADING = re.compile(r"^(?:contents|table of contents|目录|目錄)$", re.IGNORECASE)
+_CONTENTS_HEADING = re.compile(r"^(?:contents|table of contents|目\s*[录錄次])$", re.IGNORECASE)
 _TOC_SLASH_ENTRY = re.compile(r"^\s*\d{1,3}\s*/\s*(.+?)\s*$")
 _TOC_ENGLISH_PART = re.compile(
     r"^part\s+(one|two|three|four|[ivx]{1,4}|\d{1,2})\s+(.+)$",
@@ -413,7 +415,7 @@ def _paragraph_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
     }
 
 
-def _heading_lines(text: str) -> List[Tuple[str, int]]:
+def _heading_lines(text: str, *, numbered_sections: bool = False) -> List[Tuple[str, int]]:
     matches: List[Tuple[str, int]] = []
     for line_index, raw_line in enumerate(text.splitlines()):
         line = re.sub(r"\s+", " ", raw_line).strip(" \t/｜|")
@@ -447,16 +449,23 @@ def _heading_lines(text: str) -> List[Tuple[str, int]]:
                 number = _roman_number(token)
             matches.append(("chapter", number))
             continue
-        chapter = _LATIN_CHAPTER.fullmatch(line)
+        chapter = _LATIN_CHAPTER.fullmatch(line) or _PADDED_CHAPTER.fullmatch(line)
         if (
             chapter is not None
             and line_index == 0
-            and not line.endswith((".", ";", ":"))
+            and not line.endswith((".", ";", ":", "。", "；", "："))
             and not any(ord(character) < 32 and not character.isspace() for character in raw_line)
         ):
             number = int(chapter.group(1))
             if 0 < number <= _MAX_HEADING_NUMBER:
-                matches.append(("chapter", number))
+                # A bare number below explicit CJK chapters is a subsection,
+                # not a new chapter (including Japanese full-width digits).
+                kind = (
+                    "section"
+                    if numbered_sections and not line.casefold().startswith("chapter ")
+                    else "chapter"
+                )
+                matches.append((kind, number))
             continue
         section = _LATIN_SECTION.fullmatch(line)
         if section is not None and re.search(r"[A-Za-z]{3}", section.group(2)):
@@ -470,12 +479,52 @@ def _normalized_heading_title(value: str) -> str:
     return re.sub(r"[^\w]+", "", value.casefold(), flags=re.UNICODE)
 
 
-def _latin_toc_titles(texts: Sequence[str]) -> Tuple[Dict[str, str], set[int]]:
+def _repeated_chapter_toc_indices(
+    texts: Sequence[str], *, numbered_sections: bool
+) -> set[int]:
+    """Confirm a split TOC by the body repeating its first full chapter heading."""
+
+    indices: set[int] = set()
+    contents_start: int | None = None
+    first_chapter: Tuple[str, int] | None = None
+    for index, text in enumerate(texts):
+        if any(_CONTENTS_HEADING.fullmatch(line.strip()) for line in text.splitlines()):
+            contents_start = index
+            first_chapter = None
+        if contents_start is None:
+            continue
+        chapters = [
+            _normalized_heading_title(line)
+            for line in text.splitlines()
+            if any(
+                kind == "chapter"
+                for kind, _number in _heading_lines(
+                    line, numbered_sections=numbered_sections
+                )
+            )
+        ]
+        if not chapters:
+            continue
+        if first_chapter is None:
+            first_chapter = (chapters[0], index)
+        elif index > first_chapter[1] and first_chapter[0] in chapters:
+            indices.update(range(contents_start, index))
+            contents_start = None
+            first_chapter = None
+    return indices
+
+
+def _latin_toc_titles(
+    texts: Sequence[str], *, numbered_sections: bool = False
+) -> Tuple[Dict[str, str], set[int]]:
     titles: Dict[str, str] = {}
     toc_indices: set[int] = set()
     in_toc = False
     current_chapter = 0
     pending_chapter_title = False
+    split_toc_indices = _repeated_chapter_toc_indices(
+        texts, numbered_sections=numbered_sections
+    )
     for index, text in enumerate(texts):
         lines = [
             re.sub(r"\s+", " ", raw_line).strip(" \t/｜|")
@@ -484,7 +533,7 @@ def _latin_toc_titles(texts: Sequence[str]) -> Tuple[Dict[str, str], set[int]]:
         has_contents_heading = any(
             _CONTENTS_HEADING.fullmatch(line) for line in lines
         )
-        if has_contents_heading:
+        if has_contents_heading or index in split_toc_indices:
             in_toc = True
         elif in_toc and not any(
             _TOC_SLASH_ENTRY.fullmatch(line) or _TOC_LEADER.search(line)
@@ -538,8 +587,14 @@ def _latin_toc_titles(texts: Sequence[str]) -> Tuple[Dict[str, str], set[int]]:
                 continue
             if slash_entry is not None:
                 continue
-            chapter = _LATIN_CHAPTER.fullmatch(line)
+            chapter = _LATIN_CHAPTER.fullmatch(line) or _PADDED_CHAPTER.fullmatch(line)
             if chapter is not None:
+                if numbered_sections and not line.casefold().startswith("chapter "):
+                    if current_chapter:
+                        titles[_normalized_heading_title(line)] = (
+                            f"chapter:{current_chapter}:section:{int(chapter.group(1))}"
+                        )
+                    continue
                 current_chapter = int(chapter.group(1))
                 titles[_normalized_heading_title(chapter.group(2))] = (
                     f"chapter:{current_chapter}"
@@ -557,7 +612,16 @@ def _latin_toc_titles(texts: Sequence[str]) -> Tuple[Dict[str, str], set[int]]:
 
 def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
     positions: Dict[str, int] = {}
-    toc_titles, toc_indices = _latin_toc_titles(texts)
+    decimal_positions: Dict[str, int] = {}
+    numbered_sections = any(
+        match is not None and match.group(2) in {"章", "篇", "部"}
+        for text in texts
+        for line in text.splitlines()
+        for match in [_CHINESE_HEADING.fullmatch(line.strip())]
+    )
+    toc_titles, toc_indices = _latin_toc_titles(
+        texts, numbered_sections=numbered_sections
+    )
     current_chapter = 0
     last_section = 0
     for index, text in enumerate(texts):
@@ -567,13 +631,42 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
         ]
         if index in toc_indices:
             continue
-        if any(_AUTHOR_PREFACE_HEADING.fullmatch(line) for line in normalized_lines):
+        if (positions or decimal_positions) and any(
+            _ENDNOTES_HEADING.fullmatch(line) for line in normalized_lines
+        ):
+            break
+        # Decimal chapter.section ordinals survive even when the parser omits
+        # chapter titles. Only use a title line, never a TOC page number or prose.
+        first_line = normalized_lines[0] if normalized_lines else ""
+        # A trailing numeric footnote marker may share the segment with the
+        # next heading; it does not change that heading's structural ordinal.
+        if re.fullmatch(r"\$\^\{\d+\}\$", first_line) and len(normalized_lines) > 1:
+            first_line = normalized_lines[1]
+        decimal = _DECIMAL_SECTION.fullmatch(first_line)
+        if (
+            decimal is not None and len(first_line) <= 100
+            and not first_line.endswith((".", ";", ":", "。", "；", "："))
+            and not re.search(r"\d$", first_line)
+            and not _TOC_LEADER.search(first_line)
+        ):
+            chapter_number, section_number = int(decimal[1]), int(decimal[2])
+            if 0 < chapter_number <= _MAX_HEADING_NUMBER and 0 < section_number <= _MAX_HEADING_NUMBER:
+                decimal_positions.setdefault(f"chapter:{chapter_number}:section:{section_number}", index)
+        if not decimal_positions and any(
+            _AUTHOR_PREFACE_HEADING.fullmatch(line) for line in normalized_lines
+        ):
             positions.setdefault("preface:author", index)
+        matches = _heading_lines(text, numbered_sections=numbered_sections)
         for line in normalized_lines:
             toc_key = toc_titles.get(_normalized_heading_title(line))
             if toc_key is not None:
                 positions.setdefault(toc_key, index)
-        matches = _heading_lines(text)
+                parts = toc_key.split(":")
+                if not matches or (
+                    len(parts) == 2 and not any(kind == "chapter" for kind, _ in matches)
+                ):
+                    current_chapter = int(parts[1])
+                    last_section = int(parts[3]) if len(parts) == 4 else 0
         if len(matches) > 4:
             continue
         for kind, number in matches:
@@ -595,6 +688,7 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
                 key = f"chapter:{current_chapter}:section:{number}"
                 last_section = number
             positions.setdefault(key, index)
+    positions.update(decimal_positions)
     positions.update(_paragraph_heading_positions(texts))
     return positions
 

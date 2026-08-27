@@ -39,6 +39,10 @@ class _FakeIndexRuntime:
         self.mutation_entries = 0
         self.missing_source_ids: set[str] = set()
         self.replace_failure: Exception | None = None
+        self.sources: List[Dict[str, object]] = []
+
+    def catalog(self) -> Dict[str, List[Dict[str, object]]]:
+        return {"source_files": list(self.sources)}
 
     @contextmanager
     def mutation(self) -> Iterator[None]:
@@ -186,6 +190,94 @@ class ImportOrchestratorTests(unittest.TestCase):
             [item["job_id"] for item in orchestrator.resumable_import_jobs()],
             ["import-restored"],
         )
+
+    def test_reimport_same_pdf_preserves_legacy_identity_and_settings(self) -> None:
+        raw_pdf = self.root / "corpus" / "raw_pdf"
+        raw_pdf.mkdir(parents=True)
+        original = raw_pdf / "original.pdf"
+        original.write_bytes(b"%PDF same English edition")
+        incoming = raw_pdf / "original (imported-copy).pdf"
+        incoming.write_bytes(original.read_bytes())
+        document = {
+            "enabled": True,
+            "source_file_id": "pdf-legacy-book",
+            "document_id": "LEGACY_BOOK",
+            "file_name": original.name,
+            "original_file_name": original.name,
+            "title": "My edited title",
+            "author": "My edited author",
+            "page_mapping": {"validated_by": "user", "segments": [
+                {"pdf_page_start": 21, "printed_page_start": 1},
+            ]},
+        }
+        config_path = self.root / "config" / "pdf_imports.json"
+        config_path.parent.mkdir(exist_ok=True)
+        config_path.write_text(json.dumps({"documents": [document]}), encoding="utf-8")
+        self.runtime.sources = [{
+            "source_file_id": document["source_file_id"],
+            "source_type": "pdf",
+            "sha256": sha256_file(original),
+        }]
+        orchestrator = self._orchestrator()
+
+        registered, source_id, target = orchestrator.register_pdf_for_import(incoming)
+
+        self.assertEqual(source_id, "pdf-legacy-book")
+        self.assertEqual(registered, document)
+        self.assertEqual(json.loads(config_path.read_text(encoding="utf-8"))["documents"], [document])
+        self.assertEqual(target, original)
+        self.assertTrue(original.is_file())
+        self.assertFalse(incoming.exists())
+        with self.assertRaisesRegex(MinerUError, "正在准备导入"):
+            orchestrator.register_pdf_for_import(original)
+        orchestrator.release_import_reservation(source_id)
+
+    def test_reimport_matches_full_hash_not_title_or_hash_prefix(self) -> None:
+        original = self._target("original.pdf")
+        digest = sha256_file(original)
+        self.runtime.sources = [{
+            "source_file_id": "pdf-other-edition",
+            "source_type": "pdf",
+            "title": "original",
+            "sha256": digest[:16] + "0" * 48,
+        }]
+        orchestrator = self._orchestrator()
+
+        _document, source_id, target = orchestrator.register_pdf_for_import(original)
+
+        self.assertEqual(source_id, f"pdf-import-{digest[:16]}")
+        self.assertEqual(target, original)
+        self.assertTrue(original.is_file())
+        orchestrator.release_import_reservation(source_id)
+
+    def test_reimport_prefers_existing_content_id_among_historical_duplicates(self) -> None:
+        original = self._target("existing.pdf")
+        digest = sha256_file(original)
+        content_id = f"pdf-import-{digest[:16]}"
+        self.runtime.sources = [
+            {"source_file_id": source_id, "source_type": "pdf", "sha256": digest}
+            for source_id in ("pdf-legacy-book", content_id)
+        ]
+        orchestrator = self._orchestrator()
+
+        _document, source_id, _target = orchestrator.register_pdf_for_import(original)
+
+        self.assertEqual(source_id, content_id)
+        orchestrator.release_import_reservation(source_id)
+
+    def test_reimport_does_not_guess_between_multiple_legacy_duplicates(self) -> None:
+        original = self._target("ambiguous.pdf")
+        self.runtime.sources = [
+            {"source_file_id": source_id, "source_type": "pdf", "sha256": sha256_file(original)}
+            for source_id in ("pdf-legacy-one", "pdf-legacy-two")
+        ]
+        orchestrator = self._orchestrator()
+
+        with self.assertRaisesRegex(MinerUError, "已有多条相同 PDF"):
+            orchestrator.register_pdf_for_import(original)
+
+        self.assertFalse((self.root / "config" / "pdf_imports.json").exists())
+        self.assertTrue(original.is_file())
 
     def test_scanned_auto_job_records_local_ocr_route_when_available(self) -> None:
         target = self._target("scan.pdf")
