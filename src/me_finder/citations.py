@@ -8,7 +8,11 @@ pages are never substituted with PDF physical indexes.
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Mapping, Optional
+from typing import (
+    Dict,
+    List,
+    Mapping,
+)
 
 from .collection_metadata import infer_collection_metadata
 

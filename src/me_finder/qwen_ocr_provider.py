@@ -12,7 +12,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Mapping, Optional
+from typing import (
+    Callable,
+    Iterable,
+    Mapping,
+    Optional,
+)
 
 from .parser_provider import (
     NormalizedBlock,
@@ -29,7 +34,6 @@ from .parser_provider import (
 )
 from .vision_api import (
     OpenAICompatibleVisionClient,
-    VisionAPIError,
     VisionProviderConfig,
 )
 

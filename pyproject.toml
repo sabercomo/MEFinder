@@ -1,0 +1,30 @@
+# Ruff configuration for MEFinder.
+#
+# This file intentionally carries *only* tool configuration — the app runs from
+# ``src/`` via PYTHONPATH and is packaged by PyInstaller, so there is no
+# ``[project]`` table / pip-installable distribution to imply here.
+#
+# Ruff runs in CI (see .github/workflows/ci.yml).  It starts with the pyflakes
+# ("F") rules — real correctness lint: undefined names, unused imports, import
+# shadowing — the class of bug that previously slipped in (web_http.py using
+# ``Optional`` without importing it).  Broaden the selection (e.g. "I" for
+# import sorting, "B" for bugbear) once the initial backlog is triaged.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".venv*",
+    "build",
+    "dist",
+    "release",
+    "installer",
+    "packaging",
+]
+
+[tool.ruff.lint]
+select = ["F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test helpers intentionally import symbols to assert their presence.
+"tests/*" = ["F401"]

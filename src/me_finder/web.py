@@ -33,12 +33,12 @@ from .preferences import (
 from .pdf_import_service import load_import_config
 from .chunked_upload import ChunkedUploadError
 from .web_assets import (
-    HTML,  # re-exported for tests and desktop bootstrap
+    HTML,  # noqa: F401 - re-exported for tests and desktop bootstrap
     _PACKAGE_DIR,
     render_html,
 )
 from .web_http import (
-    MAX_JSON_REQUEST_BYTES,  # re-exported for request-limit tests
+    MAX_JSON_REQUEST_BYTES,  # noqa: F401 - re-exported for request-limit tests
     WebHTTPContext,
     make_http_handler,
 )

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    # The release gate: run the entire tests/ tree the same way the build
+    # scripts do.  Tests needing the private corpus or optional dev deps
+    # skipUnless-skip visibly, so this stays green on a clean checkout.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run the whole test suite
+        run: python -m unittest discover -t . -s tests
+
+  lint:
+    # Ruff pyflakes ("F") rules — advisory for now.  Once the first run's
+    # backlog is triaged to zero, drop `continue-on-error` to make it blocking.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ruff (pyflakes)
+        run: pipx run ruff check .

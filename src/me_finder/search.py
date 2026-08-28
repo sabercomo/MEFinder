@@ -10,7 +10,13 @@ import sqlite3
 import threading
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from .citations import build_citation_formats
 from .database import (

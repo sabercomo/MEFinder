@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import posixpath
 import re
 import struct
 import zipfile
 import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 from urllib.parse import unquote, urlsplit
 
 from .collection_metadata import infer_collection_metadata

@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
 
 
 DATA_ROOT_MARKER = "data_root.txt"

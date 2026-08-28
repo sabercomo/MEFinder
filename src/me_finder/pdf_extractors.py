@@ -10,7 +10,14 @@ import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import (
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
@@ -22,7 +29,6 @@ from .import_resume import resume_summary
 from .normalization import (
     compact_text,
     normalize_pdf_text,
-    normalize_text,
     punctuationless_text,
     split_sentences,
 )

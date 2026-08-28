@@ -15,7 +15,12 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import (
+    Dict,
+    List,
+    Mapping,
+    Optional,
+)
 
 CROSSREF_ENDPOINT = "https://api.crossref.org/works"
 _TIMEOUT_SECONDS = 12
