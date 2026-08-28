@@ -112,6 +112,7 @@ function groupScopeManageOptionsHTML() {
 function openManageDocumentGroups() {
   var modal = document.getElementById('group-manage-modal');
   if (!modal) return;
+  groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
   renderDocumentGroupManager();
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
@@ -167,6 +168,10 @@ function documentGroupSourceLabel(source) {
   return parser && parser !== format ? format + ' · ' + parser : format;
 }
 
+// 内嵌「添加已有文献」选择器：与「生成对照」同一套卡片母题，展开时齐平在组卡片内。
+// groupId 记当前展开的组；query/selected 在整个 manager 重绘间保留，避免搜索时丢焦点。
+var groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
+
 function renderDocumentGroupManager() {
   var body = document.getElementById('group-manage-body');
   if (!body) return;
@@ -185,14 +190,17 @@ function renderDocumentGroupManager() {
   }
   libraryStore.documentGroups.forEach(function(g) {
     var gid = esc(g.document_group_id);
+    var pickerOpen = groupPicker.groupId === g.document_group_id;
     html += '<div class="grp-block"><div class="grp-head">'
       + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)">'
+      + '<div class="grp-head-actions">'
+      + '<button class="action-btn sm' + (pickerOpen ? ' is-active' : '') + '" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">＋ 添加文献</button>'
       + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\',this)">加入所选（' + selectedCount + '）</button>' : '')
       + '<button class="action-btn sm danger-outline" type="button" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
-      + '</div>';
+      + '</div></div>';
     var members = g.members || [];
     if (!members.length) {
-      html += '<div class="grp-empty grp-empty--sm">尚无成员。在文献列表勾选后用底部「设置作品组」加入</div>';
+      html += '<div class="grp-empty grp-empty--sm">尚无成员。点上方「添加文献」从已导入的文献里勾选加入，或在文献列表勾选后用底部「设置作品组」加入</div>';
     } else {
       html += '<div class="grp-members">' + members.map(function(m) {
         var sid = esc(m.source_file_id);
@@ -256,10 +264,30 @@ function renderDocumentGroupManager() {
     } else if (members.length) {
       html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成双栏对照</div>';
     }
+    if (pickerOpen) {
+      html += '<div class="grp-pick">'
+        + '<div class="grp-pick-search">'
+        + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="m14 14 3 3"/></svg>'
+        + '<input id="grp-pick-input-' + gid + '" class="grp-input" type="text" placeholder="搜索书名、作者、文件名…" value="' + esc(groupPicker.query) + '" oninput="groupPickerInputAction(\'' + gid + '\', this.value)" aria-label="搜索已导入文献">'
+        + '</div>'
+        + '<div id="grp-pick-list-' + gid + '" class="grp-pick-list"></div>'
+        + '<div class="grp-pick-foot"><span id="grp-pick-count-' + gid + '" class="grp-pick-count"></span>'
+        + '<button class="grp-base-btn" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">完成</button>'
+        + '<button class="grp-align-btn" type="button" onclick="addGroupPickedAction(\'' + gid + '\', this)">加入所选</button>'
+        + '</div></div>';
+    }
     html += '</div>';
   });
   body.innerHTML = html;
   pairGroups.forEach(syncDocumentGroupPairAction);
+  if (groupPicker.groupId) {
+    renderGroupPickerList(groupPicker.groupId);
+    var pickInput = document.getElementById('grp-pick-input-' + groupPicker.groupId);
+    if (pickInput && groupPicker.focusPending) {
+      groupPicker.focusPending = false;
+      pickInput.focus();
+    }
+  }
 }
 
 async function postGroupOp(path, payload, successMessage) {
@@ -353,6 +381,117 @@ async function assignSelectedToGroupAction(groupId, button) {
     showToast('已将 ' + ids.length + ' 份文献加入作品组', 'success');
   } catch (e) { showToast(e.message || '加入失败', 'danger'); }
   finally { button.disabled = false; button.textContent = label; }
+}
+
+// source_file_id → 所属作品组标题（一个文献至多归一组）。用于选择器里标注「已在《X》」。
+function groupMembershipMap() {
+  var map = {};
+  libraryStore.documentGroups.forEach(function(g) {
+    (g.members || []).forEach(function(m) { map[m.source_file_id] = g.title; });
+  });
+  return map;
+}
+
+// 候选 = 尚未在本组、且命中搜索（书名 / 作者 / 文件名）的已导入文献。
+function groupPickerCandidates(groupId, query) {
+  var group = documentGroupById(groupId);
+  var here = {};
+  if (group) (group.members || []).forEach(function(m) { here[m.source_file_id] = true; });
+  var q = (query || '').trim().toLowerCase();
+  return libraryStore.sources.filter(function(src) {
+    if (here[src.source_file_id]) return false;
+    if (!q) return true;
+    var hay = ((src.title || '') + ' ' + (src.author || '') + ' ' + (src.file_name || '')).toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
+}
+
+function toggleGroupPicker(groupId) {
+  if (groupPicker.groupId === groupId) {
+    groupPicker.groupId = '';
+  } else {
+    groupPicker.groupId = groupId;
+    groupPicker.query = '';
+    groupPicker.selected = {};
+    groupPicker.focusPending = true;
+  }
+  renderDocumentGroupManager();
+}
+
+// 只更新列表容器，不整块重绘，搜索时不丢焦点。
+function groupPickerInputAction(groupId, value) {
+  if (groupPicker.groupId !== groupId) return;
+  groupPicker.query = value || '';
+  renderGroupPickerList(groupId);
+}
+
+function toggleGroupPickCandidate(sourceId, checked) {
+  if (checked) groupPicker.selected[sourceId] = true;
+  else delete groupPicker.selected[sourceId];
+  var countEl = document.getElementById('grp-pick-count-' + groupPicker.groupId);
+  if (countEl) countEl.textContent = groupPickSelectedCountLabel();
+}
+
+function groupPickSelectedCountLabel() {
+  var n = Object.keys(groupPicker.selected).length;
+  return n ? '已选 ' + n + ' 份' : '勾选要加入的文献';
+}
+
+function renderGroupPickerList(groupId) {
+  var list = document.getElementById('grp-pick-list-' + groupId);
+  if (!list) return;
+  var membership = groupMembershipMap();
+  var candidates = groupPickerCandidates(groupId, groupPicker.query);
+  if (!candidates.length) {
+    list.innerHTML = '<div class="grp-pick-empty">' + (groupPicker.query ? '没有命中的文献' : '所有已导入文献都已在本组') + '</div>';
+  } else {
+    list.innerHTML = candidates.map(function(src) {
+      var sid = esc(src.source_file_id);
+      var title = src.title || src.file_name || src.source_file_id;
+      var language = libLangChipLabel(libraryLanguageCode(src));
+      var format = documentGroupSourceLabel(src);
+      var otherGroup = membership[src.source_file_id];
+      var checked = groupPicker.selected[src.source_file_id] ? ' checked' : '';
+      return '<label class="grp-pick-row">'
+        + '<input type="checkbox"' + checked + ' onchange="toggleGroupPickCandidate(\'' + sid + '\', this.checked)">'
+        + '<span class="grp-pick-main"><span class="grp-pick-title" title="' + esc(title) + '">' + esc(title) + '</span>'
+        + '<span class="grp-pick-meta"><span>' + esc(language) + '</span><span>' + esc(format) + '</span>'
+        + (otherGroup ? '<span class="grp-pick-moved">已在《' + esc(otherGroup) + '》，加入即移动</span>' : '')
+        + '</span></span></label>';
+    }).join('');
+  }
+  var countEl = document.getElementById('grp-pick-count-' + groupId);
+  if (countEl) countEl.textContent = groupPickSelectedCountLabel();
+}
+
+async function addGroupPickedAction(groupId, button) {
+  if (button.disabled) return;
+  var ids = Object.keys(groupPicker.selected);
+  if (!ids.length) { showToast('请先勾选要加入的文献', 'warning'); return; }
+  button.disabled = true;
+  button.textContent = '加入中…';
+  try {
+    for (var i = 0; i < ids.length; i += 1) {
+      var response = await fetch('/api/document-groups/add-member', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({document_group_id: groupId, source_file_id: ids[i]})
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '加入失败');
+    }
+    groupPicker.groupId = '';
+    groupPicker.selected = {};
+    groupPicker.query = '';
+    await loadDocumentGroups();
+    renderGroupScopeSelector();
+    renderDocumentGroupManager();
+    renderLibraryList();
+    showToast('已将 ' + ids.length + ' 份文献加入作品组', 'success');
+  } catch (e) {
+    showToast(e.message || '加入失败', 'danger');
+    button.disabled = false;
+    button.textContent = '加入所选';
+  }
 }
 
 // 映射区间、识别证据、PDF 剖面和收录作品只在详情抽屉里用，按 source_id 单份读取。
