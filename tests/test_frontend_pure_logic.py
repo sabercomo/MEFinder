@@ -1868,7 +1868,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         globalThis.showToast = function() {};
         saveVisionProvider();
         fields['vision-provider-name'].value = '通义千问';
-        visionNameAutoValue = '通义千问';
+        __setVisionNameAutoValue('通义千问');
         saveVisionProvider();
         return savedNames;
         """

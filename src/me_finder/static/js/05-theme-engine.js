@@ -2,7 +2,7 @@
    —— 阶段 #7 前端全局作用域收敛的首个试点（模式同 reader.js）。
    node（tests/test_theme_engine.py）仍走文件末尾的 module.exports；
    浏览器走 global.* 导出。IIFE 实参在 node 下退回 globalThis。 */
-(function (global) {
+(function (global) {  // module: 05-theme-engine.js
   /* ── Theme Engine ──────────────────────────────────────────────
      可扩展主题引擎（阶段 3-6）。核心是一组**纯函数**：由用户设定的
      button / highlight / background / foreground / contrast 派生出全部语义色

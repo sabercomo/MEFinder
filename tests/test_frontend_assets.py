@@ -251,9 +251,19 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_inline_handlers_have_definitions(self):
         """模板与 JS 生成的 on*= 处理器引用的函数必须真的存在。"""
 
+        # 处理器目标既可以是顶层函数声明，也可以是 IIFE 模块（如 05-theme-engine.js）
+        # 通过 `global.name =` / `window.name =` 显式挂到全局的公共符号 —— 后者在
+        # 运行时同样让 onclick="name()" 可解析，所以两种都算「已定义」。
         defined = set(
             re.findall(
                 r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
+                HTML,
+                re.MULTILINE,
+            )
+        )
+        defined.update(
+            re.findall(
+                r"^\s*(?:global|window)\.([A-Za-z_$][\w$]*)\s*=",
                 HTML,
                 re.MULTILINE,
             )
@@ -317,10 +327,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #        40-library.css 用 id 提优先级明确取消旋转。
     # 0.5.0：#7 前端全局作用域收敛试点——05-theme-engine.js 包进 IIFE，
     #        私有 helper 不再泄漏到全局，仅 17 个公共符号显式 global.* 导出。
+    # 0.5.0：#7 试点续 —— 70-vision.js 同样包进 IIFE（85 私有 helper 收敛，46 公共导出）。
     BASELINE_SHA256 = (
-        "faf6865c61b2cedb7fd046e4d66d1319d9f2e480cf68eaa732da4313e103a900"
+        "4d19b03f5288810b27e0d64e63cd3e52284ae95a2f4c9f6d41bee604914af1b3"
     )
-    BASELINE_BYTES = 924629
+    BASELINE_BYTES = 932563
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
