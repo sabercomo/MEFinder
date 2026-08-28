@@ -21,6 +21,7 @@ from typing import Dict, List, Optional
 
 from .document_group_metadata import canonical_version_label, member_display_name
 from .persistence.connection import open_writable_index
+from .persistence.schema_installers import install_document_group_schema
 from .persistence.index_schema import DEFAULT_DATABASE_PATH
 
 TITLE_MAX_LENGTH = 200
@@ -37,81 +38,6 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
         ).fetchone()
         is not None
     )
-
-
-def install_document_group_schema(connection: sqlite3.Connection) -> bool:
-    """Create the two group tables on an open connection if absent (idempotent)."""
-
-    changed = False
-    members_table_missing = not _table_exists(connection, "document_group_members")
-    if not _table_exists(connection, "document_groups"):
-        connection.execute(
-            """
-            CREATE TABLE document_groups (
-                document_group_id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                base_source_file_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-        changed = True
-    else:
-        # An index migrated under the (reverted) 837d808 folders+groups feature
-        # already has a document_groups table WITHOUT base_source_file_id (837 kept
-        # membership as a source_files column, not a base pointer). Add it additively.
-        columns = {
-            row[1]
-            for row in connection.execute("PRAGMA table_info(document_groups)")
-        }
-        if "base_source_file_id" not in columns:
-            connection.execute(
-                "ALTER TABLE document_groups ADD COLUMN base_source_file_id TEXT"
-            )
-            changed = True
-    if members_table_missing:
-        connection.execute(
-            """
-            CREATE TABLE document_group_members (
-                document_group_id TEXT NOT NULL
-                    REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
-                source_file_id TEXT NOT NULL UNIQUE,
-                version_label TEXT,
-                member_order INTEGER NOT NULL DEFAULT 0,
-                added_at TEXT NOT NULL
-            )
-            """
-        )
-        connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_document_group_members_group "
-            "ON document_group_members(document_group_id)"
-        )
-        changed = True
-        source_columns = {
-            row[1] for row in connection.execute("PRAGMA table_info(source_files)")
-        }
-        if "document_group_id" in source_columns:
-            legacy_members = connection.execute(
-                "SELECT s.source_file_id, s.document_group_id "
-                "FROM source_files s JOIN document_groups g "
-                "ON g.document_group_id = s.document_group_id "
-                "WHERE s.document_group_id IS NOT NULL "
-                "AND TRIM(s.document_group_id) <> '' "
-                "ORDER BY s.document_group_id, s.source_file_id"
-            ).fetchall()
-            timestamp = _now()
-            member_orders: Dict[str, int] = {}
-            for source_file_id, document_group_id in legacy_members:
-                member_order = member_orders.get(document_group_id, 0)
-                connection.execute(
-                    "INSERT INTO document_group_members"
-                    "(document_group_id, source_file_id, version_label, "
-                    "member_order, added_at) VALUES (?, ?, NULL, ?, ?)",
-                    (document_group_id, source_file_id, member_order, timestamp),
-                )
-                member_orders[document_group_id] = member_order + 1
-    return changed
 
 
 def ensure_document_group_schema(db_path: Path = DEFAULT_DATABASE_PATH) -> bool:

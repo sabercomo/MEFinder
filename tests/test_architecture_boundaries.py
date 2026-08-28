@@ -84,6 +84,18 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     violations.append(path.name)
         self.assertEqual(violations, [])
 
+    def test_persistence_layer_does_not_import_domain_modules(self) -> None:
+        # persistence owns connection policy, schema and migrations; it must not
+        # depend *upward* on domain modules.  Schema DDL that domain code needs
+        # lives in persistence.schema_installers, imported downward instead.
+        violations = []
+        for path in sorted((PACKAGE / "persistence").glob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.level >= 2:
+                    violations.append(f"{path.name}: from {'.' * node.level}{node.module or ''}")
+        self.assertEqual(violations, [])
+
     def test_frontend_core_state_is_grouped_by_domain(self) -> None:
         state = (PACKAGE / "static" / "js" / "00-state.js").read_text(
             encoding="utf-8"

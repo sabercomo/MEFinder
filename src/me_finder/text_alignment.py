@@ -25,6 +25,7 @@ from .edition_folio_anchors import (
 )
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.connection import open_writable_index
+from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import (
     EMBEDDING_MODEL,
     EMBEDDING_RUNTIME_VERSION,
@@ -172,106 +173,6 @@ def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
     return connection.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", (name,)
     ).fetchone() is not None
-
-
-def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
-    """Install the additive segmentation/alignment tables."""
-
-    changed = False
-    if not _table_exists(connection, "segment_sets"):
-        statements = (
-        """
-        CREATE TABLE segment_sets (
-            segment_set_id TEXT PRIMARY KEY,
-            source_file_id TEXT NOT NULL REFERENCES source_files(source_file_id) ON DELETE CASCADE,
-            source_text_hash TEXT NOT NULL,
-            segmenter TEXT NOT NULL,
-            segmenter_version TEXT NOT NULL,
-            language_code TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            UNIQUE(source_file_id, source_text_hash, segmenter, segmenter_version)
-        )
-        """,
-        """
-        CREATE TABLE text_segments (
-            segment_id TEXT PRIMARY KEY,
-            segment_set_id TEXT NOT NULL REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
-            order_index INTEGER NOT NULL,
-            text_raw TEXT NOT NULL,
-            UNIQUE(segment_set_id, order_index)
-        )
-        """,
-        """
-        CREATE TABLE text_segment_spans (
-            segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE,
-            source_file_id TEXT NOT NULL,
-            pdf_page_index INTEGER NOT NULL,
-            page_char_start INTEGER NOT NULL,
-            page_char_end INTEGER NOT NULL,
-            span_order INTEGER NOT NULL,
-            PRIMARY KEY(segment_id, span_order)
-        )
-        """,
-        """
-        CREATE TABLE alignment_runs (
-            alignment_run_id TEXT PRIMARY KEY,
-            document_group_id TEXT NOT NULL REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
-            pivot_source_file_id TEXT NOT NULL REFERENCES source_files(source_file_id) ON DELETE CASCADE,
-            target_source_file_id TEXT NOT NULL REFERENCES source_files(source_file_id) ON DELETE CASCADE,
-            pivot_segment_set_id TEXT NOT NULL REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
-            target_segment_set_id TEXT NOT NULL REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
-            algorithm TEXT NOT NULL,
-            algorithm_version TEXT NOT NULL,
-            parameters_json TEXT NOT NULL,
-            status TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            completed_at TEXT
-        )
-        """,
-        """
-        CREATE TABLE alignment_links (
-            alignment_link_id TEXT PRIMARY KEY,
-            alignment_run_id TEXT NOT NULL REFERENCES alignment_runs(alignment_run_id) ON DELETE CASCADE,
-            order_index INTEGER NOT NULL,
-            cost REAL NOT NULL,
-            review_status TEXT NOT NULL,
-            UNIQUE(alignment_run_id, order_index)
-        )
-        """,
-        """
-        CREATE TABLE alignment_link_members (
-            alignment_link_id TEXT NOT NULL REFERENCES alignment_links(alignment_link_id) ON DELETE CASCADE,
-            side TEXT NOT NULL CHECK(side IN ('pivot', 'target')),
-            segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE,
-            member_order INTEGER NOT NULL,
-            PRIMARY KEY(alignment_link_id, side, member_order),
-            UNIQUE(alignment_link_id, segment_id)
-        )
-        """,
-        "CREATE INDEX idx_segment_sets_source ON segment_sets(source_file_id)",
-        "CREATE INDEX idx_segment_spans_source_page ON text_segment_spans(source_file_id, pdf_page_index, page_char_start, page_char_end)",
-        "CREATE INDEX idx_alignment_runs_pair ON alignment_runs(document_group_id, pivot_source_file_id, target_source_file_id, status)",
-        "CREATE INDEX idx_alignment_members_segment ON alignment_link_members(segment_id, side)",
-        )
-        for statement in statements:
-            connection.execute(statement)
-        changed = True
-    if not _table_exists(connection, "text_segment_paragraph_spans"):
-        connection.execute(
-            "CREATE TABLE text_segment_paragraph_spans ("
-            "segment_id TEXT NOT NULL REFERENCES text_segments(segment_id) ON DELETE CASCADE, "
-            "source_file_id TEXT NOT NULL, paragraph_id TEXT NOT NULL, "
-            "paragraph_index INTEGER NOT NULL, paragraph_char_start INTEGER NOT NULL, "
-            "paragraph_char_end INTEGER NOT NULL, span_order INTEGER NOT NULL, "
-            "PRIMARY KEY(segment_id, span_order))"
-        )
-        changed = True
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_segment_paragraph_spans_source_position "
-        "ON text_segment_paragraph_spans(source_file_id, paragraph_index, "
-        "paragraph_char_start, paragraph_char_end)"
-    )
-    return changed
 
 
 def _json_object(value: object) -> Dict[str, object]:

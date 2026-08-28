@@ -10,6 +10,10 @@ from typing import Callable, Sequence
 
 from .connection import open_writable_index
 from .index_schema import DATABASE_SCHEMA_VERSION
+from .schema_installers import (
+    install_document_group_schema,
+    install_text_alignment_schema,
+)
 
 
 MigrationStep = Callable[[sqlite3.Connection], bool]
@@ -19,18 +23,6 @@ MigrationStep = Callable[[sqlite3.Connection], bool]
 class Migration:
     target_version: int
     apply: MigrationStep
-
-
-def _install_document_groups(connection: sqlite3.Connection) -> bool:
-    from ..document_groups import install_document_group_schema
-
-    return install_document_group_schema(connection)
-
-
-def _install_text_alignment(connection: sqlite3.Connection) -> bool:
-    from ..text_alignment import install_text_alignment_schema
-
-    return install_text_alignment_schema(connection)
 
 
 def _install_text_segment_paragraph_spans(
@@ -67,8 +59,8 @@ def _install_text_segment_paragraph_spans(
 # database.ensure_database_search_index because it publishes a replacement
 # file atomically. v3 through v5 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
-    Migration(target_version=3, apply=_install_document_groups),
-    Migration(target_version=4, apply=_install_text_alignment),
+    Migration(target_version=3, apply=install_document_group_schema),
+    Migration(target_version=4, apply=install_text_alignment_schema),
     Migration(target_version=5, apply=_install_text_segment_paragraph_spans),
 )
 
