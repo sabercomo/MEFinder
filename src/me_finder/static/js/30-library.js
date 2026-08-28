@@ -106,20 +106,15 @@ function renderGroupScopeSelector() {
 // C2：选择器底部追加管理入口。
 function groupScopeManageOptionsHTML() {
   return '<div class="lib-group-sep" role="separator"></div>'
-    + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups(true)">＋ 新建作品组</button>'
     + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>';
 }
 
-function openManageDocumentGroups(focusCreate) {
+function openManageDocumentGroups() {
   var modal = document.getElementById('group-manage-modal');
   if (!modal) return;
   renderDocumentGroupManager();
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
-  if (focusCreate) setTimeout(function() {
-    var input = document.getElementById('grp-create-input');
-    if (input) input.focus();
-  }, 0);
 }
 
 function closeGroupManageModal() {

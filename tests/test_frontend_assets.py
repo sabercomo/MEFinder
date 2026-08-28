@@ -310,10 +310,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.9 后续：作品组操作防重复提交，确认弹窗位于父弹窗上方。
     # 0.4.9 后续：作品组下拉菜单加高，并按窗口高度限制滚动区域。
     # 0.4.9 后续：取消页码模式控件，常规 Markdown/EPUB 使用隐藏印刷页码。
+    # 0.4.9 后续：作品组下拉菜单只保留管理入口，新建仍在管理弹窗内。
     BASELINE_SHA256 = (
-        "9f35dde4959463586a55898a4976fb3ea4893d1596d816ed95434b5e51d8aea3"
+        "bf53423dae9df6897d63cac7c69ab8a418aad705e65ee14654e36b29b6fc76f7"
     )
-    BASELINE_BYTES = 907993
+    BASELINE_BYTES = 907678
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

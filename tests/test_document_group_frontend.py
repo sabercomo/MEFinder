@@ -62,7 +62,7 @@ const invoke = () => action === 'create' ? context.createDocumentGroupInline()
 
 @unittest.skipUnless(NODE, "node is required for frontend execution tests")
 class DocumentGroupActionTests(unittest.TestCase):
-    def test_same_title_parsing_records_are_distinguishable_in_members_and_pairs(self) -> None:
+    def test_group_manager_keeps_creation_and_distinguishes_same_title_versions(self) -> None:
         script = r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -86,7 +86,12 @@ vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 context.documentSupportsTextAlignment = () => true;
 context.libraryLanguageCode = () => 'en';
 context.syncDocumentGroupPairAction = () => {};
+const menu = context.groupScopeManageOptionsHTML();
+assert.equal(Array.from(menu.matchAll(/<button\b/g)).length, 1);
+assert.ok(menu.includes('onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>'));
 context.renderDocumentGroupManager();
+assert.ok(body.innerHTML.includes('id="grp-create-input"'));
+assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建</button>'));
 for (const parser of ['原生文本', 'MinerU']) {
   assert.ok(body.innerHTML.includes('<span>PDF · ' + parser + '</span>'));
   assert.ok(body.innerHTML.includes('Same version · 英语 · PDF · ' + parser + '</option>'));
