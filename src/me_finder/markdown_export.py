@@ -10,13 +10,13 @@ from __future__ import annotations
 import re
 from typing import Iterable, List, Mapping, Optional
 
+from .export_footnotes import (
+    Footnote, FootnoteText, NormalizedDocument, normalize_document_export, normalize_document_footnotes,
+)
 from .markdown_export_normalize import (
     ExportOptions,
     PageArtifactProfile,
     PageMarker,
-    build_page_artifact_profile,
-    iter_export_page_blocks,
-    resolve_page_marker,
 )
 
 
@@ -43,6 +43,7 @@ def document_to_markdown(
     title: object = None,
     author: object = None,
     options: Optional[ExportOptions] = None,
+    normalized: Optional[NormalizedDocument] = None,
 ) -> str:
     """Convert persisted pages into one UTF-8 Markdown document string.
 
@@ -53,18 +54,15 @@ def document_to_markdown(
     """
 
     options = options or ExportOptions()
-    # Materialize once so the artifact profile (cross-page statistics) and the
-    # per-page rendering can share the same page objects.  The Markdown builder
+    # Materialize once for shared page cleanup and document-wide footnote recovery.
+    # The Markdown builder
     # already holds the whole document in memory when joining chunks, so this is
     # not a new scaling constraint.
-    materialized = [page for page in pages if isinstance(page, Mapping)]
-    profile = build_page_artifact_profile(materialized, options)
-
+    if normalized is None:
+        materialized = [page for page in pages if isinstance(page, Mapping)]
+        normalized = normalize_document_export(materialized, options=options)
     chunks = [_frontmatter(title=title, author=author)]
-    for page in materialized:
-        rendered = page_to_markdown(page, profile=profile, options=options)
-        if rendered:
-            chunks.append(rendered)
+    chunks.extend(_render_items(normalized.items))
     return "\n\n".join(chunks).strip() + "\n"
 
 
@@ -77,13 +75,11 @@ def page_to_markdown(
     """Render one persisted page payload, page marker first, body after."""
 
     options = options or ExportOptions()
-    body = _render_body(page, profile=profile, options=options)
-    if not body:
+    if not str(page.get("text_raw") or "").strip():
         return ""
-    marker = render_markdown_page_marker(resolve_page_marker(page, options))
-    if marker:
-        return f"{marker}\n\n{body}"
-    return body
+    return "\n\n".join(_render_items(normalize_document_footnotes(
+        [page], profile=profile, options=options,
+    )))
 
 
 def render_markdown_page_marker(marker: Optional[PageMarker]) -> Optional[str]:
@@ -136,16 +132,25 @@ def _yaml_scalar(value: object) -> str:
     return f'"{text}"'
 
 
-def _render_body(
-    page: Mapping[str, object],
-    *,
-    profile: Optional[PageArtifactProfile],
-    options: ExportOptions,
-) -> str:
+def _render_items(items: Iterable[PageMarker | FootnoteText | Footnote]) -> List[str]:
     rendered: List[str] = []
-    for block in iter_export_page_blocks(page, profile=profile, options=options):
-        if block.level is None:
-            rendered.append(block.text)
+    for item in items:
+        if isinstance(item, PageMarker):
+            rendered.append(render_markdown_page_marker(item))
+        elif isinstance(item, Footnote):
+            # Definitions stay with their chapter. Markdown viewers choose their
+            # own displayed numbers; the identifier expresses the relationship.
+            lines = item.text.splitlines()
+            rendered.append(f"[^{item.note_id}]: {lines[0]}" + "".join(
+                f"\n    {line}" for line in lines[1:]
+            ))
         else:
-            rendered.append(f"{'#' * block.level} {block.text}")
-    return "\n\n".join(rendered)
+            pieces = []
+            offset = 0
+            for ref in item.references:
+                pieces.extend((item.text[offset:ref.start], f"[^{ref.note_id}]"))
+                offset = ref.end
+            pieces.append(item.text[offset:])
+            text = "".join(pieces)
+            rendered.append(f"{'#' * item.level} {text}" if item.level else text)
+    return rendered

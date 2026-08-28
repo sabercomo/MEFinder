@@ -1129,7 +1129,6 @@ async function exportLibraryDocumentMarkdown(sourceId) {
 async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
   var payload = {source_id: sourceId};
   if (outputDirectory) payload.output_dir = outputDirectory;
-  payload.export_options = normalizeExportPageCleanup(settingsStore.exportPageCleanup);
   var response = await fetch('/api/document/export-markdown', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1157,7 +1156,6 @@ async function exportLibraryDocumentEpub(sourceId) {
 async function requestLibraryDocumentEpubExport(sourceId, outputDirectory) {
   var payload = {source_id: sourceId};
   if (outputDirectory) payload.output_dir = outputDirectory;
-  payload.export_options = normalizeExportPageCleanup(settingsStore.exportPageCleanup);
   var response = await fetch('/api/document/export-epub', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},

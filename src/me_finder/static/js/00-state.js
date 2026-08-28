@@ -116,14 +116,6 @@ const settingsStore = {
   currentPdfParseMode: 'auto',
   pdfParseModeSaving: false,
   currentDocumentExportMode: 'data_only',
-  // Markdown / EPUB 共用页码锚点策略；三项页面噪声固定清理。
-  exportPageCleanup: {
-    page_marker_mode: 'full',
-    remove_visible_page_numbers: true,
-    remove_running_headers: true,
-    remove_running_footers: true
-  },
-  exportPageCleanupSaving: false,
   autoUpdateEnabled: false,
   updateAutoStarted: false,
   updateState: {status: 'idle', can_self_update: false},

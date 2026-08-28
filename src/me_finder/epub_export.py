@@ -5,21 +5,17 @@ Markdown-to-EPUB converter.  Both renderers consume the same format-neutral
 primitives from :mod:`markdown_export_normalize`:
 
 * :class:`ExportOptions`            — page-anchor policy + page cleanup flags
-* :func:`build_page_artifact_profile` / :func:`iter_export_page_blocks`
-                                     — cleaned ``(level, text)`` content stream
-* :func:`resolve_page_marker` → :class:`PageMarker`
-                                     — the *semantic* page anchor
+* :func:`normalize_document_footnotes` — cleaned text, references and chapter notes
+* :class:`PageMarker`                 — the semantic page anchor
 
 The Markdown renderer turns a ``PageMarker`` into an ``<!-- printed_page: N -->``
 comment; this renderer turns the identical ``PageMarker`` into an EPUB 3
 ``pagebreak`` anchor plus a ``page-list`` navigation entry.  That divergence is
 the whole point: it proves the normalization layer is reusable across formats.
 
-Scope (MVP, see task): EPUB 3, title/author metadata, heading hierarchy + nav
-table of contents, basic body formatting, printed_page → EPUB pagebreak, and the
-default page cleanup.  The persisted MEFinder page model is text-only (images,
-tables, footnotes are not stored as blocks), so those are intentionally out of
-scope — body text is preserved faithfully rather than guessed at.
+Scope: EPUB 3, metadata, heading navigation, printed-page anchors, page cleanup,
+and conservatively recovered footnotes. Image/table reconstruction and uncertain
+note relationships remain out of scope; their source text is preserved.
 
 The EPUB container is written by hand with :mod:`zipfile` (no new dependency);
 EPUB 3 is a ZIP whose first entry is an uncompressed ``mimetype``.
@@ -37,12 +33,10 @@ from pathlib import Path
 from typing import Iterable, List, Mapping, Optional
 from xml.sax.saxutils import escape, quoteattr
 
+from .export_footnotes import Footnote, NormalizedDocument, normalize_document_export
 from .markdown_export_normalize import (
     ExportOptions,
     PageMarker,
-    build_page_artifact_profile,
-    iter_export_page_blocks,
-    resolve_page_marker,
 )
 
 
@@ -64,6 +58,8 @@ body { margin: 0 5%; line-height: 1.5; }
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.4em 0 0.6em; }
 p { margin: 0 0 0.9em; text-indent: 0; }
 span[epub|type~="pagebreak"] { display: none; }
+a[role~="doc-noteref"] { vertical-align: super; font-size: smaller; line-height: normal; }
+aside[role~="doc-footnote"] { margin: 0.7em 0; font-size: 0.9em; }
 """
 
 
@@ -114,9 +110,11 @@ def _render_content(
     pages: Iterable[Mapping[str, object]],
     *,
     options: ExportOptions,
+    normalized: Optional[NormalizedDocument] = None,
 ) -> _RenderedContent:
-    materialized = [page for page in pages if isinstance(page, Mapping)]
-    profile = build_page_artifact_profile(materialized, options)
+    if normalized is None:
+        materialized = [page for page in pages if isinstance(page, Mapping)]
+        normalized = normalize_document_export(materialized, options=options)
 
     lines: List[str] = []
     headings: List[_HeadingEntry] = []
@@ -124,12 +122,9 @@ def _render_content(
     heading_seq = 0
     page_seq = 0
 
-    for page in materialized:
-        marker = resolve_page_marker(page, options)
-        blocks = iter_export_page_blocks(page, profile=profile, options=options)
-        if not blocks and marker is None:
-            continue
-        if marker is not None:
+    for item in normalized.items:
+        if isinstance(item, PageMarker):
+            marker = item
             label = _pagebreak_label(marker)
             if label is not None:
                 page_seq += 1
@@ -151,16 +146,44 @@ def _render_content(
                     f'id={quoteattr(anchor)} aria-label={quoteattr(label)}'
                     f'{source_pages}></span>'
                 )
-        for block in blocks:
-            if block.level is None:
-                lines.append(f"<p>{escape(block.text)}</p>")
+        elif isinstance(item, Footnote):
+            # Chapter-end notes remain readable even without popup support.
+            paragraphs = re.split(r"\n\s*\n", item.text)
+            body = "\n".join(
+                f"<p>{str(item.display_number) + '. ' if index == 0 else ''}{escape(text)}</p>"
+                for index, text in enumerate(paragraphs)
+            )
+            backlinks = " ".join(
+                f'<a href={quoteattr("#" + ref_id)} role="doc-backlink" '
+                f'aria-label={quoteattr(f"返回注释 {item.display_number} 的引用 {index}")}>↩{index}</a>'
+                for index, ref_id in enumerate(item.reference_ids, 1)
+            )
+            lines.append(
+                f'<aside epub:type="footnote" role="doc-footnote" id={quoteattr(item.note_id)}>\n'
+                f'{body}\n<p>{backlinks}</p>\n</aside>'
+            )
+        else:
+            pieces = []
+            offset = 0
+            for ref in item.references:
+                pieces.append(escape(item.text[offset:ref.start]))
+                pieces.append(
+                    f'<a epub:type="noteref" role="doc-noteref" '
+                    f'href={quoteattr("#" + ref.note_id)} id={quoteattr(ref.reference_id)}>'
+                    f'{ref.display_number}</a>'
+                )
+                offset = ref.end
+            pieces.append(escape(item.text[offset:]))
+            text = "".join(pieces)
+            if item.level is None:
+                lines.append(f"<p>{text}</p>")
             else:
                 heading_seq += 1
                 anchor = f"h-{heading_seq:04d}"
-                headings.append(_HeadingEntry(block.level, anchor, block.text))
+                headings.append(_HeadingEntry(item.level, anchor, item.text))
                 lines.append(
-                    f"<h{block.level} id={quoteattr(anchor)}>"
-                    f"{escape(block.text)}</h{block.level}>"
+                    f"<h{item.level} id={quoteattr(anchor)}>"
+                    f"{text}</h{item.level}>"
                 )
     return _RenderedContent("\n".join(lines), headings, page_entries)
 
@@ -322,6 +345,7 @@ def build_epub_bytes(
     options: Optional[ExportOptions] = None,
     identifier: Optional[str] = None,
     modified: Optional[str] = None,
+    normalized: Optional[NormalizedDocument] = None,
 ) -> bytes:
     """Render persisted pages into one in-memory EPUB 3 container.
 
@@ -338,7 +362,7 @@ def build_epub_bytes(
     identifier = identifier or f"urn:uuid:{uuid.uuid4()}"
     modified = modified or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    content = _render_content(pages, options=options)
+    content = _render_content(pages, options=options, normalized=normalized)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         # The mimetype MUST be the first entry and stored uncompressed.
@@ -376,6 +400,7 @@ def write_epub(
     author: object = None,
     language: object = None,
     options: Optional[ExportOptions] = None,
+    normalized: Optional[NormalizedDocument] = None,
 ) -> Path:
     """Atomically write one EPUB 3 file and return its path."""
 
@@ -385,6 +410,7 @@ def write_epub(
         author=author,
         language=language,
         options=options,
+        normalized=normalized,
     )
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)

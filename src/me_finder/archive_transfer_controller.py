@@ -99,8 +99,8 @@ class ArchiveTransferController:
             )
         except ValueError as exc:
             return 400, {"error": str(exc)}
-        # Format-neutral export view: the request may carry the page-anchor
-        # policy and page-cleanup flags (defaults = full marker + cleanup on).
+        # The UI uses printed-page anchors and cleanup by default. Explicit
+        # options remain available to programmatic callers for diagnostics.
         options = ExportOptions.from_mapping(payload.get("export_options"))
         try:
             result = self._export_document_markdown(
@@ -129,8 +129,8 @@ class ArchiveTransferController:
         except ValueError as exc:
             return 400, {"error": str(exc)}
         requested_options = ExportOptions.from_mapping(payload.get("export_options"))
-        # EPUB cleanup is invariant in the product UI: only the semantic page
-        # marker mode is selectable. Ignore legacy/hand-written opt-out flags.
+        # Keep EPUB cleanup enabled; explicit page-marker modes remain available
+        # to programmatic callers, while the UI uses the printed-page default.
         options = ExportOptions(page_marker_mode=requested_options.page_marker_mode)
         try:
             result = self._export_document_epub(

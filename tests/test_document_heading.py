@@ -255,6 +255,46 @@ class TocLocateAndClusterTests(unittest.TestCase):
 class BronnerLikeTocHierarchyTests(unittest.TestCase):
     """A. page_navigation outline + 目录 bookmark -> correct nested outline."""
 
+    def test_offline_enrichment_does_not_erase_previously_derived_headings(self):
+        from copy import deepcopy
+        from src.me_finder.document_heading import enrich_pdf_headings
+        pages = [_page(0, [_block("第一章 方法", document_heading_level=1,
+                                   document_heading_source="document_toc", document_heading_printed_page="1")])]
+        before = deepcopy(pages)
+        enrich_pdf_headings(pages, None, [])
+        self.assertEqual(pages, before)
+
+    def test_contiguous_toc_pages_match_actual_printed_destinations_without_v2(self):
+        pages = [
+            _page(1, [_block("目录"), _block("第一章 方法 34\n第二章 讨论 48")]),
+            _page(2, [_block("第三章 结论 70\n索引 80")]),
+            _page(3, [_block("前言正文，不属于目录。")]),
+            {**_page(42, [_block("第一章 方法")]), "printed_page": "34"},
+            {**_page(56, [_block("第二章 讨论")]), "printed_page": "48"},
+            {**_page(78, [_block("第三章 结论")]), "printed_page": "70"},
+            {**_page(88, [_block("索引")]), "printed_page": "80"},
+        ]
+        candidates = extract_toc_candidates(pages, 1)
+        self.assertEqual([c["printed_page"] for c in candidates], ["34", "48", "70", "80"])
+        assign_toc_candidate_levels(candidates, 1000)
+        assignments, _, _ = derive_toc_headings(pages, [], candidates, toc_page_index=1, page_count=89)
+        self.assertEqual([a["pdf_page_index"] for a in assignments], [42, 56, 78, 88])
+        apply_heading_assignments(pages, assignments, HEADING_SOURCE_DOCUMENT_TOC)
+        self.assertEqual(pages[3]["blocks"][0]["document_heading_printed_page"], "34")
+
+    def test_unique_v2_running_title_cannot_override_known_toc_destination(self):
+        from src.me_finder.document_heading import normalize_heading_text
+        pages = [
+            _page(0, [_block("第一章 方法 34")]),
+            {**_page(42, [_block("标题无法辨认")]), "printed_page": "34"},
+            {**_page(43, [_block("第一章 方法")]), "printed_page": "35"},
+        ]
+        candidates = extract_toc_candidates(pages, 0)
+        titles = [{"page": 43, "norm": normalize_heading_text("第一章 方法"), "text": "第一章 方法", "level": 1}]
+        assignments, _, diagnostics = derive_toc_headings(pages, titles, candidates, toc_page_index=0, page_count=44)
+        self.assertEqual(assignments, [])
+        self.assertTrue(any("destination not uniquely matched" in message for message in diagnostics))
+
     def _doc(self):
         pages = [
             _page(0, [_block("批判理论 Critical Theory", bbox=[0, 0, 9, 9])]),  # book title

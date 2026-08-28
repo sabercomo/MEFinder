@@ -22,8 +22,9 @@ comment syntax lives in the Markdown renderer, not here.
 The heavy lifting reuses existing, verified structure signals instead of broad
 regexes:
 
-* ``document_heading_level`` marks a block as a *real* heading (from the PDF
-  outline / document TOC).  Such blocks are never treated as running headers.
+* Heading metadata is evidence, not a trusted tree. ``trusted_heading`` combines
+  located outline/TOC assignments, geometry and cross-page repetition before
+  either the renderer or the numbering scope can treat a block as a heading.
 * ``mineru_type``/``type`` == ``page_number`` marks a parser-detected folio.
 * ``page_width``/``page_height`` + ``bbox`` give a normalized top/bottom region.
 * ``printed_page``/``citation_page`` is the page's own known folio, used to
@@ -50,7 +51,7 @@ PAGE_MARKER_FULL = "full"
 VALID_PAGE_MARKER_MODES = frozenset(
     {PAGE_MARKER_NONE, PAGE_MARKER_PRINTED, PAGE_MARKER_FULL}
 )
-DEFAULT_PAGE_MARKER_MODE = PAGE_MARKER_FULL
+DEFAULT_PAGE_MARKER_MODE = PAGE_MARKER_PRINTED
 
 # Backwards-compatible private alias (kept for existing references).
 _VALID_MARKER_MODES = VALID_PAGE_MARKER_MODES
@@ -135,6 +136,21 @@ _DECORATION_ROLES = frozenset(
     {"page_number", "header", "footer", "page_header", "page_footer"}
 )
 
+# Explicit note markers only: ordinary digits may be page numbers, years or
+# mathematical notation. Keep uncertain note-like text out of decoration cleanup.
+_NOTE_MARKER = r"[①-⑳㉑-㉟㊱-㊿]|\[[1-9][0-9]{0,2}\]"
+FOOTNOTE_MARKER_RE = re.compile(
+    r"\$\s*\^\{\s*(?P<sup>" + _NOTE_MARKER + r")\s*\}\s*\$"
+    r"|(?P<plain>" + _NOTE_MARKER + r")"
+)
+FOOTNOTE_ROLES = frozenset({"footnote", "page_footnote"})
+
+
+def has_footnote_signal(block: Mapping[str, object]) -> bool:
+    return _block_role(block) in FOOTNOTE_ROLES or bool(
+        FOOTNOTE_MARKER_RE.search(str(block.get("text") or ""))
+    )
+
 # Top/bottom bands (fraction of page height) reused from edition_folio_anchors.
 _TOP_BAND = 0.16
 _BOTTOM_BAND = 0.84
@@ -147,7 +163,6 @@ _BARE_ROMAN = re.compile(r"\s*([ivxlcdm]{1,7})\s*\Z", re.IGNORECASE)
 # Running-header/footer detection thresholds.  Kept explicit and conservative so
 # small documents (and unit fixtures) never trigger accidental removal.
 _MIN_ARTIFACT_COUNT = 3
-_MIN_ARTIFACT_RATIO = 0.25
 
 
 def _block_role(block: Mapping[str, object]) -> str:
@@ -164,24 +179,7 @@ def _block_role(block: Mapping[str, object]) -> str:
 
 
 def _has_heading_level(block: Mapping[str, object]) -> bool:
-    """Whether the block is a *real* heading (canonical or parser level).
-
-    A running-header duplicate is stored as ordinary text, so a real chapter /
-    part title (which carries a heading level from the outline/TOC enrichment or
-    the parser) is protected from header/footer removal.
-    """
-
-    for key in ("document_heading_level", "text_level"):
-        value = block.get(key)
-        if value in (None, ""):
-            continue
-        try:
-            level = int(value)
-        except (TypeError, ValueError):
-            continue
-        if 1 <= level <= 6:
-            return True
-    return False
+    return heading_level(block) is not None
 
 
 def _page_scale(page: Mapping[str, object]) -> Tuple[float, float]:
@@ -360,8 +358,8 @@ def _page_region_texts(
 ) -> Tuple[set, set]:
     """Normalized texts appearing in this page's top and bottom regions.
 
-    Only non-heading blocks contribute, so a real chapter title on a chapter
-    start page never inflates the running-header statistics.
+    Parser heading levels are NOT evidence against a running header. Footnote
+    candidates are protected before they can contribute to these statistics.
     """
 
     width, height = _page_scale(page)
@@ -369,7 +367,7 @@ def _page_region_texts(
     top: set = set()
     bottom: set = set()
     for index, block in enumerate(ordered):
-        if _has_heading_level(block):
+        if has_footnote_signal(block):
             continue
         norm = normalize_heading_text(block.get("text"))
         if not norm:
@@ -388,18 +386,20 @@ def build_page_artifact_profile(
 ) -> PageArtifactProfile:
     """Detect running headers/footers by cross-page repetition of region text."""
 
-    options = options or ExportOptions()
-    if not options.remove_running_headers and not options.remove_running_footers:
-        return PageArtifactProfile()
-
     header_counts: dict = {}
     footer_counts: dict = {}
+    body_texts: set = set()
     total = 0
     for page in pages:
         if not isinstance(page, Mapping):
             continue
         total += 1
         top, bottom = _page_region_texts(page)
+        width, height = _page_scale(page)
+        for block in _ordered_body_blocks(page):
+            y = _block_y_center(block, width, height)
+            if y is not None and _TOP_BAND < y < _BOTTOM_BAND and not has_footnote_signal(block):
+                body_texts.add(normalize_heading_text(block.get("text")))
         for norm in top:
             header_counts[norm] = header_counts.get(norm, 0) + 1
         for norm in bottom:
@@ -408,17 +408,16 @@ def build_page_artifact_profile(
     def artifacts(counts: dict) -> frozenset:
         if total <= 0:
             return frozenset()
-        threshold = max(_MIN_ARTIFACT_COUNT, _MIN_ARTIFACT_RATIO * total)
+        # A running title may cover only a short chapter in a long book. Its
+        # frequency must not be diluted by the length of unrelated chapters.
         return frozenset(
-            text for text, count in counts.items() if count >= threshold
+            text for text, count in counts.items()
+            if count >= _MIN_ARTIFACT_COUNT or text in body_texts
         )
 
-    running_headers = (
-        artifacts(header_counts) if options.remove_running_headers else frozenset()
-    )
-    running_footers = (
-        artifacts(footer_counts) if options.remove_running_footers else frozenset()
-    )
+    # Evidence remains available even when a caller opts out of visible cleanup.
+    running_headers = artifacts(header_counts)
+    running_footers = artifacts(footer_counts)
     return PageArtifactProfile(
         running_headers=running_headers,
         running_footers=running_footers,
@@ -450,10 +449,14 @@ def normalize_export_blocks(
 
     result: List[Mapping[str, object]] = []
     for index, block in enumerate(ordered):
-        region = _region_of(
-            index, len(ordered), _block_y_center(block, width, height)
-        )
-
+        region = _region_of(index, len(ordered), _block_y_center(block, width, height))
+        decision = trusted_heading(block, page=page, region=region, profile=profile)
+        block = {**block, "_export_heading": decision}
+        # Protect both note bodies and their references BEFORE any deletion,
+        # including orphan notes and repeated bibliographic text such as 同上.
+        if has_footnote_signal(block):
+            result.append(block)
+            continue
         if options.remove_visible_page_numbers and _is_visible_page_number(
             block, printed=printed, region=region
         ):
@@ -495,6 +498,179 @@ def normalize_export_blocks(
 # --------------------------------------------------------------------------- #
 MAX_HEADING_LEVEL = 6
 
+_ORDINAL = r"[零〇一二三四五六七八九十百千万两兩0-9０-９]+"
+_CHAPTER_TITLE = re.compile(
+    rf"^(?:第\s*{_ORDINAL}\s*章|chapter\s+(?:[0-9]+|[ivxlcdm]+)\b)", re.IGNORECASE
+)
+_PART_TITLE = re.compile(
+    rf"^(?:第\s*{_ORDINAL}\s*(?:篇|部(?:分)?)|part\s+(?:[0-9]+|[ivxlcdm]+)\b)", re.IGNORECASE
+)
+_SECTION_TITLE = re.compile(rf"^第\s*{_ORDINAL}\s*节")
+
+
+@dataclass(frozen=True)
+class HeadingDecision:
+    level: Optional[int]
+    kind: str
+    reason: str
+
+
+def trusted_heading(block, *, page, region, profile) -> HeadingDecision:
+    """One decision shared by cleanup, both outlines and numbering scopes.
+
+    Enrichment is evidence attached to a particular block, not a trusted tree.
+    Repeated edge text defeats raw/v2 levels and unlocated TOC assignments.
+    A bookmark, or TOC entry verified at its printed destination, can identify
+    the real occurrence even when its title is repeated in running headers.
+    """
+    if "_export_heading" in block:
+        return block["_export_heading"]
+    text = str(block.get("text") or "").strip()
+    structural_title = str(block.get("document_heading_title")
+                           or _strip_heading_folio_prefix(block, _printed_page_raw(page)) or text)
+    kind = "chapter" if _CHAPTER_TITLE.match(structural_title) else (
+        "part" if _PART_TITLE.match(structural_title) else (
+            "section" if _SECTION_TITLE.match(structural_title) else "heading"
+        )
+    )
+    if re.match(r"^(?:过渡(?:\s|$)|索引$|index$|译名对照表)", structural_title, re.IGNORECASE):
+        kind = "non_chapter_section"
+    level = heading_level(block)
+    source = str(block.get("document_heading_source") or "")
+    located = source == "pdf_outline" or (
+        source == "document_toc"
+        and block.get("document_heading_printed_page") is not None
+        and str(block["document_heading_printed_page"]) == _printed_page_raw(page)
+    )
+    norm = normalize_heading_text(text)
+    repeated = (region == "top" and profile.is_running_header(norm)) or (
+        region == "bottom" and profile.is_running_footer(norm)
+    )
+    if repeated and not located:
+        return HeadingDecision(None, kind, "REPEATED_EDGE_TEXT")
+    if _block_role(block) in _DECORATION_ROLES and not located:
+        return HeadingDecision(None, kind, "PAGE_DECORATION")
+    if _block_role(block) in FOOTNOTE_ROLES:
+        return HeadingDecision(None, kind, "NOTE_BODY")
+    if level is not None:
+        return HeadingDecision(level, kind, source.upper() if source else "PARSER_TITLE_WITHOUT_DECORATION")
+    # A standalone part divider is often split from its subtitle by the parser.
+    # Only the explicit ordinal label, in the body region, is sufficient here.
+    if kind == "part" and _PART_TITLE.fullmatch(text) and region is None:
+        return HeadingDecision(1, kind, "EXPLICIT_PART_DIVIDER")
+    return HeadingDecision(None, kind, "NO_HEADING_EVIDENCE")
+
+
+@dataclass
+class ExportStructure:
+    pages: list[list[dict]]
+    scopes: list[dict]
+    heading_issues: list[dict]
+
+
+def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
+    """Protect candidates, decide headings/scopes, then clean the export view.
+
+    Numbering policy: explicit trusted chapters start scopes; parts supply the
+    parent and close the preceding note output without resetting numbers;
+    sections inherit their chapter. Content
+    before the first chapter uses preface scope 0. With no trusted chapter the
+    whole document uses scope 0, explicitly labelled document (not guessed h1).
+    """
+    prepared = []
+    issues = []
+    for page in pages:
+        raw = str(page.get("text_raw") or "").strip()
+        blocks = page.get("blocks")
+        if not isinstance(blocks, (list, tuple)) or not blocks_aligned_with_text(blocks, raw):
+            prepared.append([{"text": raw}] if raw else [])
+            continue
+        width, height = _page_scale(page)
+        indexed = []
+        for index, block in enumerate(blocks):
+            if not isinstance(block, Mapping) or not str(block.get("text") or "").strip():
+                continue
+            region = _region_of(index, len(blocks), _block_y_center(block, width, height))
+            decision = trusted_heading(block, page=page, region=region, profile=profile)
+            if heading_level(block) is not None and decision.level is None:
+                issues.append({
+                    "reason": "UNTRUSTED_HEADING_BOUNDARY", "heading_reason": decision.reason,
+                    "kind": decision.kind, "text": block["text"],
+                    "source_file_id": page.get("source_file_id"),
+                    "source_page_index": page.get("pdf_page_index"),
+                    "source_physical_page": _physical_page(page),
+                    "source_printed_page": _printed_page_raw(page), "source_block_index": index,
+                })
+            indexed.append({**block, "_export_index": index, "_export_heading": decision})
+        # Parser arrays can append a discarded header after its own body. Move
+        # only a trusted heading, and only across blocks proven below it in the
+        # same horizontal flow. Never sort prose or change source block indices.
+        for position in range(len(indexed)):
+            block = indexed[position]
+            if heading_level(block) is None:
+                continue
+            bbox = _normalized_page_bbox(block, width, height)
+            if bbox is None:
+                continue
+            target = position
+            while target > 0:
+                previous = _normalized_page_bbox(indexed[target - 1], width, height)
+                if previous is None or bbox[3] > previous[1]:
+                    break
+                if min(bbox[2], previous[2]) <= max(bbox[0], previous[0]):
+                    break  # another column is not evidence of reading order
+                target -= 1
+            if target != position:
+                indexed.insert(target, indexed.pop(position))
+        prepared.append(indexed)
+
+    has_parts = any(heading_level(b) is not None and b["_export_heading"].kind == "part"
+                    for blocks in prepared for b in blocks)
+    scopes = [{"scope_id": 0, "kind": "document", "title": None, "part_title": None,
+               "source_physical_page": _physical_page(pages[0]) if pages else None,
+               "source_printed_page": _printed_page_raw(pages[0]) if pages else None,
+               "source_block_index": None, "boundary_reason": "NO_TRUSTED_CHAPTER"}]
+    scope_id = 0
+    part_title = None
+    chapter_level = None
+    for page, blocks in zip(pages, prepared):
+        for block in blocks:
+            if heading_level(block) is not None:
+                decision = block["_export_heading"]
+                if decision.kind == "part":
+                    block["_export_scope_end_before"] = True
+                    part_title = str(block["text"]).strip()
+                    chapter_level = None
+                    block["_export_heading"] = HeadingDecision(1, "part", decision.reason)
+                elif decision.kind == "chapter":
+                    scope_id += 1
+                    scopes[0].update(kind="preface", boundary_reason="BEFORE_FIRST_CHAPTER")
+                    scopes.append({"scope_id": scope_id, "kind": "chapter", "title": str(block["text"]).strip(),
+                                   "part_title": part_title, "boundary_reason": decision.reason,
+                                   "source_physical_page": _physical_page(page),
+                                   "source_printed_page": _printed_page_raw(page),
+                                   "source_block_index": block["_export_index"]})
+                    chapter_level = 2 if has_parts else decision.level
+                    block["_export_heading"] = HeadingDecision(chapter_level,
+                                                               "chapter", decision.reason)
+                elif decision.kind == "non_chapter_section":
+                    chapter_level = None
+                elif chapter_level is not None and has_parts:
+                    # Flat OCR TOC indentation must not make chapter subsections
+                    # siblings of parts. Non-chapter headings inherit the scope.
+                    block["_export_heading"] = HeadingDecision(
+                        min(MAX_HEADING_LEVEL, max(chapter_level + 1, decision.level)),
+                        decision.kind, decision.reason,
+                    )
+            block["_export_scope_id"] = scope_id
+    cleaned = []
+    for page, blocks in zip(pages, prepared):
+        if blocks and "_export_index" not in blocks[0]:
+            cleaned.append(blocks)  # raw-text trust gate, never infer page structure
+        else:
+            cleaned.append(list(normalize_export_blocks({**page, "blocks": blocks}, profile=profile, options=options)))
+    return ExportStructure(cleaned, scopes, issues)
+
 
 @dataclass(frozen=True)
 class ExportBlock:
@@ -516,6 +692,8 @@ def heading_level(block: Mapping[str, object]) -> Optional[int]:
     otherwise the block is ordinary body text.  Never rewrites either field.
     """
 
+    if "_export_heading" in block:
+        return block["_export_heading"].level
     level = _coerce_heading_level(block.get("document_heading_level"))
     if level is not None:
         return level

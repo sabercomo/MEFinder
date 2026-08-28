@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Bumped when the heading-derivation algorithm changes, so persisted documents
 # can be lazily re-enriched (see document_heading_profile / ensure_document_headings).
-DOCUMENT_HEADING_VERSION = 1
+DOCUMENT_HEADING_VERSION = 2
 
 HEADING_SOURCE_PDF_OUTLINE = "pdf_outline"
 HEADING_SOURCE_DOCUMENT_TOC = "document_toc"
@@ -417,6 +417,10 @@ def apply_heading_assignments(
             continue
         block["document_heading_level"] = level
         block["document_heading_source"] = source
+        if assignment.get("printed_page") is not None:
+            block["document_heading_printed_page"] = str(assignment["printed_page"])
+        if assignment.get("title"):
+            block["document_heading_title"] = str(assignment["title"])
         written += 1
     return written
 
@@ -529,25 +533,31 @@ def extract_toc_candidates(
     """
 
     by_index = _pages_by_index(pages)
-    blocks = by_index.get(toc_page_index) or []
     candidates: List[Dict[str, object]] = []
-    for order, block in enumerate(blocks):
-        if str(block.get("mineru_type") or "") in {
-            "page_number",
-            "footer",
-            "header",
-        }:
-            continue
-        bbox = block.get("bbox")
-        x0 = float(bbox[0]) if isinstance(bbox, (list, tuple)) and bbox else None
-        for line in str(block.get("text") or "").split("\n"):
-            entry = _strip_trailing_page_number(line)
-            ntext = normalize_heading_text(entry)
-            if not ntext or ntext.lower() in _TOC_LOCATOR_TITLES:
+    page_index = toc_page_index
+    while page_index in by_index:
+        page_candidates = []
+        for order, block in enumerate(by_index[page_index]):
+            if str(block.get("mineru_type") or "") in {"page_number", "footer", "header"}:
                 continue
-            candidates.append(
-                {"text": entry, "norm": ntext, "x0": x0, "reading_order": order}
-            )
+            bbox = block.get("bbox")
+            x0 = float(bbox[0]) if isinstance(bbox, (list, tuple)) and bbox else None
+            for line in str(block.get("text") or "").split("\n"):
+                entry = _strip_trailing_page_number(line)
+                ntext = normalize_heading_text(entry)
+                if not ntext or ntext.lower() in _TOC_LOCATOR_TITLES:
+                    continue
+                target = re.search(r"(\d+)\s*$", line)
+                page_candidates.append({
+                    "text": entry, "norm": ntext, "x0": x0, "reading_order": order,
+                    "printed_page": target.group(1) if target else None,
+                    "toc_page_index": page_index,
+                })
+        numbered = sum(c["printed_page"] is not None and len(c["text"]) <= 120 for c in page_candidates)
+        if page_index != toc_page_index and (numbered < 2 or numbered < len(page_candidates) * 0.6):
+            break
+        candidates.extend(page_candidates)
+        page_index += 1
     return candidates
 
 
@@ -632,6 +642,11 @@ def derive_toc_headings(
     """
 
     by_index = _pages_by_index(pages)
+    by_printed: Dict[str, list] = {}
+    for page in pages:
+        printed = page.get("citation_page") or page.get("printed_page")
+        if printed is not None:
+            by_printed.setdefault(str(printed), []).append(int(page["pdf_page_index"]))
     # Index of body v2 titles by normalized text (unique ones only).
     v2_by_norm: Dict[str, List[Mapping[str, object]]] = {}
     for title in v2_titles:
@@ -652,6 +667,22 @@ def derive_toc_headings(
     for candidate in candidates:
         ntext = str(candidate.get("norm") or "")
         level = int(candidate.get("level") or 1)
+        destinations = by_printed.get(str(candidate.get("printed_page")), [])
+        if destinations:
+            # Verify the actual printed destination before trusting a unique v2
+            # title elsewhere: that title may be a mislabeled running header.
+            hits = [(p, i) for p in destinations for i, b in enumerate(by_index[p])
+                    if normalize_heading_text(b.get("text")) in {ntext, _strip_chapter_prefix(ntext)}]
+            if len(hits) == 1:
+                page, block_index = hits[0]
+                toc_assignments.append({"pdf_page_index": page, "block_index": block_index,
+                                        "level": level, "printed_page": candidate["printed_page"],
+                                        "title": candidate["text"]})
+                matched_v2.add((page, normalize_heading_text(by_index[page][block_index].get("text"))))
+                body_pages.append(page)
+            else:
+                diagnostics.append(f"toc destination not uniquely matched: {candidate.get('text')!r}")
+            continue
         title = match_v2(ntext)
         if title is None:
             diagnostics.append(f"toc entry not matched to a body title: {candidate.get('text')!r}")
@@ -661,7 +692,8 @@ def derive_toc_headings(
             diagnostics.append(f"toc entry title not located in body block: {candidate.get('text')!r}")
             continue
         toc_assignments.append(
-            {"pdf_page_index": int(title["page"]), "block_index": block_index, "level": level}
+            {"pdf_page_index": int(title["page"]), "block_index": block_index, "level": level,
+             "title": candidate["text"]}
         )
         matched_v2.add((int(title["page"]), str(title["norm"])))
         body_pages.append(int(title["page"]))
@@ -753,6 +785,15 @@ def enrich_pdf_headings(
             data = _load_v2(whole)
             if data is not None:
                 v2_sources.append((data, 0))
+
+    # Refresh derived assignments when evidence is available. Keep existing
+    # metadata when both original PDF and parser caches are unavailable offline.
+    if outline.get("classification") != "none" or v2_sources:
+        for page in pages:
+            for block in page.get("blocks") or []:
+                if isinstance(block, dict) and block.get("document_heading_source") in _SOURCE_RANK:
+                    for key in ("document_heading_level", "document_heading_source", "document_heading_printed_page", "document_heading_title"):
+                        block.pop(key, None)
 
     page_count = 1 + max(
         (int(p.get("pdf_page_index")) for p in pages if isinstance(p, Mapping)

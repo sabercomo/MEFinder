@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import closing
 import json
+import shutil
+import sqlite3
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -22,6 +26,9 @@ from src.me_finder.document_export_service import (
     export_indexed_pdf,
 )
 from src.me_finder.web import make_handler
+
+
+NODE = shutil.which("node")
 
 
 def export_fixture(root: Path, *, source_type: str = "pdf") -> tuple[Path, str]:
@@ -171,6 +178,81 @@ class IndexedDocumentExportTests(unittest.TestCase):
 
 
 class DocumentExportHTTPTests(unittest.TestCase):
+    def test_full_export_entry_enriches_before_shared_normalization_and_returns_report(self):
+        from tests.test_markdown_export import footnote_fixture
+        from tests.test_document_heading import _v2_title
+        from src.me_finder.document_heading import DOCUMENT_HEADING_VERSION
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database, source_id = export_fixture(root)
+            pages = footnote_fixture()
+            cache = root / "cached-parser"
+            cache.mkdir()
+            v2 = [[] for _ in range(12)]
+            for page in pages:
+                page["source_file_id"] = source_id
+                for block in page["blocks"]:
+                    block.update(result_dir=str(cache), pdf_page_index=page["pdf_page_index"],
+                                 local_page_idx=page["pdf_page_index"])
+                    if block.get("document_heading_level"):
+                        v2[page["pdf_page_index"]].append(_v2_title(block["text"], block.pop("document_heading_level"), block.get("bbox")))
+            (cache / "content_list_v2.json").write_text(json.dumps(v2, ensure_ascii=False), encoding="utf-8")
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("DELETE FROM pdf_pages WHERE source_file_id=?", (source_id,))
+                for page in pages:
+                    connection.execute("INSERT INTO pdf_pages(source_file_id,pdf_page_index,payload_json) VALUES(?,?,?)",
+                                       (source_id, page["pdf_page_index"], json.dumps(page, ensure_ascii=False)))
+                connection.commit()
+            output = root / "exports"
+            output.mkdir()
+            context = AppContext.create(root, index_path=database)
+            handler = make_handler(database, app_context=context)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                responses = []
+                for kind in ("epub", "markdown"):
+                    status, response = self._post(server, {"source_id": source_id, "output_dir": str(output)},
+                                                  path="/api/document/export-" + kind)
+                    self.assertEqual(status, 200)
+                    responses.append(response)
+                # Existing profile is complete, but source-page provenance is
+                # still checked on every export. No inferred destination/split.
+                (cache / "layout.json").write_text(json.dumps({"pdf_info": [{
+                    "page_idx": 9, "page_size": [1000, 1000],
+                    "para_blocks": [{"bbox": pages[0]["blocks"][2]["bbox"],
+                                     "lines": [{"spans": [{"cross_page": True}]}]}],
+                }]}), encoding="utf-8")
+                status, guarded = self._post(server, {"source_id": source_id, "output_dir": str(output)},
+                                             path="/api/document/export-epub")
+                self.assertEqual(status, 200)
+            finally:
+                server.shutdown()
+                server.server_close()
+                handler.close_runtime()
+                thread.join(timeout=2)
+            self.assertEqual(responses[0]["footnote_report"], responses[1]["footnote_report"])
+            report = responses[0]["footnote_report"]
+            self.assertEqual(report["matched_ref_count"], 4)
+            self.assertEqual([s["number_range"] for s in report["scopes"]], [[1, 3], [1, 1]])
+            self.assertEqual([s["boundary_reason"] for s in report["scopes"]], ["MINERU_V2", "MINERU_V2"])
+            self.assertEqual(guarded["footnote_report"]["matched_note_count"], 2)
+            self.assertEqual(guarded["footnote_report"]["unresolved_reason"]["ref"], {"CROSS_PAGE_SOURCE_BLOCK": 2})
+            self.assertEqual(guarded["footnote_report"]["unresolved_reason"]["note"], {"CROSS_PAGE_SOURCE_BLOCK": 2})
+            with zipfile.ZipFile(guarded["path"]) as archive:
+                guarded_text = archive.read("OEBPS/content.xhtml").decode("utf-8")
+                self.assertIn("先引用②，再引用①。", guarded_text)
+                self.assertIn("① 相同文献。", guarded_text)
+            with closing(sqlite3.connect(database)) as connection:
+                source = json.loads(connection.execute("SELECT payload_json FROM source_files WHERE source_file_id=?", (source_id,)).fetchone()[0])
+                stored = [json.loads(r[0]) for r in connection.execute("SELECT payload_json FROM pdf_pages WHERE source_file_id=? ORDER BY pdf_page_index", (source_id,))]
+            self.assertEqual(source["document_heading_profile"]["version"], DOCUMENT_HEADING_VERSION)
+            self.assertEqual([p["text_raw"] for p in stored], [p["text_raw"] for p in pages])
+            self.assertFalse(any("_export_source_cross_page" in b for p in stored for b in p["blocks"]))
+            self.assertIn("## 第一章 起点", Path(responses[1]["path"]).read_text(encoding="utf-8"))
+
     @staticmethod
     def _post(
         server: ThreadingHTTPServer,
@@ -242,6 +324,47 @@ class DocumentExportHTTPTests(unittest.TestCase):
             source,
         )
         self.assertIn("payload.output_dir = outputDirectory", source)
+
+    @unittest.skipUnless(NODE, "node is required for frontend execution tests")
+    def test_reading_exports_do_not_forward_legacy_page_preferences(self) -> None:
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const requests = [];
+const context = {
+  settingsStore: {},
+  fetch: async (url, options) => {
+    requests.push({url, payload: JSON.parse(options.body)});
+    return {ok: true, json: async () => ({ok: true})};
+  }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+(async () => {
+  for (const mode of ['full', 'none']) {
+    context.settingsStore.exportPageCleanup = {
+      page_marker_mode: mode, remove_running_headers: false
+    };
+    for (const [method, format] of [
+      ['requestLibraryDocumentMarkdownExport', 'markdown'],
+      ['requestLibraryDocumentEpubExport', 'epub']
+    ]) {
+      await context[method]('source-one', 'C:/exports');
+      assert.deepEqual(requests.pop(), {
+        url: '/api/document/export-' + format,
+        payload: {source_id: 'source-one', output_dir: 'C:/exports'}
+      });
+    }
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/30-library.js"
+        result = subprocess.run(
+            [NODE, "-e", script, str(source)], capture_output=True,
+            text=True, encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_http_markdown_endpoint_exports_utf8_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

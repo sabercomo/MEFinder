@@ -156,7 +156,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                     "source_file_id": " pdf-one ",
                     "output_dir": Path("/app-data/exports"),
                     # No export_options in the payload → safe defaults.
-                    "options": ExportOptions(),
+                    "options": ExportOptions(page_marker_mode="printed"),
                 }
             ],
         )
@@ -222,6 +222,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
                 {"source_id": "pdf-two", "output_dir": str(output_dir)}
             )
         self.assertEqual(self.epub_calls[-1]["output_dir"], output_dir)
+        self.assertEqual(self.epub_calls[-1]["options"], ExportOptions(page_marker_mode="printed"))
 
     def test_markdown_export_rejects_invalid_marker_mode(self) -> None:
         self.controller.export_document_markdown(
@@ -229,7 +230,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
         )
         # Invalid values fall back to the default rather than erroring.
         self.assertEqual(
-            self.markdown_calls[-1]["options"].page_marker_mode, "full"
+            self.markdown_calls[-1]["options"].page_marker_mode, "printed"
         )
 
     def test_markdown_export_invalid_payload_fails_before_service(self) -> None:

@@ -27,7 +27,9 @@ from .document_heading import (
 from .database import _sanitize_surrogates_in_place
 from .epub_export import safe_epub_filename, write_epub
 from .markdown_export import document_to_markdown, safe_markdown_filename
-from .markdown_export_normalize import ExportOptions
+from .export_footnotes import normalize_document_export
+from .markdown_export_normalize import ExportOptions, _page_scale
+from .auto_page_mapping import _normalized_page_bbox
 from .pdf_extractors import file_sha256
 
 
@@ -309,11 +311,14 @@ def export_indexed_pdf_markdown(
         or Path(str(source.get("file_name") or source_id)).stem
     )
     author = bibliographic.get("author")
+    pages = _text_export_pages(database, source_id, runtime_root)
+    normalized = normalize_document_export(pages, options=options)
     markdown = document_to_markdown(
-        iter_indexed_pdf_pages(database, source_id),
+        pages,
         title=title,
         author=author,
         options=options,
+        normalized=normalized,
     )
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
@@ -327,6 +332,7 @@ def export_indexed_pdf_markdown(
         "path": str(destination.resolve()),
         "size_bytes": destination.stat().st_size,
         "page_count": page_count,
+        "footnote_report": normalized.footnote_report,
     }
 
 
@@ -402,13 +408,16 @@ def export_indexed_pdf_epub(
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / safe_epub_filename(title)
+    pages = _text_export_pages(database, source_id, runtime_root)
+    normalized = normalize_document_export(pages, options=options)
     write_epub(
         destination,
-        iter_indexed_pdf_pages(database, source_id),
+        pages,
         title=title,
         author=bibliographic.get("author"),
         language=language,
         options=options,
+        normalized=normalized,
     )
     return {
         "ok": True,
@@ -417,7 +426,55 @@ def export_indexed_pdf_epub(
         "size_bytes": destination.stat().st_size,
         "page_count": page_count,
         "epub_version": "3.0",
+        "footnote_report": normalized.footnote_report,
     }
+
+
+def _text_export_pages(database: Path, source_id: str, runtime_root: Optional[Path]) -> list:
+    """Read export-only pages and carry explicit cached parser provenance.
+
+    MinerU may concatenate cross-page spans into a block assigned to its first
+    page. Never reconstruct a target page here. A matching layout box carrying
+    cross_page=true merely disqualifies the whole block from automatic pairing.
+    """
+    pages = list(iter_indexed_pdf_pages(database, source_id))
+    if runtime_root is None:
+        return pages
+    cross_page_boxes = {}
+    for page in pages:
+        width, height = _page_scale(page)
+        for block in page.get("blocks") or []:
+            raw_dir = block.get("result_dir")
+            if not raw_dir:
+                continue
+            result_dir = Path(str(raw_dir))
+            if not result_dir.is_absolute():
+                result_dir = Path(runtime_root) / result_dir
+            if result_dir not in cross_page_boxes:
+                boxes = {}
+                layout_path = result_dir / "layout.json"
+                if layout_path.is_file():
+                    try:
+                        layout = json.loads(layout_path.read_text(encoding="utf-8-sig"))
+                    except ValueError as exc:
+                        raise DocumentExportError(f"解析器页面来源缓存不是有效 JSON：{layout_path}") from exc
+                    for raw_page in layout.get("pdf_info", []):
+                        page_width, page_height = raw_page["page_size"]
+                        boxes[raw_page["page_idx"]] = [
+                            _normalized_page_bbox(b, page_width, page_height)
+                            for b in raw_page.get("para_blocks", []) + raw_page.get("discarded_blocks", [])
+                            if any(span.get("cross_page") is True
+                                   for line in b.get("lines", []) for span in line.get("spans", []))
+                        ]
+                cross_page_boxes[result_dir] = boxes
+            block["_export_layout_available"] = block.get("local_page_idx") in cross_page_boxes[result_dir]
+            bbox = _normalized_page_bbox(block, width, height)
+            if bbox is not None and any(
+                other is not None and all(abs(a - b) <= 0.003 for a, b in zip(bbox, other))
+                for other in cross_page_boxes[result_dir].get(block.get("local_page_idx"), [])
+            ):
+                block["_export_source_cross_page"] = True
+    return pages
 
 
 def _reconstruct_segments(
