@@ -432,14 +432,14 @@ class LongFilenameImportTests(unittest.TestCase):
             opener = build_opener(ProxyHandler({}))
             with (
                 patch(
-                    "src.me_finder.web.detect_imported_pdf",
+                    "src.me_finder.web_runtime.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "native_text",
                         "pdf_page_count": 1,
                     },
                 ),
                 patch(
-                    "src.me_finder.web.extract_pdf_source",
+                    "src.me_finder.web_runtime.extract_pdf_source",
                     side_effect=fake_extraction,
                 ),
             ):

@@ -11,6 +11,8 @@ from src.me_finder.http_contract import GET_API_ROUTES, POST_API_ROUTES
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_PATH = ROOT / "src" / "me_finder" / "web.py"
+# The four route tables are assembled in the application composition root.
+RUNTIME_PATH = ROOT / "src" / "me_finder" / "web_runtime.py"
 HTTP_PATH = ROOT / "src" / "me_finder" / "web_http.py"
 CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.4.9-http-api.json"
 
@@ -43,10 +45,10 @@ class HTTPAPIContractTests(unittest.TestCase):
 
     def test_route_tables_and_special_handlers_are_frozen(self) -> None:
         get_routes = _dictionary_keys(
-            WEB_PATH, {"controller_get_routes", "shell_get_routes"}
+            RUNTIME_PATH, {"controller_get_routes", "shell_get_routes"}
         )
         post_routes = _dictionary_keys(
-            WEB_PATH, {"controller_post_routes", "shell_post_routes"}
+            RUNTIME_PATH, {"controller_post_routes", "shell_post_routes"}
         )
         self.assertEqual(get_routes | {"/api/calibration"}, GET_API_ROUTES)
         self.assertEqual(

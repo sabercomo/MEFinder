@@ -9,7 +9,7 @@ from src.me_finder.web import HTML
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_http.py")
+    for name in ("web.py", "web_runtime.py", "web_http.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -637,7 +637,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('"/api/backup/export"', WEB_SOURCE)
         self.assertIn('"/api/backup/import/choose"', WEB_SOURCE)
         self.assertIn('"/api/backup/import"', WEB_SOURCE)
-        self.assertIn("from .backup_service import restore_backup, write_backup", WEB_SOURCE)
+        # backup_service is imported by the composition root; tolerate any
+        # single-line or parenthesized import formatting.
+        self.assertIn("from .backup_service import", WEB_SOURCE)
+        self.assertIn("restore_backup", WEB_SOURCE)
+        self.assertIn("write_backup", WEB_SOURCE)
 
     def test_document_transfer_setting_controls_export_payload(self) -> None:
         self.assertIn('data-target="document-transfer-settings"', HTML)

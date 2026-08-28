@@ -166,33 +166,22 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("version=str(version_info_path)", self.spec)
         self.assertIn("local_ocr_manifest.json", self.spec)
 
-    def test_windows_builds_gate_anchor_compatibility(self) -> None:
+    def test_windows_builds_run_the_whole_test_suite(self) -> None:
+        # 发布门禁通过 `unittest discover` 运行整个 tests/，而不是手工维护模块名单
+        # ——手工名单会静默漏掉新增测试。这里只需断言每份脚本都跑 discover。
         for script in (
             self.dev_build_script,
             self.build_script,
             self.portable_script,
         ):
-            self.assertIn("tests.test_anchor_metadata", script)
-            self.assertIn("tests.test_pdf_match_anchors", script)
+            self.assertIn("unittest discover -t . -s tests", script)
 
-    def test_windows_builds_gate_preferences_theme_and_desktop_contracts(self) -> None:
+    def test_windows_builds_keep_loopback_local_and_verify_fts5(self) -> None:
         for script in (
             self.dev_build_script,
             self.build_script,
             self.portable_script,
         ):
-            self.assertIn("tests.test_preferences_concurrency", script)
-            self.assertIn("tests.test_theme_system", script)
-            self.assertIn("tests.test_desktop_portable", script)
-            self.assertIn("tests.test_local_ocr_installer", script)
-
-    def test_windows_builds_gate_fts5_and_keep_loopback_local(self) -> None:
-        for script in (
-            self.dev_build_script,
-            self.build_script,
-            self.portable_script,
-        ):
-            self.assertIn("tests.test_fts_search_scalability", script)
             self.assertIn("paragraphs_fts", script)
             self.assertIn("NO_PROXY", script)
 

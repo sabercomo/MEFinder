@@ -188,7 +188,7 @@ class ImportConfigConcurrencyTests(unittest.TestCase):
                     observed_config_lock,
                 ),
                 patch(
-                    "src.me_finder.web.save_import_config",
+                    "src.me_finder.web_runtime.save_import_config",
                     side_effect=delay_stale_metadata_save,
                 ),
             ):

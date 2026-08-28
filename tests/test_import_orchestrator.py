@@ -90,7 +90,9 @@ class _FakeQueue:
 class ImportOrchestratorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp_dir.name)
+        # Resolve symlinks (macOS $TMPDIR is /var -> /private/var) so paths
+        # compare equal to the resolved targets the import service returns.
+        self.root = Path(self.temp_dir.name).resolve()
         (self.root / "data").mkdir()
         self.paths = AppPaths.create(
             self.root,

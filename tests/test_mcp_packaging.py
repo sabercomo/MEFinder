@@ -50,39 +50,28 @@ class MCPPackagingTests(unittest.TestCase):
             self.assertIn(r"packaging\mcp_sidecar.spec", script)
             self.assertIn("MEFinderMCP.exe", script)
             self.assertIn("tools.smoke_mcp_sidecar", script)
-            self.assertIn("tests.test_mcp_packaging", script)
-            self.assertIn("tests.test_mcp_concurrency", script)
-            self.assertIn("tests.test_backup_coordinator", script)
-            self.assertIn("tests.test_document_groups", script)
-            self.assertIn("tests.test_search_group_scope", script)
 
         self.assertIn("must contain exactly two executables", self.windows_installer)
 
-    def test_release_gates_cover_v049_features(self) -> None:
+    def test_release_gates_run_the_whole_test_suite(self) -> None:
+        # 每份发布脚本都用 `unittest discover` 跑整套 tests/，因此不必再逐个断言
+        # 具体测试模块出现在脚本里——新增测试会自动纳入门禁。
         for script in (
             self.windows_dev,
             self.windows_installer,
             self.windows_portable,
             self.macos_build,
         ):
-            self.assertIn("tests.test_epub_import", script)
-            self.assertIn("tests.test_text_alignment", script)
-            self.assertIn("tests.test_text_alignment_controller", script)
+            self.assertIn("unittest discover -t . -s tests", script)
 
     def test_macos_bundle_contains_signed_smoked_sidecar_and_licenses(self) -> None:
         self.assertIn("packaging/mcp_sidecar.spec", self.macos_build)
         self.assertIn("Contents/MacOS/MEFinderMCP", self.macos_build)
         self.assertIn("tools.smoke_mcp_sidecar", self.macos_build)
         self.assertIn('codesign "${MEFINDER_CODESIGN_ARGS[@]}" "$1"', self.macos_build)
-        self.assertIn("tests.test_mcp_packaging", self.macos_build)
-        self.assertIn("tests.test_mcp_concurrency", self.macos_build)
-        self.assertIn("tests.test_backup_coordinator", self.macos_build)
-        self.assertIn("tests.test_document_groups", self.macos_build)
-        self.assertIn("tests.test_search_group_scope", self.macos_build)
         for name in ("LICENSE", "THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_LICENSES"):
             self.assertIn(name, self.macos_spec)
         self.assertIn("local_ocr_manifest.json", self.macos_spec)
-        self.assertIn("tests.test_local_ocr_installer", self.macos_build)
         self.assertIn(
             'cryptography==46.0.3; platform_machine == "x86_64"',
             self.macos_requirements,

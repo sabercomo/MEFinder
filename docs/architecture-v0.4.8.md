@@ -18,7 +18,9 @@ Kimi K3 的总判断正确：MEFinder 的模块化单体不需要推倒重写，
 
 ```text
 desktop / CLI
-  -> web.py                         composition root + lifecycle
+  -> web.py                         entry point + platform PDF openers + serve()
+     -> web_runtime.py             composition root: builds services, controllers,
+                                    route tables and lifecycle (ApplicationRuntime)
      -> controllers                transport-neutral input/error mapping
         -> application             use cases + ports
            -> persistence          connection / schema / migrations / repositories
@@ -45,7 +47,8 @@ frontend
 ## 后续约束
 
 1. application 新增持久化需求时，先扩展 Port，再在 `persistence` 实现；不得把 SQL 写回用例层。
-2. `web.py`、`web_http.py` 和 `database.py` 达到门禁上限时，应迁出真实职责，不得提高上限。
+2. `web.py`、`web_runtime.py`、`web_http.py` 和 `database.py` 达到门禁上限时，应迁出真实职责，不得提高上限（上限只降不升）。
+2b. 发布门禁运行整套 `tests/`（`unittest discover -t . -s tests`），不再手工维护模块名单；缺私有语料或可选开发依赖的用例用 `skipUnless` 自跳过（见 `tests/corpus_fixtures.py`）。
 3. 新解析器必须实现现有 `ParserProvider`；新本地运行时必须实现 `ManagedComponent`。
 4. 只有任务的恢复、取消和持久化语义相同，才能共享执行运行时；展示层统一消费 `TaskEvent`。
 5. 新增或删除 HTTP 路由时必须同步更新 v0.4.8 契约（或创建下一版本契约）。

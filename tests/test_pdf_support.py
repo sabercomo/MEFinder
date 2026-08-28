@@ -19,6 +19,8 @@ from src.me_finder.pdf_page_mapping import (
 )
 from src.me_finder.search import SearchEngine
 
+from tests.corpus_fixtures import PDF_CORPUS_REASON, has_pdf_corpus
+
 
 PDF_CORPUS = Path("corpus/raw_pdf")
 SEARCHABLE_PDF = PDF_CORPUS / "Critique of Forms of Life (Jaeggi, RahelCronin, Ciaran(Translation)) (Z-Library).pdf"
@@ -252,6 +254,7 @@ class PDFBibliographicProjectionTests(unittest.TestCase):
         self.assertEqual(source["bibliographic_metadata"]["issue"], "2")
 
 
+@unittest.skipUnless(has_pdf_corpus(), PDF_CORPUS_REASON)
 class PDFDetectionTests(unittest.TestCase):
     def test_native_text_pdf_detection(self) -> None:
         profile = detect_pdf_type(SEARCHABLE_PDF)
@@ -267,6 +270,7 @@ class PDFDetectionTests(unittest.TestCase):
         self.assertIn(profile["detected_pdf_type"], {"native_text", "complex_layout"})
 
 
+@unittest.skipUnless(has_pdf_corpus(), PDF_CORPUS_REASON)
 class PDFSearchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

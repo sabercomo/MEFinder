@@ -474,7 +474,7 @@ class ApiRequestLimitTests(unittest.TestCase):
             request_thread = threading.Thread(target=send_request, daemon=True)
             try:
                 with patch(
-                    "src.me_finder.web.update_metadata_in_database",
+                    "src.me_finder.web_runtime.update_metadata_in_database",
                     side_effect=blocked_update,
                 ):
                     request_thread.start()

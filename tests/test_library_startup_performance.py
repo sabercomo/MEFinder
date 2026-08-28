@@ -177,7 +177,10 @@ class LibraryEndpointWiringTests(unittest.TestCase):
     def test_web_routes_expose_summary_and_detail(self) -> None:
         from pathlib import Path
 
-        web_source = Path("src/me_finder/web.py").read_text(encoding="utf-8")
+        web_source = "\n".join(
+            Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
+            for name in ("web.py", "web_runtime.py")
+        )
         controller_source = Path(
             "src/me_finder/library_query_controller.py"
         ).read_text(encoding="utf-8")

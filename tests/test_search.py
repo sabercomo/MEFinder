@@ -7,7 +7,10 @@ from pathlib import Path
 from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
 from src.me_finder.search import SearchEngine
 
+from tests.corpus_fixtures import CORPUS_REASON, has_corpus
 
+
+@unittest.skipUnless(has_corpus() or DEFAULT_INDEX_PATH.exists(), CORPUS_REASON)
 class KnownQuoteSearchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

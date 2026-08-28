@@ -158,7 +158,7 @@ class AppContextTests(unittest.TestCase):
 
             try:
                 with patch(
-                    "src.me_finder.web.rebuild_local_index",
+                    "src.me_finder.web_runtime.rebuild_local_index",
                     side_effect=record_rebuild,
                 ):
                     server_thread.start()

@@ -10,7 +10,10 @@ from src.me_finder.indexer import build_index
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.search import SearchEngine
 
+from tests.corpus_fixtures import CORPUS_REASON, has_corpus
 
+
+@unittest.skipUnless(has_corpus() or DEFAULT_DATABASE_PATH.exists(), CORPUS_REASON)
 class SQLiteSearchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

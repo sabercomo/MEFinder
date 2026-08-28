@@ -111,96 +111,9 @@ try {
 
     $compiler = Find-InnoCompiler -ExplicitPath $ISCCPath
 
-    & $pythonCommand @pythonLauncherArgs -m unittest `
-        tests.test_anchor_metadata `
-        tests.test_api_fallback_recovery `
-        tests.test_backup_service `
-        tests.test_backup_coordinator `
-        tests.test_backup_file_picker `
-        tests.test_data_location `
-        tests.test_desktop_shell_controller `
-        tests.test_scan_directory_picker `
-        tests.test_batch_document_removal `
-        tests.test_citations `
-        tests.test_cnki_citation `
-        tests.test_journal_metadata_lookup `
-        tests.test_foreign_book_lookup `
-        tests.test_crossref_lookup `
-        tests.test_book_metadata_lookup `
-        tests.test_chunked_upload `
-        tests.test_database_resilience `
-        tests.test_fts_search_scalability `
-        tests.test_large_index_resilience `
-        tests.test_library_startup_performance `
-        tests.test_pdf_import_config `
-        tests.test_import_config_concurrency `
-        tests.test_preferences_concurrency `
-        tests.test_long_filename_import `
-        tests.test_pdf_match_anchors `
-        tests.test_page_display `
-        tests.test_runtime_page_mapping `
-        tests.test_search_match_spans `
-        tests.test_search_occurrence_identity `
-        tests.test_search_service `
-        tests.test_search_group_scope `
-        tests.test_api_request_limits `
-        tests.test_source_streaming `
-        tests.test_app_context `
-        tests.test_database_page_anchors `
-        tests.test_index_publication_guard `
-        tests.test_normalization `
-        tests.test_vision_api `
-        tests.test_search_controls_and_views `
-        tests.test_structured_reader `
-        tests.test_structured_reader_frontend `
-        tests.test_structured_reader_web `
-        tests.test_text_alignment `
-        tests.test_text_alignment_controller `
-        tests.test_batch_directory_import `
-        tests.test_calibration_library_ui `
-        tests.test_document_groups `
-        tests.test_document_package_import `
-        tests.test_directory_scan `
-        tests.test_epub_import `
-        tests.test_import_queue `
-        tests.test_import_resume_mineru `
-        tests.test_import_resume_queue `
-        tests.test_import_resume_vision `
-        tests.test_import_resume_web `
-        tests.test_mineru_config `
-        tests.test_mineru_accounts `
-        tests.test_mineru_accounts_web `
-        tests.test_mineru_local_settings `
-        tests.test_mineru_local_provider `
-        tests.test_local_ocr_settings `
-        tests.test_local_ocr_installer `
-        tests.test_component_catalog `
-        tests.test_component_catalog_export `
-        tests.test_managed_mineru `
-        tests.test_local_ocr_provider `
-        tests.test_mineru_engine_import_bridge `
-        tests.test_parser_settings_controller `
-        tests.test_import_job_controller `
-        tests.test_import_parser_executor `
-        tests.test_import_orchestrator `
-        tests.test_portable_index_rebuild `
-        tests.test_windows_desktop `
-        tests.test_update_service `
-        tests.test_windows_version_info `
-        tests.test_windows_packaging `
-        tests.test_runtime_location `
-        tests.test_literature_verification_service `
-        tests.test_mcp_v1_baseline `
-        tests.test_mcp_server `
-        tests.test_mcp_quality `
-        tests.test_mcp_documentation `
-        tests.test_mcp_packaging `
-        tests.test_mcp_concurrency `
-        tests.test_platform_open `
-        tests.test_theme_system `
-        tests.test_frontend_assets `
-        tests.test_frontend_pure_logic `
-        tests.test_desktop_portable
+    # 安装包门禁运行整套 tests/（discover），不再手工维护模块名单。缺私有语料或
+    # 可选开发依赖的用例会 skipUnless 自跳过。
+    & $pythonCommand @pythonLauncherArgs -m unittest discover -t . -s tests
     if ($LASTEXITCODE -ne 0) { throw "Feature tests failed; installer was not built." }
 
     $nodeCommand = Get-Command node -ErrorAction SilentlyContinue

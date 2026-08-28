@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .application import SearchRequest

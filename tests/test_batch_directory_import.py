@@ -158,13 +158,13 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ):
                 try:
@@ -233,7 +233,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 side_effect=MinerUError("PDF detection failed"),
             ):
                 try:
@@ -304,7 +304,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     method="POST",
                 )
                 with patch(
-                    "src.me_finder.web.ImportJobJournal.save_job",
+                    "src.me_finder.web_runtime.ImportJobJournal.save_job",
                     side_effect=OSError("journal unavailable"),
                 ):
                     with self.assertRaises(HTTPError) as caught:
@@ -355,7 +355,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
             previous_cwd = Path.cwd()
             server = None
             with patch(
-                "src.me_finder.web.rebuild_local_index",
+                "src.me_finder.web_runtime.rebuild_local_index",
                 wraps=rebuild_local_index,
             ) as rebuild:
                 try:
@@ -426,10 +426,10 @@ class BatchDirectoryImportTests(unittest.TestCase):
             previous_cwd = Path.cwd()
             server = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={"detected_pdf_type": "native_text", "pdf_page_count": 1},
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
                 "src.me_finder.database._backup_database",
@@ -503,7 +503,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
             handler = None
             with (
                 patch(
-                    "src.me_finder.web.detect_imported_pdf",
+                    "src.me_finder.web_runtime.detect_imported_pdf",
                     side_effect=detected,
                 ),
                 patch(
@@ -645,16 +645,16 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
-                "src.me_finder.web.rebuild_local_index",
+                "src.me_finder.web_runtime.rebuild_local_index",
                 wraps=rebuild_local_index,
             ) as rebuild:
                 try:
@@ -752,13 +752,13 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
                 "src.me_finder.application.import_orchestrator.extract_source",
@@ -838,13 +838,13 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ):
                 try:
@@ -991,19 +991,19 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "broken_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.parse_pdf_with_mineru",
+                "src.me_finder.web_runtime.parse_pdf_with_mineru",
                 return_value=None,
             ) as parse, patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
-                "src.me_finder.web.rebuild_local_index",
+                "src.me_finder.web_runtime.rebuild_local_index",
                 wraps=rebuild_local_index,
             ) as rebuild:
                 try:
@@ -1103,16 +1103,16 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "broken_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.parse_pdf_with_mineru",
+                "src.me_finder.web_runtime.parse_pdf_with_mineru",
                 side_effect=parse_one_at_a_time,
             ) as parse, patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ):
                 try:
@@ -1219,19 +1219,19 @@ class BatchDirectoryImportTests(unittest.TestCase):
             server = None
             handler = None
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "broken_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.parse_pdf_with_mineru",
+                "src.me_finder.web_runtime.parse_pdf_with_mineru",
                 return_value=None,
             ) as parse, patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
-                "src.me_finder.web.replace_source_in_database",
+                "src.me_finder.web_runtime.replace_source_in_database",
                 side_effect=flaky_replace,
             ):
                 try:
@@ -1311,13 +1311,13 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 return RealSearchEngine(index_path)
 
             with patch(
-                "src.me_finder.web.detect_imported_pdf",
+                "src.me_finder.web_runtime.detect_imported_pdf",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 1,
                 },
             ), patch(
-                "src.me_finder.web.extract_pdf_source",
+                "src.me_finder.web_runtime.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ):
                 try:
@@ -1332,7 +1332,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
                     base_url = f"http://127.0.0.1:{server.server_port}"
 
                     with patch(
-                        "src.me_finder.web.SearchEngine",
+                        "src.me_finder.web_runtime.SearchEngine",
                         side_effect=transient_reopen,
                     ):
                         response = self._post_json(

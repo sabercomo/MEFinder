@@ -11,8 +11,12 @@ PACKAGE = ROOT / "src" / "me_finder"
 
 class ArchitectureBoundaryTests(unittest.TestCase):
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
+        # web.py is now only the HTTP composition root + platform PDF openers;
+        # the service/route assembly lives in web_runtime.py.  Caps only ratchet
+        # down — when a file hits its cap, move a real responsibility out.
         limits = {
-            "web.py": 1200,
+            "web.py": 700,
+            "web_runtime.py": 950,
             "web_http.py": 800,
             "web_assets.py": 120,
             "database.py": 1650,

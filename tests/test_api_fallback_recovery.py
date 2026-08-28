@@ -289,21 +289,21 @@ class LateProviderRecoveryHTTPTests(unittest.TestCase):
             with (
                 patch.dict(os.environ, config_env, clear=False),
                 patch(
-                    "src.me_finder.web.detect_imported_pdf",
+                    "src.me_finder.web_runtime.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "scanned",
                         "pdf_page_count": 1,
                     },
                 ),
                 patch(
-                    "src.me_finder.web.parse_pdf_with_mineru",
+                    "src.me_finder.web_runtime.parse_pdf_with_mineru",
                     side_effect=MinerUError(
                         "MinerU HTTP 401: user authenticate failed",
                         allow_parser_fallback=True,
                     ),
                 ),
                 patch(
-                    "src.me_finder.web.parse_pdf_with_provider",
+                    "src.me_finder.web_runtime.parse_pdf_with_provider",
                     side_effect=VisionAPIError(
                         "test stopped after selecting the provider"
                     ),

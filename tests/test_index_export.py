@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from docx import Document
+try:
+    from docx import Document
+except ModuleNotFoundError:  # python-docx is a test-only fixture dependency
+    Document = None
 
 from src.me_finder.indexer import build_index
 
@@ -29,6 +32,7 @@ def _corpus_cwd():
         os.chdir(previous)
 
 
+@unittest.skipUnless(Document is not None, "需要开发依赖 python-docx 生成测试语料")
 class IndexExportTests(unittest.TestCase):
     def test_json_export_is_off_by_default_sqlite_always_built(self) -> None:
         with _corpus_cwd() as (root, corpus):

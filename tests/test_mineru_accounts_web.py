@@ -168,7 +168,7 @@ class MinerUAccountsWebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             with patch(
-                "src.me_finder.web.MinerUAccountService.list_accounts",
+                "src.me_finder.web_runtime.MinerUAccountService.list_accounts",
                 side_effect=OSError("account config unavailable"),
             ):
                 with self._runtime(root) as (server, _handler):
@@ -266,7 +266,7 @@ class MinerUAccountsWebTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
                 with patch(
-                    "src.me_finder.web.test_mineru_credential",
+                    "src.me_finder.web_runtime.test_mineru_credential",
                     return_value={"ok": True, "latency_ms": 12},
                 ) as test_credential:
                     status, payload = self._request(
