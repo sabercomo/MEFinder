@@ -315,10 +315,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #        并新增“显示/隐藏页眉页脚”开关；reader.js/reader.css 相应改动。
     # 0.5.0：文献库操作菜单（三点）打开时取消其 SVG 的无效 180° 旋转；
     #        40-library.css 用 id 提优先级明确取消旋转。
+    # 0.5.0：#7 前端全局作用域收敛试点——05-theme-engine.js 包进 IIFE，
+    #        私有 helper 不再泄漏到全局，仅 17 个公共符号显式 global.* 导出。
     BASELINE_SHA256 = (
-        "76044e44452c268f18178f996e1f756265c4c4a9a98a8769dc6372acc7cbbcb8"
+        "faf6865c61b2cedb7fd046e4d66d1319d9f2e480cf68eaa732da4313e103a900"
     )
-    BASELINE_BYTES = 922304
+    BASELINE_BYTES = 924629
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
