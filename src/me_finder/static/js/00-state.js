@@ -131,3 +131,31 @@ const settingsStore = {
 // 首帧仍由服务端注入的 data-theme 决定；载入偏好后 applyAppearance() 校正。
 const desktopShell = document.documentElement.dataset.desktopShell || '';
 const importStore = { queue: [] };
+
+// —— 引用样式的 localStorage 读取器 ——
+// 移到 00-state（全局作用域）：00-state 顶层初始化即调用它们，而其原文件
+// (20-search / 60-settings) 已包进 IIFE，函数不再跨脚本提升到全局。
+function loadLocalSelectedCitationStyle() {
+  try {
+    var value = localStorage.getItem('meFinderCitationStyle');
+    return CITATION_STYLE_IDS.has(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function loadLocalCitationStyles() {
+  try {
+    var raw = localStorage.getItem(CITATION_STYLES_STORAGE_KEY);
+    if (raw === null) return null;
+    var parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    var selected = CITATION_STYLE_OPTIONS.filter(function(option) {
+      return parsed.indexOf(option.id) >= 0;
+    }).map(function(option) { return option.id; });
+    return selected.length ? selected : null;
+  } catch (_) {
+    return null;
+  }
+}
+

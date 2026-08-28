@@ -328,10 +328,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.0：#7 前端全局作用域收敛试点——05-theme-engine.js 包进 IIFE，
     #        私有 helper 不再泄漏到全局，仅 17 个公共符号显式 global.* 导出。
     # 0.5.0：#7 试点续 —— 70-vision.js 同样包进 IIFE（85 私有 helper 收敛，46 公共导出）。
+    # 0.5.0：#7 续 —— 10-shell/20-search/50-calibration/60-settings 四个无 node
+    #        测试依赖的文件一并包进 IIFE（约 91 个私有 helper 收敛）。
     BASELINE_SHA256 = (
-        "4d19b03f5288810b27e0d64e63cd3e52284ae95a2f4c9f6d41bee604914af1b3"
+        "5941570153488bdc3b10ba6e49caa31a68024d102bb00b4a5687347e76944da4"
     )
-    BASELINE_BYTES = 932563
+    BASELINE_BYTES = 943708
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

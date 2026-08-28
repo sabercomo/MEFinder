@@ -511,8 +511,15 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertNotIn("z-index: 9999;", HTML)
         # Esc 栈：从下拉 → 弹窗 → 选择态 → 抽屉逐层。
         self.assertIn("document.querySelector('.app-select.is-open, .bib-menu.open')", HTML)
-        self.assertIn("libraryStore.deleteSelection.size > 0) {\n    event.preventDefault();\n    clearLibrarySelection();", HTML)
-        self.assertIn("drawer.classList.contains('open')) {\n    event.preventDefault();\n    requestCloseLibDrawer();", HTML)
+        # 断言 Esc 栈的动作顺序，对缩进保持宽容（IIFE 包裹会改变前导空白）。
+        self.assertRegex(
+            HTML,
+            r"libraryStore\.deleteSelection\.size > 0\) \{\s+event\.preventDefault\(\);\s+clearLibrarySelection\(\);",
+        )
+        self.assertRegex(
+            HTML,
+            r"drawer\.classList\.contains\('open'\)\) \{\s+event\.preventDefault\(\);\s+requestCloseLibDrawer\(\);",
+        )
 
     def test_library_ratio_persistent_selectall_and_keyboard_nav(self) -> None:
         """L-07 列表:详情比例 + 自适应详情宽度；L-11 列表键盘导航。"""
