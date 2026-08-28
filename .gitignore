@@ -37,3 +37,6 @@ config/*.pre-restore
 .project-memory/
 .venv*/
 config/mineru_accounts.local.json
+
+# 从源码运行 `serve` 时 ComponentCatalog 在工作目录生成的本地组件状态
+components/
