@@ -18,6 +18,12 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from .auto_page_mapping import normalize_page_candidate
 from .citations import build_citation_formats
 from .database import open_database
+from .markdown_export_normalize import (
+    ExportOptions,
+    build_page_artifact_profile,
+    iter_decoration_spans,
+    resolve_page_marker,
+)
 from .page_display import (
     CitationPageResolution,
     PageDisplayResult,
@@ -926,6 +932,23 @@ def _source_metadata(
     }
 
 
+def _page_marker_payload(marker: object) -> Optional[Dict[str, object]]:
+    """Serialize a :class:`PageMarker` as the reader's EPUB-style page anchor.
+
+    ``printed_page`` is the book's own folio (kept verbatim so roman numerals or
+    a translation's original-edition folio survive); ``physical_page`` is the
+    1-based PDF page.  Returns ``None`` when there is nothing to anchor.
+    """
+
+    if marker is None:
+        return None
+    printed = getattr(marker, "printed_page", None)
+    physical = getattr(marker, "physical_page", None)
+    if printed is None and physical is None:
+        return None
+    return {"printed_page": printed, "physical_page": physical}
+
+
 def _pdf_window(
     connection: sqlite3.Connection,
     source_id: str,
@@ -967,9 +990,22 @@ def _pdf_window(
         before=int(rows[0]["pdf_page_index"]) if rows else start,
         count=count,
     )
+    # Decode every page in the window once so running-header / running-footer
+    # detection can see the whole window before we clean any single page.  The
+    # reader keeps ``text_raw`` untouched as its citation/highlight coordinate
+    # system; decoration spans only tell the UI which character ranges are pure
+    # page noise so it can hide them without ever moving an offset.
+    decoded = [
+        (row, _json_object(row["payload_json"]))
+        for row in rows
+    ]
+    export_options = ExportOptions()
+    decoration_profile = build_page_artifact_profile(
+        [payload for _row, payload in decoded],
+        export_options,
+    )
     items: List[Dict[str, object]] = []
-    for row in rows:
-        payload = _json_object(row["payload_json"])
+    for row, payload in decoded:
         page_index = _integer_or_default(
             row["pdf_page_index"],
             payload.get("pdf_page_index"),
@@ -1019,6 +1055,17 @@ def _pdf_window(
                     payload.get("mapping_confidence_level")
                 ),
                 "is_empty": not bool(text_raw.strip()),
+                "decoration_spans": [
+                    {"start": start, "end": end, "kind": kind}
+                    for start, end, kind in iter_decoration_spans(
+                        payload,
+                        profile=decoration_profile,
+                        options=export_options,
+                    )
+                ],
+                "page_marker": _page_marker_payload(
+                    resolve_page_marker(payload, export_options)
+                ),
                 "citation_formats": _safe_citation_formats(
                     _citation_metadata_for_item(
                         citation_catalog,

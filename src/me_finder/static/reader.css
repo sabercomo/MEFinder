@@ -176,6 +176,30 @@
   background: var(--surface-hover);
 }
 
+.mef-reader-decoration-toggle {
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mef-reader-decoration-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.mef-reader-decoration-toggle[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
 .mef-reader-citation-bar {
   display: flex;
   align-items: center;
@@ -454,6 +478,20 @@
   background: var(--warning-soft);
   color: inherit;
   box-shadow: 0 0 0 1px var(--warning-border);
+}
+
+/* Running headers / footers / visible folios are hidden from the reading flow,
+   but their characters stay in the DOM so citation and highlight offsets remain
+   exact. The reveal toggle brings them back as faint, non-selectable-looking
+   text for anyone who wants to eyeball the raw page. */
+.mef-reader-decoration {
+  display: none;
+}
+
+.mef-reader-content.mef-show-decorations .mef-reader-decoration {
+  display: inline;
+  color: var(--text-tertiary);
+  opacity: .55;
 }
 
 .mef-reader-loading {

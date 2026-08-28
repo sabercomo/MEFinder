@@ -490,6 +490,95 @@ def normalize_export_blocks(
 
 
 # --------------------------------------------------------------------------- #
+# Decoration spans (for a reader that keeps raw text as its coordinate system)
+# --------------------------------------------------------------------------- #
+# ``kind`` values are stable identifiers a UI can style or reveal on demand.
+DECORATION_PAGE_NUMBER = "page_number"
+DECORATION_HEADER = "header"
+DECORATION_FOOTER = "footer"
+
+
+def iter_decoration_spans(
+    page: Mapping[str, object],
+    *,
+    profile: Optional[PageArtifactProfile] = None,
+    options: Optional[ExportOptions] = None,
+) -> List[Tuple[int, int, str]]:
+    """Return ``(start, end, kind)`` code-point spans of removable page decoration.
+
+    This is the *offset-preserving* companion to :func:`normalize_export_blocks`.
+    Where the exporter drops a noise block outright, a reader that keeps
+    ``text_raw`` as its citation/highlight coordinate system cannot drop the
+    characters — it must instead know exactly which character ranges are pure
+    page decoration so it can hide them visually while every offset stays valid.
+
+    The drop decisions mirror ``normalize_export_blocks`` exactly (same running
+    header/footer and visible-folio gates, same footnote protection) so the
+    reader and the exporter never disagree about what counts as noise.  Only
+    *whole-block* removals are reported; the heading-folio-prefix strip is a
+    mid-block text edit and is deliberately left inline (hiding it would require
+    rewriting offsets).  Spans are emitted only when the blocks faithfully
+    reconstruct ``text_raw`` and each block's own offsets are exact, so a hidden
+    range can never swallow real body text.
+    """
+
+    options = options or ExportOptions()
+    profile = profile or PageArtifactProfile()
+    ordered = _ordered_body_blocks(page)
+    if not ordered:
+        return []
+    text_raw = str(page.get("text_raw") or "")
+    blocks = page.get("blocks")
+    blocks = blocks if isinstance(blocks, (list, tuple)) else None
+    # All-or-nothing, matching the exporter: if the blocks do not reconstruct the
+    # page we clean nothing and the reader shows the raw page untouched.
+    if blocks is None or not blocks_aligned_with_text(blocks, text_raw):
+        return []
+
+    width, height = _page_scale(page)
+    printed = _printed_page_raw(page)
+    spans: List[Tuple[int, int, str]] = []
+    for index, block in enumerate(ordered):
+        if has_footnote_signal(block):
+            continue
+        region = _region_of(
+            index, len(ordered), _block_y_center(block, width, height)
+        )
+        kind: Optional[str] = None
+        if options.remove_visible_page_numbers and _is_visible_page_number(
+            block, printed=printed, region=region
+        ):
+            kind = DECORATION_PAGE_NUMBER
+        elif not _has_heading_level(block):
+            norm = normalize_heading_text(block.get("text"))
+            if (
+                options.remove_running_headers
+                and region == "top"
+                and profile.is_running_header(norm)
+            ):
+                kind = DECORATION_HEADER
+            elif (
+                options.remove_running_footers
+                and region == "bottom"
+                and profile.is_running_footer(norm)
+            ):
+                kind = DECORATION_FOOTER
+        if kind is None:
+            continue
+        # Validate against the UNSTRIPPED page text: that is the exact string the
+        # reader keeps as its offset coordinate system, so an emitted span always
+        # lines up with ``text_raw`` character-for-character.
+        if not _has_valid_offsets(block, text_raw):
+            continue
+        start = int(block["page_char_start"])
+        end = int(block["page_char_end"])
+        if 0 <= start < end <= len(text_raw):
+            spans.append((start, end, kind))
+    spans.sort()
+    return spans
+
+
+# --------------------------------------------------------------------------- #
 # Shared, format-neutral content primitives
 #
 # Both the Markdown renderer and the EPUB renderer consume these so the cleanup

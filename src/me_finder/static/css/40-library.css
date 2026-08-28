@@ -797,6 +797,11 @@
 .library-overflow.is-open .library-overflow-btn { background: var(--accent-soft); color: var(--accent); box-shadow: none; border-color: transparent; }
 .library-overflow-menu { left: auto; right: 0; min-width: 184px; }
 
+/* 三个点是操作菜单触发器，其唯一 SVG 恰好命中通用下拉箭头的
+   `.app-select-trigger svg:last-child` 旋转规则，点开时整块圆点转 180°
+   （转与不转看着一样，是纯无效动画）。用 id 提高优先级明确取消旋转。 */
+#library-overflow.is-open .library-overflow-btn svg { transform: none; }
+
 /* 底部状态条（Zotero 式）：统计从顶部沉到这里。 */
 .library-statusbar {
   flex: 0 0 auto;

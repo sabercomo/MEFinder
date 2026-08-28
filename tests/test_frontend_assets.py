@@ -311,10 +311,14 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.4.9 后续：作品组下拉菜单加高，并按窗口高度限制滚动区域。
     # 0.4.9 后续：取消页码模式控件，常规 Markdown/EPUB 使用隐藏印刷页码。
     # 0.4.9 后续：作品组下拉菜单只保留管理入口，新建仍在管理弹窗内。
+    # 0.5.0：结构化阅读器隐藏页眉页脚与印刷页码（保留 text_raw 偏移坐标系），
+    #        并新增“显示/隐藏页眉页脚”开关；reader.js/reader.css 相应改动。
+    # 0.5.0：文献库操作菜单（三点）打开时取消其 SVG 的无效 180° 旋转；
+    #        40-library.css 用 id 提优先级明确取消旋转。
     BASELINE_SHA256 = (
-        "bf53423dae9df6897d63cac7c69ab8a418aad705e65ee14654e36b29b6fc76f7"
+        "76044e44452c268f18178f996e1f756265c4c4a9a98a8769dc6372acc7cbbcb8"
     )
-    BASELINE_BYTES = 907678
+    BASELINE_BYTES = 922304
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

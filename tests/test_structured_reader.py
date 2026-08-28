@@ -204,6 +204,94 @@ class StructuredReaderTests(unittest.TestCase):
             empty["page_display"], "PDF 第 3 页，引用页码尚未校准"
         )
 
+    def test_reader_reports_decoration_spans_without_touching_text_raw(self) -> None:
+        source_id = "pdf-decoration"
+        header = "第一章 导论"
+        footer_tpl = "{n}"
+        page_width, page_height = 800.0, 1000.0
+
+        def _block(text: str, page_text: str, y0: float, y1: float) -> dict:
+            start = page_text.find(text)
+            return {
+                "text": text,
+                "page_char_start": start,
+                "page_char_end": start + len(text),
+                "offset_unit": "unicode_codepoint",
+                "bbox": [50.0, y0, 750.0, y1],
+                "page_width": page_width,
+                "page_height": page_height,
+            }
+
+        pages = []
+        for index in range(4):
+            printed = 23 + index
+            body = f"这是第{index}页真正的正文文字，应当完整保留下来。"
+            footer = footer_tpl.format(n=printed)
+            text_raw = "\n".join([header, body, footer])
+            pages.append(
+                {
+                    "pdf_page_id": f"{source_id}-PAGE-{index:06d}",
+                    "source_file_id": source_id,
+                    "pdf_page_index": index,
+                    "pdf_page_number_1based": index + 1,
+                    "citation_page": str(printed),
+                    "page_mapping_method": "manual_segment",
+                    "text_raw": text_raw,
+                    "page_text_hash": pdf_page_text_hash(text_raw),
+                    "page_width": page_width,
+                    "page_height": page_height,
+                    "blocks": [
+                        _block(header, text_raw, 10.0, 60.0),
+                        _block(body, text_raw, 300.0, 700.0),
+                        _block(footer, text_raw, 930.0, 980.0),
+                    ],
+                }
+            )
+
+        self._build(
+            {
+                "metadata": {},
+                "source_files": [
+                    {
+                        "source_file_id": source_id,
+                        "source_type": "pdf",
+                        "file_name": "decoration.pdf",
+                        "display_title": "装饰样例",
+                    }
+                ],
+                "volumes": [],
+                "works": [],
+                "paragraphs": [],
+                "pdf_pages": pages,
+            }
+        )
+
+        result = get_document_window(self.database_path, source_id, start=0, count=4)
+        item = result["items"][1]
+
+        # text_raw is the untouched coordinate system: it still contains the
+        # running header and the visible folio verbatim.
+        expected_text = "\n".join([header, "这是第1页真正的正文文字，应当完整保留下来。", "24"])
+        self.assertEqual(item["text_raw"], expected_text)
+
+        spans = item["decoration_spans"]
+        kinds = {span["kind"] for span in spans}
+        self.assertIn("header", kinds)
+        self.assertIn("page_number", kinds)
+        for span in spans:
+            covered = item["text_raw"][span["start"]:span["end"]]
+            if span["kind"] == "header":
+                self.assertEqual(covered, header)
+            if span["kind"] == "page_number":
+                self.assertEqual(covered, "24")
+        # The body sentence is never inside a decoration span.
+        body_at = item["text_raw"].index("这是第1页")
+        self.assertFalse(
+            any(span["start"] <= body_at < span["end"] for span in spans)
+        )
+
+        self.assertEqual(item["page_marker"]["printed_page"], "24")
+
     def test_pdf_pagination_boundaries_and_unknown_page_source_are_safe(self) -> None:
         source_id = "pdf-boundary"
         page_indexes = (0, 2, 5, 9)

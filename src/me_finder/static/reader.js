@@ -48,6 +48,7 @@
     resolvedHighlights: new Map(),
     targetAnchorId: '',
     preciseHighlight: true,
+    showDecorations: false,
     matchQuote: '',
     hashRecoveryNotice: '',
     requestSerial: 0,
@@ -286,12 +287,24 @@
     comparisonLaunchers.className = 'mef-reader-comparison-launchers';
     comparisonLaunchers.hidden = true;
 
+    var toggleDecorations = createButton(
+      '显示页眉页脚',
+      'mef-reader-decoration-toggle',
+      'toggle-decorations'
+    );
+    toggleDecorations.setAttribute('aria-pressed', 'false');
+    toggleDecorations.setAttribute(
+      'title',
+      '页眉、页脚与页码默认隐藏；点此临时显示以对照原书'
+    );
+
     var close = createButton('关闭', 'mef-reader-close', 'close');
     close.setAttribute('aria-label', '关闭结构化阅读器');
 
     header.appendChild(heading);
     header.appendChild(current);
     header.appendChild(comparisonLaunchers);
+    header.appendChild(toggleDecorations);
     header.appendChild(close);
 
     var citationBar = document.createElement('div');
@@ -445,6 +458,7 @@
       if (action === 'comparison-previous') loadComparisonPrevious();
       if (action === 'comparison-next') loadComparisonNext();
       if (action === 'clear-selection') clearCitationRange();
+      if (action === 'toggle-decorations') toggleDecorationVisibility();
     });
     viewport.addEventListener('mousedown', function () {
       state.selectionDragging = true;
@@ -464,6 +478,7 @@
       title: title,
       eyebrow: eyebrow,
       current: current,
+      toggleDecorations: toggleDecorations,
       comparisonLaunchers: comparisonLaunchers,
       citationBar: citationBar,
       citationContext: citationContext,
@@ -817,7 +832,7 @@
       body.textContent = isParagraph ? '本段无可显示文本' : '本页无文本层';
     } else {
       var ranges = state.comparison.highlights.get(anchorId) || [];
-      appendHighlightedText(body, text, ranges);
+      appendHighlightedText(body, text, ranges, item.decoration_spans);
       if (ranges.length) article.classList.add('has-highlight');
     }
     article.appendChild(meta);
@@ -853,6 +868,7 @@
         ));
       });
     state.elements.comparisonContent.replaceChildren(fragment);
+    applyDecorationVisibility();
     var target = state.elements.comparisonContent.querySelector(
       '[data-reader-index="' + state.comparison.currentIndex + '"]'
     );
@@ -1714,13 +1730,29 @@
     }, 40);
   }
 
-  function appendHighlightedText(container, text, ranges) {
-    if (!ranges || !ranges.length) {
-      container.appendChild(document.createTextNode(text));
-      return;
+  function applyDecorationVisibility() {
+    var show = !!state.showDecorations;
+    [state.elements.content, state.elements.comparisonContent].forEach(
+      function (root) {
+        if (root && root.classList) {
+          root.classList.toggle('mef-show-decorations', show);
+        }
+      }
+    );
+    var button = state.elements.toggleDecorations;
+    if (button) {
+      button.textContent = show ? '隐藏页眉页脚' : '显示页眉页脚';
+      button.setAttribute('aria-pressed', show ? 'true' : 'false');
     }
-    var codePointCount = codePointLength(text);
-    var normalized = ranges
+  }
+
+  function toggleDecorationVisibility() {
+    state.showDecorations = !state.showDecorations;
+    applyDecorationVisibility();
+  }
+
+  function mergeCodePointRanges(ranges, codePointCount) {
+    var normalized = (ranges || [])
       .map(function (range) {
         return {
           start: clampInteger(range.start, 0, 0, codePointCount),
@@ -1729,7 +1761,6 @@
       })
       .filter(function (range) { return range.end > range.start; })
       .sort(function (left, right) { return left.start - right.start; });
-
     var merged = [];
     normalized.forEach(function (range) {
       var previous = merged.length ? merged[merged.length - 1] : null;
@@ -1739,26 +1770,111 @@
         merged.push({start: range.start, end: range.end});
       }
     });
+    return merged;
+  }
 
-    var cursor = 0;
-    merged.forEach(function (range) {
-      var beforeStart = codePointToUtf16Index(text, cursor);
-      var beforeEnd = codePointToUtf16Index(text, range.start);
-      if (beforeEnd > beforeStart) {
-        container.appendChild(document.createTextNode(text.slice(beforeStart, beforeEnd)));
+  function decorationKindAt(decorations, start, end) {
+    for (var i = 0; i < decorations.length; i += 1) {
+      if (decorations[i].start <= start && end <= decorations[i].end) {
+        return decorations[i].kind || 'decoration';
       }
-      var mark = document.createElement('mark');
-      mark.className = 'mef-reader-highlight';
-      mark.textContent = text.slice(
-        codePointToUtf16Index(text, range.start),
-        codePointToUtf16Index(text, range.end)
-      );
-      container.appendChild(mark);
-      cursor = range.end;
+    }
+    return null;
+  }
+
+  // Renders `text` (the page's untouched text_raw) into `container`, wrapping
+  // highlight ranges in <mark> and page-decoration ranges (running headers /
+  // footers / visible folios) in a hidden <span>.  Every branch appends a real
+  // text node covering the exact source characters, so the DOM text content
+  // stays character-for-character equal to text_raw — the citation/highlight
+  // offset coordinate system (see textOffsetWithin) is never disturbed, whether
+  // or not the decoration is visually shown.
+  function appendHighlightedText(container, text, ranges, decorations) {
+    var codePoints = Array.from(text);
+    var highlights = mergeCodePointRanges(ranges, codePointLength(text));
+    var decoRanges = (decorations || [])
+      .map(function (span) {
+        var range = {
+          start: clampInteger(span.start, 0, 0, codePointLength(text)),
+          end: clampInteger(span.end, 0, 0, codePointLength(text)),
+          kind: span.kind || 'decoration'
+        };
+        // Swallow the blank line a hidden header/footer would otherwise leave
+        // behind under `white-space: pre-wrap`.  Only whitespace is absorbed, so
+        // the concatenated text nodes still equal text_raw and offsets hold.
+        var isBlank = function (index) {
+          return index >= 0 && index < codePoints.length &&
+            /^\s$/.test(codePoints[index]);
+        };
+        while (range.end < codePoints.length && isBlank(range.end) &&
+               codePoints[range.end] !== '\n') {
+          range.end += 1;
+        }
+        if (range.end < codePoints.length && codePoints[range.end] === '\n') {
+          range.end += 1;
+        } else {
+          while (range.start > 0 && isBlank(range.start - 1) &&
+                 codePoints[range.start - 1] !== '\n') {
+            range.start -= 1;
+          }
+          if (range.start > 0 && codePoints[range.start - 1] === '\n') {
+            range.start -= 1;
+          }
+        }
+        return range;
+      })
+      .filter(function (span) { return span.end > span.start; });
+    if (!highlights.length && !decoRanges.length) {
+      container.appendChild(document.createTextNode(text));
+      return;
+    }
+
+    var codePointCount = codePointLength(text);
+    var boundarySet = {0: true};
+    boundarySet[codePointCount] = true;
+    highlights.forEach(function (range) {
+      boundarySet[range.start] = true;
+      boundarySet[range.end] = true;
     });
-    var tailStart = codePointToUtf16Index(text, cursor);
-    if (tailStart < text.length) {
-      container.appendChild(document.createTextNode(text.slice(tailStart)));
+    decoRanges.forEach(function (span) {
+      boundarySet[span.start] = true;
+      boundarySet[span.end] = true;
+    });
+    var boundaries = Object.keys(boundarySet)
+      .map(Number)
+      .sort(function (left, right) { return left - right; });
+
+    var isHighlighted = function (start, end) {
+      return highlights.some(function (range) {
+        return range.start <= start && end <= range.end;
+      });
+    };
+
+    for (var i = 0; i < boundaries.length - 1; i += 1) {
+      var start = boundaries[i];
+      var end = boundaries[i + 1];
+      if (end <= start) continue;
+      var slice = text.slice(
+        codePointToUtf16Index(text, start),
+        codePointToUtf16Index(text, end)
+      );
+      if (!slice) continue;
+      var node = document.createTextNode(slice);
+      if (isHighlighted(start, end)) {
+        var mark = document.createElement('mark');
+        mark.className = 'mef-reader-highlight';
+        mark.appendChild(node);
+        node = mark;
+      }
+      var kind = decorationKindAt(decoRanges, start, end);
+      if (kind) {
+        var decoration = document.createElement('span');
+        decoration.className = 'mef-reader-decoration';
+        decoration.dataset.decorationKind = kind;
+        decoration.appendChild(node);
+        node = decoration;
+      }
+      container.appendChild(node);
     }
   }
 
@@ -1878,7 +1994,7 @@
     } else {
       var ranges = highlightRangesForItem(item, anchorId);
       state.resolvedHighlights.set(anchorId, ranges);
-      appendHighlightedText(body, text, ranges);
+      appendHighlightedText(body, text, ranges, item.decoration_spans);
       if (ranges.length) article.classList.add('has-highlight');
     }
 
@@ -1933,6 +2049,7 @@
     fragment.appendChild(afterSpacer);
 
     elements.content.replaceChildren(fragment);
+    applyDecorationVisibility();
 
     /*
      * Position the requested anchor before observing boundaries.  Observing

@@ -368,15 +368,23 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("for (character of String(text || ''))", body)
         self.assertIn("utf16Index += character.length", body)
         self.assertIn("codePointsSeen += 1", body)
+        # Every text slice is fed code-point→UTF-16 converted bounds, never raw
+        # code-point offsets. The single slice in appendHighlightedText converts
+        # both of its bounds.
+        self.assertIn("codePointToUtf16Index(text, start)", READER_JS)
+        self.assertIn("codePointToUtf16Index(text, end)", READER_JS)
         self.assertGreaterEqual(
             READER_JS.count("codePointToUtf16Index(text,"),
-            5,
+            2,
         )
         self.assertIn("offsetUnit === 'unicode_codepoint'", READER_JS)
 
     def test_highlighting_is_safe_and_does_not_inject_search_html(self) -> None:
         self.assertIn("document.createElement('mark')", READER_JS)
-        self.assertIn("mark.textContent = text.slice(", READER_JS)
+        # The slice is wrapped in a text node (never innerHTML), then the mark
+        # adopts that node — HTML in the source text can never become markup.
+        self.assertIn("var node = document.createTextNode(slice)", READER_JS)
+        self.assertIn("mark.appendChild(node)", READER_JS)
         self.assertIn("document.createTextNode", READER_JS)
         self.assertNotIn(".innerHTML", READER_JS)
         self.assertIn("span.page_text_hash", READER_JS)
