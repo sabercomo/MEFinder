@@ -234,6 +234,8 @@ class DocumentExportHTTPTests(unittest.TestCase):
                 handler.close_runtime()
                 thread.join(timeout=2)
             self.assertEqual(responses[0]["footnote_report"], responses[1]["footnote_report"])
+            self.assertEqual(responses[0]["reconstruction_report"], responses[1]["reconstruction_report"])
+            self.assertEqual(guarded["reconstruction_report"]["reconstructed_block_count"], 0)
             report = responses[0]["footnote_report"]
             self.assertEqual(report["matched_ref_count"], 4)
             self.assertEqual([s["number_range"] for s in report["scopes"]], [[1, 3], [1, 1]])

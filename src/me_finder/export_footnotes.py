@@ -12,8 +12,10 @@ import hashlib
 import logging
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Mapping, Optional, Sequence
+
+from .export_page_reconstruction import SourceFragment, reconstruct_export_pages
 
 from .markdown_export_normalize import (
     ExportBlock,
@@ -51,6 +53,7 @@ class FootnoteReference:
 @dataclass(frozen=True)
 class FootnoteText(ExportBlock):
     references: tuple[FootnoteReference, ...] = ()
+    source_fragment: Optional[SourceFragment] = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,7 @@ class Footnote:
 class NormalizedDocument:
     items: list[PageMarker | FootnoteText | Footnote]
     footnote_report: dict
+    reconstruction_report: dict = field(default_factory=dict)
 
 
 def _is_unmarked_note(block: Mapping[str, object]) -> bool:
@@ -92,6 +96,8 @@ def normalize_document_export(
     continuation fragments remain in place and are reported, never silently lost.
     """
     options = options or ExportOptions()
+    reconstructed = reconstruct_export_pages(pages)
+    pages = reconstructed.pages
     profile = profile or build_page_artifact_profile(pages, options)
     structure = prepare_export_structure(pages, profile=profile, options=options)
     prepared = structure.pages
@@ -137,6 +143,22 @@ def normalize_document_export(
                 "source_layout_available": bool(block.get("_export_layout_available")),
                 "start": start, "end": end,
             }
+            fragment = block.get("_export_source_fragment")
+            if fragment is not None:
+                # Original identities remain usable for search/citation. Logical
+                # page ownership and local marker offsets are separate fields.
+                source_start = fragment.source_char_start + len(str(block["text"])) - len(str(block["text"]).lstrip())
+                record.update(
+                    source_fragment=asdict(fragment),
+                    source_page_index=fragment.source_page_index,
+                    source_physical_page=fragment.source_physical_page,
+                    source_printed_page=fragment.source_printed_page,
+                    export_page_index=page.get("pdf_page_index"),
+                    export_physical_page=physical,
+                    export_printed_page=_printed_page_raw(page),
+                    source_start=source_start + start if start is not None else None,
+                    source_end=source_start + end if end is not None else None,
+                )
             records.append(record)
             return record
         for position, block in enumerate(blocks):
@@ -268,7 +290,9 @@ def normalize_document_export(
             note_records[position].update(status="matched", reason="SAME_PAGE_UNIQUE_MARKER",
                                           note_id=note_id, scope_id=owner, display_number=number)
             for ref_position, match in references:
-                reference_id = f"{note_id}-ref-{blocks[ref_position]['_export_index']}-{match.start()}"
+                ref_record = ref_records[(ref_position, match.start())]
+                source_start = ref_record.get("source_start", match.start())
+                reference_id = f"{note_id}-ref-{blocks[ref_position]['_export_index']}-{source_start}"
                 reference_ids.append(reference_id)
                 ref_records[(ref_position, match.start())].update(
                     status="matched", reason="SAME_PAGE_UNIQUE_MARKER", note_id=note_id,
@@ -303,6 +327,7 @@ def normalize_document_export(
                 events.append((chapters[position], block.get("_export_scope_end_before", False), FootnoteText(
                     str(block["text"]).strip(), heading_level(block),
                     tuple(sorted(block_refs[position], key=lambda ref: ref.start)),
+                    block.get("_export_source_fragment"),
                 )))
 
     result: list[PageMarker | FootnoteText | Footnote] = []
@@ -337,7 +362,7 @@ def normalize_document_export(
               "heading_issues": structure.heading_issues, "unstructured_pages": unstructured_pages,
               "heading_issue_reason": dict(Counter(i["reason"] for i in structure.heading_issues)),
               "candidate_detection_scope": "aligned source blocks; unstructured pages are retained and listed separately",
-              "source_provenance_policy": "explicit cross_page spans veto whole blocks; absent flags are not proof of PDF alignment",
+              "source_provenance_policy": "exact native span reconstruction precedes matching; remaining cross_page blocks are vetoed; absent flags are not proof of PDF alignment",
               "counting_unit": "ref = explicit inline marker; note = candidate source block; reasons counted once per entity"}
     for kind in ("ref", "note"):
         candidates = [r for r in records if r["kind"] == kind]
@@ -358,7 +383,7 @@ def normalize_document_export(
                                  **{f"{status}_{kind}_count": sum(r["kind"] == kind and r["status"] == status for r in scoped)
                                     for status in ("matched", "unresolved") for kind in ("ref", "note")}})
     report["numbering_scope_count"] = len(report["scopes"])
-    return NormalizedDocument(result, report)
+    return NormalizedDocument(result, report, reconstructed.report)
 
 
 def normalize_document_footnotes(pages, *, options=None, profile=None):

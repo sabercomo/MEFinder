@@ -599,9 +599,9 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
                     "source_file_id": page.get("source_file_id"),
                     "source_page_index": page.get("pdf_page_index"),
                     "source_physical_page": _physical_page(page),
-                    "source_printed_page": _printed_page_raw(page), "source_block_index": index,
+                    "source_printed_page": _printed_page_raw(page), "source_block_index": block.get("_export_index", index),
                 })
-            indexed.append({**block, "_export_index": index, "_export_heading": decision})
+            indexed.append({**block, "_export_index": block.get("_export_index", index), "_export_heading": decision})
         # Parser arrays can append a discarded header after its own body. Move
         # only a trusted heading, and only across blocks proven below it in the
         # same horizontal flow. Never sort prose or change source block indices.
