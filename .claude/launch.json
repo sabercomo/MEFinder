@@ -6,6 +6,16 @@
       "runtimeExecutable": ".venv-windows/Scripts/python.exe",
       "runtimeArgs": ["-m", "src.me_finder", "serve"],
       "port": 8765
+    },
+    {
+      "name": "me-finder-macos-demo",
+      "runtimeExecutable": ".venv-macos312-arm64/bin/python",
+      "runtimeArgs": [
+        "-m", "src.me_finder", "serve",
+        "--index", "/private/tmp/claude-501/-Users-mercury-Documents--------/6a4d7271-dd3b-4eb7-9bbf-16c8d581e03f/scratchpad/reader-demo-index.sqlite3",
+        "--port", "8766"
+      ],
+      "port": 8766
     }
   ]
 }
