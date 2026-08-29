@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import difflib
 import re
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Iterator, Mapping, Sequence
 
 from ..runtime_location import runtime_root
 from .search_service import SearchRequest, SearchService
@@ -129,16 +130,13 @@ class LiteratureVerificationService:
         source_type: str = "all",
         limit: int = 5,
     ) -> dict[str, object]:
-        from ..search import SearchEngine
-
         _validate_quote(quote)
         validated_mode = _validate_mode(mode)
         _validate_source_type(source_type)
         validated_source_id = _validate_optional_source_id(source_file_id)
         validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
 
-        engine = SearchEngine(self._existing_index_path())
-        try:
+        with self._open_engine() as engine:
             return self._search_one(
                 engine,
                 quote,
@@ -147,8 +145,6 @@ class LiteratureVerificationService:
                 source_type=source_type,
                 limit=validated_limit,
             )
-        finally:
-            engine.close()
 
     def verify_quotes(
         self,
@@ -169,16 +165,8 @@ class LiteratureVerificationService:
             "matches_per_quote", matches_per_quote, minimum=1, maximum=5
         )
 
-        engine = SearchEngine(self._existing_index_path())
-        try:
-            # Resolve source existence once so every quote reports the same error.
-            if (
-                validated_source_id is not None
-                and validated_source_id not in engine.sources_by_id
-            ):
-                from ..structured_reader import SourceNotFound
-
-                raise SourceNotFound(f"未找到文献：{validated_source_id}")
+        # Resolve source existence once so every quote reports the same error.
+        with self._open_engine(validated_source_id) as engine:
             results = [
                 _verify_result(
                     index,
@@ -193,8 +181,6 @@ class LiteratureVerificationService:
                 )
                 for index, quote in enumerate(validated_quotes)
             ]
-        finally:
-            engine.close()
 
         counts = {"verified": 0, "approximate": 0, "not_found": 0}
         for result in results:
@@ -216,15 +202,12 @@ class LiteratureVerificationService:
         source_type: str = "all",
         mode: str = "fuzzy",
     ) -> dict[str, object]:
-        from ..search import SearchEngine
-
         _validate_quote(quote)
         validated_mode = _validate_mode(mode)
         _validate_source_type(source_type)
         validated_source_id = _validate_optional_source_id(source_file_id)
 
-        engine = SearchEngine(self._existing_index_path())
-        try:
+        with self._open_engine() as engine:
             located = self._search_one(
                 engine,
                 quote,
@@ -233,8 +216,6 @@ class LiteratureVerificationService:
                 source_type=source_type,
                 limit=1,
             )
-        finally:
-            engine.close()
 
         matches = located["matches"]
         if not matches:
@@ -269,30 +250,18 @@ class LiteratureVerificationService:
         source_type: str = "all",
         limit: int = 10,
     ) -> dict[str, object]:
-        from ..search import SearchEngine
-
         _validate_query(query)
         _validate_source_type(source_type)
         validated_source_id = _validate_optional_source_id(source_file_id)
         validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
 
-        engine = SearchEngine(self._existing_index_path())
-        try:
-            if (
-                validated_source_id is not None
-                and validated_source_id not in engine.sources_by_id
-            ):
-                from ..structured_reader import SourceNotFound
-
-                raise SourceNotFound(f"未找到文献：{validated_source_id}")
+        with self._open_engine(validated_source_id) as engine:
             raw_result = engine.search_passages(
                 query,
                 limit=validated_limit,
                 source_type=source_type,
                 source_file_id=validated_source_id,
             )
-        finally:
-            engine.close()
         return {
             "schema_version": SCHEMA_VERSION,
             "query": str(raw_result["query"]),
@@ -550,6 +519,30 @@ class LiteratureVerificationService:
         if not path.is_file():
             raise FileNotFoundError(f"Index not found: {path}")
         return path
+
+    @contextmanager
+    def _open_engine(self, source_file_id: str | None = None) -> Iterator[object]:
+        """Open the index for one tool call, and always close it.
+
+        Each MCP call resolves the index afresh (the sidecar holds no long-lived
+        handle), so every read-only tool needs the same open/validate/close
+        dance.  Passing ``source_file_id`` also checks it exists up front, which
+        every scoped tool must do before searching.
+        """
+
+        from ..search import SearchEngine
+        from ..structured_reader import SourceNotFound
+
+        engine = SearchEngine(self._existing_index_path())
+        try:
+            if (
+                source_file_id is not None
+                and source_file_id not in engine.sources_by_id
+            ):
+                raise SourceNotFound(f"未找到文献：{source_file_id}")
+            yield engine
+        finally:
+            engine.close()
 
 
 def _validate_quote(quote: object) -> None:

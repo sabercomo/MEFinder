@@ -20,6 +20,12 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web_http.py": 800,
             "web_assets.py": 120,
             "database.py": 1650,
+            # MCP 用例层：0.5.0 一轮加了 5 个工具就从 431 涨到 951 行，
+            # 是增长最快却唯一不受约束的文件，纳入门禁。
+            "application/literature_verification_service.py": 1000,
+            # 协议层拆出后应保持配置无关且稳定。
+            "openai_compatible.py": 800,
+            "vision_api.py": 900,
         }
         for relative, limit in limits.items():
             lines = (PACKAGE / relative).read_text(encoding="utf-8").splitlines()
@@ -84,6 +90,74 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     violations.append(path.name)
         self.assertEqual(violations, [])
 
+    def test_no_new_import_cycles_appear(self) -> None:
+        """包内循环依赖只能减少，不能新增。
+
+        0.5.0 曾因 general_model 与 vision_api 互相 import（一侧用函数内懒
+        import 掩盖）而悄悄新增一条环；协议层 openai_compatible 拆出后消除。
+        这里冻结剩余的已知环，任何新环都会让门禁失败。
+        """
+
+        edges: dict[str, set[str]] = {}
+        for path in sorted(PACKAGE.rglob("*.py")):
+            if "__pycache__" in str(path):
+                continue
+            relative = path.relative_to(PACKAGE).with_suffix("")
+            parts = list(relative.parts)
+            if parts[-1] == "__init__":
+                parts = parts[:-1]
+            module = ".".join(parts)
+            if not module:
+                continue
+            targets = edges.setdefault(module, set())
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or not node.level:
+                    continue
+                base = module.split(".")
+                prefix = (
+                    ".".join(base[: -node.level])
+                    if node.level <= len(base)
+                    else ""
+                )
+                target = (
+                    f"{prefix}.{node.module}".strip(".")
+                    if node.module
+                    else prefix
+                )
+                if target:
+                    targets.add(target)
+
+        colors: dict[str, int] = {}
+        cycles: list[tuple[str, ...]] = []
+
+        def visit(node: str, stack: list[str]) -> None:
+            colors[node] = 1
+            stack.append(node)
+            for peer in sorted(edges.get(node, ())):
+                if colors.get(peer) == 1:
+                    cycles.append(tuple(sorted(set(stack[stack.index(peer):]))))
+                elif colors.get(peer, 0) == 0:
+                    visit(peer, stack)
+            stack.pop()
+            colors[node] = 2
+
+        for module in sorted(edges):
+            if colors.get(module, 0) == 0:
+                visit(module, [])
+
+        # database <-> text_alignment <-> calibration_library <-> bibliographic_metadata
+        # 是 0.4.x 遗留的领域纠缠，由 database.py 内一条懒 import 兜住，尚未拆解。
+        known = {
+            (
+                "bibliographic_metadata",
+                "calibration_library",
+                "database",
+                "text_alignment",
+            )
+        }
+        self.assertEqual(set(cycles), known)
+
     def test_persistence_layer_does_not_import_domain_modules(self) -> None:
         # persistence owns connection policy, schema and migrations; it must not
         # depend *upward* on domain modules.  Schema DDL that domain code needs
@@ -95,6 +169,24 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 if isinstance(node, ast.ImportFrom) and node.level >= 2:
                     violations.append(f"{path.name}: from {'.' * node.level}{node.module or ''}")
         self.assertEqual(violations, [])
+
+    def test_openai_transport_layer_knows_nothing_about_config_stores(self) -> None:
+        """协议层必须保持配置无关，否则环会绕回来。
+
+        openai_compatible 只负责线上格式（端点形状、鉴权头、请求体、模型列表
+        归一化、客户端）。它一旦 import 任何配置模块（vision_api /
+        general_model），vision_api ↔ general_model 的环就会重新出现。
+        """
+
+        tree = ast.parse(
+            (PACKAGE / "openai_compatible.py").read_text(encoding="utf-8")
+        )
+        internal = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level
+        }
+        self.assertEqual(internal, set())
 
     def test_frontend_core_state_is_grouped_by_domain(self) -> None:
         state = (PACKAGE / "static" / "js" / "00-state.js").read_text(

@@ -22,7 +22,7 @@ from src.me_finder.pdf_extractors import (
     load_mineru_segments,
     mineru_profile,
 )
-from src.me_finder.vision_api import (
+from src.me_finder.openai_compatible import (
     OpenAICompatibleVisionClient,
     VisionAPIError,
     VisionProviderConfig,
@@ -31,6 +31,8 @@ from src.me_finder.vision_api import (
     _models_endpoint,
     _responses_endpoint,
     _responses_text,
+)
+from src.me_finder.vision_api import (
     default_fallback_provider,
     delete_vision_provider,
     discover_vision_models,
@@ -467,7 +469,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 [401, {"data": [{"id": "qwen3-vl-plus"}]}]
             )
             with patch(
-                "src.me_finder.vision_api.urllib.request.build_opener",
+                "src.me_finder.openai_compatible.urllib.request.build_opener",
                 return_value=opener,
             ):
                 result = discover_vision_models(
@@ -504,7 +506,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 [404, {"models": ["vision-relay-model"]}]
             )
             with patch(
-                "src.me_finder.vision_api.urllib.request.build_opener",
+                "src.me_finder.openai_compatible.urllib.request.build_opener",
                 return_value=opener,
             ):
                 result = discover_vision_models(
@@ -529,7 +531,7 @@ class VisionAPIConfigTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             opener = _CompatibilityOpener([403] * 6)
             with patch(
-                "src.me_finder.vision_api.urllib.request.build_opener",
+                "src.me_finder.openai_compatible.urllib.request.build_opener",
                 return_value=opener,
             ):
                 with self.assertRaises(VisionAPIError) as raised:
@@ -589,7 +591,7 @@ class VisionAPIConfigTests(unittest.TestCase):
                 }
             )
             with patch(
-                "src.me_finder.vision_api.urllib.request.build_opener",
+                "src.me_finder.openai_compatible.urllib.request.build_opener",
                 return_value=opener,
             ):
                 result = discover_vision_models(
@@ -724,7 +726,7 @@ class VisionAPIConfigTests(unittest.TestCase):
             provider_id = saved["providers"][0]["id"]
             opener = _FakeModelsOpener({"models": ["vision-new", "text-new"]})
             with patch(
-                "src.me_finder.vision_api.urllib.request.build_opener",
+                "src.me_finder.openai_compatible.urllib.request.build_opener",
                 return_value=opener,
             ):
                 result = discover_vision_models(
@@ -755,7 +757,7 @@ class VisionAPIConfigTests(unittest.TestCase):
             {"choices": [{"message": {"content": "OK"}}]}
         )
         with patch(
-            "src.me_finder.vision_api.urllib.request.build_opener",
+            "src.me_finder.openai_compatible.urllib.request.build_opener",
             return_value=opener,
         ):
             client = OpenAICompatibleVisionClient(
@@ -785,7 +787,7 @@ class VisionAPIConfigTests(unittest.TestCase):
             ]
         )
         with patch(
-            "src.me_finder.vision_api.urllib.request.build_opener",
+            "src.me_finder.openai_compatible.urllib.request.build_opener",
             return_value=opener,
         ):
             client = OpenAICompatibleVisionClient(
@@ -826,7 +828,7 @@ class VisionAPIConfigTests(unittest.TestCase):
         }
         opener = _CompatibilityOpener([response, response])
         with patch(
-            "src.me_finder.vision_api.urllib.request.build_opener",
+            "src.me_finder.openai_compatible.urllib.request.build_opener",
             return_value=opener,
         ):
             client = OpenAICompatibleVisionClient(

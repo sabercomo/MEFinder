@@ -10,7 +10,7 @@ import sqlite3
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import anyio
 from jsonschema import Draft202012Validator, ValidationError
@@ -180,60 +180,73 @@ def _error_result(code: str) -> CallToolResult:
     )
 
 
+# One entry per advertised tool.  A table (rather than an if/elif chain with a
+# fallthrough) keeps an unregistered name from being silently executed as some
+# other tool; ``test_mcp_server`` asserts these keys equal the contract's.
+TOOL_HANDLERS: dict[
+    str,
+    Callable[[LiteratureVerificationService, Mapping[str, object]], dict[str, object]],
+] = {
+    "list_documents": lambda service, arguments: service.list_documents(
+        query=arguments.get("query"),
+        source_type=arguments.get("source_type", "all"),
+        limit=arguments.get("limit", 20),
+    ),
+    "locate_quote": lambda service, arguments: service.locate_quote(
+        arguments["quote"],
+        mode=arguments.get("mode", "auto"),
+        source_file_id=arguments.get("source_file_id"),
+        source_type=arguments.get("source_type", "all"),
+        limit=arguments.get("limit", 5),
+    ),
+    "verify_quotes": lambda service, arguments: service.verify_quotes(
+        arguments["quotes"],
+        mode=arguments.get("mode", "auto"),
+        source_file_id=arguments.get("source_file_id"),
+        source_type=arguments.get("source_type", "all"),
+        matches_per_quote=arguments.get("matches_per_quote", 1),
+    ),
+    "search_passages": lambda service, arguments: service.search_passages(
+        arguments["query"],
+        source_file_id=arguments.get("source_file_id"),
+        source_type=arguments.get("source_type", "all"),
+        limit=arguments.get("limit", 10),
+    ),
+    "diff_quote": lambda service, arguments: service.diff_quote(
+        arguments["quote"],
+        source_file_id=arguments.get("source_file_id"),
+        source_type=arguments.get("source_type", "all"),
+        mode=arguments.get("mode", "fuzzy"),
+    ),
+    "read_bibliographic_pages": lambda service, arguments: (
+        service.read_bibliographic_pages(
+            arguments["source_file_id"],
+            front=arguments.get("front", 5),
+            back=arguments.get("back", 5),
+        )
+    ),
+    "read_bibliographic_metadata": lambda service, arguments: (
+        service.read_bibliographic_metadata(arguments["source_file_id"])
+    ),
+    "read_document_window": lambda service, arguments: (
+        service.read_document_window(
+            arguments["source_file_id"],
+            start=arguments.get("start", 0),
+            count=arguments.get("count", 10),
+        )
+    ),
+}
+
+
 def _execute_tool(
     service: LiteratureVerificationService,
     tool_name: str,
     arguments: Mapping[str, object],
 ) -> dict[str, object]:
-    if tool_name == "list_documents":
-        return service.list_documents(
-            query=arguments.get("query"),
-            source_type=arguments.get("source_type", "all"),
-            limit=arguments.get("limit", 20),
-        )
-    if tool_name == "locate_quote":
-        return service.locate_quote(
-            arguments["quote"],
-            mode=arguments.get("mode", "auto"),
-            source_file_id=arguments.get("source_file_id"),
-            source_type=arguments.get("source_type", "all"),
-            limit=arguments.get("limit", 5),
-        )
-    if tool_name == "verify_quotes":
-        return service.verify_quotes(
-            arguments["quotes"],
-            mode=arguments.get("mode", "auto"),
-            source_file_id=arguments.get("source_file_id"),
-            source_type=arguments.get("source_type", "all"),
-            matches_per_quote=arguments.get("matches_per_quote", 1),
-        )
-    if tool_name == "search_passages":
-        return service.search_passages(
-            arguments["query"],
-            source_file_id=arguments.get("source_file_id"),
-            source_type=arguments.get("source_type", "all"),
-            limit=arguments.get("limit", 10),
-        )
-    if tool_name == "diff_quote":
-        return service.diff_quote(
-            arguments["quote"],
-            source_file_id=arguments.get("source_file_id"),
-            source_type=arguments.get("source_type", "all"),
-            mode=arguments.get("mode", "fuzzy"),
-        )
-    if tool_name == "read_bibliographic_pages":
-        return service.read_bibliographic_pages(
-            arguments["source_file_id"],
-            front=arguments.get("front", 5),
-            back=arguments.get("back", 5),
-        )
-    if tool_name == "read_bibliographic_metadata":
-        return service.read_bibliographic_metadata(arguments["source_file_id"])
-    return service.read_document_window(
-        arguments["source_file_id"],
-        start=arguments.get("start", 0),
-        count=arguments.get("count", 10),
-    )
+    handler = TOOL_HANDLERS.get(tool_name)
+    if handler is None:
+        raise ValueError(f"unknown MCP tool: {tool_name}")
+    return handler(service, arguments)
 
 
 def _call_tool(

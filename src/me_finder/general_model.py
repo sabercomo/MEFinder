@@ -24,12 +24,12 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
-from .vision_api import (
+from .openai_compatible import (
     OpenAICompatibleVisionClient,
     VisionAPIError,
     VisionProviderConfig,
-    _validated_url,
-    discover_vision_models,
+    list_models,
+    validated_url,
 )
 
 # Reserved id used to route an import job to the general local model through the
@@ -125,7 +125,7 @@ def _validated_general_updates(
     model = str(updates.get("model") or "").strip()
     if not model or len(model) > _MAX_MODEL_LENGTH:
         raise VisionAPIError("请填写有效的模型名称。")
-    api_base = _validated_url(updates.get("api_base"))
+    api_base = validated_url(updates.get("api_base"))
     name = str(updates.get("name") or "").strip()
     if len(name) > _MAX_NAME_LENGTH:
         raise VisionAPIError("显示名称最多 80 个字符。")
@@ -193,7 +193,7 @@ def load_general_model_provider(
     return VisionProviderConfig(
         provider_id=GENERAL_MODEL_PROVIDER_ID,
         name=str(record.get("name") or "").strip() or DEFAULT_GENERAL_MODEL_NAME,
-        api_base=_validated_url(api_base),
+        api_base=validated_url(api_base),
         api_key=str(record.get("api_key") or ""),
         model=model,
         enabled=True,
@@ -215,7 +215,7 @@ def _config_from_payload(
     return VisionProviderConfig(
         provider_id=GENERAL_MODEL_PROVIDER_ID,
         name=str(payload.get("name") or "").strip() or DEFAULT_GENERAL_MODEL_NAME,
-        api_base=_validated_url(api_base),
+        api_base=validated_url(api_base),
         api_key=api_key,
         model=model,
         enabled=True,
@@ -249,10 +249,27 @@ def discover_general_model_models(
     payload: Mapping[str, object],
     path: Path = DEFAULT_GENERAL_MODEL_CONFIG_PATH,
 ) -> Dict[str, object]:
-    """List models the endpoint exposes, reusing the vision discovery core."""
+    """List models the endpoint exposes.
+
+    Calls the shared HTTP core directly rather than the hosted-provider helper,
+    because a self-hosted endpoint usually needs **no** API key and must not be
+    rejected for having none.
+    """
 
     stored = read_general_model_config(path)
-    probe = dict(payload)
-    if not str(probe.get("api_key") or "").strip():
-        probe["api_key"] = str(stored.get("api_key") or "")
-    return discover_vision_models(probe, config_path=path)
+    api_base = str(payload.get("api_base") or "").strip()
+    if not api_base:
+        raise VisionAPIError("请先填写服务地址再获取模型列表。")
+    api_key = str(payload.get("api_key") or "").strip()
+    if not api_key:
+        api_key = str(stored.get("api_key") or "")
+    name = (
+        str(payload.get("name") or "").strip()
+        or DEFAULT_GENERAL_MODEL_NAME
+    )
+    return list_models(
+        validated_url(api_base),
+        api_key,
+        name,
+        use_env_proxy=bool(payload.get("use_env_proxy")),
+    )

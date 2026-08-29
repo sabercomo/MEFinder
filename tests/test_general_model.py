@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from unittest import mock
 import unittest
 from pathlib import Path
 
@@ -106,6 +107,41 @@ class GeneralModelConfigTests(unittest.TestCase):
         self.assertEqual(provider.provider_id, "general-local-model")
         self.assertEqual(provider.model, "qwen2.5-vl")
         self.assertEqual(provider.api_key, "")
+
+
+class GeneralModelDiscoveryTests(unittest.TestCase):
+    def test_keyless_endpoint_can_list_models(self) -> None:
+        """自部署端点通常没有 API Key，取模型不能因此被拒。
+
+        vision 的 discover_vision_models 会先要求填 Key（面向托管服务商），
+        通用本地模型必须绕过它、直接调用配置无关的 list_models。
+        """
+
+        d = Path(tempfile.mkdtemp())
+        cfg = d / "general_model.local.json"
+        seen: dict[str, object] = {}
+
+        def fake_list_models(api_base, api_key, name, **kwargs):
+            seen.update(
+                {"api_base": api_base, "api_key": api_key, "name": name}
+            )
+            return {"models": [{"id": "qwen2.5-vl"}], "count": 1}
+
+        with mock.patch.object(gm, "list_models", fake_list_models):
+            result = gm.discover_general_model_models(
+                {"api_base": "http://127.0.0.1:8000/v1", "model": ""}, cfg
+            )
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(seen["api_key"], "")  # 空 Key 被放行
+        self.assertEqual(seen["api_base"], "http://127.0.0.1:8000/v1")
+
+    def test_discovery_requires_an_address(self) -> None:
+        d = Path(tempfile.mkdtemp())
+        with self.assertRaises(va.VisionAPIError):
+            gm.discover_general_model_models(
+                {"api_base": "", "model": ""}, d / "general_model.local.json"
+            )
 
 
 class GeneralModelRoutingTests(unittest.TestCase):

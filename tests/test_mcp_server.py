@@ -18,7 +18,10 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from src.me_finder.mcp_server import (
     CONTRACT,
+    INPUT_VALIDATORS,
+    TOOL_HANDLERS,
     _call_tool,
+    _execute_tool,
 )
 from src.me_finder.structured_reader import UnsupportedSourceType
 from tests.mcp_v1_fixture import (
@@ -319,6 +322,24 @@ run_stdio_server(create_server(NoisyService()))
                 self.assertIn("handler-noise", errlog.read())
 
         anyio.run(scenario)
+
+
+class MCPToolDispatchTests(unittest.TestCase):
+    """分发表、入参校验表与契约必须是同一组工具名。
+
+    过去 _execute_tool 是 if/elif 链，最后一个分支是隐式兜底：往契约里加了新
+    工具却忘了加分支时，请求会被静默当成 read_document_window 执行。改成表驱
+    动后，这里冻结三者一致。
+    """
+
+    def test_dispatch_table_matches_contract_and_validators(self) -> None:
+        contract_tools = {str(item["name"]) for item in CONTRACT["tools"]}
+        self.assertEqual(set(TOOL_HANDLERS), contract_tools)
+        self.assertEqual(set(INPUT_VALIDATORS), contract_tools)
+
+    def test_unknown_tool_raises_instead_of_falling_through(self) -> None:
+        with self.assertRaises(ValueError):
+            _execute_tool(object(), "no_such_tool", {})
 
 
 class MCPServerErrorMappingTests(unittest.TestCase):
