@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.me_finder import database as database_module
+from src.me_finder import database_backup as database_backup_module
 from src.me_finder import document_groups
 from src.me_finder.database import (
     DATABASE_BACKUP_RETENTION,
@@ -300,10 +301,12 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
         ids = [f"pdf-{i}" for i in range(6)]
         temp_dir, root, database_path = self._service_root(ids)
         with temp_dir:
+            # 这条路径走公开的 backup_database（与 _backup_database 同在
+            # database_backup 模块），所以 patch 必须打在该模块上。
             with patch.object(
-                database_module,
+                database_backup_module,
                 "_backup_database",
-                wraps=database_module._backup_database,
+                wraps=database_backup_module._backup_database,
             ) as backup:
                 result = DocumentDeletionService(root, database_path).remove_many(
                     ids[:4]
