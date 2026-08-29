@@ -5,7 +5,7 @@
   "release": "0.5.0",
   "server": {
     "name": "mefinder",
-    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；只记得大意或部分关键词、无法逐字引用时用 search_passages 按相关性召回原文（结果非逐字命中，按 relevance.rank 取用，再用 locate_quote 逐字定位）；怀疑抄写有误、要指出改漏多字用 diff_quote；补全或核验题录时用 read_bibliographic_pages 读版权页候选并只据原书文本提取；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；只记得大意或部分关键词、无法逐字引用时用 search_passages 按相关性召回原文（结果非逐字命中，按 relevance.rank 取用，再用 locate_quote 逐字定位）；怀疑抄写有误、要指出改漏多字用 diff_quote；补全题录时先用 read_bibliographic_metadata 查看缺哪些字段，再用 read_bibliographic_pages 读版权页候选，并只据原书自身文本提取、不得凭常识臆测；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -451,6 +451,60 @@
         "destructiveHint": false,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "read_bibliographic_metadata",
+      "title": "读取题录字段与缺口",
+      "description": "返回一篇文献当前已存的题录字段及其取值，并逐字段标注 present（已填）、invalid（存疑，需复核）或 missing（缺失），同时给出文献类型与现有元数据来源。用于在补全题录前看清缺哪些字段；配合 read_bibliographic_pages 从原书自身提取填补。只读现有题录，不改写、不联网、不推断。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          }
+        },
+        "required": ["source_file_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "source": {"$ref": "#/$defs/reader_source"},
+          "document_type": {"$ref": "#/$defs/nullable_string"},
+          "metadata_source": {"$ref": "#/$defs/nullable_string"},
+          "metadata_status": {"$ref": "#/$defs/nullable_string"},
+          "fields": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/bibliographic_field"}
+          },
+          "missing_fields": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "invalid_fields": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "required": [
+          "schema_version",
+          "source",
+          "document_type",
+          "metadata_source",
+          "metadata_status",
+          "fields",
+          "missing_fields",
+          "invalid_fields"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
     }
   ],
   "errorSchema": {
@@ -846,6 +900,37 @@
         "hints",
         "likely_copyright_page"
       ],
+      "additionalProperties": false
+    },
+    "bibliographic_field": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "enum": [
+            "title",
+            "author",
+            "country",
+            "translator",
+            "publisher",
+            "publish_place",
+            "publish_year",
+            "isbn",
+            "journal_name",
+            "volume",
+            "issue",
+            "page_range",
+            "doi",
+            "issn"
+          ]
+        },
+        "value": {"$ref": "#/$defs/nullable_string"},
+        "status": {
+          "type": "string",
+          "enum": ["present", "invalid", "missing"]
+        }
+      },
+      "required": ["field", "value", "status"],
       "additionalProperties": false
     }
   }

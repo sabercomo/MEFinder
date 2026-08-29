@@ -45,6 +45,7 @@ class McpV1BaselineTests(unittest.TestCase):
                 "diff_quote",
                 "search_passages",
                 "read_bibliographic_pages",
+                "read_bibliographic_metadata",
             ],
         )
         expected_annotations = {
@@ -80,6 +81,10 @@ class McpV1BaselineTests(unittest.TestCase):
         self.assertEqual(
             set(tools["read_bibliographic_pages"]["inputSchema"]["properties"]),
             {"source_file_id", "front", "back"},
+        )
+        self.assertEqual(
+            set(tools["read_bibliographic_metadata"]["inputSchema"]["properties"]),
+            {"source_file_id"},
         )
         serialized_contract = json.dumps(contract, ensure_ascii=False)
         self.assertNotIn("highlighted_html", serialized_contract)

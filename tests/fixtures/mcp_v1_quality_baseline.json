@@ -7,10 +7,10 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 354,
-    "instructions_utf8_bytes": 724,
-    "utf8_bytes": 26275,
-    "before_unreferenced_defs_trim_utf8_bytes": 62964
+    "instructions_characters": 402,
+    "instructions_utf8_bytes": 810,
+    "utf8_bytes": 28543,
+    "before_unreferenced_defs_trim_utf8_bytes": 75365
   },
   "responses": {
     "named_document_list": {
@@ -136,6 +136,14 @@
       },
       "structured_content_utf8_bytes": 1243,
       "content_utf8_bytes": 75
+    },
+    "bibliographic_metadata": {
+      "tool": "read_bibliographic_metadata",
+      "arguments": {
+        "source_file_id": "fixture-pdf"
+      },
+      "structured_content_utf8_bytes": 1152,
+      "content_utf8_bytes": 57
     }
   },
   "workflows": {
@@ -190,6 +198,11 @@
       ],
       "call_count": 2,
       "result_utf8_bytes": 2293
+    },
+    "metadata_gap_review": {
+      "responses": ["bibliographic_metadata"],
+      "call_count": 1,
+      "result_utf8_bytes": 1209
     }
   }
 }

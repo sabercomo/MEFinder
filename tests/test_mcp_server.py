@@ -150,6 +150,11 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "physical_page",
                                 "reader_source",
                             },
+                            "read_bibliographic_metadata": {
+                                "bibliographic_field",
+                                "nullable_string",
+                                "reader_source",
+                            },
                         }
                         self.assertEqual(
                             [item.name for item in listed.tools],

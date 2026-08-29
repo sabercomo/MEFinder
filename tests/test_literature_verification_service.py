@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from src.me_finder.application import LiteratureVerificationService
+from src.me_finder.bibliographic_metadata import METADATA_FIELDS
 from src.me_finder.structured_reader import SourceNotFound
 from tests.mcp_v1_fixture import (
     CALIBRATED_QUOTE,
@@ -446,7 +447,38 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(_bibliographic_hints("普通正文，没有任何题录线索。"), [])
         self.assertFalse(_is_likely_copyright_page([]))
 
+    def test_read_bibliographic_metadata_reports_field_status(self) -> None:
+        output_schema = self.tools["read_bibliographic_metadata"]["outputSchema"]
+        field_schema = self.contract["$defs"]["bibliographic_field"]
+        result = self.service.read_bibliographic_metadata(PDF_SOURCE_ID)
+        self.assert_required_keys(result, output_schema)
+        self.assert_required_keys(
+            result["source"], self.contract["$defs"]["reader_source"]
+        )
+        self.assertEqual(result["source"]["source_file_id"], PDF_SOURCE_ID)
+        field_names = [field["field"] for field in result["fields"]]
+        self.assertEqual(field_names, list(METADATA_FIELDS))
+        for field in result["fields"]:
+            self.assert_required_keys(field, field_schema)
+            self.assertIn(field["status"], {"present", "invalid", "missing"})
+            if field["status"] == "missing":
+                self.assertIn(field["field"], result["missing_fields"])
+            if field["status"] == "invalid":
+                self.assertIn(field["field"], result["invalid_fields"])
+        present = {f["field"] for f in result["fields"] if f["status"] == "present"}
+        # The fixture stores core book fields but leaves journal fields empty.
+        self.assertIn("title", present)
+        self.assertIn("author", present)
+        self.assertIn("journal_name", result["missing_fields"])
+        self.assertEqual(
+            present & set(result["missing_fields"]), set()
+        )
+        with self.assertRaises(SourceNotFound):
+            self.service.read_bibliographic_metadata("unknown-source")
+
     def test_service_validates_mcp_boundaries(self) -> None:
+        with self.assertRaisesRegex(ValueError, "source_file_id"):
+            self.service.read_bibliographic_metadata("invalid source")
         with self.assertRaisesRegex(ValueError, "front"):
             self.service.read_bibliographic_pages(PDF_SOURCE_ID, front=0, back=0)
         with self.assertRaisesRegex(ValueError, "front"):

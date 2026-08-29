@@ -148,6 +148,14 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
             f"读取了前部 {len(result['front'])} 页、尾部 {len(result['back'])} 页候选，"
             f"其中 {likely} 页疑似版权页。"
         )
+    if tool_name == "read_bibliographic_metadata":
+        present = sum(
+            1 for field in result["fields"] if field["status"] == "present"
+        )
+        return (
+            f"题录字段 {present}/{len(result['fields'])} 已填，"
+            f"缺失 {len(result['missing_fields'])} 项，存疑 {len(result['invalid_fields'])} 项。"
+        )
     return f"读取了 {len(result['items'])} 个文献位置。"
 
 
@@ -219,6 +227,8 @@ def _execute_tool(
             front=arguments.get("front", 5),
             back=arguments.get("back", 5),
         )
+    if tool_name == "read_bibliographic_metadata":
+        return service.read_bibliographic_metadata(arguments["source_file_id"])
     return service.read_document_window(
         arguments["source_file_id"],
         start=arguments.get("start", 0),

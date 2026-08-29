@@ -258,7 +258,7 @@ D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下应该能看到七个只读工具：
+正常情况下应该能看到八个只读工具：
 
 ```text
 list_documents
@@ -268,6 +268,7 @@ verify_quotes
 diff_quote
 search_passages
 read_bibliographic_pages
+read_bibliographic_metadata
 ```
 
 然后测试是否能读取自己的文献库：
@@ -495,7 +496,7 @@ read_document_window
 
 ## 八、配置成功后能做什么
 
-MEFinder MCP 提供七个只读工具：
+MEFinder MCP 提供八个只读工具：
 
 - `list_documents`：列出或筛选已导入文献；
 - `locate_quote`：定位原句、近似引文和多个候选；
@@ -503,7 +504,8 @@ MEFinder MCP 提供七个只读工具：
 - `verify_quotes`：一次核对多条引文，逐条返回命中/疑似错引/未找到；
 - `diff_quote`：把疑似抄错的引文和原句逐字符对齐，指出增、漏、改；
 - `search_passages`：只记得大意或部分关键词时，按相关性召回可能相关的原文段落（相关性检索，非逐字命中，可再转 `locate_quote` 逐字核验）；
-- `read_bibliographic_pages`：读取版权页候选（书首与书尾），供 AI 从原书自身补全题录。
+- `read_bibliographic_pages`：读取版权页候选（书首与书尾），供 AI 从原书自身补全题录；
+- `read_bibliographic_metadata`：查看已存题录字段与缺口（缺哪些字段），配合上一个工具补全。
 
 测试时可以直接说：
 

@@ -475,6 +475,76 @@ class LiteratureVerificationService:
             "back": back_pages,
         }
 
+    def read_bibliographic_metadata(
+        self,
+        source_file_id: str,
+    ) -> dict[str, object]:
+        from ..bibliographic_metadata import (
+            METADATA_FIELDS,
+            canonical_metadata,
+            invalid_metadata_fields,
+            is_valid_bibliographic_value,
+        )
+        from ..database import load_database_index
+        from ..structured_reader import SourceNotFound
+
+        validated_source_id = _validate_source_id(source_file_id)
+        catalog = load_database_index(self._existing_index_path())
+        source = next(
+            (
+                item
+                for item in catalog.get("source_files", [])
+                if isinstance(item, Mapping)
+                and str(item.get("source_file_id") or "") == validated_source_id
+            ),
+            None,
+        )
+        if source is None:
+            raise SourceNotFound(f"未找到文献：{validated_source_id}")
+
+        record = canonical_metadata(source)
+        invalid = set(invalid_metadata_fields(record))
+        fields: list[dict[str, object]] = []
+        missing_fields: list[str] = []
+        invalid_fields: list[str] = []
+        for name in METADATA_FIELDS:
+            value = record.get(name)
+            if name in invalid:
+                status = "invalid"
+                invalid_fields.append(name)
+            elif value not in (None, "") and is_valid_bibliographic_value(value):
+                status = "present"
+            else:
+                status = "missing"
+                missing_fields.append(name)
+            fields.append(
+                {"field": name, "value": _first_text(value), "status": status}
+            )
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "source": {
+                "source_file_id": validated_source_id,
+                "source_type": str(source.get("source_type") or ""),
+                "title": _first_text(
+                    record.get("title"),
+                    source.get("document_title"),
+                    source.get("display_title"),
+                    source.get("file_name"),
+                ),
+                "original_file_name": _first_text(
+                    source.get("original_file_name"),
+                    source.get("file_name"),
+                ),
+            },
+            "document_type": _first_text(record.get("document_type")),
+            "metadata_source": _first_text(record.get("metadata_source")),
+            "metadata_status": _first_text(record.get("metadata_status")),
+            "fields": fields,
+            "missing_fields": missing_fields,
+            "invalid_fields": invalid_fields,
+        }
+
     def _existing_index_path(self) -> Path:
         path = self.index_path
         if not path.is_file():
