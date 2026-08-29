@@ -261,6 +261,150 @@ class SearchEngine:
             "index_metadata": self.index.get("metadata", {}),
         }
 
+    def search_passages(
+        self,
+        query: str,
+        limit: int = 10,
+        source_type: str = "all",
+        source_file_id: Optional[str] = None,
+        source_file_ids: Optional[Sequence[str]] = None,
+    ) -> Dict[str, object]:
+        """Rank passages by BM25 keyword relevance to a free description.
+
+        Unlike :meth:`search` (verbatim / near-verbatim location), this ranks by
+        how relevant a passage is to a loose description or keywords and does not
+        require the query to resemble a contiguous span of the passage — so it can
+        never claim a verbatim hit. The retrieval step lives in
+        :meth:`_retrieve_passages` so an embedding backend can replace it later
+        without touching formatting or the tool contract.
+        """
+
+        query = (query or "").strip()
+        self._scope_source_ids = (
+            frozenset(str(item) for item in source_file_ids)
+            if source_file_ids is not None
+            else None
+        )
+        if source_type not in {"all", "word", "epub", "pdf"}:
+            source_type = "all"
+        source_file_id = str(source_file_id or "").strip() or None
+        normalized_limit = max(1, min(int(limit or 10), 50))
+        if not query:
+            return {
+                "query": query,
+                "total": 0,
+                "total_is_exact": True,
+                "has_more": False,
+                "results": [],
+            }
+        ranked, truncated, method = self._retrieve_passages(
+            query, source_type, source_file_id, normalized_limit
+        )
+        total = len(ranked)
+        selected = ranked[:normalized_limit]
+        raw_scores = [raw for _paragraph, raw in selected]
+        results = [
+            self._format_passage(paragraph, rank, raw, raw_scores, method)
+            for rank, (paragraph, raw) in enumerate(selected, start=1)
+        ]
+        return {
+            "query": query,
+            "total": total,
+            "total_is_exact": not truncated,
+            "has_more": truncated or total > normalized_limit,
+            "results": results,
+        }
+
+    def _retrieve_passages(
+        self,
+        query: str,
+        source_type: str,
+        source_file_id: Optional[str],
+        limit: int,
+    ) -> Tuple[List[Tuple[Dict[str, object], float]], bool, str]:
+        """Relevance retrieval seam: return ``(ranked, truncated, method)``.
+
+        ``ranked`` is a list of ``(paragraph, raw_relevance)`` ordered
+        most-relevant first. ``raw_relevance`` follows a "lower is more relevant"
+        convention (both SQLite ``bm25`` and the trigram fallback do); callers must
+        rely only on the ordering, never on the scale. A future embedding backend
+        replaces this method alone.
+        """
+
+        q_plain = punctuationless_text(query)
+        budget = max(SQL_CANDIDATE_FLOOR, limit * SQL_CANDIDATE_MULTIPLIER)
+        if self.backend == "sqlite" and self.db is not None:
+            fts_query = self._fts_match_expression(q_plain, "OR")
+            if fts_query:
+                source_clause, source_args = self._sql_source_filter(
+                    source_type, source_file_id, "p"
+                )
+                rows = self.db.execute(
+                    f"SELECT {PARAGRAPH_SELECT_COLUMNS}, "
+                    "bm25(paragraphs_fts) AS bm25_score "
+                    "FROM paragraphs_fts JOIN paragraphs p "
+                    "ON p.rowid = paragraphs_fts.rowid "
+                    "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
+                    + source_clause
+                    + " ORDER BY bm25(paragraphs_fts) LIMIT ?",
+                    [fts_query, *source_args, budget + 1],
+                ).fetchall()
+                truncated = len(rows) > budget
+                ranked = [
+                    (paragraph_from_database_row(row), float(row["bm25_score"]))
+                    for row in rows[:budget]
+                ]
+                return ranked, truncated, "bm25"
+        return self._scan_passages(q_plain, source_type, source_file_id, budget)
+
+    def _scan_passages(
+        self,
+        q_plain: str,
+        source_type: str,
+        source_file_id: Optional[str],
+        budget: int,
+    ) -> Tuple[List[Tuple[Dict[str, object], float]], bool, str]:
+        """Fallback relevance ranking by trigram overlap (no FTS / JSON backend)."""
+
+        if not q_plain or not getattr(self, "paragraphs", None):
+            return [], False, "trigram"
+        query_grams = set(self._ngrams(q_plain))
+        if not query_grams:
+            return [], False, "trigram"
+        scored: List[Tuple[int, Dict[str, object]]] = []
+        for paragraph in self.paragraphs:
+            if not self._source_allowed(paragraph, source_type, source_file_id):
+                continue
+            plain = str(paragraph.get("plain_text") or "")
+            overlap = len(query_grams.intersection(self._ngrams_set(plain)))
+            if overlap:
+                scored.append((overlap, paragraph))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        truncated = len(scored) > budget
+        # Negate overlap to keep the "lower is more relevant" raw-score convention.
+        ranked = [
+            (paragraph, float(-overlap)) for overlap, paragraph in scored[:budget]
+        ]
+        return ranked, truncated, "trigram"
+
+    def _format_passage(
+        self,
+        paragraph: Dict[str, object],
+        rank: int,
+        raw_score: float,
+        raw_scores: Sequence[float],
+        method: str,
+    ) -> Dict[str, object]:
+        # Passages have no verbatim span; reuse the shared formatter with an empty
+        # match window (start == end) so ``matched_text`` becomes a preview snippet.
+        result = self._format_result(paragraph, "relevance", 0.0, 0, 0)
+        result["relevance"] = {
+            "rank": rank,
+            "method": method,
+            "score": _relative_relevance(raw_score, raw_scores),
+        }
+        return result
+
     def _sql_source_filter(
         self,
         source_type: str,
@@ -1619,6 +1763,23 @@ class SearchEngine:
             str(record.get("original_file_name") or ""),
             paragraph_sort,
         )
+
+
+def _relative_relevance(raw_score: float, raw_scores: Sequence[float]) -> float:
+    """Normalize one raw relevance to [0, 1] within the current result set.
+
+    Lower raw scores are more relevant, so the best hit in the set maps to 1.0.
+    This is a within-response relative signal only — it is not comparable across
+    queries. Callers should order results by ``rank``, not by this score.
+    """
+
+    if not raw_scores:
+        return 1.0
+    best = min(raw_scores)
+    worst = max(raw_scores)
+    if worst <= best:
+        return 1.0
+    return round((worst - raw_score) / (worst - best), 4)
 
 
 def best_window_ratio(query_plain: str, plain: str) -> Tuple[float, int, int]:

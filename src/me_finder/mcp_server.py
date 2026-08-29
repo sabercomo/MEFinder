@@ -35,7 +35,7 @@ CONTRACT_PATH = (
     Path(__file__).resolve().parents[2]
     / "docs"
     / "contracts"
-    / "v0.4.4-mcp-v1-tools.json"
+    / "v0.5.0-mcp-v1-tools.json"
 )
 ERROR_MESSAGES = {
     "invalid_input": "输入参数不符合工具契约。",
@@ -122,6 +122,8 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
         return f"找到 {result['total']} 篇文献。"
     if tool_name == "locate_quote":
         return f"找到 {result['total']} 个原句候选。"
+    if tool_name == "search_passages":
+        return f"按相关性召回了 {len(result['passages'])} 段原文（相关性排序，非逐字命中）。"
     if tool_name == "verify_quotes":
         return (
             f"核对了 {result['total']} 条引文："
@@ -196,6 +198,13 @@ def _execute_tool(
             source_file_id=arguments.get("source_file_id"),
             source_type=arguments.get("source_type", "all"),
             matches_per_quote=arguments.get("matches_per_quote", 1),
+        )
+    if tool_name == "search_passages":
+        return service.search_passages(
+            arguments["query"],
+            source_file_id=arguments.get("source_file_id"),
+            source_type=arguments.get("source_type", "all"),
+            limit=arguments.get("limit", 10),
         )
     if tool_name == "diff_quote":
         return service.diff_quote(

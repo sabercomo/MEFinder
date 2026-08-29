@@ -261,6 +261,51 @@ class LiteratureVerificationService:
             "stats": stats,
         }
 
+    def search_passages(
+        self,
+        query: str,
+        *,
+        source_file_id: str | None = None,
+        source_type: str = "all",
+        limit: int = 10,
+    ) -> dict[str, object]:
+        from ..search import SearchEngine
+
+        _validate_query(query)
+        _validate_source_type(source_type)
+        validated_source_id = _validate_optional_source_id(source_file_id)
+        validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
+
+        engine = SearchEngine(self._existing_index_path())
+        try:
+            if (
+                validated_source_id is not None
+                and validated_source_id not in engine.sources_by_id
+            ):
+                from ..structured_reader import SourceNotFound
+
+                raise SourceNotFound(f"未找到文献：{validated_source_id}")
+            raw_result = engine.search_passages(
+                query,
+                limit=validated_limit,
+                source_type=source_type,
+                source_file_id=validated_source_id,
+            )
+        finally:
+            engine.close()
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "query": str(raw_result["query"]),
+            "total": int(raw_result["total"]),
+            "total_is_exact": bool(raw_result["total_is_exact"]),
+            "has_more": bool(raw_result["has_more"]),
+            "passages": [
+                _passage_match(item)
+                for item in raw_result["results"]
+                if isinstance(item, Mapping)
+            ],
+        }
+
     def _search_one(
         self,
         engine: object,
@@ -442,6 +487,13 @@ def _validate_quote(quote: object) -> None:
         raise ValueError("quote 必须是非空字符串")
     if len(quote) > 10_000:
         raise ValueError("quote 不能超过 10000 个 Unicode codepoint")
+
+
+def _validate_query(query: object) -> None:
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("query 必须是非空字符串")
+    if len(query) > 1_000:
+        raise ValueError("query 不能超过 1000 个 Unicode codepoint")
 
 
 def _validate_quotes(quotes: object) -> list[str]:
@@ -691,6 +743,51 @@ def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
         "physical_page": physical_page,
         "citation_page": _citation_page(fields, source_type, physical_page),
         "page_mapping": _page_mapping(fields),
+        "reader": {
+            "unit": "pdf_page" if source_type == "pdf" else "word_paragraph",
+            "start": int(reader_start),
+        },
+    }
+
+
+def _passage_match(fields: Mapping[str, object]) -> dict[str, object]:
+    source_type = str(fields["source_type"])
+    physical_page = _physical_page(fields, source_type)
+    reader_start = _first_present(
+        fields,
+        "pdf_page_start_index" if source_type == "pdf" else "paragraph_index",
+    )
+    relevance = fields["relevance"]
+    if not isinstance(relevance, Mapping):
+        raise ValueError("检索引擎返回了无效的 relevance")
+    citation_formats = fields["citation_formats"]
+    if not isinstance(citation_formats, Mapping):
+        raise ValueError("检索引擎返回了无效的 citation_formats")
+    return {
+        "paragraph_id": str(fields["paragraph_id"]),
+        "source_file_id": str(fields["source_file_id"]),
+        "source_type": source_type,
+        "document_title": _first_text(fields.get("document_title")),
+        "work_title": _first_text(fields.get("work_title")),
+        "author": _first_text(fields.get("author_label")),
+        "paragraph_text": str(fields["paragraph_text"]),
+        "preview": str(fields["matched_text"]),
+        "context_before": fields["context_before"],
+        "context_after": fields["context_after"],
+        "relevance": {
+            "rank": int(relevance["rank"]),
+            "method": str(relevance["method"]),
+            "score": float(relevance["score"]),
+        },
+        "physical_page": physical_page,
+        "citation_page": _citation_page(fields, source_type, physical_page),
+        "page_mapping": _page_mapping(fields),
+        "citation": {
+            "chinese": str(citation_formats["chinese"]),
+            "gb": str(citation_formats["gb"]),
+            "chinese_status": str(citation_formats["chinese_status"]),
+            "gb_status": str(citation_formats["gb_status"]),
+        },
         "reader": {
             "unit": "pdf_page" if source_type == "pdf" else "word_paragraph",
             "start": int(reader_start),

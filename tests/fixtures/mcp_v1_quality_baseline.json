@@ -7,15 +7,17 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 258,
-    "instructions_utf8_bytes": 530,
-    "utf8_bytes": 21485,
-    "before_unreferenced_defs_trim_utf8_bytes": 43788
+    "instructions_characters": 354,
+    "instructions_utf8_bytes": 724,
+    "utf8_bytes": 26275,
+    "before_unreferenced_defs_trim_utf8_bytes": 62964
   },
   "responses": {
     "named_document_list": {
       "tool": "list_documents",
-      "arguments": {"query": "MCP 合成 PDF 样例"},
+      "arguments": {
+        "query": "MCP 合成 PDF 样例"
+      },
       "structured_content_utf8_bytes": 214,
       "content_utf8_bytes": 21
     },
@@ -50,13 +52,19 @@
     },
     "cross_page_locate": {
       "tool": "locate_quote",
-      "arguments": {"quote": "跨页证据\n仍可追溯", "mode": "exact"},
+      "arguments": {
+        "quote": "跨页证据\n仍可追溯",
+        "mode": "exact"
+      },
       "structured_content_utf8_bytes": 995,
       "content_utf8_bytes": 27
     },
     "spread_right_locate": {
       "tool": "locate_quote",
-      "arguments": {"quote": "右页保存另一证据", "mode": "exact"},
+      "arguments": {
+        "quote": "右页保存另一证据",
+        "mode": "exact"
+      },
       "structured_content_utf8_bytes": 1010,
       "content_utf8_bytes": 27
     },
@@ -72,14 +80,21 @@
     },
     "cross_page_window": {
       "tool": "read_document_window",
-      "arguments": {"source_file_id": "fixture-pdf", "start": 2, "count": 2},
+      "arguments": {
+        "source_file_id": "fixture-pdf",
+        "start": 2,
+        "count": 2
+      },
       "structured_content_utf8_bytes": 1649,
       "content_utf8_bytes": 30
     },
     "batch_verify": {
       "tool": "verify_quotes",
       "arguments": {
-        "quotes": ["技术判断必须由可复核证据支撑", "这是一条夹具中不存在的句子"],
+        "quotes": [
+          "技术判断必须由可复核证据支撑",
+          "这是一条夹具中不存在的句子"
+        ],
         "mode": "exact"
       },
       "structured_content_utf8_bytes": 1164,
@@ -97,47 +112,84 @@
     },
     "misquote_diff": {
       "tool": "diff_quote",
-      "arguments": {"quote": "技术判断必须由可复核证据支撑误", "mode": "fuzzy"},
+      "arguments": {
+        "quote": "技术判断必须由可复核证据支撑误",
+        "mode": "fuzzy"
+      },
       "structured_content_utf8_bytes": 1191,
       "content_utf8_bytes": 44
     },
     "bibliographic_pages": {
       "tool": "read_bibliographic_pages",
-      "arguments": {"source_file_id": "fixture-pdf", "front": 2, "back": 2},
+      "arguments": {
+        "source_file_id": "fixture-pdf",
+        "front": 2,
+        "back": 2
+      },
       "structured_content_utf8_bytes": 1387,
+      "content_utf8_bytes": 75
+    },
+    "passage_retrieval": {
+      "tool": "search_passages",
+      "arguments": {
+        "query": "检索命中 结论成立"
+      },
+      "structured_content_utf8_bytes": 1243,
       "content_utf8_bytes": 75
     }
   },
   "workflows": {
     "exact_quote": {
-      "responses": ["exact_locate"],
+      "responses": [
+        "exact_locate"
+      ],
       "call_count": 1,
       "result_utf8_bytes": 975
     },
     "named_document_quote": {
-      "responses": ["named_document_list", "exact_locate"],
+      "responses": [
+        "named_document_list",
+        "exact_locate"
+      ],
       "call_count": 2,
       "result_utf8_bytes": 1210
     },
     "quote_with_context_expansion": {
-      "responses": ["cross_page_locate", "cross_page_window"],
+      "responses": [
+        "cross_page_locate",
+        "cross_page_window"
+      ],
       "call_count": 2,
       "result_utf8_bytes": 2701
     },
     "batch_reference_check": {
-      "responses": ["batch_verify"],
+      "responses": [
+        "batch_verify"
+      ],
       "call_count": 1,
       "result_utf8_bytes": 1245
     },
     "misquote_review": {
-      "responses": ["misquote_diff"],
+      "responses": [
+        "misquote_diff"
+      ],
       "call_count": 1,
       "result_utf8_bytes": 1235
     },
     "bibliographic_extraction": {
-      "responses": ["bibliographic_pages"],
+      "responses": [
+        "bibliographic_pages"
+      ],
       "call_count": 1,
       "result_utf8_bytes": 1462
+    },
+    "passage_then_locate": {
+      "responses": [
+        "passage_retrieval",
+        "exact_locate"
+      ],
+      "call_count": 2,
+      "result_utf8_bytes": 2293
     }
   }
 }

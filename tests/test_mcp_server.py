@@ -130,6 +130,18 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "physical_page",
                                 "reader_cursor",
                             },
+                            "search_passages": {
+                                "citation_page",
+                                "context_item",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "page_mapping",
+                                "passage",
+                                "passage_citation",
+                                "physical_page",
+                                "reader_cursor",
+                                "relevance",
+                            },
                             "read_bibliographic_pages": {
                                 "bibliographic_page",
                                 "citation_page",
@@ -179,10 +191,15 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "count": 2,
                             },
                         )
+                        passages = await session.call_tool(
+                            "search_passages",
+                            {"query": "可复核证据"},
+                        )
                         results = {
                             "list_documents": documents,
                             "locate_quote": located,
                             "read_document_window": window,
+                            "search_passages": passages,
                         }
                         for name, result in results.items():
                             self.assertFalse(result.is_error)
@@ -196,6 +213,15 @@ class MCPServerProtocolTests(unittest.TestCase):
                         self.assertEqual(documents.structured_content["total"], 2)
                         self.assertEqual(located.structured_content["total"], 1)
                         self.assertEqual(len(window.structured_content["items"]), 2)
+                        self.assertGreaterEqual(
+                            len(passages.structured_content["passages"]), 1
+                        )
+                        self.assertEqual(
+                            passages.structured_content["passages"][0]["relevance"][
+                                "rank"
+                            ],
+                            1,
+                        )
                         self.assertNotIn(CALIBRATED_QUOTE, located.content[0].text)
                 errlog.seek(0)
                 self.assertEqual(errlog.read(), "")

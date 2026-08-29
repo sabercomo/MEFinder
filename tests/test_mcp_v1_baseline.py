@@ -13,7 +13,7 @@ from tests.mcp_v1_fixture import build_mcp_v1_fixture
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.4.4-mcp-v1-tools.json"
+CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.5.0-mcp-v1-tools.json"
 BASELINE_PATH = PROJECT_ROOT / "tests" / "fixtures" / "mcp_v1_baseline.json"
 
 
@@ -43,6 +43,7 @@ class McpV1BaselineTests(unittest.TestCase):
                 "read_document_window",
                 "verify_quotes",
                 "diff_quote",
+                "search_passages",
                 "read_bibliographic_pages",
             ],
         )
@@ -71,6 +72,10 @@ class McpV1BaselineTests(unittest.TestCase):
         self.assertEqual(
             set(tools["diff_quote"]["inputSchema"]["properties"]),
             {"quote", "source_file_id", "source_type", "mode"},
+        )
+        self.assertEqual(
+            set(tools["search_passages"]["inputSchema"]["properties"]),
+            {"query", "source_file_id", "source_type", "limit"},
         )
         self.assertEqual(
             set(tools["read_bibliographic_pages"]["inputSchema"]["properties"]),

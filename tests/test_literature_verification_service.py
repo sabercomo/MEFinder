@@ -22,7 +22,7 @@ from tests.mcp_v1_fixture import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.4.4-mcp-v1-tools.json"
+CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.5.0-mcp-v1-tools.json"
 
 
 class LiteratureVerificationServiceTests(unittest.TestCase):
@@ -310,6 +310,56 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
                 [CALIBRATED_QUOTE],
                 source_file_id="unknown-source",
             )
+
+    def test_search_passages_ranks_by_relevance_and_matches_contract(self) -> None:
+        output_schema = self.tools["search_passages"]["outputSchema"]
+        # A loose keyword description, not a verbatim quote.
+        result = self.service.search_passages("检索命中 结论成立", limit=5)
+        self.assert_required_keys(result, output_schema)
+        self.assertEqual(result["schema_version"], "1")
+        self.assertTrue(result["total_is_exact"])
+        self.assertGreaterEqual(result["total"], 1)
+
+        passage_schema = self.contract["$defs"]["passage"]
+        ranks = [passage["relevance"]["rank"] for passage in result["passages"]]
+        self.assertEqual(ranks, list(range(1, len(ranks) + 1)))
+        top = result["passages"][0]
+        self.assert_required_keys(top, passage_schema)
+        self.assert_required_keys(
+            top["relevance"], self.contract["$defs"]["relevance"]
+        )
+        self.assert_required_keys(
+            top["citation"], self.contract["$defs"]["passage_citation"]
+        )
+        self.assertEqual(top["relevance"]["method"], "bm25")
+        self.assertEqual(top["relevance"]["score"], 1.0)
+        self.assertEqual(top["source_file_id"], WORD_SOURCE_ID)
+        self.assertIn("检索命中与结论成立", top["paragraph_text"])
+        # A retrieval hit is not a verbatim match: the query text is absent.
+        self.assertNotIn("检索命中 结论成立", top["paragraph_text"])
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn(str(self.runtime_root), serialized)
+
+    def test_search_passages_scopes_and_separates_absence_from_errors(self) -> None:
+        scoped = self.service.search_passages(
+            "可复核证据",
+            source_file_id=PDF_SOURCE_ID,
+            source_type="pdf",
+        )
+        self.assertTrue(scoped["passages"])
+        self.assertTrue(
+            all(p["source_file_id"] == PDF_SOURCE_ID for p in scoped["passages"])
+        )
+
+        absent = self.service.search_passages("完全不存在的关键词组合", limit=3)
+        self.assertEqual(absent["total"], 0)
+        self.assertEqual(absent["passages"], [])
+        self.assertTrue(absent["total_is_exact"])
+
+        with self.assertRaises(SourceNotFound):
+            self.service.search_passages("证据", source_file_id="unknown-source")
+        with self.assertRaises(ValueError):
+            self.service.search_passages("   ")
 
     def test_diff_quote_reports_identical_difference_and_absence(self) -> None:
         output_schema = self.tools["diff_quote"]["outputSchema"]

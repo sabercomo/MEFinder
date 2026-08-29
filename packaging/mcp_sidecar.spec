@@ -39,7 +39,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (
-            str(ROOT / "docs" / "contracts" / "v0.4.4-mcp-v1-tools.json"),
+            str(ROOT / "docs" / "contracts" / "v0.5.0-mcp-v1-tools.json"),
             "docs/contracts",
         ),
     ],

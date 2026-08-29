@@ -5,7 +5,7 @@
   "release": "0.5.0",
   "server": {
     "name": "mefinder",
-    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；怀疑抄写有误、要指出改漏多字用 diff_quote；补全或核验题录时用 read_bibliographic_pages 读版权页候选并只据原书文本提取；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；只记得大意或部分关键词、无法逐字引用时用 search_passages 按相关性召回原文（结果非逐字命中，按 relevance.rank 取用，再用 locate_quote 逐字定位）；怀疑抄写有误、要指出改漏多字用 diff_quote；补全或核验题录时用 read_bibliographic_pages 读版权页候选并只据原书文本提取；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -341,6 +341,67 @@
       }
     },
     {
+      "name": "search_passages",
+      "title": "按描述检索原文",
+      "description": "按自然语言描述或关键词在 MEFinder 本地索引中按相关性召回可能相关的原文段落，用于只记得大意或部分关键词、无法逐字引用时找回原文。这是相关性检索而非逐字核对：命中只表示该段与描述相关，不代表逐字一致；结果按 relevance.rank 排序，relevance.score 仅是本次结果内部的相对相关度（1 最相关），不可跨查询比较。要逐字定位或核对某句话，请改用 locate_quote 或 verify_quotes。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["all", "pdf", "word"],
+            "default": "all"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 10
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "query": {"type": "string"},
+          "total": {"type": "integer", "minimum": 0},
+          "total_is_exact": {"type": "boolean"},
+          "has_more": {"type": "boolean"},
+          "passages": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/passage"}
+          }
+        },
+        "required": [
+          "schema_version",
+          "query",
+          "total",
+          "total_is_exact",
+          "has_more",
+          "passages"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "read_bibliographic_pages",
       "title": "读取版权页候选",
       "description": "返回文献前部与尾部的候选页面文本——版权页、图书在版编目（CIP）页通常出现在这些位置——并对每页标注 ISBN、在版编目、出版社等书目线索，供调用方直接从原书自身文本提取题录，无需联网。只返回既有解析文本，不改写题录，不作最终裁决。",
@@ -567,6 +628,79 @@
         "page_mapping",
         "reader"
       ],
+      "additionalProperties": false
+    },
+    "relevance": {
+      "type": "object",
+      "properties": {
+        "rank": {"type": "integer", "minimum": 1},
+        "method": {"type": "string", "enum": ["bm25", "trigram"]},
+        "score": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["rank", "method", "score"],
+      "additionalProperties": false
+    },
+    "passage": {
+      "type": "object",
+      "properties": {
+        "paragraph_id": {"type": "string"},
+        "source_file_id": {"type": "string"},
+        "source_type": {"type": "string", "enum": ["pdf", "word"]},
+        "document_title": {"$ref": "#/$defs/nullable_string"},
+        "work_title": {"$ref": "#/$defs/nullable_string"},
+        "author": {"$ref": "#/$defs/nullable_string"},
+        "paragraph_text": {"type": "string"},
+        "preview": {"type": "string"},
+        "context_before": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
+        "context_after": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
+        "relevance": {"$ref": "#/$defs/relevance"},
+        "physical_page": {"$ref": "#/$defs/physical_page"},
+        "citation_page": {"$ref": "#/$defs/citation_page"},
+        "page_mapping": {"$ref": "#/$defs/page_mapping"},
+        "citation": {"$ref": "#/$defs/passage_citation"},
+        "reader": {"$ref": "#/$defs/reader_cursor"}
+      },
+      "required": [
+        "paragraph_id",
+        "source_file_id",
+        "source_type",
+        "document_title",
+        "work_title",
+        "author",
+        "paragraph_text",
+        "preview",
+        "context_before",
+        "context_after",
+        "relevance",
+        "physical_page",
+        "citation_page",
+        "page_mapping",
+        "citation",
+        "reader"
+      ],
+      "additionalProperties": false
+    },
+    "passage_citation": {
+      "type": "object",
+      "properties": {
+        "chinese": {"type": "string"},
+        "gb": {"type": "string"},
+        "chinese_status": {
+          "type": "string",
+          "enum": ["complete", "metadata_incomplete"]
+        },
+        "gb_status": {
+          "type": "string",
+          "enum": ["complete", "metadata_incomplete"]
+        }
+      },
+      "required": ["chinese", "gb", "chinese_status", "gb_status"],
       "additionalProperties": false
     },
     "reader_source": {
