@@ -27,6 +27,17 @@ APP_JS = _read_split_source("js", ".js", "app.js")
 
 
 class StructuredReaderFrontendTests(unittest.TestCase):
+    def test_reader_header_keeps_close_in_the_rightmost_column(self) -> None:
+        self.assertRegex(
+            READER_CSS,
+            r"\.mef-reader-header\s*\{[^}]*grid-template-columns:\s*"
+            r"minmax\(0, 1fr\) auto auto auto auto",
+        )
+        self.assertLess(
+            READER_JS.index("header.appendChild(toggleDecorations)"),
+            READER_JS.index("header.appendChild(close)"),
+        )
+
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)
         self.assertIn("state.source.parser_label", READER_JS)

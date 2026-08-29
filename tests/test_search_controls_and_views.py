@@ -191,6 +191,23 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
         self.assertLess(row_source.index("result-match-type"), row_source.index("result-title"))
 
+    def test_dynamic_search_handlers_are_exported_from_the_iife(self) -> None:
+        handlers = (
+            "selectSearchScopeAll",
+            "selectSearchGroup",
+            "selectSearchDocument",
+            "selectResult",
+            "togglePageDetail",
+            "showSearchResultsList",
+            "selectCitationStyle",
+            "copySelectedCitation",
+            "openSelectedStructuredReader",
+            "openSource",
+        )
+        for handler in handlers:
+            with self.subTest(handler=handler):
+                self.assertIn(f"global.{handler} = {handler};", HTML)
+
     def test_search_detail_warns_before_incomplete_citation_copy(self) -> None:
         detail_start = HTML.index("function showDetail(item)")
         detail_end = HTML.index("function showEmptyDetail()", detail_start)

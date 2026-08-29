@@ -464,9 +464,10 @@ class ThemeMarkupTests(unittest.TestCase):
             HTML,
         )
 
-    def test_export_settings_explain_fixed_policy_without_marker_controls(self) -> None:
-        self.assertIn("自动清理已识别的页码、重复页眉和页脚", HTML)
-        self.assertIn("保留已确认的原书印刷页码定位", HTML)
+    def test_export_settings_do_not_show_fixed_policy_as_a_setting(self) -> None:
+        self.assertNotIn("Markdown 与 EPUB", HTML)
+        self.assertNotIn("自动清理已识别的页码、重复页眉和页脚", HTML)
+        self.assertNotIn("保留已确认的原书印刷页码定位", HTML)
         self.assertNotIn('id="page-marker-modes"', HTML)
         self.assertNotIn('data-page-marker-choice=', HTML)
         self.assertNotIn('name="page-marker-mode"', HTML)

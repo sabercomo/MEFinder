@@ -332,10 +332,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #        测试依赖的文件一并包进 IIFE（约 91 个私有 helper 收敛）。
     # 0.5.0：新增「通用本地模型」——本地OCR区块末尾的自部署 OpenAI 兼容端点卡片
     #        + 导入页专属解析单选项；后端复用 vision provider 路径。
+    # 0.5.0：恢复检索 IIFE 中供动态 onclick 使用的公共入口；设置页移除无控件的
+    #        Markdown/EPUB 固定清理策略说明；阅读器新增页眉页脚按钮后同步为五列头部。
     BASELINE_SHA256 = (
-        "d18eae774fef7b6c9ea4242da3d8065440b6096a8089325c59636501a21c1703"
+        "6a4f8a18daaf5c9500954d87c83accdfcafd809f2eb7e28e818685fd52931a0a"
     )
-    BASELINE_BYTES = 956032
+    BASELINE_BYTES = 956046
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

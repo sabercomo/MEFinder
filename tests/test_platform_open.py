@@ -12,8 +12,11 @@ from src.me_finder import web
 
 class PlatformOpenTests(unittest.TestCase):
     @staticmethod
-    def _fake_winreg(prog_id: str) -> mock.Mock:
+    def _fake_winreg(prog_id: str, open_command: str | None = None) -> mock.Mock:
         class FakeKey:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
             def __enter__(self):
                 return self
 
@@ -23,8 +26,19 @@ class PlatformOpenTests(unittest.TestCase):
         winreg = mock.Mock()
         winreg.HKEY_CURRENT_USER = "HKCU"
         winreg.HKEY_CLASSES_ROOT = "HKCR"
-        winreg.OpenKey.return_value = FakeKey()
-        winreg.QueryValueEx.return_value = (prog_id, None)
+
+        def open_key(hive, name):
+            if name.endswith(r"\shell\open\command") and open_command is None:
+                raise FileNotFoundError(name)
+            return FakeKey(name)
+
+        winreg.OpenKey.side_effect = open_key
+        winreg.QueryValueEx.side_effect = lambda key, value_name: (
+            open_command
+            if key.name.endswith(r"\shell\open\command")
+            else prog_id,
+            None,
+        )
         return winreg
 
     def test_macos_uses_open_command(self) -> None:
@@ -71,6 +85,32 @@ class PlatformOpenTests(unittest.TestCase):
 
         self.assertEqual(result, adobe)
         find_adobe.assert_called_once_with()
+
+    def test_default_adobe_probe_resolves_generic_alias_to_acrobat(self) -> None:
+        adobe = Path("D:/AD/Acrobat Pro/App/Acrobat/Acrobat.exe")
+        winreg = self._fake_winreg("pdf_auto_file", f'"{adobe}" "%1"')
+
+        with (
+            mock.patch.dict("sys.modules", {"winreg": winreg}),
+            mock.patch.object(web.sys, "platform", "win32"),
+            mock.patch.object(web, "find_adobe_pdf_app") as find_adobe,
+        ):
+            result = web.find_default_adobe_pdf_app()
+
+        self.assertEqual(result, adobe)
+        find_adobe.assert_not_called()
+
+    def test_default_adobe_probe_rejects_generic_alias_to_non_adobe_reader(self) -> None:
+        reader = Path("C:/Program Files/WPS Office/wpspdf.exe")
+        winreg = self._fake_winreg("pdf_auto_file", f'"{reader}" "%1"')
+
+        with (
+            mock.patch.dict("sys.modules", {"winreg": winreg}),
+            mock.patch.object(web.sys, "platform", "win32"),
+        ):
+            result = web.find_default_adobe_pdf_app()
+
+        self.assertIsNone(result)
 
     def test_default_adobe_probe_does_not_override_wps_file_association(self) -> None:
         winreg = self._fake_winreg("WPSPDF.AssocFile.PDF")

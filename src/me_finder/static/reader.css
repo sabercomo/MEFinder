@@ -53,7 +53,7 @@
 
 .mef-reader-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: 18px;
   min-height: 72px;

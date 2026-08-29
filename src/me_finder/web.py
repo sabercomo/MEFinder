@@ -175,9 +175,28 @@ def find_default_adobe_pdf_app() -> Optional[Path]:
             break
 
     normalized = prog_id.casefold()
-    if not any(marker in normalized for marker in ("acroexch", "acrobat", "acrord")):
+    if any(marker in normalized for marker in ("acroexch", "acrobat", "acrord")):
+        return find_adobe_pdf_app()
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CLASSES_ROOT,
+            rf"{prog_id}\shell\open\command",
+        ) as key:
+            command = str(winreg.QueryValueEx(key, "")[0])
+    except OSError:
         return None
-    return find_adobe_pdf_app()
+
+    match = re.search(r'"([^"]+\.exe)"', command, flags=re.IGNORECASE)
+    if not match:
+        match = re.search(r"([A-Za-z]:\\[^\s]+\.exe)", command, flags=re.IGNORECASE)
+    if not match:
+        return None
+
+    executable = Path(match.group(1))
+    if executable.name.casefold() not in {"acrobat.exe", "acrord32.exe"}:
+        return None
+    return executable
 
 
 def open_path_with_default_app(target: Path) -> None:

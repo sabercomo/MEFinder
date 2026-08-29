@@ -740,7 +740,16 @@
   global.runSearch = runSearch;
   global.toggleDetailContext = toggleDetailContext;
   global.showDetail = showDetail;
+  global.selectSearchScopeAll = selectSearchScopeAll;
+  global.selectSearchGroup = selectSearchGroup;
+  global.selectSearchDocument = selectSearchDocument;
+  global.selectResult = selectResult;
+  global.togglePageDetail = togglePageDetail;
+  global.showSearchResultsList = showSearchResultsList;
   global.selectedResult = selectedResult;
   global.setCitationStyle = setCitationStyle;
+  global.selectCitationStyle = selectCitationStyle;
+  global.copySelectedCitation = copySelectedCitation;
+  global.openSelectedStructuredReader = openSelectedStructuredReader;
   global.openSource = openSource;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));
