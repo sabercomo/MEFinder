@@ -43,6 +43,7 @@ class McpV1BaselineTests(unittest.TestCase):
                 "read_document_window",
                 "verify_quotes",
                 "diff_quote",
+                "read_bibliographic_pages",
             ],
         )
         expected_annotations = {
@@ -70,6 +71,10 @@ class McpV1BaselineTests(unittest.TestCase):
         self.assertEqual(
             set(tools["diff_quote"]["inputSchema"]["properties"]),
             {"quote", "source_file_id", "source_type", "mode"},
+        )
+        self.assertEqual(
+            set(tools["read_bibliographic_pages"]["inputSchema"]["properties"]),
+            {"source_file_id", "front", "back"},
         )
         serialized_contract = json.dumps(contract, ensure_ascii=False)
         self.assertNotIn("highlighted_html", serialized_contract)

@@ -130,6 +130,14 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "physical_page",
                                 "reader_cursor",
                             },
+                            "read_bibliographic_pages": {
+                                "bibliographic_page",
+                                "citation_page",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "physical_page",
+                                "reader_source",
+                            },
                         }
                         self.assertEqual(
                             [item.name for item in listed.tools],

@@ -356,7 +356,53 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertIsNone(missing["stats"])
         self.assertEqual(missing["diff"], [])
 
+    def test_read_bibliographic_pages_returns_front_back_and_hints(self) -> None:
+        output_schema = self.tools["read_bibliographic_pages"]["outputSchema"]
+        page_schema = self.contract["$defs"]["bibliographic_page"]
+        result = self.service.read_bibliographic_pages(
+            PDF_SOURCE_ID, front=2, back=2
+        )
+        self.assert_required_keys(result, output_schema)
+        self.assert_required_keys(
+            result["source"], self.contract["$defs"]["reader_source"]
+        )
+        self.assertEqual(result["source"]["source_file_id"], PDF_SOURCE_ID)
+        self.assertGreater(result["total"], 0)
+        self.assertTrue(result["front"])
+        for page in [*result["front"], *result["back"]]:
+            self.assert_required_keys(page, page_schema)
+            self.assertIsInstance(page["hints"], list)
+            self.assertIsInstance(page["likely_copyright_page"], bool)
+        # The tail window must not repeat pages already returned as front matter.
+        front_positions = {page["position"] for page in result["front"]}
+        back_positions = {page["position"] for page in result["back"]}
+        self.assertEqual(front_positions & back_positions, set())
+
+    def test_read_bibliographic_pages_flags_copyright_cues(self) -> None:
+        from src.me_finder.application.literature_verification_service import (
+            _bibliographic_hints,
+            _is_likely_copyright_page,
+        )
+
+        hints = _bibliographic_hints(
+            "图书在版编目（CIP）数据\nISBN 978-7-100-00000-0\n"
+            "出版发行：商务印书馆\n2019 年第 1 版\n定价：58.00 元"
+        )
+        self.assertIn("isbn", hints)
+        self.assertIn("cip", hints)
+        self.assertIn("publisher", hints)
+        self.assertIn("year", hints)
+        self.assertTrue(_is_likely_copyright_page(hints))
+        self.assertEqual(_bibliographic_hints("普通正文，没有任何题录线索。"), [])
+        self.assertFalse(_is_likely_copyright_page([]))
+
     def test_service_validates_mcp_boundaries(self) -> None:
+        with self.assertRaisesRegex(ValueError, "front"):
+            self.service.read_bibliographic_pages(PDF_SOURCE_ID, front=0, back=0)
+        with self.assertRaisesRegex(ValueError, "front"):
+            self.service.read_bibliographic_pages(PDF_SOURCE_ID, front=21)
+        with self.assertRaisesRegex(ValueError, "source_file_id"):
+            self.service.read_bibliographic_pages("invalid source")
         with self.assertRaisesRegex(ValueError, "quotes"):
             self.service.verify_quotes([])
         with self.assertRaisesRegex(ValueError, "quotes"):

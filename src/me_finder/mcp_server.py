@@ -135,6 +135,17 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
             "different": "引文与原句存在差异，详见 diff。",
             "not_found": "未在索引中找到可比对的原句。",
         }[str(result["status"])]
+    if tool_name == "read_bibliographic_pages":
+        likely = sum(
+            1
+            for group in (result["front"], result["back"])
+            for page in group
+            if page.get("likely_copyright_page")
+        )
+        return (
+            f"读取了前部 {len(result['front'])} 页、尾部 {len(result['back'])} 页候选，"
+            f"其中 {likely} 页疑似版权页。"
+        )
     return f"读取了 {len(result['items'])} 个文献位置。"
 
 
@@ -192,6 +203,12 @@ def _execute_tool(
             source_file_id=arguments.get("source_file_id"),
             source_type=arguments.get("source_type", "all"),
             mode=arguments.get("mode", "fuzzy"),
+        )
+    if tool_name == "read_bibliographic_pages":
+        return service.read_bibliographic_pages(
+            arguments["source_file_id"],
+            front=arguments.get("front", 5),
+            back=arguments.get("back", 5),
         )
     return service.read_document_window(
         arguments["source_file_id"],

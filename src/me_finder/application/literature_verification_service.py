@@ -5,7 +5,7 @@ from __future__ import annotations
 import difflib
 import re
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Sequence
 
 from ..runtime_location import runtime_root
 from .search_service import SearchRequest, SearchService
@@ -352,6 +352,84 @@ class LiteratureVerificationService:
             ],
         }
 
+    def read_bibliographic_pages(
+        self,
+        source_file_id: str,
+        *,
+        front: int = 5,
+        back: int = 5,
+    ) -> dict[str, object]:
+        from ..structured_reader import get_document_window
+
+        validated_source_id = _validate_source_id(source_file_id)
+        front_count = _bounded_integer("front", front, minimum=0, maximum=20)
+        back_count = _bounded_integer("back", back, minimum=0, maximum=20)
+        if front_count == 0 and back_count == 0:
+            raise ValueError("front 与 back 不能同时为 0")
+        index_path = self._existing_index_path()
+
+        # One probe from the start resolves total pages and the source record even
+        # when only the tail is requested (count must be at least 1).
+        probe = get_document_window(
+            index_path,
+            validated_source_id,
+            start=0,
+            count=max(front_count, 1),
+        )
+        source = probe["source"]
+        if not isinstance(source, Mapping):
+            raise ValueError("结构化阅读器返回了无效的 source")
+        source_type = str(source["source_type"])
+        total = int(probe["total"])
+
+        front_pages: list[dict[str, object]] = []
+        front_positions: set[int] = set()
+        if front_count > 0:
+            for item in probe["items"]:
+                if not isinstance(item, Mapping):
+                    continue
+                page = _bibliographic_page(item, source_type)
+                front_pages.append(page)
+                front_positions.add(int(page["position"]))
+
+        back_pages: list[dict[str, object]] = []
+        if back_count > 0 and total > 0:
+            back_start = max(0, total - back_count)
+            tail = get_document_window(
+                index_path,
+                validated_source_id,
+                start=back_start,
+                count=back_count,
+            )
+            for item in tail["items"]:
+                if not isinstance(item, Mapping):
+                    continue
+                page = _bibliographic_page(item, source_type)
+                # A short document can make the tail window overlap the front.
+                if int(page["position"]) in front_positions:
+                    continue
+                back_pages.append(page)
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "source": {
+                "source_file_id": str(source["source_file_id"]),
+                "source_type": source_type,
+                "title": _first_text(
+                    source.get("display_title"),
+                    source.get("document_title"),
+                    source.get("file_name"),
+                ),
+                "original_file_name": _first_text(
+                    source.get("original_file_name"),
+                    source.get("file_name"),
+                ),
+            },
+            "total": total,
+            "front": front_pages,
+            "back": back_pages,
+        }
+
     def _existing_index_path(self) -> Path:
         path = self.index_path
         if not path.is_file():
@@ -617,6 +695,59 @@ def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
             "unit": "pdf_page" if source_type == "pdf" else "word_paragraph",
             "start": int(reader_start),
         },
+    }
+
+
+_BIBLIOGRAPHIC_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("isbn", ("isbn",)),
+    ("cip", ("图书在版编目", "(cip)", "（cip）", "cip数据", "cip 数据")),
+    ("publisher", ("出版社", "出版发行", "出版發行", "press", "verlag", "éditions")),
+    ("price", ("定价", "定 价", "售价")),
+    ("responsibility", ("责任编辑", "責任編輯", "责任印制", "装帧设计", "封面设计")),
+)
+_YEAR_RE = re.compile(r"(?:1[89]\d{2}|20\d{2})\s*年")
+
+
+def _bibliographic_hints(text: str) -> list[str]:
+    """Flag copyright-page cues found verbatim in already-parsed page text."""
+
+    lowered = text.casefold()
+    hints = [
+        name
+        for name, tokens in _BIBLIOGRAPHIC_CUES
+        if any(token in lowered for token in tokens)
+    ]
+    if _YEAR_RE.search(text):
+        hints.append("year")
+    return hints
+
+
+def _is_likely_copyright_page(hints: Sequence[str]) -> bool:
+    if {"isbn", "cip"} & set(hints):
+        return True
+    return len(hints) >= 3
+
+
+def _bibliographic_page(
+    fields: Mapping[str, object],
+    source_type: str,
+) -> dict[str, object]:
+    physical_page = _physical_page(fields, source_type)
+    position = _first_present(
+        fields,
+        "pdf_page_index" if source_type == "pdf" else "paragraph_index",
+    )
+    text = str(fields["text_raw"])
+    hints = _bibliographic_hints(text)
+    return {
+        "item_type": str(fields["item_type"]),
+        "position": int(position),
+        "text": text,
+        "is_empty": bool(fields.get("is_empty", not text.strip())),
+        "physical_page": physical_page,
+        "citation_page": _citation_page(fields, source_type, physical_page),
+        "hints": hints,
+        "likely_copyright_page": _is_likely_copyright_page(hints),
     }
 
 

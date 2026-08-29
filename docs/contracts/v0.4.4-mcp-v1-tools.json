@@ -5,7 +5,7 @@
   "release": "0.5.0",
   "server": {
     "name": "mefinder",
-    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；怀疑抄写有误、要指出改漏多字用 diff_quote；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；怀疑抄写有误、要指出改漏多字用 diff_quote；补全或核验题录时用 read_bibliographic_pages 读版权页候选并只据原书文本提取；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -339,6 +339,57 @@
         "destructiveHint": false,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "read_bibliographic_pages",
+      "title": "读取版权页候选",
+      "description": "返回文献前部与尾部的候选页面文本——版权页、图书在版编目（CIP）页通常出现在这些位置——并对每页标注 ISBN、在版编目、出版社等书目线索，供调用方直接从原书自身文本提取题录，无需联网。只返回既有解析文本，不改写题录，不作最终裁决。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "front": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20,
+            "default": 5
+          },
+          "back": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20,
+            "default": 5
+          }
+        },
+        "required": ["source_file_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "source": {"$ref": "#/$defs/reader_source"},
+          "total": {"type": "integer", "minimum": 0},
+          "front": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/bibliographic_page"}
+          },
+          "back": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/bibliographic_page"}
+          }
+        },
+        "required": ["schema_version", "source", "total", "front", "back"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
     }
   ],
   "errorSchema": {
@@ -620,6 +671,46 @@
         "missing",
         "changed_quote",
         "changed_source"
+      ],
+      "additionalProperties": false
+    },
+    "bibliographic_page": {
+      "type": "object",
+      "properties": {
+        "item_type": {
+          "type": "string",
+          "enum": ["pdf_page", "word_paragraph"]
+        },
+        "position": {"type": "integer", "minimum": 0},
+        "text": {"type": "string"},
+        "is_empty": {"type": "boolean"},
+        "physical_page": {"$ref": "#/$defs/physical_page"},
+        "citation_page": {"$ref": "#/$defs/citation_page"},
+        "hints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "isbn",
+              "cip",
+              "publisher",
+              "price",
+              "responsibility",
+              "year"
+            ]
+          }
+        },
+        "likely_copyright_page": {"type": "boolean"}
+      },
+      "required": [
+        "item_type",
+        "position",
+        "text",
+        "is_empty",
+        "physical_page",
+        "citation_page",
+        "hints",
+        "likely_copyright_page"
       ],
       "additionalProperties": false
     }

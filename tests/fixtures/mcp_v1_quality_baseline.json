@@ -7,10 +7,10 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 207,
-    "instructions_utf8_bytes": 429,
-    "utf8_bytes": 18439,
-    "before_unreferenced_defs_trim_utf8_bytes": 33384
+    "instructions_characters": 258,
+    "instructions_utf8_bytes": 530,
+    "utf8_bytes": 21485,
+    "before_unreferenced_defs_trim_utf8_bytes": 43788
   },
   "responses": {
     "named_document_list": {
@@ -100,6 +100,12 @@
       "arguments": {"quote": "技术判断必须由可复核证据支撑误", "mode": "fuzzy"},
       "structured_content_utf8_bytes": 1191,
       "content_utf8_bytes": 44
+    },
+    "bibliographic_pages": {
+      "tool": "read_bibliographic_pages",
+      "arguments": {"source_file_id": "fixture-pdf", "front": 2, "back": 2},
+      "structured_content_utf8_bytes": 1387,
+      "content_utf8_bytes": 75
     }
   },
   "workflows": {
@@ -127,6 +133,11 @@
       "responses": ["misquote_diff"],
       "call_count": 1,
       "result_utf8_bytes": 1235
+    },
+    "bibliographic_extraction": {
+      "responses": ["bibliographic_pages"],
+      "call_count": 1,
+      "result_utf8_bytes": 1462
     }
   }
 }
