@@ -27,17 +27,23 @@ class McpV1BaselineTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_contract_freezes_three_read_only_tools(self) -> None:
+    def test_contract_freezes_read_only_tools(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         self.assertEqual(contract["contract"], "mefinder.mcp.v1")
         self.assertEqual(contract["schema_version"], "1")
-        self.assertEqual(contract["release"], "0.4.4")
+        self.assertEqual(contract["release"], "0.5.0")
         self.assertEqual(__version__, "0.5.0")
 
         tools = {tool["name"]: tool for tool in contract["tools"]}
         self.assertEqual(
             list(tools),
-            ["list_documents", "locate_quote", "read_document_window"],
+            [
+                "list_documents",
+                "locate_quote",
+                "read_document_window",
+                "verify_quotes",
+                "diff_quote",
+            ],
         )
         expected_annotations = {
             "readOnlyHint": True,
@@ -56,6 +62,14 @@ class McpV1BaselineTests(unittest.TestCase):
         self.assertEqual(
             set(tools["read_document_window"]["inputSchema"]["properties"]),
             {"source_file_id", "start", "count"},
+        )
+        self.assertEqual(
+            set(tools["verify_quotes"]["inputSchema"]["properties"]),
+            {"quotes", "mode", "source_file_id", "source_type", "matches_per_quote"},
+        )
+        self.assertEqual(
+            set(tools["diff_quote"]["inputSchema"]["properties"]),
+            {"quote", "source_file_id", "source_type", "mode"},
         )
         serialized_contract = json.dumps(contract, ensure_ascii=False)
         self.assertNotIn("highlighted_html", serialized_contract)

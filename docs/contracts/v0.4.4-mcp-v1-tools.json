@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "contract": "mefinder.mcp.v1",
   "schema_version": "1",
-  "release": "0.4.4",
+  "release": "0.5.0",
   "server": {
     "name": "mefinder",
-    "instructions": "先用 locate_quote 定位原句；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+    "instructions": "先用 locate_quote 定位原句；一次核对多条引文用 verify_quotes；怀疑抄写有误、要指出改漏多字用 diff_quote；用户指定文献但未提供 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -181,6 +181,156 @@
           "previous_start",
           "next_start",
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "verify_quotes",
+      "title": "批量核对引文",
+      "description": "一次核对多条引文是否逐字出现在 MEFinder 本地索引中，为每条返回命中状态（verified 逐字命中 / approximate 疑似错引 / not_found 未找到）与候选原句，用于成批校验一篇论文的引用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "quotes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["auto", "exact", "compact", "punctuation", "fuzzy"],
+            "default": "auto"
+          },
+          "source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["all", "pdf", "word"],
+            "default": "all"
+          },
+          "matches_per_quote": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 1
+          }
+        },
+        "required": ["quotes"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "total": {"type": "integer", "minimum": 0},
+          "verified_count": {"type": "integer", "minimum": 0},
+          "approximate_count": {"type": "integer", "minimum": 0},
+          "not_found_count": {"type": "integer", "minimum": 0},
+          "results": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/verify_result"}
+          }
+        },
+        "required": [
+          "schema_version",
+          "total",
+          "verified_count",
+          "approximate_count",
+          "not_found_count",
+          "results"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "diff_quote",
+      "title": "错引比对",
+      "description": "把一条可能抄错的引文与索引中最接近的原句逐字符对齐，返回原句、相似度以及标注了增（added）/漏（missing）/改（changed）的差异分段；引文完全一致时 status 为 identical。不改写引文，只指出差异。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10000
+          },
+          "source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "source_type": {
+            "type": "string",
+            "enum": ["all", "pdf", "word"],
+            "default": "all"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["auto", "exact", "compact", "punctuation", "fuzzy"],
+            "default": "fuzzy"
+          }
+        },
+        "required": ["quote"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "quote": {"type": "string"},
+          "status": {
+            "type": "string",
+            "enum": ["identical", "different", "not_found"]
+          },
+          "match": {
+            "anyOf": [
+              {"$ref": "#/$defs/match"},
+              {"type": "null"}
+            ]
+          },
+          "similarity": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "diff": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/diff_segment"}
+          },
+          "stats": {
+            "anyOf": [
+              {"$ref": "#/$defs/diff_stats"},
+              {"type": "null"}
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "quote",
+          "status",
+          "match",
+          "similarity",
+          "diff",
+          "stats"
         ],
         "additionalProperties": false
       },
@@ -420,6 +570,56 @@
         "page_display",
         "page_verified",
         "citation_formats"
+      ],
+      "additionalProperties": false
+    },
+    "verify_result": {
+      "type": "object",
+      "properties": {
+        "index": {"type": "integer", "minimum": 0},
+        "quote": {"type": "string"},
+        "status": {
+          "type": "string",
+          "enum": ["verified", "approximate", "not_found"]
+        },
+        "total": {"type": "integer", "minimum": 0},
+        "has_more": {"type": "boolean"},
+        "matches": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/match"}
+        }
+      },
+      "required": ["index", "quote", "status", "total", "has_more", "matches"],
+      "additionalProperties": false
+    },
+    "diff_segment": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["equal", "added", "missing", "changed"]
+        },
+        "quote": {"type": "string"},
+        "source": {"type": "string"}
+      },
+      "required": ["op", "quote", "source"],
+      "additionalProperties": false
+    },
+    "diff_stats": {
+      "type": "object",
+      "properties": {
+        "equal": {"type": "integer", "minimum": 0},
+        "added": {"type": "integer", "minimum": 0},
+        "missing": {"type": "integer", "minimum": 0},
+        "changed_quote": {"type": "integer", "minimum": 0},
+        "changed_source": {"type": "integer", "minimum": 0}
+      },
+      "required": [
+        "equal",
+        "added",
+        "missing",
+        "changed_quote",
+        "changed_source"
       ],
       "additionalProperties": false
     }

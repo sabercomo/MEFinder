@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import re
 from pathlib import Path
 from typing import Callable, Mapping
@@ -129,38 +130,164 @@ class LiteratureVerificationService:
         limit: int = 5,
     ) -> dict[str, object]:
         from ..search import SearchEngine
-        from ..structured_reader import SourceNotFound
 
-        if not isinstance(quote, str) or not quote.strip():
-            raise ValueError("quote 必须是非空字符串")
-        if len(quote) > 10_000:
-            raise ValueError("quote 不能超过 10000 个 Unicode codepoint")
-        if not isinstance(mode, str) or mode not in SEARCH_MODES:
-            raise ValueError("mode 不受支持")
+        _validate_quote(quote)
+        validated_mode = _validate_mode(mode)
         _validate_source_type(source_type)
         validated_source_id = _validate_optional_source_id(source_file_id)
         validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
 
         engine = SearchEngine(self._existing_index_path())
         try:
-            if (
-                validated_source_id is not None
-                and validated_source_id not in engine.sources_by_id
-            ):
-                raise SourceNotFound(f"未找到文献：{validated_source_id}")
-            raw_result = SearchService.execute(
+            return self._search_one(
                 engine,
-                SearchRequest(
-                    query=quote,
-                    mode=mode,
-                    limit=validated_limit,
-                    source_type=source_type,
-                    source_file_id=validated_source_id,
-                ),
+                quote,
+                mode=validated_mode,
+                source_file_id=validated_source_id,
+                source_type=source_type,
+                limit=validated_limit,
             )
         finally:
             engine.close()
 
+    def verify_quotes(
+        self,
+        quotes: object,
+        *,
+        mode: str = "auto",
+        source_file_id: str | None = None,
+        source_type: str = "all",
+        matches_per_quote: int = 1,
+    ) -> dict[str, object]:
+        from ..search import SearchEngine
+
+        validated_quotes = _validate_quotes(quotes)
+        validated_mode = _validate_mode(mode)
+        _validate_source_type(source_type)
+        validated_source_id = _validate_optional_source_id(source_file_id)
+        validated_limit = _bounded_integer(
+            "matches_per_quote", matches_per_quote, minimum=1, maximum=5
+        )
+
+        engine = SearchEngine(self._existing_index_path())
+        try:
+            # Resolve source existence once so every quote reports the same error.
+            if (
+                validated_source_id is not None
+                and validated_source_id not in engine.sources_by_id
+            ):
+                from ..structured_reader import SourceNotFound
+
+                raise SourceNotFound(f"未找到文献：{validated_source_id}")
+            results = [
+                _verify_result(
+                    index,
+                    self._search_one(
+                        engine,
+                        quote,
+                        mode=validated_mode,
+                        source_file_id=validated_source_id,
+                        source_type=source_type,
+                        limit=validated_limit,
+                    ),
+                )
+                for index, quote in enumerate(validated_quotes)
+            ]
+        finally:
+            engine.close()
+
+        counts = {"verified": 0, "approximate": 0, "not_found": 0}
+        for result in results:
+            counts[str(result["status"])] += 1
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "total": len(results),
+            "verified_count": counts["verified"],
+            "approximate_count": counts["approximate"],
+            "not_found_count": counts["not_found"],
+            "results": results,
+        }
+
+    def diff_quote(
+        self,
+        quote: str,
+        *,
+        source_file_id: str | None = None,
+        source_type: str = "all",
+        mode: str = "fuzzy",
+    ) -> dict[str, object]:
+        from ..search import SearchEngine
+
+        _validate_quote(quote)
+        validated_mode = _validate_mode(mode)
+        _validate_source_type(source_type)
+        validated_source_id = _validate_optional_source_id(source_file_id)
+
+        engine = SearchEngine(self._existing_index_path())
+        try:
+            located = self._search_one(
+                engine,
+                quote,
+                mode=validated_mode,
+                source_file_id=validated_source_id,
+                source_type=source_type,
+                limit=1,
+            )
+        finally:
+            engine.close()
+
+        matches = located["matches"]
+        if not matches:
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "quote": quote,
+                "status": "not_found",
+                "match": None,
+                "similarity": None,
+                "diff": [],
+                "stats": None,
+            }
+        best = matches[0]
+        segments, stats, identical = _character_diff(
+            quote, str(best["matched_text"])
+        )
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "quote": quote,
+            "status": "identical" if identical else "different",
+            "match": best,
+            "similarity": _similarity(quote, str(best["matched_text"])),
+            "diff": segments,
+            "stats": stats,
+        }
+
+    def _search_one(
+        self,
+        engine: object,
+        quote: str,
+        *,
+        mode: str,
+        source_file_id: str | None,
+        source_type: str,
+        limit: int,
+    ) -> dict[str, object]:
+        from ..structured_reader import SourceNotFound
+
+        if (
+            source_file_id is not None
+            and source_file_id not in engine.sources_by_id
+        ):
+            raise SourceNotFound(f"未找到文献：{source_file_id}")
+        raw_result = SearchService.execute(
+            engine,
+            SearchRequest(
+                query=quote,
+                mode=mode,
+                limit=limit,
+                source_type=source_type,
+                source_file_id=source_file_id,
+            ),
+        )
         return {
             "schema_version": SCHEMA_VERSION,
             "query": str(raw_result["query"]),
@@ -230,6 +357,101 @@ class LiteratureVerificationService:
         if not path.is_file():
             raise FileNotFoundError(f"Index not found: {path}")
         return path
+
+
+def _validate_quote(quote: object) -> None:
+    if not isinstance(quote, str) or not quote.strip():
+        raise ValueError("quote 必须是非空字符串")
+    if len(quote) > 10_000:
+        raise ValueError("quote 不能超过 10000 个 Unicode codepoint")
+
+
+def _validate_quotes(quotes: object) -> list[str]:
+    if not isinstance(quotes, (list, tuple)):
+        raise ValueError("quotes 必须是字符串数组")
+    if not 1 <= len(quotes) <= 50:
+        raise ValueError("quotes 必须包含 1 到 50 条引文")
+    validated: list[str] = []
+    for quote in quotes:
+        _validate_quote(quote)
+        validated.append(quote)
+    return validated
+
+
+def _validate_mode(mode: object) -> str:
+    if not isinstance(mode, str) or mode not in SEARCH_MODES:
+        raise ValueError("mode 不受支持")
+    return mode
+
+
+def _verify_status(located: Mapping[str, object]) -> str:
+    matches = located["matches"]
+    if not isinstance(matches, list) or not matches:
+        return "not_found"
+    best = matches[0]
+    if str(best["match_type"]) != "fuzzy" or float(best["match_score"]) >= 1.0:
+        return "verified"
+    return "approximate"
+
+
+def _verify_result(index: int, located: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "index": index,
+        "quote": str(located["query"]),
+        "status": _verify_status(located),
+        "total": int(located["total"]),
+        "has_more": bool(located["has_more"]),
+        "matches": located["matches"],
+    }
+
+
+def _similarity(quote: str, source: str) -> float:
+    ratio = difflib.SequenceMatcher(None, quote, source, autojunk=False).ratio()
+    return round(float(ratio), 4)
+
+
+def _character_diff(
+    quote: str,
+    source: str,
+) -> tuple[list[dict[str, object]], dict[str, object], bool]:
+    """Character-level alignment of the quote against the original passage."""
+
+    matcher = difflib.SequenceMatcher(None, quote, source, autojunk=False)
+    segments: list[dict[str, object]] = []
+    stats = {
+        "equal": 0,
+        "added": 0,
+        "missing": 0,
+        "changed_quote": 0,
+        "changed_source": 0,
+    }
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        quote_text = quote[i1:i2]
+        source_text = source[j1:j2]
+        if tag == "equal":
+            segments.append({"op": "equal", "quote": quote_text, "source": source_text})
+            stats["equal"] += i2 - i1
+        elif tag == "delete":
+            # Present in the quote but not the source: the user added characters.
+            segments.append({"op": "added", "quote": quote_text, "source": ""})
+            stats["added"] += i2 - i1
+        elif tag == "insert":
+            # Present in the source but not the quote: the user omitted characters.
+            segments.append({"op": "missing", "quote": "", "source": source_text})
+            stats["missing"] += j2 - j1
+        else:
+            segments.append(
+                {"op": "changed", "quote": quote_text, "source": source_text}
+            )
+            stats["changed_quote"] += i2 - i1
+            stats["changed_source"] += j2 - j1
+    identical = (
+        stats["added"] == 0
+        and stats["missing"] == 0
+        and stats["changed_quote"] == 0
+        and stats["changed_source"] == 0
+    )
+    return segments, stats, identical
 
 
 def _validate_source_type(source_type: object) -> None:

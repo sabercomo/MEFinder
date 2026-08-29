@@ -122,6 +122,19 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
         return f"找到 {result['total']} 篇文献。"
     if tool_name == "locate_quote":
         return f"找到 {result['total']} 个原句候选。"
+    if tool_name == "verify_quotes":
+        return (
+            f"核对了 {result['total']} 条引文："
+            f"{result['verified_count']} 条逐字命中，"
+            f"{result['approximate_count']} 条疑似错引，"
+            f"{result['not_found_count']} 条未找到。"
+        )
+    if tool_name == "diff_quote":
+        return {
+            "identical": "引文与原句完全一致。",
+            "different": "引文与原句存在差异，详见 diff。",
+            "not_found": "未在索引中找到可比对的原句。",
+        }[str(result["status"])]
     return f"读取了 {len(result['items'])} 个文献位置。"
 
 
@@ -164,6 +177,21 @@ def _execute_tool(
             source_file_id=arguments.get("source_file_id"),
             source_type=arguments.get("source_type", "all"),
             limit=arguments.get("limit", 5),
+        )
+    if tool_name == "verify_quotes":
+        return service.verify_quotes(
+            arguments["quotes"],
+            mode=arguments.get("mode", "auto"),
+            source_file_id=arguments.get("source_file_id"),
+            source_type=arguments.get("source_type", "all"),
+            matches_per_quote=arguments.get("matches_per_quote", 1),
+        )
+    if tool_name == "diff_quote":
+        return service.diff_quote(
+            arguments["quote"],
+            source_file_id=arguments.get("source_file_id"),
+            source_type=arguments.get("source_type", "all"),
+            mode=arguments.get("mode", "fuzzy"),
         )
     return service.read_document_window(
         arguments["source_file_id"],

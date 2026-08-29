@@ -7,10 +7,10 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 156,
-    "instructions_utf8_bytes": 326,
-    "utf8_bytes": 9215,
-    "before_unreferenced_defs_trim_utf8_bytes": 16744
+    "instructions_characters": 207,
+    "instructions_utf8_bytes": 429,
+    "utf8_bytes": 18439,
+    "before_unreferenced_defs_trim_utf8_bytes": 33384
   },
   "responses": {
     "named_document_list": {
@@ -75,6 +75,31 @@
       "arguments": {"source_file_id": "fixture-pdf", "start": 2, "count": 2},
       "structured_content_utf8_bytes": 1649,
       "content_utf8_bytes": 30
+    },
+    "batch_verify": {
+      "tool": "verify_quotes",
+      "arguments": {
+        "quotes": ["技术判断必须由可复核证据支撑", "这是一条夹具中不存在的句子"],
+        "mode": "exact"
+      },
+      "structured_content_utf8_bytes": 1164,
+      "content_utf8_bytes": 81
+    },
+    "identical_diff": {
+      "tool": "diff_quote",
+      "arguments": {
+        "quote": "技术判断必须由可复核证据支撑",
+        "source_file_id": "fixture-pdf",
+        "mode": "exact"
+      },
+      "structured_content_utf8_bytes": 1144,
+      "content_utf8_bytes": 30
+    },
+    "misquote_diff": {
+      "tool": "diff_quote",
+      "arguments": {"quote": "技术判断必须由可复核证据支撑误", "mode": "fuzzy"},
+      "structured_content_utf8_bytes": 1191,
+      "content_utf8_bytes": 44
     }
   },
   "workflows": {
@@ -92,6 +117,16 @@
       "responses": ["cross_page_locate", "cross_page_window"],
       "call_count": 2,
       "result_utf8_bytes": 2701
+    },
+    "batch_reference_check": {
+      "responses": ["batch_verify"],
+      "call_count": 1,
+      "result_utf8_bytes": 1245
+    },
+    "misquote_review": {
+      "responses": ["misquote_diff"],
+      "call_count": 1,
+      "result_utf8_bytes": 1235
     }
   }
 }

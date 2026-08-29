@@ -75,7 +75,7 @@ class MCPServerProtocolTests(unittest.TestCase):
                         initialized = await session.initialize()
                         self.assertLess(time.monotonic() - started, 10)
                         self.assertEqual(initialized.server_info.name, "mefinder")
-                        self.assertEqual(initialized.server_info.version, "0.4.4")
+                        self.assertEqual(initialized.server_info.version, "0.5.0")
                         self.assertEqual(
                             initialized.instructions,
                             CONTRACT["server"]["instructions"],
@@ -106,6 +106,29 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "physical_page",
                                 "reader_item",
                                 "reader_source",
+                            },
+                            "verify_quotes": {
+                                "citation_page",
+                                "context_item",
+                                "match",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "page_mapping",
+                                "physical_page",
+                                "reader_cursor",
+                                "verify_result",
+                            },
+                            "diff_quote": {
+                                "citation_page",
+                                "context_item",
+                                "diff_segment",
+                                "diff_stats",
+                                "match",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "page_mapping",
+                                "physical_page",
+                                "reader_cursor",
                             },
                         }
                         self.assertEqual(

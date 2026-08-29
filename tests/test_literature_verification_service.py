@@ -268,7 +268,109 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertNotIn("result_dir", serialized)
         self.assertNotIn(str(self.runtime_root), serialized)
 
+    def test_verify_quotes_batches_status_and_matches_contract(self) -> None:
+        output_schema = self.tools["verify_quotes"]["outputSchema"]
+        misquote = CALIBRATED_QUOTE.replace("必须", "必需")
+        result = self.service.verify_quotes(
+            [CALIBRATED_QUOTE, misquote, MISSING_QUOTE],
+            mode="auto",
+        )
+        self.assert_required_keys(result, output_schema)
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["verified_count"], 1)
+        self.assertEqual(result["approximate_count"], 1)
+        self.assertEqual(result["not_found_count"], 1)
+        self.assertEqual(
+            [item["status"] for item in result["results"]],
+            ["verified", "approximate", "not_found"],
+        )
+        verify_result_schema = self.contract["$defs"]["verify_result"]
+        for index, item in enumerate(result["results"]):
+            self.assert_required_keys(item, verify_result_schema)
+            self.assertEqual(item["index"], index)
+        # not_found carries no candidates; verified keeps the exact original.
+        self.assertEqual(result["results"][2]["matches"], [])
+        self.assertEqual(result["results"][2]["total"], 0)
+        verified_match = result["results"][0]["matches"][0]
+        self.assert_required_keys(verified_match, self.contract["$defs"]["match"])
+        self.assertEqual(verified_match["matched_text"], CALIBRATED_QUOTE)
+
+    def test_verify_quotes_scopes_to_a_single_source(self) -> None:
+        scoped = self.service.verify_quotes(
+            [CALIBRATED_QUOTE],
+            source_file_id=PDF_SOURCE_ID,
+            source_type="pdf",
+        )
+        self.assertEqual(
+            scoped["results"][0]["matches"][0]["source_file_id"],
+            PDF_SOURCE_ID,
+        )
+        with self.assertRaises(SourceNotFound):
+            self.service.verify_quotes(
+                [CALIBRATED_QUOTE],
+                source_file_id="unknown-source",
+            )
+
+    def test_diff_quote_reports_identical_difference_and_absence(self) -> None:
+        output_schema = self.tools["diff_quote"]["outputSchema"]
+
+        identical = self.service.diff_quote(
+            CALIBRATED_QUOTE,
+            source_file_id=PDF_SOURCE_ID,
+            mode="exact",
+        )
+        self.assert_required_keys(identical, output_schema)
+        self.assertEqual(identical["status"], "identical")
+        self.assertEqual(identical["similarity"], 1.0)
+        self.assertTrue(all(segment["op"] == "equal" for segment in identical["diff"]))
+        self.assert_required_keys(
+            identical["stats"], self.contract["$defs"]["diff_stats"]
+        )
+        self.assertEqual(identical["stats"]["added"], 0)
+        self.assertEqual(identical["stats"]["missing"], 0)
+        self.assertEqual(identical["stats"]["changed_quote"], 0)
+
+        changed = self.service.diff_quote(
+            CALIBRATED_QUOTE.replace("必须", "必需"), mode="fuzzy"
+        )
+        self.assertEqual(changed["status"], "different")
+        self.assertIsNotNone(changed["match"])
+        change_segment = next(
+            segment for segment in changed["diff"] if segment["op"] == "changed"
+        )
+        self.assertEqual(change_segment["quote"], "需")
+        self.assertEqual(change_segment["source"], "须")
+        self.assertEqual(changed["stats"]["changed_quote"], 1)
+        self.assertEqual(changed["stats"]["changed_source"], 1)
+
+        added = self.service.diff_quote(CALIBRATED_QUOTE + "误", mode="fuzzy")
+        self.assertEqual(added["status"], "different")
+        self.assertTrue(any(segment["op"] == "added" for segment in added["diff"]))
+        self.assertEqual(added["stats"]["added"], 1)
+
+        missing = self.service.diff_quote(MISSING_QUOTE, mode="exact")
+        self.assert_required_keys(missing, output_schema)
+        self.assertEqual(missing["status"], "not_found")
+        self.assertIsNone(missing["match"])
+        self.assertIsNone(missing["similarity"])
+        self.assertIsNone(missing["stats"])
+        self.assertEqual(missing["diff"], [])
+
     def test_service_validates_mcp_boundaries(self) -> None:
+        with self.assertRaisesRegex(ValueError, "quotes"):
+            self.service.verify_quotes([])
+        with self.assertRaisesRegex(ValueError, "quotes"):
+            self.service.verify_quotes(["占位句"] * 51)
+        with self.assertRaisesRegex(ValueError, "quotes"):
+            self.service.verify_quotes("不是数组")
+        with self.assertRaisesRegex(ValueError, "非空"):
+            self.service.verify_quotes([CALIBRATED_QUOTE, ""])
+        with self.assertRaisesRegex(ValueError, "matches_per_quote"):
+            self.service.verify_quotes([CALIBRATED_QUOTE], matches_per_quote=6)
+        with self.assertRaisesRegex(ValueError, "非空"):
+            self.service.diff_quote("  ")
+        with self.assertRaisesRegex(ValueError, "mode"):
+            self.service.diff_quote(CALIBRATED_QUOTE, mode="unknown")
         with self.assertRaisesRegex(ValueError, "limit"):
             self.service.list_documents(limit=0)
         with self.assertRaisesRegex(ValueError, "非空"):

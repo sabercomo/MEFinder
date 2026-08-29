@@ -6,11 +6,13 @@
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供三个工具：
+MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供五个工具：
 
 - `list_documents`：按题名、作者、文件名或类型查找已导入文献；
 - `locate_quote`：定位原句、近似引文和多个候选；
-- `read_document_window`：从命中位置继续读取有界的 PDF 页或 Word 段落窗口。
+- `read_document_window`：从命中位置继续读取有界的 PDF 页或 Word 段落窗口；
+- `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`；
+- `diff_quote`：把疑似抄错的引文与最接近的原句逐字符对齐，标注增、漏、改。
 
 Windows 安装版、Windows 绿色版和 macOS 安装包都包含独立的 `MEFinderMCP` sidecar。不要把桌面应用主程序配置为 MCP 命令。
 
