@@ -33,7 +33,9 @@ VALID_THEMES = frozenset(
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
-VALID_PDF_PARSE_MODES = frozenset({"auto", "mineru", "mineru-local", "vision"})
+VALID_PDF_PARSE_MODES = frozenset(
+    {"auto", "mineru", "mineru-local", "vision", "general-local-model"}
+)
 VALID_DOCUMENT_EXPORT_MODES = frozenset({"data_only", "with_pdf"})
 # 保留旧客户端的导出偏好契约；当前界面不再读取这些选项。
 # 常规 Markdown / EPUB 导出使用共享规范化层的 printed 默认策略。

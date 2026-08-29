@@ -292,7 +292,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("pdf_parse_mode: mode", HTML)
         self.assertIn("settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode)", HTML)
         self.assertIn('onchange="setPdfParseMode(this.value)"', HTML)
-        self.assertIn("['auto','mineru','mineru-local','vision']", HTML)
+        self.assertIn(
+            "['auto','mineru','mineru-local','vision','general-local-model']", HTML
+        )
         self.assertIn("syncMineruLocalImportOption(!!config.enabled)", HTML)
         self.assertIn("option.hidden = !enabled", HTML)
         self.assertIn(".pdf-parse-option[hidden] { display: none; }", HTML)
@@ -522,9 +524,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             'class="settings-actions settings-save-row local-ocr-save-row"',
             HTML,
         )
+        # 两处：MinerU 本地部署的保存行 + 通用本地模型卡的保存行（同一范式）。
         self.assertEqual(
             HTML.count('class="settings-control settings-actions settings-save-row"'),
-            1,
+            2,
         )
         self.assertEqual(HTML.count('class="settings-editor-actions"'), 2)
         self.assertIn(".settings-save-row > .action-btn.primary", HTML)

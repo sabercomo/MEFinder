@@ -809,7 +809,7 @@ async function importSelectedScanned() {
 }
 
 function normalizePdfParseMode(mode) {
-  return ['auto','mineru','mineru-local','vision'].indexOf(mode) >= 0 ? mode : 'auto';
+  return ['auto','mineru','mineru-local','vision','general-local-model'].indexOf(mode) >= 0 ? mode : 'auto';
 }
 
 function renderPdfParseMode() {
@@ -882,9 +882,11 @@ function handleFileSelect(files) {
       importKind: isPackage ? 'document_package' : 'document',
       parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null,
       providerId: !isPackage && ext === '.pdf' && pdfParseMode === 'vision' ? selectedProviderId
-        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? 'mineru-local' : null,
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? 'mineru-local'
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'general-local-model' ? 'general-local-model' : null,
       providerName: !isPackage && ext === '.pdf' && pdfParseMode === 'vision' && selectedProvider ? selectedProvider.name
-        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? '本地 MinerU' : null,
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'mineru-local' ? '本地 MinerU'
+        : !isPackage && ext === '.pdf' && pdfParseMode === 'general-local-model' ? '通用本地模型' : null,
       status: 'queued',
       step: 0,
       message: isPackage ? '等待恢复文档包' : '等待处理'

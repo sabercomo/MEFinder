@@ -144,6 +144,7 @@
       if (status) { status.className = 'settings-status warning'; status.textContent = '读取失败'; }
       showToast('读取本地 OCR 设置失败：' + error.message, 'danger');
     }
+    loadGeneralModelConfig();
   }
 
   function localOCRPayload() {
@@ -2074,7 +2075,144 @@
     }
   }
 
+  // -- 通用本地模型：单个自部署 OpenAI 兼容端点，复用 vision 后端，配置独立 --
+
+  function generalModelFieldValues() {
+    return {
+      api_base: (document.getElementById('general-model-base').value || '').trim(),
+      api_key: (document.getElementById('general-model-key').value || '').trim(),
+      name: (document.getElementById('general-model-name').value || '').trim(),
+      model: (document.getElementById('general-model-model').value || '').trim(),
+      enabled: !!document.getElementById('general-model-enabled').checked
+    };
+  }
+
+  function updateGeneralModelStatus(summary) {
+    var status = document.getElementById('general-model-status');
+    if (!status) return;
+    var enabled = !!(summary && summary.enabled);
+    var configured = !!(summary && summary.configured);
+    status.className = 'settings-status' + (enabled ? ' ready' : (configured ? ' warning' : ''));
+    status.textContent = enabled ? '已启用' : (configured ? '已配置（未启用）' : '未配置');
+  }
+
+  function syncGeneralModelImportOption(enabled) {
+    var option = document.getElementById('general-model-parse-option');
+    if (!option) return;
+    option.hidden = !enabled;
+    var input = option.querySelector('input[name="pdf-parse-mode"]');
+    if (!enabled && input && input.checked) {
+      var automatic = document.querySelector('input[name="pdf-parse-mode"][value="auto"]');
+      if (automatic) automatic.checked = true;
+    } else if (enabled && input && settingsStore.currentPdfParseMode === 'general-local-model') {
+      input.checked = true;
+    }
+  }
+
+  function renderGeneralModel(summary) {
+    if (!summary) return;
+    var base = document.getElementById('general-model-base');
+    var name = document.getElementById('general-model-name');
+    var model = document.getElementById('general-model-model');
+    var enabled = document.getElementById('general-model-enabled');
+    var key = document.getElementById('general-model-key');
+    if (key) key.placeholder = summary.has_key ? '已保存（留空即保留）' : '本地部署通常留空';
+    if (base && document.activeElement !== base) base.value = summary.api_base || '';
+    if (name && document.activeElement !== name) name.value = (summary.name && summary.name !== '通用本地模型') ? summary.name : '';
+    if (model && document.activeElement !== model) model.value = summary.model || '';
+    if (enabled) enabled.checked = !!summary.enabled;
+    updateGeneralModelStatus(summary);
+    syncGeneralModelImportOption(!!summary.enabled);
+  }
+
+  async function loadGeneralModelConfig() {
+    try {
+      var response = await fetch('/api/general-model');
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+      renderGeneralModel(data);
+    } catch (error) {
+      updateGeneralModelStatus(null);
+    }
+  }
+
+  async function saveGeneralModel() {
+    var hint = document.getElementById('general-model-hint');
+    var button = document.getElementById('general-model-save');
+    if (button) button.disabled = true;
+    if (hint) { hint.className = 'settings-hint'; hint.textContent = '保存中…'; }
+    try {
+      var response = await fetch('/api/general-model', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(generalModelFieldValues())
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+      var keyField = document.getElementById('general-model-key');
+      if (keyField) keyField.value = '';
+      renderGeneralModel(data);
+      if (hint) { hint.className = 'settings-hint success'; hint.textContent = '已保存'; }
+    } catch (error) {
+      if (hint) { hint.className = 'settings-hint danger'; hint.textContent = error.message; }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function testGeneralModel() {
+    var hint = document.getElementById('general-model-hint');
+    var button = document.getElementById('general-model-test');
+    if (button) button.disabled = true;
+    if (hint) { hint.className = 'settings-hint'; hint.textContent = '连接中…'; }
+    try {
+      var response = await fetch('/api/general-model/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(generalModelFieldValues())
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '连接失败');
+      if (hint) { hint.className = 'settings-hint success'; hint.textContent = '连接成功（' + (data.latency_ms || 0) + ' ms）'; }
+    } catch (error) {
+      if (hint) { hint.className = 'settings-hint danger'; hint.textContent = error.message; }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function fetchGeneralModelModels() {
+    var hint = document.getElementById('general-model-model-hint');
+    var button = document.getElementById('general-model-fetch');
+    if (button) button.disabled = true;
+    if (hint) { hint.className = 'vision-model-hint'; hint.textContent = '读取模型列表…'; }
+    try {
+      var response = await fetch('/api/general-model/models', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(generalModelFieldValues())
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '读取失败');
+      var models = (data.models || []).map(function(m) { return typeof m === 'string' ? m : (m && m.id) || ''; }).filter(Boolean);
+      var list = document.getElementById('general-model-model-list');
+      if (list) {
+        list.innerHTML = '';
+        models.forEach(function(id) { var opt = document.createElement('option'); opt.value = id; list.appendChild(opt); });
+      }
+      if (hint) { hint.className = 'vision-model-hint'; hint.textContent = models.length ? ('读到 ' + models.length + ' 个模型，点击输入框选择') : '未读到模型，请手动输入型号'; }
+    } catch (error) {
+      if (hint) { hint.className = 'vision-model-hint'; hint.textContent = error.message + '（可手动输入型号）'; }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 处理器访问。
+  global.loadGeneralModelConfig = loadGeneralModelConfig;
+  global.saveGeneralModel = saveGeneralModel;
+  global.testGeneralModel = testGeneralModel;
+  global.fetchGeneralModelModels = fetchGeneralModelModels;
   global.loadLocalOCRConfig = loadLocalOCRConfig;
   global.saveLocalOCRConfig = saveLocalOCRConfig;
   global.manageLocalOCRComponent = manageLocalOCRComponent;

@@ -664,6 +664,10 @@ class DocumentImportCoordinator:
         vision_provider_id: object,
     ) -> Tuple[str, str]:
         mode = str(pdf_parse_mode or "auto").strip().lower()
+        if mode == "general-local-model":
+            # The general local model rides the vision path via a reserved
+            # provider id; the id comes from here, not from the request header.
+            return "vision", "general-local-model"
         if mode not in {"auto", "mineru", "mineru-local", "vision"}:
             raise MinerUError("PDF 解析方式无效。")
         provider_id = (

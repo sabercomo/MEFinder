@@ -40,6 +40,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/local-ocr",
         "/api/local-ocr/component",
         "/api/vision-providers",
+        "/api/general-model",
         "/api/import",
         "/api/import-upload/start",
         "/api/import-upload/chunk",

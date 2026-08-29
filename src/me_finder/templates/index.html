@@ -380,6 +380,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small>直接使用你在设置中启用的本地部署服务，不上传到 MinerU 在线服务</small>
               </span>
             </label>
+            <label class="pdf-parse-option" id="general-model-parse-option" hidden>
+              <input type="radio" name="pdf-parse-mode" value="general-local-model" onchange="setPdfParseMode(this.value)">
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>通用本地模型</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">高级</span></span>
+                <small>用你在设置中启用的自部署 OpenAI 兼容模型逐页解析，不上传到在线服务</small>
+              </span>
+            </label>
             <label class="pdf-parse-option pdf-parse-option-vision" id="vision-parse-option">
               <input type="radio" name="pdf-parse-mode" value="vision" onchange="setPdfParseMode(this.value)">
               <span class="pdf-parse-card">
@@ -630,6 +637,29 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       </div>
                     </div>
                   </details>
+                </div>
+              </section>
+              <section class="mineru-local-settings" id="general-model-settings">
+                <div class="mineru-local-section-head">
+                  <span class="mineru-local-summary-copy"><strong>通用本地模型</strong><small>连接你自己部署的 OpenAI 兼容视觉模型（如 vLLM / Ollama 上的 Qwen-VL、MiniCPM-V），逐页转写识别</small></span>
+                  <span id="general-model-status" class="settings-status">未配置</span>
+                </div>
+                <div class="mineru-local-body">
+                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>填服务地址和模型即可；API Key 可留空（本地部署通常无需）。启用后，导入页会多出「通用本地模型」选项，不会自动使用。</span></div>
+                  <div class="settings-grid mineru-local-grid">
+                    <label class="settings-label" for="general-model-base">服务地址</label>
+                    <div class="settings-control"><input id="general-model-base" class="settings-input settings-input--mono" type="url" spellcheck="false" autocomplete="off" placeholder="http://127.0.0.1:8000/v1"><small>OpenAI 兼容的 /v1 接口地址</small></div>
+                    <label class="settings-label" for="general-model-key">API Key <span class="settings-field-optional">（可选）</span></label>
+                    <div class="settings-control"><div class="settings-secret"><input id="general-model-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="本地部署通常留空"><button id="general-model-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('general-model-key','general-model-key-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button></div><small>只保存在本机；编辑时留空即保留原 Key</small></div>
+                    <label class="settings-label" for="general-model-name">显示名称 <span class="settings-field-optional">（可选）</span></label>
+                    <div class="settings-control"><input id="general-model-name" class="settings-input settings-input--sm" type="text" maxlength="80" placeholder="通用本地模型"></div>
+                    <label class="settings-label" for="general-model-model">模型</label>
+                    <div class="settings-control"><div class="settings-model-row"><input id="general-model-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" list="general-model-model-list" placeholder="选择或手动输入模型名"><datalist id="general-model-model-list"></datalist><button id="general-model-fetch" class="action-btn settings-model-fetch" type="button" onclick="fetchGeneralModelModels()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button></div><small id="general-model-model-hint" class="vision-model-hint">填好地址后可自动读取模型列表；读取失败也可手动输入型号</small></div>
+                    <span class="settings-label">启用</span>
+                    <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="general-model-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用为导入解析选项</span></label><small>启用后，导入页可以选择「通用本地模型」；不会自动使用</small></div>
+                    <span class="settings-label"></span>
+                    <div class="settings-control settings-actions settings-save-row"><button id="general-model-save" class="action-btn primary" type="button" onclick="saveGeneralModel()">保存设置</button><button id="general-model-test" class="action-btn" type="button" onclick="testGeneralModel()">检测连接</button><span id="general-model-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                  </div>
                 </div>
               </section>
             </div>

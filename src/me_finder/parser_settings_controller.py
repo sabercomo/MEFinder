@@ -41,6 +41,13 @@ from .local_ocr_settings import (
 from .managed_component import ManagedComponent
 from .parser_provider import ParserProviderError
 from .parser_statistics import build_parser_statistics
+from .general_model import (
+    discover_general_model_models,
+    general_model_summary,
+    resolve_general_model_config_path,
+    save_general_model_config,
+    test_general_model,
+)
 from .vision_api import (
     VisionAPIError,
     delete_vision_provider,
@@ -617,6 +624,60 @@ class ParserSettingsController:
         except VisionAPIError as exc:
             return 400, {"error": str(exc)}
         return 200, result
+
+    # -- 通用本地模型：单个自部署 OpenAI 兼容端点，复用 vision 后端，独立配置 --
+
+    def general_model_config(self) -> ParserSettingsResponse:
+        path = resolve_general_model_config_path(self._paths.runtime_root)
+        try:
+            payload = general_model_summary(path)
+        except VisionAPIError as exc:
+            return 500, {"error": str(exc)}
+        return 200, payload
+
+    def save_general_model(
+        self,
+        payload: Mapping[str, object],
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, dict):
+            return 400, {"error": "通用本地模型配置格式无效。"}
+        path = resolve_general_model_config_path(self._paths.runtime_root)
+        try:
+            summary = save_general_model_config(payload, path)
+        except VisionAPIError as exc:
+            return 400, {"error": str(exc)}
+        except (OSError, json.JSONDecodeError):
+            return 500, {"error": "通用本地模型配置无法保存，请检查配置目录。"}
+        return 200, {"ok": True, **summary}
+
+    def test_general_model_connection(
+        self,
+        payload: Mapping[str, object],
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, dict):
+            return 400, {"error": "通用本地模型配置格式无效。"}
+        path = resolve_general_model_config_path(self._paths.runtime_root)
+        try:
+            result = test_general_model(payload, path)
+        except VisionAPIError as exc:
+            return 400, {"error": str(exc)}
+        return 200, result
+
+    def general_model_models(
+        self,
+        payload: Mapping[str, object],
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, dict):
+            return 400, {
+                "error": "通用本地模型配置格式无效。",
+                "manual_entry_allowed": True,
+            }
+        path = resolve_general_model_config_path(self._paths.runtime_root)
+        try:
+            result = discover_general_model_models(payload, path)
+        except VisionAPIError as exc:
+            return 400, {"error": str(exc), "manual_entry_allowed": True}
+        return 200, {"ok": True, **result}
 
     def _mineru_accounts_payload(self) -> Dict[str, object]:
         if self._legacy_migration_error is not None:

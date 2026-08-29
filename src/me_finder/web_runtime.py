@@ -589,6 +589,9 @@ def build_application_runtime(
         "/api/vision-providers": (
             lambda _params: parser_settings_controller.vision_providers()
         ),
+        "/api/general-model": (
+            lambda _params: parser_settings_controller.general_model_config()
+        ),
         "/api/bibliographic-metadata": (
             lambda params: bibliographic_metadata_controller.metadata(
                 (params.get("source_id") or [None])[0]
@@ -646,6 +649,15 @@ def build_application_runtime(
         ),
         "/api/vision-providers/test": (
             parser_settings_controller.test_vision_provider
+        ),
+        "/api/general-model": (
+            parser_settings_controller.save_general_model
+        ),
+        "/api/general-model/models": (
+            parser_settings_controller.general_model_models
+        ),
+        "/api/general-model/test": (
+            parser_settings_controller.test_general_model_connection
         ),
         "/api/bibliographic-metadata/batch-detect": (
             bibliographic_metadata_controller.batch_detect

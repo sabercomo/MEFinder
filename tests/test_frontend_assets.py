@@ -330,10 +330,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.0：#7 试点续 —— 70-vision.js 同样包进 IIFE（85 私有 helper 收敛，46 公共导出）。
     # 0.5.0：#7 续 —— 10-shell/20-search/50-calibration/60-settings 四个无 node
     #        测试依赖的文件一并包进 IIFE（约 91 个私有 helper 收敛）。
+    # 0.5.0：新增「通用本地模型」——本地OCR区块末尾的自部署 OpenAI 兼容端点卡片
+    #        + 导入页专属解析单选项；后端复用 vision provider 路径。
     BASELINE_SHA256 = (
-        "5941570153488bdc3b10ba6e49caa31a68024d102bb00b4a5687347e76944da4"
+        "d18eae774fef7b6c9ea4242da3d8065440b6096a8089325c59636501a21c1703"
     )
-    BASELINE_BYTES = 943708
+    BASELINE_BYTES = 956032
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

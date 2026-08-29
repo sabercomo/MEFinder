@@ -171,6 +171,7 @@
     if (page === 'import') {
       if (!parserStore.visionConfigLoaded) loadVisionProviders();
       if (!parserStore.mineruConfigLoaded) loadMineruConfig();
+      loadGeneralModelConfig();
     }
     if (page === 'settings') {
       ensureVisibleSettingsCategory();

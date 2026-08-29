@@ -304,6 +304,15 @@ def load_vision_provider(
     if not requested:
         eligible_ids = _eligible_provider_ids(providers)
         requested = eligible_ids[0] if eligible_ids else ""
+    # The general local model keeps its own one-record config beside this file;
+    # route the reserved id there so the whole downstream vision path is shared.
+    if requested == "general-local-model":
+        from .general_model import (
+            general_model_config_path_for,
+            load_general_model_provider,
+        )
+
+        return load_general_model_provider(general_model_config_path_for(path))
     raw = next(
         (item for item in providers if str(item.get("id") or "") == requested),
         None,
