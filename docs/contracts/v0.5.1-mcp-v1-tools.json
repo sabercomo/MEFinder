@@ -580,6 +580,233 @@
         "destructiveHint": false,
         "openWorldHint": false
       }
+    },
+    {
+      "name": "propose_alignment_correction",
+      "title": "提议人工对齐修正",
+      "description": "当 find_parallel_passages 的既有对齐把某句指到了错误译文段时，用本工具记录一条“待确认”的修正提议：给出源版本、目标版本、源 Segment ID（来自 correspondence.source_segment_ids）与你判断正确的目标 Segment ID（来自候选的 candidate_id），并在 evidence 中写明判断依据（跨语言语义、专名、引文结构、上下文）。本工具只写入待确认记录，绝不改变任何查询结果；必须由用户在对话中明确同意后，再用返回的 confirmation_token 调用 confirm_alignment_correction 才会生效。不得在用户未确认时调用 confirm。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "target_source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "source_segment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "target_segment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "evidence": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "source_file_id",
+          "target_source_file_id",
+          "source_segment_ids",
+          "target_segment_ids"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "override_id": {"type": "string"},
+          "confirmation_token": {"type": "string"},
+          "status": {"const": "pending"},
+          "document_group_id": {"type": "string"},
+          "source_file_id": {"type": "string"},
+          "target_source_file_id": {"type": "string"},
+          "source_segments": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/override_segment"}
+          },
+          "target_segments": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/override_segment"}
+          },
+          "created_at": {"type": "string"}
+        },
+        "required": [
+          "schema_version",
+          "override_id",
+          "confirmation_token",
+          "status",
+          "document_group_id",
+          "source_file_id",
+          "target_source_file_id",
+          "source_segments",
+          "target_segments",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "confirm_alignment_correction",
+      "title": "确认人工对齐修正",
+      "description": "在用户明确同意某条修正提议后，用 propose_alignment_correction 返回的 override_id 与 confirmation_token 使其生效。生效后普通双栏阅读与 MCP 查询都会优先采用这条人工复核对齐，覆盖对应选区的自动结果。若分段或对齐已更新导致提议过期，将返回错误并自动作废该提议。不要在用户未确认时调用本工具。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "override_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "confirmation_token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          }
+        },
+        "required": ["override_id", "confirmation_token"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "override_id": {"type": "string"},
+          "status": {"const": "confirmed"},
+          "source_file_id": {"type": "string"},
+          "target_source_file_id": {"type": "string"},
+          "confirmed_at": {"type": "string"}
+        },
+        "required": [
+          "schema_version",
+          "override_id",
+          "status",
+          "source_file_id",
+          "target_source_file_id",
+          "confirmed_at"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "revoke_alignment_correction",
+      "title": "撤销人工对齐修正",
+      "description": "撤销一条待确认或已确认的人工对齐修正。撤销后该选区恢复使用自动对齐；此操作可逆，用户可随时重新提议并确认。不删除历史记录，只把状态标记为已撤销。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "override_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          }
+        },
+        "required": ["override_id"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "override_id": {"type": "string"},
+          "status": {"const": "revoked"},
+          "previous_status": {
+            "type": "string",
+            "enum": ["pending", "confirmed", "revoked"]
+          },
+          "source_file_id": {"type": "string"},
+          "target_source_file_id": {"type": "string"},
+          "revoked_at": {"type": "string"}
+        },
+        "required": [
+          "schema_version",
+          "override_id",
+          "status",
+          "previous_status",
+          "source_file_id",
+          "target_source_file_id",
+          "revoked_at"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_alignment_corrections",
+      "title": "列出人工对齐修正",
+      "description": "只读列出已记录的人工对齐修正（待确认 / 已确认 / 已撤销），含源与目标 Segment ID、判断依据和时间戳，用于复核与审计。可按源文献、目标文献或状态筛选。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "target_source_file_id": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+            "default": null
+          },
+          "status": {
+            "type": ["string", "null"],
+            "enum": ["pending", "confirmed", "revoked", null],
+            "default": null
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "total": {"type": "integer", "minimum": 0},
+          "overrides": {
+            "type": "array",
+            "items": {"$ref": "#/$defs/override_record"}
+          }
+        },
+        "required": ["schema_version", "total", "overrides"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
     }
   ],
   "errorSchema": {
@@ -884,9 +1111,14 @@
         "target": {"$ref": "#/$defs/parallel_target"},
         "status": {
           "type": "string",
-          "enum": ["needs_agent_review", "unavailable"]
+          "enum": ["needs_agent_review", "confirmed", "unavailable"]
         },
         "via_source_file_id": {"$ref": "#/$defs/nullable_string"},
+        "source_segment_ids": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "manual_override_id": {"$ref": "#/$defs/nullable_string"},
         "candidates": {
           "type": "array",
           "items": {"$ref": "#/$defs/parallel_candidate"}
@@ -898,8 +1130,58 @@
         "target",
         "status",
         "via_source_file_id",
+        "source_segment_ids",
+        "manual_override_id",
         "candidates",
         "note"
+      ],
+      "additionalProperties": false
+    },
+    "override_segment": {
+      "type": "object",
+      "properties": {
+        "segment_id": {"type": "string"},
+        "text": {"type": "string"}
+      },
+      "required": ["segment_id", "text"],
+      "additionalProperties": false
+    },
+    "override_record": {
+      "type": "object",
+      "properties": {
+        "override_id": {"type": "string"},
+        "document_group_id": {"type": "string"},
+        "source_file_id": {"type": "string"},
+        "target_source_file_id": {"type": "string"},
+        "source_segment_ids": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "target_segment_ids": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "confirmed", "revoked"]
+        },
+        "evidence": {"type": "object"},
+        "created_at": {"type": "string"},
+        "confirmed_at": {"$ref": "#/$defs/nullable_string"},
+        "revoked_at": {"$ref": "#/$defs/nullable_string"}
+      },
+      "required": [
+        "override_id",
+        "document_group_id",
+        "source_file_id",
+        "target_source_file_id",
+        "source_segment_ids",
+        "target_segment_ids",
+        "status",
+        "evidence",
+        "created_at",
+        "confirmed_at",
+        "revoked_at"
       ],
       "additionalProperties": false
     },

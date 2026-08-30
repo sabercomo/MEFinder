@@ -200,4 +200,43 @@ def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
         "ON text_segment_paragraph_spans(source_file_id, paragraph_index, "
         "paragraph_char_start, paragraph_char_end)"
     )
+    if not _table_exists(connection, "alignment_manual_overrides"):
+        # Human-confirmed corrections to the automatic cross-version mapping.
+        # A row is written as ``pending`` by an agent proposal and only starts
+        # affecting reads after the user confirms it (``confirmed``); it can be
+        # reverted (``revoked``) at any time.  Everything is keyed on segment
+        # ids, so a re-segmentation cascade-deletes stale overrides.
+        connection.execute(
+            """
+            CREATE TABLE alignment_manual_overrides (
+                override_id TEXT PRIMARY KEY,
+                document_group_id TEXT NOT NULL REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
+                source_file_id TEXT NOT NULL REFERENCES source_files(source_file_id) ON DELETE CASCADE,
+                target_source_file_id TEXT NOT NULL REFERENCES source_files(source_file_id) ON DELETE CASCADE,
+                source_segment_set_id TEXT NOT NULL REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
+                target_segment_set_id TEXT NOT NULL REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
+                source_segment_key TEXT NOT NULL,
+                source_segment_ids_json TEXT NOT NULL,
+                target_segment_ids_json TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed', 'revoked')),
+                confirmation_token TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                confirmed_at TEXT,
+                revoked_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_manual_overrides_lookup ON alignment_manual_overrides("
+            "source_file_id, target_source_file_id, source_segment_set_id, "
+            "source_segment_key, status)"
+        )
+        # At most one active correction per source selection and segment-set.
+        connection.execute(
+            "CREATE UNIQUE INDEX idx_manual_overrides_active ON "
+            "alignment_manual_overrides(source_file_id, target_source_file_id, "
+            "source_segment_set_id, source_segment_key) WHERE status = 'confirmed'"
+        )
+        changed = True
     return changed

@@ -9,8 +9,8 @@
   "advertised_context": {
     "instructions_characters": 384,
     "instructions_utf8_bytes": 790,
-    "utf8_bytes": 34589,
-    "before_unreferenced_defs_trim_utf8_bytes": 111599
+    "utf8_bytes": 41385,
+    "before_unreferenced_defs_trim_utf8_bytes": 175520
   },
   "responses": {
     "named_document_list": {

@@ -311,6 +311,62 @@ class LiteratureVerificationService:
                 source_formatter=_search_match,
             )
 
+    def propose_alignment_correction(
+        self,
+        *,
+        source_file_id: str,
+        target_source_file_id: str,
+        source_segment_ids: Sequence[object],
+        target_segment_ids: Sequence[object],
+        evidence: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        from .alignment_override_service import propose_alignment_correction
+
+        return propose_alignment_correction(
+            self._existing_index_path(),
+            source_file_id=source_file_id,
+            target_source_file_id=target_source_file_id,
+            source_segment_ids=source_segment_ids,
+            target_segment_ids=target_segment_ids,
+            evidence=evidence,
+        )
+
+    def confirm_alignment_correction(
+        self, *, override_id: str, confirmation_token: str
+    ) -> dict[str, object]:
+        from .alignment_override_service import confirm_alignment_correction
+
+        return confirm_alignment_correction(
+            self._existing_index_path(),
+            override_id=override_id,
+            confirmation_token=confirmation_token,
+        )
+
+    def revoke_alignment_correction(self, *, override_id: str) -> dict[str, object]:
+        from .alignment_override_service import revoke_alignment_correction
+
+        return revoke_alignment_correction(
+            self._existing_index_path(), override_id=override_id
+        )
+
+    def list_alignment_corrections(
+        self,
+        *,
+        source_file_id: str | None = None,
+        target_source_file_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        from .alignment_override_service import list_alignment_corrections
+
+        return list_alignment_corrections(
+            self._existing_index_path(),
+            source_file_id=source_file_id,
+            target_source_file_id=target_source_file_id,
+            status=status,
+            limit=limit,
+        )
+
     def _search_one(
         self,
         engine: object,

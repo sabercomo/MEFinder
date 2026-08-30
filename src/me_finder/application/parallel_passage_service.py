@@ -79,6 +79,8 @@ def find_parallel_passages(
                         "target": target_summary,
                         "status": "unavailable",
                         "via_source_file_id": target["via_source_file_id"],
+                        "source_segment_ids": [],
+                        "manual_override_id": None,
                         "candidates": [],
                         "note": "原句命中缺少可用于对照定位的精确字符偏移。",
                     }
@@ -99,21 +101,33 @@ def find_parallel_passages(
                         "target": target_summary,
                         "status": "unavailable",
                         "via_source_file_id": target["via_source_file_id"],
+                        "source_segment_ids": [],
+                        "manual_override_id": None,
                         "candidates": [],
                         "note": str(exc),
                     }
                 )
                 continue
+            if str(located.get("alignment_source")) == "manual_review":
+                status = "confirmed"
+                note = "该对应已由人工复核确认，普通双栏阅读与 MCP 查询都优先采用它。"
+            else:
+                status = "needs_agent_review"
+                note = (
+                    "anchor_distance 只表示相对既有对齐中心的位置，不代表语义正确率。"
+                )
             correspondences.append(
                 {
                     "source": source,
                     "target": target_summary,
-                    "status": "needs_agent_review",
+                    "status": status,
                     "via_source_file_id": located["via_source_file_id"],
-                    "candidates": _target_candidates(located),
-                    "note": (
-                        "anchor_distance 只表示相对既有对齐中心的位置，不代表语义正确率。"
+                    "source_segment_ids": list(
+                        located.get("source_segment_ids", [])
                     ),
+                    "manual_override_id": located.get("manual_override_id"),
+                    "candidates": _target_candidates(located),
+                    "note": note,
                 }
             )
 

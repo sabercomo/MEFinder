@@ -161,6 +161,23 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
             f"题录字段 {present}/{len(result['fields'])} 已填，"
             f"缺失 {len(result['missing_fields'])} 项，存疑 {len(result['invalid_fields'])} 项。"
         )
+    if tool_name == "propose_alignment_correction":
+        return (
+            "已记录待确认的对齐修正提议，尚未生效。请向用户复核源句与目标段及判断依据，"
+            f"用户明确同意后再用 override_id 与 confirmation_token 确认。override_id={result['override_id']}"
+        )
+    if tool_name == "confirm_alignment_correction":
+        return (
+            "对齐修正已确认生效，普通阅读与查询将优先采用它。"
+            f"override_id={result['override_id']}"
+        )
+    if tool_name == "revoke_alignment_correction":
+        return (
+            f"已撤销对齐修正（原状态 {result['previous_status']}），该选区恢复使用自动对齐，"
+            "可随时重新提议。"
+        )
+    if tool_name == "list_alignment_corrections":
+        return f"共 {result['total']} 条人工对齐修正记录。"
     return f"读取了 {len(result['items'])} 个文献位置。"
 
 
@@ -248,6 +265,34 @@ TOOL_HANDLERS: dict[
             arguments["source_file_id"],
             start=arguments.get("start", 0),
             count=arguments.get("count", 10),
+        )
+    ),
+    "propose_alignment_correction": lambda service, arguments: (
+        service.propose_alignment_correction(
+            source_file_id=arguments["source_file_id"],
+            target_source_file_id=arguments["target_source_file_id"],
+            source_segment_ids=arguments["source_segment_ids"],
+            target_segment_ids=arguments["target_segment_ids"],
+            evidence=arguments.get("evidence"),
+        )
+    ),
+    "confirm_alignment_correction": lambda service, arguments: (
+        service.confirm_alignment_correction(
+            override_id=arguments["override_id"],
+            confirmation_token=arguments["confirmation_token"],
+        )
+    ),
+    "revoke_alignment_correction": lambda service, arguments: (
+        service.revoke_alignment_correction(
+            override_id=arguments["override_id"],
+        )
+    ),
+    "list_alignment_corrections": lambda service, arguments: (
+        service.list_alignment_corrections(
+            source_file_id=arguments.get("source_file_id"),
+            target_source_file_id=arguments.get("target_source_file_id"),
+            status=arguments.get("status"),
+            limit=arguments.get("limit", 50),
         )
     ),
 }

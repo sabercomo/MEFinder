@@ -324,6 +324,94 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(true_candidate["anchor_distance"], 1)
         self.assertEqual(true_candidate["passages"][0]["position"], 1)
 
+    def test_alignment_correction_round_trip_prefers_confirmed_target(self) -> None:
+        add_mcp_parallel_fixture(self.runtime_root / "data" / "index.sqlite3")
+
+        def parallel() -> dict[str, object]:
+            return self.service.find_parallel_passages(
+                CALIBRATED_QUOTE,
+                mode="exact",
+                source_file_id=PDF_SOURCE_ID,
+                target_source_file_id=PARALLEL_SOURCE_ID,
+            )["correspondences"][0]
+
+        before = parallel()
+        self.assertEqual(before["status"], "needs_agent_review")
+        self.assertIsNone(before["manual_override_id"])
+        self.assertTrue(before["source_segment_ids"])
+        # Deliberately correct to the neighbouring (anchor_distance -1) segment.
+        wrong_neighbour = next(
+            candidate
+            for candidate in before["candidates"]
+            if candidate["anchor_distance"] == -1
+        )
+
+        proposal = self.service.propose_alignment_correction(
+            source_file_id=PDF_SOURCE_ID,
+            target_source_file_id=PARALLEL_SOURCE_ID,
+            source_segment_ids=before["source_segment_ids"],
+            target_segment_ids=[wrong_neighbour["candidate_id"]],
+            evidence={"reason": "integration-test"},
+        )
+        self.assert_required_keys(
+            proposal, self.tools["propose_alignment_correction"]["outputSchema"]
+        )
+        self.assertEqual(proposal["status"], "pending")
+
+        # A pending proposal must not change what the query returns.
+        self.assertEqual(parallel()["status"], "needs_agent_review")
+
+        confirmed = self.service.confirm_alignment_correction(
+            override_id=proposal["override_id"],
+            confirmation_token=proposal["confirmation_token"],
+        )
+        self.assert_required_keys(
+            confirmed, self.tools["confirm_alignment_correction"]["outputSchema"]
+        )
+
+        after = parallel()
+        self.assertEqual(after["status"], "confirmed")
+        self.assertEqual(after["manual_override_id"], proposal["override_id"])
+        aligned = next(
+            candidate
+            for candidate in after["candidates"]
+            if candidate["anchor_distance"] == 0
+        )
+        self.assertEqual(aligned["text"], wrong_neighbour["text"])
+        self.assertIn("人工复核", after["note"])
+
+        listed = self.service.list_alignment_corrections(status="confirmed")
+        self.assert_required_keys(
+            listed, self.tools["list_alignment_corrections"]["outputSchema"]
+        )
+        self.assertEqual(listed["total"], 1)
+        self.assertEqual(
+            listed["overrides"][0]["override_id"], proposal["override_id"]
+        )
+        self.assertEqual(listed["overrides"][0]["evidence"]["reason"], "integration-test")
+
+        revoked = self.service.revoke_alignment_correction(
+            override_id=proposal["override_id"]
+        )
+        self.assert_required_keys(
+            revoked, self.tools["revoke_alignment_correction"]["outputSchema"]
+        )
+        self.assertEqual(parallel()["status"], "needs_agent_review")
+
+    def test_alignment_correction_rejects_invalid_input(self) -> None:
+        add_mcp_parallel_fixture(self.runtime_root / "data" / "index.sqlite3")
+        with self.assertRaises(ValueError):
+            self.service.propose_alignment_correction(
+                source_file_id=PDF_SOURCE_ID,
+                target_source_file_id=PARALLEL_SOURCE_ID,
+                source_segment_ids=[],
+                target_segment_ids=["segment-x"],
+            )
+        with self.assertRaises(ValueError):
+            self.service.confirm_alignment_correction(
+                override_id="not a valid id!", confirmation_token="token"
+            )
+
     def test_locate_quote_keeps_no_result_separate_from_errors(self) -> None:
         result = self.service.locate_quote(MISSING_QUOTE, mode="exact")
         self.assertEqual(result["total"], 0)

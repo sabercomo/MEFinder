@@ -6,7 +6,7 @@
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供九个工具：
+MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十三个工具：前九个只读；最后四个用于对齐修正，其中三个为带确认门槛的写工具，只有用户在对话中明确同意后才会永久生效，其余读写路径不受影响。
 
 - `list_documents`：按题名、作者、文件名或类型查找已导入文献；
 - `locate_quote`：定位原句、近似引文和多个候选；
@@ -16,7 +16,11 @@ MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供九个工具：
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；
 - `find_parallel_passages`：输入任一版本的句子，以已生成的版本对齐为中心返回英文、原文或其他译本的多个附近候选、定位和前后文；Codex 必须重新比较语义与上下文，只在证据唯一时确认，否则报告 `ambiguous` 或 `unavailable`；
 - `read_bibliographic_pages`：返回书首与书尾的版权页候选文本并标注书目线索，供从原书自身提取题录（不联网）；
-- `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全。
+- `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全；
+- `propose_alignment_correction`：当既有对齐把某句指到错误译文段时，用源/目标 Segment ID 与判断依据记录一条“待确认”的修正提议——它不改变任何查询，只返回 `confirmation_token`，必须交用户复核；
+- `confirm_alignment_correction`：在用户明确同意后，用 `override_id` 和 `confirmation_token` 让修正永久生效，普通双栏阅读与 MCP 查询随后都优先采用它；未经用户确认不得调用；
+- `revoke_alignment_correction`：撤销待确认或已确认的修正，恢复自动对齐，可逆；
+- `list_alignment_corrections`：只读列出全部修正记录（待确认/已确认/已撤销）及证据，供复核审计。
 
 Windows 安装版、Windows 绿色版和 macOS 安装包都包含独立的 `MEFinderMCP` sidecar。不要把桌面应用主程序配置为 MCP 命令。
 
@@ -193,7 +197,7 @@ tool_timeout_sec = 60
 1. 运行 `codex mcp list`，应看到启用的 `mefinder`；
 2. 运行 `codex mcp get mefinder --json`，核对命令、参数和工作目录；
 3. 在 Codex TUI 或桌面端输入 `/mcp`，应看到服务器已连接；
-4. 工具列表应包含本页“当前可用范围”列出的九个只读工具；
+4. 工具列表应包含本页“当前可用范围”列出的十三个工具（九个只读 + 四个对齐修正）；
 5. 先在 MEFinder 中导入至少一篇文献，再询问：“只使用 MEFinder 核对这句话出自哪篇文献、哪一页。”
 
 建议继续检查以下自然语言任务：
@@ -209,10 +213,11 @@ tool_timeout_sec = 60
 
 0.4.4 源码模式的真实 Codex 验收结果见 [`mcp-v1-codex-e2e-report.md`](mcp-v1-codex-e2e-report.md)。
 
-## 8. 隐私和只读边界
+## 8. 隐私和读写边界
 
 - MEFinder MCP Server 本身不访问网络，只读取当前本地 SQLite 索引；
-- 九个 v1 工具均为只读，不导入、删除、写回校准结果或修改题录；
+- 前九个 v1 工具均为只读，不导入、删除、写回校准结果或修改题录；
+- 四个对齐修正工具是唯一写路径，且仅写入 `alignment_manual_overrides` 一张记录表：`propose` 只写“待确认”提议、绝不改变查询结果；`confirm` 需要用户明确同意并提供 `propose` 返回的令牌才让修正生效；`revoke` 可逆；`list` 只读。它们不导入文献、不删除数据、不修改题录，也不触碰自动对齐本身；
 - MCP 不返回本地绝对文件路径、API Token、内部页哈希或无关设置；
 - Codex 调用工具后，查询、命中原文、上下文、题录和页码证据会进入 Codex 对话及模型上下文，并受用户所使用的 Codex/OpenAI 产品数据控制约束；
 - 运行本地 MCP Server 不需要 OpenAI API Key，但使用 Codex 本身仍需要对应的 Codex 登录和权限；

@@ -190,6 +190,13 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "nullable_string",
                                 "reader_source",
                             },
+                            "propose_alignment_correction": {"override_segment"},
+                            "confirm_alignment_correction": set(),
+                            "revoke_alignment_correction": set(),
+                            "list_alignment_corrections": {
+                                "override_record",
+                                "nullable_string",
+                            },
                         }
                         self.assertEqual(
                             [item.name for item in listed.tools],
