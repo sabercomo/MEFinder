@@ -67,6 +67,22 @@ class MCPServerProtocolTests(unittest.TestCase):
             env={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
         )
 
+    def test_parallel_tool_requires_agent_calibration_and_abstention(self) -> None:
+        description = next(
+            tool["description"]
+            for tool in CONTRACT["tools"]
+            if tool["name"] == "find_parallel_passages"
+        )
+        for expected in (
+            "Agent 校准模式",
+            "anchor_distance",
+            "confirmed",
+            "ambiguous",
+            "unavailable",
+            "不得硬选",
+        ):
+            self.assertIn(expected, description)
+
     def test_initialize_tools_list_and_all_tool_calls(self) -> None:
         async def scenario() -> None:
             error_path = Path(self.temp_dir.name) / "protocol-stderr.log"
@@ -149,10 +165,13 @@ class MCPServerProtocolTests(unittest.TestCase):
                             },
                             "find_parallel_passages": {
                                 "citation_page",
+                                "context_item",
                                 "nullable_nonnegative_integer",
                                 "nullable_string",
+                                "parallel_candidate",
                                 "parallel_correspondence",
                                 "parallel_passage",
+                                "parallel_segment_context",
                                 "parallel_source",
                                 "parallel_target",
                                 "physical_page",
@@ -298,11 +317,12 @@ class MCPServerProtocolTests(unittest.TestCase):
                         },
                     )
                     self.assertFalse(result.is_error, result.structured_content)
-                    self.assertEqual(result.structured_content["aligned_count"], 1)
                     self.assertEqual(
-                        result.structured_content["correspondences"][0]["passages"][
-                            0
-                        ]["text"],
+                        result.structured_content["candidate_set_count"], 1
+                    )
+                    self.assertEqual(
+                        result.structured_content["correspondences"][0]["candidates"]
+                        [1]["text"],
                         "Technical judgments must be supported by verifiable evidence.",
                     )
 

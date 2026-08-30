@@ -5,7 +5,7 @@
   "release": "0.5.1",
   "server": {
     "name": "mefinder",
-    "instructions": "定位原句用 locate_quote；询问译本或原文对应句时用 find_parallel_passages，只采用已生成的版本对齐，不自行翻译；批量核对用 verify_quotes；只记得大意或关键词时用 search_passages，再用 locate_quote 逐字定位；错引比对用 diff_quote；题录补全先用 read_bibliographic_metadata，再用 read_bibliographic_pages，只据原书文本提取；未知 source_file_id 时用 list_documents；上下文不足时用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现，不自动证明题录元数据完全正确。"
+    "instructions": "定位原句用 locate_quote；译本或原文对应用 find_parallel_passages：只把既有对齐当召回中心，必须比较源句、前后文与全部候选，按跨语言语义、专名和引文结构校准；anchor_distance 仅表示位置。唯一证据充分才回答 confirmed；多个合理候选回答 ambiguous 并列出；证据不足回答 unavailable，不得硬选或自行翻译。批量核对用 verify_quotes；大意检索用 search_passages，再以 locate_quote 逐字定位；错引比对用 diff_quote；题录补全先读元数据缺口再读书目页；未知文献先用 list_documents；上下文不足用 read_document_window。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -404,7 +404,7 @@
     {
       "name": "find_parallel_passages",
       "title": "查找跨译本对应句",
-      "description": "先在 MEFinder 本地索引中定位给定句子，再从作品组已生成的版本对齐中返回英文、原文或其他译本的对应文本与定位。可按目标文献 ID 或 BCP 47 语言代码收窄；不重新翻译，不隐藏多候选，对齐被拒绝或无可靠对应时显式返回 unavailable 及原因。",
+      "description": "Agent 校准模式：先在 MEFinder 本地索引中定位给定句子，以作品组既有对齐为中心召回附近多个英文、原文或其他译本候选，并返回源句及目标候选的前后文与定位。调用方必须根据跨语言语义、专名、引文结构和上下文重新判断；anchor_distance 只是位置提示，不是正确率。只有唯一候选证据充分时才回答 confirmed；多个候选仍合理时回答 ambiguous 并列出候选；证据不足时回答 unavailable，不得硬选或自行翻译。可按目标文献 ID 或 BCP 47 语言代码收窄。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -451,7 +451,7 @@
           "source_match_count": {"type": "integer", "minimum": 0},
           "source_match_count_is_exact": {"type": "boolean"},
           "total": {"type": "integer", "minimum": 0},
-          "aligned_count": {"type": "integer", "minimum": 0},
+          "candidate_set_count": {"type": "integer", "minimum": 0},
           "has_more": {"type": "boolean"},
           "correspondences": {
             "type": "array",
@@ -464,7 +464,7 @@
           "source_match_count",
           "source_match_count_is_exact",
           "total",
-          "aligned_count",
+          "candidate_set_count",
           "has_more",
           "correspondences"
         ],
@@ -766,6 +766,15 @@
         "source_type": {"type": "string", "enum": ["pdf", "word"]},
         "document_title": {"$ref": "#/$defs/nullable_string"},
         "matched_text": {"type": "string"},
+        "paragraph_text": {"type": "string"},
+        "context_before": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
+        "context_after": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/context_item"}
+        },
         "match_type": {
           "type": "string",
           "enum": [
@@ -786,6 +795,9 @@
         "source_type",
         "document_title",
         "matched_text",
+        "paragraph_text",
+        "context_before",
+        "context_after",
         "match_type",
         "match_score",
         "physical_page",
@@ -825,6 +837,46 @@
       "required": ["item_type", "position", "char_start", "char_end", "text"],
       "additionalProperties": false
     },
+    "parallel_segment_context": {
+      "type": "object",
+      "properties": {
+        "segment_id": {"type": "string"},
+        "text": {"type": "string"}
+      },
+      "required": ["segment_id", "text"],
+      "additionalProperties": false
+    },
+    "parallel_candidate": {
+      "type": "object",
+      "properties": {
+        "candidate_id": {"type": "string"},
+        "order_index": {"type": "integer", "minimum": 0},
+        "anchor_distance": {"type": "integer", "minimum": -3, "maximum": 3},
+        "text": {"type": "string"},
+        "passages": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/parallel_passage"}
+        },
+        "context_before": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/parallel_segment_context"}
+        },
+        "context_after": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/parallel_segment_context"}
+        }
+      },
+      "required": [
+        "candidate_id",
+        "order_index",
+        "anchor_distance",
+        "text",
+        "passages",
+        "context_before",
+        "context_after"
+      ],
+      "additionalProperties": false
+    },
     "parallel_correspondence": {
       "type": "object",
       "properties": {
@@ -832,12 +884,12 @@
         "target": {"$ref": "#/$defs/parallel_target"},
         "status": {
           "type": "string",
-          "enum": ["aligned", "unavailable"]
+          "enum": ["needs_agent_review", "unavailable"]
         },
         "via_source_file_id": {"$ref": "#/$defs/nullable_string"},
-        "passages": {
+        "candidates": {
           "type": "array",
-          "items": {"$ref": "#/$defs/parallel_passage"}
+          "items": {"$ref": "#/$defs/parallel_candidate"}
         },
         "note": {"$ref": "#/$defs/nullable_string"}
       },
@@ -846,7 +898,7 @@
         "target",
         "status",
         "via_source_file_id",
-        "passages",
+        "candidates",
         "note"
       ],
       "additionalProperties": false

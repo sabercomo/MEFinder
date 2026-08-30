@@ -222,30 +222,51 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(result["source_match_count"], 1)
         self.assertEqual(result["total"], 1)
-        self.assertEqual(result["aligned_count"], 1)
+        self.assertEqual(result["candidate_set_count"], 1)
         correspondence = result["correspondences"][0]
         self.assert_required_keys(
             correspondence,
             self.contract["$defs"]["parallel_correspondence"],
         )
-        self.assertEqual(correspondence["status"], "aligned")
+        self.assertEqual(correspondence["status"], "needs_agent_review")
         self.assertEqual(
             correspondence["target"]["source_file_id"], PARALLEL_SOURCE_ID
         )
         self.assertEqual(correspondence["target"]["language_code"], "en-US")
         self.assertEqual(
-            correspondence["passages"],
+            [candidate["anchor_distance"] for candidate in correspondence["candidates"]],
+            [-1, 0, 1],
+        )
+        self.assertEqual(
+            [candidate["text"] for candidate in correspondence["candidates"]],
+            [
+                "A nearby passage discusses how technical decisions are recorded.",
+                "Technical judgments must be supported by verifiable evidence.",
+                "The following passage explains how that evidence can be reviewed.",
+            ],
+        )
+        aligned_candidate = correspondence["candidates"][1]
+        self.assertEqual(
+            aligned_candidate["passages"],
             [
                 {
                     "item_type": "word_paragraph",
-                    "position": 0,
+                    "position": 1,
                     "char_start": 0,
                     "char_end": 61,
                     "text": "Technical judgments must be supported by verifiable evidence.",
                 }
             ],
         )
-        self.assertIsNone(correspondence["note"])
+        self.assertEqual(
+            aligned_candidate["context_before"][0]["text"],
+            correspondence["candidates"][0]["text"],
+        )
+        self.assertEqual(
+            aligned_candidate["context_after"][0]["text"],
+            correspondence["candidates"][2]["text"],
+        )
+        self.assertIn("不代表语义正确率", correspondence["note"])
 
         reverse = self.service.find_parallel_passages(
             "Technical judgments must be supported by verifiable evidence.",
@@ -253,7 +274,9 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
             source_file_id=PARALLEL_SOURCE_ID,
             target_source_file_id=PDF_SOURCE_ID,
         )["correspondences"][0]
-        self.assertEqual(reverse["passages"][0]["text"], f"{CALIBRATED_QUOTE}。")
+        self.assertEqual(
+            reverse["candidates"][0]["text"], f"{CALIBRATED_QUOTE}。"
+        )
 
         with sqlite3.connect(self.runtime_root / "data" / "index.sqlite3") as connection:
             connection.execute(
@@ -267,8 +290,39 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
             target_source_file_id=PARALLEL_SOURCE_ID,
         )["correspondences"][0]
         self.assertEqual(unavailable["status"], "unavailable")
-        self.assertEqual(unavailable["passages"], [])
+        self.assertEqual(unavailable["candidates"], [])
         self.assertIn("置信度过低", unavailable["note"])
+
+    def test_find_parallel_passages_keeps_true_candidate_when_anchor_is_shifted(
+        self,
+    ) -> None:
+        database_path = self.runtime_root / "data" / "index.sqlite3"
+        add_mcp_parallel_fixture(database_path)
+        with sqlite3.connect(database_path) as connection:
+            connection.execute(
+                "UPDATE alignment_link_members SET segment_id = "
+                "'fixture-parallel-target-before' "
+                "WHERE alignment_link_id = 'fixture-parallel-link' "
+                "AND side = 'target'"
+            )
+
+        correspondence = self.service.find_parallel_passages(
+            CALIBRATED_QUOTE,
+            mode="exact",
+            source_file_id=PDF_SOURCE_ID,
+            target_source_file_id=PARALLEL_SOURCE_ID,
+        )["correspondences"][0]
+
+        self.assertEqual(correspondence["status"], "needs_agent_review")
+        self.assertEqual(correspondence["candidates"][0]["anchor_distance"], 0)
+        true_candidate = next(
+            candidate
+            for candidate in correspondence["candidates"]
+            if candidate["text"]
+            == "Technical judgments must be supported by verifiable evidence."
+        )
+        self.assertEqual(true_candidate["anchor_distance"], 1)
+        self.assertEqual(true_candidate["passages"][0]["position"], 1)
 
     def test_locate_quote_keeps_no_result_separate_from_errors(self) -> None:
         result = self.service.locate_quote(MISSING_QUOTE, mode="exact")

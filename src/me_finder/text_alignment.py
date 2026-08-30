@@ -1700,6 +1700,146 @@ def _paragraph_anchor_fallback(
     return [str(row["segment_id"])] if row is not None else []
 
 
+def _alignment_candidate_segments(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    source_file_id: str,
+    source_kind: str,
+    aligned_segment_ids: Sequence[str],
+    radius: int,
+) -> List[Dict[str, object]]:
+    placeholders = ",".join("?" for _ in aligned_segment_ids)
+    aligned_rows = connection.execute(
+        "SELECT segment_id, order_index FROM text_segments "
+        f"WHERE segment_set_id = ? AND segment_id IN ({placeholders}) "
+        "ORDER BY order_index",
+        (segment_set_id, *aligned_segment_ids),
+    ).fetchall()
+    aligned_orders = {int(row["order_index"]) for row in aligned_rows}
+    first_order = min(aligned_orders)
+    last_order = max(aligned_orders)
+    window_start = max(0, first_order - radius)
+    window_end = last_order + radius
+    rows = connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? AND order_index BETWEEN ? AND ? "
+        "ORDER BY order_index",
+        (segment_set_id, max(0, window_start - 1), window_end + 1),
+    ).fetchall()
+    rows_by_order = {int(row["order_index"]): row for row in rows}
+    candidates = [
+        row
+        for row in rows
+        if window_start <= int(row["order_index"]) <= window_end
+    ]
+    candidate_ids = [str(row["segment_id"]) for row in candidates]
+    candidate_placeholders = ",".join("?" for _ in candidate_ids)
+
+    spans_by_segment: Dict[str, List[Dict[str, object]]] = {}
+    if source_kind == "pdf":
+        span_rows = connection.execute(
+            "SELECT p.segment_id, p.pdf_page_index, p.page_char_start, "
+            "p.page_char_end, s.order_index, p.span_order "
+            "FROM text_segment_spans p JOIN text_segments s "
+            "ON s.segment_id = p.segment_id "
+            f"WHERE p.segment_id IN ({candidate_placeholders}) "
+            "ORDER BY s.order_index, p.span_order",
+            candidate_ids,
+        ).fetchall()
+        page_indices = sorted({int(row["pdf_page_index"]) for row in span_rows})
+        page_placeholders = ",".join("?" for _ in page_indices)
+        page_rows = connection.execute(
+            "SELECT pdf_page_index, payload_json FROM pdf_pages "
+            f"WHERE source_file_id = ? AND pdf_page_index IN ({page_placeholders})",
+            (source_file_id, *page_indices),
+        ).fetchall()
+        page_payloads = {
+            int(row["pdf_page_index"]): _json_object(row["payload_json"])
+            for row in page_rows
+        }
+        for segment_id in candidate_ids:
+            spans_by_segment[segment_id] = _merge_page_spans(
+                [row for row in span_rows if str(row["segment_id"]) == segment_id],
+                page_payloads,
+            )
+    else:
+        span_rows = connection.execute(
+            "SELECT p.segment_id, p.paragraph_id, p.paragraph_index, "
+            "p.paragraph_char_start, p.paragraph_char_end, s.order_index, "
+            "p.span_order FROM text_segment_paragraph_spans p "
+            "JOIN text_segments s ON s.segment_id = p.segment_id "
+            f"WHERE p.segment_id IN ({candidate_placeholders}) "
+            "ORDER BY s.order_index, p.span_order",
+            candidate_ids,
+        ).fetchall()
+        paragraph_indices = sorted(
+            {int(row["paragraph_index"]) for row in span_rows}
+        )
+        paragraph_placeholders = ",".join("?" for _ in paragraph_indices)
+        paragraph_rows = connection.execute(
+            "SELECT paragraph_id, paragraph_index, text_raw, payload_json "
+            "FROM paragraphs WHERE source_file_id = ? "
+            f"AND paragraph_index IN ({paragraph_placeholders})",
+            (source_file_id, *paragraph_indices),
+        ).fetchall()
+        paragraphs = {
+            int(row["paragraph_index"]): ParagraphText(
+                paragraph_id=str(row["paragraph_id"]),
+                paragraph_index=int(row["paragraph_index"]),
+                payload=_json_object(row["payload_json"]),
+                text=str(row["text_raw"] or ""),
+            )
+            for row in paragraph_rows
+        }
+        for segment_id in candidate_ids:
+            spans_by_segment[segment_id] = _merge_paragraph_spans(
+                [row for row in span_rows if str(row["segment_id"]) == segment_id],
+                paragraphs,
+            )
+
+    result: List[Dict[str, object]] = []
+    for row in candidates:
+        order = int(row["order_index"])
+        if order < first_order:
+            anchor_distance = order - first_order
+        elif order > last_order:
+            anchor_distance = order - last_order
+        else:
+            anchor_distance = 0
+        before = rows_by_order.get(order - 1)
+        after = rows_by_order.get(order + 1)
+        result.append(
+            {
+                "segment_id": str(row["segment_id"]),
+                "order_index": order,
+                "anchor_distance": anchor_distance,
+                "text": str(row["text_raw"]),
+                "context_before": (
+                    []
+                    if before is None
+                    else [
+                        {
+                            "segment_id": str(before["segment_id"]),
+                            "text": str(before["text_raw"]),
+                        }
+                    ]
+                ),
+                "context_after": (
+                    []
+                    if after is None
+                    else [
+                        {
+                            "segment_id": str(after["segment_id"]),
+                            "text": str(after["text_raw"]),
+                        }
+                    ]
+                ),
+                "page_match_spans": spans_by_segment[str(row["segment_id"])],
+            }
+        )
+    return result
+
+
 def locate_alignment(
     db_path: Path,
     source_file_id: object,
@@ -1709,6 +1849,7 @@ def locate_alignment(
     end_page_index: object,
     start_offset: object,
     end_offset: object,
+    candidate_radius: object = 0,
 ) -> Dict[str, object]:
     source_id = _validate_source_id(source_file_id)
     target_id = _validate_source_id(target_source_file_id)
@@ -1716,6 +1857,9 @@ def locate_alignment(
     end_page = _validate_nonnegative_integer("end_page_index", end_page_index)
     first_offset = _validate_nonnegative_integer("start_offset", start_offset)
     last_offset = _validate_nonnegative_integer("end_offset", end_offset)
+    radius = _validate_nonnegative_integer("candidate_radius", candidate_radius)
+    if radius > 5:
+        raise InvalidAlignmentRequest("candidate_radius 不能大于 5。")
     if source_id == target_id:
         raise InvalidAlignmentRequest("源版本和目标版本不能相同。")
     if end_page < start_page or (end_page == start_page and last_offset <= first_offset):
@@ -1910,7 +2054,7 @@ def locate_alignment(
             or target_id
         )
         final_run = route_runs[-1]
-        return {
+        result = {
             "alignment_run_id": final_run["alignment_run_id"],
             "alignment_run_ids": [
                 str(route_run["alignment_run_id"]) for route_run in route_runs
@@ -1928,6 +2072,16 @@ def locate_alignment(
             "match_offset_unit": "unicode_codepoint",
             "precise_highlight_available": True,
         }
+        if radius:
+            result["calibration_candidates"] = _alignment_candidate_segments(
+                connection,
+                _segment_set_id_for_source(final_run, target_id),
+                target_id,
+                target_kind,
+                target_segment_ids,
+                radius,
+            )
+        return result
     finally:
         connection.close()
 

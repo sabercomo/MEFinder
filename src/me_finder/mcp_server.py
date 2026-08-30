@@ -126,8 +126,8 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
         return f"按相关性召回了 {len(result['passages'])} 段原文（相关性排序，非逐字命中）。"
     if tool_name == "find_parallel_passages":
         return (
-            f"找到 {result['aligned_count']} 个可靠的跨版本对应，"
-            f"共返回 {len(result['correspondences'])} 个对照结果。"
+            f"返回 {result['candidate_set_count']} 组待 Agent 校准的跨版本候选，"
+            f"共 {len(result['correspondences'])} 个对照结果。"
         )
     if tool_name == "verify_quotes":
         return (

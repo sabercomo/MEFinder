@@ -79,7 +79,7 @@ def find_parallel_passages(
                         "target": target_summary,
                         "status": "unavailable",
                         "via_source_file_id": target["via_source_file_id"],
-                        "passages": [],
+                        "candidates": [],
                         "note": "原句命中缺少可用于对照定位的精确字符偏移。",
                     }
                 )
@@ -90,6 +90,7 @@ def find_parallel_passages(
                     source_id,
                     target["source_file_id"],
                     **selection,
+                    candidate_radius=3,
                 )
             except AlignmentNotFound as exc:
                 correspondences.append(
@@ -98,7 +99,7 @@ def find_parallel_passages(
                         "target": target_summary,
                         "status": "unavailable",
                         "via_source_file_id": target["via_source_file_id"],
-                        "passages": [],
+                        "candidates": [],
                         "note": str(exc),
                     }
                 )
@@ -107,10 +108,12 @@ def find_parallel_passages(
                 {
                     "source": source,
                     "target": target_summary,
-                    "status": "aligned",
+                    "status": "needs_agent_review",
                     "via_source_file_id": located["via_source_file_id"],
-                    "passages": _target_passages(located),
-                    "note": None,
+                    "candidates": _target_candidates(located),
+                    "note": (
+                        "anchor_distance 只表示相对既有对齐中心的位置，不代表语义正确率。"
+                    ),
                 }
             )
 
@@ -121,8 +124,8 @@ def find_parallel_passages(
         "source_match_count": int(raw_result["total"]),
         "source_match_count_is_exact": bool(raw_result["total_is_exact"]),
         "total": total,
-        "aligned_count": sum(
-            item["status"] == "aligned" for item in correspondences
+        "candidate_set_count": sum(
+            item["status"] == "needs_agent_review" for item in correspondences
         ),
         "has_more": bool(raw_result["has_more"]) or total > limit,
         "correspondences": correspondences[:limit],
@@ -147,6 +150,9 @@ def _parallel_source(
         "source_type": match["source_type"],
         "document_title": match["document_title"],
         "matched_text": match["matched_text"],
+        "paragraph_text": match["paragraph_text"],
+        "context_before": match["context_before"],
+        "context_after": match["context_after"],
         "match_type": match["match_type"],
         "match_score": match["match_score"],
         "physical_page": match["physical_page"],
@@ -213,3 +219,29 @@ def _target_passages(
             }
         )
     return passages
+
+
+def _target_candidates(
+    located: Mapping[str, object],
+) -> list[dict[str, object]]:
+    candidates = []
+    for fields in located["calibration_candidates"]:
+        if not isinstance(fields, Mapping):
+            continue
+        candidates.append(
+            {
+                "candidate_id": str(fields["segment_id"]),
+                "order_index": int(fields["order_index"]),
+                "anchor_distance": int(fields["anchor_distance"]),
+                "text": str(fields["text"]),
+                "passages": _target_passages(
+                    {
+                        "target_item_type": located["target_item_type"],
+                        "page_match_spans": fields["page_match_spans"],
+                    }
+                ),
+                "context_before": fields["context_before"],
+                "context_after": fields["context_after"],
+            }
+        )
+    return candidates

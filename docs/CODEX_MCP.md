@@ -14,7 +14,7 @@ MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供九个工具：
 - `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`；
 - `diff_quote`：把疑似抄错的引文与最接近的原句逐字符对齐，标注增、漏、改；
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；
-- `find_parallel_passages`：输入任一版本的句子，从已生成的版本对齐中返回英文、原文或其他译本对应句，可按目标语言或版本收窄；
+- `find_parallel_passages`：输入任一版本的句子，以已生成的版本对齐为中心返回英文、原文或其他译本的多个附近候选、定位和前后文；Codex 必须重新比较语义与上下文，只在证据唯一时确认，否则报告 `ambiguous` 或 `unavailable`；
 - `read_bibliographic_pages`：返回书首与书尾的版权页候选文本并标注书目线索，供从原书自身提取题录（不联网）；
 - `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全。
 
@@ -193,7 +193,7 @@ tool_timeout_sec = 60
 1. 运行 `codex mcp list`，应看到启用的 `mefinder`；
 2. 运行 `codex mcp get mefinder --json`，核对命令、参数和工作目录；
 3. 在 Codex TUI 或桌面端输入 `/mcp`，应看到服务器已连接；
-4. 工具列表应只包含 `list_documents`、`locate_quote` 和 `read_document_window`；
+4. 工具列表应包含本页“当前可用范围”列出的九个只读工具；
 5. 先在 MEFinder 中导入至少一篇文献，再询问：“只使用 MEFinder 核对这句话出自哪篇文献、哪一页。”
 
 建议继续检查以下自然语言任务：
@@ -201,6 +201,7 @@ tool_timeout_sec = 60
 - “只在《指定文献》中查这句话。”
 - “这句话可能有两个错字，找最接近的原文。”
 - “把命中位置前后再读几段，然后判断上下文。”
+- “查出这句中文对应的英文原句；比较全部候选和前后文，不能唯一确定时不要硬选。”
 - “如果只有 PDF 物理页、没有书内页码，请明确说明。”
 - “有多个来源时不要替我猜，列出全部候选。”
 
@@ -211,7 +212,7 @@ tool_timeout_sec = 60
 ## 8. 隐私和只读边界
 
 - MEFinder MCP Server 本身不访问网络，只读取当前本地 SQLite 索引；
-- 三个 v1 工具均为只读，不导入、删除、校准或修改题录；
+- 九个 v1 工具均为只读，不导入、删除、写回校准结果或修改题录；
 - MCP 不返回本地绝对文件路径、API Token、内部页哈希或无关设置；
 - Codex 调用工具后，查询、命中原文、上下文、题录和页码证据会进入 Codex 对话及模型上下文，并受用户所使用的 Codex/OpenAI 产品数据控制约束；
 - 运行本地 MCP Server 不需要 OpenAI API Key，但使用 Codex 本身仍需要对应的 Codex 登录和权限；

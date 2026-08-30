@@ -120,7 +120,9 @@ class MCPDocumentationTests(unittest.TestCase):
     def test_guide_states_local_server_and_model_context_privacy_separately(self) -> None:
         self.assertIn("MCP Server 本身不访问网络", self.guide)
         self.assertIn("会进入 Codex 对话及模型上下文", self.guide)
-        self.assertIn("三个 v1 工具均为只读", self.guide)
+        self.assertIn("九个 v1 工具均为只读", self.guide)
+        self.assertIn("多个附近候选、定位和前后文", self.guide)
+        self.assertIn("ambiguous", self.guide)
         self.assertIn("不需要 OpenAI API Key", self.guide)
         self.assertIn("MEFinder 不读取、创建或删除用户的 Codex 配置", self.guide)
 
