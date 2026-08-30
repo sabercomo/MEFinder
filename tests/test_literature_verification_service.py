@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -14,16 +15,18 @@ from src.me_finder.structured_reader import SourceNotFound
 from tests.mcp_v1_fixture import (
     CALIBRATED_QUOTE,
     MISSING_QUOTE,
+    PARALLEL_SOURCE_ID,
     PDF_SOURCE_ID,
     UNCALIBRATED_QUOTE,
     WORD_QUOTE,
     WORD_SOURCE_ID,
+    add_mcp_parallel_fixture,
     build_mcp_v1_fixture,
 )
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.5.0-mcp-v1-tools.json"
+CONTRACT_PATH = PROJECT_ROOT / "docs" / "contracts" / "v0.5.1-mcp-v1-tools.json"
 
 
 class LiteratureVerificationServiceTests(unittest.TestCase):
@@ -202,6 +205,70 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
             word_match["reader"],
             {"unit": "word_paragraph", "start": 0},
         )
+
+    def test_find_parallel_passages_returns_persisted_english_alignment(self) -> None:
+        add_mcp_parallel_fixture(self.runtime_root / "data" / "index.sqlite3")
+
+        result = self.service.find_parallel_passages(
+            CALIBRATED_QUOTE,
+            mode="exact",
+            source_file_id=PDF_SOURCE_ID,
+            target_language_code="en",
+        )
+
+        self.assert_required_keys(
+            result,
+            self.tools["find_parallel_passages"]["outputSchema"],
+        )
+        self.assertEqual(result["source_match_count"], 1)
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["aligned_count"], 1)
+        correspondence = result["correspondences"][0]
+        self.assert_required_keys(
+            correspondence,
+            self.contract["$defs"]["parallel_correspondence"],
+        )
+        self.assertEqual(correspondence["status"], "aligned")
+        self.assertEqual(
+            correspondence["target"]["source_file_id"], PARALLEL_SOURCE_ID
+        )
+        self.assertEqual(correspondence["target"]["language_code"], "en-US")
+        self.assertEqual(
+            correspondence["passages"],
+            [
+                {
+                    "item_type": "word_paragraph",
+                    "position": 0,
+                    "char_start": 0,
+                    "char_end": 61,
+                    "text": "Technical judgments must be supported by verifiable evidence.",
+                }
+            ],
+        )
+        self.assertIsNone(correspondence["note"])
+
+        reverse = self.service.find_parallel_passages(
+            "Technical judgments must be supported by verifiable evidence.",
+            mode="exact",
+            source_file_id=PARALLEL_SOURCE_ID,
+            target_source_file_id=PDF_SOURCE_ID,
+        )["correspondences"][0]
+        self.assertEqual(reverse["passages"][0]["text"], f"{CALIBRATED_QUOTE}。")
+
+        with sqlite3.connect(self.runtime_root / "data" / "index.sqlite3") as connection:
+            connection.execute(
+                "UPDATE alignment_links SET review_status = 'rejected' "
+                "WHERE alignment_link_id = 'fixture-parallel-link'"
+            )
+        unavailable = self.service.find_parallel_passages(
+            CALIBRATED_QUOTE,
+            mode="exact",
+            source_file_id=PDF_SOURCE_ID,
+            target_source_file_id=PARALLEL_SOURCE_ID,
+        )["correspondences"][0]
+        self.assertEqual(unavailable["status"], "unavailable")
+        self.assertEqual(unavailable["passages"], [])
+        self.assertIn("置信度过低", unavailable["note"])
 
     def test_locate_quote_keeps_no_result_separate_from_errors(self) -> None:
         result = self.service.locate_quote(MISSING_QUOTE, mode="exact")
@@ -514,6 +581,18 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
                 CALIBRATED_QUOTE,
                 source_file_id="invalid source",
             )
+        with self.assertRaisesRegex(ValueError, "target_language_code"):
+            self.service.find_parallel_passages(
+                CALIBRATED_QUOTE,
+                target_language_code="en_US",
+            )
+        with self.assertRaisesRegex(ValueError, "target_source_file_id"):
+            self.service.find_parallel_passages(
+                CALIBRATED_QUOTE,
+                target_source_file_id="invalid source",
+            )
+        with self.assertRaisesRegex(ValueError, "limit"):
+            self.service.find_parallel_passages(CALIBRATED_QUOTE, limit=21)
         with self.assertRaisesRegex(ValueError, "count"):
             self.service.read_document_window(PDF_SOURCE_ID, count=51)
 

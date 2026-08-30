@@ -35,7 +35,7 @@ CONTRACT_PATH = (
     Path(__file__).resolve().parents[2]
     / "docs"
     / "contracts"
-    / "v0.5.0-mcp-v1-tools.json"
+    / "v0.5.1-mcp-v1-tools.json"
 )
 ERROR_MESSAGES = {
     "invalid_input": "输入参数不符合工具契约。",
@@ -124,6 +124,11 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
         return f"找到 {result['total']} 个原句候选。"
     if tool_name == "search_passages":
         return f"按相关性召回了 {len(result['passages'])} 段原文（相关性排序，非逐字命中）。"
+    if tool_name == "find_parallel_passages":
+        return (
+            f"找到 {result['aligned_count']} 个可靠的跨版本对应，"
+            f"共返回 {len(result['correspondences'])} 个对照结果。"
+        )
     if tool_name == "verify_quotes":
         return (
             f"核对了 {result['total']} 条引文："
@@ -211,6 +216,16 @@ TOOL_HANDLERS: dict[
         source_file_id=arguments.get("source_file_id"),
         source_type=arguments.get("source_type", "all"),
         limit=arguments.get("limit", 10),
+    ),
+    "find_parallel_passages": lambda service, arguments: (
+        service.find_parallel_passages(
+            arguments["quote"],
+            mode=arguments.get("mode", "auto"),
+            source_file_id=arguments.get("source_file_id"),
+            target_source_file_id=arguments.get("target_source_file_id"),
+            target_language_code=arguments.get("target_language_code"),
+            limit=arguments.get("limit", 5),
+        )
     ),
     "diff_quote": lambda service, arguments: service.diff_quote(
         arguments["quote"],

@@ -15,7 +15,7 @@ CONTRACT_PATH = (
     Path(__file__).resolve().parents[1]
     / "docs"
     / "contracts"
-    / "v0.5.0-mcp-v1-tools.json"
+    / "v0.5.1-mcp-v1-tools.json"
 )
 
 

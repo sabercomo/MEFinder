@@ -1,12 +1,12 @@
 # 在 Codex 中使用 MEFinder MCP
 
-更新日期：2026-08-14
+更新日期：2026-08-31
 
-适用版本：MEFinder 0.5.0 源码模式与官方发布包
+适用版本：MEFinder 0.5.1 源码模式与官方发布包
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供八个工具：
+MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供九个工具：
 
 - `list_documents`：按题名、作者、文件名或类型查找已导入文献；
 - `locate_quote`：定位原句、近似引文和多个候选；
@@ -14,6 +14,7 @@ MEFinder MCP v1 是本地 STDIO 只读服务，向 Codex 提供八个工具：
 - `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`；
 - `diff_quote`：把疑似抄错的引文与最接近的原句逐字符对齐，标注增、漏、改；
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；
+- `find_parallel_passages`：输入任一版本的句子，从已生成的版本对齐中返回英文、原文或其他译本对应句，可按目标语言或版本收窄；
 - `read_bibliographic_pages`：返回书首与书尾的版权页候选文本并标注书目线索，供从原书自身提取题录（不联网）；
 - `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全。
 

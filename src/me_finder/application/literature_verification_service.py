@@ -273,6 +273,44 @@ class LiteratureVerificationService:
             ],
         }
 
+    def find_parallel_passages(
+        self,
+        quote: str,
+        *,
+        mode: str = "auto",
+        source_file_id: str | None = None,
+        target_source_file_id: str | None = None,
+        target_language_code: str | None = None,
+        limit: int = 5,
+    ) -> dict[str, object]:
+        """Find a quote, then read its persisted cross-version alignment."""
+
+        from .parallel_passage_service import find_parallel_passages
+
+        _validate_quote(quote)
+        validated_mode = _validate_mode(mode)
+        validated_source_id = _validate_optional_source_id(source_file_id)
+        validated_target_id = _validate_optional_source_id(
+            target_source_file_id, name="target_source_file_id"
+        )
+        validated_language = _validate_optional_language_code(target_language_code)
+        validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=20)
+        index_path = self._existing_index_path()
+
+        with self._open_engine(validated_source_id) as engine:
+            return find_parallel_passages(
+                index_path,
+                engine,
+                quote,
+                mode=validated_mode,
+                source_file_id=validated_source_id,
+                target_source_file_id=validated_target_id,
+                target_language_code=validated_language,
+                limit=validated_limit,
+                schema_version=SCHEMA_VERSION,
+                source_formatter=_search_match,
+            )
+
     def _search_one(
         self,
         engine: object,
@@ -557,6 +595,16 @@ def _validate_query(query: object) -> None:
         raise ValueError("query 不能超过 1000 个 Unicode codepoint")
 
 
+def _validate_optional_language_code(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*", value
+    ):
+        raise ValueError("target_language_code 必须是 BCP 47 语言代码")
+    return value
+
+
 def _validate_quotes(quotes: object) -> list[str]:
     if not isinstance(quotes, (list, tuple)):
         raise ValueError("quotes 必须是字符串数组")
@@ -650,20 +698,24 @@ def _validate_source_type(source_type: object) -> None:
         raise ValueError("source_type 必须是 all、pdf、word 或 epub")
 
 
-def _validate_source_id(source_file_id: object) -> str:
+def _validate_source_id(
+    source_file_id: object, *, name: str = "source_file_id"
+) -> str:
     if not isinstance(source_file_id, str) or not SOURCE_ID_PATTERN.fullmatch(
         source_file_id
     ):
         raise ValueError(
-            "source_file_id 只能包含 ASCII 字母、数字、点、下划线和连字符，且长度不超过 128"
+            f"{name} 只能包含 ASCII 字母、数字、点、下划线和连字符，且长度不超过 128"
         )
     return source_file_id
 
 
-def _validate_optional_source_id(source_file_id: object) -> str | None:
+def _validate_optional_source_id(
+    source_file_id: object, *, name: str = "source_file_id"
+) -> str | None:
     if source_file_id is None:
         return None
-    return _validate_source_id(source_file_id)
+    return _validate_source_id(source_file_id, name=name)
 
 
 def _bounded_integer(

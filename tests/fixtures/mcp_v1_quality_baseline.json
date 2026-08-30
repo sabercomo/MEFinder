@@ -7,9 +7,9 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 402,
-    "instructions_utf8_bytes": 810,
-    "utf8_bytes": 28543,
+    "instructions_characters": 358,
+    "instructions_utf8_bytes": 672,
+    "utf8_bytes": 32990,
     "before_unreferenced_defs_trim_utf8_bytes": 75365
   },
   "responses": {

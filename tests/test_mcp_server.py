@@ -26,7 +26,9 @@ from src.me_finder.mcp_server import (
 from src.me_finder.structured_reader import UnsupportedSourceType
 from tests.mcp_v1_fixture import (
     CALIBRATED_QUOTE,
+    PARALLEL_SOURCE_ID,
     PDF_SOURCE_ID,
+    add_mcp_parallel_fixture,
     build_mcp_v1_fixture,
 )
 
@@ -78,7 +80,7 @@ class MCPServerProtocolTests(unittest.TestCase):
                         initialized = await session.initialize()
                         self.assertLess(time.monotonic() - started, 10)
                         self.assertEqual(initialized.server_info.name, "mefinder")
-                        self.assertEqual(initialized.server_info.version, "0.5.0")
+                        self.assertEqual(initialized.server_info.version, "0.5.1")
                         self.assertEqual(
                             initialized.instructions,
                             CONTRACT["server"]["instructions"],
@@ -145,6 +147,17 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "reader_cursor",
                                 "relevance",
                             },
+                            "find_parallel_passages": {
+                                "citation_page",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "parallel_correspondence",
+                                "parallel_passage",
+                                "parallel_source",
+                                "parallel_target",
+                                "physical_page",
+                                "reader_cursor",
+                            },
                             "read_bibliographic_pages": {
                                 "bibliographic_page",
                                 "citation_page",
@@ -203,11 +216,16 @@ class MCPServerProtocolTests(unittest.TestCase):
                             "search_passages",
                             {"query": "可复核证据"},
                         )
+                        parallel = await session.call_tool(
+                            "find_parallel_passages",
+                            {"quote": CALIBRATED_QUOTE, "mode": "exact"},
+                        )
                         results = {
                             "list_documents": documents,
                             "locate_quote": located,
                             "read_document_window": window,
                             "search_passages": passages,
+                            "find_parallel_passages": parallel,
                         }
                         for name, result in results.items():
                             self.assertFalse(result.is_error)
@@ -223,6 +241,9 @@ class MCPServerProtocolTests(unittest.TestCase):
                         self.assertEqual(len(window.structured_content["items"]), 2)
                         self.assertGreaterEqual(
                             len(passages.structured_content["passages"]), 1
+                        )
+                        self.assertEqual(
+                            parallel.structured_content["correspondences"], []
                         )
                         self.assertEqual(
                             passages.structured_content["passages"][0]["relevance"][
@@ -257,6 +278,33 @@ class MCPServerProtocolTests(unittest.TestCase):
                             result.structured_content["error"]["code"],
                             "index_not_found",
                         )
+
+        anyio.run(scenario)
+
+    def test_parallel_passage_tool_returns_persisted_alignment_over_stdio(self) -> None:
+        add_mcp_parallel_fixture(self.runtime_root / "data" / "index.sqlite3")
+
+        async def scenario() -> None:
+            async with stdio_client(self.server_parameters()) as streams:
+                async with ClientSession(*streams) as session:
+                    await session.initialize()
+                    result = await session.call_tool(
+                        "find_parallel_passages",
+                        {
+                            "quote": CALIBRATED_QUOTE,
+                            "mode": "exact",
+                            "source_file_id": PDF_SOURCE_ID,
+                            "target_source_file_id": PARALLEL_SOURCE_ID,
+                        },
+                    )
+                    self.assertFalse(result.is_error, result.structured_content)
+                    self.assertEqual(result.structured_content["aligned_count"], 1)
+                    self.assertEqual(
+                        result.structured_content["correspondences"][0]["passages"][
+                            0
+                        ]["text"],
+                        "Technical judgments must be supported by verifiable evidence.",
+                    )
 
         anyio.run(scenario)
 

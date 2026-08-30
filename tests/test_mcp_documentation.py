@@ -39,7 +39,7 @@ class MCPDocumentationTests(unittest.TestCase):
 
     def test_readme_links_to_optional_packaged_read_only_integration(self) -> None:
         self.assertIn("[Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)", self.readme)
-        self.assertIn("0.5.0，可选只读集成", self.readme)
+        self.assertIn("0.5.1，可选只读集成", self.readme)
         self.assertIn("Windows 安装版、绿色版和 macOS 发布包", self.readme)
 
     def test_guide_covers_all_supported_configuration_paths(self) -> None:

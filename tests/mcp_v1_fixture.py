@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from pathlib import Path
 
 from src.me_finder.database import build_database
@@ -9,6 +11,7 @@ from src.me_finder.pdf_extractors import pdf_page_text_hash
 
 PDF_SOURCE_ID = "fixture-pdf"
 WORD_SOURCE_ID = "fixture-word"
+PARALLEL_SOURCE_ID = "fixture-english-epub"
 
 CALIBRATED_QUOTE = "技术判断必须由可复核证据支撑"
 UNCALIBRATED_QUOTE = "物理页位置不能自动视为正式引用页"
@@ -593,3 +596,123 @@ def build_mcp_v1_fixture(
         },
         database_path,
     )
+
+
+def add_mcp_parallel_fixture(database_path: Path) -> None:
+    """Add one completed PDF→EPUB alignment to the public MCP fixture."""
+
+    target_text = "Technical judgments must be supported by verifiable evidence."
+    source_segment_id = "fixture-parallel-source-segment"
+    target_segment_id = "fixture-parallel-target-segment"
+    connection = sqlite3.connect(str(database_path))
+    connection.execute(
+        "INSERT INTO source_files(source_file_id, source_type, file_name, "
+        "relative_path, volume_number, payload_json) VALUES (?, 'word', ?, NULL, NULL, ?)",
+        (
+            PARALLEL_SOURCE_ID,
+            "mcp-fixture-en.epub",
+            json.dumps(
+                {
+                    "source_file_id": PARALLEL_SOURCE_ID,
+                    "source_type": "word",
+                    "file_name": "mcp-fixture-en.epub",
+                    "title": "MCP Synthetic English Edition",
+                    "file_format": "epub",
+                    "language_code": "en-US",
+                }
+            ),
+        ),
+    )
+    connection.execute(
+        "INSERT INTO paragraphs(paragraph_id, volume_id, work_id, source_file_id, "
+        "source_type, paragraph_index, eligible_for_search, text_raw, normalized_text, "
+        "compact_text, plain_text, payload_json) "
+        "VALUES (?, NULL, NULL, ?, 'word', 0, 1, ?, ?, ?, ?, ?)",
+        (
+            "fixture-english-epub-p0",
+            PARALLEL_SOURCE_ID,
+            target_text,
+            normalize_text(target_text),
+            compact_text(target_text),
+            punctuationless_text(target_text),
+            json.dumps(
+                {
+                    "paragraph_id": "fixture-english-epub-p0",
+                    "paragraph_index": 0,
+                    "source_format": "epub",
+                    "volume_number": None,
+                    "document_title": "MCP Synthetic English Edition",
+                    "work_title": "MCP Synthetic English Edition",
+                }
+            ),
+        ),
+    )
+    connection.execute(
+        "INSERT INTO document_groups(document_group_id, title, base_source_file_id, "
+        "created_at, updated_at) VALUES ('fixture-parallel-work', 'MCP parallel work', ?, 't', 't')",
+        (PDF_SOURCE_ID,),
+    )
+    connection.executemany(
+        "INSERT INTO document_group_members(document_group_id, source_file_id, "
+        "version_label, member_order, added_at) "
+        "VALUES ('fixture-parallel-work', ?, ?, ?, 't')",
+        (
+            (PDF_SOURCE_ID, "中文译本", 0),
+            (PARALLEL_SOURCE_ID, "English original", 1),
+        ),
+    )
+    connection.executemany(
+        "INSERT INTO segment_sets(segment_set_id, source_file_id, source_text_hash, "
+        "segmenter, segmenter_version, language_code, created_at) "
+        "VALUES (?, ?, ?, 'me-finder-multilingual-sentence', '12', ?, 't')",
+        (
+            ("fixture-parallel-source-set", PDF_SOURCE_ID, "source-hash", "zh-Hans"),
+            ("fixture-parallel-target-set", PARALLEL_SOURCE_ID, "target-hash", "en-US"),
+        ),
+    )
+    connection.executemany(
+        "INSERT INTO text_segments(segment_id, segment_set_id, order_index, text_raw) "
+        "VALUES (?, ?, 0, ?)",
+        (
+            (
+                source_segment_id,
+                "fixture-parallel-source-set",
+                f"{CALIBRATED_QUOTE}。",
+            ),
+            (target_segment_id, "fixture-parallel-target-set", target_text),
+        ),
+    )
+    connection.execute(
+        "INSERT INTO text_segment_spans(segment_id, source_file_id, pdf_page_index, "
+        "page_char_start, page_char_end, span_order) VALUES (?, ?, 0, 0, ?, 0)",
+        (source_segment_id, PDF_SOURCE_ID, len(CALIBRATED_QUOTE) + 1),
+    )
+    connection.execute(
+        "INSERT INTO text_segment_paragraph_spans(segment_id, source_file_id, "
+        "paragraph_id, paragraph_index, paragraph_char_start, paragraph_char_end, "
+        "span_order) VALUES (?, ?, 'fixture-english-epub-p0', 0, 0, ?, 0)",
+        (target_segment_id, PARALLEL_SOURCE_ID, len(target_text)),
+    )
+    connection.execute(
+        "INSERT INTO alignment_runs(alignment_run_id, document_group_id, "
+        "pivot_source_file_id, target_source_file_id, pivot_segment_set_id, "
+        "target_segment_set_id, algorithm, algorithm_version, parameters_json, "
+        "status, created_at, completed_at) VALUES "
+        "('fixture-parallel-run', 'fixture-parallel-work', ?, ?, "
+        "'fixture-parallel-source-set', 'fixture-parallel-target-set', "
+        "'chapter-anchored-semantic-dp', '17', '{\"heading_anchors\": []}', "
+        "'completed', 't', 't')",
+        (PDF_SOURCE_ID, PARALLEL_SOURCE_ID),
+    )
+    connection.execute(
+        "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "
+        "order_index, cost, review_status) VALUES "
+        "('fixture-parallel-link', 'fixture-parallel-run', 0, 0, 'automatic')"
+    )
+    connection.executemany(
+        "INSERT INTO alignment_link_members(alignment_link_id, side, segment_id, "
+        "member_order) VALUES ('fixture-parallel-link', ?, ?, 0)",
+        (("pivot", source_segment_id), ("target", target_segment_id)),
+    )
+    connection.commit()
+    connection.close()
