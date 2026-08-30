@@ -1457,10 +1457,8 @@ def _map_segments_through_run(
 ) -> List[str]:
     if str(run["pivot_source_file_id"]) == source_id:
         source_side = "pivot"
-        target_side = "target"
     elif str(run["target_source_file_id"]) == source_id:
         source_side = "target"
-        target_side = "pivot"
     else:
         raise TextAlignmentError("对齐记录不包含请求的源版本。")
     placeholders = ",".join("?" for _ in source_segments)

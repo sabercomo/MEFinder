@@ -155,8 +155,6 @@ class LiteratureVerificationService:
         source_type: str = "all",
         matches_per_quote: int = 1,
     ) -> dict[str, object]:
-        from ..search import SearchEngine
-
         validated_quotes = _validate_quotes(quotes)
         validated_mode = _validate_mode(mode)
         _validate_source_type(source_type)

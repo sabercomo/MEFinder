@@ -18,7 +18,7 @@ from ..bibliographic_metadata import (
     update_metadata_in_database,
 )
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
-from ..pdf_import_service import locked_import_config, save_import_config
+from ..import_config_store import locked_import_config, save_import_config
 
 
 class BibliographicQueryPort(Protocol):

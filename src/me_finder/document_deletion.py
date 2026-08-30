@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .database import backup_database, delete_sources_from_database
-from .pdf_import_service import locked_import_config, save_import_config
+from .import_config_store import locked_import_config, save_import_config
 
 
 class DocumentDeletionService:

@@ -27,12 +27,26 @@ jobs:
       - name: Run the whole test suite
         run: python -m unittest discover -t . -s tests
 
+  windows-tests:
+    # Pull requests also exercise the real Windows path and filesystem
+    # semantics used by desktop releases. Push CI keeps the existing Linux
+    # lane; the manually triggered release smoke still owns packaging.
+    if: github.event_name == 'pull_request'
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Run the whole test suite on Windows
+        run: python -m unittest discover -t . -s tests
+
   lint:
-    # Ruff pyflakes ("F") rules — advisory for now.  Once the first run's
-    # backlog is triaged to zero, drop `continue-on-error` to make it blocking.
+    # Ruff pyflakes ("F") rules are at zero and block regressions.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

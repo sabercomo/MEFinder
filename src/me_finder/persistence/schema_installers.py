@@ -90,7 +90,7 @@ def install_document_group_schema(connection: sqlite3.Connection) -> bool:
                 "ORDER BY s.document_group_id, s.source_file_id"
             ).fetchall()
             timestamp = _now()
-            member_orders: Dict[str, int] = {}
+            member_orders: dict[str, int] = {}
             for source_file_id, document_group_id in legacy_members:
                 member_order = member_orders.get(document_group_id, 0)
                 connection.execute(

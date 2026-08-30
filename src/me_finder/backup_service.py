@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List, Optional
 
 from .document_groups import read_document_group_snapshot
-from .pdf_import_service import import_config_lock, save_import_config
+from .import_config_store import import_config_lock, save_import_config
 from .text_alignment import read_alignment_recipe_snapshot
 
 BACKUP_MARKER = "me_finder_backup"

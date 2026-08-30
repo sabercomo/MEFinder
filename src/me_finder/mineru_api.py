@@ -1020,7 +1020,7 @@ def submit_local_pdf_segments(
         )
         segment_state.pop("error", None)
         save_segment_manifest(prefix, manifest, Path(manifest_dir))
-    manifest_path = save_segment_manifest(prefix, manifest, Path(manifest_dir))
+    save_segment_manifest(prefix, manifest, Path(manifest_dir))
     return manifest
 
 

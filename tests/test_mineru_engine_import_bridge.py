@@ -350,7 +350,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             expected = {"status": "completed", "document_job_id": "job-1"}
 
             with patch(
-                "src.me_finder.pdf_import_service._parse_pdf_with_mineru_accounts",
+                "src.me_finder.pdf_parser_adapters._parse_pdf_with_mineru_accounts",
                 return_value=expected,
             ) as engine_import:
                 result = parse_pdf_with_mineru(

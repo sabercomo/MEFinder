@@ -579,7 +579,7 @@ class PDFImportConfigTests(unittest.TestCase):
             )
 
             with patch(
-                "src.me_finder.pdf_import_service.build_index",
+                "src.me_finder.index_publisher.build_index",
                 return_value={"source_files": []},
             ) as build:
                 rebuild_local_index(root)

@@ -378,8 +378,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.1：内联处理器门禁覆盖 JS 动态模板，并补齐既有 IIFE 的事件公共面。
     # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
     # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
+    # 0.5.1：应用补丁版本注入从 0.5.0 更新为 0.5.1；装配字节数不变。
     BASELINE_SHA256 = (
-        "6438ac32ce0559b448e94fdeaf79d803a87534e13449985322f48134abe12159"
+        "ab04841b60c928fc801e61c3922c83517d4d81608592129ba17debf23f9bcdf1"
     )
     BASELINE_BYTES = 975512
 

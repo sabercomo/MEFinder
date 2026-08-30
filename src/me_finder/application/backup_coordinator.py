@@ -15,7 +15,7 @@ from ..document_groups import replace_document_group_snapshot
 from ..text_alignment import replace_alignment_recipe_snapshot
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError
-from ..pdf_import_service import import_config_lock
+from ..import_config_store import import_config_lock
 
 
 class BackupIndexPort(Protocol):

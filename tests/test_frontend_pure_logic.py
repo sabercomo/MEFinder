@@ -2132,11 +2132,6 @@ class CandidateCardHTMLGoldenTests(unittest.TestCase):
         fixture = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
         source_id = fixture["sourceId"]
         candidates = fixture["candidates"]
-        configs = {
-            "cnki": "CNKI_CARD_CONFIG",
-            "book": "BOOK_CARD_CONFIG",
-            "crossref": "CROSSREF_CARD_CONFIG",
-        }
         expr = (
             "(function(){var sid=%s;var cs=%s;var out={};"
             "[['cnki',CNKI_CARD_CONFIG],['book',BOOK_CARD_CONFIG],"

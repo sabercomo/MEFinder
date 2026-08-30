@@ -16,7 +16,7 @@ from ..app_context import AppPaths
 from ..auto_page_mapping import has_manual_mapping
 from ..lifecycle import DurableOperationGate
 from ..mineru_api import MinerUError
-from ..pdf_import_service import (
+from ..import_config_store import (
     import_config_lock,
     load_import_config,
     save_import_config,

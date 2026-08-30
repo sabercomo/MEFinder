@@ -30,7 +30,7 @@ from .preferences import (
     read_preferences,
     resolve_preferences_path,
 )
-from .pdf_import_service import load_import_config
+from .import_config_store import load_import_config
 from .chunked_upload import ChunkedUploadError
 from .web_assets import (
     HTML,  # noqa: F401 - re-exported for tests and desktop bootstrap

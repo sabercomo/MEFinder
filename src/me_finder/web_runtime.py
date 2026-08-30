@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping
 
 from . import __version__
+from .app_context import AppContext
 from .application.backup_coordinator import BackupCoordinator
 from .application.bibliographic_metadata_coordinator import BibliographicMetadataCoordinator
 from .application.data_root_admission import DataRootAdmissionGate
@@ -109,18 +110,22 @@ from .page_mapping_controller import PageMappingController
 from .parser_settings_controller import ParserSettingsController
 from .parser_statistics import build_parser_statistics
 from .pdf_extractors import extract_pdf_source
-from .pdf_import_service import (
-    copy_local_document,
-    detect_imported_pdf,
+from .document_file_store import copy_local_document
+from .import_config_store import (
     import_config_lock,
     load_import_config,
     locked_import_config,
+    save_import_config,
+)
+from .index_publisher import rebuild_local_index
+from .pdf_import_service import (
+    detect_imported_pdf,
+    scan_directories_for_documents,
+)
+from .pdf_parser_adapters import (
     parse_pdf_with_local_ocr,
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
-    rebuild_local_index,
-    save_import_config,
-    scan_directories_for_documents,
 )
 from .persistence import SQLiteDocumentReadRepository
 from .preferences import (

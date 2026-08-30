@@ -27,7 +27,7 @@ from ..calibration_library import (
     build_library_detail,
     summarize_library,
 )
-from ..pdf_import_service import load_import_config
+from ..import_config_store import load_import_config
 from .document_read_port import DocumentReadPort
 
 

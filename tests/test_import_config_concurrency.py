@@ -184,7 +184,7 @@ class ImportConfigConcurrencyTests(unittest.TestCase):
             opener = build_opener(ProxyHandler({}))
             with (
                 patch(
-                    "src.me_finder.pdf_import_service._IMPORT_CONFIG_LOCK",
+                    "src.me_finder.import_config_store._IMPORT_CONFIG_LOCK",
                     observed_config_lock,
                 ),
                 patch(

@@ -18,7 +18,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
-from src.me_finder import pdf_import_service
+from src.me_finder import document_file_store
 from src.me_finder.extractors import extract_source
 from src.me_finder.pdf_extractors import extract_pdf_source
 from src.me_finder.pdf_import_service import (
@@ -196,7 +196,7 @@ class LongFilenameImportTests(unittest.TestCase):
 
             with (
                 patch.object(
-                    pdf_import_service.shutil,
+                    document_file_store.shutil,
                     "copy2",
                     side_effect=synchronized_copy,
                 ),
@@ -238,7 +238,7 @@ class LongFilenameImportTests(unittest.TestCase):
 
             with (
                 patch.object(
-                    pdf_import_service.shutil,
+                    document_file_store.shutil,
                     "copy2",
                     side_effect=synchronized_copy,
                 ),

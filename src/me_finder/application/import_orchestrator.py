@@ -21,10 +21,12 @@ from ..mineru_api import MinerUError, resolve_mineru_config_path
 from ..mineru_local_settings import mineru_local_config_summary
 from ..mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
 from ..local_ocr_settings import local_ocr_available
-from ..pdf_import_service import (
+from ..import_config_store import (
     import_config_lock,
     load_import_config,
     locked_import_config,
+)
+from ..pdf_import_service import (
     register_pdf,
     reuse_registered_pdf_copy,
 )

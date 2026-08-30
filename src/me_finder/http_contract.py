@@ -1,4 +1,4 @@
-"""Versioned public HTTP route contract for the desktop-local API."""
+"""Versioned public HTTP contracts for the desktop-local API."""
 
 GET_API_ROUTES = frozenset(
     {
@@ -106,3 +106,121 @@ POST_API_ROUTES = frozenset(
         "/api/vision-providers/test",
     }
 )
+
+
+# Only state-changing interfaces where a request/response drift can corrupt or
+# strand user data are modeled here. Route presence remains frozen above; this
+# table deliberately does not attempt to model every desktop-local endpoint.
+HIGH_RISK_WRITE_CONTRACTS = {
+    "/api/import-upload/start": {
+        "request": {
+            "required": {"file_name": "string", "size": "integer"},
+            "optional": {
+                "parse_mode": "string",
+                "provider_id": "string",
+                "import_kind": "string",
+            },
+        },
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "upload_id": "string",
+                "chunk_size": "integer",
+                "total_size": "integer",
+                "file_name": "string",
+            },
+        },
+    },
+    "/api/import-upload/finish": {
+        "request": {"required": {"upload_id": "string"}, "optional": {}},
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "job_id": "string",
+                "file_name": "string",
+                "source_file_id": "string",
+                "detected_pdf_type": "string|null",
+                "parse_route": "string|null",
+                "provider_id": "string|null",
+            },
+        },
+    },
+    "/api/import-retry": {
+        "request": {
+            "required": {"job_id": "string", "provider_id": "string"},
+            "optional": {},
+        },
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "job_id": "string",
+                "provider_id": "string",
+                "provider_name": "string",
+                "parse_route": "string",
+            },
+        },
+    },
+    "/api/import-resume": {
+        "request": {"required": {"job_id": "string"}, "optional": {}},
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "job_id": "string",
+                "parse_route": "string|null",
+                "provider_id": "string|null",
+                "provider_name": "string|null",
+            },
+        },
+    },
+    "/api/mineru-accounts/service": {
+        "request": {"required": {"api_base": "string"}, "optional": {}},
+        "success": {
+            "status": [200],
+            "required": {
+                "configured": "boolean",
+                "api_base": "string",
+                "accounts": "array",
+                "statistics": "object",
+                "local_deployment": "object",
+            },
+        },
+    },
+    "/api/vision-providers": {
+        "request": {
+            "required": {"action": "string"},
+            "optional": {
+                "provider": "object",
+                "provider_id": "string",
+                "auto_fallback_from_mineru": "boolean",
+            },
+        },
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "providers": "array",
+                "default_provider_id": "string|null",
+                "auto_fallback_from_mineru": "boolean",
+                "has_configured_provider": "boolean",
+            },
+        },
+    },
+    "/api/data-location/migrate": {
+        "request": {"required": {"target_path": "string"}, "optional": {}},
+        "success": {
+            "status": [200],
+            "required": {
+                "ok": "boolean",
+                "current_path": "string",
+                "target_path": "string",
+                "restart_required": "boolean",
+                "old_data_retained": "boolean",
+                "message": "string",
+            },
+        },
+    },
+}

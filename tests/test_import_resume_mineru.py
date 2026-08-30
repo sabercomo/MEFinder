@@ -761,11 +761,11 @@ class MinerUResumeTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.pdf_import_service.submit_local_pdf_segments",
+                    "src.me_finder.pdf_parser_adapters.submit_local_pdf_segments",
                     return_value=manifest,
                 ),
                 patch(
-                    "src.me_finder.pdf_import_service.get_batch_status",
+                    "src.me_finder.pdf_parser_adapters.get_batch_status",
                     side_effect=MinerUError("temporary network error"),
                 ),
             ):
@@ -788,7 +788,7 @@ class MinerUResumeTests(unittest.TestCase):
             stored["segments"][0]["status"] = "submitted"
             stored["segments"][0].pop("last_error", None)
             with patch(
-                "src.me_finder.pdf_import_service.submit_local_pdf_segments",
+                "src.me_finder.pdf_parser_adapters.submit_local_pdf_segments",
                 return_value=stored,
             ):
                 with self.assertRaisesRegex(MinerUError, "超时") as raised:
@@ -836,11 +836,11 @@ class MinerUResumeTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.pdf_import_service.submit_local_pdf_segments",
+                    "src.me_finder.pdf_parser_adapters.submit_local_pdf_segments",
                     return_value=manifest,
                 ),
                 patch(
-                    "src.me_finder.pdf_import_service.get_batch_status",
+                    "src.me_finder.pdf_parser_adapters.get_batch_status",
                     side_effect=MinerUError(
                         "MinerU HTTP 404: batch not found",
                         retry_with_new_task=True,
@@ -1011,11 +1011,11 @@ class MinerUResumeTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.pdf_import_service.submit_local_pdf_segments",
+                    "src.me_finder.pdf_parser_adapters.submit_local_pdf_segments",
                     return_value=manifest,
                 ),
                 patch(
-                    "src.me_finder.pdf_import_service.get_batch_status",
+                    "src.me_finder.pdf_parser_adapters.get_batch_status",
                     return_value=failed_status,
                 ),
             ):
@@ -1066,15 +1066,15 @@ class MinerUResumeTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.pdf_import_service.submit_local_pdf_segments",
+                    "src.me_finder.pdf_parser_adapters.submit_local_pdf_segments",
                     return_value=manifest,
                 ),
                 patch(
-                    "src.me_finder.pdf_import_service.get_batch_status",
+                    "src.me_finder.pdf_parser_adapters.get_batch_status",
                     return_value=done_status,
                 ),
                 patch(
-                    "src.me_finder.pdf_import_service.download_done_results",
+                    "src.me_finder.pdf_parser_adapters.download_done_results",
                     return_value=[result_dir],
                 ),
             ):

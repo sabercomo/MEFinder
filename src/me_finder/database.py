@@ -15,7 +15,6 @@ import shutil
 import sqlite3
 import threading
 import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -23,26 +22,21 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
 )
 
 from .persistence.connection import open_readonly_index
 from .database_backup import (
     DATABASE_BACKUP_FREE_SPACE_MARGIN,
-    DATABASE_BACKUP_RETENTION,
+    DATABASE_BACKUP_RETENTION as DATABASE_BACKUP_RETENTION,
     DATABASE_REBUILD_ESTIMATE_FLOOR,
     _backup_database,
     _prune_database_backups,
-    backup_database,
+    backup_database as backup_database,
 )
 from .index_identity import (
-    IndexIdentityConflictError,
+    IndexIdentityConflictError as IndexIdentityConflictError,
     _deduplicate_keyed_rows,
     _deduplicate_source_files,
-    _identity_conflict,
-    _is_empty,
-    _merge_missing_fields,
-    _verify_source_identity,
 )
 from .persistence.index_schema import (
     ANCHOR_SPEC_VERSION,
