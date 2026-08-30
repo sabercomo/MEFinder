@@ -28,7 +28,7 @@ from src.me_finder.web import make_handler
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py")
+    for name in ("web.py", "web_runtime.py", "http_routes.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -143,7 +143,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         self.assertNotIn("self.queue_import_job(", startup_block)
 
     def test_resume_requires_an_explicit_api_call_before_queueing(self) -> None:
-        self.assertIn('"/api/import-resumable": (', WEB_SOURCE)
+        self.assertIn('"/api/import-resumable":', WEB_SOURCE)
         self.assertIn('"/api/import-resume": import_job_controller.resume', WEB_SOURCE)
         resume_start = ORCHESTRATOR_SOURCE.index("def resume_import_job(")
         resume_end = ORCHESTRATOR_SOURCE.index(

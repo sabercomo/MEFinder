@@ -18,6 +18,7 @@ let resolveFetch, resolveConfirm;
 let requests = 0, confirmations = 0, refreshes = 0;
 const toasts = [];
 const context = {
+  module: {exports: {}},
   libraryStore: {deleteSelection: new Set(['source-1'])},
   document: {getElementById(id) { return id === 'grp-create-btn' ? button : input; }},
   fetch() { requests++; return new Promise(resolve => {resolveFetch = resolve;}); },
@@ -26,14 +27,19 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-context.documentGroupById = () => ({title: 'Work'});
-context.loadDocumentGroups = async () => {refreshes++;};
-context.renderGroupScopeSelector = context.renderDocumentGroupManager = context.renderLibraryList = () => {};
-context.clearLibrarySelection = () => context.libraryStore.deleteSelection.clear();
+const library = context.module.exports;
+const dependencies = {
+  documentGroupById: () => ({title: 'Work'}),
+  loadDocumentGroups: async () => {refreshes++;},
+  renderGroupScopeSelector: () => {},
+  renderDocumentGroupManager: () => {},
+  renderLibraryList: () => {},
+  clearLibrarySelection: () => context.libraryStore.deleteSelection.clear()
+};
 const action = process.argv[2], outcome = process.argv[3];
-const invoke = () => action === 'create' ? context.createDocumentGroupInline()
-  : action === 'assign' ? context.assignSelectedToGroupAction('group-1', button)
-  : context.deleteDocumentGroupAction('group-1', button);
+const invoke = () => action === 'create' ? library.createDocumentGroupInline(dependencies)
+  : action === 'assign' ? library.assignSelectedToGroupAction('group-1', button, dependencies)
+  : library.deleteDocumentGroupAction('group-1', button, dependencies);
 (async () => {
   const pending = invoke();
   assert.equal(button.disabled, true);
@@ -73,6 +79,7 @@ const sources = [
   {source_file_id: 'mineru', title: 'Same book', parser_type: 'mineru_structured', parser_label: 'MinerU'}
 ];
 const context = {
+  module: {exports: {}},
   libraryStore: {deleteSelection: new Set(), sources, documentGroups: [{
     document_group_id: 'group', title: 'Work', base_source_file_id: 'native',
     members: sources.map(s => ({source_file_id: s.source_file_id, display_name: 'Same version'}))
@@ -83,13 +90,16 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-context.documentSupportsTextAlignment = () => true;
-context.libraryLanguageCode = () => 'en';
-context.syncDocumentGroupPairAction = () => {};
-const menu = context.groupScopeManageOptionsHTML();
+const library = context.module.exports;
+const dependencies = {
+  documentSupportsTextAlignment: () => true,
+  libraryLanguageCode: () => 'en',
+  syncDocumentGroupPairAction: () => {}
+};
+const menu = library.groupScopeManageOptionsHTML();
 assert.equal(Array.from(menu.matchAll(/<button\b/g)).length, 1);
 assert.ok(menu.includes('onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>'));
-context.renderDocumentGroupManager();
+library.renderDocumentGroupManager(dependencies);
 assert.ok(body.innerHTML.includes('id="grp-create-input"'));
 assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建</button>'));
 for (const parser of ['原生文本', 'MinerU']) {

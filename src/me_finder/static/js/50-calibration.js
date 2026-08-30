@@ -9,9 +9,9 @@
     } catch (error) {
       throw new Error(error && error.message ? error.message : '刷新文献状态失败');
     }
-    applyLibraryCatalog(data);
-    await ensureLibraryDetail(sourceId);
-    updateLibraryEntry(sourceId);
+    global.MEFinder.library.applyCatalog(data);
+    await global.MEFinder.library.ensureDetail(sourceId);
+    global.MEFinder.library.updateEntry(sourceId);
     if (calSelectedSourceId === sourceId) await loadCalibrationDoc(sourceId);
   }
 
@@ -78,7 +78,7 @@
       return;
     }
     calTransientStatus[sourceId] = 'mapping';
-    updateLibraryEntry(sourceId);
+    global.MEFinder.library.updateEntry(sourceId);
     var panel = document.getElementById('cal-auto-preview');
     var button = document.getElementById('cal-auto-detect-btn');
     panel.style.display = 'block';
@@ -103,7 +103,7 @@
       panel.innerHTML = '<div class="auto-detect-title">页码自动检测失败</div><div class="auto-detect-note">' + esc(e.message) + '</div>';
     } finally {
       if (button) button.disabled = false;
-      updateLibraryEntry(sourceId);
+      global.MEFinder.library.updateEntry(sourceId);
     }
   }
 
@@ -598,7 +598,7 @@
         removeRequestController = null;
         button.disabled = false;
         button.textContent = targets.length === 1 ? '从文献库移除' : '移除所选 ' + targets.length + ' 篇';
-        await loadLibrary(true);
+        await global.MEFinder.library.load(true);
         showToast('已停止等待。移除是一个整体事务，服务端可能已经完成，文献库已刷新', 'warning');
         return;
       }
@@ -613,11 +613,11 @@
     if (removedIds.length) {
       var removedSet = new Set(removedIds);
       closeRemoveDocumentModal();
-      closeLibDrawer();
+      global.MEFinder.bibliography.closeDrawer();
       if (removedSet.has(searchStore.documentId)) searchStore.documentId = '';
       await loadMeta();
       // 一次强制刷新同时喂给文献库与搜索下拉。
-      await loadLibrary(true);
+      await global.MEFinder.library.load(true);
       updateSearchDocumentLabel();
       window.dispatchEvent(new CustomEvent('library_changed', {detail:{source_ids:removedIds}}));
       var query = document.getElementById('query').value.trim();
@@ -627,7 +627,7 @@
     if (failures.length) {
       // Keep the failed items selected so the action bar stays up for a retry.
       failures.forEach(function(item) { libraryStore.deleteSelection.add(item.source_id); });
-      renderLibraryList();
+      global.MEFinder.library.renderList();
       if (!removedIds.length) {
         button.disabled = false;
         button.textContent = targets.length === 1 ? '从文献库移除' : '重试删除所选';
@@ -635,7 +635,7 @@
       showToast((removedIds.length ? '已移除 ' + removedIds.length + ' 篇；' : '') + failures.length + ' 篇移除失败：' + failures[0].message, 'danger');
     } else {
       libraryStore.deleteSelection.clear();
-      renderLibraryList();
+      global.MEFinder.library.renderList();
       var successMessage;
       if (hasWordTargets && deleteInternalRequested) {
         successMessage = '所选文献及应用内副本已移除，外部原文件不受影响';
@@ -663,12 +663,19 @@
   global.calibrationSortText = calibrationSortText;
   global.loadCalibrationDoc = loadCalibrationDoc;
   global.runAutoDetection = runAutoDetection;
+  global.applyAutoDetection = applyAutoDetection;
+  global.editAutoDetectionResult = editAutoDetectionResult;
+  global.cancelAutoDetection = cancelAutoDetection;
   global.setSegmentNumberStyle = setSegmentNumberStyle;
   global.setSegmentLayout = setSegmentLayout;
   global.setSegmentReadingDirection = setSegmentReadingDirection;
   global.updateSegmentGutter = updateSegmentGutter;
   global.addCalSegment = addCalSegment;
+  global.updateCalSeg = updateCalSeg;
+  global.removeCalSegment = removeCalSegment;
   global.updateCalPreview = updateCalPreview;
+  global.scrollToManualMapping = scrollToManualMapping;
+  global.showCalibrationEvidence = showCalibrationEvidence;
   global.saveCalibration = saveCalibration;
   global.openRemoveDocumentModal = openRemoveDocumentModal;
   global.openRemoveSelectedDocumentsModal = openRemoveSelectedDocumentsModal;

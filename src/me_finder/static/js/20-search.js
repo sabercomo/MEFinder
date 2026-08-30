@@ -162,7 +162,7 @@
       searchStore.sourceFiles = data.items || [];
       searchStore.volumes = data.volumes || [];
       libraryStore.volumeBySource = buildVolumeIndex(searchStore.volumes);
-      if (typeof loadDocumentGroups === 'function') await loadDocumentGroups();
+      await global.MEFinder.library.loadDocumentGroups();
       searchStore.documentsLoaded = true;
     } catch (error) {
       searchStore.documentsLoaded = false;

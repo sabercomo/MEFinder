@@ -268,9 +268,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
                 re.MULTILINE,
             )
         )
-        template = _read("templates/index.html")
         referenced = set()
-        for attr in re.findall(r"\bon\w+\s*=\s*\"([^\"]*)\"", template):
+        for attr in re.findall(r"\bon\w+\s*=\s*\"([^\"]*)\"", HTML):
             referenced.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", attr))
         builtins = {
             "if",
@@ -278,11 +277,52 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "getElementById",
             "querySelector",
             "stopPropagation",
+            "preventDefault",
             "click",
+            "setTimeout",
             "void",
         }
         missing = sorted(n for n in referenced - builtins if n not in defined)
         self.assertEqual(missing, [], f"内联处理器引用了不存在的函数：{missing}")
+
+    def test_large_domain_modules_keep_bounded_global_command_surfaces(self):
+        """大型领域模块必须留在 IIFE；直接全局命令不得重新无界增长。"""
+
+        budgets = {
+            "static/js/30-library.js": 37,
+            "static/js/40-bibliography.js": 26,
+            "static/js/70-vision.js": 24,
+            "static/js/71-vision-providers.js": 18,
+            "static/js/80-import.js": 20,
+        }
+        for relative, budget in budgets.items():
+            with self.subTest(asset=relative):
+                source = _read(relative)
+                name = Path(relative).name
+                self.assertIn(f"(function (global) {{  // module: {name}", source)
+                self.assertTrue(
+                    source.rstrip().endswith(
+                        "}(typeof window !== 'undefined' ? window : "
+                        "(typeof globalThis !== 'undefined' ? globalThis : this)));"
+                    )
+                )
+                direct_exports = re.findall(
+                    r"^\s*global\.([A-Za-z_$][\w$]*)\s*=", source, re.MULTILINE
+                )
+                self.assertLessEqual(
+                    len(direct_exports),
+                    budget,
+                    f"{relative} 直接全局命令超过预算：{direct_exports}",
+                )
+
+    def test_vision_runtime_and_remote_providers_remain_separate(self):
+        runtime = _read("static/js/70-vision.js")
+        providers = _read("static/js/71-vision-providers.js")
+        self.assertIn("global.MEFinder.parserRuntime = parserRuntimeAPI", runtime)
+        self.assertNotIn("function loadVisionProviders", runtime)
+        self.assertIn("global.MEFinder.visionProviders = visionProvidersAPI", providers)
+        self.assertNotIn("function loadMineruConfig", providers)
+        self.assertNotIn("function loadLocalOCRConfig", providers)
 
 
 class FrontendAssetBaselineTests(unittest.TestCase):
@@ -334,10 +374,14 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #        + 导入页专属解析单选项；后端复用 vision provider 路径。
     # 0.5.0：恢复检索 IIFE 中供动态 onclick 使用的公共入口；设置页移除无控件的
     #        Markdown/EPUB 固定清理策略说明；阅读器新增页眉页脚按钮后同步为五列头部。
+    # 0.5.1：30-library.js 收进 IIFE，白盒测试改用显式依赖注入与 module.exports。
+    # 0.5.1：内联处理器门禁覆盖 JS 动态模板，并补齐既有 IIFE 的事件公共面。
+    # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
+    # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
     BASELINE_SHA256 = (
-        "6a4f8a18daaf5c9500954d87c83accdfcafd809f2eb7e28e818685fd52931a0a"
+        "6438ac32ce0559b448e94fdeaf79d803a87534e13449985322f48134abe12159"
     )
-    BASELINE_BYTES = 956046
+    BASELINE_BYTES = 975512
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

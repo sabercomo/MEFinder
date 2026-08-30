@@ -335,6 +335,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const requests = [];
 const context = {
+  module: {exports: {}},
   settingsStore: {},
   fetch: async (url, options) => {
     requests.push({url, payload: JSON.parse(options.body)});
@@ -343,6 +344,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+const library = context.module.exports;
 (async () => {
   for (const mode of ['full', 'none']) {
     context.settingsStore.exportPageCleanup = {
@@ -352,7 +354,7 @@ vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
       ['requestLibraryDocumentMarkdownExport', 'markdown'],
       ['requestLibraryDocumentEpubExport', 'epub']
     ]) {
-      await context[method]('source-one', 'C:/exports');
+      await library[method]('source-one', 'C:/exports');
       assert.deepEqual(requests.pop(), {
         url: '/api/document/export-' + format,
         payload: {source_id: 'source-one', output_dir: 'C:/exports'}

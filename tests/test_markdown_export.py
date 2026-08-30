@@ -318,6 +318,89 @@ class MarkdownExportServiceTests(unittest.TestCase):
             self.assertNotIn("pdf_page", content)
             self.assertFalse(Path(str(result["path"]) + ".partial").exists())
 
+    def test_service_exports_indexed_epub_as_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            database = root / "data" / "index.sqlite3"
+            source_id = "epub-markdown-1"
+            metadata = {"title": "电子书测试", "author": "测试作者"}
+            paragraphs = [
+                {
+                    "paragraph_id": f"{source_id}-P{index:06d}",
+                    "source_file_id": source_id,
+                    "source_type": "word",
+                    "source_format": "epub",
+                    "volume_id": "EPUB_VOLUME_1",
+                    "work_id": "EPUB_WORK_1",
+                    "paragraph_index": index,
+                    "text_raw": text,
+                    "style_name": style,
+                    "original_page_start": page,
+                    "eligible_for_search": True,
+                }
+                for index, (text, style, page) in enumerate(
+                    [
+                        ("第一章", "h1", "1"),
+                        ("第一页正文。", "p", "1"),
+                        ("第二章", "h2", "2"),
+                        ("第二页正文。", "p", "2"),
+                    ]
+                )
+            ]
+            build_database(
+                {
+                    "metadata": {},
+                    "source_files": [
+                        {
+                            "source_file_id": source_id,
+                            "source_type": "word",
+                            "file_name": "电子书测试.epub",
+                            "file_format": "epub",
+                            "display_title": "电子书测试",
+                            "epub_page_count": 2,
+                            "bibliographic_metadata": metadata,
+                        }
+                    ],
+                    "volumes": [
+                        {
+                            "volume_id": "EPUB_VOLUME_1",
+                            "source_file_id": source_id,
+                            "source_type": "word",
+                            "display_title": "电子书测试",
+                        }
+                    ],
+                    "works": [
+                        {
+                            "work_id": "EPUB_WORK_1",
+                            "volume_id": "EPUB_VOLUME_1",
+                            "source_type": "word",
+                            "work_order": 1,
+                            "title": "电子书测试",
+                        }
+                    ],
+                    "paragraphs": paragraphs,
+                },
+                database,
+            )
+
+            result = export_indexed_pdf_markdown(
+                database_path=database,
+                source_file_id=source_id,
+                output_dir=root / "exports",
+            )
+
+            self.assertEqual(result["page_count"], 2)
+            self.assertEqual(result["paragraph_count"], 4)
+            content = Path(result["path"]).read_text(encoding="utf-8")
+            self.assertIn('title: "电子书测试"', content)
+            self.assertIn('author: "测试作者"', content)
+            self.assertIn("# 第一章", content)
+            self.assertIn("## 第二章", content)
+            self.assertIn("<!-- printed_page: 1 -->", content)
+            self.assertIn("<!-- printed_page: 2 -->", content)
+            self.assertLess(content.index("第一页正文。"), content.index("第二章"))
+            self.assertFalse(Path(str(result["path"]) + ".partial").exists())
+
     def test_service_missing_and_unsupported_sources_have_clear_errors(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

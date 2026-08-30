@@ -12,11 +12,13 @@ PACKAGE = ROOT / "src" / "me_finder"
 class ArchitectureBoundaryTests(unittest.TestCase):
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
         # web.py is now only the HTTP composition root + platform PDF openers;
-        # the service/route assembly lives in web_runtime.py.  Caps only ratchet
+        # service wiring lives in web_runtime.py and domain route assembly in
+        # http_routes.py.  Caps only ratchet
         # down — when a file hits its cap, move a real responsibility out.
         limits = {
             "web.py": 700,
-            "web_runtime.py": 950,
+            "web_runtime.py": 725,
+            "http_routes.py": 260,
             "web_http.py": 800,
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
@@ -37,6 +39,33 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 limit,
                 f"{relative} 已超过 {limit} 行，请先拆出新的明确边界。",
             )
+
+    def test_http_routes_are_assembled_by_product_domain_without_container(self) -> None:
+        source = (PACKAGE / "http_routes.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        functions = {
+            node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+        }
+        self.assertEqual(
+            functions,
+            {
+                "assemble_archive_routes",
+                "assemble_bibliography_routes",
+                "assemble_import_routes",
+                "assemble_library_routes",
+                "assemble_parser_settings_routes",
+                "assemble_preference_routes",
+                "assemble_reader_routes",
+                "assemble_shell_routes",
+            },
+        )
+        self.assertFalse(
+            any(isinstance(node, ast.ClassDef) for node in tree.body),
+            "路由装配应使用显式领域函数，不应引入通用容器。",
+        )
+        runtime = (PACKAGE / "web_runtime.py").read_text(encoding="utf-8")
+        self.assertNotIn("controller_get_routes = {", runtime)
+        self.assertNotIn("controller_post_routes = {", runtime)
 
     def test_http_transport_does_not_import_concrete_adapters(self) -> None:
         source = (PACKAGE / "web_http.py").read_text(encoding="utf-8")

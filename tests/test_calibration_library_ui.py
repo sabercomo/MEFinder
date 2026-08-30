@@ -372,7 +372,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("return el ? el.value.trim() : String(cache[field] || '').trim();", HTML)
         self.assertIn("BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { store[field] = result[field]; });", HTML)
         # 选中文献时以元数据初始化缓存；保存后清掉缓存以便下次重新初始化。
-        self.assertIn("bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));", HTML)
+        self.assertIn(
+            "global.MEFinder.bibliography.cacheFields(sourceId, sourceBibliographicMetadata(src));",
+            HTML,
+        )
         self.assertIn("delete bibFieldCache[sourceId];", HTML)
 
     def test_unsaved_bibliographic_edits_are_guarded_on_leaving_detail(self) -> None:
@@ -388,15 +391,21 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
         # 切到别的文献前拦截；同一文献重选不打扰。
         self.assertIn("var switchingDoc = sourceId !== libraryStore.selectedId;", HTML)
-        self.assertIn("if (switchingDoc && !await guardLeaveDetail()) return;", HTML)
+        self.assertIn(
+            "if (switchingDoc && !await global.MEFinder.bibliography.guardLeaveDetail()) return;",
+            HTML,
+        )
         # 顶部状态筛选、筛选弹层选档、移除 chip 离开详情前都拦截。
         self.assertIn("async function applyLibStatusFilter(status)", HTML)
         self.assertIn("async function setLibFacet(event, kind, value)", HTML)
         self.assertIn("async function removeLibFacet(event, kind)", HTML)
         # 任一字段输入即置脏。
-        self.assertIn("event.target.closest('#bibliographic-editor')) bibEditorDirty = true;", HTML)
+        self.assertIn("MEFinder.bibliography.markDirty();", HTML)
         # 保存成功后清脏并回到查看态。
-        self.assertIn("bibEditorDirty = false;\n    bibEditMode[sourceId] = false;", HTML)
+        self.assertRegex(
+            HTML,
+            r"bibEditorDirty = false;\s+bibEditMode\[sourceId\] = false;",
+        )
 
     def test_detail_drawer_splits_read_edit_and_reorders_regions(self) -> None:
         """Phase 3 详情外壳：查看/编辑态分离、插槽渲染、区块重排、操作收敛、上一条/下一条。"""
@@ -428,6 +437,9 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('id="drawer-more-menu"', HTML)
         self.assertIn('class="bib-menu bib-menu-end drawer-actions-menu"', HTML)
         self.assertIn('aria-expanded="false" aria-controls="drawer-more-menu"', HTML)
+        self.assertIn("var canExportMarkdown = src.source_type === 'pdf' || sourceFormatLabel(src) === 'EPUB';", HTML)
+        self.assertIn("if (canExportMarkdown) {", HTML)
+        self.assertIn(">导出 Markdown</button>", HTML)
         drawer_menu_rule = HTML.split('.bib-menu.drawer-actions-menu {', 1)[1].split('}', 1)[0]
         self.assertIn('top: auto;', drawer_menu_rule)
         self.assertIn('bottom: calc(100% + 6px);', drawer_menu_rule)
@@ -532,7 +544,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('" tabindex="0" role="option" data-id="', HTML)
         self.assertIn("function handleLibraryListKeydown(event)", HTML)
         self.assertIn("function setupLibraryKeyboardNav()", HTML)
-        self.assertIn("setupLibraryKeyboardNav();", HTML)
+        self.assertIn("MEFinder.library.setupKeyboardNav();", HTML)
         self.assertIn(".library-entry:focus-visible", HTML)
 
     def test_calibration_has_one_level_preview_before_expert_table(self) -> None:
@@ -628,11 +640,15 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         importing = HTML.index('data-page="import"')
         self.assertLess(library, importing)
         self.assertNotIn("navigateTo('calibration')", HTML)
-        self.assertIn("navigateTo('library');\n  if (!libraryStore.loaded) await loadLibrary();", HTML)
+        self.assertRegex(
+            HTML,
+            r"navigateTo\('library'\);\s+if \(!libraryStore\.loaded\) "
+            r"await global\.MEFinder\.library\.load\(\);",
+        )
 
     def test_completed_import_refreshes_an_open_library_without_restart(self) -> None:
         self.assertIn("var refreshPromise = currentPage === 'library'", HTML)
-        self.assertIn("? loadLibrary()", HTML)
+        self.assertIn("? global.MEFinder.library.load()", HTML)
         self.assertIn(": ensureSearchDocuments();", HTML)
         self.assertIn("refreshPromise.then(updateSearchDocumentLabel);", HTML)
 

@@ -1483,7 +1483,7 @@ def _config_call(config_name, method, *args):
     40-bibliography.js，需连同 06-pure.js 一起进同一 eval。"""
 
     bib = ROOT / "src" / "me_finder" / "static" / "js" / "40-bibliography.js"
-    call = "%s.%s(%s)" % (
+    call = "module.exports.lookupConfigs.%s.%s(%s)" % (
         config_name, method, ",".join(json.dumps(a) for a in args)
     )
     expr = "(function(){%s\n%s\nreturn %s;})()" % (
@@ -1528,15 +1528,18 @@ def _import_eval(tail):
 
 
 def _vision_eval(tail):
-    """在 06-pure.js + 70-vision.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
+    """在 70/71 视觉模块同一 eval 里跑 tail（可注入 DOM 桩与 return）。
 
     视觉 API 下拉的 hide/revealVisionPop 触碰 DOM，用 tail 注入极小桩驱动。
-    70-vision.js 顶层无执行语句，单独 eval 只登记函数声明。"""
+    两个 IIFE 顶层只登记函数与模块 API，不触发 DOM 读写。"""
 
-    vis = ROOT / "src" / "me_finder" / "static" / "js" / "70-vision.js"
-    expr = "(function(){%s\n%s\n%s})()" % (
+    js_dir = ROOT / "src" / "me_finder" / "static" / "js"
+    runtime = js_dir / "70-vision.js"
+    providers = js_dir / "71-vision-providers.js"
+    expr = "(function(){%s\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
-        vis.read_text(encoding="utf-8"),
+        runtime.read_text(encoding="utf-8"),
+        providers.read_text(encoding="utf-8"),
         tail,
     )
     return _module_eval(expr)
@@ -1575,17 +1578,20 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
 
     def test_begin_creates_marquee_and_enters_drag_state(self):
         tail = _DOM_STUB + r"""
-        globalThis.__selCleared = false;
-        globalThis.window = {getSelection: function () {
-          return {removeAllRanges: function () { globalThis.__selCleared = true; }};
+        var selCleared = false;
+        var appWindow = {getSelection: function () {
+          return {removeAllRanges: function () { selCleared = true; }};
         }};
         var body = mkEl();
-        globalThis.document = {body: body, createElement: function (tag) {
+        var appDocument = {body: body, createElement: function (tag) {
           var e = mkEl(); e._tag = tag; return e;
         }};
         var container = mkEl();
         var state = {};
-        beginDragSelectionMarquee(state, container, 'library-selection-marquee', {pointerId: 7});
+        module.exports.beginDragSelectionMarquee(
+          state, container, 'library-selection-marquee', {pointerId: 7},
+          {document: appDocument, window: appWindow}
+        );
         return {
           started: state.started,
           marqueeTag: state.marquee._tag,
@@ -1593,7 +1599,7 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
           appendedToBody: body._appended.indexOf(state.marquee) >= 0,
           containerHasDragSelecting: container._has('is-drag-selecting'),
           captured: container._captured,
-          selCleared: globalThis.__selCleared
+          selCleared: selCleared
         };
         """
         self.assertEqual(_import_eval(tail), {
@@ -1609,17 +1615,19 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
     def test_begin_passes_through_marquee_class_verbatim(self):
         # 扫描结果那套只有类名不同，助手须原样透传，不得改写。
         tail = _DOM_STUB + r"""
-        globalThis.window = {getSelection: function () { return {removeAllRanges: function () {}}; }};
-        globalThis.document = {body: mkEl(), createElement: function (t) { var e = mkEl(); e._tag = t; return e; }};
+        var appWindow = {getSelection: function () { return {removeAllRanges: function () {}}; }};
+        var appDocument = {body: mkEl(), createElement: function (t) { var e = mkEl(); e._tag = t; return e; }};
         var state = {};
-        beginDragSelectionMarquee(state, mkEl(), 'scan-selection-marquee', {pointerId: 1});
+        module.exports.beginDragSelectionMarquee(
+          state, mkEl(), 'scan-selection-marquee', {pointerId: 1},
+          {document: appDocument, window: appWindow}
+        );
         return state.marquee.className;
         """
         self.assertEqual(_import_eval(tail), "scan-selection-marquee")
 
     def test_end_clears_targets_and_releases(self):
         tail = _DOM_STUB + r"""
-        globalThis.document = {body: mkEl(), createElement: function (t) { return mkEl(); }};
         var container = mkEl();
         container.classList.add('is-drag-selecting');
         var t1 = mkEl(); t1.classList.add('is-drag-target');
@@ -1627,7 +1635,7 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
         container._dragTargets = [t1, t2];
         var marquee = mkEl();
         var state = {marquee: marquee, started: true};
-        endDragSelectionMarquee(state, container, '.scan-row', {pointerId: 3});
+        module.exports.endDragSelectionMarquee(state, container, '.scan-row', {pointerId: 3});
         return {
           usedSelector: container._lastSelector,
           containerHasDragSelecting: container._has('is-drag-selecting'),
@@ -1649,9 +1657,10 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
     def test_end_composes_library_selector(self):
         # 文献库那套选择器不同，助手须拼成 '<sel>.is-drag-target'。
         tail = _DOM_STUB + r"""
-        globalThis.document = {body: mkEl(), createElement: function (t) { return mkEl(); }};
         var container = mkEl();
-        endDragSelectionMarquee({marquee: null}, container, '.library-entry', {pointerId: 9});
+        module.exports.endDragSelectionMarquee(
+          {marquee: null}, container, '.library-entry', {pointerId: 9}
+        );
         return {selector: container._lastSelector, released: container._released};
         """
         # state.marquee 为 null 时不得抛错，仍照常释放指针。
@@ -1690,7 +1699,7 @@ class VisionPopVisibilityTests(unittest.TestCase):
         tail = _VISION_POP_STUB + r"""
         var pop = mkPop();
         var input = mkInput();
-        hideVisionPop(pop, input);
+        module.exports.hideVisionPop(pop, input);
         return {hidden: pop.hidden, innerHTML: pop.innerHTML, aria: input._attrs['aria-expanded']};
         """
         self.assertEqual(_vision_eval(tail),
@@ -1699,7 +1708,7 @@ class VisionPopVisibilityTests(unittest.TestCase):
     def test_hide_tolerates_missing_input(self):
         tail = _VISION_POP_STUB + r"""
         var pop = mkPop();
-        hideVisionPop(pop, null);
+        module.exports.hideVisionPop(pop, null);
         return {hidden: pop.hidden, innerHTML: pop.innerHTML};
         """
         self.assertEqual(_vision_eval(tail), {"hidden": True, "innerHTML": ""})
@@ -1709,7 +1718,7 @@ class VisionPopVisibilityTests(unittest.TestCase):
         var active = mkActive();
         var pop = mkPop(active);
         var input = mkInput();
-        revealVisionPop(pop, input);
+        module.exports.revealVisionPop(pop, input);
         return {
           hidden: pop.hidden,
           aria: input._attrs['aria-expanded'],
@@ -1727,7 +1736,7 @@ class VisionPopVisibilityTests(unittest.TestCase):
     def test_reveal_without_active_does_not_throw(self):
         tail = _VISION_POP_STUB + r"""
         var pop = mkPop(null);
-        revealVisionPop(pop, null);
+        module.exports.revealVisionPop(pop, null);
         return {hidden: pop.hidden, selector: pop._lastSelector};
         """
         self.assertEqual(_vision_eval(tail),
@@ -1755,7 +1764,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
           querySelector:function(selector) { return selector.indexOf('vlm') >= 0 ? vlmSection : null; }
         };
         parserStore.mineruLocalConfig = {enabled:true, managed:false, endpoint:'http://127.0.0.1:8000'};
-        renderManagedMineru({
+        module.exports.renderManagedMineru({
           supported:true,
           hardware:{name:'CPU', recommended_profile:'pipeline'},
           service:{running:false},
@@ -1796,7 +1805,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         };
         parserStore.mineruLocalConfig = {enabled:true, managed:true};
         var profile = {profile:'pipeline', display_name:'Pipeline', supported:true, installed:true, state:'installed'};
-        renderManagedMineru({
+        module.exports.renderManagedMineru({
           supported:true,
           hardware:{name:'CPU', recommended_profile:'pipeline'},
           service:{running:true, profile:'pipeline', endpoint:'http://127.0.0.1:8000'},
@@ -1808,11 +1817,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
         var hardware = elements['managed-mineru-hardware'].textContent;
         var autoInstall = elements['managed-mineru-auto-install'].textContent;
         var runningHint = elements['managed-mineru-hint'].textContent;
-        var whileVlmRunning = managedMineruSummaryLabel(
+        var whileVlmRunning = module.exports.managedMineruSummaryLabel(
           {enabled:true, managed:true, managed_profile:'vlm'},
           {service:{running:true, profile:'vlm'}}
         );
-        renderManagedMineru({
+        module.exports.renderManagedMineru({
           supported:true,
           hardware:{name:'CPU', recommended_profile:'pipeline'},
           service:{running:false},
@@ -1868,7 +1877,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         globalThis.showToast = function() {};
         saveVisionProvider();
         fields['vision-provider-name'].value = '通义千问';
-        __setVisionNameAutoValue('通义千问');
+        module.exports.setVisionNameAutoValue('通义千问');
         saveVisionProvider();
         return savedNames;
         """
@@ -1884,9 +1893,9 @@ class MineruLocalDisplayTests(unittest.TestCase):
           getElementById:function() { return null; },
           querySelector:function() { return vlmSection; }
         };
-        renderManagedMineru({hardware:{vlm_supported:false}, profiles:[], service:{}});
+        module.exports.renderManagedMineru({hardware:{vlm_supported:false}, profiles:[], service:{}});
         var cpuOnly = vlmSection.hidden;
-        renderManagedMineru({hardware:{vlm_supported:true}, profiles:[], service:{}});
+        module.exports.renderManagedMineru({hardware:{vlm_supported:true}, profiles:[], service:{}});
         return {cpuOnly:cpuOnly, gpuCapable:vlmSection.hidden};
         """
         self.assertEqual(_vision_eval(tail), {
@@ -1896,7 +1905,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_uses_gigabytes_speed_and_estimated_total(self):
         tail = r"""
-        return managedMineruTransferSummary({
+        return module.exports.managedMineruTransferSummary({
           downloaded_bytes:1073741824,
           total_bytes:2147483648,
           total_is_estimate:true,
@@ -1911,7 +1920,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_marks_paused_payload_as_network_or_processing(self):
         tail = r"""
-        return managedMineruTransferSummary({
+        return module.exports.managedMineruTransferSummary({
           downloaded_bytes:686817280,
           total_bytes:2328028720,
           total_is_estimate:true,
@@ -1926,7 +1935,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_proxy_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return managedMineruErrorText(
+        return module.exports.managedMineruErrorText(
           'MinerU 安装子进程退出 2：Failed to fetch: `https://pypi.org/simple/mineru/` Caused by: tunnel error: unsuccessful'
         );
         """
@@ -1937,7 +1946,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_huggingface_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return managedMineruErrorText(
+        return module.exports.managedMineruErrorText(
           'huggingface_hub/file_download.py xet_get OSError: I/O error: error decoding response body'
         );
         """
@@ -2082,9 +2091,13 @@ class CnkiLookupConfigTests(unittest.TestCase):
 
     def test_reset_state_prefills_open_url_from_form(self):
         # resetState 忽略入参 form，改经 cnkiSearchUrlFromForm 现读表单预填 open_url。
-        tail = ("collectBibliographicForm = function(){return {doi:'', title:'知网标题'};};"
-                "return {got: CNKI_LOOKUP.resetState({}),"
-                " expected_url: cnkiSearchUrlFromForm()};")
+        tail = (
+            "var bib = module.exports;"
+            "var dependencies = {collectBibliographicForm:function(){"
+            "return {doi:'', title:'知网标题'};}};"
+            "return {got:bib.lookupConfigs.CNKI_LOOKUP.resetState({}, dependencies),"
+            " expected_url:bib.cnkiSearchUrlFromForm(dependencies)};"
+        )
         result = _bib_eval(tail)
         self.assertEqual(result["got"]["candidates"], [])
         self.assertEqual(result["got"]["open_url"], result["expected_url"])
@@ -2092,14 +2105,14 @@ class CnkiLookupConfigTests(unittest.TestCase):
             "https://oversea.cnki.net/"))
 
     def test_save_error_state_stores_open_url_when_present(self):
-        tail = ("CNKI_LOOKUP.saveErrorState({open_url:'U'}, 's1');"
-                "return cnkiLookupState;")
+        tail = ("module.exports.lookupConfigs.CNKI_LOOKUP.saveErrorState({open_url:'U'}, 's1');"
+                "return module.exports.cnkiLookupState;")
         self.assertEqual(_bib_eval(tail),
                          {"s1": {"candidates": [], "open_url": "U"}})
 
     def test_save_error_state_is_noop_without_open_url(self):
-        tail = ("CNKI_LOOKUP.saveErrorState({error:'e'}, 's1');"
-                "return cnkiLookupState;")
+        tail = ("module.exports.lookupConfigs.CNKI_LOOKUP.saveErrorState({error:'e'}, 's1');"
+                "return module.exports.cnkiLookupState;")
         self.assertEqual(_bib_eval(tail), {})
 
 

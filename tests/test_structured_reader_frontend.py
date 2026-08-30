@@ -248,7 +248,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
     def test_group_alignment_accepts_pdf_and_epub_but_not_docx(self) -> None:
         helper = re.search(
             r"function documentSupportsTextAlignment\(source\) \{"
-            r"(?P<body>.*?)\n\}",
+            r"(?P<body>.*?)\n\s*\}",
             APP_JS,
             flags=re.DOTALL,
         )

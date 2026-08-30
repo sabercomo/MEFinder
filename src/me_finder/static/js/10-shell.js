@@ -167,17 +167,17 @@
     if (target) target.classList.add('active');
     const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
     if (link) link.classList.add('active');
-    if (page === 'library' && !libraryStore.loaded) loadLibrary();
+    if (page === 'library' && !libraryStore.loaded) global.MEFinder.library.load();
     if (page === 'import') {
-      if (!parserStore.visionConfigLoaded) loadVisionProviders();
-      if (!parserStore.mineruConfigLoaded) loadMineruConfig();
-      loadGeneralModelConfig();
+      if (!parserStore.visionConfigLoaded) global.MEFinder.visionProviders.load();
+      if (!parserStore.mineruConfigLoaded) global.MEFinder.parserRuntime.loadMineruConfig();
+      global.MEFinder.parserRuntime.loadGeneralModelConfig();
     }
     if (page === 'settings') {
       ensureVisibleSettingsCategory();
       if (!settingsStore.preferencesLoaded) loadPreferences();
-      if (!parserStore.mineruConfigLoaded) loadMineruConfig();
-      if (!parserStore.visionConfigLoaded) loadVisionProviders();
+      if (!parserStore.mineruConfigLoaded) global.MEFinder.parserRuntime.loadMineruConfig();
+      if (!parserStore.visionConfigLoaded) global.MEFinder.visionProviders.load();
       if (!settingsStore.dataLocationLoaded) loadDataLocation();
     }
   }

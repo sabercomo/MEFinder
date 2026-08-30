@@ -1,8 +1,8 @@
-"""Pure conversion of persisted MEFinder structured PDF pages to Markdown.
+"""Pure conversion of persisted MEFinder document text to Markdown.
 
-The module reads only data already stored by MEFinder (page payloads and
-bibliographic metadata).  It never reparses a PDF, never OCRs, and never
-consults MinerU output directories.
+The module reads only data already stored by MEFinder (PDF page payloads, EPUB
+paragraphs, and bibliographic metadata).  It never reparses a source file,
+never OCRs, and never consults MinerU output directories.
 """
 
 from __future__ import annotations
@@ -63,6 +63,44 @@ def document_to_markdown(
         normalized = normalize_document_export(materialized, options=options)
     chunks = [_frontmatter(title=title, author=author)]
     chunks.extend(_render_items(normalized.items))
+    return "\n\n".join(chunks).strip() + "\n"
+
+
+def epub_paragraphs_to_markdown(
+    paragraphs: Iterable[Mapping[str, object]],
+    *,
+    title: object = None,
+    author: object = None,
+    options: Optional[ExportOptions] = None,
+) -> str:
+    """Convert indexed EPUB paragraphs into one UTF-8 Markdown document."""
+
+    options = options or ExportOptions()
+    chunks = [_frontmatter(title=title, author=author)]
+    previous_page: Optional[str] = None
+    for paragraph in paragraphs:
+        text = str(paragraph.get("text_raw") or "").strip()
+        if not text:
+            continue
+        printed_page = str(paragraph.get("original_page_start") or "").strip()
+        if printed_page and printed_page != previous_page:
+            previous_page = printed_page
+            if options.page_marker_mode != "none":
+                chunks.append(
+                    render_markdown_page_marker(PageMarker(printed_page=printed_page))
+                )
+        style_name = str(paragraph.get("style_name") or "").lower()
+        heading = re.fullmatch(r"h([1-6])", style_name)
+        if heading:
+            chunks.append(f"{'#' * int(heading.group(1))} {text}")
+        elif style_name == "blockquote":
+            chunks.append("\n".join(f"> {line}" for line in text.splitlines()))
+        elif style_name == "li":
+            chunks.append(f"- {text}")
+        elif style_name == "pre":
+            chunks.append("\n".join(f"    {line}" for line in text.splitlines()))
+        else:
+            chunks.append(text)
     return "\n\n".join(chunks).strip() + "\n"
 
 

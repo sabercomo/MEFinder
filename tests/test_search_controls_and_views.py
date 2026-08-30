@@ -9,7 +9,7 @@ from src.me_finder.web import HTML
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "web_http.py")
+    for name in ("web.py", "web_runtime.py", "http_routes.py", "web_http.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -60,7 +60,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "if (searchStore.groupId && !libraryStore.documentGroups.some(function(g) { return g.document_group_id === searchStore.groupId; }))",
             HTML,
         )
-        self.assertIn("searchStore.groupId = '';\n    updateSearchDocumentLabel();", HTML)
+        self.assertRegex(
+            HTML,
+            r"searchStore\.groupId = '';\s+updateSearchDocumentLabel\(\);",
+        )
 
     def test_primary_search_and_library_dropdowns_use_application_menus(self) -> None:
         self.assertIn('id="library-sort-field-select"', HTML)
@@ -289,7 +292,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("function pollMineruReparse(sourceId, jobId)", HTML)
         self.assertIn("importStore.queue.push(queueItem)", HTML)
         self.assertIn("navigateTo('import')", HTML)
-        self.assertIn("pollImportJob(queueItem.id)", HTML)
+        self.assertIn("global.MEFinder.imports.pollJob(queueItem.id)", HTML)
         self.assertIn("queue.scrollIntoView({behavior: 'smooth', block: 'start'})", HTML)
         self.assertIn("MinerU 在线解析", HTML)
         self.assertIn("重新 OCR", HTML)
@@ -316,7 +319,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("option.hidden = !enabled", HTML)
         self.assertIn(".pdf-parse-option[hidden] { display: none; }", HTML)
         self.assertIn("if (!enabled && input && input.checked)", HTML)
-        self.assertIn("if (!parserStore.mineruConfigLoaded) loadMineruConfig()", HTML)
+        self.assertIn(
+            "if (!parserStore.mineruConfigLoaded) "
+            "global.MEFinder.parserRuntime.loadMineruConfig()",
+            HTML,
+        )
         self.assertIn("parse_mode: q.parseMode || 'auto'", HTML)
         self.assertIn("parseMode: !isPackage && ext === '.pdf' ? pdfParseMode : null", HTML)
         self.assertIn("/api/import-upload/start", HTML)
@@ -450,7 +457,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("mineruFailed: !!job.mineru_failed", HTML)
         render_start = HTML.index("function renderVisionProviders()")
         render_end = HTML.index("async function loadVisionProviders()", render_start)
-        self.assertIn("renderImportQueue();", HTML[render_start:render_end])
+        self.assertIn("global.MEFinder.imports.renderQueue();", HTML[render_start:render_end])
         self.assertIn("fetch('/api/import-retry'", HTML)
         self.assertIn('"X-Vision-Provider-ID"', WEB_SOURCE)
         self.assertIn('"/api/vision-providers"', WEB_SOURCE)
@@ -551,7 +558,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn(".settings-editor-actions > .action-btn.primary", HTML)
         self.assertIn('"/api/local-ocr"', WEB_SOURCE)
         self.assertIn('"/api/local-ocr/test"', WEB_SOURCE)
-        self.assertIn("pollImportJob(item.id)", HTML)
+        self.assertIn("global.MEFinder.imports.pollJob(item.id)", HTML)
         self.assertIn('切换到本地部署', HTML)
         self.assertIn("fetch('/api/parser-statistics'", HTML)
         self.assertIn("async function loadParserStatistics()", HTML)

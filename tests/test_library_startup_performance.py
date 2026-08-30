@@ -179,13 +179,13 @@ class LibraryEndpointWiringTests(unittest.TestCase):
 
         web_source = "\n".join(
             Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-            for name in ("web.py", "web_runtime.py")
+            for name in ("web.py", "web_runtime.py", "http_routes.py")
         )
         controller_source = Path(
             "src/me_finder/library_query_controller.py"
         ).read_text(encoding="utf-8")
-        self.assertIn('"/api/library": (', web_source)
-        self.assertIn('"/api/library/document": (', web_source)
+        self.assertIn('"/api/library":', web_source)
+        self.assertIn('"/api/library/document":', web_source)
         self.assertIn('if requested_view == "summary":', controller_source)
         self.assertIn(
             "self._document_queries.library_summary(", controller_source

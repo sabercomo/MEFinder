@@ -779,15 +779,15 @@
     if (data.lib_default_language === 'chinese' || data.lib_default_language === 'foreign') {
       libraryStore.defaultLanguage = data.lib_default_language;
       try { localStorage.setItem('meFinderLibDefaultLanguage', libraryStore.defaultLanguage); } catch (_) {}
-      syncLibDefaultLanguageControl();
+      global.MEFinder.library.syncDefaultLanguageControl();
     }
     if (typeof data.online_auto_match_threshold === 'number') {
       onlineMetadataAutoMatchThreshold = data.online_auto_match_threshold;
       try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(Math.round(onlineMetadataAutoMatchThreshold * 100))); } catch (_) {}
-      syncOnlineAutoMatchControl();
+      global.MEFinder.imports.syncOnlineAutoMatchControl();
     }
     settingsStore.currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
-    settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode);
+    settingsStore.currentPdfParseMode = global.MEFinder.imports.normalizePdfParseMode(data.pdf_parse_mode);
     settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
       ? 'with_pdf'
       : 'data_only';
@@ -799,13 +799,13 @@
     var autoUpdateInput = document.getElementById('auto-update-enabled');
     if (autoUpdateInput) autoUpdateInput.checked = settingsStore.autoUpdateEnabled;
     renderPdfOpenMode();
-    renderPdfParseMode();
+    global.MEFinder.imports.renderPdfParseMode();
     renderDocumentExportMode();
     renderCitationStylePreferences();
     settingsStore.scanDirectories = Array.isArray(data.scan_directories) ? data.scan_directories : [];
     renderScanDirectories();
-    syncLibraryViewButtons();
-    if (libraryStore.loaded) renderLibraryList();
+    global.MEFinder.library.syncViewButtons();
+    if (libraryStore.loaded) global.MEFinder.library.renderList();
     settingsStore.preferencesLoaded = true;
   }
 
@@ -897,11 +897,11 @@
     var requestedThemeRevision = settingsStore.themeRevision;
     renderThemeSelection();
     renderPdfOpenMode();
-    renderPdfParseMode();
+    global.MEFinder.imports.renderPdfParseMode();
     renderDocumentExportMode();
     renderCitationStylePreferences();
-    syncOnlineAutoMatchControl();
-    syncLibDefaultLanguageControl();
+    global.MEFinder.imports.syncOnlineAutoMatchControl();
+    global.MEFinder.library.syncDefaultLanguageControl();
     setPdfOpenModeControlsDisabled(true);
     setDocumentExportModeControlsDisabled(true);
     setCitationStyleControlsDisabled(true);
@@ -1311,6 +1311,7 @@
   global.setupScanDirectoryControls = setupScanDirectoryControls;
   global.chooseScanDirectory = chooseScanDirectory;
   global.addScanDirectory = addScanDirectory;
+  global.removeScanDirectory = removeScanDirectory;
   global.markSettingsSectionDirty = markSettingsSectionDirty;
   global.persistDisplayPreference = persistDisplayPreference;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

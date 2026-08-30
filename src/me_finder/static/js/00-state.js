@@ -29,6 +29,16 @@ const DEFAULT_CITATION_STYLES = ['chinese', 'gb'];
 const CITATION_STYLES_STORAGE_KEY = 'meFinderEnabledCitationStylesV1';
 const ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT = 0.90;  // 联网书目补全自动采用唯一高匹配候选的分数下限
 const ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT = 80;  // 低于此值只弹候选让人工确认，避免误采
+
+function loadOnlineAutoMatchThreshold() {
+  var raw = null;
+  try { raw = localStorage.getItem('meFinderOnlineAutoMatchThreshold'); } catch (_) {}
+  var pct = Math.round(Number(raw));
+  if (!Number.isFinite(pct)) return ONLINE_METADATA_AUTO_MATCH_THRESHOLD_DEFAULT;
+  pct = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, pct));
+  return pct / 100;
+}
+
 let onlineMetadataAutoMatchThreshold = loadOnlineAutoMatchThreshold();
 let enabledCitationStyles = loadLocalCitationStyles() || DEFAULT_CITATION_STYLES.slice();
 let citationStyle = loadLocalSelectedCitationStyle() || 'chinese';
@@ -36,6 +46,12 @@ let citationStyle = loadLocalSelectedCitationStyle() || 'chinese';
 // 文献库摘要在搜索下拉与文献库页之间共用一份：两处并发打开时只发一次请求。
 
 let detailContextResizeObserver = null;
+
+function loadLibDefaultLanguage() {
+  var raw = null;
+  try { raw = localStorage.getItem('meFinderLibDefaultLanguage'); } catch (_) {}
+  return raw === 'foreign' ? 'foreign' : 'chinese';
+}
 
 const libraryStore = {
   sources: [],

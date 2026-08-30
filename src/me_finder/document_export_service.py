@@ -1,4 +1,4 @@
-"""Application service for exporting one indexed PDF as mefinder.document.v1."""
+"""Application services for exporting indexed MEFinder documents."""
 
 from __future__ import annotations
 
@@ -24,9 +24,13 @@ from .document_heading import (
     enrich_pdf_headings,
     find_content_list_v2,
 )
-from .database import _sanitize_surrogates_in_place
+from .database import _sanitize_surrogates_in_place, paragraph_from_database_row
 from .epub_export import safe_epub_filename, write_epub
-from .markdown_export import document_to_markdown, safe_markdown_filename
+from .markdown_export import (
+    document_to_markdown,
+    epub_paragraphs_to_markdown,
+    safe_markdown_filename,
+)
 from .export_footnotes import normalize_document_export
 from .markdown_export_normalize import ExportOptions
 from .export_page_reconstruction import attach_export_layout
@@ -245,7 +249,7 @@ def export_indexed_pdf_markdown(
     runtime_root: Optional[Path] = None,
     options: Optional[ExportOptions] = None,
 ) -> Dict[str, object]:
-    """Export one indexed PDF's persisted structured data as UTF-8 Markdown.
+    """Export one indexed PDF or EPUB as UTF-8 Markdown.
 
     ``options`` carries the format-neutral page-anchor policy and page-cleanup
     flags (see :class:`ExportOptions`); the default is the ``printed`` marker
@@ -261,15 +265,6 @@ def export_indexed_pdf_markdown(
     if not database.is_file():
         raise IndexedDocumentNotFound("当前文献索引不存在。")
 
-    # Older libraries were indexed before canonical heading enrichment existed;
-    # bring them up to the current version from cached artifacts before reading.
-    if runtime_root is not None:
-        ensure_document_headings(
-            database_path=database,
-            runtime_root=runtime_root,
-            source_file_id=source_id,
-        )
-
     with closing(_connect(database)) as connection:
         source = _payload_row(
             connection,
@@ -278,9 +273,15 @@ def export_indexed_pdf_markdown(
         )
         if source is None:
             raise IndexedDocumentNotFound("文献不存在或已从文献库移除。")
-        if str(source.get("source_type") or "") != "pdf":
+        source_type = str(source.get("source_type") or "")
+        source_format = str(source.get("file_format") or "").lower()
+        is_pdf = source_type == "pdf"
+        is_epub = source_format == "epub" or str(
+            source.get("file_name") or ""
+        ).lower().endswith(".epub")
+        if not is_pdf and not is_epub:
             raise UnsupportedDocumentExport(
-                "Markdown 导出仅支持已解析的 PDF 文献。"
+                "Markdown 导出仅支持已解析的 PDF 或 EPUB 文献。"
             )
         volume = _payload_row(
             connection,
@@ -288,16 +289,26 @@ def export_indexed_pdf_markdown(
             "ORDER BY volume_number, volume_id LIMIT 1",
             (source_id,),
         ) or {}
-        page_count = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",
-                (source_id,),
-            ).fetchone()[0]
-        )
-        if page_count < 1:
-            raise UnsupportedDocumentExport(
-                "这份 PDF 还没有可导出的页级解析结果。"
+        if is_pdf:
+            item_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?",
+                    (source_id,),
+                ).fetchone()[0]
             )
+            if item_count < 1:
+                raise UnsupportedDocumentExport(
+                    "这份 PDF 还没有可导出的页级解析结果。"
+                )
+        else:
+            item_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM paragraphs WHERE source_file_id = ?",
+                    (source_id,),
+                ).fetchone()[0]
+            )
+            if item_count < 1:
+                raise UnsupportedDocumentExport("这份 EPUB 没有可导出的正文。")
 
     bibliographic = (
         source.get("bibliographic_metadata")
@@ -311,30 +322,61 @@ def export_indexed_pdf_markdown(
         or Path(str(source.get("file_name") or source_id)).stem
     )
     author = bibliographic.get("author")
-    pages = _text_export_pages(database, source_id, runtime_root)
-    normalized = normalize_document_export(pages, options=options)
-    markdown = document_to_markdown(
-        pages,
-        title=title,
-        author=author,
-        options=options,
-        normalized=normalized,
-    )
+    if is_pdf:
+        # Older libraries were indexed before canonical heading enrichment existed;
+        # bring them up to the current version from cached artifacts before reading.
+        if runtime_root is not None:
+            ensure_document_headings(
+                database_path=database,
+                runtime_root=runtime_root,
+                source_file_id=source_id,
+            )
+        pages = _text_export_pages(database, source_id, runtime_root)
+        normalized = normalize_document_export(pages, options=options)
+        markdown = document_to_markdown(
+            pages,
+            title=title,
+            author=author,
+            options=options,
+            normalized=normalized,
+        )
+    else:
+        with closing(_connect(database)) as connection:
+            paragraphs = list(
+                map(
+                    paragraph_from_database_row,
+                    connection.execute(
+                        "SELECT * FROM paragraphs WHERE source_file_id = ? "
+                        "ORDER BY paragraph_index, rowid",
+                        (source_id,),
+                    ),
+                )
+            )
+        markdown = epub_paragraphs_to_markdown(
+            paragraphs,
+            title=title,
+            author=author,
+            options=options,
+        )
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / safe_markdown_filename(title)
     partial = destination.with_name(destination.name + ".partial")
     partial.write_text(markdown, encoding="utf-8", newline="\n")
     partial.replace(destination)
-    return {
+    result: Dict[str, object] = {
         "ok": True,
         "source_file_id": source_id,
         "path": str(destination.resolve()),
         "size_bytes": destination.stat().st_size,
-        "page_count": page_count,
-        "footnote_report": normalized.footnote_report,
-        "reconstruction_report": normalized.reconstruction_report,
+        "page_count": item_count if is_pdf else int(source.get("epub_page_count") or 0),
     }
+    if is_pdf:
+        result["footnote_report"] = normalized.footnote_report
+        result["reconstruction_report"] = normalized.reconstruction_report
+    else:
+        result["paragraph_count"] = item_count
+    return result
 
 
 def export_indexed_pdf_epub(

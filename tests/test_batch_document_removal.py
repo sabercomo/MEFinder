@@ -537,13 +537,12 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
 
 class BatchRemovalWiringTests(unittest.TestCase):
     def test_web_exposes_the_batch_endpoint(self) -> None:
-        # Route tables live in the application composition root (web_runtime.py);
-        # the entry point (web.py) still delegates to it.
+        # Domain route tables live in http_routes.py; web_runtime merges them.
         source = "\n".join(
             Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-            for name in ("web.py", "web_runtime.py")
+            for name in ("web.py", "web_runtime.py", "http_routes.py")
         )
-        route = '"/api/documents/remove-batch": ('
+        route = '"/api/documents/remove-batch":'
         self.assertIn(route, source)
         self.assertIn("document_lifecycle_controller.remove_batch", source)
         self.assertEqual(source.count(route), 1)
