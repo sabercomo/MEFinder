@@ -253,13 +253,23 @@ def build_library(
                 item["author"] = explicit_responsibility
             else:
                 item["author"] = inferred_author
-        language_code = _item_language_code(
+        auto_language_code = _item_language_code(
             language_samples.get(source_id),
             item.get("title"),
             item.get("author"),
             item.get("file_name"),
         )
+        # 人工指定的语言优先于自动识别（自动会在英译本+外文前页等场景判成 und）。
+        bibliographic_metadata = source.get("bibliographic_metadata")
+        manual_language_code = (
+            str(bibliographic_metadata.get("language_code_manual") or "").strip()
+            if isinstance(bibliographic_metadata, Mapping)
+            else ""
+        )
+        language_code = manual_language_code or auto_language_code
         item["language_code"] = language_code
+        item["language_code_auto"] = auto_language_code
+        item["language_code_manual"] = manual_language_code
         item["language"] = (
             "chinese"
             if language_code.startswith("zh-")

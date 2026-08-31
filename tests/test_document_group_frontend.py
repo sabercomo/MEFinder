@@ -98,14 +98,17 @@ const dependencies = {
 };
 const menu = library.groupScopeManageOptionsHTML();
 assert.equal(Array.from(menu.matchAll(/<button\b/g)).length, 1);
-assert.ok(menu.includes('onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>'));
+assert.ok(menu.includes('onclick="closeAppSelects();openManageDocumentGroups()"'), menu);
+assert.ok(menu.includes('管理作品组…'), menu);
 library.renderDocumentGroupManager(dependencies);
 assert.ok(body.innerHTML.includes('id="grp-create-input"'));
 assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建</button>'));
+// 手风琴默认展开首个作品组，成员行降噪：解析器/格式收进标题 tooltip，不再单独占一行。
 for (const parser of ['原生文本', 'MinerU']) {
-  assert.ok(body.innerHTML.includes('<span>PDF · ' + parser + '</span>'));
-  assert.ok(body.innerHTML.includes('Same version · 英语 · PDF · ' + parser + '</span>'));
+  assert.ok(body.innerHTML.includes('title="Same book · PDF · ' + parser + '"'), body.innerHTML);
 }
+// 语言以 chip 呈现在成员行内。
+assert.ok(body.innerHTML.includes('grp-lang-chip">英语'), body.innerHTML);
 """
         result = subprocess.run(
             [NODE, "-e", script, str(LIBRARY_JS)], capture_output=True,

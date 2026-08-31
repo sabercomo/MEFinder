@@ -153,6 +153,17 @@
 .join-group-opt .join-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .join-group-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; }
 .join-group-new { color: var(--accent); }
+/* 「加入作品组」下拉顶部：一行输入，回车即建即加入。 */
+.join-group-create { padding: 4px 6px 8px; }
+.join-group-input-field { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 12.5px; outline: 2px solid transparent; outline-offset: 1px; }
+.join-group-input-field::placeholder { color: var(--text-decorative); }
+.join-group-input-field:focus-visible { border-color: var(--accent); outline-color: var(--accent); box-shadow: var(--focus-ring); }
+.join-group-create-hint { font-size: 11px; color: var(--accent-text); margin-top: 6px; padding: 0 2px; }
+/* 下拉里降权的「管理…」入口：齿轮 + 灰字，标成设置动作。 */
+.lib-group-subhead { font-size: 11px; color: var(--text-tertiary); padding: 7px 9px 5px; }
+.lib-manage-gear { width: 15px; height: 15px; flex: 0 0 auto; }
+.lib-group-manage { gap: 8px; justify-content: flex-start; color: var(--text-secondary); font-weight: 500; }
+.lib-group-manage:hover { color: var(--text-primary); }
 .grp-ver-select { min-width: 0; }
 .grp-ver-select .app-select-trigger { width: 100%; height: 44px; font-size: 13px; }
 .grp-ver-menu { z-index: 3000; max-height: 280px; overflow-y: auto; }
@@ -707,13 +718,36 @@
 .grp-empty { font-size: 13px; color: var(--text-tertiary); padding: 8px 2px; }
 .grp-empty--sm { font-size: 12px; padding: 4px 2px 6px; }
 .grp-block { flex: 0 0 auto; border: 1px solid var(--divider); border-radius: 10px; overflow: hidden; background: var(--surface-primary); }
+.grp-block.is-expanded { border-color: var(--border-strong); }
+/* 手风琴组头：折叠态只有这一行（标题 · 语言 · N 版本）。 */
+.grp-head2 { display: flex; align-items: center; gap: 10px; padding: 11px 12px; background: var(--surface-secondary); }
+.grp-block.is-expanded .grp-head2 { border-bottom: 1px solid var(--divider); }
+.grp-expand-btn { flex: 0 0 auto; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; color: var(--text-tertiary); cursor: pointer; }
+.grp-expand-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.grp-chevron { width: 16px; height: 16px; transition: transform var(--transition-fast); }
+.grp-chevron.is-open { transform: rotate(90deg); }
+.grp-head2 .grp-title { min-width: 0; flex: 1 1 auto; font-weight: 650; }
+.grp-head-summary { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.grp-head-langs { color: var(--text-tertiary); font-size: 11px; background: var(--surface-primary); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+.grp-head-count { color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 删除组降权：默认收成安静的文字按钮，hover 才变红。 */
+.grp-del-btn { flex: 0 0 auto; height: 28px; padding: 0 9px; border-radius: 7px; color: var(--text-tertiary); font-size: 12px; cursor: pointer; opacity: 0; transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast); }
+.grp-block:hover .grp-del-btn, .grp-block.is-expanded .grp-del-btn { opacity: 1; }
+.grp-del-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+.grp-body { display: flex; flex-direction: column; }
+.grp-body-actions { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px; }
+.grp-lang-chip { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; background: var(--surface-secondary); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+/* 「生成对照」折叠触发：把整块版本选择藏在意图后面。 */
+.grp-pair-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 11px 12px; border-top: 1px solid var(--divider); color: var(--accent); font-size: 12.5px; cursor: pointer; }
+.grp-pair-toggle svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.grp-pair-toggle-note { margin-left: auto; color: var(--text-tertiary); font-size: 11px; }
 .grp-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; background: var(--surface-secondary); }
 .grp-head .grp-title { min-width: 0; font-weight: 650; }
 .grp-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .grp-head .action-btn { min-height: 44px; white-space: nowrap; }
 .grp-head .action-btn.is-active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .grp-members { display: flex; flex-direction: column; }
-.grp-member { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(150px, .8fr) auto auto; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border-top: 1px solid var(--divider); }
+.grp-member { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(120px, .7fr) auto auto; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border-top: 1px solid var(--divider); }
 .grp-member.is-base { background: var(--accent-soft); }
 .grp-member-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .grp-member-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-primary); }

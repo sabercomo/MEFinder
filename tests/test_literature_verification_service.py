@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -278,11 +279,14 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
             reverse["candidates"][0]["text"], f"{CALIBRATED_QUOTE}。"
         )
 
-        with sqlite3.connect(self.runtime_root / "data" / "index.sqlite3") as connection:
+        with closing(
+            sqlite3.connect(self.runtime_root / "data" / "index.sqlite3")
+        ) as connection:
             connection.execute(
                 "UPDATE alignment_links SET review_status = 'rejected' "
                 "WHERE alignment_link_id = 'fixture-parallel-link'"
             )
+            connection.commit()
         unavailable = self.service.find_parallel_passages(
             CALIBRATED_QUOTE,
             mode="exact",
@@ -298,13 +302,14 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
     ) -> None:
         database_path = self.runtime_root / "data" / "index.sqlite3"
         add_mcp_parallel_fixture(database_path)
-        with sqlite3.connect(database_path) as connection:
+        with closing(sqlite3.connect(database_path)) as connection:
             connection.execute(
                 "UPDATE alignment_link_members SET segment_id = "
                 "'fixture-parallel-target-before' "
                 "WHERE alignment_link_id = 'fixture-parallel-link' "
                 "AND side = 'target'"
             )
+            connection.commit()
 
         correspondence = self.service.find_parallel_passages(
             CALIBRATED_QUOTE,

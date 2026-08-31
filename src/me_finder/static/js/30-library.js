@@ -93,7 +93,7 @@
       + '" type="button" role="option" onclick="setLibraryGroupScope(\'\')">'
       + '<span class="lib-group-name">全部文献</span></button>';
     if (libraryStore.documentGroups.length) {
-      html += '<div class="lib-group-sep" role="separator"></div>';
+      html += '<div class="lib-group-subhead">按作品组</div>';
       html += libraryStore.documentGroups.map(function(g) {
         var count = (g.members || []).length;
         return '<button class="app-select-option lib-group-opt' + (g.document_group_id === libraryStore.groupScopeId ? ' is-selected' : '')
@@ -107,16 +107,20 @@
     renderJoinGroupMenu();
   }
 
-  // C2：选择器底部追加管理入口。
+  // C2：选择器底部追加降权的管理入口（齿轮标成设置动作，与上面的浏览项区分）。
   function groupScopeManageOptionsHTML() {
     return '<div class="lib-group-sep" role="separator"></div>'
-      + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups()">管理作品组…</button>';
+      + '<button class="app-select-option lib-group-manage" type="button" onclick="closeAppSelects();openManageDocumentGroups()">'
+      + settingsGearSvg() + '<span>管理作品组…</span></button>';
   }
 
   function openManageDocumentGroups() {
     var modal = document.getElementById('group-manage-modal');
     if (!modal) return;
     groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
+    expandedGroups = {};
+    expandedPairGroupId = '';
+    groupsInitialized = false;
     renderDocumentGroupManager();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
@@ -209,6 +213,45 @@
   var groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
   // 每个作品组「生成对照」左右两栏当前选中的版本（source_file_id）。
   var pairSelection = {};
+  // 各作品组独立展开/收起，可同时展开多组（不是单开手风琴）。
+  var expandedGroups = {};
+  // 「生成对照」默认折叠，点开才显示左右版本选择。
+  var expandedPairGroupId = '';
+  // 首次渲染默认展开第一组以示可展开；此后尊重用户开合（含全部收起）。
+  var groupsInitialized = false;
+
+  function toggleGroupExpand(groupId) {
+    if (expandedGroups[groupId]) {
+      delete expandedGroups[groupId];
+      if (expandedPairGroupId === groupId) expandedPairGroupId = '';
+      if (groupPicker.groupId === groupId) groupPicker.groupId = '';
+    } else {
+      expandedGroups[groupId] = true;
+    }
+    renderDocumentGroupManager();
+  }
+
+  function toggleGroupPair(groupId) {
+    expandedPairGroupId = expandedPairGroupId === groupId ? '' : groupId;
+    if (expandedPairGroupId === groupId) expandedGroups[groupId] = true;
+    renderDocumentGroupManager();
+  }
+
+  // 打开添加文献选择器 / 对照的组，保证处于展开态；首屏给一个默认展开的组。
+  function syncExpandedGroups() {
+    if (!groupsInitialized) {
+      groupsInitialized = true;
+      if (libraryStore.documentGroups.length && !Object.keys(expandedGroups).length) {
+        expandedGroups[libraryStore.documentGroups[0].document_group_id] = true;
+      }
+    }
+    if (groupPicker.groupId) expandedGroups[groupPicker.groupId] = true;
+    if (expandedPairGroupId) expandedGroups[expandedPairGroupId] = true;
+  }
+
+  function chevronSvg(open) {
+    return '<svg class="grp-chevron' + (open ? ' is-open' : '') + '" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l6 5-6 5"/></svg>';
+  }
 
   function renderDocumentGroupManager(dependencies) {
     var body = document.getElementById('group-manage-body');
@@ -218,6 +261,7 @@
       libraryLanguageCode: libraryLanguageCode,
       syncDocumentGroupPairAction: syncDocumentGroupPairAction
     };
+    syncExpandedGroups();
     var selectedCount = libraryStore.deleteSelection.size;
     var pairGroups = [];
     var html = sameTitleSuggestionsHtml();
@@ -227,7 +271,7 @@
       + '</label>'
       + '<button id="grp-create-btn" class="action-btn primary" type="button" onclick="createDocumentGroupInline()">新建</button></div>';
     if (selectedCount) {
-      html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——点某个作品组的「加入所选」把它们归入该作品组</div>';
+      html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——展开某个作品组后点「加入所选」把它们归入该组</div>';
     }
     if (!libraryStore.documentGroups.length) {
       html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹</div>';
@@ -235,16 +279,27 @@
     libraryStore.documentGroups.forEach(function(g) {
       var gid = esc(g.document_group_id);
       var pickerOpen = groupPicker.groupId === g.document_group_id;
-      html += '<div class="grp-block"><div class="grp-head">'
-        + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)">'
-        + '<div class="grp-head-actions">'
-        + '<button class="action-btn sm' + (pickerOpen ? ' is-active' : '') + '" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">＋ 添加文献</button>'
-        + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\',this)">加入所选（' + selectedCount + '）</button>' : '')
-        + '<button class="action-btn sm danger-outline" type="button" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
-        + '</div></div>';
+      var isExpanded = !!expandedGroups[g.document_group_id];
       var members = g.members || [];
+      // 折叠态摘要：去重后的成员语言 + 版本数，一行看清这是哪部作品的几个版本。
+      var langSummary = [];
+      members.forEach(function(m) {
+        var s = libraryStore.sources.find(function(x) { return x.source_file_id === m.source_file_id; });
+        var lbl = s ? libLangChipLabel(deps.libraryLanguageCode(s)) : '未识别语言';
+        if (langSummary.indexOf(lbl) < 0) langSummary.push(lbl);
+      });
+      html += '<div class="grp-block' + (isExpanded ? ' is-expanded' : '') + '"><div class="grp-head2">'
+        + '<button class="grp-expand-btn" type="button" aria-label="' + (isExpanded ? '收起' : '展开') + '" aria-expanded="' + isExpanded + '" onclick="toggleGroupExpand(\'' + gid + '\')">' + chevronSvg(isExpanded) + '</button>'
+        + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)" onclick="event.stopPropagation()">'
+        + '<span class="grp-head-summary" onclick="toggleGroupExpand(\'' + gid + '\')">'
+        + (langSummary.length ? '<span class="grp-head-langs">' + esc(langSummary.join(' · ')) + '</span>' : '')
+        + '<span class="grp-head-count">' + members.length + ' 版本</span></span>'
+        + '<button class="grp-del-btn" type="button" aria-label="删除作品组" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
+        + '</div>';
+      if (!isExpanded) { html += '</div>'; return; }
+      html += '<div class="grp-body">';
       if (!members.length) {
-        html += '<div class="grp-empty grp-empty--sm">尚无成员。点上方「添加文献」输入书名即加入，或在文献列表勾选后用底部「设置作品组」加入</div>';
+        html += '<div class="grp-empty grp-empty--sm">尚无成员。点下方「添加文献」输入书名即加入，或在文献列表勾选后加入</div>';
       } else {
         html += '<div class="grp-members">' + members.map(function(m) {
           var sid = esc(m.source_file_id);
@@ -253,9 +308,10 @@
           var isBase = m.source_file_id === g.base_source_file_id;
           var language = src ? libLangChipLabel(deps.libraryLanguageCode(src)) : '未识别语言';
           var format = src ? documentGroupSourceLabel(src) : '未知格式';
+          // 降噪：解析器/格式收进标题 tooltip，成员行只留标题 + 语言 chip + 版本名 + 基准 + 移除。
           return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
-            + '<span class="grp-member-main"><span class="grp-member-title" title="' + esc(srcTitle) + '">' + esc(srcTitle) + '</span>'
-            + '<span class="grp-member-meta"><span>' + esc(language) + '</span><span>' + esc(format) + '</span></span></span>'
+            + '<span class="grp-member-title" title="' + esc(srcTitle + ' · ' + format) + '">' + esc(srcTitle) + '</span>'
+            + '<span class="grp-lang-chip">' + esc(language) + '</span>'
             + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(cleanSourceLabel(m.display_name || '')) + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
             + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button"'
             + (isBase ? ' disabled' : ' onclick="setGroupBaseAction(\'' + gid + '\',\'' + sid + '\')"')
@@ -318,16 +374,25 @@
             + '</div></div>';
         };
         var existingPair = documentGroupAlignmentForPair(g, pairSel.left, pairSel.right);
-        html += '<div class="grp-pair"><div class="grp-pair-copy">'
-          + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
-          + (existingPair ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
-          + '</span></div><div class="grp-pair-controls">'
-          + versionSelectHtml('left', pairSel.left)
-          + '<span class="grp-pair-arrow" aria-hidden="true">↔</span>'
-          + versionSelectHtml('right', pairSel.right)
-          + '<button id="grp-pair-generate-' + gid + '" class="grp-align-btn" type="button" onclick="generateSelectedTextAlignmentAction(\'' + gid + '\',this)">' + (existingPair ? '重新生成' : '生成对照') + '</button>'
-          + '</div></div>';
-        pairGroups.push(g.document_group_id);
+        if (expandedPairGroupId === g.document_group_id) {
+          html += '<div class="grp-pair"><div class="grp-pair-copy">'
+            + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
+            + (existingPair ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
+            + '</span></div><div class="grp-pair-controls">'
+            + versionSelectHtml('left', pairSel.left)
+            + '<span class="grp-pair-arrow" aria-hidden="true">↔</span>'
+            + versionSelectHtml('right', pairSel.right)
+            + '<button id="grp-pair-generate-' + gid + '" class="grp-align-btn" type="button" onclick="generateSelectedTextAlignmentAction(\'' + gid + '\',this)">' + (existingPair ? '重新生成' : '生成对照') + '</button>'
+            + '</div></div>';
+          pairGroups.push(g.document_group_id);
+        } else {
+          // 默认折叠：把整块版本选择藏在意图后面，点开才展开。
+          html += '<button class="grp-pair-toggle" type="button" onclick="toggleGroupPair(\'' + gid + '\')">'
+            + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l6 5-6 5"/></svg>'
+            + '<span>选择两版生成对照</span>'
+            + (existingPair ? '<span class="grp-pair-toggle-note">已有直接对照</span>' : '')
+            + '</button>';
+        }
       } else if (members.length) {
         html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成双栏对照</div>';
       }
@@ -341,8 +406,13 @@
           + '<div class="grp-pick-foot"><span class="grp-pick-count">点候选即加入本组</span>'
           + '<button class="grp-base-btn" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">完成</button>'
           + '</div></div>';
+      } else {
+        html += '<div class="grp-body-actions">'
+          + '<button class="action-btn sm" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">＋ 添加文献</button>'
+          + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\',this)">加入所选（' + selectedCount + '）</button>' : '')
+          + '</div>';
       }
-      html += '</div>';
+      html += '</div></div>';
     });
     body.innerHTML = html;
     pairGroups.forEach(deps.syncDocumentGroupPairAction);
@@ -508,25 +578,68 @@
     }
   }
 
-  // 选择栏「加入作品组 ▾」下拉：已有组一步加入 + 新建 + 管理入口。
+  // 选择栏「加入作品组 ▾」下拉：顶部一行新建（回车即建即加入）+ 已有组一步加入 + 降权的管理入口。
   function renderJoinGroupMenu() {
     var menu = document.getElementById('library-join-group-menu');
     if (!menu) return;
     var groups = libraryStore.documentGroups || [];
-    var html = '';
+    var count = libraryStore.deleteSelection.size;
+    var single = count <= 1;
+    // 文案随选择份数变：1 篇「创建并加入」，多篇「合并为一组」。
+    var placeholder = single ? '输入名称，回车创建并加入' : '输入名称，回车合并为新作品组';
+    var hint = count
+      ? ('已选 ' + count + ' 篇 · ' + (single ? '将创建并加入' : '将合并为一组'))
+      : '先在列表勾选文献';
+    var html = '<div class="join-group-create">'
+      + '<input id="join-group-input" class="join-group-input-field" type="text" placeholder="' + esc(placeholder) + '" onkeydown="if(event.key===\'Enter\'){event.preventDefault();newGroupFromNameInput(this.value);}" aria-label="新建作品组名称">'
+      + '<div class="join-group-create-hint">' + esc(hint) + '</div></div>';
     if (groups.length) {
       html += '<div class="join-group-head">加入已有作品组</div>';
       html += groups.map(function(g) {
-        var count = (g.members || []).length;
+        var vcount = (g.members || []).length;
         return '<button class="app-select-option join-group-opt" type="button" role="menuitem" onclick="joinSelectedToGroup(\'' + esc(g.document_group_id) + '\')">'
           + '<span class="join-group-name">' + esc(g.title) + '</span>'
-          + '<span class="join-group-count">' + count + ' 版本</span></button>';
+          + '<span class="join-group-count">' + vcount + ' 版本</span></button>';
       }).join('');
-      html += '<div class="join-group-sep" role="separator"></div>';
     }
-    html += '<button class="app-select-option join-group-new" type="button" role="menuitem" onclick="newGroupFromSelection()">＋ 新建并加入作品组</button>';
-    html += '<button class="app-select-option" type="button" role="menuitem" onclick="closeAppSelects();openManageDocumentGroups();">管理作品组…</button>';
+    html += '<div class="join-group-sep" role="separator"></div>';
+    html += '<button class="app-select-option lib-group-manage" type="button" role="menuitem" onclick="closeAppSelects();openManageDocumentGroups();">'
+      + settingsGearSvg() + '<span>管理作品组…</span></button>';
     menu.innerHTML = html;
+  }
+
+  // 齿轮图标：把「管理…」这类设置入口标成设置动作，而非跟加入并列的快捷项。
+  function settingsGearSvg() {
+    return '<svg class="lib-manage-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  }
+
+  // 下拉顶部输入行：有名字就按名字建组并把勾选文献加入；留空回退到自动命名。
+  async function newGroupFromNameInput(value) {
+    var title = (value || '').trim();
+    var ids = Array.from(libraryStore.deleteSelection);
+    if (!ids.length) { showToast('请先勾选文献', 'warning'); return; }
+    if (!title) { newGroupFromSelection(); return; }
+    closeAppSelects();
+    try {
+      var created = await postGroupOp('/api/document-groups/create', {title: title}, null);
+      for (var i = 0; i < ids.length; i += 1) {
+        var response = await fetch('/api/document-groups/add-member', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({document_group_id: created.document_group_id, source_file_id: ids[i]})
+        });
+        var data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || '加入失败');
+      }
+      clearLibrarySelection();
+      await loadDocumentGroups();
+      renderGroupScopeSelector();
+      renderDocumentGroupManager();
+      renderLibraryList();
+      openManageDocumentGroups();
+      showToast('已新建作品组《' + (created.title || title) + '》', 'success');
+    } catch (e) {
+      showToast(e.message || '新建失败', 'danger');
+    }
   }
 
   async function joinSelectedToGroup(groupId) {
@@ -1754,7 +1867,10 @@
   global.combineSuggestedGroupAction = combineSuggestedGroupAction;
   global.joinSelectedToGroup = joinSelectedToGroup;
   global.newGroupFromSelection = newGroupFromSelection;
+  global.newGroupFromNameInput = newGroupFromNameInput;
   global.toggleGroupPicker = toggleGroupPicker;
+  global.toggleGroupExpand = toggleGroupExpand;
+  global.toggleGroupPair = toggleGroupPair;
   global.groupPickerInputAction = groupPickerInputAction;
   global.addGroupMemberDirect = addGroupMemberDirect;
   global.setLibFacet = setLibFacet;

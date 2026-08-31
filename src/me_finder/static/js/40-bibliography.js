@@ -24,6 +24,23 @@
   // 每份文献一个开关，保存/取消/换文献回到查看态。语义仍是显式保存 + dirty 保护。
   let bibEditMode = {};
   const BIBLIOGRAPHIC_CACHE_FIELDS = ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'];
+  // 人工语言选项：自动识别失败（如英译本判成未识别）时手动指定。空值＝跟随自动识别。
+  const BIB_LANGUAGE_OPTIONS = [['zh-Hans','简体中文'],['zh-Hant','繁体中文'],['en','English'],['de','Deutsch'],['fr','Français'],['es','Español'],['it','Italiano'],['pt','Português'],['ru','Русский'],['ja','日本語'],['ko','한국어']];
+  function bibLanguageLabel(code) {
+    var hit = BIB_LANGUAGE_OPTIONS.find(function(o){ return o[0] === String(code || ''); });
+    return hit ? hit[1] : (code === 'und' ? '未识别语言' : '');
+  }
+  // 编辑态语言下拉：首项「自动识别」＝清除人工覆盖，并把自动判定的语言标出来。
+  function bibLanguageFieldHTML(src) {
+    var manual = String((src && src.language_code_manual) || '');
+    var autoLabel = bibLanguageLabel(src && src.language_code_auto) || '未识别语言';
+    var opts = '<option value=""' + (manual ? '' : ' selected') + '>自动识别（' + esc(autoLabel) + '）</option>'
+      + BIB_LANGUAGE_OPTIONS.map(function(o){
+          return '<option value="' + o[0] + '"' + (o[0] === manual ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+        }).join('');
+    return '<div class="bibliographic-field full" data-metadata-field="language"><label for="bib-language">语言</label>'
+      + '<select id="bib-language" class="bib-language-select">' + opts + '</select></div>';
+  }
   function bibFieldCacheFromMeta(meta) {
     var out = {};
     BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { out[field] = String((meta && meta[field]) || '').trim(); });
@@ -120,7 +137,7 @@
       + '</div>'
       + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
       + '<div class="bibliographic-grid">'
-      + fieldsHTML + '</div>'
+      + fieldsHTML + bibLanguageFieldHTML(src) + '</div>'
       + toolbarHTML
       + lookupResultsHTML
       + citationPanelHTML
@@ -165,6 +182,7 @@
         + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
         + row('出版年份','publish_year',meta.publish_year) + row('ISBN','isbn',meta.isbn,true);
     }
+    rows += row('语言', 'language', bibLanguageLabel(src.language_code) || '未识别语言');
     // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
     // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
     var confirmed = isBibliographicTypeConfirmed(meta);
@@ -355,6 +373,9 @@
       issue: value('issue', 'issue'), page_range: value('page-range', 'page_range'), doi: value('doi', 'doi'), issn: value('issn', 'issn'),
       metadata_evidence: bibliographicPendingEvidence[libraryStore.selectedId] || {}
     };
+    // 仅当语言下拉在场（编辑态）才提交 language，避免其它保存路径误清人工语言。
+    var languageEl = document.getElementById('bib-language');
+    if (languageEl) result.language = languageEl.value;
     if (libraryStore.selectedId) {
       var store = bibFieldCache[libraryStore.selectedId] || (bibFieldCache[libraryStore.selectedId] = {});
       BIBLIOGRAPHIC_CACHE_FIELDS.forEach(function(field) { store[field] = result[field]; });

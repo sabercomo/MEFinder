@@ -39,7 +39,7 @@ class MCPDocumentationTests(unittest.TestCase):
 
     def test_readme_links_to_optional_packaged_read_only_integration(self) -> None:
         self.assertIn("[Codex MCP 配置、健康检查与隐私说明](docs/CODEX_MCP.md)", self.readme)
-        self.assertIn("0.5.1，可选只读集成", self.readme)
+        self.assertIn("0.5.1，可选集成", self.readme)
         self.assertIn("Windows 安装版、绿色版和 macOS 发布包", self.readme)
 
     def test_guide_covers_all_supported_configuration_paths(self) -> None:
@@ -71,7 +71,7 @@ class MCPDocumentationTests(unittest.TestCase):
             "Windows 普通路径中的反斜杠",
             "必须写成两个",
             "D:\\\\MEFinder\\\\MEFinderMCP.exe",
-            "Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行",
+            "Claude Code 用一条命令完成配置",
             "`Win + R`",
             "输入 `powershell`",
             "`Command（⌘）+ 空格`",

@@ -19,6 +19,10 @@ METADATA_FIELDS = (
     "doi", "issn",
 )
 DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
+# 人工可指定的语言：自动识别失败（如英译本+德文原名前页判为平局→und）时的兜底。
+MANUAL_LANGUAGE_CODES = frozenset(
+    {"zh-Hans", "zh-Hant", "en", "de", "fr", "es", "it", "pt", "ru", "ja", "ko", "und"}
+)
 RESPONSIBILITY_STATUSES = ("present", "none", "unknown")
 PUBLISHER_PLACES = {
     "上海古籍出版社": "上海",
@@ -663,6 +667,16 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
         raise ValueError(f"未知文献类型：{requested_type}")
     else:
         result["document_type"] = "translated_book" if result.get("translator") else "book"
+    # 人工语言覆盖：正文键存在且非空→校验并记录；键存在且为空→清除（回到自动识别）；
+    # 键缺席→保留 previous（已在 result 里，见下方 _canonical_metadata 承载）。
+    if "language" in payload:
+        requested_language = str(payload.get("language") or "").strip()
+        if requested_language:
+            if requested_language not in MANUAL_LANGUAGE_CODES:
+                raise ValueError(f"未知语言代码：{requested_language}")
+            result["language_code_manual"] = requested_language
+        else:
+            result.pop("language_code_manual", None)
     requested_responsibility = str(payload.get("responsibility_status") or "").strip().lower()
     if requested_responsibility:
         if requested_responsibility not in RESPONSIBILITY_STATUSES:
@@ -2322,6 +2336,7 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
         "metadata_conflicts",
         "metadata_missing_fields",
         "responsibility_status",
+        "language_code_manual",
     ):
         if source.get(field) not in (None, ""):
             result[field] = source[field]

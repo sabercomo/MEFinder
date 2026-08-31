@@ -290,8 +290,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
 
         budgets = {
             # 作品组归组命令：一键归组 / 同名合并建议 / 内嵌加入 /「加入作品组」下拉 /
-            # 「生成对照」版本自定义下拉的打开与选择（净 42）。
-            "static/js/30-library.js": 42,
+            # 「生成对照」版本自定义下拉的打开与选择 / 管理弹窗手风琴的组展开与对照折叠、
+            # 下拉顶部命名新建（净 45）。
+            "static/js/30-library.js": 45,
             "static/js/40-bibliography.js": 26,
             "static/js/70-vision.js": 24,
             "static/js/71-vision-providers.js": 18,
@@ -381,12 +382,14 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
     # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
     # 0.5.1：应用补丁版本注入从 0.5.0 更新为 0.5.1；装配字节数不变。
-    # 作品组：书名清洗盖到主库列表与组名、菜单文案「新建并加入作品组」、
-    # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）。
+    # 作品组：书名清洗盖到主库列表与组名、「加入作品组」下拉顶部命名新建 + 齿轮管理入口、
+    # 管理弹窗改手风琴（组默认收成一行、对照默认折叠、成员行降噪）、页脚改「关闭」、
+    # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）；
+    # 书目信息新增「语言」下拉（人工覆盖自动识别）；vision 刷新统计改走 MEFinder.visionProviders.render。
     BASELINE_SHA256 = (
-        "9038f941db6e30c588e6b45f711adc53732956cb5082ccc6b9d521b57bb12240"
+        "3d1dfc09f7d244490bd84f18a42b7b9a791e9b9bd497260c71203911572197a6"
     )
-    BASELINE_BYTES = 989068
+    BASELINE_BYTES = 1002014
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

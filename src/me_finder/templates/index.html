@@ -1042,11 +1042,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
 <div id="group-manage-modal" class="group-manage-backdrop" aria-hidden="true" onclick="groupManageBackdrop(event)">
   <div class="group-manage-card" role="dialog" aria-labelledby="group-manage-title" aria-describedby="group-manage-description" onclick="event.stopPropagation()">
     <div class="group-manage-head">
-      <span class="group-manage-heading"><span id="group-manage-title" class="group-manage-title">管理作品组</span><span id="group-manage-description" class="group-manage-description">整理同一作品的版本，并直接选择任意两版生成对照</span></span>
+      <span class="group-manage-heading"><span id="group-manage-title" class="group-manage-title">管理作品组</span><span id="group-manage-description" class="group-manage-description">整理同一作品的不同版本</span></span>
       <button class="group-manage-close" type="button" aria-label="关闭" onclick="closeGroupManageModal()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
     </div>
     <div class="group-manage-body" id="group-manage-body"></div>
-    <div class="group-manage-foot"><button class="action-btn primary" type="button" onclick="closeGroupManageModal()">完成</button></div>
+    <div class="group-manage-foot"><button class="action-btn" type="button" onclick="closeGroupManageModal()">关闭</button></div>
   </div>
 </div>
 <div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">

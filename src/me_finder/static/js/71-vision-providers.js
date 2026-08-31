@@ -1102,6 +1102,7 @@
 
   var visionProvidersAPI = {
     load: loadVisionProviders,
+    render: renderVisionProviders,
     configured: configuredVisionProviders,
     selectedRecoveryProviderId: selectedImportRecoveryProviderId,
     syncRecoveryProvider: syncImportRecoveryProvider,

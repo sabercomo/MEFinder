@@ -744,7 +744,7 @@
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.parserStatistics = data || {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
       renderParserStatistics();
-      renderVisionProviders();
+      global.MEFinder.visionProviders.render();
       if (status) {
         status.className = 'settings-status ready';
         status.textContent = '已刷新';
