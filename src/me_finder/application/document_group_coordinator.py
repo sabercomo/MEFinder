@@ -14,6 +14,7 @@ from typing import Callable, Dict, List, Protocol
 
 from ..document_groups import (
     add_group_member,
+    combine_into_group,
     create_document_group,
     delete_document_group,
     list_document_groups,
@@ -55,6 +56,18 @@ class DocumentGroupCoordinator:
 
     def create(self, title: object) -> Dict[str, object]:
         return self._write(lambda path: create_document_group(title, path))
+
+    def combine(
+        self,
+        title: object,
+        source_file_ids: object,
+        base_source_file_id: object = None,
+    ) -> Dict[str, object]:
+        return self._write(
+            lambda path: combine_into_group(
+                title, source_file_ids, path, base_source_file_id
+            )
+        )
 
     def rename(self, document_group_id: object, title: object) -> Dict[str, object]:
         return self._write(

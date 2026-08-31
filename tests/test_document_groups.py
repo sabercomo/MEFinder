@@ -211,6 +211,45 @@ class DocumentGroupDataLayerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             dg.create_document_group("   ", self.db)
 
+    # ── combine: create + add members + set base in one transaction ──
+    def test_combine_creates_group_with_members_and_base(self) -> None:
+        result = dg.combine_into_group(
+            "利维坦",
+            ["src-de", "src-zh", "src-en"],
+            self.db,
+            base_source_file_id="src-de",
+        )
+        gid = result["document_group_id"]
+        self.assertEqual(result["member_source_file_ids"], ["src-de", "src-zh", "src-en"])
+        groups = dg.list_document_groups(self.db)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["title"], "利维坦")
+        self.assertEqual(groups[0]["base_source_file_id"], "src-de")
+        self.assertEqual(
+            [m["source_file_id"] for m in groups[0]["members"]],
+            ["src-de", "src-zh", "src-en"],
+        )
+        for source_id in ("src-de", "src-zh", "src-en"):
+            self.assertEqual(dg.document_group_for_source(source_id, self.db), gid)
+
+    def test_combine_moves_members_out_of_previous_groups(self) -> None:
+        old = dg.create_document_group("旧组", self.db)["document_group_id"]
+        dg.add_group_member(old, "src-zh", self.db)
+        dg.combine_into_group("利维坦", ["src-de", "src-zh"], self.db)
+        self.assertEqual(len(self._membership_rows()), 2)
+        self.assertNotEqual(dg.document_group_for_source("src-zh", self.db), old)
+
+    def test_combine_requires_two_members_and_valid_base(self) -> None:
+        with self.assertRaises(ValueError):
+            dg.combine_into_group("利维坦", ["src-zh"], self.db)
+        with self.assertRaises(ValueError):
+            dg.combine_into_group(
+                "利维坦", ["src-zh", "src-en"], self.db, base_source_file_id="src-de"
+            )
+        with self.assertRaises(ValueError):
+            dg.combine_into_group("利维坦", ["src-zh", "no-such-source"], self.db)
+        self.assertEqual(dg.list_document_groups(self.db), [])
+
     # ── constraint 1: one group per source (UNIQUE) ──
     def test_source_belongs_to_at_most_one_group(self) -> None:
         g1 = dg.create_document_group("组一", self.db)["document_group_id"]

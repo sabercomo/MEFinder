@@ -24,6 +24,16 @@ class DocumentGroupController:
     def create(self, payload: object) -> GroupResponse:
         return self._run(payload, lambda value: self._groups.create(value.get("title")))
 
+    def combine(self, payload: object) -> GroupResponse:
+        return self._run(
+            payload,
+            lambda value: self._groups.combine(
+                value.get("title"),
+                value.get("source_file_ids"),
+                value.get("base_source_file_id"),
+            ),
+        )
+
     def rename(self, payload: object) -> GroupResponse:
         return self._run(
             payload,

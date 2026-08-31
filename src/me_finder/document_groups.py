@@ -262,6 +262,92 @@ def add_group_member(
     }
 
 
+def combine_into_group(
+    title: object,
+    source_file_ids: object,
+    db_path: Path = DEFAULT_DATABASE_PATH,
+    base_source_file_id: object = None,
+) -> Dict[str, object]:
+    """Create a group and assign several SourceFiles in one transaction.
+
+    This is the one-shot behind "combine into a work": it creates the group,
+    moves each file in (clearing any prior group's base pointer and derived
+    alignment runs, exactly as ``add_group_member`` does), and optionally sets
+    the base — so the caller replaces create + N add-member + set-base round
+    trips with a single call. Members that already share a group are moved here.
+    """
+
+    group_title = _clean_title(title)
+    ordered_ids: List[str] = []
+    seen: set[str] = set()
+    for raw in source_file_ids if isinstance(source_file_ids, (list, tuple)) else []:
+        source_id = str(raw or "").strip()
+        if not source_id:
+            raise ValueError("source_file_id is required")
+        if source_id not in seen:
+            seen.add(source_id)
+            ordered_ids.append(source_id)
+    if len(ordered_ids) < 2:
+        raise ValueError("请至少选择两份文献。")
+    base_id = str(base_source_file_id or "").strip()
+    if base_id and base_id not in seen:
+        raise ValueError("基准版本必须在所选文献中。")
+    group_id = f"document-group-{uuid.uuid4().hex}"
+    timestamp = _now()
+    ensure_document_group_schema(db_path)
+    connection = _connect_writable(db_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute(
+            "INSERT INTO document_groups"
+            "(document_group_id, title, base_source_file_id, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (group_id, group_title, base_id or None, timestamp, timestamp),
+        )
+        for order, source_id in enumerate(ordered_ids):
+            _require_source_exists(connection, source_id)
+            existing = connection.execute(
+                "SELECT document_group_id FROM document_group_members "
+                "WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()
+            if existing is not None:
+                previous_group = existing["document_group_id"]
+                connection.execute(
+                    "DELETE FROM alignment_runs WHERE pivot_source_file_id = ? "
+                    "OR target_source_file_id = ?",
+                    (source_id, source_id),
+                )
+                connection.execute(
+                    "UPDATE document_groups SET base_source_file_id = NULL, "
+                    "updated_at = ? WHERE document_group_id = ? "
+                    "AND base_source_file_id = ?",
+                    (timestamp, previous_group, source_id),
+                )
+                connection.execute(
+                    "DELETE FROM document_group_members WHERE source_file_id = ?",
+                    (source_id,),
+                )
+            connection.execute(
+                "INSERT INTO document_group_members"
+                "(document_group_id, source_file_id, version_label, member_order, added_at) "
+                "VALUES (?, ?, NULL, ?, ?)",
+                (group_id, source_id, order, timestamp),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "document_group_id": group_id,
+        "title": group_title,
+        "base_source_file_id": base_id or None,
+        "member_source_file_ids": ordered_ids,
+    }
+
+
 def remove_group_member(
     source_file_id: object, db_path: Path = DEFAULT_DATABASE_PATH
 ) -> Dict[str, object]:

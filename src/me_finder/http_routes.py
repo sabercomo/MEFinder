@@ -37,6 +37,7 @@ def assemble_library_routes(
     }
     post_routes = {
         "/api/document-groups/create": document_group_controller.create,
+        "/api/document-groups/combine": document_group_controller.combine,
         "/api/document-groups/rename": document_group_controller.rename,
         "/api/document-groups/delete": document_group_controller.delete,
         "/api/document-groups/add-member": document_group_controller.add_member,

@@ -113,6 +113,37 @@ for (const parser of ['原生文本', 'MinerU']) {
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_combine_auto_title_and_base_pick_original_language(self) -> None:
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const context = {
+  module: {exports: {}},
+  libraryStore: {deleteSelection: new Set()},
+  document: {getElementById() { return null; }},
+  libraryLanguageCode(src) { return String((src && src.language_code) || ''); }
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+const library = context.module.exports;
+const de = {source_file_id: 'de', title: 'Grundlinien', language_code: 'de'};
+const zh = {source_file_id: 'zh', title: '法哲学原理', language_code: 'zh-Hans'};
+const en = {source_file_id: 'en', title: 'Philosophy of Right', language_code: 'en'};
+// Title prefers the Chinese member; base prefers the non-Chinese, non-English original.
+assert.equal(library.autoGroupTitle([de, zh, en]), '法哲学原理');
+assert.equal(library.autoGroupBaseId([de, zh, en]), 'de');
+// No foreign original: base falls to the non-Chinese English edition.
+assert.equal(library.autoGroupBaseId([zh, en]), 'en');
+// Two Chinese editions: base falls to the first.
+assert.equal(library.autoGroupBaseId([zh, {source_file_id: 'zh2', language_code: 'zh-Hant'}]), 'zh');
+"""
+        result = subprocess.run(
+            [NODE, "-e", script, str(LIBRARY_JS)], capture_output=True,
+            text=True, encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_pending_actions_submit_once_and_restore_buttons(self) -> None:
         for action in ("create", "assign", "delete"):
             for outcome in ("success", "error"):

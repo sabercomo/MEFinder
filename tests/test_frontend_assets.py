@@ -289,7 +289,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """大型领域模块必须留在 IIFE；直接全局命令不得重新无界增长。"""
 
         budgets = {
-            "static/js/30-library.js": 37,
+            # +1 for combineSelectedIntoGroupAction (one-shot "combine into a work").
+            "static/js/30-library.js": 38,
             "static/js/40-bibliography.js": 26,
             "static/js/70-vision.js": 24,
             "static/js/71-vision-providers.js": 18,
@@ -379,10 +380,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
     # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
     # 0.5.1：应用补丁版本注入从 0.5.0 更新为 0.5.1；装配字节数不变。
+    # 作品组「归为一部作品」一键归组：新增选择栏按钮与 combine 前端逻辑。
     BASELINE_SHA256 = (
-        "ab04841b60c928fc801e61c3922c83517d4d81608592129ba17debf23f9bcdf1"
+        "74d0d767ff8efba606ead5fabf0ed998dc20c1f58f113dc0cfc97b282fd501a7"
     )
-    BASELINE_BYTES = 975512
+    BASELINE_BYTES = 978201
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

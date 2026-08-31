@@ -403,6 +403,56 @@
     finally { button.disabled = false; button.textContent = label; }
   }
 
+  function combineSourceTitle(src) {
+    return (src && (src.title || src.file_name || src.source_file_id)) || '';
+  }
+
+  // 组标题优先取中文成员标题（界面是中文，读起来更顺），否则取第一份。
+  function autoGroupTitle(sources) {
+    var chinese = sources.find(function(src) { return libraryLanguageCode(src).indexOf('zh') === 0; });
+    return combineSourceTitle(chinese || sources[0]);
+  }
+
+  // 默认基准取「最像原文」的一份：先非中非英（如德/法/日原著），再非中文，最后第一份。
+  function autoGroupBaseId(sources) {
+    var byPriority = sources.find(function(src) {
+      var lang = libraryLanguageCode(src);
+      return lang.indexOf('zh') !== 0 && lang !== 'en';
+    }) || sources.find(function(src) {
+      return libraryLanguageCode(src).indexOf('zh') !== 0;
+    }) || sources[0];
+    return byPriority ? byPriority.source_file_id : '';
+  }
+
+  async function combineSelectedIntoGroupAction(button) {
+    if (button.disabled) return;
+    var ids = Array.from(libraryStore.deleteSelection);
+    var sources = ids.map(function(id) {
+      return libraryStore.sources.find(function(s) { return s.source_file_id === id; });
+    }).filter(Boolean);
+    if (sources.length < 2) { showToast('请至少勾选两份文献', 'warning'); return; }
+    var title = autoGroupTitle(sources);
+    var label = button.textContent;
+    button.disabled = true;
+    button.textContent = '归组中…';
+    try {
+      var result = await postGroupOp('/api/document-groups/combine', {
+        title: title,
+        source_file_ids: sources.map(function(s) { return s.source_file_id; }),
+        base_source_file_id: autoGroupBaseId(sources)
+      }, null);
+      clearLibrarySelection();
+      renderGroupScopeSelector();
+      openManageDocumentGroups();
+      showToast('已归为《' + (result.title || title) + '》，可直接生成对照', 'success');
+    } catch (e) {
+      showToast(e.message || '归组失败', 'danger');
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+
   // source_file_id → 所属作品组标题（一个文献至多归一组）。用于选择器里标注「已在《X》」。
   function groupMembershipMap() {
     var map = {};
@@ -924,6 +974,9 @@
     if (page) page.classList.toggle('library-selecting', active);
     if (bar) bar.hidden = !active;
     if (count) count.textContent = '已选 ' + selectedCount + ' 项';
+    var combineButton = document.getElementById('library-combine-selected-btn');
+    // Combining needs at least two versions of the same work.
+    if (combineButton) combineButton.hidden = selectedCount < 2;
     if (removeButton) removeButton.disabled = selectedCount === 0;
     if (exportButton) {
       exportButton.disabled = libraryStore.exportRunning || selectedPdfCount === 0;
@@ -1490,6 +1543,9 @@
       renderDocumentGroupManager: renderDocumentGroupManager,
       createDocumentGroupInline: createDocumentGroupInline,
       assignSelectedToGroupAction: assignSelectedToGroupAction,
+      combineSelectedIntoGroupAction: combineSelectedIntoGroupAction,
+      autoGroupTitle: autoGroupTitle,
+      autoGroupBaseId: autoGroupBaseId,
       deleteDocumentGroupAction: deleteDocumentGroupAction,
       requestLibraryDocumentMarkdownExport: requestLibraryDocumentMarkdownExport,
       requestLibraryDocumentEpubExport: requestLibraryDocumentEpubExport
@@ -1524,6 +1580,7 @@
   global.removeGroupMemberAction = removeGroupMemberAction;
   global.setMemberVersionLabelInline = setMemberVersionLabelInline;
   global.assignSelectedToGroupAction = assignSelectedToGroupAction;
+  global.combineSelectedIntoGroupAction = combineSelectedIntoGroupAction;
   global.toggleGroupPicker = toggleGroupPicker;
   global.groupPickerInputAction = groupPickerInputAction;
   global.toggleGroupPickCandidate = toggleGroupPickCandidate;
