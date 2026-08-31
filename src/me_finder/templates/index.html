@@ -244,8 +244,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="library-selection-spacer"></span>
             <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
             <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选文档包</button>
-            <button class="action-btn primary" type="button" id="library-combine-selected-btn" hidden onclick="combineSelectedIntoGroupAction(this)">归为一部作品</button>
-            <button class="action-btn" type="button" id="library-group-selected-btn" onclick="openManageDocumentGroups()">设置作品组</button>
+            <div class="app-select library-join-group" id="library-join-group">
+              <button class="app-select-trigger library-join-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,'library-join-group')">
+                <span class="app-select-value">加入作品组</span>
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
+              </button>
+              <div class="app-select-menu library-join-group-menu" role="menu" id="library-join-group-menu"></div>
+            </div>
             <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
           </div>
         </div>

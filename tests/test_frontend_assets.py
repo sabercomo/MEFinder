@@ -289,8 +289,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """大型领域模块必须留在 IIFE；直接全局命令不得重新无界增长。"""
 
         budgets = {
-            # 作品组归组命令：一键归组 / 同名合并建议 / 内嵌加入（净 38）。
-            "static/js/30-library.js": 38,
+            # 作品组归组命令：一键归组 / 同名合并建议 / 内嵌加入 /
+            # 「加入作品组」下拉的加入与新建（净 40）。
+            "static/js/30-library.js": 40,
             "static/js/40-bibliography.js": 26,
             "static/js/70-vision.js": 24,
             "static/js/71-vision-providers.js": 18,
@@ -380,11 +381,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
     # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
     # 0.5.1：应用补丁版本注入从 0.5.0 更新为 0.5.1；装配字节数不变。
-    # 作品组：一键归组 + 内嵌 typeahead 加入 + 同名未归组建议横幅。
+    # 作品组：选择栏「加入作品组 ▾」下拉（已有组一步加入 + 新建 + 管理），并去掉并排的归组/设置两按钮。
     BASELINE_SHA256 = (
-        "1f7be300f878488ae476c00da83dc45c3b8615e0bc0caf583cb76d0cf6e6e691"
+        "7d3a25314a685fe76bb3cf89ca7f75384fbb58a40306e9550450e6404fcab1b4"
     )
-    BASELINE_BYTES = 981063
+    BASELINE_BYTES = 986406
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
