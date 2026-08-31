@@ -178,7 +178,7 @@ claude mcp list
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下会列出九个只读工具：
+正常情况下会列出十三个工具：
 
 ```text
 list_documents
@@ -190,6 +190,10 @@ search_passages
 find_parallel_passages
 read_bibliographic_pages
 read_bibliographic_metadata
+list_alignment_corrections
+propose_alignment_correction
+confirm_alignment_correction
+revoke_alignment_correction
 ```
 
 再确认能读取你自己的文献库：
@@ -353,7 +357,7 @@ D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下应该能看到九个只读工具：
+正常情况下应该能看到十三个工具：
 
 ```text
 list_documents
@@ -365,6 +369,10 @@ search_passages
 find_parallel_passages
 read_bibliographic_pages
 read_bibliographic_metadata
+list_alignment_corrections
+propose_alignment_correction
+confirm_alignment_correction
+revoke_alignment_correction
 ```
 
 然后测试是否能读取自己的文献库：
@@ -625,28 +633,55 @@ read_document_window
 
 ## 八、配置成功后能做什么
 
-MEFinder MCP 提供九个只读工具：
+MEFinder MCP 提供十三个工具，分为两组。
 
-- `list_documents`：列出或筛选已导入文献；
-- `locate_quote`：定位原句、近似引文和多个候选；
-- `read_document_window`：读取命中位置附近的上下文；
-- `verify_quotes`：一次核对多条引文，逐条返回命中/疑似错引/未找到；
-- `diff_quote`：把疑似抄错的引文和原句逐字符对齐，指出增、漏、改；
-- `search_passages`：只记得大意或部分关键词时，按相关性召回可能相关的原文段落（相关性检索，非逐字命中，可再转 `locate_quote` 逐字核验）；
-- `find_parallel_passages`：输入一句中文或任一译本文本，以已有对齐为中心返回其他版本的多个附近候选和前后文；Agent 比较语义与上下文后才确认，无法唯一确定时会列出歧义或明确说明证据不足；
-- `read_bibliographic_pages`：读取版权页候选（书首与书尾），供 AI 从原书自身补全题录；
-- `read_bibliographic_metadata`：查看已存题录字段与缺口（缺哪些字段），配合上一个工具补全。
+### 只读检索工具（10 个）
 
-测试时可以直接说：
+- `list_documents`：按题名、作者或文件名筛选已导入文献，返回后续工具使用的稳定文献 ID；
+- `locate_quote`：在本地索引中定位原句，返回原文、上下文、匹配方式与页码状态；支持精确、忽略空格、忽略标点、模糊等多种模式；
+- `read_document_window`：从命中位置读取有界文本窗口，查看前后页或相邻段落的上下文；
+- `verify_quotes`：一次批量核对多条引文，逐条返回 verified（逐字命中）/ approximate（疑似错引）/ not_found（未找到）；
+- `diff_quote`：把疑似抄错的引文与索引中最接近的原句逐字符对齐，标注增（added）/ 漏（missing）/ 改（changed）；
+- `search_passages`：只记得大意或部分关键词时，按相关性召回可能相关的原文段落（相关性检索，非逐字命中；需要逐字核对时再用 `locate_quote`）；
+- `find_parallel_passages`：输入一句中文或任一译本文本，以作品组已有对齐为中心召回其他版本的多个候选和前后文；Agent 比较跨语言语义、专名、引文结构后才确认，无法唯一确定时列出歧义或明确说明证据不足；
+- `read_bibliographic_pages`：读取文献首尾的版权页和 CIP 页候选，供 AI 直接从原书文本提取题录；
+- `read_bibliographic_metadata`：查看已存题录字段及缺口（标注 present / invalid / missing），配合上一个工具补全；
+- `list_alignment_corrections`：只读列出已记录的人工对齐修正（待确认 / 已确认 / 已撤销），用于复核与审计。
+
+### 译本对齐人工修正（3 个，写操作）
+
+这三个工具用于在 `find_parallel_passages` 的自动对齐指向错误时，由 AI 辅助提议修正，经你明确确认后生效。
+
+- `propose_alignment_correction`：记录一条"待确认"的对齐修正提议，写明源版本、目标版本、正确的目标段落 ID 及判断依据；只写入待确认记录，不改变任何查询结果；
+- `confirm_alignment_correction`：在你明确同意后，用提议返回的 `override_id` 和 `confirmation_token` 使修正生效；生效后双栏阅读和 MCP 查询都会优先采用这条人工对齐；
+- `revoke_alignment_correction`：撤销一条待确认或已确认的修正，该选区恢复自动对齐；操作可逆，不删除历史记录。
+
+> **注意**：`propose` 只写入待确认记录，必须由你明确同意后 AI 才能调用 `confirm`。`revoke` 不破坏数据，可随时重新提议。
+
+### 测试示例
+
+原句定位与上下文：
 
 ```text
 请只使用 mefinder 核对这句话出自哪篇文献、哪一页，并继续读取命中位置前后的上下文。
 ```
 
-跨译本查询可以直接说：
+跨译本对照：
 
 ```text
 请用 mefinder 查这句中文对应的英文原句，比较返回的全部候选和前后文；只有证据唯一时才确认，否则说明 ambiguous 或 unavailable。
+```
+
+批量核对：
+
+```text
+请用 mefinder 的 verify_quotes 批量核对下面这五条引文，逐条告诉我是否逐字命中。
+```
+
+对齐修正（自动对齐有误时）：
+
+```text
+刚才 find_parallel_passages 找到的英文段落不对，正确对应应该是另一段，请用 mefinder 提议修正并等我确认。
 ```
 
 MEFinder MCP 本身不访问网络，但客户端调用工具后，返回的命中原文和上下文会进入对应 AI 客户端的对话及模型上下文。涉及未公开文献时请留意。
