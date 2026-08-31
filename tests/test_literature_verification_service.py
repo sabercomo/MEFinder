@@ -639,7 +639,7 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(front_positions & back_positions, set())
 
     def test_read_bibliographic_pages_flags_copyright_cues(self) -> None:
-        from src.me_finder.application.literature_verification_service import (
+        from src.me_finder.application.mcp_result_formatting import (
             _bibliographic_hints,
             _is_likely_copyright_page,
         )
