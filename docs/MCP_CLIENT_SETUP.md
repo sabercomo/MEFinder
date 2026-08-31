@@ -127,30 +127,125 @@ codex mcp list
 
 ## 三、Claude Code 配置
 
-Claude Code 最简单的方式是在 PowerShell 或 Windows Terminal 中执行命令。打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），粘贴下面这条命令：
+Claude Code 用一条命令完成配置，不需要手动编辑配置文件。
+
+### 1. 确认 claude 命令可用
+
+打开 PowerShell（按 `Win + R` 输入 `powershell` 回车），运行：
+
+```powershell
+claude --version
+```
+
+正常情况下会显示版本号，例如 `claude 1.x.x`。如果提示"找不到命令"，请确认 Claude Code 已经安装，或重新打开一个新的 PowerShell 窗口再试。
+
+### 2. 添加 MCP 服务器
+
+粘贴下面这条命令，把路径换成你自己的：
 
 ```powershell
 claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"
 ```
 
-命令里的路径换成你自己的。
+- `--transport stdio`：MEFinder 使用本地 STDIO MCP；
+- `--scope user`：配置对当前用户的所有 Claude Code 项目生效；
+- `mefinder`：服务器名称，可以自定义；
+- `--` 后面是 `MEFinderMCP.exe` 的完整路径。
 
-- `--transport stdio`：这是本地 STDIO MCP；
-- `--scope user`：添加到当前用户，以后打开其他项目也能使用；
-- `mefinder`：服务器名称；
-- `--` 后面的完整路径：Claude Code 要启动的 `MEFinderMCP.exe`。
-
-检查配置：
+### 3. 确认配置已保存
 
 ```powershell
 claude mcp list
 ```
 
-看到 `mefinder` 已连接后，进入 Claude Code 输入 `/mcp` 再确认一次，然后测试：
+输出里能看到 `mefinder` 就说明已经添加。
+
+### 4. 在 Claude Code 里确认连接
+
+重新打开 Claude Code（或新建一个会话），在对话框输入：
 
 ```text
-请只使用 mefinder 搜索这段引文。
+/mcp
 ```
+
+弹出的列表里能看到 `mefinder`，说明 Claude Code 已经识别到这个 MCP 服务器。
+
+### 5. 测试
+
+先让 Claude 列出工具：
+
+```text
+请查看 mefinder MCP 提供了哪些工具。
+```
+
+正常情况下会列出九个只读工具：
+
+```text
+list_documents
+locate_quote
+read_document_window
+verify_quotes
+diff_quote
+search_passages
+find_parallel_passages
+read_bibliographic_pages
+read_bibliographic_metadata
+```
+
+再确认能读取你自己的文献库：
+
+```text
+请只使用 mefinder，列出当前已经导入的文献。
+```
+
+如果能返回 MEFinder 里已经索引的文献，说明连接完全正常。
+
+然后可以测试原句定位：
+
+```text
+请只使用 mefinder 定位下面这句话，告诉我它来自哪篇文献、哪一页：
+
+<把原句粘贴到这里>
+```
+
+找到命中以后继续：
+
+```text
+继续使用 mefinder，读取刚才命中位置前后的上下文。
+```
+
+这样可以依次测试 `list_documents → locate_quote → read_document_window` 三个核心工具。
+
+### 也可以直接编辑配置文件
+
+如果不习惯用命令行，也可以手动编辑配置文件，效果完全一样。
+
+配置文件位于：
+
+```text
+C:\Users\<你的用户名>\.claude\settings.json
+```
+
+用文本编辑器打开，在其中加入（或新建）`mcpServers` 字段：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "command": "D:\\MEFinder\\MEFinderMCP.exe",
+      "args": []
+    }
+  }
+}
+```
+
+如果文件里已经有其他内容，只需把 `mcpServers` 块加进去，不要覆盖已有字段。Windows 路径中的反斜杠在 JSON 里必须写成两个：
+
+```text
+D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
+```
+
+保存后重新打开 Claude Code 即可生效。
 
 ## 四、WorkBuddy 配置
 
@@ -376,10 +471,43 @@ codex mcp list
 
 ### Claude Code
 
+打开终端，运行：
+
 ```bash
 claude mcp add --transport stdio --scope user mefinder -- /Applications/MEFinder.app/Contents/MacOS/MEFinderMCP
 claude mcp list
 ```
+
+看到 `mefinder` 出现在列表里后，重新打开 Claude Code 并输入 `/mcp` 确认，然后依次测试：
+
+```text
+请查看 mefinder MCP 提供了哪些工具。
+```
+
+```text
+请只使用 mefinder，列出当前已经导入的文献。
+```
+
+也可以手动编辑配置文件，效果完全一样。文件位于：
+
+```text
+~/.claude/settings.json
+```
+
+在其中加入 `mcpServers` 字段：
+
+```json
+{
+  "mcpServers": {
+    "mefinder": {
+      "command": "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP",
+      "args": []
+    }
+  }
+}
+```
+
+macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。保存后重新打开 Claude Code 即可生效。
 
 ### WorkBuddy
 
