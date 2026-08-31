@@ -104,7 +104,7 @@ assert.ok(body.innerHTML.includes('id="grp-create-input"'));
 assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建</button>'));
 for (const parser of ['原生文本', 'MinerU']) {
   assert.ok(body.innerHTML.includes('<span>PDF · ' + parser + '</span>'));
-  assert.ok(body.innerHTML.includes('Same version · 英语 · PDF · ' + parser + '</option>'));
+  assert.ok(body.innerHTML.includes('Same version · 英语 · PDF · ' + parser + '</span>'));
 }
 """
         result = subprocess.run(

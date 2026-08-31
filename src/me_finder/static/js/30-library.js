@@ -142,14 +142,13 @@
 
   function syncDocumentGroupPairAction(groupId) {
     var group = documentGroupById(groupId);
-    var left = document.getElementById('grp-pair-left-' + groupId);
-    var right = document.getElementById('grp-pair-right-' + groupId);
     var button = document.getElementById('grp-pair-generate-' + groupId);
     var status = document.getElementById('grp-pair-status-' + groupId);
-    if (!group || !left || !right || !button || !status) return;
-    var distinct = left.value && right.value && left.value !== right.value;
+    var sel = pairSelection[groupId] || {};
+    if (!group || !button || !status) return;
+    var distinct = sel.left && sel.right && sel.left !== sel.right;
     var existing = distinct
-      ? documentGroupAlignmentForPair(group, left.value, right.value)
+      ? documentGroupAlignmentForPair(group, sel.left, sel.right)
       : null;
     button.disabled = !distinct;
     button.textContent = existing ? '重新生成' : '生成对照';
@@ -159,10 +158,35 @@
   }
 
   function generateSelectedTextAlignmentAction(groupId, button) {
-    var left = document.getElementById('grp-pair-left-' + groupId);
-    var right = document.getElementById('grp-pair-right-' + groupId);
-    if (!left || !right) return;
-    generateTextAlignmentAction(groupId, left.value, right.value, button);
+    var sel = pairSelection[groupId] || {};
+    if (!sel.left || !sel.right) return;
+    generateTextAlignmentAction(groupId, sel.left, sel.right, button);
+  }
+
+  // 版本下拉在可滚动的管理弹窗内，用 fixed 菜单按 trigger 定位，避免被容器 overflow 裁切。
+  function openVersionSelect(event, selectId) {
+    if (event) event.stopPropagation();
+    var el = document.getElementById(selectId);
+    if (!el) return;
+    var willOpen = !el.classList.contains('is-open');
+    closeAppSelects();
+    el.classList.toggle('is-open', willOpen);
+    if (!willOpen) return;
+    var trigger = el.querySelector('.app-select-trigger');
+    var menu = el.querySelector('.app-select-menu');
+    if (!trigger || !menu) return;
+    var rect = trigger.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.left = rect.left + 'px';
+    menu.style.width = Math.max(rect.width, 240) + 'px';
+  }
+
+  function pickPairVersion(groupId, side, sourceId) {
+    pairSelection[groupId] = pairSelection[groupId] || {};
+    pairSelection[groupId][side] = sourceId;
+    closeAppSelects();
+    renderDocumentGroupManager();
   }
 
   // 单一「管理作品组」弹窗承载成员管理，并把默认基准与任意两版的直接对照分开。
@@ -183,6 +207,8 @@
   // 内嵌「添加已有文献」选择器：与「生成对照」同一套卡片母题，展开时齐平在组卡片内。
   // groupId 记当前展开的组；query/selected 在整个 manager 重绘间保留，避免搜索时丢焦点。
   var groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
+  // 每个作品组「生成对照」左右两栏当前选中的版本（source_file_id）。
+  var pairSelection = {};
 
   function renderDocumentGroupManager(dependencies) {
     var body = document.getElementById('group-manage-body');
@@ -259,23 +285,46 @@
           : supported.find(function(item) {
             return item.member.source_file_id !== leftId;
           }).member.source_file_id;
-        var optionHtml = function(selectedId) {
-          return supported.map(function(item) {
-            var source = item.source;
-            var member = item.member;
-            var version = member.version_label || cleanSourceLabel(member.display_name || source.title || source.file_name);
-            var label = version + ' · ' + libLangChipLabel(deps.libraryLanguageCode(source)) + ' · ' + documentGroupSourceLabel(source);
-            return '<option value="' + esc(member.source_file_id) + '"' + (member.source_file_id === selectedId ? ' selected' : '') + '>' + esc(label) + '</option>';
-          }).join('');
+        var supportedIds = supported.map(function(item) { return item.member.source_file_id; });
+        if (!pairSelection[g.document_group_id]
+            || supportedIds.indexOf(pairSelection[g.document_group_id].left) < 0
+            || supportedIds.indexOf(pairSelection[g.document_group_id].right) < 0) {
+          pairSelection[g.document_group_id] = { left: leftId, right: rightId };
+        }
+        var pairSel = pairSelection[g.document_group_id];
+        var versionShort = function(item) {
+          return item.member.version_label
+            || cleanSourceLabel(item.member.display_name || item.source.title || item.source.file_name);
         };
-        var existingPair = documentGroupAlignmentForPair(g, leftId, rightId);
+        var versionFull = function(item) {
+          return versionShort(item) + ' · ' + libLangChipLabel(deps.libraryLanguageCode(item.source))
+            + ' · ' + documentGroupSourceLabel(item.source);
+        };
+        var versionSelectHtml = function(side, selectedId) {
+          var selectedItem = supported.find(function(item) {
+            return item.member.source_file_id === selectedId;
+          }) || supported[0];
+          var selId = 'grp-ver-' + gid + '-' + side;
+          return '<div class="app-select grp-ver-select" id="' + selId + '">'
+            + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="openVersionSelect(event,\'' + selId + '\')">'
+            + '<span class="app-select-value">' + esc(versionShort(selectedItem)) + '</span>'
+            + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>'
+            + '</button><div class="app-select-menu grp-ver-menu" role="listbox">'
+            + supported.map(function(item) {
+                var isSelected = item.member.source_file_id === selectedId;
+                return '<button class="app-select-option' + (isSelected ? ' is-selected' : '') + '" type="button" role="option" onclick="pickPairVersion(\'' + gid + '\',\'' + side + '\',\'' + esc(item.member.source_file_id) + '\')">'
+                  + '<span class="grp-ver-opt-label">' + esc(versionFull(item)) + '</span></button>';
+              }).join('')
+            + '</div></div>';
+        };
+        var existingPair = documentGroupAlignmentForPair(g, pairSel.left, pairSel.right);
         html += '<div class="grp-pair"><div class="grp-pair-copy">'
           + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
           + (existingPair ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
           + '</span></div><div class="grp-pair-controls">'
-          + '<label><span class="visually-hidden">左栏版本</span><select id="grp-pair-left-' + gid + '" class="grp-pair-select" onchange="syncDocumentGroupPairAction(\'' + gid + '\')">' + optionHtml(leftId) + '</select></label>'
+          + versionSelectHtml('left', pairSel.left)
           + '<span class="grp-pair-arrow" aria-hidden="true">↔</span>'
-          + '<label><span class="visually-hidden">右栏版本</span><select id="grp-pair-right-' + gid + '" class="grp-pair-select" onchange="syncDocumentGroupPairAction(\'' + gid + '\')">' + optionHtml(rightId) + '</select></label>'
+          + versionSelectHtml('right', pairSel.right)
           + '<button id="grp-pair-generate-' + gid + '" class="grp-align-btn" type="button" onclick="generateSelectedTextAlignmentAction(\'' + gid + '\',this)">' + (existingPair ? '重新生成' : '生成对照') + '</button>'
           + '</div></div>';
         pairGroups.push(g.document_group_id);
@@ -413,7 +462,7 @@
   }
 
   function combineSourceTitle(src) {
-    return (src && (src.title || src.file_name || src.source_file_id)) || '';
+    return cleanSourceLabel((src && (src.title || src.file_name || src.source_file_id)) || '');
   }
 
   // 组标题优先取中文成员标题（界面是中文，读起来更顺），否则取第一份。
@@ -475,7 +524,7 @@
       }).join('');
       html += '<div class="join-group-sep" role="separator"></div>';
     }
-    html += '<button class="app-select-option join-group-new" type="button" role="menuitem" onclick="newGroupFromSelection()">＋ 新建作品组…</button>';
+    html += '<button class="app-select-option join-group-new" type="button" role="menuitem" onclick="newGroupFromSelection()">＋ 新建并加入作品组</button>';
     html += '<button class="app-select-option" type="button" role="menuitem" onclick="closeAppSelects();openManageDocumentGroups();">管理作品组…</button>';
     menu.innerHTML = html;
   }
@@ -1238,7 +1287,7 @@
   function libraryEntryHTML(src) {
     var vol = volumeForSource(src.source_file_id);
     var isPdf = src.source_type === 'pdf';
-    var title = src.title || (src.file_name || src.source_file_id);
+    var title = cleanSourceLabel(src.title || src.file_name || src.source_file_id);
     var author = src.author || '作者信息待完善';
     var thesisIcon = src.document_type === 'thesis'
       ? '<svg class="doc-thesis-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-label="学位论文"><title>学位论文</title><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/><path d="M22 10v5"/></svg>'
@@ -1692,6 +1741,8 @@
   global.groupManageBackdrop = groupManageBackdrop;
   global.syncDocumentGroupPairAction = syncDocumentGroupPairAction;
   global.generateSelectedTextAlignmentAction = generateSelectedTextAlignmentAction;
+  global.openVersionSelect = openVersionSelect;
+  global.pickPairVersion = pickPairVersion;
   global.createDocumentGroupInline = createDocumentGroupInline;
   global.renameDocumentGroupInline = renameDocumentGroupInline;
   global.deleteDocumentGroupAction = deleteDocumentGroupAction;
