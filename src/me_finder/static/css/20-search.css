@@ -135,10 +135,7 @@
 .app-select-trigger:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .app-select-trigger:focus-visible { border-color: var(--accent); box-shadow: var(--focus-ring); outline: none; }
 .app-select-trigger svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--text-tertiary); }
-/* 只转末尾的下拉箭头。此前 `svg` 会把前导图标（如作品组图标）也一起转 180°，看着像翻转 bug。 */
-.app-select-trigger svg:last-child { transition: transform var(--transition-fast); }
 .app-select.is-open .app-select-trigger { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.app-select.is-open .app-select-trigger svg:last-child { transform: rotate(180deg); }
 .document-select .app-select-trigger { width: clamp(170px, 18vw, 250px); }
 .app-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-select-menu {
