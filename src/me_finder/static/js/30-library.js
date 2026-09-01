@@ -168,14 +168,10 @@
   }
 
   // 版本下拉在可滚动的管理弹窗内，用 fixed 菜单按 trigger 定位，避免被容器 overflow 裁切。
-  function openVersionSelect(event, selectId) {
-    if (event) event.stopPropagation();
-    var el = document.getElementById(selectId);
-    if (!el) return;
-    var willOpen = !el.classList.contains('is-open');
-    closeAppSelects();
-    el.classList.toggle('is-open', willOpen);
-    if (!willOpen) return;
+  // fixed 菜单不随外层滚动移动，所以监听滚动/缩放：trigger 还在视野内就跟随重定位，
+  // 滚出视野就关闭，避免菜单脱离触发器悬浮在别处。
+  var fixedSelectFollowHandler = null;
+  function positionFixedSelectMenu(el) {
     var trigger = el.querySelector('.app-select-trigger');
     var menu = el.querySelector('.app-select-menu');
     if (!trigger || !menu) return;
@@ -184,6 +180,38 @@
     menu.style.top = (rect.bottom + 6) + 'px';
     menu.style.left = rect.left + 'px';
     menu.style.width = Math.max(rect.width, 240) + 'px';
+  }
+  function detachFixedSelectFollow() {
+    if (!fixedSelectFollowHandler) return;
+    window.removeEventListener('scroll', fixedSelectFollowHandler, true);
+    window.removeEventListener('resize', fixedSelectFollowHandler, true);
+    fixedSelectFollowHandler = null;
+  }
+  function openVersionSelect(event, selectId) {
+    if (event) event.stopPropagation();
+    var el = document.getElementById(selectId);
+    if (!el) return;
+    var willOpen = !el.classList.contains('is-open');
+    detachFixedSelectFollow();
+    closeAppSelects();
+    el.classList.toggle('is-open', willOpen);
+    if (!willOpen) return;
+    var trigger = el.querySelector('.app-select-trigger');
+    var menu = el.querySelector('.app-select-menu');
+    if (!trigger || !menu) return;
+    positionFixedSelectMenu(el);
+    fixedSelectFollowHandler = function() {
+      var open = document.getElementById(selectId);
+      if (!open || !open.classList.contains('is-open')) { detachFixedSelectFollow(); return; }
+      var trig = open.querySelector('.app-select-trigger');
+      if (!trig) { detachFixedSelectFollow(); return; }
+      var r = trig.getBoundingClientRect();
+      if (r.bottom <= 0 || r.top >= window.innerHeight) { closeAppSelects(); detachFixedSelectFollow(); return; }
+      positionFixedSelectMenu(open);
+    };
+    // capture=true 才能收到内层滚动容器（抽屉 / 弹窗正文）的 scroll 事件。
+    window.addEventListener('scroll', fixedSelectFollowHandler, true);
+    window.addEventListener('resize', fixedSelectFollowHandler, true);
   }
 
   function pickPairVersion(groupId, side, sourceId) {

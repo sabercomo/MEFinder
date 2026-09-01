@@ -16,7 +16,7 @@
   height: 32px;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: var(--surface-secondary);
   font-size: 12px;
   color: var(--text-secondary);
@@ -51,7 +51,7 @@
 .cal-sort-direction-select .app-select-trigger { min-width: 88px; }
 .cal-sort-controls .app-select-menu { width: 178px; }
 .cal-sort-direction-select .app-select-menu { width: 112px; }
-.status-chip, .cal-status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; padding: 3px 8px; border: 1px solid transparent; border-radius: 7px; white-space: nowrap; transition: opacity 180ms ease, background 180ms ease, color 180ms ease; }
+.status-chip, .cal-status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650; padding: 3px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); white-space: nowrap; transition: opacity 180ms ease, background 180ms ease, color 180ms ease; }
 .status-chip__icon { width: 12px; height: 12px; display: inline-grid; place-items: center; flex: 0 0 auto; opacity: 1; }
 .status-chip__icon svg { width: 12px; height: 12px; display: block; overflow: visible; }
 .status-chip__icon.is-spinning svg { animation: cal-refresh-spin 720ms linear infinite; }
@@ -75,7 +75,7 @@
   margin-top: 14px;
   padding: 11px 13px;
   border: 1px solid var(--cal-border, var(--calibration-card-border));
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--calibration-card-bg);
   color: var(--calibration-card-text);
   font-size: 12.5px;
@@ -99,14 +99,14 @@
   margin-top: 14px;
   padding: 16px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 .auto-detect-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .auto-detect-note { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
 .auto-detect-warning { color: var(--warning); margin: 8px 0; }
 .auto-segment-list { display: grid; gap: 8px; margin-top: 12px; }
-.auto-segment-row { padding: 10px 12px; border: 1px solid var(--divider); border-radius: 6px; }
+.auto-segment-row { padding: 10px 12px; border: 1px solid var(--divider); border-radius: var(--radius-sm); }
 .auto-segment-main { font-size: 13px; font-weight: 600; }
 .auto-segment-evidence { margin-top: 4px; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 .auto-detect-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
@@ -114,7 +114,7 @@
 .bibliographic-field { min-width: 0; }
 .bibliographic-field.full { grid-column: 1 / -1; }
 .bibliographic-field label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
-.bibliographic-field input { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--divider); border-radius: 6px; background: var(--input-bg); color: var(--text-primary); }
+.bibliographic-field input { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--divider); border-radius: var(--radius-sm); background: var(--input-bg); color: var(--text-primary); }
 /* 语言选择复用 app 自定义下拉：整宽触发器、箭头内嵌，替代原生 <select>。 */
 .bibliographic-field .bib-language-select { position: relative; width: 100%; }
 .bibliographic-field .bib-language-select .app-select-trigger { width: 100%; height: 34px; font-size: 13px; }
@@ -128,7 +128,7 @@
   margin-top: 7px;
   padding: 4px 7px;
   border: 1px solid var(--warning-border);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--warning-soft);
   color: var(--warning);
   font-size: 11px;
@@ -142,7 +142,7 @@
   margin-top: 12px;
   padding: 12px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
 }
 .cnki-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -157,7 +157,7 @@
   padding: 8px 9px;
   resize: vertical;
   border: 1px solid var(--divider);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--input-bg);
   color: var(--text-primary);
   font: inherit;
@@ -190,7 +190,7 @@
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--divider);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popover);
   display: none;
 }
@@ -203,7 +203,7 @@
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text-primary);
   font-size: 13px;
@@ -223,7 +223,7 @@
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--divider);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--surface-primary);
 }
 .cnki-candidate.high { border-color: color-mix(in srgb, var(--success) 42%, var(--divider)); }
@@ -284,7 +284,7 @@
   height: 32px;
   padding: 0 8px;
   border: 1px solid var(--divider);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--input-bg);
   font-size: 13px;
   color: var(--text-primary);
@@ -297,22 +297,22 @@
 .seg-input.narrow { max-width: 88px; }
 .segment-table .seg-input.narrow { max-width: none; min-width: 0; }
 .segment-style-select { width: 100%; }
-.segment-style-select .app-select-trigger { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border-radius: 6px; font-size: 12px; }
+.segment-style-select .app-select-trigger { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 12px; }
 .segment-style-select .app-select-menu { right: auto; left: 0; width: 178px; }
 .segment-layout-select { width: 100%; }
-.segment-layout-select .app-select-trigger { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border-radius: 6px; font-size: 12px; }
+.segment-layout-select .app-select-trigger { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 12px; }
 .segment-layout-select .app-select-menu { right: auto; left: 0; width: 132px; }
 .segment-direction-control {
   display: inline-flex;
   padding: 2px;
   gap: 2px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--surface-secondary);
 }
 .segment-direction-btn {
   height: 26px;
   padding: 0 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
@@ -343,7 +343,7 @@
   width: 196px;
   height: 116px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
 }
@@ -405,7 +405,7 @@
 .spread-summary {
   margin-top: 12px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--divider);
   font-size: 12px;
@@ -420,7 +420,7 @@
   display: grid;
   place-items: center;
   color: var(--text-tertiary);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 .seg-remove svg { width: 16px; height: 16px; display: block; }
 .seg-remove:hover { color: var(--error); background: var(--danger-soft); }

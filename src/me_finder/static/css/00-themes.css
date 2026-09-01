@@ -62,9 +62,17 @@
   --error: var(--danger);
   --sidebar-active: var(--surface-selected);
   --sidebar-width: 180px;
-  --card-radius: 16px;
-  --widget-radius: 10px;
-  --input-radius: 12px;
+  /* 统一圆角尺度：控件/卡片/弹窗的圆角收敛到这一档尺度，避免 6/7/8/9/10/11… 各处微差。
+     内圆角 = 外圆角 − 内边距。旧的 card/widget/input 半径别名到本尺度，保持既有 var 引用生效。 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  --card-radius: var(--radius-xl);
+  --widget-radius: var(--radius-lg);
+  --input-radius: var(--radius-lg);
   --input-height: 56px;
   --transition-fast: 160ms ease;
   --transition-normal: 220ms ease;

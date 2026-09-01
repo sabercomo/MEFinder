@@ -26,16 +26,16 @@
   width: min(460px, 100%);
   padding: 22px;
   border: 1px solid var(--border-default);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background: var(--dialog-bg);
   color: var(--text-primary);
   box-shadow: var(--shadow-popover);
 }
 /* Per-dialog size / layout differences, the only thing that varies. */
-.remove-modal { width: min(470px, 100%); border-radius: 14px; }
+.remove-modal { width: min(470px, 100%); border-radius: var(--radius-xl); }
 .cnki-batch-modal { width: min(560px, 100%); max-height: min(80vh, 720px); display: flex; flex-direction: column; }
 .app-dialog-heading { display: flex; align-items: center; gap: 11px; }
-.app-dialog-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: 9px; background: var(--info-soft); color: var(--info-icon); font-size: 16px; font-weight: 750; }
+.app-dialog-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; height: 28px; border-radius: var(--radius-md); background: var(--info-soft); color: var(--info-icon); font-size: 16px; font-weight: 750; }
 .app-dialog[data-tone="warning"] .app-dialog-icon { background: var(--warning-soft); color: var(--warning-icon); }
 .app-dialog[data-tone="danger"] .app-dialog-icon { background: var(--danger-soft); color: var(--danger-icon); }
 .app-dialog-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
@@ -50,14 +50,14 @@
 .remove-option { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; font-size: 13px; color: var(--text-primary); }
 .remove-option input { margin-top: 2px; }
 .remove-option small { display: block; color: var(--text-tertiary); line-height: 1.45; margin-top: 2px; }
-.remove-modal-warning { display: none; margin-top: 12px; padding: 9px 11px; border-radius: 7px; background: var(--danger-soft); color: var(--danger); font-size: 12px; line-height: 1.5; }
+.remove-modal-warning { display: none; margin-top: 12px; padding: 9px 11px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-size: 12px; line-height: 1.5; }
 .remove-modal-warning.show { display: block; }
 .remove-modal-actions { margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; }
 
 .cnki-batch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .cnki-batch-title { font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
 .cnki-batch-progress { margin-top: 4px; font-size: 12px; color: var(--text-tertiary); }
-.cnki-batch-doc { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: var(--surface-secondary); }
+.cnki-batch-doc { margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-secondary); }
 .cnki-batch-doc-title { font-size: 13px; font-weight: 650; color: var(--text-primary); line-height: 1.45; }
 .cnki-batch-doc-meta { margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
 .cnki-batch-list { margin-top: 12px; overflow-y: auto; flex: 1 1 auto; }
@@ -69,7 +69,7 @@
 /* ── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: var(--radius-xs); }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* ── Toast notification ────────────────────────────────────── */
@@ -97,7 +97,7 @@
   max-width: 100%;
   padding: 11px 16px 11px 13px;
   border: 1px solid var(--border-default);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   background: var(--surface-elevated);
   box-shadow: var(--shadow-popover);
   color: var(--text-primary);

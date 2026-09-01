@@ -94,7 +94,12 @@ def _item_language_code(
         return "zh-Hans"
 
     lowered = text.casefold()
-    if _CYRILLIC_RE.search(lowered):
+    # \u897f\u91cc\u5c14\u5b57\u6bcd\u53ea\u5728\u5176\u4e3a\u4e3b\u5bfc\u6587\u5b57\u65f6\u624d\u5224\u4fc4\u8bed\u3002\u5426\u5219\u82f1\u6587\u4e66\u6b63\u6587\u91cc\u5939\u5e26\u7684\u4e00\u4e2a\u4fc4\u8bed\u4eba\u540d /
+    # \u5f15\u6587\uff08\u54ea\u6015\u5355\u4e2a\u5b57\u7b26\uff09\u90fd\u4f1a\u77ed\u8def\u8fdb\u8fd9\u4e00\u652f\uff0c\u56e0\u4fc4\u8bed\u529f\u80fd\u8bcd\u4e0d\u8db3\u800c\u8bef\u5224\u6210 und \u2014\u2014 \u8fd9\u6b63\u662f
+    # \u300c\u660e\u660e\u662f\u82f1\u6587\u5374\u8bc6\u522b\u4e0d\u51fa\u300d\u7684\u6839\u56e0\u3002\u975e\u4e3b\u5bfc\u65f6\u843d\u5230\u4e0b\u9762\u7684\u62c9\u4e01\u8bed\u7cfb\u6253\u5206\u3002
+    cyrillic_count = len(_CYRILLIC_RE.findall(text))
+    latin_count = len(re.findall(r"[A-Za-z]", text))
+    if cyrillic_count >= 8 and cyrillic_count >= latin_count:
         words = re.findall(r"[\u0400-\u04ff]+", lowered)
         russian_score = sum(word in _LANGUAGE_STOPWORDS["ru"] for word in words)
         return "ru" if russian_score >= 2 else "und"

@@ -240,7 +240,7 @@ html[data-desktop-shell="win32"] .main-area {
   top: 8px;
   bottom: 8px;
   width: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--accent);
 }
 .sidebar-icon {
@@ -325,7 +325,7 @@ html.sidebar-collapsed { --sidebar-width: 64px; }
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 500;
   background: var(--success-soft);

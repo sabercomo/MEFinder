@@ -388,9 +388,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）；
     # 书目信息新增「语言」下拉（人工覆盖自动识别）；vision 刷新统计改走 MEFinder.visionProviders.render。
     BASELINE_SHA256 = (
-        "8dffb69003aec6e0bb3f37721eed52784d07e0e02700518b06f2cd1c691608be"
+        "c8874a947d49286061d41f795fe9b89f24283b293a4c15aff7c5f9c57e332962"
     )
-    BASELINE_BYTES = 1004919
+    BASELINE_BYTES = 1008825
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
