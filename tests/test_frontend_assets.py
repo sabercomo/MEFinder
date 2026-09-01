@@ -292,7 +292,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 作品组归组命令：一键归组 / 同名合并建议 / 内嵌加入 /「加入作品组」下拉 /
             # 「生成对照」版本自定义下拉的打开与选择 / 管理弹窗手风琴的组展开与对照折叠、
             # 下拉顶部命名新建（净 45）。
-            "static/js/30-library.js": 45,
+            # 0.5.2 +1：管理弹窗头部「＋ 新建作品组」切换 toggleGroupCreate（净 46）。
+            # 0.5.2 +1：作品组搜索框 groupSearchInputAction（净 47）。
+            "static/js/30-library.js": 47,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
             "static/js/40-bibliography.js": 27,
             "static/js/70-vision.js": 24,
@@ -387,10 +389,23 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 管理弹窗改手风琴（组默认收成一行、对照默认折叠、成员行降噪）、页脚改「关闭」、
     # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）；
     # 书目信息新增「语言」下拉（人工覆盖自动识别）；vision 刷新统计改走 MEFinder.visionProviders.render。
+    # 0.5.2：管理作品组弹窗重做——新建收进头部「＋ 新建作品组」（默认收起表单）、
+    # 成员行改「radio 基准锚点 + 标题基准标签 + 语言短代码 chip（JA/ZH/EN）+ hover 设为基准」、
+    # 次级动作右对齐；libLangCode 新增短代码。
+    # 0.5.2 续：组容器去盒化——组不再各自成卡片，改发丝线分隔（弹窗为唯一容器）；
+    # 组头标题改纯文本外观的衬线书名（聚焦才显编辑框）、语言摘要改灰字、删除组降为 hover 浮出的横排文字；
+    # 成员书名用衬线。
+    # 0.5.2 续二：版本名改行内小灰字（聚焦才显编辑框，不再占满整行）；基准行去掉整条色带；
+    # 顶部加「搜索作品组」框；「生成对照」主操作移到底部动作条（实心强调色 + 「已直接对照」状态）；
+    # 计数改裸数字；groupSearchInputAction 新增；成员元信息 chip 与版本名间加「·」分隔。
+    # 0.5.2 续三：「＋ 新建作品组」从右上角移到搜索工具行（搜索占宽、新建在右）；
+    # 弹窗标题保持「管理作品组」+ 副标题「整理同一作品的不同版本」；
+    # 组标题 input 用 field-sizing/size 贴合内容宽度，语言摘要紧贴书名不再被顶远。
+    # （reader.js 双栏对照重做尚未纳入本基线。）
     BASELINE_SHA256 = (
-        "8085949e8cde3728c2ee3076294b7264b5c738f246093e6e197ff05cdf2a1cdd"
+        "74c3f2bb0481e3f6bbef37aa2c835c27f4f9d0af3c7eb52be9fccbdcb744d89d"
     )
-    BASELINE_BYTES = 1008515
+    BASELINE_BYTES = 1018399
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

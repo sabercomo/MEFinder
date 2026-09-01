@@ -691,8 +691,8 @@
 .group-manage-backdrop.open { display: flex; }
 .group-manage-card { width: min(820px, 100%); height: min(760px, calc(100dvh - 48px)); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; background: var(--dialog-bg); border: 1px solid var(--border-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-popover); overflow: hidden; }
 .group-manage-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--divider); }
-.group-manage-heading { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.group-manage-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.group-manage-heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 3px; }
+.group-manage-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: var(--text-primary); }
 .group-manage-description { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 .group-manage-close { width: 44px; height: 44px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-md); color: var(--text-secondary); cursor: pointer; }
 .group-manage-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -706,7 +706,9 @@
 .grp-input:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
 .grp-input:active { border-color: var(--accent); }
 .grp-input:disabled { cursor: not-allowed; opacity: .55; }
-.grp-create { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+/* 新建表单默认收起，由头部「＋ 新建作品组」展开（.is-open）。 */
+.grp-create { display: none; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.grp-create.is-open { display: grid; }
 .grp-create-field { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .grp-field-label { color: var(--text-secondary); font-size: 12px; font-weight: 650; }
 .grp-create .action-btn { min-height: 44px; white-space: nowrap; }
@@ -717,26 +719,51 @@
 .grp-suggest .action-btn { flex: 0 0 auto; }
 .grp-empty { font-size: 13px; color: var(--text-tertiary); padding: 8px 2px; }
 .grp-empty--sm { font-size: 12px; padding: 4px 2px 6px; }
-.grp-block { flex: 0 0 auto; border: 1px solid var(--divider); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-primary); }
-.grp-block.is-expanded { border-color: var(--border-strong); }
-/* 手风琴组头：折叠态只有这一行（标题 · 语言 · N 版本）。 */
-.grp-head2 { display: flex; align-items: center; gap: 10px; padding: 11px 12px; background: var(--surface-secondary); }
-.grp-block.is-expanded .grp-head2 { border-bottom: 1px solid var(--divider); }
+/* 单层容器：组不再各自成盒，靠一条发丝线分隔（弹窗本身就是唯一容器）。 */
+.grp-block { flex: 0 0 auto; }
+.grp-block + .grp-block { border-top: 1px solid var(--divider); padding-top: 8px; margin-top: 4px; }
+/* 组头：折叠态只有这一行（标题 · 语言 · N 版本 · ⋯）。 */
+.grp-head2 { display: flex; align-items: center; gap: 10px; padding: 8px 2px; background: transparent; }
+.grp-block.is-expanded .grp-head2 { border-bottom: 1px solid var(--divider); padding-bottom: 12px; }
 .grp-expand-btn { flex: 0 0 auto; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--text-tertiary); cursor: pointer; }
 .grp-expand-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .grp-chevron { width: 16px; height: 16px; transition: transform var(--transition-fast); }
 .grp-chevron.is-open { transform: rotate(90deg); }
-.grp-head2 .grp-title { min-width: 0; flex: 1 1 auto; font-weight: 650; }
-.grp-head-summary { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.grp-head-langs { color: var(--text-tertiary); font-size: 11px; background: var(--surface-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 2px 7px; white-space: nowrap; }
+/* 组标题：纯文本外观的书名（衬线），点/聚焦才显出可编辑边框。
+   input 默认按 ~20 字符宽，会把语言摘要顶远——用 field-sizing/size 收成贴合内容的宽度。 */
+.grp-head2 .grp-title { flex: 0 1 auto; width: auto; min-width: 3ch; max-width: 22ch; field-sizing: content; height: auto; padding: 3px 6px; margin-left: -6px; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-weight: 650; font-size: 16px; border-color: transparent; background: transparent; }
+.grp-head2 .grp-title:focus-visible { border-color: var(--accent); background: var(--input-bg); }
+.grp-head-summary { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+.grp-head-langs { color: var(--text-tertiary); font-size: 12px; background: transparent; border: none; padding: 0; white-space: nowrap; }
 .grp-head-count { color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* 删除组降权：默认收成安静的文字按钮，hover 才变红。 */
-.grp-del-btn { flex: 0 0 auto; height: 28px; padding: 0 9px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 12px; cursor: pointer; opacity: 0; transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast); }
+.grp-del-btn { flex: 0 0 auto; height: 28px; padding: 0 9px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 12px; line-height: 28px; white-space: nowrap; cursor: pointer; opacity: 0; transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast); }
 .grp-block:hover .grp-del-btn, .grp-block.is-expanded .grp-del-btn { opacity: 1; }
 .grp-del-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 .grp-body { display: flex; flex-direction: column; }
-.grp-body-actions { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px; }
-.grp-lang-chip { flex: 0 0 auto; color: var(--text-tertiary); font-size: 11px; background: var(--surface-secondary); border-radius: var(--radius-sm); padding: 2px 7px; white-space: nowrap; }
+/* 次级动作右对齐——与设置里「保存」等主操作一致落在右侧。 */
+.grp-body-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 2px 4px; }
+/* 「已直接对照」状态靠左，动作靠右。 */
+.grp-linked { margin-right: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--success, #1f9e6f); font-size: 12px; font-weight: 500; }
+.grp-linked svg { width: 14px; height: 14px; }
+/* 生成对照：真正的主操作，实心强调色按钮，落在最右。 */
+.grp-generate-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: var(--radius-md); background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 650; cursor: pointer; white-space: nowrap; transition: transform var(--transition-fast), filter var(--transition-fast); }
+.grp-generate-btn svg { width: 14px; height: 14px; }
+.grp-generate-btn:hover { filter: brightness(1.06); }
+.grp-generate-btn:active { transform: scale(.97); }
+.grp-generate-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 顶部工具行：搜索框（占宽）+「＋ 新建作品组」（右）。 */
+.grp-toolbar { display: flex; align-items: center; gap: 8px; }
+.grp-search { position: relative; flex: 1 1 auto; min-width: 0; }
+.grp-search > svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-tertiary); pointer-events: none; }
+.grp-search .grp-input { width: 100%; padding-left: 36px; }
+.grp-new-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 15px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-primary); color: var(--text-secondary); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast); }
+.grp-new-btn svg { width: 13px; height: 13px; }
+.grp-new-btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.grp-new-btn:active { transform: scale(.98); }
+.grp-new-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 语言以短代码 chip（JA/ZH/EN）呈现，让语言成为可扫读的第一维度。 */
+.grp-lang-chip { flex: 0 0 auto; font-family: var(--font-mono, ui-monospace, "Roboto Mono", monospace); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--text-secondary); background: var(--surface-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1px 6px; white-space: nowrap; }
 /* 「生成对照」折叠触发：把整块版本选择藏在意图后面。 */
 .grp-pair-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 11px 12px; border-top: 1px solid var(--divider); color: var(--accent); font-size: 12.5px; cursor: pointer; }
 .grp-pair-toggle svg { width: 15px; height: 15px; flex: 0 0 auto; }
@@ -747,24 +774,37 @@
 .grp-head .action-btn { min-height: 44px; white-space: nowrap; }
 .grp-head .action-btn.is-active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .grp-members { display: flex; flex-direction: column; }
-.grp-member { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(120px, .7fr) auto auto; align-items: center; gap: 8px; min-width: 0; padding: 10px 12px; border-top: 1px solid var(--divider); }
-.grp-member.is-base { background: var(--accent-soft); }
-.grp-member-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.grp-member-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.grp-member-meta { display: flex; align-items: center; gap: 8px; color: var(--text-tertiary); font-size: 11px; }
-.grp-member-meta span + span::before { content: "·"; margin-right: 8px; }
-.grp-vlabel { min-width: 0; }
-.grp-base-btn { height: 44px; padding: 0 12px; border: 1px solid var(--border-default); outline: 2px solid transparent; outline-offset: 1px; border-radius: var(--radius-sm); background: var(--surface-primary); color: var(--text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; }
-.grp-base-btn:focus-visible { outline-color: var(--accent); }
-.grp-base-btn:active:not(:disabled) { background: var(--surface-selected); }
-.grp-base-btn.is-base { border-color: var(--accent); color: var(--accent); background: transparent; font-weight: 650; }
-.grp-base-btn:disabled { cursor: not-allowed; opacity: .7; }
+/* 成员行：radio 锚点 · 主体（标题+基准标签 / 语言代码+版本名）· hover 浮出的设为基准 · 移除。 */
+.grp-member { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 9px 12px; border-top: 1px solid var(--divider); }
+/* 基准仅靠实心 radio + 「基准」标签指示，不再铺整条色带（更接近效果图）。 */
+/* 单选锚点：空心圆 → 基准时实心（填充从 scale 淡入，不是凭空出现）。 */
+.grp-base-radio { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 3px; border: 1.5px solid var(--border-strong); border-radius: 50%; background: var(--surface-primary); cursor: pointer; position: relative; transition: border-color var(--transition-fast), background var(--transition-fast); }
+.grp-base-radio::after { content: ""; position: absolute; inset: 0; margin: auto; width: 6px; height: 6px; border-radius: 50%; background: #fff; transform: scale(.5); opacity: 0; transition: transform 200ms cubic-bezier(0.23,1,0.32,1), opacity 160ms ease; }
+.grp-base-radio.is-base { border-color: var(--accent); background: var(--accent); }
+.grp-base-radio.is-base::after { transform: scale(1); opacity: 1; }
+.grp-base-radio:disabled { cursor: default; }
+.grp-base-radio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grp-member-main { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 4px; }
+.grp-member-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.grp-base-tag { flex: 0 0 auto; font-size: 10px; font-weight: 650; letter-spacing: .04em; color: var(--accent); background: var(--accent-soft); border-radius: var(--radius-sm); padding: 1px 7px; }
+.grp-member-meta { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--text-tertiary); font-size: 11px; }
+.grp-meta-dot { color: var(--text-tertiary); }
+/* 版本名：行内小灰字外观（年份·出版社 / 译者），聚焦才显编辑框，不再是占满整行的输入盒。 */
+.grp-vlabel { flex: 0 1 auto; min-width: 0; width: 15em; max-width: 100%; height: auto; padding: 1px 5px; margin-left: -5px; border-color: transparent; background: transparent; font-size: 12px; color: var(--text-secondary); }
+.grp-vlabel::placeholder { color: var(--text-tertiary); }
+.grp-vlabel:focus-visible { border-color: var(--accent); background: var(--input-bg); color: var(--text-primary); }
+/* 设为基准：安静的幽灵按钮，行 hover 才浮出；基准行不渲染此按钮。 */
+.grp-base-btn { flex: 0 0 auto; align-self: center; height: 30px; padding: 0 10px; border-radius: var(--radius-sm); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; opacity: 0; transition: opacity var(--transition-fast), background var(--transition-fast), transform var(--transition-fast); }
+.grp-member:hover .grp-base-btn { opacity: 1; }
+.grp-base-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
+.grp-base-btn:active { transform: scale(.96); }
 .grp-align-btn { height: 44px; padding: 0 14px; border: 1px solid var(--accent); outline: 2px solid transparent; outline-offset: 1px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 650; cursor: pointer; white-space: nowrap; }
 .grp-align-btn:focus-visible { outline-color: var(--accent); }
 .grp-align-btn:active:not(:disabled) { background: var(--surface-selected); }
 .grp-align-btn:disabled { cursor: not-allowed; opacity: .55; }
-.grp-remove-btn { width: 44px; height: 44px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 13px; cursor: pointer; }
-.grp-remove-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.grp-remove-btn { flex: 0 0 auto; align-self: center; width: 30px; height: 30px; border-radius: var(--radius-sm); color: var(--text-tertiary); font-size: 13px; cursor: pointer; opacity: 0; transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast); }
+.grp-member:hover .grp-remove-btn { opacity: 1; }
+.grp-remove-btn:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 .grp-remove-btn:active:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
 .grp-remove-btn:disabled { cursor: not-allowed; opacity: .55; }
 .grp-pair { display: grid; grid-template-columns: minmax(150px, .35fr) minmax(0, 1fr); align-items: center; gap: 16px; padding: 12px; border-top: 1px solid var(--divider); background: var(--surface-elevated); }
@@ -804,7 +844,11 @@
   .group-manage-close:hover { background: var(--surface-hover); color: var(--text-primary); }
   .grp-input:hover:not(:disabled),
   .grp-pair-select:hover:not(:disabled) { border-color: var(--accent); }
-  .grp-base-btn:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+  .grp-head2 .grp-title:hover { border-color: var(--border-subtle); }
+  .grp-member-meta .grp-vlabel:hover { border-color: var(--border-subtle); }
+  .grp-del-btn:hover { background: var(--danger-soft); color: var(--danger); }
+  .grp-base-btn:hover { background: var(--accent-soft); }
+  .grp-base-radio:hover:not(:disabled) { border-color: var(--accent); }
   .grp-align-btn:hover:not(:disabled) { background: var(--surface-hover); }
   .grp-remove-btn:hover { background: var(--danger-soft); color: var(--danger); }
   .grp-pick-row:hover:not(.is-adding) { background: var(--surface-hover); }

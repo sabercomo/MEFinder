@@ -121,6 +121,8 @@
     expandedGroups = {};
     expandedPairGroupId = '';
     groupsInitialized = false;
+    groupCreateOpen = false;
+    groupSearchQuery = '';
     renderDocumentGroupManager();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
@@ -247,6 +249,48 @@
   var expandedPairGroupId = '';
   // 首次渲染默认展开第一组以示可展开；此后尊重用户开合（含全部收起）。
   var groupsInitialized = false;
+  // 新建表单默认收起，由头部「＋ 新建作品组」按钮切换展开，避免常驻占黄金位置。
+  var groupCreateOpen = false;
+  // 作品组搜索：按标题或成员书名过滤。
+  var groupSearchQuery = '';
+
+  function groupMatchesSearch(g) {
+    var q = (groupSearchQuery || '').trim().toLowerCase();
+    if (!q) return true;
+    if (String(g.title || '').toLowerCase().indexOf(q) >= 0) return true;
+    return (g.members || []).some(function(m) {
+      var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
+      var t = src ? (src.title || src.file_name || '') : '';
+      return String(t).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function groupSearchHtml() {
+    return '<div class="grp-toolbar">'
+      + '<div class="grp-search">'
+      + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="m14 14 3 3"/></svg>'
+      + '<input id="grp-search-input" class="grp-input" type="text" placeholder="搜索作品组" value="' + esc(groupSearchQuery) + '" oninput="groupSearchInputAction(this.value)" aria-label="搜索作品组">'
+      + '</div>'
+      + '<button class="grp-new-btn" type="button" onclick="toggleGroupCreate()">'
+      + '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M7 2v10M2 7h10"/></svg>新建作品组</button>'
+      + '</div>';
+  }
+
+  function groupSearchInputAction(value) {
+    groupSearchQuery = value;
+    renderDocumentGroupManager();
+    var el = document.getElementById('grp-search-input');
+    if (el) { el.focus(); var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} }
+  }
+
+  function toggleGroupCreate() {
+    groupCreateOpen = !groupCreateOpen;
+    renderDocumentGroupManager();
+    if (groupCreateOpen) {
+      var input = document.getElementById('grp-create-input');
+      if (input) input.focus();
+    }
+  }
 
   function toggleGroupExpand(groupId) {
     if (expandedGroups[groupId]) {
@@ -292,8 +336,8 @@
     syncExpandedGroups();
     var selectedCount = libraryStore.deleteSelection.size;
     var pairGroups = [];
-    var html = sameTitleSuggestionsHtml();
-    html += '<div class="grp-create"><label class="grp-create-field">'
+    var html = groupSearchHtml() + sameTitleSuggestionsHtml();
+    html += '<div class="grp-create' + (groupCreateOpen ? ' is-open' : '') + '"><label class="grp-create-field">'
       + '<span class="grp-field-label">作品组标题</span>'
       + '<input id="grp-create-input" class="grp-input" type="text" placeholder="例如：法哲学原理" onkeydown="if(event.key===\'Enter\'){event.preventDefault();createDocumentGroupInline();}">'
       + '</label>'
@@ -301,10 +345,13 @@
     if (selectedCount) {
       html += '<div class="grp-assign-hint">已选 ' + selectedCount + ' 份文献——展开某个作品组后点「加入所选」把它们归入该组</div>';
     }
+    var visibleGroups = libraryStore.documentGroups.filter(groupMatchesSearch);
     if (!libraryStore.documentGroups.length) {
       html += '<div class="grp-empty">还没有作品组。作品组用于把「同一部作品的不同版本 / 原文 / 译本」归到一起，不是文件夹</div>';
+    } else if (!visibleGroups.length) {
+      html += '<div class="grp-empty">没有匹配「' + esc((groupSearchQuery || '').trim()) + '」的作品组</div>';
     }
-    libraryStore.documentGroups.forEach(function(g) {
+    visibleGroups.forEach(function(g) {
       var gid = esc(g.document_group_id);
       var pickerOpen = groupPicker.groupId === g.document_group_id;
       var isExpanded = !!expandedGroups[g.document_group_id];
@@ -318,11 +365,11 @@
       });
       html += '<div class="grp-block' + (isExpanded ? ' is-expanded' : '') + '"><div class="grp-head2">'
         + '<button class="grp-expand-btn" type="button" aria-label="' + (isExpanded ? '收起' : '展开') + '" aria-expanded="' + isExpanded + '" onclick="toggleGroupExpand(\'' + gid + '\')">' + chevronSvg(isExpanded) + '</button>'
-        + '<input class="grp-input grp-title" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)" onclick="event.stopPropagation()">'
+        + '<input class="grp-input grp-title" size="' + Math.max(4, Array.from(String(g.title || '')).reduce(function(n, ch) { return n + (ch.charCodeAt(0) > 255 ? 2 : 1); }, 0) + 1) + '" value="' + esc(g.title) + '" aria-label="作品组标题" onchange="renameDocumentGroupInline(\'' + gid + '\', this.value)" onclick="event.stopPropagation()">'
         + '<span class="grp-head-summary" onclick="toggleGroupExpand(\'' + gid + '\')">'
         + (langSummary.length ? '<span class="grp-head-langs">' + esc(langSummary.join(' · ')) + '</span>' : '')
-        + '<span class="grp-head-count">' + members.length + ' 版本</span></span>'
-        + '<button class="grp-del-btn" type="button" aria-label="删除作品组" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
+        + '<span class="grp-head-count" title="' + members.length + ' 个版本">' + members.length + '</span></span>'
+        + '<button class="grp-del-btn" type="button" aria-label="删除作品组" title="删除作品组" onclick="deleteDocumentGroupAction(\'' + gid + '\',this)">删除组</button>'
         + '</div>';
       if (!isExpanded) { html += '</div>'; return; }
       html += '<div class="grp-body">';
@@ -334,16 +381,23 @@
           var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
           var srcTitle = cleanSourceLabel(src ? (src.title || src.file_name || m.source_file_id) : m.source_file_id);
           var isBase = m.source_file_id === g.base_source_file_id;
-          var language = src ? libLangChipLabel(deps.libraryLanguageCode(src)) : '未识别语言';
+          var langCode = src ? libLangCode(deps.libraryLanguageCode(src)) : '—';
           var format = src ? documentGroupSourceLabel(src) : '未知格式';
-          // 降噪：解析器/格式收进标题 tooltip，成员行只留标题 + 语言 chip + 版本名 + 基准 + 移除。
+          // 基准=单选锚点（实心圆点 + 「基准」标签排最前）；其余版本 hover 才浮出「设为基准」。
+          // 解析器/格式收进标题 tooltip，成员行只留：radio · 标题 · 语言代码 chip · 版本名 · 移除。
           return '<div class="grp-member' + (isBase ? ' is-base' : '') + '">'
-            + '<span class="grp-member-title" title="' + esc(srcTitle + ' · ' + format) + '">' + esc(srcTitle) + '</span>'
-            + '<span class="grp-lang-chip">' + esc(language) + '</span>'
+            + '<button class="grp-base-radio' + (isBase ? ' is-base' : '') + '" type="button"'
+            + (isBase ? ' disabled aria-label="当前基准版本"' : ' aria-label="设为基准版本" onclick="setGroupBaseAction(\'' + gid + '\',\'' + sid + '\')"')
+            + '></button>'
+            + '<div class="grp-member-main">'
+            + '<div class="grp-member-title" title="' + esc(srcTitle + ' · ' + format) + '">' + esc(srcTitle)
+            + (isBase ? '<span class="grp-base-tag">基准</span>' : '') + '</div>'
+            + '<div class="grp-member-meta">'
+            + '<span class="grp-lang-chip">' + esc(langCode) + '</span>'
+            + '<span class="grp-meta-dot" aria-hidden="true">·</span>'
             + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(cleanSourceLabel(m.display_name || '')) + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
-            + '<button class="grp-base-btn' + (isBase ? ' is-base' : '') + '" type="button"'
-            + (isBase ? ' disabled' : ' onclick="setGroupBaseAction(\'' + gid + '\',\'' + sid + '\')"')
-            + '>' + (isBase ? '默认基准' : '设为默认') + '</button>'
+            + '</div></div>'
+            + (isBase ? '' : '<button class="grp-base-btn" type="button" onclick="setGroupBaseAction(\'' + gid + '\',\'' + sid + '\')">设为基准</button>')
             + '<button class="grp-remove-btn" type="button" aria-label="从作品组移除" title="从作品组移除" onclick="removeGroupMemberAction(\'' + sid + '\')">✕</button>'
             + '</div>';
         }).join('') + '</div>';
@@ -352,7 +406,9 @@
         var src = libraryStore.sources.find(function(s) { return s.source_file_id === m.source_file_id; });
         return src && deps.documentSupportsTextAlignment(src) ? {member:m, source:src} : null;
       }).filter(Boolean);
-      if (supported.length >= 2) {
+      var canAlign = supported.length >= 2;
+      var pairExisting = false;
+      if (canAlign) {
         var chinese = supported.find(function(item) {
           return deps.libraryLanguageCode(item.source).indexOf('zh') === 0;
         });
@@ -402,6 +458,8 @@
             + '</div></div>';
         };
         var existingPair = documentGroupAlignmentForPair(g, pairSel.left, pairSel.right);
+        pairExisting = !!existingPair;
+        // 「生成对照」主操作移到底部动作条；展开态才在此渲染左右版本选择。
         if (expandedPairGroupId === g.document_group_id) {
           html += '<div class="grp-pair"><div class="grp-pair-copy">'
             + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
@@ -413,13 +471,6 @@
             + '<button id="grp-pair-generate-' + gid + '" class="grp-align-btn" type="button" onclick="generateSelectedTextAlignmentAction(\'' + gid + '\',this)">' + (existingPair ? '重新生成' : '生成对照') + '</button>'
             + '</div></div>';
           pairGroups.push(g.document_group_id);
-        } else {
-          // 默认折叠：把整块版本选择藏在意图后面，点开才展开。
-          html += '<button class="grp-pair-toggle" type="button" onclick="toggleGroupPair(\'' + gid + '\')">'
-            + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l6 5-6 5"/></svg>'
-            + '<span>选择两版生成对照</span>'
-            + (existingPair ? '<span class="grp-pair-toggle-note">已有直接对照</span>' : '')
-            + '</button>';
         }
       } else if (members.length) {
         html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成双栏对照</div>';
@@ -435,9 +486,14 @@
           + '<button class="grp-base-btn" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">完成</button>'
           + '</div></div>';
       } else {
+        var isPairOpen = expandedPairGroupId === g.document_group_id;
         html += '<div class="grp-body-actions">'
+          + (canAlign && pairExisting ? '<span class="grp-linked"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>已直接对照</span>' : '')
           + '<button class="action-btn sm" type="button" onclick="toggleGroupPicker(\'' + gid + '\')">＋ 添加文献</button>'
           + (selectedCount ? '<button class="action-btn sm" type="button" onclick="assignSelectedToGroupAction(\'' + gid + '\',this)">加入所选（' + selectedCount + '）</button>' : '')
+          + (canAlign ? '<button class="grp-generate-btn" type="button" onclick="toggleGroupPair(\'' + gid + '\')">'
+              + '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1.75" y="3" width="12.5" height="10" rx="1.6"/><path d="M8 3v10"/></svg>'
+              + (isPairOpen ? '收起' : (pairExisting ? '重新生成对照' : '生成对照')) + '</button>' : '')
           + '</div>';
       }
       html += '</div></div>';
@@ -1898,6 +1954,8 @@
   global.joinSelectedToGroup = joinSelectedToGroup;
   global.newGroupFromSelection = newGroupFromSelection;
   global.newGroupFromNameInput = newGroupFromNameInput;
+  global.toggleGroupCreate = toggleGroupCreate;
+  global.groupSearchInputAction = groupSearchInputAction;
   global.toggleGroupPicker = toggleGroupPicker;
   global.toggleGroupExpand = toggleGroupExpand;
   global.toggleGroupPair = toggleGroupPair;

@@ -86,7 +86,7 @@ const context = {
   }]},
   document: {getElementById() {return body;}},
   esc: value => value, sourceFormatLabel: () => 'PDF',
-  libLangChipLabel: () => '英语'
+  libLangChipLabel: () => '英语', libLangCode: () => 'EN'
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
@@ -107,8 +107,11 @@ assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建<
 for (const parser of ['原生文本', 'MinerU']) {
   assert.ok(body.innerHTML.includes('title="Same book · PDF · ' + parser + '"'), body.innerHTML);
 }
-// 语言以 chip 呈现在成员行内。
-assert.ok(body.innerHTML.includes('grp-lang-chip">英语'), body.innerHTML);
+// 语言以短代码 chip 呈现在成员行内。
+assert.ok(body.innerHTML.includes('grp-lang-chip">EN'), body.innerHTML);
+// 基准版有「基准」标签；单选锚点用 radio。
+assert.ok(body.innerHTML.includes('grp-base-tag">基准'), body.innerHTML);
+assert.ok(body.innerHTML.includes('class="grp-base-radio is-base"'), body.innerHTML);
 """
         result = subprocess.run(
             [NODE, "-e", script, str(LIBRARY_JS)], capture_output=True,
@@ -166,7 +169,7 @@ const context = {
   }]},
   document: {getElementById() { return body; }},
   esc: value => value, sourceFormatLabel: () => 'PDF',
-  libLangChipLabel: code => code,
+  libLangChipLabel: code => code, libLangCode: code => code,
   libraryLanguageCode: src => String((src && src.language_code) || ''),
   documentSupportsTextAlignment: () => true,
   showToast() {}
@@ -209,7 +212,7 @@ const context = {
   }]},
   document: {getElementById() { return body; }},
   esc: value => value, sourceFormatLabel: () => 'PDF',
-  libLangChipLabel: code => code,
+  libLangChipLabel: code => code, libLangCode: code => code,
   libraryLanguageCode: src => String((src && src.language_code) || ''),
   documentSupportsTextAlignment: () => true, showToast() {}
 };

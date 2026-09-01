@@ -411,6 +411,20 @@ function libLangChipLabel(scriptLang) {
   return labels[scriptLang] || '其他语言';
 }
 
+// 成员行内的短语言代码 chip（JA / ZH / EN…）：与 libLangChipLabel 的全称互补，
+// 用在密集的版本列表里，让语言成为可扫读的第一维度。
+function libLangCode(scriptLang) {
+  var codes = {
+    'zh-Hans':'ZH', 'zh-Hant':'ZH', en:'EN', de:'DE', fr:'FR', ja:'JA',
+    ko:'KO', es:'ES', it:'IT', pt:'PT', ru:'RU', und:'—', other:'—'
+  };
+  if (scriptLang === 'chinese') return 'ZH';
+  if (scriptLang === 'foreign') return '外';
+  if (codes[scriptLang]) return codes[scriptLang];
+  var base = String(scriptLang || '').split('-')[0].slice(0, 2).toUpperCase();
+  return base || '—';
+}
+
 function libraryLanguageCode(source) {
   var code = String((source && source.language_code) || '');
   if (code) return code;
