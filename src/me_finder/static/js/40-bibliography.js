@@ -30,16 +30,42 @@
     var hit = BIB_LANGUAGE_OPTIONS.find(function(o){ return o[0] === String(code || ''); });
     return hit ? hit[1] : (code === 'und' ? '未识别语言' : '');
   }
-  // 编辑态语言下拉：首项「自动识别」＝清除人工覆盖，并把自动判定的语言标出来。
-  function bibLanguageFieldHTML(src) {
+  // 编辑态语言选择：复用 app 自定义下拉（.app-select），主题化、箭头内嵌，
+  // 用 fixed 定位菜单（openVersionSelect）避免被抽屉滚动容器裁切；
+  // 首项「自动识别」＝清除人工覆盖，并把自动判定的语言标出来。隐藏 input 承载取值。
+  function bibLanguageFieldHTML(src, full) {
     var manual = String((src && src.language_code_manual) || '');
     var autoLabel = bibLanguageLabel(src && src.language_code_auto) || '未识别语言';
-    var opts = '<option value=""' + (manual ? '' : ' selected') + '>自动识别（' + esc(autoLabel) + '）</option>'
-      + BIB_LANGUAGE_OPTIONS.map(function(o){
-          return '<option value="' + o[0] + '"' + (o[0] === manual ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
-        }).join('');
-    return '<div class="bibliographic-field full" data-metadata-field="language"><label for="bib-language">语言</label>'
-      + '<select id="bib-language" class="bib-language-select">' + opts + '</select></div>';
+    var autoOptLabel = '自动识别（' + autoLabel + '）';
+    var currentLabel = manual ? bibLanguageLabel(manual) : autoOptLabel;
+    var chevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
+    function opt(code, label, selected) {
+      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" role="option"'
+        + ' onclick="pickBibLanguage(event,\'' + code + '\',\'' + esc(label) + '\')">' + esc(label) + '</button>';
+    }
+    var options = opt('', autoOptLabel, !manual)
+      + BIB_LANGUAGE_OPTIONS.map(function(o){ return opt(o[0], o[1], o[0] === manual); }).join('');
+    return '<div class="bibliographic-field' + (full ? ' full' : '') + '" data-metadata-field="language">'
+      + '<label for="bib-language-trigger">语言</label>'
+      + '<input type="hidden" id="bib-language" value="' + esc(manual) + '">'
+      + '<div class="app-select bib-language-select" id="bib-language-select">'
+      + '<button class="app-select-trigger" id="bib-language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="openVersionSelect(event,\'bib-language-select\')">'
+      + '<span class="app-select-value" id="bib-language-value">' + esc(currentLabel) + '</span>' + chevron + '</button>'
+      + '<div class="app-select-menu bib-language-menu" role="listbox">' + options + '</div>'
+      + '</div></div>';
+  }
+
+  // 选语言：写隐藏 input（供 collectBibliographicForm 读取）+ 更新触发器文案与选中态。
+  function pickBibLanguage(event, code, label) {
+    if (event) event.stopPropagation();
+    var hidden = document.getElementById('bib-language');
+    if (hidden) hidden.value = code;
+    var value = document.getElementById('bib-language-value');
+    if (value) value.textContent = label;
+    var menu = document.querySelector('#bib-language-select .app-select-menu');
+    if (menu) menu.querySelectorAll('.app-select-option').forEach(function(o){ o.classList.remove('is-selected'); });
+    if (event && event.currentTarget) event.currentTarget.classList.add('is-selected');
+    if (typeof closeAppSelects === 'function') closeAppSelects();
   }
   function bibFieldCacheFromMeta(meta) {
     var out = {};
@@ -64,7 +90,8 @@
       fieldsHTML = field('author','author','作者',meta.author,false)
         + field('title','title','篇名',meta.title,true)
         + field('publisher','publisher','学校',meta.publisher,false)
-        + field('publish-year','publish_year','年份',meta.publish_year,false);
+        + field('publish-year','publish_year','年份',meta.publish_year,false)
+        + bibLanguageFieldHTML(src, true);
     } else if (docType === 'journal_article') {
       fieldsHTML = field('title','title','标题（篇名）',meta.title,true)
         + field('author','author','作者',meta.author,false)
@@ -74,17 +101,22 @@
         + field('publish-year','publish_year','时间（年份）',meta.publish_year,false)
         + field('page-range','page_range','页码（起止页）',meta.page_range,false)
         + field('doi','doi','DOI',meta.doi,false)
-        + field('issn','issn','ISSN',meta.issn,false);
+        + field('issn','issn','ISSN',meta.issn,false)
+        + bibLanguageFieldHTML(src, true);
     } else {
+      // 书名整宽（与查看态一致），令 ISBN 与「语言」自然落成同一行的左右半边。
       fieldsHTML = field('author','author','作者',meta.author,false) + field('country','country','国别',meta.country,false)
-        + field('title','title','书名',meta.title,false) + field('translator','translator','译者',meta.translator,false)
+        + field('title','title','书名',meta.title,true) + field('translator','translator','译者',meta.translator,false)
         + field('publish-place','publish_place','出版地',meta.publish_place,false)
         + field('publisher','publisher','出版社',meta.publisher,false) + field('publish-year','publish_year','出版年份',meta.publish_year,false)
-        + field('isbn','isbn','ISBN',meta.isbn,true);
+        + field('isbn','isbn','ISBN',meta.isbn,false)
+        + bibLanguageFieldHTML(src, false);
     }
     var sid = esc(src.source_file_id);
     var isJournal = docType === 'journal_article';
     var isBook = docType === 'book' || docType === 'translated_book';
+    // 「自动识别 / 重新识别」读 PDF 页面，仅 PDF 适用；EPUB 已从 OPF 填好，走「查图书信息」+ 手动。
+    var canDetect = src.source_type === 'pdf';
     // 一条紧凑工具条：主操作收敛成一个 split 按钮（点主体走当前生效源，▼ 换源），
     // 「自动识别」独立次按钮，识别依据/重新识别等低频动作收进 ⋯ 菜单。
     // 主按钮默认按文献语言智能选源（中文→知网、外文→Crossref/图书目录）；
@@ -104,15 +136,15 @@
         + '</span>'
         + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(sid, lookupSource) + '</span>'
         + '</span>'
-        + '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>'
-        + (meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
+        + (canDetect ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>' : '')
+        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
         + '</div>';
     } else {
       // 图书 / 学位论文：维持原有平铺工具条，不改交互。
       toolbarHTML = '<div class="bib-toolbar">'
         + (isBook ? '<button class="action-btn primary" type="button" onclick="lookupGoogleBooks(\'' + sid + '\')">查图书信息</button>' : '')
-        + '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>'
-        + (meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
+        + (canDetect ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>' : '')
+        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
         + '</div>';
     }
     var lookupResultsHTML = isJournal
@@ -137,7 +169,7 @@
       + '</div>'
       + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
       + '<div class="bibliographic-grid">'
-      + fieldsHTML + bibLanguageFieldHTML(src) + '</div>'
+      + fieldsHTML + '</div>'
       + toolbarHTML
       + lookupResultsHTML
       + citationPanelHTML
@@ -167,22 +199,26 @@
         + '<span class="bib-read-label">' + label + '</span>'
         + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
     }
+    var langLabel = bibLanguageLabel(src.language_code) || '未识别语言';
     var rows;
     if (docType === 'thesis') {
       rows = row('作者','author',meta.author) + row('篇名','title',meta.title,true)
-        + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year);
+        + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year)
+        + row('语言','language',langLabel,true);
     } else if (docType === 'journal_article') {
       rows = row('篇名','title',meta.title,true) + row('作者','author',meta.author)
         + row('出版刊物','journal_name',meta.journal_name) + row('卷次','volume',meta.volume)
         + row('期号','issue',meta.issue) + row('年份','publish_year',meta.publish_year)
-        + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn);
+        + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn)
+        + row('语言','language',langLabel,true);
     } else {
+      // ISBN 与「语言」各占半边同一行（书名整宽保证成对）。
       rows = row('作者','author',meta.author) + row('国别','country',meta.country)
         + row('书名','title',meta.title,true) + row('译者','translator',meta.translator)
         + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
-        + row('出版年份','publish_year',meta.publish_year) + row('ISBN','isbn',meta.isbn,true);
+        + row('出版年份','publish_year',meta.publish_year)
+        + row('ISBN','isbn',meta.isbn) + row('语言','language',langLabel);
     }
-    rows += row('语言', 'language', bibLanguageLabel(src.language_code) || '未识别语言');
     // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
     // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
     var confirmed = isBibliographicTypeConfirmed(meta);
@@ -989,6 +1025,7 @@
   global.openCnkiExternal = openCnkiExternal;
   global.openCnkiCandidate = openCnkiCandidate;
   global.parseCnkiCitationText = parseCnkiCitationText;
+  global.pickBibLanguage = pickBibLanguage;
   global.detectBibliographicMetadata = detectBibliographicMetadata;
   global.saveBibliographicMetadata = saveBibliographicMetadata;
   global.returnToSearch = returnToSearch;

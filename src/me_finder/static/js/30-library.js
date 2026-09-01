@@ -1736,7 +1736,9 @@
     var corpusTitle = vol ? (vol.corpus_title || '') : '';
 
     var bibliographicHTML = '';
-    if (src.source_type === 'pdf') {
+    // EPUB（source_type=word + 格式 EPUB）在导入时已从 OPF 填好书目元数据，
+    // 与 PDF 共用同一套书目信息面板；Word 暂不参与。
+    if (src.source_type === 'pdf' || libraryFileFacet(src) === 'epub') {
       // 选中即以当前元数据初始化字段缓存；切类型只在缓存里保留隐藏字段，不会丢。
       global.MEFinder.bibliography.cacheFields(sourceId, sourceBibliographicMetadata(src));
       bibliographicHTML = global.MEFinder.bibliography.renderSection(src);

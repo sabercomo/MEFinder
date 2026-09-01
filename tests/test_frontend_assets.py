@@ -293,7 +293,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 「生成对照」版本自定义下拉的打开与选择 / 管理弹窗手风琴的组展开与对照折叠、
             # 下拉顶部命名新建（净 45）。
             "static/js/30-library.js": 45,
-            "static/js/40-bibliography.js": 26,
+            # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
+            "static/js/40-bibliography.js": 27,
             "static/js/70-vision.js": 24,
             "static/js/71-vision-providers.js": 18,
             "static/js/80-import.js": 20,
@@ -387,9 +388,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）；
     # 书目信息新增「语言」下拉（人工覆盖自动识别）；vision 刷新统计改走 MEFinder.visionProviders.render。
     BASELINE_SHA256 = (
-        "3d1dfc09f7d244490bd84f18a42b7b9a791e9b9bd497260c71203911572197a6"
+        "8dffb69003aec6e0bb3f37721eed52784d07e0e02700518b06f2cd1c691608be"
     )
-    BASELINE_BYTES = 1002014
+    BASELINE_BYTES = 1004919
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

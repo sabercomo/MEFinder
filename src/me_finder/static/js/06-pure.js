@@ -497,7 +497,7 @@ function metadataStatusLabel(status) {
 
 // 书目元数据来源中文名。原在 40-bibliography.js，纯映射。
 function metadataSourceLabel(source) {
-  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据'})[source] || source || '未知';
+  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据',epub_package:'EPUB 元数据'})[source] || source || '未知';
 }
 
 // 合并书源的书目字段：优先取顶层非空值覆盖嵌套元数据。原在 40-bibliography.js。
