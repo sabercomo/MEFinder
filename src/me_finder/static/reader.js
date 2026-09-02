@@ -260,17 +260,54 @@
     var header = document.createElement('header');
     header.className = 'mef-reader-header';
 
+    // ── 第一行：正在阅读 · 书名 · 作者 ·········· ⋯ ×
+    var headRow = document.createElement('div');
+    headRow.className = 'mef-reader-headrow';
+
     var heading = document.createElement('div');
     heading.className = 'mef-reader-heading';
     var eyebrow = document.createElement('span');
     eyebrow.className = 'mef-reader-eyebrow';
-    eyebrow.textContent = '结构化文本';
+    eyebrow.textContent = '正在阅读';
     var title = document.createElement('h2');
     title.id = 'mef-reader-title';
     title.className = 'mef-reader-title';
     title.textContent = '文献阅读';
+    var subtitle = document.createElement('div');
+    subtitle.className = 'mef-reader-subtitle';
+    subtitle.hidden = true;
     heading.appendChild(eyebrow);
     heading.appendChild(title);
+    heading.appendChild(subtitle);
+
+    // ⋯ 更多（原始版面 / 逐字校对，以及当前解析记录）
+    var overflow = createButton('', 'mef-reader-overflow', 'reader-overflow');
+    overflow.setAttribute('aria-label', '更多');
+    overflow.setAttribute('title', '更多');
+    var overflowGlyph = document.createElement('span');
+    overflowGlyph.setAttribute('aria-hidden', 'true');
+    overflowGlyph.textContent = '⋯';
+    overflow.appendChild(overflowGlyph);
+
+    var close = createButton('', 'mef-reader-close', 'close');
+    close.setAttribute('aria-label', '关闭结构化阅读器');
+    var closeGlyph = document.createElement('span');
+    closeGlyph.setAttribute('aria-hidden', 'true');
+    closeGlyph.textContent = '✕';
+    close.appendChild(closeGlyph);
+
+    headRow.appendChild(heading);
+    headRow.appendChild(overflow);
+    headRow.appendChild(close);
+
+    // ── 第二行：[阅读 | 双栏对照] ·········· 页眉页脚开关  引用页
+    var toolRow = document.createElement('div');
+    toolRow.className = 'mef-reader-toolrow';
+
+    // 模式轴：阅读 / 双栏对照（分段控件）。无对齐版本时整体隐藏。
+    var modeSeg = document.createElement('div');
+    modeSeg.className = 'mef-reader-mode-seg';
+    modeSeg.hidden = true;
 
     var current = createButton(
       '正在载入…',
@@ -283,29 +320,37 @@
     current.setAttribute('aria-expanded', 'false');
     current.textContent = '正在载入…';
 
-    var comparisonLaunchers = document.createElement('div');
-    comparisonLaunchers.className = 'mef-reader-comparison-launchers';
-    comparisonLaunchers.hidden = true;
-
+    // 页眉页脚：开／关状态 → 开关（复用对照栏那套开关样式）。
     var toggleDecorations = createButton(
-      '显示页眉页脚',
-      'mef-reader-decoration-toggle',
+      '',
+      'mef-reader-follow-switch mef-reader-decoration-switch',
       'toggle-decorations'
     );
     toggleDecorations.setAttribute('aria-pressed', 'false');
+    toggleDecorations.setAttribute('aria-label', '显示页眉页脚');
     toggleDecorations.setAttribute(
       'title',
-      '页眉、页脚与页码默认隐藏；点此临时显示以对照原书'
+      '页眉、页脚与页码默认隐藏；开启以对照原书'
     );
+    var decoTrack = document.createElement('span');
+    decoTrack.className = 'mef-follow-track';
+    decoTrack.setAttribute('aria-hidden', 'true');
+    var decoLabel = document.createElement('span');
+    decoLabel.className = 'mef-follow-label';
+    decoLabel.textContent = '页眉页脚';
+    toggleDecorations.appendChild(decoTrack);
+    toggleDecorations.appendChild(decoLabel);
 
-    var close = createButton('关闭', 'mef-reader-close', 'close');
-    close.setAttribute('aria-label', '关闭结构化阅读器');
+    // 右侧控件自成一组、靠右——无论模式轴是否显示，页眉页脚开关与引用页始终贴右。
+    var toolRight = document.createElement('div');
+    toolRight.className = 'mef-reader-toolrow-right';
+    toolRight.appendChild(toggleDecorations);
+    toolRight.appendChild(current);
+    toolRow.appendChild(modeSeg);
+    toolRow.appendChild(toolRight);
 
-    header.appendChild(heading);
-    header.appendChild(current);
-    header.appendChild(comparisonLaunchers);
-    header.appendChild(toggleDecorations);
-    header.appendChild(close);
+    header.appendChild(headRow);
+    header.appendChild(toolRow);
 
     var citationBar = document.createElement('div');
     citationBar.className = 'mef-reader-citation-bar';
@@ -376,35 +421,60 @@
     comparisonPane.hidden = true;
     var comparisonHeader = document.createElement('div');
     comparisonHeader.className = 'mef-reader-pane-header';
-    var comparisonTitle = document.createElement('strong');
-    comparisonTitle.className = 'mef-reader-pane-title';
-    comparisonTitle.textContent = '对齐版本';
+    // 对照版本：语言/格式落在这个选择器里（拆胶囊后的去处）。多版本时可点切换。
+    var comparisonTitle = createButton('', 'mef-reader-version-select', 'cycle-comparison-target');
+    var comparisonTitleText = document.createElement('span');
+    comparisonTitleText.className = 'mef-reader-version-name';
+    comparisonTitleText.textContent = '对齐版本';
+    var comparisonTitleCaret = document.createElement('span');
+    comparisonTitleCaret.className = 'mef-reader-version-caret';
+    comparisonTitleCaret.setAttribute('aria-hidden', 'true');
+    comparisonTitleCaret.textContent = '▾';
+    comparisonTitle.appendChild(comparisonTitleText);
+    comparisonTitle.appendChild(comparisonTitleCaret);
+    comparisonTitle.setAttribute('aria-label', '切换对照版本');
     var comparisonNavigation = document.createElement('div');
     comparisonNavigation.className = 'mef-reader-comparison-navigation';
-    var comparisonPrevious = createButton(
-      '向前翻',
-      'mef-reader-pane-action',
-      'comparison-previous'
-    );
-    var comparisonNext = createButton(
-      '向后翻',
-      'mef-reader-pane-action',
-      'comparison-next'
-    );
+    // 自动跟随是一个开／关状态 → 用开关，而不是文字按钮。
     var comparisonFollow = createButton(
-      '自动跟随：开',
-      'mef-reader-pane-action is-active',
+      '',
+      'mef-reader-follow-switch is-active',
       'toggle-comparison-follow'
     );
+    var comparisonFollowTrack = document.createElement('span');
+    comparisonFollowTrack.className = 'mef-follow-track';
+    comparisonFollowTrack.setAttribute('aria-hidden', 'true');
+    var comparisonFollowLabel = document.createElement('span');
+    comparisonFollowLabel.className = 'mef-follow-label';
+    comparisonFollowLabel.textContent = '自动跟随';
+    comparisonFollow.appendChild(comparisonFollowTrack);
+    comparisonFollow.appendChild(comparisonFollowLabel);
     comparisonFollow.setAttribute('aria-pressed', 'true');
+    comparisonFollow.setAttribute('aria-label', '自动跟随源文滚动');
+    comparisonFollow.setAttribute('title', '开启后对照栏随源文自动滚动到对应段落');
+    // 翻页是独立动作 → 一对 ‹ › 图标按钮。
+    var comparisonPrevious = createButton(
+      '‹',
+      'mef-reader-pane-action mef-reader-pane-icon',
+      'comparison-previous'
+    );
+    comparisonPrevious.setAttribute('aria-label', '向前翻');
+    comparisonPrevious.setAttribute('title', '向前翻');
+    var comparisonNext = createButton(
+      '›',
+      'mef-reader-pane-action mef-reader-pane-icon',
+      'comparison-next'
+    );
+    comparisonNext.setAttribute('aria-label', '向后翻');
+    comparisonNext.setAttribute('title', '向后翻');
     var comparisonClose = createButton(
       '收起',
       'mef-reader-pane-action',
       'close-comparison'
     );
+    comparisonNavigation.appendChild(comparisonFollow);
     comparisonNavigation.appendChild(comparisonPrevious);
     comparisonNavigation.appendChild(comparisonNext);
-    comparisonNavigation.appendChild(comparisonFollow);
     comparisonNavigation.appendChild(comparisonClose);
     comparisonHeader.appendChild(comparisonTitle);
     comparisonHeader.appendChild(comparisonNavigation);
@@ -415,7 +485,19 @@
     var comparisonContent = document.createElement('div');
     comparisonContent.className = 'mef-reader-content';
     comparisonViewport.appendChild(comparisonContent);
+    // 低置信对齐提示：命中不精确（precise_highlight_available=false）时显式标注 + 校正入口。
+    var comparisonWarn = createButton(
+      '对齐可能不准 · 校正',
+      'mef-reader-align-warn',
+      'report-misalignment'
+    );
+    comparisonWarn.hidden = true;
+    comparisonWarn.setAttribute(
+      'title',
+      '此处对齐为粗定位，可能锚到相邻段落或注释；点此了解如何校正'
+    );
     comparisonPane.appendChild(comparisonHeader);
+    comparisonPane.appendChild(comparisonWarn);
     comparisonPane.appendChild(comparisonViewport);
 
     readerBody.appendChild(sourcePane);
@@ -437,19 +519,24 @@
     document.body.appendChild(root);
 
     root.addEventListener('click', function (event) {
-      var action = event.target && event.target.dataset
-        ? event.target.dataset.readerAction
-        : '';
+      // 用 closest 兜住按钮内部的子元素（开关的标签/轨道、分段按钮的文字）。
+      var trigger = event.target && event.target.closest
+        ? event.target.closest('[data-reader-action]')
+        : null;
+      var action = trigger ? trigger.dataset.readerAction : '';
       if (action === 'close') closeReader();
       if (action === 'toggle-citation') toggleCitationMenu();
       if (action === 'copy-footnote') copyCachedCitation('chinese');
       if (action === 'copy-gbt7714') copyCachedCitation('gb');
       if (action === 'locate-alignment') {
-        locateInAlignedVersion(event.target.dataset.readerTarget || '');
+        locateInAlignedVersion(trigger.dataset.readerTarget || '');
       }
+      if (action === 'reader-single') closeComparison();
+      if (action === 'cycle-comparison-target') cycleComparisonTarget();
+      if (action === 'report-misalignment') reportMisalignment();
       if (action === 'open-comparison') {
         locateInAlignedVersion(
-          event.target.dataset.readerTarget || '',
+          trigger.dataset.readerTarget || '',
           sourceCenterRange()
         );
       }
@@ -477,9 +564,11 @@
       panel: panel,
       title: title,
       eyebrow: eyebrow,
+      subtitle: subtitle,
+      overflow: overflow,
       current: current,
       toggleDecorations: toggleDecorations,
-      comparisonLaunchers: comparisonLaunchers,
+      modeSeg: modeSeg,
       citationBar: citationBar,
       citationContext: citationContext,
       copyFootnote: copyFootnote,
@@ -494,7 +583,9 @@
       viewport: viewport,
       content: content,
       comparisonPane: comparisonPane,
+      comparisonWarn: comparisonWarn,
       comparisonTitle: comparisonTitle,
+      comparisonTitleText: comparisonTitleText,
       comparisonPrevious: comparisonPrevious,
       comparisonNext: comparisonNext,
       comparisonFollow: comparisonFollow,
@@ -570,7 +661,7 @@
     Array.from(state.elements.alignmentActions.querySelectorAll('button')).forEach(
       function (button) { button.disabled = state.alignmentLoading; }
     );
-    Array.from(state.elements.comparisonLaunchers.querySelectorAll('button')).forEach(
+    Array.from(state.elements.modeSeg.querySelectorAll('button')).forEach(
       function (button) { button.disabled = state.alignmentLoading; }
     );
     if (!target) {
@@ -589,17 +680,76 @@
     state.elements.citationContext.textContent = context;
   }
 
+  // 清标题：去掉文件名里常见的来源/作者括号垃圾（如「 (…(Judith Butler)) (Z-Library)」）。
+  function cleanReaderTitle(raw) {
+    var t = String(raw || '').trim();
+    var idx = t.indexOf(' (');
+    if (idx > 0 && /[A-Za-z]|Library|z-?lib/i.test(t.slice(idx))) {
+      t = t.slice(0, idx).trim();
+    }
+    return t || String(raw || '');
+  }
+
+  function readerByline(source) {
+    if (!source) return '';
+    var author = String(source.author || source.authors || source.creator || '').trim();
+    var translator = String(source.translator || source.translators || '').trim();
+    var parts = [];
+    if (author) parts.push(author + ' 著');
+    if (translator) parts.push(translator + ' 译');
+    return parts.join(' · ');
+  }
+
+  var READER_LANGUAGE_LABELS = {
+    'zh-Hans': '简体中文',
+    'zh-Hant': '繁体中文',
+    en: '英语',
+    de: '德语',
+    fr: '法语',
+    ja: '日语',
+    ko: '韩语'
+  };
+
+  // 紧凑版本标签：语言 · 格式（拆胶囊后落在选择器/栏头里）。
+  function compactVersionLabel(languageCode, format) {
+    var language = READER_LANGUAGE_LABELS[String(languageCode || '')] || '未识别语言';
+    var fmt = String(format || '').toUpperCase();
+    return language + (fmt ? ' · ' + fmt : '');
+  }
+
+  function shortAlignLabel(target) {
+    return compactVersionLabel(target.language_code, target.source_format);
+  }
+
+  function sourceVersionLabel() {
+    var s = state.source || {};
+    if (!s.language_code) return cleanReaderTitle(state.title) || '当前版本';
+    return compactVersionLabel(s.language_code, s.source_format || s.format);
+  }
+
+  // 低置信对齐的「校正」入口：先说明成因，并把当前源栏可见范围重新定位一次（多为最有效的自助校正）。
+  function reportMisalignment() {
+    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正。');
+    if (state.comparison.open && state.comparison.targetSourceId) {
+      locateInAlignedVersion(state.comparison.targetSourceId, sourceCenterRange());
+    }
+  }
+
+  // 多版本时点选择器切到下一个对齐目标。
+  function cycleComparisonTarget() {
+    var targets = state.alignmentTargets || [];
+    if (targets.length < 2) return;
+    var currentId = state.comparison.targetSourceId;
+    var idx = -1;
+    targets.forEach(function (t, i) {
+      if (String(t.source_file_id || '') === currentId) idx = i;
+    });
+    var next = targets[(idx + 1 + targets.length) % targets.length];
+    if (next) locateInAlignedVersion(String(next.source_file_id || ''), sourceCenterRange());
+  }
+
   function alignmentTargetDisplayLabel(target) {
-    var languageLabels = {
-      'zh-Hans': '简体中文',
-      'zh-Hant': '繁体中文',
-      en: '英语',
-      de: '德语',
-      fr: '法语',
-      ja: '日语',
-      ko: '韩语'
-    };
-    var language = languageLabels[String(target.language_code || '')] || '未识别语言';
+    var language = READER_LANGUAGE_LABELS[String(target.language_code || '')] || '未识别语言';
     var format = String(target.source_format || '').toUpperCase();
     var displayName = String(target.display_name || '另一版本');
     return language + (format ? ' · ' + format : '') + ' · ' + displayName;
@@ -608,8 +758,10 @@
   function renderAlignmentActions() {
     if (!state.elements) return;
     state.elements.alignmentActions.replaceChildren();
-    state.elements.comparisonLaunchers.replaceChildren();
-    state.alignmentTargets.forEach(function (target) {
+    var seg = state.elements.modeSeg;
+    seg.replaceChildren();
+    var targets = state.alignmentTargets;
+    targets.forEach(function (target) {
       var button = createButton(
         '在' + alignmentTargetDisplayLabel(target) + '中定位',
         'mef-reader-alignment-action',
@@ -617,17 +769,38 @@
       );
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
-
-      var launcher = createButton(
-        '双栏对照 · ' + alignmentTargetDisplayLabel(target),
-        'mef-reader-comparison-launcher',
-        'open-comparison'
-      );
-      launcher.dataset.readerTarget = String(target.source_file_id || '');
-      state.elements.comparisonLaunchers.appendChild(launcher);
     });
-    state.elements.comparisonLaunchers.hidden = !state.alignmentTargets.length;
+    // 模式轴：[阅读 | 双栏对照]。「双栏对照」默认对齐首个（或当前打开的）版本。
+    if (targets.length) {
+      var defaultTarget = state.comparison.open && state.comparison.targetSourceId
+        ? state.comparison.targetSourceId
+        : String(targets[0].source_file_id || '');
+      var readBtn = createButton('阅读', 'mef-reader-mode-btn', 'reader-single');
+      var compBtn = createButton('双栏对照', 'mef-reader-mode-btn', 'open-comparison');
+      compBtn.dataset.readerTarget = defaultTarget;
+      // 语言/格式落在提示里（拆开原来「双栏对照 · 英语 · EPUB · 英文」那颗胶囊）。
+      compBtn.title = '双栏对照 · ' + alignmentTargetDisplayLabel(targets[0]);
+      seg.appendChild(readBtn);
+      seg.appendChild(compBtn);
+      seg.hidden = false;
+      syncModeSegment();
+    } else {
+      seg.hidden = true;
+    }
     updateCitationControls();
+  }
+
+  // 让模式分段的选中态跟随「是否正在对照」。
+  function syncModeSegment() {
+    if (!state.elements || !state.elements.modeSeg || state.elements.modeSeg.hidden) return;
+    var comparing = !!state.comparison.open;
+    Array.from(state.elements.modeSeg.querySelectorAll('.mef-reader-mode-btn')).forEach(
+      function (btn) {
+        var active = btn.dataset.readerAction === 'open-comparison' ? comparing : !comparing;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      }
+    );
   }
 
   async function loadAlignmentTargets(sourceId) {
@@ -816,7 +989,7 @@
     var meta = document.createElement('header');
     meta.className = 'mef-reader-item-meta';
     var label = document.createElement('span');
-    label.className = 'mef-reader-item-label';
+    label.className = 'mef-reader-item-label is-source-page';
     var isParagraph = item.item_type === 'word_paragraph';
     label.textContent = item.page_display ||
       (isParagraph
@@ -847,9 +1020,6 @@
       comparison.previousStart === null;
     state.elements.comparisonNext.disabled = comparison.loading ||
       !comparison.hasMore || comparison.nextStart === null;
-    state.elements.comparisonFollow.textContent = comparison.autoFollow
-      ? '自动跟随：开'
-      : '自动跟随：关';
     state.elements.comparisonFollow.classList.toggle('is-active', comparison.autoFollow);
     state.elements.comparisonFollow.setAttribute(
       'aria-pressed',
@@ -972,14 +1142,30 @@
     state.elements.readerBody.classList.add('is-comparing');
     state.elements.comparisonPane.hidden = false;
     state.elements.sourcePaneHeader.hidden = false;
-    state.elements.sourcePaneTitle.textContent = state.title || '当前版本';
-    state.elements.comparisonTitle.textContent = comparison.targetDisplayName;
+    state.elements.sourcePaneTitle.textContent = sourceVersionLabel();
+    var targetObj = (state.alignmentTargets || []).filter(function (t) {
+      return String(t.source_file_id || '') === targetSourceId;
+    })[0];
+    state.elements.comparisonTitleText.textContent = targetObj
+      ? shortAlignLabel(targetObj)
+      : comparison.targetDisplayName;
+    state.elements.comparisonTitle.classList.toggle(
+      'is-switchable',
+      (state.alignmentTargets || []).length > 1
+    );
+    // 精确高亮不可用 = 粗定位 → 显式标注低置信，给「校正」入口。
+    var lowConfidence = (payload.preciseHighlightAvailable != null
+      ? payload.preciseHighlightAvailable
+      : payload.precise_highlight_available) === false;
+    comparison.lowConfidence = lowConfidence;
+    state.elements.comparisonWarn.hidden = !lowConfidence;
     if (sourceHighlight) {
       positionSourceTarget(state.elements.content.querySelector(
         '[data-reader-index="' + sourceHighlight.startIndex + '"]'
       ));
     }
     updateComparisonControls();
+    syncModeSegment();
     return loadComparisonWindow(comparison.currentIndex);
   }
 
@@ -1005,7 +1191,9 @@
     state.elements.readerBody.classList.remove('is-comparing');
     state.elements.comparisonPane.hidden = true;
     state.elements.sourcePaneHeader.hidden = true;
+    state.elements.comparisonWarn.hidden = true;
     state.elements.comparisonContent.replaceChildren();
+    syncModeSegment();
   }
 
   function toggleComparisonFollow() {
@@ -1741,8 +1929,9 @@
     );
     var button = state.elements.toggleDecorations;
     if (button) {
-      button.textContent = show ? '隐藏页眉页脚' : '显示页眉页脚';
+      button.classList.toggle('is-active', show);
       button.setAttribute('aria-pressed', show ? 'true' : 'false');
+      button.setAttribute('aria-label', show ? '隐藏页眉页脚' : '显示页眉页脚');
     }
   }
 
@@ -2220,15 +2409,21 @@
         ? Math.max(0, Math.floor(Number(payload.last_position)))
         : null;
       state.source = payload.source || state.source;
-      state.elements.eyebrow.textContent = state.source && state.source.parser_label
-        ? '结构化文本 · ' + state.source.parser_label
-        : '结构化文本';
+      // 眉标固定「正在阅读」；解析记录（结构化文本 · MinerU）挪进 ⋯ 提示，不再占眉标。
+      state.elements.overflow.title = state.source && state.source.parser_label
+        ? '结构化文本 · ' + state.source.parser_label + ' · 原始版面 / 逐字校对'
+        : '原始版面 / 逐字校对';
       if (!state.title && state.source) {
         state.title = state.source.display_title ||
           state.source.document_title ||
           state.source.file_name ||
           '';
-        state.elements.title.textContent = state.title || '文献阅读';
+      }
+      if (state.source) {
+        state.elements.title.textContent = cleanReaderTitle(state.title) || '文献阅读';
+        var byline = readerByline(state.source);
+        state.elements.subtitle.textContent = byline;
+        state.elements.subtitle.hidden = !byline;
       }
 
       if (mode === 'replace') state.items.clear();
@@ -2444,8 +2639,10 @@
     state.currentIndex = resolveTargetIndex(options);
     prepareHighlights(options);
 
-    state.elements.title.textContent = state.title || '文献阅读';
-    state.elements.eyebrow.textContent = '结构化文本';
+    state.elements.title.textContent = cleanReaderTitle(state.title) || '文献阅读';
+    state.elements.eyebrow.textContent = '正在阅读';
+    state.elements.subtitle.textContent = '';
+    state.elements.subtitle.hidden = true;
     state.elements.current.textContent = '正在载入…';
     state.elements.current.disabled = true;
     state.elements.root.hidden = false;

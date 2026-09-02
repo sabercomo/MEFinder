@@ -401,11 +401,20 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 续三：「＋ 新建作品组」从右上角移到搜索工具行（搜索占宽、新建在右）；
     # 弹窗标题保持「管理作品组」+ 副标题「整理同一作品的不同版本」；
     # 组标题 input 用 field-sizing/size 贴合内容宽度，语言摘要紧贴书名不再被顶远。
-    # （reader.js 双栏对照重做尚未纳入本基线。）
+    # 0.5.2 续四：组间留白改为均匀——body gap 归零，靠组头对称 padding(13px) + 单条发丝线均分，
+    # 不再叠加 body gap / block margin/padding；toolbar/suggest/create 各自 margin-bottom 补位。
+    # 0.5.2 阅读器 Stage1：双栏对照右栏「自动跟随」文字按钮改开关（标签+轨道）、翻页改 ‹ › 图标按钮。
+    # 0.5.2 阅读器 Stage2：头部按效果图重做——两行式（正在阅读+清标题+作者行 / ⋯ ×；模式轴 + 页眉页脚开关 + 引用页 pill）；
+    #   杂糅胶囊「双栏对照·英语·EPUB·英文」拆成 [阅读|双栏对照] 分段控件（语言/格式落 title 提示）；
+    #   显示页眉页脚改开关；引用页改强调色 pill；事件委托改 closest 兜住按钮子元素；标题清 Z-Library 垃圾。
+    # 0.5.2 阅读器 Stage3/4：对照栏内部——左栏头改版本标签、右栏头改「语言·格式 ▾」版本选择器（多版本可切换）；
+    #   页码统一成 chip（源栏引用页=强调色、对照栏原书页=中性灰）；低置信对齐（precise_highlight_available=false）
+    #   显式提示条「对齐可能不准 · 校正」。
+    # 0.5.2 阅读器修：右侧控件（页眉页脚开关+引用页）自成一组 margin-left:auto，无对照(分段隐藏)时也贴右。
     BASELINE_SHA256 = (
-        "74c3f2bb0481e3f6bbef37aa2c835c27f4f9d0af3c7eb52be9fccbdcb744d89d"
+        "9a86f12df2e5c6dd32ff1e5d2cd16996c4063eb42e48260069631e878b2bb032"
     )
-    BASELINE_BYTES = 1018399
+    BASELINE_BYTES = 1031633
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

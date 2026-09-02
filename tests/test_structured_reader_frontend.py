@@ -28,23 +28,23 @@ APP_JS = _read_split_source("js", ".js", "app.js")
 
 class StructuredReaderFrontendTests(unittest.TestCase):
     def test_reader_header_keeps_close_in_the_rightmost_column(self) -> None:
-        self.assertRegex(
-            READER_CSS,
-            r"\.mef-reader-header\s*\{[^}]*grid-template-columns:\s*"
-            r"minmax\(0, 1fr\) auto auto auto auto",
-        )
+        # 两行式头部：书名行（含 ⋯ 与 ×）在上，模式轴 / 控件行在下。
+        self.assertIn(".mef-reader-headrow", READER_CSS)
+        self.assertIn(".mef-reader-toolrow", READER_CSS)
+        # × 关闭仍是书名行最右：overflow 先 append、close 后 append。
         self.assertLess(
-            READER_JS.index("header.appendChild(toggleDecorations)"),
-            READER_JS.index("header.appendChild(close)"),
+            READER_JS.index("headRow.appendChild(overflow)"),
+            READER_JS.index("headRow.appendChild(close)"),
         )
 
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)
         self.assertIn("state.source.parser_label", READER_JS)
+        # 解析记录（结构化文本 · MinerU）挪进 ⋯ 提示，不再占眉标；眉标固定「正在阅读」。
         self.assertIn("'结构化文本 · ' + state.source.parser_label", READER_JS)
         open_start = READER_JS.index("async function openReader(")
         open_end = READER_JS.index("function openForSearchResult(", open_start)
-        self.assertIn("state.elements.eyebrow.textContent = '结构化文本'", READER_JS[open_start:open_end])
+        self.assertIn("state.elements.eyebrow.textContent = '正在阅读'", READER_JS[open_start:open_end])
 
     def test_exposes_a_small_non_module_api_for_app_js(self) -> None:
         self.assertIn("global.MEFinderReader = Object.freeze", READER_JS)
@@ -274,7 +274,9 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("function scheduleComparisonFollow()", READER_JS)
         self.assertIn("function loadComparisonWindow", READER_JS)
         self.assertIn("双栏对照 · ", READER_JS)
-        self.assertIn("自动跟随：开", READER_JS)
+        # 自动跟随从文字按钮改为开关（标签 + 轨道），状态用 is-active + aria-pressed 表达。
+        self.assertIn("mef-reader-follow-switch", READER_JS)
+        self.assertIn("自动跟随", READER_JS)
         self.assertIn("dataset.readerComparison", READER_JS)
         self.assertIn("payload.previous_start", READER_JS)
         self.assertIn("payload.next_start", READER_JS)
