@@ -280,15 +280,6 @@
     heading.appendChild(title);
     heading.appendChild(subtitle);
 
-    // ⋯ 更多（原始版面 / 逐字校对，以及当前解析记录）
-    var overflow = createButton('', 'mef-reader-overflow', 'reader-overflow');
-    overflow.setAttribute('aria-label', '更多');
-    overflow.setAttribute('title', '更多');
-    var overflowGlyph = document.createElement('span');
-    overflowGlyph.setAttribute('aria-hidden', 'true');
-    overflowGlyph.textContent = '⋯';
-    overflow.appendChild(overflowGlyph);
-
     var close = createButton('', 'mef-reader-close', 'close');
     close.setAttribute('aria-label', '关闭结构化阅读器');
     var closeGlyph = document.createElement('span');
@@ -297,7 +288,6 @@
     close.appendChild(closeGlyph);
 
     headRow.appendChild(heading);
-    headRow.appendChild(overflow);
     headRow.appendChild(close);
 
     // ── 第二行：[阅读 | 双栏对照] ·········· 页眉页脚开关  引用页
@@ -421,8 +411,14 @@
     comparisonPane.hidden = true;
     var comparisonHeader = document.createElement('div');
     comparisonHeader.className = 'mef-reader-pane-header';
-    // 对照版本：语言/格式落在这个选择器里（拆胶囊后的去处）。多版本时可点切换。
-    var comparisonTitle = createButton('', 'mef-reader-version-select', 'cycle-comparison-target');
+    // 对照版本：语言/格式落在这个选择器里（拆胶囊后的去处）。
+    // 多译本时点开是真下拉，列出全部译本（语言·格式·版本名）供切换；单译本则只是纯标签。
+    var comparisonVersionPicker = document.createElement('div');
+    comparisonVersionPicker.className = 'mef-reader-version-picker';
+    var comparisonTitle = createButton('', 'mef-reader-version-select', 'toggle-version-menu');
+    comparisonTitle.setAttribute('aria-haspopup', 'listbox');
+    comparisonTitle.setAttribute('aria-expanded', 'false');
+    comparisonTitle.setAttribute('aria-label', '切换对照版本');
     var comparisonTitleText = document.createElement('span');
     comparisonTitleText.className = 'mef-reader-version-name';
     comparisonTitleText.textContent = '对齐版本';
@@ -432,7 +428,12 @@
     comparisonTitleCaret.textContent = '▾';
     comparisonTitle.appendChild(comparisonTitleText);
     comparisonTitle.appendChild(comparisonTitleCaret);
-    comparisonTitle.setAttribute('aria-label', '切换对照版本');
+    var comparisonVersionMenu = document.createElement('div');
+    comparisonVersionMenu.className = 'mef-reader-version-menu';
+    comparisonVersionMenu.setAttribute('role', 'listbox');
+    comparisonVersionMenu.hidden = true;
+    comparisonVersionPicker.appendChild(comparisonTitle);
+    comparisonVersionPicker.appendChild(comparisonVersionMenu);
     var comparisonNavigation = document.createElement('div');
     comparisonNavigation.className = 'mef-reader-comparison-navigation';
     // 自动跟随是一个开／关状态 → 用开关，而不是文字按钮。
@@ -476,7 +477,7 @@
     comparisonNavigation.appendChild(comparisonPrevious);
     comparisonNavigation.appendChild(comparisonNext);
     comparisonNavigation.appendChild(comparisonClose);
-    comparisonHeader.appendChild(comparisonTitle);
+    comparisonHeader.appendChild(comparisonVersionPicker);
     comparisonHeader.appendChild(comparisonNavigation);
     var comparisonViewport = document.createElement('div');
     comparisonViewport.className = 'mef-reader-viewport mef-reader-comparison-viewport';
@@ -524,6 +525,11 @@
         ? event.target.closest('[data-reader-action]')
         : null;
       var action = trigger ? trigger.dataset.readerAction : '';
+      // 点选择器以外任意处，收起版本下拉。
+      if (action !== 'toggle-version-menu'
+          && (!event.target.closest || !event.target.closest('.mef-reader-version-picker'))) {
+        closeVersionMenu();
+      }
       if (action === 'close') closeReader();
       if (action === 'toggle-citation') toggleCitationMenu();
       if (action === 'copy-footnote') copyCachedCitation('chinese');
@@ -532,7 +538,11 @@
         locateInAlignedVersion(trigger.dataset.readerTarget || '');
       }
       if (action === 'reader-single') closeComparison();
-      if (action === 'cycle-comparison-target') cycleComparisonTarget();
+      if (action === 'toggle-version-menu') toggleVersionMenu();
+      if (action === 'pick-comparison-target') {
+        closeVersionMenu();
+        locateInAlignedVersion(trigger.dataset.readerTarget || '', sourceCenterRange());
+      }
       if (action === 'report-misalignment') reportMisalignment();
       if (action === 'open-comparison') {
         locateInAlignedVersion(
@@ -565,7 +575,6 @@
       title: title,
       eyebrow: eyebrow,
       subtitle: subtitle,
-      overflow: overflow,
       current: current,
       toggleDecorations: toggleDecorations,
       modeSeg: modeSeg,
@@ -586,6 +595,7 @@
       comparisonWarn: comparisonWarn,
       comparisonTitle: comparisonTitle,
       comparisonTitleText: comparisonTitleText,
+      comparisonVersionMenu: comparisonVersionMenu,
       comparisonPrevious: comparisonPrevious,
       comparisonNext: comparisonNext,
       comparisonFollow: comparisonFollow,
@@ -735,17 +745,41 @@
     }
   }
 
-  // 多版本时点选择器切到下一个对齐目标。
-  function cycleComparisonTarget() {
-    var targets = state.alignmentTargets || [];
-    if (targets.length < 2) return;
+  // 多译本时，右栏版本选择器点开是真下拉：列出全部对齐目标供切换。
+  function renderVersionMenu() {
+    if (!state.elements) return;
+    var menu = state.elements.comparisonVersionMenu;
+    menu.replaceChildren();
     var currentId = state.comparison.targetSourceId;
-    var idx = -1;
-    targets.forEach(function (t, i) {
-      if (String(t.source_file_id || '') === currentId) idx = i;
+    (state.alignmentTargets || []).forEach(function (t) {
+      var tid = String(t.source_file_id || '');
+      var isCur = tid === currentId;
+      var item = createButton(
+        alignmentTargetDisplayLabel(t),
+        'mef-reader-version-option' + (isCur ? ' is-current' : ''),
+        'pick-comparison-target'
+      );
+      item.dataset.readerTarget = tid;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', isCur ? 'true' : 'false');
+      menu.appendChild(item);
     });
-    var next = targets[(idx + 1 + targets.length) % targets.length];
-    if (next) locateInAlignedVersion(String(next.source_file_id || ''), sourceCenterRange());
+  }
+
+  function toggleVersionMenu() {
+    if (!state.elements) return;
+    if ((state.alignmentTargets || []).length < 2) return; // 单译本不弹菜单
+    var menu = state.elements.comparisonVersionMenu;
+    var willOpen = menu.hidden;
+    if (willOpen) renderVersionMenu();
+    menu.hidden = !willOpen;
+    state.elements.comparisonTitle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  }
+
+  function closeVersionMenu() {
+    if (!state.elements || state.elements.comparisonVersionMenu.hidden) return;
+    state.elements.comparisonVersionMenu.hidden = true;
+    state.elements.comparisonTitle.setAttribute('aria-expanded', 'false');
   }
 
   function alignmentTargetDisplayLabel(target) {
@@ -1192,6 +1226,7 @@
     state.elements.comparisonPane.hidden = true;
     state.elements.sourcePaneHeader.hidden = true;
     state.elements.comparisonWarn.hidden = true;
+    closeVersionMenu();
     state.elements.comparisonContent.replaceChildren();
     syncModeSegment();
   }
@@ -2409,10 +2444,10 @@
         ? Math.max(0, Math.floor(Number(payload.last_position)))
         : null;
       state.source = payload.source || state.source;
-      // 眉标固定「正在阅读」；解析记录（结构化文本 · MinerU）挪进 ⋯ 提示，不再占眉标。
-      state.elements.overflow.title = state.source && state.source.parser_label
-        ? '结构化文本 · ' + state.source.parser_label + ' · 原始版面 / 逐字校对'
-        : '原始版面 / 逐字校对';
+      // 眉标固定「正在阅读」；解析记录（结构化文本 · MinerU）落在书名 tooltip，不再占眉标、也不做没用的 ⋯。
+      state.elements.title.title = state.source && state.source.parser_label
+        ? '结构化文本 · ' + state.source.parser_label
+        : '结构化文本';
       if (!state.title && state.source) {
         state.title = state.source.display_title ||
           state.source.document_title ||

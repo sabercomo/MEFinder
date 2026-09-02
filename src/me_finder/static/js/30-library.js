@@ -399,6 +399,7 @@
             + (isBase ? '<span class="grp-base-tag">基准</span>' : '') + '</div>'
             + '<div class="grp-member-meta">'
             + '<span class="grp-lang-chip">' + esc(langCode) + '</span>'
+            + (src ? '<span class="grp-fmt-chip">' + esc(sourceFormatLabel(src)) + '</span>' : '')
             + '<span class="grp-meta-dot" aria-hidden="true">·</span>'
             + '<input class="grp-input grp-vlabel" value="' + esc(m.version_label || '') + '" placeholder="' + esc(cleanSourceLabel(m.display_name || '')) + '" aria-label="版本名称" onchange="setMemberVersionLabelInline(\'' + sid + '\', this.value)">'
             + '</div></div>'

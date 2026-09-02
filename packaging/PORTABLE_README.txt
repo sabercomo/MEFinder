@@ -16,11 +16,11 @@ MEFinder 文献原句定位器（Windows 绿色版）
 2. 在该文件夹的地址栏输入 powershell，按回车。
 3. 核验绿色版 ZIP 时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.5.1-windows-portable.zip"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.5.2-windows-portable.zip"
 
    核验安装版时，运行：
 
-   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.5.1-windows-setup.exe"
+   Get-FileHash -Algorithm SHA256 ".\MEFinder-v0.5.2-windows-setup.exe"
 
 4. 将输出中的 Hash 与同名 .sha256.txt 文件第一列的 64 位字符逐字比较。英文字母大小写不影响结果。
 5. 如果两者不一致，请删除下载文件，不要运行，并从 MEFinder 官方 GitHub 发布页重新下载。

@@ -31,11 +31,9 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         # 两行式头部：书名行（含 ⋯ 与 ×）在上，模式轴 / 控件行在下。
         self.assertIn(".mef-reader-headrow", READER_CSS)
         self.assertIn(".mef-reader-toolrow", READER_CSS)
-        # × 关闭仍是书名行最右：overflow 先 append、close 后 append。
-        self.assertLess(
-            READER_JS.index("headRow.appendChild(overflow)"),
-            READER_JS.index("headRow.appendChild(close)"),
-        )
+        # × 关闭在书名行右侧（headRow：heading + close，无用的 ⋯ 已删）。
+        self.assertIn("headRow.appendChild(close)", READER_JS)
+        self.assertNotIn("mef-reader-overflow", READER_JS)
 
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)

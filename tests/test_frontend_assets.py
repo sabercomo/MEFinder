@@ -385,6 +385,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.1：40-bibliography/80-import 收进 IIFE，跨模块调用收口到 MEFinder 命名 API。
     # 0.5.1：70-vision 按解析器运行时/远程视觉供应商拆成 70/71，跨文件改走命名 API。
     # 0.5.1：应用补丁版本注入从 0.5.0 更新为 0.5.1；装配字节数不变。
+    # 0.5.2：应用补丁版本注入从 0.5.1 更新为 0.5.2；装配字节数不变。
     # 作品组：书名清洗盖到主库列表与组名、「加入作品组」下拉顶部命名新建 + 齿轮管理入口、
     # 管理弹窗改手风琴（组默认收成一行、对照默认折叠、成员行降噪）、页脚改「关闭」、
     # 「生成对照」版本改自定义下拉（fixed 菜单，避免滚动容器裁切）；
@@ -415,10 +416,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 作品组修：openManageDocumentGroups 打开时强制 loadDocumentGroups 再渲染，杜绝从文献库加入后弹窗显示旧缓存。
     # 0.5.2 新设置：PDF 阅读页加「结构化文本排版」单选（流式查看默认 / 复刻 PDF 物理断行）；
     #   偏好 reader_line_mode，经根元素 data-reader-line-mode 驱动 reader.css 的 white-space 切换。
+    # 0.5.2 作品组：成员行语言码后加文件格式 chip（PDF/EPUB/Word，幽灵描边区别于语言码）。
+    # 0.5.2 阅读器：右栏版本选择器改真下拉（多译本列全部对齐目标供切换）；删掉无用的 ⋯ 更多按钮
+    #   （解析记录移到书名 tooltip）。
     BASELINE_SHA256 = (
-        "9b7398d7fce0d9ae8f110d0319ee0db046380575a5e00f38925cd8ce4a59e504"
+        "d695b2f39818ec43dee8851aec15b00b1f238e5c1151ed5186477fa55332446f"
     )
-    BASELINE_BYTES = 1036760
+    BASELINE_BYTES = 1039772
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

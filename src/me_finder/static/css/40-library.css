@@ -765,6 +765,8 @@
 .grp-new-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* 语言以短代码 chip（JA/ZH/EN）呈现，让语言成为可扫读的第一维度。 */
 .grp-lang-chip { flex: 0 0 auto; font-family: var(--font-mono, ui-monospace, "Roboto Mono", monospace); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--text-secondary); background: var(--surface-secondary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1px 6px; white-space: nowrap; }
+/* 文件格式（PDF / EPUB / Word）：同款 chip，更轻（描边、幽灵底）以区别于语言码。 */
+.grp-fmt-chip { flex: 0 0 auto; font-family: var(--font-mono, ui-monospace, "Roboto Mono", monospace); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; color: var(--text-tertiary); background: transparent; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1px 6px; white-space: nowrap; }
 /* 「生成对照」折叠触发：把整块版本选择藏在意图后面。 */
 .grp-pair-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 11px 12px; border-top: 1px solid var(--divider); color: var(--accent); font-size: 12.5px; cursor: pointer; }
 .grp-pair-toggle svg { width: 15px; height: 15px; flex: 0 0 auto; }

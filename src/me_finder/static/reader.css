@@ -170,8 +170,7 @@
 .mef-reader-current:hover:not(:disabled) { filter: brightness(.97); }
 .mef-reader-current:disabled { cursor: default; opacity: .7; }
 
-/* ⋯ 更多、× 关闭：图标按钮。 */
-.mef-reader-overflow,
+/* × 关闭：图标按钮。 */
 .mef-reader-close {
   flex: 0 0 auto;
   width: 34px;
@@ -189,13 +188,11 @@
   cursor: pointer;
 }
 
-.mef-reader-overflow:hover,
 .mef-reader-close:hover {
   background: var(--surface-hover);
   color: var(--text-secondary);
 }
 
-.mef-reader-overflow:focus-visible,
 .mef-reader-close:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -377,6 +374,40 @@
 .mef-reader-version-select:not(.is-switchable) { cursor: default; }
 .mef-reader-version-select:not(.is-switchable):hover { background: var(--surface-primary); }
 .mef-reader-version-select:not(.is-switchable) .mef-reader-version-caret { display: none; }
+
+/* 版本下拉菜单：多译本时列出全部对齐目标。 */
+.mef-reader-version-picker { position: relative; }
+.mef-reader-version-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
+  max-width: 340px;
+  padding: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
+  background: var(--surface-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+}
+.mef-reader-version-menu[hidden] { display: none; }
+.mef-reader-version-option {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.mef-reader-version-option:hover { background: var(--surface-hover); color: var(--text-primary); }
+.mef-reader-version-option.is-current { color: var(--accent); font-weight: 650; }
 
 /* 低置信对齐提示条：暖色，点击了解校正。 */
 .mef-reader-align-warn {

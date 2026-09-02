@@ -72,7 +72,7 @@ jobs:
           if ($oldHash -ne "b05773ff7dbb0449237206c834ccb851c27213341623e1161ca04ce1d0843eff") {
             throw "Unexpected v0.4.9 installer SHA-256: $oldHash"
           }
-          $newInstaller = Resolve-Path "release\MEFinder-v0.5.1-windows-setup.exe"
+          $newInstaller = Resolve-Path "release\MEFinder-v0.5.2-windows-setup.exe"
           $installRoot = Join-Path $env:LOCALAPPDATA "Programs\MEFinder"
           $dataRoot = Join-Path $env:LOCALAPPDATA "MEFinder"
           $runtimeRoot = Join-Path $dataRoot "runtime"
@@ -103,7 +103,7 @@ jobs:
           $newProcess = Start-Process -FilePath $newInstaller -Wait -PassThru `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
           if ($newProcess.ExitCode -ne 0) {
-            throw "v0.5.1 installer exited with $($newProcess.ExitCode)."
+            throw "v0.5.2 installer exited with $($newProcess.ExitCode)."
           }
           Start-Sleep -Seconds 2
           Get-CimInstance Win32_Process |
@@ -152,9 +152,9 @@ jobs:
           $ErrorActionPreference = "Stop"
           $portableStage = Join-Path $env:RUNNER_TEMP "portable"
           $moved = Join-Path $env:RUNNER_TEMP "portable-moved"
-          Expand-Archive -LiteralPath "release\MEFinder-v0.5.1-windows-portable.zip" `
+          Expand-Archive -LiteralPath "release\MEFinder-v0.5.2-windows-portable.zip" `
             -DestinationPath $portableStage
-          $portableRoot = Get-ChildItem -LiteralPath $portableStage -Directory -Filter "MEFinder-v0.5.1-windows-portable" |
+          $portableRoot = Get-ChildItem -LiteralPath $portableStage -Directory -Filter "MEFinder-v0.5.2-windows-portable" |
             Select-Object -ExpandProperty FullName -First 1
           if (-not $portableRoot) { throw "Portable archive root was not found." }
           python -m tools.smoke_mcp_sidecar (Join-Path $portableRoot "MEFinderMCP.exe")
@@ -171,10 +171,10 @@ jobs:
       - name: Upload unsigned Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MEFinder-v0.5.1-windows-unsigned
+          name: MEFinder-v0.5.2-windows-unsigned
           if-no-files-found: error
           path: |
-            release/MEFinder-v0.5.1-windows-setup.exe
-            release/MEFinder-v0.5.1-windows-setup.exe.sha256.txt
-            release/MEFinder-v0.5.1-windows-portable.zip
-            release/MEFinder-v0.5.1-windows-portable.zip.sha256.txt
+            release/MEFinder-v0.5.2-windows-setup.exe
+            release/MEFinder-v0.5.2-windows-setup.exe.sha256.txt
+            release/MEFinder-v0.5.2-windows-portable.zip
+            release/MEFinder-v0.5.2-windows-portable.zip.sha256.txt
