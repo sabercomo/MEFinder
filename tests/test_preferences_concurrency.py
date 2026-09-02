@@ -39,6 +39,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "pdf_open_mode": "system",
             "pdf_parse_mode": "mineru",
             "document_export_mode": "with_pdf",
+            "reader_line_mode": "flow",
             "export_page_cleanup": {
                 "page_marker_mode": "printed",
                 "remove_visible_page_numbers": True,

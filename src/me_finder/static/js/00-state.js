@@ -132,6 +132,8 @@ const settingsStore = {
   currentPdfParseMode: 'auto',
   pdfParseModeSaving: false,
   currentDocumentExportMode: 'data_only',
+  currentReaderLineMode: 'flow',
+  readerLineModeSaving: false,
   autoUpdateEnabled: false,
   updateAutoStarted: false,
   updateState: {status: 'idle', can_self_update: false},

@@ -33,6 +33,9 @@ VALID_THEMES = frozenset(
 VALID_LIBRARY_VIEWS = frozenset({"list", "grid"})
 VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
+# 结构化阅读器正文排版：flow=回流填满阅读列（默认）；physical=复刻 PDF 物理断行。
+DEFAULT_READER_LINE_MODE = "flow"
+VALID_READER_LINE_MODES = frozenset({"flow", "physical"})
 VALID_PDF_PARSE_MODES = frozenset(
     {"auto", "mineru", "mineru-local", "vision", "general-local-model"}
 )
@@ -267,6 +270,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     )
     if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
         document_export_mode = DEFAULT_DOCUMENT_EXPORT_MODE
+    reader_line_mode = payload.get("reader_line_mode") if isinstance(payload, dict) else None
+    if reader_line_mode not in VALID_READER_LINE_MODES:
+        reader_line_mode = DEFAULT_READER_LINE_MODE
     auto_update = payload.get("auto_update") if isinstance(payload, dict) else None
     if not isinstance(auto_update, bool):
         auto_update = DEFAULT_AUTO_UPDATE
@@ -300,6 +306,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "pdf_open_mode": pdf_open_mode,
         "pdf_parse_mode": pdf_parse_mode,
         "document_export_mode": document_export_mode,
+        "reader_line_mode": reader_line_mode,
         "export_page_cleanup": export_page_cleanup,
         "auto_update": auto_update,
         "citation_styles": citation_styles,
@@ -406,6 +413,11 @@ def _save_preferences_locked(
         if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
             raise ValueError("不支持的文档包导出方式")
         current["document_export_mode"] = str(document_export_mode)
+    if "reader_line_mode" in updates:
+        reader_line_mode = updates["reader_line_mode"]
+        if reader_line_mode not in VALID_READER_LINE_MODES:
+            raise ValueError("不支持的正文排版方式")
+        current["reader_line_mode"] = str(reader_line_mode)
     if "export_page_cleanup" in updates:
         cleanup = updates["export_page_cleanup"]
         if not isinstance(cleanup, Mapping):

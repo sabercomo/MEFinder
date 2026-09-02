@@ -114,7 +114,7 @@
       + settingsGearSvg() + '<span>管理作品组…</span></button>';
   }
 
-  function openManageDocumentGroups() {
+  async function openManageDocumentGroups() {
     var modal = document.getElementById('group-manage-modal');
     if (!modal) return;
     groupPicker = { groupId: '', query: '', selected: {}, focusPending: false };
@@ -123,9 +123,14 @@
     groupsInitialized = false;
     groupCreateOpen = false;
     groupSearchQuery = '';
+    // 先用缓存渲染避免空窗，再从服务器拉最新——保证从别处（文献库）加入的成员一定显示。
     renderDocumentGroupManager();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
+    try {
+      await loadDocumentGroups();
+      if (modal.classList.contains('open')) renderDocumentGroupManager();
+    } catch (e) { /* 拉取失败保留缓存视图 */ }
   }
 
   function closeGroupManageModal() {

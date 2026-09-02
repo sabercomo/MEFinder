@@ -791,6 +791,7 @@
     settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
       ? 'with_pdf'
       : 'data_only';
+    settingsStore.currentReaderLineMode = data.reader_line_mode === 'physical' ? 'physical' : 'flow';
     settingsStore.autoUpdateEnabled = data.auto_update === true;
     enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
     saveLocalCitationStyles(enabledCitationStyles);
@@ -799,6 +800,7 @@
     var autoUpdateInput = document.getElementById('auto-update-enabled');
     if (autoUpdateInput) autoUpdateInput.checked = settingsStore.autoUpdateEnabled;
     renderPdfOpenMode();
+    renderReaderLineMode();
     global.MEFinder.imports.renderPdfParseMode();
     renderDocumentExportMode();
     renderCitationStylePreferences();
@@ -857,6 +859,54 @@
     }
   }
 
+  function renderReaderLineMode() {
+    var mode = settingsStore.currentReaderLineMode === 'physical' ? 'physical' : 'flow';
+    document.querySelectorAll('.pdf-open-option[data-reader-line-choice]').forEach(function(option) {
+      var selected = option.dataset.readerLineChoice === mode;
+      option.classList.toggle('selected', selected);
+      var input = option.querySelector('input[name="reader-line-mode"]');
+      if (input) input.checked = selected;
+    });
+    // 结构化阅读器据此切换 white-space：flow=回流，physical=保留 PDF 断行。
+    if (global.document && global.document.documentElement) {
+      global.document.documentElement.dataset.readerLineMode = mode;
+    }
+  }
+
+  async function setReaderLineMode(mode) {
+    if (mode !== 'flow' && mode !== 'physical') return;
+    if (settingsStore.readerLineModeSaving || settingsStore.preferencesLoadPromise) {
+      renderReaderLineMode();
+      return;
+    }
+    var previousMode = settingsStore.currentReaderLineMode;
+    settingsStore.currentReaderLineMode = mode;
+    settingsStore.readerLineModeSaving = true;
+    document.querySelectorAll('input[name="reader-line-mode"]').forEach(function(i) { i.disabled = true; });
+    renderReaderLineMode();
+    try {
+      var resp = await fetch('/api/preferences', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reader_line_mode: mode})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+      settingsStore.currentReaderLineMode = data.reader_line_mode === 'physical' ? 'physical' : 'flow';
+      settingsStore.preferencesLoaded = true;
+      renderReaderLineMode();
+    } catch (e) {
+      settingsStore.currentReaderLineMode = previousMode;
+      renderReaderLineMode();
+      showToast('正文排版保存失败：' + e.message);
+    } finally {
+      settingsStore.readerLineModeSaving = false;
+      if (!settingsStore.preferencesLoadPromise) {
+        document.querySelectorAll('input[name="reader-line-mode"]').forEach(function(i) { i.disabled = false; });
+      }
+    }
+  }
+
   async function setDocumentExportMode(mode) {
     if (mode !== 'data_only' && mode !== 'with_pdf') return;
     if (settingsStore.documentExportModeSaving || settingsStore.preferencesLoadPromise) {
@@ -897,6 +947,7 @@
     var requestedThemeRevision = settingsStore.themeRevision;
     renderThemeSelection();
     renderPdfOpenMode();
+    renderReaderLineMode();
     global.MEFinder.imports.renderPdfParseMode();
     renderDocumentExportMode();
     renderCitationStylePreferences();
@@ -1302,6 +1353,7 @@
   global.migrateDataLocation = migrateDataLocation;
   global.configureDesktopPlatformOptions = configureDesktopPlatformOptions;
   global.setPdfOpenMode = setPdfOpenMode;
+  global.setReaderLineMode = setReaderLineMode;
   global.setDocumentExportMode = setDocumentExportMode;
   global.loadPreferences = loadPreferences;
   global.checkForUpdates = checkForUpdates;

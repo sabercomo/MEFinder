@@ -524,6 +524,21 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="pdf-open-option-check" aria-hidden="true"></span>
               </label>
             </div>
+            <div class="settings-subhead"><span class="settings-section-title">结构化文本排版</span><span class="settings-section-note">在应用内阅读器里，正文如何断行</span></div>
+            <div class="pdf-open-options" role="radiogroup" aria-label="结构化文本排版">
+              <label class="pdf-open-option selected" data-reader-line-choice="flow">
+                <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
+                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 11h14M5 15h14M5 19h9"/></svg></span>
+                <span class="pdf-open-option-copy"><strong>流式查看 <em>推荐</em></strong><small>正文回流填满阅读列，不受 PDF 物理断行限制</small></span>
+                <span class="pdf-open-option-check" aria-hidden="true"></span>
+              </label>
+              <label class="pdf-open-option" data-reader-line-choice="physical">
+                <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
+                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h11M5 11h14M5 15h8M5 19h12"/></svg></span>
+                <span class="pdf-open-option-copy"><strong>复刻 PDF 物理断行</strong><small>按原 PDF 每行字数断行，便于逐字比对原书版面</small></span>
+                <span class="pdf-open-option-check" aria-hidden="true"></span>
+              </label>
+            </div>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">

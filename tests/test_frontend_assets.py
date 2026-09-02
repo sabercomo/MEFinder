@@ -411,10 +411,14 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   页码统一成 chip（源栏引用页=强调色、对照栏原书页=中性灰）；低置信对齐（precise_highlight_available=false）
     #   显式提示条「对齐可能不准 · 校正」。
     # 0.5.2 阅读器修：右侧控件（页眉页脚开关+引用页）自成一组 margin-left:auto，无对照(分段隐藏)时也贴右。
+    # 0.5.2 阅读器修2：正文 white-space pre-wrap→normal，回流填满阅读列，不复刻 PDF 物理断行（偏移不变）。
+    # 0.5.2 作品组修：openManageDocumentGroups 打开时强制 loadDocumentGroups 再渲染，杜绝从文献库加入后弹窗显示旧缓存。
+    # 0.5.2 新设置：PDF 阅读页加「结构化文本排版」单选（流式查看默认 / 复刻 PDF 物理断行）；
+    #   偏好 reader_line_mode，经根元素 data-reader-line-mode 驱动 reader.css 的 white-space 切换。
     BASELINE_SHA256 = (
-        "9a86f12df2e5c6dd32ff1e5d2cd16996c4063eb42e48260069631e878b2bb032"
+        "9b7398d7fce0d9ae8f110d0319ee0db046380575a5e00f38925cd8ce4a59e504"
     )
-    BASELINE_BYTES = 1031633
+    BASELINE_BYTES = 1036760
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

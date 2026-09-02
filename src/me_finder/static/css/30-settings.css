@@ -223,6 +223,14 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 /* System-settings single-select list, not two floating cards (m2). One
    connected container, compact rows, radio dot on the right. */
+/* 同一「PDF 阅读」面板内的第二组设置（结构化文本排版）的小标题。 */
+.settings-subhead {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 24px 2px 12px;
+}
+
 .pdf-open-options,
 .document-export-options {
   display: flex;

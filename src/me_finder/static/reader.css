@@ -567,6 +567,13 @@
   font-size: 16px;
   line-height: 1.9;
   overflow-wrap: anywhere;
+  /* 默认：正文回流填满阅读列，不复刻 PDF 的物理断行（源文 \n 仅折成空格，字符偏移不变，
+     不影响引文定位与跨版本高亮）。设置里可切「复刻 PDF 物理断行」。 */
+  white-space: normal;
+}
+
+/* 设置：结构化文本排版 = 复刻 PDF 物理断行时，保留源文换行。 */
+:root[data-reader-line-mode="physical"] .mef-reader-item-text {
   white-space: pre-wrap;
 }
 
