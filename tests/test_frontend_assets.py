@@ -294,7 +294,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 下拉顶部命名新建（净 45）。
             # 0.5.2 +1：管理弹窗头部「＋ 新建作品组」切换 toggleGroupCreate（净 46）。
             # 0.5.2 +1：作品组搜索框 groupSearchInputAction（净 47）。
-            "static/js/30-library.js": 47,
+            # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
+            "static/js/30-library.js": 48,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
             "static/js/40-bibliography.js": 27,
             "static/js/70-vision.js": 24,
@@ -420,9 +421,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 阅读器：右栏版本选择器改真下拉（多译本列全部对齐目标供切换）；删掉无用的 ⋯ 更多按钮
     #   （解析记录移到书名 tooltip）。
     BASELINE_SHA256 = (
-        "d10a9a3c539186a2d591f96351dc9e2e5f7ca42ef84d54b255ce9867ce415ec9"
+        "15b6f2fc6b8f5cf0e7588e2710a8ad3122371636ed38eff3d85186ade16cd3c8"
     )
-    BASELINE_BYTES = 1039968
+    BASELINE_BYTES = 1043563
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -238,6 +238,81 @@ assert.ok(!markup.includes('《利维坦》'), markup);
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_realign_all_recomputes_each_existing_pair_once(self) -> None:
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const button = {disabled: false, textContent: ''};
+const body = {innerHTML: ''};
+const groups = [
+  {
+    document_group_id: 'g1', title: 'Work 1', members: [],
+    alignments: [
+      {status: 'completed', pivot_source_file_id: 'a', target_source_file_id: 'b'},
+      {status: 'completed', pivot_source_file_id: 'b', target_source_file_id: 'a'},
+      {status: 'superseded', pivot_source_file_id: 'a', target_source_file_id: 'c'}
+    ]
+  },
+  {
+    document_group_id: 'g2', title: 'Work 2', members: [],
+    alignments: [
+      {status: 'completed', pivot_source_file_id: 'd', target_source_file_id: 'e'}
+    ]
+  }
+];
+const requests = [];
+const confirmations = [];
+const toasts = [];
+const context = {
+  module: {exports: {}},
+  libraryStore: {deleteSelection: new Set(), sources: [], documentGroups: groups, groupScopeId: ''},
+  searchStore: {groupId: ''},
+  document: {getElementById(id) {
+    if (id === 'group-manage-body') return body;
+    if (id === 'group-realign-all') return button;
+    return null;
+  }},
+  fetch: async (url, options) => {
+    if (url === '/api/document-groups') {
+      return {ok: true, json: async () => ({document_groups: groups})};
+    }
+    requests.push(JSON.parse(options.body));
+    return {ok: true, json: async () => ({result: {status: 'completed'}})};
+  },
+  showAppConfirm: async message => {confirmations.push(message); return true;},
+  showToast: (message, tone) => toasts.push([message, tone]),
+  esc: value => value,
+  sourceFormatLabel: () => 'PDF',
+  libLangChipLabel: code => code,
+  libLangCode: code => code,
+  libraryLanguageCode: () => 'en'
+};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+const library = context.module.exports;
+(async () => {
+  assert.equal(library.documentGroupExistingAlignmentPairs(groups).length, 2);
+  await library.realignAllTextAlignmentsAction(button);
+  assert.equal(confirmations.length, 1);
+  assert.ok(confirmations[0].includes('2 组'));
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(request => request.force === true));
+  assert.deepEqual(
+    requests.map(request => [request.document_group_id, request.pivot_source_file_id, request.target_source_file_id]),
+    [['g1', 'a', 'b'], ['g2', 'd', 'e']]
+  );
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, '重新对齐已有译本（2 组）');
+  assert.deepEqual(toasts, [['已重新对齐 2 组译本', 'success']]);
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+        result = subprocess.run(
+            [NODE, "-e", script, str(LIBRARY_JS)], capture_output=True,
+            text=True, encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_pending_actions_submit_once_and_restore_buttons(self) -> None:
         for action in ("create", "assign", "delete"):
             for outcome in ("success", "error"):

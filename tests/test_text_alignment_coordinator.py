@@ -86,6 +86,24 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             generate.call_args.kwargs["model_cache_dir"],
             Path("D:/runtime/components/text-alignment/models"),
         )
+        self.assertFalse(generate.call_args.kwargs["force"])
+
+    def test_force_recomputation_is_forwarded(self) -> None:
+        index_runtime = _IndexRuntime()
+        paths = SimpleNamespace(
+            index_path=Path("D:/runtime/data/index.sqlite3"),
+            runtime_root=Path("D:/runtime"),
+        )
+        coordinator = TextAlignmentCoordinator(
+            paths, index_runtime, _DurableOperations()
+        )
+        with mock.patch(
+            "src.me_finder.application.text_alignment_coordinator.generate_alignment",
+            return_value={"status": "completed"},
+        ) as generate:
+            coordinator.generate("group", "pdf-de", "epub-en", force=True)
+
+        self.assertTrue(generate.call_args.kwargs["force"])
 
 
 if __name__ == "__main__":

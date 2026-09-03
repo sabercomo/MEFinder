@@ -700,8 +700,9 @@
 .group-manage-close:disabled { cursor: not-allowed; opacity: .55; }
 .group-manage-close svg { width: 16px; height: 16px; }
 .group-manage-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 0; }
-.group-manage-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--divider); background: var(--dialog-bg); }
+.group-manage-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--divider); background: var(--dialog-bg); }
 .group-manage-foot .action-btn { min-height: 44px; white-space: nowrap; }
+.group-realign-all { margin-right: auto; }
 .grp-input { height: 44px; padding: 0 12px; border: 1px solid var(--border-default); outline: 2px solid transparent; outline-offset: 1px; border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 13px; }
 .grp-input:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
 .grp-input:active { border-color: var(--accent); }

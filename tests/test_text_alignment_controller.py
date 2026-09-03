@@ -15,10 +15,10 @@ from src.me_finder.text_alignment_controller import TextAlignmentController
 class _Coordinator:
     error = None
 
-    def generate(self, *values):
+    def generate(self, *values, **options):
         if self.error:
             raise self.error
-        return {"values": values, "status": "completed"}
+        return {"values": values, "options": options, "status": "completed"}
 
 
 class TextAlignmentControllerTests(unittest.TestCase):
@@ -74,6 +74,12 @@ class TextAlignmentControllerTests(unittest.TestCase):
         status, body = self.controller.generate(self._generate_payload())
         self.assertEqual(status, 200)
         self.assertEqual(body["result"]["status"], "completed")
+        self.assertFalse(body["result"]["options"]["force"])
+
+        forced_payload = self._generate_payload() | {"force": True}
+        status, body = self.controller.generate(forced_payload)
+        self.assertEqual(status, 200)
+        self.assertTrue(body["result"]["options"]["force"])
 
         status, body = self.controller.targets({"source_id": ["pdf-de"]})
         self.assertEqual(status, 200)
@@ -86,6 +92,10 @@ class TextAlignmentControllerTests(unittest.TestCase):
     def test_invalid_shapes_are_rejected_before_dependencies(self) -> None:
         self.assertEqual(
             self.controller.generate({"document_group_id": "group-one"})[0],
+            400,
+        )
+        self.assertEqual(
+            self.controller.generate(self._generate_payload() | {"force": 1})[0],
             400,
         )
         self.assertEqual(self.controller.targets({})[0], 400)

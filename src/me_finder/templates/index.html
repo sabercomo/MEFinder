@@ -1061,7 +1061,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       <button class="group-manage-close" type="button" aria-label="关闭" onclick="closeGroupManageModal()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
     </div>
     <div class="group-manage-body" id="group-manage-body"></div>
-    <div class="group-manage-foot"><button class="action-btn" type="button" onclick="closeGroupManageModal()">关闭</button></div>
+    <div class="group-manage-foot">
+      <button id="group-realign-all" class="action-btn group-realign-all" type="button" onclick="realignAllTextAlignmentsAction(this)" aria-live="polite" disabled>暂无已对齐译本</button>
+      <button class="action-btn" type="button" onclick="closeGroupManageModal()">关闭</button>
+    </div>
   </div>
 </div>
 <div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">

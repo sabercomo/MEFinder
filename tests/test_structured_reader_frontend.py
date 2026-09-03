@@ -24,6 +24,9 @@ def _read_split_source(subdir: str, suffix: str, fallback: str) -> str:
 
 APP_CSS = _read_split_source("css", ".css", "app.css")
 APP_JS = _read_split_source("js", ".js", "app.js")
+INDEX_HTML = (ROOT / "src" / "me_finder" / "templates" / "index.html").read_text(
+    encoding="utf-8"
+)
 
 
 class StructuredReaderFrontendTests(unittest.TestCase):
@@ -264,6 +267,12 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn(".grp-remove-btn { grid-column: 2; grid-row: 2; }", APP_CSS)
         self.assertNotIn(".grp-remove-btn:active { transform", APP_CSS)
         self.assertIn(".group-manage-foot { flex: 0 0 auto", APP_CSS)
+        self.assertIn('id="group-realign-all"', INDEX_HTML)
+        self.assertIn('onclick="realignAllTextAlignmentsAction(this)"', INDEX_HTML)
+        self.assertIn("function documentGroupExistingAlignmentPairs", APP_JS)
+        self.assertIn("function realignAllTextAlignmentsAction", APP_JS)
+        self.assertIn("force: force", APP_JS)
+        self.assertIn(".group-realign-all { margin-right: auto; }", APP_CSS)
 
     def test_aligned_pdf_versions_can_read_side_by_side_by_segment(self) -> None:
         self.assertIn("function sourceCenterRange()", READER_JS)

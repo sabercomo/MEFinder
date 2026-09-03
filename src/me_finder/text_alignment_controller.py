@@ -46,13 +46,19 @@ class TextAlignmentController:
             "pivot_source_file_id",
             "target_source_file_id",
         }
-        if not isinstance(payload, Mapping) or set(payload) != required:
+        if (
+            not isinstance(payload, Mapping)
+            or not required.issubset(payload)
+            or not set(payload).issubset(required | {"force"})
+            or not isinstance(payload.get("force", False), bool)
+        ):
             return 400, {"error": "自动对齐请求字段无效。"}
         try:
             result = self._coordinator.generate(
                 payload["document_group_id"],
                 payload["pivot_source_file_id"],
                 payload["target_source_file_id"],
+                force=payload.get("force", False),
             )
         except TextAlignmentRejected as exc:
             return 400, {"error": str(exc)}

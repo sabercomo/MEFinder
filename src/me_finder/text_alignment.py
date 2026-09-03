@@ -999,6 +999,7 @@ def generate_alignment(
     pivot_source_file_id: object,
     target_source_file_id: object,
     *,
+    force: bool = False,
     model_cache_dir: Path | None = None,
     embedding_provider: EmbeddingProvider | None = None,
     write_window: WriteWindow | None = None,
@@ -1041,23 +1042,25 @@ def generate_alignment(
                 pivot_language=_segment_set_language(connection, pivot_set_id),
                 target_language=_segment_set_language(connection, target_set_id),
             )
-            existing = connection.execute(
-                "SELECT alignment_run_id, parameters_json FROM alignment_runs "
-                "WHERE document_group_id = ? AND pivot_source_file_id = ? "
-                "AND target_source_file_id = ? AND pivot_segment_set_id = ? "
-                "AND target_segment_set_id = ? AND algorithm = ? "
-                "AND algorithm_version = ? AND status = 'completed' "
-                "ORDER BY completed_at DESC LIMIT 1",
-                (
-                    group_id,
-                    pivot_id,
-                    target_id,
-                    pivot_set_id,
-                    target_set_id,
-                    ALIGNMENT_ALGORITHM,
-                    ALIGNMENT_ALGORITHM_VERSION,
-                ),
-            ).fetchone()
+            existing = None
+            if not force:
+                existing = connection.execute(
+                    "SELECT alignment_run_id, parameters_json FROM alignment_runs "
+                    "WHERE document_group_id = ? AND pivot_source_file_id = ? "
+                    "AND target_source_file_id = ? AND pivot_segment_set_id = ? "
+                    "AND target_segment_set_id = ? AND algorithm = ? "
+                    "AND algorithm_version = ? AND status = 'completed' "
+                    "ORDER BY completed_at DESC LIMIT 1",
+                    (
+                        group_id,
+                        pivot_id,
+                        target_id,
+                        pivot_set_id,
+                        target_set_id,
+                        ALIGNMENT_ALGORITHM,
+                        ALIGNMENT_ALGORITHM_VERSION,
+                    ),
+                ).fetchone()
             if existing is not None:
                 counts = {
                     str(row["review_status"]): int(row["link_count"])

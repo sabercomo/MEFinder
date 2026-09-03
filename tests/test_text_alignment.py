@@ -732,6 +732,20 @@ class TextAlignmentTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_force_recomputes_an_unchanged_completed_pair(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        second = generate_alignment(
+            self.db, "work-one", "pdf-de", "pdf-zh", force=True
+        )
+
+        self.assertFalse(second["reused"])
+        self.assertNotEqual(second["alignment_run_id"], first["alignment_run_id"])
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            statuses = connection.execute(
+                "SELECT status FROM alignment_runs ORDER BY created_at, rowid"
+            ).fetchall()
+        self.assertEqual(statuses, [("superseded",), ("completed",)])
+
     def test_old_alignment_requires_regeneration_and_is_not_reused(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         connection = sqlite3.connect(str(self.db))

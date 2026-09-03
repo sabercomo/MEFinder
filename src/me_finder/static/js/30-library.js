@@ -151,6 +151,36 @@
     });
   }
 
+  function documentGroupExistingAlignmentPairs(groups) {
+    var pairs = [];
+    var seen = new Set();
+    (groups || []).forEach(function(group) {
+      (group.alignments || []).forEach(function(alignment) {
+        if (alignment.status !== 'completed') return;
+        var pairIds = [alignment.pivot_source_file_id, alignment.target_source_file_id].sort();
+        var key = group.document_group_id + '\u0000' + pairIds.join('\u0000');
+        if (seen.has(key)) return;
+        seen.add(key);
+        pairs.push({
+          document_group_id: group.document_group_id,
+          pivot_source_file_id: alignment.pivot_source_file_id,
+          target_source_file_id: alignment.target_source_file_id
+        });
+      });
+    });
+    return pairs;
+  }
+
+  function syncDocumentGroupRealignAllAction() {
+    var button = document.getElementById('group-realign-all');
+    if (!button) return;
+    var count = documentGroupExistingAlignmentPairs(libraryStore.documentGroups).length;
+    button.disabled = count === 0;
+    button.textContent = count
+      ? '重新对齐已有译本（' + count + ' 组）'
+      : '暂无已对齐译本';
+  }
+
   function syncDocumentGroupPairAction(groupId) {
     var group = documentGroupById(groupId);
     var button = document.getElementById('grp-pair-generate-' + groupId);
@@ -468,7 +498,7 @@
         // 「生成对照」主操作移到底部动作条；展开态才在此渲染左右版本选择。
         if (expandedPairGroupId === g.document_group_id) {
           html += '<div class="grp-pair"><div class="grp-pair-copy">'
-            + '<strong>生成双栏对照</strong><span id="grp-pair-status-' + gid + '">'
+            + '<strong>生成译本对照</strong><span id="grp-pair-status-' + gid + '">'
             + (existingPair ? '这两个版本已有直接对照' : '这两个版本尚未生成直接对照')
             + '</span></div><div class="grp-pair-controls">'
             + versionSelectHtml('left', pairSel.left)
@@ -479,7 +509,7 @@
           pairGroups.push(g.document_group_id);
         }
       } else if (members.length) {
-        html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成双栏对照</div>';
+        html += '<div class="grp-pair grp-pair--empty">至少需要两个 PDF / EPUB 版本才能生成译本对照</div>';
       }
       if (pickerOpen) {
         html += '<div class="grp-pick">'
@@ -506,6 +536,7 @@
     });
     body.innerHTML = html;
     pairGroups.forEach(deps.syncDocumentGroupPairAction);
+    syncDocumentGroupRealignAllAction();
     if (groupPicker.groupId) {
       renderGroupPickerList(groupPicker.groupId);
       var pickInput = document.getElementById('grp-pick-input-' + groupPicker.groupId);
@@ -1229,6 +1260,64 @@
     return sources;
   }
 
+  async function requestTextAlignment(groupId, pivotSourceId, targetSourceId, force) {
+    var response = await fetch('/api/text-alignments/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        document_group_id: groupId,
+        pivot_source_file_id: pivotSourceId,
+        target_source_file_id: targetSourceId,
+        force: force
+      })
+    });
+    var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
+    return data.result || {};
+  }
+
+  async function realignAllTextAlignmentsAction(button) {
+    var pairs = documentGroupExistingAlignmentPairs(libraryStore.documentGroups);
+    if (!pairs.length) {
+      showToast('还没有可重新对齐的译本', 'warning');
+      return;
+    }
+    if (!await showAppConfirm(
+      '将依次重新计算 ' + pairs.length + ' 组已有译本对照，耗时取决于书籍数量与长度。',
+      {title: '重新对齐已有译本？', confirmText: '开始重新对齐'}
+    )) return;
+    button.disabled = true;
+    var completed = 0;
+    var failures = [];
+    for (var index = 0; index < pairs.length; index += 1) {
+      var pair = pairs[index];
+      button.textContent = '正在重新对齐 ' + (index + 1) + '/' + pairs.length;
+      try {
+        await requestTextAlignment(
+          pair.document_group_id,
+          pair.pivot_source_file_id,
+          pair.target_source_file_id,
+          true
+        );
+        completed += 1;
+      } catch (error) {
+        failures.push(error.message || '自动对齐失败');
+      }
+    }
+    await loadDocumentGroups();
+    renderGroupScopeSelector();
+    renderDocumentGroupManager();
+    if (failures.length) {
+      showToast(
+        '重新对齐完成：' + completed + '/' + pairs.length + ' 组成功，'
+          + failures.length + ' 组失败。' + failures[0],
+        'danger'
+      );
+    } else {
+      showToast('已重新对齐 ' + completed + ' 组译本', 'success');
+    }
+  }
+
   async function generateTextAlignmentAction(groupId, pivotSourceId, targetSourceId, button) {
     var group = documentGroupById(groupId);
     if (!group || !pivotSourceId || !targetSourceId) {
@@ -1244,21 +1333,18 @@
       button.textContent = '对齐中…';
     }
     try {
-      var response = await fetch('/api/text-alignments/generate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          document_group_id: groupId,
-          pivot_source_file_id: pivotSourceId,
-          target_source_file_id: targetSourceId
-        })
-      });
-      var data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
+      var existingAlignment = documentGroupAlignmentForPair(
+        group, pivotSourceId, targetSourceId
+      );
+      var result = await requestTextAlignment(
+        groupId,
+        existingAlignment ? existingAlignment.pivot_source_file_id : pivotSourceId,
+        existingAlignment ? existingAlignment.target_source_file_id : targetSourceId,
+        !!existingAlignment
+      );
       await loadDocumentGroups();
       renderGroupScopeSelector();
       renderDocumentGroupManager();
-      var result = data.result || {};
       var rejected = Number(result.rejected_link_count || 0);
       var unmatched = Number(result.unmatched_link_count || 0);
       showToast(
@@ -1913,6 +1999,8 @@
     module.exports = {
       groupScopeManageOptionsHTML: groupScopeManageOptionsHTML,
       renderDocumentGroupManager: renderDocumentGroupManager,
+      documentGroupExistingAlignmentPairs: documentGroupExistingAlignmentPairs,
+      realignAllTextAlignmentsAction: realignAllTextAlignmentsAction,
       createDocumentGroupInline: createDocumentGroupInline,
       assignSelectedToGroupAction: assignSelectedToGroupAction,
       combineSelectedIntoGroupAction: combineSelectedIntoGroupAction,
@@ -1946,6 +2034,7 @@
   global.groupManageBackdrop = groupManageBackdrop;
   global.syncDocumentGroupPairAction = syncDocumentGroupPairAction;
   global.generateSelectedTextAlignmentAction = generateSelectedTextAlignmentAction;
+  global.realignAllTextAlignmentsAction = realignAllTextAlignmentsAction;
   global.openVersionSelect = openVersionSelect;
   global.pickPairVersion = pickPairVersion;
   global.createDocumentGroupInline = createDocumentGroupInline;

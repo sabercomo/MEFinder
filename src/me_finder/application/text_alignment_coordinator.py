@@ -27,6 +27,8 @@ class TextAlignmentCoordinator:
         document_group_id: object,
         pivot_source_file_id: object,
         target_source_file_id: object,
+        *,
+        force: bool = False,
     ):
         with self._index_runtime.mutation():
             try:
@@ -36,6 +38,7 @@ class TextAlignmentCoordinator:
                         document_group_id,
                         pivot_source_file_id,
                         target_source_file_id,
+                        force=force,
                         model_cache_dir=(
                             self._paths.runtime_root
                             / "components"
