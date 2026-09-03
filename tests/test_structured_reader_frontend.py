@@ -271,7 +271,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("function showComparison(payload, targetDisplayName)", READER_JS)
         self.assertIn("function scheduleComparisonFollow()", READER_JS)
         self.assertIn("function loadComparisonWindow", READER_JS)
-        self.assertIn("双栏对照 · ", READER_JS)
+        self.assertIn("译本对照 · ", READER_JS)
         # 自动跟随从文字按钮改为开关（标签 + 轨道），状态用 is-active + aria-pressed 表达。
         self.assertIn("mef-reader-follow-switch", READER_JS)
         self.assertIn("自动跟随", READER_JS)
@@ -495,6 +495,20 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         )
         self.assertIn("width: min(900px, calc(100% - 64px));", READER_CSS)
         self.assertIn("font-size: 18px; line-height: 1.92;", READER_CSS)
+
+    def test_reader_panel_is_contained_by_the_application_viewport(self) -> None:
+        self.assertRegex(
+            READER_CSS,
+            r"\.mef-structured-reader \{[^}]*padding: 24px;[^}]*overflow: hidden;",
+        )
+        self.assertRegex(
+            READER_CSS,
+            r"\.mef-reader-panel \{[^}]*max-width: 980px;[^}]*max-height: 900px;[^}]*margin: auto;",
+        )
+        self.assertRegex(
+            READER_CSS,
+            r"\.mef-reader-pane-header \{[^}]*flex-wrap: wrap;",
+        )
 
     def test_search_detail_exposes_reader_without_replacing_open_original(self) -> None:
         self.assertIn("查看结构化文本", APP_JS)

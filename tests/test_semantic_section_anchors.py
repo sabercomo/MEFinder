@@ -13,6 +13,22 @@ from src.me_finder.semantic_alignment import (
 
 
 class SemanticSectionAnchorTests(unittest.TestCase):
+    def test_compact_split_toc_without_leaders_is_not_used_as_body_anchors(self) -> None:
+        texts = [
+            "目录\n导论 社会性别意识形态 001",
+            "第一章",
+            "全球局势\n046",
+            "第二章 梵蒂冈观点",
+            "088",
+            "第三章",
+            "当代美国对社会性别的攻击\n111",
+            "结论\n注释\n致谢\n133\n159\n203",
+            "导论\n为什么会有人害怕社会性别（gender）呢？这是正文开头。",
+            "正文继续。",
+        ]
+
+        self.assertEqual(find_heading_anchors(texts, texts), [])
+
     def test_decimal_body_headings_align_without_using_toc_or_endnote_titles(self) -> None:
         german = [
             "Inhalt\n1.1 Lebensform: Begriff und Phänomen 67\n6.1 Kritik eines neuen Typs 278",

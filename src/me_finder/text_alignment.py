@@ -47,9 +47,12 @@ from .semantic_alignment import (
 SEGMENTER = "me-finder-multilingual-sentence"
 SEGMENTER_VERSION = "12"
 ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
-ALIGNMENT_ALGORITHM_VERSION = "17"
-# Version 17 improves heading discovery without changing stored span semantics.
-READABLE_ALIGNMENT_VERSIONS = frozenset({"16", ALIGNMENT_ALGORITHM_VERSION})
+ALIGNMENT_ALGORITHM_VERSION = "18"
+# Anchor changes alter the alignment result even when stored span semantics match.
+READABLE_ALIGNMENT_VERSIONS = frozenset({ALIGNMENT_ALGORITHM_VERSION})
+RESTORABLE_ALIGNMENT_VERSIONS = frozenset(
+    {"16", "17", ALIGNMENT_ALGORITHM_VERSION}
+)
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
@@ -163,6 +166,8 @@ class AlignmentPreparation:
     pivot_reusable_texts: Tuple[str, ...] = ()
     target_reusable_texts: Tuple[str, ...] = ()
     folio_candidates: Tuple[FolioBoundaryCandidate, ...] = ()
+    pivot_language: str = "und"
+    target_language: str = "und"
 
 
 def _now() -> str:
@@ -707,6 +712,18 @@ def _previous_segment_texts(
     )
 
 
+def _segment_set_language(
+    connection: sqlite3.Connection, segment_set_id: str
+) -> str:
+    row = connection.execute(
+        "SELECT language_code FROM segment_sets WHERE segment_set_id = ?",
+        (segment_set_id,),
+    ).fetchone()
+    if row is None:
+        raise TextAlignmentError("对齐所需的 Segment 集不存在。")
+    return str(row["language_code"] or "und")
+
+
 def align_segment_sequences(
     source_texts: Sequence[str],
     target_texts: Sequence[str],
@@ -715,6 +732,8 @@ def align_segment_sequences(
     embedding_provider: EmbeddingProvider | None = None,
     reusable_sequences: Sequence[Sequence[str]] = (),
     folio_candidates: Sequence[FolioBoundaryCandidate] = (),
+    source_language: str = "und",
+    target_language: str = "und",
 ) -> Tuple[List[SemanticLink], list]:
     """Return chapter-anchored semantic links and the anchors used."""
 
@@ -744,6 +763,8 @@ def align_segment_sequences(
             )
             for candidate in verified_folios
         ],
+        source_language=source_language,
+        target_language=target_language,
     )
 
 
@@ -816,6 +837,8 @@ def _generate_alignment_on_connection(
                     target_set_id,
                 )
             ),
+            pivot_language=_segment_set_language(connection, pivot_set_id),
+            target_language=_segment_set_language(connection, target_set_id),
         )
     pivot_set_id = preparation.pivot_set_id
     target_set_id = preparation.target_set_id
@@ -832,6 +855,8 @@ def _generate_alignment_on_connection(
                 preparation.target_reusable_texts,
             ),
             folio_candidates=preparation.folio_candidates,
+            source_language=preparation.pivot_language,
+            target_language=preparation.target_language,
         )
     aligned, anchors = computed
     connection.execute(
@@ -856,6 +881,8 @@ def _generate_alignment_on_connection(
         "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
         "note_block_confidence_threshold": NOTE_BLOCK_CONFIDENCE_THRESHOLD,
         "note_candidate_margin": NOTE_CANDIDATE_MARGIN,
+        "pivot_language": preparation.pivot_language,
+        "target_language": preparation.target_language,
         "heading_anchors": [
             {
                 "key": anchor.key,
@@ -1011,6 +1038,8 @@ def generate_alignment(
                         target_set_id,
                     )
                 ),
+                pivot_language=_segment_set_language(connection, pivot_set_id),
+                target_language=_segment_set_language(connection, target_set_id),
             )
             existing = connection.execute(
                 "SELECT alignment_run_id, parameters_json FROM alignment_runs "
@@ -1086,6 +1115,8 @@ def generate_alignment(
             preparation.target_reusable_texts,
         ),
         folio_candidates=preparation.folio_candidates,
+        source_language=preparation.pivot_language,
+        target_language=preparation.target_language,
     )
 
     with transaction_window():
@@ -2605,7 +2636,7 @@ def restore_alignment_recipe_snapshot(
             continue
         if (
             pair.get("algorithm") != ALIGNMENT_ALGORITHM
-            or pair.get("algorithm_version") not in READABLE_ALIGNMENT_VERSIONS
+            or pair.get("algorithm_version") not in RESTORABLE_ALIGNMENT_VERSIONS
         ):
             continue
         group_id = str(pair.get("document_group_id") or "")

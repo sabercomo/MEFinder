@@ -804,16 +804,16 @@
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
     });
-    // 模式轴：[阅读 | 双栏对照]。「双栏对照」默认对齐首个（或当前打开的）版本。
+    // 模式轴：[阅读 | 译本对照]。「译本对照」默认对齐首个（或当前打开的）版本。
     if (targets.length) {
       var defaultTarget = state.comparison.open && state.comparison.targetSourceId
         ? state.comparison.targetSourceId
         : String(targets[0].source_file_id || '');
       var readBtn = createButton('阅读', 'mef-reader-mode-btn', 'reader-single');
-      var compBtn = createButton('双栏对照', 'mef-reader-mode-btn', 'open-comparison');
+      var compBtn = createButton('译本对照', 'mef-reader-mode-btn', 'open-comparison');
       compBtn.dataset.readerTarget = defaultTarget;
-      // 语言/格式落在提示里（拆开原来「双栏对照 · 英语 · EPUB · 英文」那颗胶囊）。
-      compBtn.title = '双栏对照 · ' + alignmentTargetDisplayLabel(targets[0]);
+      // 语言/格式落在提示里（拆开原来「译本对照 · 英语 · EPUB · 英文」那颗胶囊）。
+      compBtn.title = '译本对照 · ' + alignmentTargetDisplayLabel(targets[0]);
       seg.appendChild(readBtn);
       seg.appendChild(compBtn);
       seg.hidden = false;

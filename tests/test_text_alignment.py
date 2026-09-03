@@ -757,18 +757,18 @@ class TextAlignmentTests(unittest.TestCase):
         )
         self.assertEqual(located["target_item_type"], "word_paragraph")
 
-    def test_version16_alignment_remains_readable_but_regenerates_when_requested(self) -> None:
+    def test_version17_alignment_requires_regeneration(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         with closing(sqlite3.connect(str(self.db))) as connection:
-            connection.execute("UPDATE alignment_runs SET algorithm_version = '16'")
+            connection.execute("UPDATE alignment_runs SET algorithm_version = '17'")
             connection.commit()
 
-        located = locate_alignment(
-            self.db, "pdf-de", "epub-en",
-            start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
-        )
-        self.assertEqual(located["alignment_run_id"], first["alignment_run_id"])
-        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Spirit is actual.")
+        with self.assertRaisesRegex(AlignmentNotFound, "重新生成对照"):
+            locate_alignment(
+                self.db, "pdf-de", "epub-en",
+                start_page_index=0, end_page_index=0,
+                start_offset=0, end_offset=3,
+            )
 
         regenerated = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         self.assertFalse(regenerated["reused"])

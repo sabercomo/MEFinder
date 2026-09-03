@@ -420,9 +420,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 阅读器：右栏版本选择器改真下拉（多译本列全部对齐目标供切换）；删掉无用的 ⋯ 更多按钮
     #   （解析记录移到书名 tooltip）。
     BASELINE_SHA256 = (
-        "d695b2f39818ec43dee8851aec15b00b1f238e5c1151ed5186477fa55332446f"
+        "d10a9a3c539186a2d591f96351dc9e2e5f7ca42ef84d54b255ce9867ce415ec9"
     )
-    BASELINE_BYTES = 1039772
+    BASELINE_BYTES = 1039968
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
