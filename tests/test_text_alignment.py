@@ -7,6 +7,7 @@ import threading
 import unittest
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
@@ -37,6 +38,8 @@ from src.me_finder.text_alignment import (
     _load_pages,
 )
 from src.me_finder.semantic_alignment import (
+    SemanticLink,
+    embed_texts,
     embed_text_sequences as cache_text_sequences,
     find_heading_anchors,
 )
@@ -494,12 +497,14 @@ class TextAlignmentTests(unittest.TestCase):
         self.assertGreater(result["rejected_link_count"], 0)
         connection = sqlite3.connect(str(self.db))
         try:
-            self.assertGreater(
-                connection.execute(
-                    "SELECT COUNT(*) FROM alignment_links WHERE review_status = 'rejected'"
-                ).fetchone()[0],
-                0,
-            )
+            rejected = connection.execute(
+                "SELECT confidence, anchor_key FROM alignment_links "
+                "WHERE review_status = 'rejected'"
+            ).fetchall()
+            self.assertGreater(len(rejected), 0)
+            for confidence, anchor_key in rejected:
+                self.assertAlmostEqual(confidence, -1.0)
+                self.assertIsNone(anchor_key)
         finally:
             connection.close()
         with self.assertRaisesRegex(AlignmentNotFound, "置信度过低"):
@@ -512,6 +517,50 @@ class TextAlignmentTests(unittest.TestCase):
                 start_offset=0,
                 end_offset=len("Der Geist ist wirklich."),
             )
+
+    def test_all_review_statuses_persist_confidence_and_anchor_key(self) -> None:
+        links = [
+            SemanticLink(0, 1, 0, 1, 0.09, 0.91, "automatic", "chapter:1"),
+            SemanticLink(1, 2, 1, 2, 0.17, 0.83, "note_automatic", "note:1:1"),
+            SemanticLink(0, 1, 1, 2, 1.63, 0.37, "rejected", "term:geist"),
+            SemanticLink(1, 2, 2, 2, 2.2, 0.0, "unmatched"),
+        ]
+        with mock.patch(
+            "src.me_finder.text_alignment.align_segment_sequences",
+            return_value=(links, []),
+        ):
+            generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            rows = connection.execute(
+                "SELECT review_status, confidence, anchor_key "
+                "FROM alignment_links ORDER BY order_index"
+            ).fetchall()
+            confidence_counts = dict(
+                connection.execute(
+                    "SELECT review_status, COUNT(confidence) FROM alignment_links "
+                    "GROUP BY review_status"
+                ).fetchall()
+            )
+
+        self.assertEqual(
+            rows,
+            [
+                ("automatic", 0.91, "chapter:1"),
+                ("note_automatic", 0.83, "note:1:1"),
+                ("rejected", 0.37, "term:geist"),
+                ("unmatched", 0.0, None),
+            ],
+        )
+        self.assertEqual(
+            confidence_counts,
+            {
+                "automatic": 1,
+                "note_automatic": 1,
+                "rejected": 1,
+                "unmatched": 1,
+            },
+        )
 
     def test_untranslated_addition_falls_back_to_shared_section_heading(self) -> None:
         connection = sqlite3.connect(str(self.db))
@@ -731,6 +780,84 @@ class TextAlignmentTests(unittest.TestCase):
             )
         finally:
             connection.close()
+
+    def test_switching_embedding_model_does_not_reuse_completed_result(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        second = generate_alignment(
+            self.db,
+            "work-one",
+            "pdf-de",
+            "pdf-zh",
+            embedding_model_id="multilingual-e5-large",
+        )
+
+        self.assertFalse(second["reused"])
+        self.assertNotEqual(second["alignment_run_id"], first["alignment_run_id"])
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            parameters = json.loads(
+                connection.execute(
+                    "SELECT parameters_json FROM alignment_runs "
+                    "WHERE alignment_run_id = ?",
+                    (second["alignment_run_id"],),
+                ).fetchone()[0]
+            )
+        self.assertEqual(parameters["embedding_model_id"], "multilingual-e5-large")
+
+    def test_reviewed_body_bounds_persist_and_survive_force(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            counts = dict(connection.execute(
+                "SELECT CASE WHEN s.source_file_id='pdf-de' THEN 'pivot' ELSE 'target' END, COUNT(*) "
+                "FROM text_segments t JOIN segment_sets s USING(segment_set_id) "
+                "WHERE s.source_file_id IN ('pdf-de','pdf-zh') GROUP BY s.source_file_id"
+            ))
+        bounds = {side: [0, count] for side, count in counts.items()}
+        reviewed = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh",
+                                      force=True, reviewed_body_ranges=bounds)
+        forced = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh", force=True)
+        self.assertNotEqual(first["alignment_run_id"], reviewed["alignment_run_id"])
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            params = json.loads(connection.execute("SELECT parameters_json FROM alignment_runs WHERE alignment_run_id=?",
+                                                   (forced["alignment_run_id"],)).fetchone()[0])
+        self.assertEqual(params["body_range_source"], "reviewed")
+        self.assertEqual(params["body_ranges"], bounds)
+
+    def test_reviewed_body_bounds_reject_invalid_input(self) -> None:
+        with self.assertRaises(InvalidAlignmentRequest):
+            generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh",
+                               reviewed_body_ranges={"pivot": [-1,2], "target": [0,2]})
+
+    def test_reviewed_frontmatter_is_stored_and_cannot_use_location_fallback(self) -> None:
+        result = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh",
+                                    reviewed_body_ranges={"pivot": [1,2], "target": [1,2]})
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            rows = connection.execute(
+                "SELECT l.review_status,l.confidence FROM alignment_links l "
+                "JOIN alignment_link_members m USING(alignment_link_id) "
+                "JOIN text_segments t USING(segment_id) "
+                "WHERE l.alignment_run_id=? AND t.order_index=0",
+                (result["alignment_run_id"],),
+            ).fetchall()
+        self.assertTrue(rows)
+        self.assertTrue(all(status == "rejected" and confidence == 0 for status,confidence in rows))
+        with self.assertRaisesRegex(AlignmentNotFound, "副文本"):
+            locate_alignment(self.db,"pdf-de","pdf-zh",start_page_index=0,end_page_index=0,
+                             start_offset=0,end_offset=len("Der Geist ist wirklich."))
+
+    def test_completed_pair_without_confidence_is_recomputed(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            connection.execute(
+                "UPDATE alignment_links SET confidence = NULL "
+                "WHERE alignment_run_id = ?",
+                (first["alignment_run_id"],),
+            )
+            connection.commit()
+
+        second = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+
+        self.assertFalse(second["reused"])
+        self.assertNotEqual(second["alignment_run_id"], first["alignment_run_id"])
 
     def test_force_recomputes_an_unchanged_completed_pair(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
@@ -1168,12 +1295,68 @@ class TextAlignmentTests(unittest.TestCase):
 
 
 class SemanticEmbeddingCacheTests(unittest.TestCase):
+    def test_query_prefix_model_uses_fastembed_query_path(self) -> None:
+        calls: list[tuple[str, list[str]]] = []
+
+        class StubTextEmbedding:
+            def __init__(self, **kwargs):
+                self.model_name = kwargs["model_name"]
+
+            def embed(self, texts, *, batch_size):
+                calls.append(("embed", list(texts)))
+                return [np.asarray([1.0, 0.0], dtype=np.float32) for _ in texts]
+
+            def query_embed(self, texts, *, batch_size):
+                calls.append(("query_embed", list(texts)))
+                return [np.asarray([1.0, 0.0], dtype=np.float32) for _ in texts]
+
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            "sys.modules",
+            {"fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding)},
+        ):
+            vectors = embed_texts(
+                ["source text", "target text"],
+                Path(temp_dir),
+                model_id="multilingual-e5-large",
+            )
+
+        self.assertEqual(
+            calls,
+            [("query_embed", ["query: source text", "query: target text"])],
+        )
+        self.assertEqual(vectors.shape, (2, 2))
+
+    def test_model_ids_produce_distinct_document_vector_cache_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_dir = Path(temp_dir)
+            calls: list[str] = []
+
+            def fake_embed(texts, _cache_dir, *, model_id):
+                calls.append(model_id)
+                return np.ones((len(texts), 3), dtype=np.float32)
+
+            with mock.patch(
+                "src.me_finder.semantic_alignment.embed_texts",
+                side_effect=fake_embed,
+            ):
+                cache_text_sequences(
+                    [["same text"]], cache_dir, model_id="minilm-l12-v2"
+                )
+                cache_text_sequences(
+                    [["same text"]], cache_dir, model_id="multilingual-e5-large"
+                )
+
+            cache_files = list((cache_dir / "document-vectors").glob("*.npy"))
+
+        self.assertEqual(calls, ["minilm-l12-v2", "multilingual-e5-large"])
+        self.assertEqual(len(cache_files), 2)
+
     def test_document_vectors_are_reused_across_alignment_targets(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = Path(temp_dir)
             calls: list[list[str]] = []
 
-            def fake_embed(texts, _cache_dir):
+            def fake_embed(texts, _cache_dir, **_kwargs):
                 calls.append(list(texts))
                 return np.arange(len(texts) * 3, dtype=np.float32).reshape(-1, 3)
 
@@ -1194,7 +1377,7 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
             cache_dir = Path(temp_dir)
             calls: list[list[str]] = []
 
-            def fake_embed(texts, _cache_dir):
+            def fake_embed(texts, _cache_dir, **_kwargs):
                 calls.append(list(texts))
                 return np.ones((len(texts), 3), dtype=np.float32)
 

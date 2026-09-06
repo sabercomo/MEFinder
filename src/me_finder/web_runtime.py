@@ -93,6 +93,7 @@ from .local_ocr_installer import (
 )
 from .local_ocr_settings import resolve_local_ocr_config_path
 from .macos_update import check_macos_update
+from .managed_embedding_models import ManagedEmbeddingModels
 from .managed_mineru import ManagedMinerU
 from .mineru_api import (
     MinerUError,
@@ -474,6 +475,7 @@ def build_application_runtime(
         ),
     )
     component_catalog = ComponentCatalog(root, LOCAL_OCR_MANIFEST_FILE)
+    managed_embedding_models = ManagedEmbeddingModels(root)
     managed_mineru = ManagedMinerU(
         root,
         resolve_mineru_config_path(root),
@@ -550,6 +552,7 @@ def build_application_runtime(
         managed_components={
             local_ocr_installer.component_id: local_ocr_installer,
             managed_mineru.component_id: managed_mineru,
+            managed_embedding_models.component_id: managed_embedding_models,
         },
     )
     parser_settings_controller.migrate_legacy_mineru_account()

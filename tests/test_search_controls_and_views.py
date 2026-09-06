@@ -692,6 +692,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         expected_ids = {
             "appearance-card",
             "pdf-reader-settings",
+            "text-alignment-settings",
             "software-update-settings",
             "macos-update-settings",
             "data-location-settings",

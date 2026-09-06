@@ -403,6 +403,7 @@
     if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
       loadParserStatistics();
     }
+    if (sectionId === 'text-alignment-settings') loadAlignmentModelComponent();
   }
 
   // Fall back to the first platform-visible category when the active one is hidden
@@ -770,6 +771,143 @@
     }
   }
 
+  function renderAlignmentEmbeddingModel() {
+    var modelId = settingsStore.currentAlignmentEmbeddingModel;
+    document.querySelectorAll('.embedding-model-option').forEach(function(option) {
+      var selected = option.dataset.embeddingModelChoice === modelId;
+      option.classList.toggle('selected', selected);
+      var input = option.querySelector('input[name="alignment-embedding-model"]');
+      if (input) {
+        input.checked = selected;
+        input.disabled = settingsStore.alignmentEmbeddingModelSaving;
+      }
+    });
+  }
+
+  async function setAlignmentEmbeddingModel(modelId) {
+    if (['minilm-l12-v2', 'multilingual-e5-large'].indexOf(modelId) < 0) return;
+    if (settingsStore.alignmentEmbeddingModelSaving || settingsStore.preferencesLoadPromise) {
+      renderAlignmentEmbeddingModel();
+      return;
+    }
+    var previous = settingsStore.currentAlignmentEmbeddingModel;
+    if (previous === modelId) return;
+    settingsStore.currentAlignmentEmbeddingModel = modelId;
+    settingsStore.alignmentEmbeddingModelSaving = true;
+    renderAlignmentEmbeddingModel();
+    try {
+      var resp = await fetch('/api/preferences', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({alignment_embedding_model_id: modelId})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+      settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id;
+      showToast('对齐模型已切换；请对已有配对重新运行对齐');
+    } catch (e) {
+      settingsStore.currentAlignmentEmbeddingModel = previous;
+      showToast('对齐模型保存失败：' + e.message, 'danger');
+    } finally {
+      settingsStore.alignmentEmbeddingModelSaving = false;
+      renderAlignmentEmbeddingModel();
+      renderAlignmentModelComponent(settingsStore.alignmentModelComponent);
+    }
+  }
+
+  function renderAlignmentModelComponent(component) {
+    if (!component || !Array.isArray(component.models)) return;
+    settingsStore.alignmentModelComponent = component;
+    var downloading = false;
+    component.models.forEach(function(model) {
+      var button = document.getElementById('embedding-model-download-' + model.id);
+      var state = document.getElementById('embedding-model-state-' + model.id);
+      var hint = document.getElementById('embedding-model-hint-' + model.id);
+      var progress = document.getElementById('embedding-model-progress-' + model.id);
+      if (!button || !state || !hint || !progress) return;
+      button.title = model.error || '';
+      if (model.state === 'downloading') {
+        downloading = true;
+        state.className = 'settings-status';
+        state.textContent = '下载中';
+        hint.textContent = model.message || '正在下载模型…';
+        progress.hidden = false;
+        progress.classList.add('indeterminate');
+        button.hidden = false;
+        button.disabled = true;
+        button.textContent = '正在下载…';
+      } else if (model.installed) {
+        state.className = 'settings-status ready';
+        state.textContent = '已下载';
+        hint.textContent = '模型保存在 MEFinder 组件目录，可离线使用';
+        progress.hidden = true;
+        progress.classList.remove('indeterminate');
+        button.hidden = true;
+      } else {
+        state.className = 'settings-status warning';
+        state.textContent = model.state === 'failed' ? '下载失败' : '未下载';
+        hint.textContent = model.error ? '上次下载失败：' + model.error : '首次使用前需下载，文件只保存在本机';
+        progress.hidden = true;
+        progress.classList.remove('indeterminate');
+        button.hidden = false;
+        button.disabled = false;
+        button.textContent = model.state === 'failed' ? '重试下载' : '下载安装';
+      }
+    });
+    var selected = component.models.find(function(model) {
+      return model.id === settingsStore.currentAlignmentEmbeddingModel;
+    });
+    var status = document.getElementById('alignment-model-status');
+    if (status && selected) {
+      status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
+      status.textContent = selected.state === 'downloading'
+        ? '下载中'
+        : '当前 · ' + selected.display_name;
+    }
+    if (settingsStore.alignmentModelPollTimer) {
+      clearTimeout(settingsStore.alignmentModelPollTimer);
+      settingsStore.alignmentModelPollTimer = null;
+    }
+    if (downloading) {
+      settingsStore.alignmentModelPollTimer = setTimeout(loadAlignmentModelComponent, 1000);
+    }
+  }
+
+  async function loadAlignmentModelComponent() {
+    try {
+      var resp = await fetch('/api/text-alignment/models');
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
+      renderAlignmentModelComponent(data);
+    } catch (e) {
+      var status = document.getElementById('alignment-model-status');
+      if (status) {
+        status.className = 'settings-status warning';
+        status.textContent = '读取失败';
+      }
+    }
+  }
+
+  async function downloadAlignmentModel(modelId, button) {
+    if (button) {
+      button.disabled = true;
+      button.textContent = '正在启动…';
+    }
+    try {
+      var resp = await fetch('/api/text-alignment/models', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_id: modelId, action: 'download'})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '下载启动失败');
+      renderAlignmentModelComponent(data);
+    } catch (e) {
+      showToast('模型下载失败：' + e.message, 'danger');
+      loadAlignmentModelComponent();
+    }
+  }
+
   function applyPreferencesData(data, requestedThemeRevision) {
     // 从后端 appearance 恢复外观引擎状态，并即时解析生效（覆盖服务端首帧回退）。
     loadAppearanceFromPreferences(data.appearance);
@@ -792,6 +930,9 @@
       ? 'with_pdf'
       : 'data_only';
     settingsStore.currentReaderLineMode = data.reader_line_mode === 'physical' ? 'physical' : 'flow';
+    settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id === 'multilingual-e5-large'
+      ? 'multilingual-e5-large'
+      : 'minilm-l12-v2';
     settingsStore.autoUpdateEnabled = data.auto_update === true;
     enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
     saveLocalCitationStyles(enabledCitationStyles);
@@ -801,6 +942,8 @@
     if (autoUpdateInput) autoUpdateInput.checked = settingsStore.autoUpdateEnabled;
     renderPdfOpenMode();
     renderReaderLineMode();
+    renderAlignmentEmbeddingModel();
+    renderAlignmentModelComponent(settingsStore.alignmentModelComponent);
     global.MEFinder.imports.renderPdfParseMode();
     renderDocumentExportMode();
     renderCitationStylePreferences();
@@ -884,6 +1027,7 @@
     settingsStore.readerLineModeSaving = true;
     document.querySelectorAll('input[name="reader-line-mode"]').forEach(function(i) { i.disabled = true; });
     renderReaderLineMode();
+    renderAlignmentEmbeddingModel();
     try {
       var resp = await fetch('/api/preferences', {
         method: 'POST',
@@ -1354,6 +1498,9 @@
   global.configureDesktopPlatformOptions = configureDesktopPlatformOptions;
   global.setPdfOpenMode = setPdfOpenMode;
   global.setReaderLineMode = setReaderLineMode;
+  global.setAlignmentEmbeddingModel = setAlignmentEmbeddingModel;
+  global.loadAlignmentModelComponent = loadAlignmentModelComponent;
+  global.downloadAlignmentModel = downloadAlignmentModel;
   global.setDocumentExportMode = setDocumentExportMode;
   global.loadPreferences = loadPreferences;
   global.checkForUpdates = checkForUpdates;

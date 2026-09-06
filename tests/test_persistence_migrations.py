@@ -25,13 +25,13 @@ class PersistenceMigrationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._temporary.cleanup()
 
-    def test_v5_migrations_are_registered_and_idempotent(self) -> None:
+    def test_v6_migrations_are_registered_and_idempotent(self) -> None:
         self.assertTrue(migrate_index_database(self.database_path))
         self.assertFalse(migrate_index_database(self.database_path))
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 5
+                connection.execute("PRAGMA user_version").fetchone()[0], 6
             )
             tables = {
                 row[0]
@@ -66,7 +66,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 5
+                connection.execute("PRAGMA user_version").fetchone()[0], 6
             )
             columns = [
                 row[1]
@@ -94,6 +94,36 @@ class PersistenceMigrationTests(unittest.TestCase):
             )
         finally:
             connection.close()
+
+    def test_v5_alignment_links_gain_confidence_and_anchor_key(self) -> None:
+        connection = sqlite3.connect(str(self.database_path))
+        connection.execute(
+            "CREATE TABLE segment_sets (segment_set_id TEXT PRIMARY KEY)"
+        )
+        connection.execute(
+            "CREATE TABLE alignment_links ("
+            "alignment_link_id TEXT PRIMARY KEY, alignment_run_id TEXT NOT NULL, "
+            "order_index INTEGER NOT NULL, cost REAL NOT NULL, "
+            "review_status TEXT NOT NULL)"
+        )
+        connection.execute("PRAGMA user_version = 5")
+        connection.commit()
+        connection.close()
+
+        self.assertTrue(migrate_index_database(self.database_path))
+        connection = sqlite3.connect(str(self.database_path))
+        try:
+            self.assertEqual(
+                connection.execute("PRAGMA user_version").fetchone()[0], 6
+            )
+            columns = [
+                row[1]
+                for row in connection.execute("PRAGMA table_info(alignment_links)")
+            ]
+        finally:
+            connection.close()
+        self.assertIn("confidence", columns)
+        self.assertIn("anchor_key", columns)
 
     def test_current_version_repairs_missing_additive_tables(self) -> None:
         connection = sqlite3.connect(str(self.database_path))

@@ -13,7 +13,7 @@ from src.me_finder.mineru_local_settings import (
     load_mineru_local_config,
     mineru_local_config_summary,
     save_mineru_local_config,
-    test_mineru_local_connection,
+    test_mineru_local_connection as run_mineru_local_connection,
 )
 
 
@@ -84,7 +84,7 @@ class MinerULocalSettingsTests(unittest.TestCase):
             "src.me_finder.mineru_local_settings.MinerULocalProvider.health",
             return_value={"ok": True, "protocol_version": "1"},
         ) as health:
-            result = test_mineru_local_connection(
+            result = run_mineru_local_connection(
                 {
                     "enabled": False,
                     "endpoint": "http://127.0.0.1:8123",

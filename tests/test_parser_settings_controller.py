@@ -293,6 +293,31 @@ class ParserSettingsControllerTests(unittest.TestCase):
         )
         local_component.perform.assert_called_once_with(request)
 
+    def test_embedding_model_component_uses_managed_component_boundary(self) -> None:
+        component = Mock()
+        component.summary.return_value = {
+            "component_id": "text-alignment-models",
+            "models": [],
+        }
+        component.perform.return_value = component.summary.return_value
+        controller = self._controller(
+            managed_components={"text-alignment-models": component}
+        )
+        request = {
+            "model_id": "multilingual-e5-large",
+            "action": "download",
+        }
+
+        self.assertEqual(
+            controller.text_alignment_models_component(),
+            (200, component.summary.return_value),
+        )
+        self.assertEqual(
+            controller.manage_text_alignment_models_component(request),
+            (200, {"ok": True, **component.perform.return_value}),
+        )
+        component.perform.assert_called_once_with(request)
+
     def test_managed_mineru_status_and_actions_share_local_deployment_payload(self) -> None:
         runtime_summary = Mock(
             return_value={"supported": True, "profiles": [], "service": {}}

@@ -8,6 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from src.me_finder.preferences import read_preferences, save_preferences
+from src.me_finder.embedding_models import (
+    DEFAULT_EMBEDDING_MODEL_ID,
+    default_alignment_threshold_settings,
+)
 
 
 class PreferenceConcurrencyTests(unittest.TestCase):
@@ -51,6 +55,8 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "citation_style": "chinese",
             "lib_default_language": "chinese",
             "online_auto_match_threshold": 0.9,
+            "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
+            "alignment_thresholds": default_alignment_threshold_settings(),
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

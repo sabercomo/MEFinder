@@ -163,6 +163,8 @@ def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
             alignment_run_id TEXT NOT NULL REFERENCES alignment_runs(alignment_run_id) ON DELETE CASCADE,
             order_index INTEGER NOT NULL,
             cost REAL NOT NULL,
+            confidence REAL,
+            anchor_key TEXT,
             review_status TEXT NOT NULL,
             UNIQUE(alignment_run_id, order_index)
         )
@@ -185,6 +187,16 @@ def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
         for statement in statements:
             connection.execute(statement)
         changed = True
+    if _table_exists(connection, "alignment_links"):
+        alignment_link_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(alignment_links)")
+        }
+        if "confidence" not in alignment_link_columns:
+            connection.execute("ALTER TABLE alignment_links ADD COLUMN confidence REAL")
+            changed = True
+        if "anchor_key" not in alignment_link_columns:
+            connection.execute("ALTER TABLE alignment_links ADD COLUMN anchor_key TEXT")
+            changed = True
     if not _table_exists(connection, "text_segment_paragraph_spans"):
         connection.execute(
             "CREATE TABLE text_segment_paragraph_spans ("

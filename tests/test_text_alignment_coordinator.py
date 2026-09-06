@@ -86,6 +86,12 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             generate.call_args.kwargs["model_cache_dir"],
             Path("D:/runtime/components/text-alignment/models"),
         )
+        self.assertEqual(
+            generate.call_args.kwargs["embedding_model_id"], "minilm-l12-v2"
+        )
+        self.assertEqual(
+            generate.call_args.kwargs["alignment_thresholds"].low, 0.56
+        )
         self.assertFalse(generate.call_args.kwargs["force"])
 
     def test_force_recomputation_is_forwarded(self) -> None:

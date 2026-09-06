@@ -8,7 +8,7 @@ import re
 import sqlite3
 import uuid
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
@@ -23,20 +23,23 @@ from .edition_folio_anchors import (
     detect_folio_boundary_candidates,
     verify_folio_boundary_candidates,
 )
+from .embedding_models import (
+    AlignmentThresholds,
+    DEFAULT_EMBEDDING_MODEL_ID,
+    embedding_model_config,
+)
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import (
-    EMBEDDING_MODEL,
+    ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
     HeadingAnchor,
-    LOW_CONFIDENCE_THRESHOLD,
-    NOTE_BLOCK_CONFIDENCE_THRESHOLD,
-    NOTE_CANDIDATE_MARGIN,
     SEMANTIC_ALIGNMENT_VERSION,
     EmbeddingProvider,
     SemanticLink,
     align_semantic_sequences,
+    alignment_body_bounds,
     alignment_transitions,
     cached_text_sequence_vectors,
     embed_text_sequences,
@@ -168,6 +171,7 @@ class AlignmentPreparation:
     folio_candidates: Tuple[FolioBoundaryCandidate, ...] = ()
     pivot_language: str = "und"
     target_language: str = "und"
+    reviewed_body_ranges: Dict[str, List[int]] | None = None
 
 
 def _now() -> str:
@@ -730,18 +734,25 @@ def align_segment_sequences(
     *,
     cache_dir: Path,
     embedding_provider: EmbeddingProvider | None = None,
+    embedding_model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+    thresholds: AlignmentThresholds | None = None,
     reusable_sequences: Sequence[Sequence[str]] = (),
     folio_candidates: Sequence[FolioBoundaryCandidate] = (),
     source_language: str = "und",
     target_language: str = "und",
+    reviewed_body_ranges: Dict[str, List[int]] | None = None,
 ) -> Tuple[List[SemanticLink], list]:
     """Return chapter-anchored semantic links and the anchors used."""
 
+    active_thresholds = thresholds or embedding_model_config(
+        embedding_model_id
+    ).thresholds
     if embedding_provider is None:
         source_vectors, target_vectors = embed_text_sequences(
             [source_texts, target_texts],
             cache_dir,
             reusable_sequences=reusable_sequences,
+            model_id=embedding_model_id,
         )
         embeddings = np.vstack([source_vectors, target_vectors])
     else:
@@ -751,21 +762,60 @@ def align_segment_sequences(
     verified_folios = verify_folio_boundary_candidates(
         folio_candidates, source_vectors, target_vectors
     )
-    return align_semantic_sequences(
-        source_texts,
-        target_texts,
-        embeddings,
+    source_start, source_end = (reviewed_body_ranges["pivot"] if reviewed_body_ranges is not None
+                                else alignment_body_bounds(source_texts))
+    target_start, target_end = (reviewed_body_ranges["target"] if reviewed_body_ranges is not None
+                                else alignment_body_bounds(target_texts))
+    aligned, anchors = align_semantic_sequences(
+        source_texts[source_start:source_end],
+        target_texts[target_start:target_end],
+        np.vstack([
+            source_vectors[source_start:source_end],
+            target_vectors[target_start:target_end],
+        ]),
         [
             HeadingAnchor(
-                candidate.pivot_segment_index,
-                candidate.target_segment_index,
+                candidate.pivot_segment_index - source_start,
+                candidate.target_segment_index - target_start,
                 candidate.key,
             )
             for candidate in verified_folios
+            if source_start <= candidate.pivot_segment_index < source_end
+            and target_start <= candidate.target_segment_index < target_end
         ],
         source_language=source_language,
         target_language=target_language,
+        thresholds=active_thresholds,
     )
+    aligned = [
+        replace(link,
+                source_start=link.source_start + source_start,
+                source_end=link.source_end + source_start,
+                target_start=link.target_start + target_start,
+                target_end=link.target_end + target_start)
+        for link in aligned
+    ]
+    # Excluded segments remain inspectable as one-sided rejected rows. No
+    # cross-book similarity exists for those rows, so confidence is zero.
+    prefix = [
+        SemanticLink(i, i + 1, 0, 0, 0.0, 0.0, "rejected")
+        for i in range(source_start)
+    ] + [
+        SemanticLink(source_start, source_start, j, j + 1, 0.0, 0.0, "rejected")
+        for j in range(target_start)
+    ]
+    suffix = [
+        SemanticLink(i, i + 1, target_end, target_end, 0.0, 0.0, "rejected")
+        for i in range(source_end, len(source_texts))
+    ] + [
+        SemanticLink(len(source_texts), len(source_texts), j, j + 1, 0.0, 0.0, "rejected")
+        for j in range(target_end, len(target_texts))
+    ]
+    return prefix + aligned + suffix, [
+        replace(anchor, source_index=anchor.source_index + source_start,
+                target_index=anchor.target_index + target_start)
+        for anchor in anchors
+    ]
 
 
 def _default_alignment_model_cache(db_path: Path) -> Path:
@@ -812,9 +862,13 @@ def _generate_alignment_on_connection(
     *,
     model_cache_dir: Path,
     embedding_provider: EmbeddingProvider | None = None,
+    embedding_model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+    thresholds: AlignmentThresholds | None = None,
     preparation: AlignmentPreparation | None = None,
     computed: Tuple[List[SemanticLink], List[HeadingAnchor]] | None = None,
 ) -> Dict[str, object]:
+    active_model = embedding_model_config(embedding_model_id)
+    active_thresholds = thresholds or active_model.thresholds
     _require_pair(
         connection, document_group_id, pivot_source_id, target_source_id
     )
@@ -850,6 +904,8 @@ def _generate_alignment_on_connection(
             [text for _segment_id, text in target_segments],
             cache_dir=model_cache_dir,
             embedding_provider=embedding_provider,
+            embedding_model_id=embedding_model_id,
+            thresholds=active_thresholds,
             reusable_sequences=(
                 preparation.pivot_reusable_texts,
                 preparation.target_reusable_texts,
@@ -857,6 +913,7 @@ def _generate_alignment_on_connection(
             folio_candidates=preparation.folio_candidates,
             source_language=preparation.pivot_language,
             target_language=preparation.target_language,
+            reviewed_body_ranges=preparation.reviewed_body_ranges,
         )
     aligned, anchors = computed
     connection.execute(
@@ -874,13 +931,20 @@ def _generate_alignment_on_connection(
     parameters = {
         "transitions": alignment_transitions(),
         "length_unit": "non_whitespace_unicode_codepoint",
-        "embedding_model": EMBEDDING_MODEL,
+        "embedding_model_id": active_model.id,
+        "embedding_model_hf_name": active_model.hf_name,
         "embedding_runtime_version": EMBEDDING_RUNTIME_VERSION,
         "semantic_alignment_version": SEMANTIC_ALIGNMENT_VERSION,
+        "alignment_region_version": ALIGNMENT_REGION_VERSION,
+        "body_range_source": "reviewed" if preparation.reviewed_body_ranges is not None else "detected",
+        "body_ranges": preparation.reviewed_body_ranges or {
+            "pivot": list(alignment_body_bounds([text for _, text in pivot_segments])),
+            "target": list(alignment_body_bounds([text for _, text in target_segments])),
+        },
         "similarity": "cosine",
-        "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
-        "note_block_confidence_threshold": NOTE_BLOCK_CONFIDENCE_THRESHOLD,
-        "note_candidate_margin": NOTE_CANDIDATE_MARGIN,
+        "low_confidence_threshold": active_thresholds.low,
+        "note_block_confidence_threshold": active_thresholds.note_block,
+        "note_candidate_margin": active_thresholds.margin,
         "pivot_language": preparation.pivot_language,
         "target_language": preparation.target_language,
         "heading_anchors": [
@@ -936,6 +1000,8 @@ def _generate_alignment_on_connection(
                 run_id,
                 order_index,
                 round(link.cost, 6),
+                link.confidence,
+                link.anchor_key or None,
                 link.review_status,
             )
         )
@@ -961,7 +1027,8 @@ def _generate_alignment_on_connection(
         )
     connection.executemany(
         "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "
-        "order_index, cost, review_status) VALUES (?, ?, ?, ?, ?)",
+        "order_index, cost, confidence, anchor_key, review_status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         link_rows,
     )
     connection.executemany(
@@ -988,6 +1055,7 @@ def _generate_alignment_on_connection(
         "folio_anchor_count": len(folio_anchors),
         "algorithm": ALIGNMENT_ALGORITHM,
         "algorithm_version": ALIGNMENT_ALGORITHM_VERSION,
+        "embedding_model_id": active_model.id,
         "status": "completed",
         "reused": False,
     }
@@ -1002,13 +1070,18 @@ def generate_alignment(
     force: bool = False,
     model_cache_dir: Path | None = None,
     embedding_provider: EmbeddingProvider | None = None,
+    embedding_model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+    alignment_thresholds: AlignmentThresholds | None = None,
     write_window: WriteWindow | None = None,
+    reviewed_body_ranges: Dict[str, List[int]] | None = None,
 ) -> Dict[str, object]:
     group_id = str(document_group_id or "").strip()
     if not group_id:
         raise InvalidAlignmentRequest("document_group_id is required")
     pivot_id = _validate_source_id(pivot_source_file_id)
     target_id = _validate_source_id(target_source_file_id)
+    active_model = embedding_model_config(embedding_model_id)
+    active_thresholds = alignment_thresholds or active_model.thresholds
     cache_dir = (
         Path(model_cache_dir)
         if model_cache_dir is not None
@@ -1023,6 +1096,22 @@ def generate_alignment(
             _require_pair(connection, group_id, pivot_id, target_id)
             pivot_set_id, pivot_segments = _segment_set(connection, pivot_id)
             target_set_id, target_segments = _segment_set(connection, target_id)
+            if reviewed_body_ranges is None:
+                # Reuse reviewed annotations only for these exact segment sets.
+                reviewed = connection.execute(
+                    "SELECT parameters_json FROM alignment_runs WHERE pivot_segment_set_id=? "
+                    "AND target_segment_set_id=? AND json_extract(parameters_json,'$.body_range_source')='reviewed' "
+                    "ORDER BY created_at DESC LIMIT 1", (pivot_set_id, target_set_id),
+                ).fetchone()
+                if reviewed is not None:
+                    reviewed_body_ranges = json.loads(reviewed[0])["body_ranges"]
+            if reviewed_body_ranges is not None:
+                for side, segments in (("pivot", pivot_segments), ("target", target_segments)):
+                    bounds = reviewed_body_ranges.get(side)
+                    if (not isinstance(bounds, list) or len(bounds) != 2
+                            or not all(type(n) is int for n in bounds)
+                            or not 0 <= bounds[0] < bounds[1] <= len(segments)):
+                        raise InvalidAlignmentRequest("复核正文范围必须是有效的半开 Segment 区间。")
             preparation = AlignmentPreparation(
                 pivot_set_id,
                 target_set_id,
@@ -1041,16 +1130,20 @@ def generate_alignment(
                 ),
                 pivot_language=_segment_set_language(connection, pivot_set_id),
                 target_language=_segment_set_language(connection, target_set_id),
+                reviewed_body_ranges=reviewed_body_ranges,
             )
             existing = None
             if not force:
-                existing = connection.execute(
+                candidates = connection.execute(
                     "SELECT alignment_run_id, parameters_json FROM alignment_runs "
                     "WHERE document_group_id = ? AND pivot_source_file_id = ? "
                     "AND target_source_file_id = ? AND pivot_segment_set_id = ? "
                     "AND target_segment_set_id = ? AND algorithm = ? "
                     "AND algorithm_version = ? AND status = 'completed' "
-                    "ORDER BY completed_at DESC LIMIT 1",
+                    "AND NOT EXISTS (SELECT 1 FROM alignment_links l "
+                    "WHERE l.alignment_run_id = alignment_runs.alignment_run_id "
+                    "AND l.confidence IS NULL) "
+                    "ORDER BY completed_at DESC, rowid DESC",
                     (
                         group_id,
                         pivot_id,
@@ -1060,7 +1153,30 @@ def generate_alignment(
                         ALIGNMENT_ALGORITHM,
                         ALIGNMENT_ALGORITHM_VERSION,
                     ),
-                ).fetchone()
+                ).fetchall()
+                existing = next(
+                    (
+                        row
+                        for row in candidates
+                        if (
+                            parameters := _json_object(row["parameters_json"])
+                        ).get("embedding_model_id")
+                        == active_model.id
+                        and parameters.get("alignment_region_version")
+                        == ALIGNMENT_REGION_VERSION
+                        and (reviewed_body_ranges is None or (
+                            parameters.get("body_range_source") == "reviewed"
+                            and parameters.get("body_ranges") == reviewed_body_ranges
+                        ))
+                        and parameters.get("low_confidence_threshold")
+                        == active_thresholds.low
+                        and parameters.get("note_block_confidence_threshold")
+                        == active_thresholds.note_block
+                        and parameters.get("note_candidate_margin")
+                        == active_thresholds.margin
+                    ),
+                    None,
+                )
             if existing is not None:
                 counts = {
                     str(row["review_status"]): int(row["link_count"])
@@ -1098,6 +1214,7 @@ def generate_alignment(
                     ),
                     "algorithm": ALIGNMENT_ALGORITHM,
                     "algorithm_version": ALIGNMENT_ALGORITHM_VERSION,
+                    "embedding_model_id": active_model.id,
                     "status": "completed",
                     "reused": True,
                 }
@@ -1113,6 +1230,8 @@ def generate_alignment(
         [text for _segment_id, text in preparation.target_segments],
         cache_dir=cache_dir,
         embedding_provider=embedding_provider,
+        embedding_model_id=active_model.id,
+        thresholds=active_thresholds,
         reusable_sequences=(
             preparation.pivot_reusable_texts,
             preparation.target_reusable_texts,
@@ -1120,6 +1239,7 @@ def generate_alignment(
         folio_candidates=preparation.folio_candidates,
         source_language=preparation.pivot_language,
         target_language=preparation.target_language,
+        reviewed_body_ranges=preparation.reviewed_body_ranges,
     )
 
     with transaction_window():
@@ -1133,6 +1253,8 @@ def generate_alignment(
                 target_id,
                 model_cache_dir=cache_dir,
                 embedding_provider=embedding_provider,
+                embedding_model_id=active_model.id,
+                thresholds=active_thresholds,
                 preparation=preparation,
                 computed=computed,
             )
@@ -1495,6 +1617,15 @@ def _map_segments_through_run(
         source_side = "target"
     else:
         raise TextAlignmentError("对齐记录不包含请求的源版本。")
+    body_range = _json_object(run["parameters_json"]).get("body_ranges", {}).get(source_side)
+    if body_range is not None:
+        selected_orders = connection.execute(
+            "SELECT order_index FROM text_segments WHERE segment_id IN ("
+            + ",".join("?" for _ in source_segments) + ")",
+            tuple(source_segments),
+        ).fetchall()
+        if any(not body_range[0] <= row[0] < body_range[1] for row in selected_orders):
+            raise AlignmentNotFound("所选文字属于副文本区域，请通过人工修正指定对应段落。")
     placeholders = ",".join("?" for _ in source_segments)
     link_rows = connection.execute(
         "SELECT DISTINCT l.alignment_link_id, l.order_index, l.review_status "
@@ -1606,14 +1737,20 @@ def _semantic_paragraph_fallback(
     model_cache_dir: Path,
 ) -> List[str]:
     source_is_pivot = str(run["pivot_source_file_id"]) == source_id
+    parameters = _json_object(run["parameters_json"])
+    model_id = str(
+        parameters.get("embedding_model_id") or DEFAULT_EMBEDDING_MODEL_ID
+    )
+    model_thresholds = embedding_model_config(model_id).thresholds
+    low_confidence_threshold = float(
+        parameters.get("low_confidence_threshold", model_thresholds.low)
+    )
     source_order_key = "pivot_order_index" if source_is_pivot else "target_order_index"
     target_order_key = "target_order_index" if source_is_pivot else "pivot_order_index"
     anchors = sorted(
         (
             anchor
-            for anchor in _json_object(run["parameters_json"]).get(
-                "heading_anchors", []
-            )
+            for anchor in parameters.get("heading_anchors", [])
             if isinstance(anchor, dict)
             and str(anchor.get("key") or "").startswith("paragraph:")
         ),
@@ -1664,13 +1801,24 @@ def _semantic_paragraph_fallback(
     target_end = (
         int(next_anchor[target_order_key]) if next_anchor is not None else len(target_rows)
     )
+    ranges = parameters.get("body_ranges", {})
+    source_range = ranges.get("pivot" if source_is_pivot else "target")
+    target_range = ranges.get("target" if source_is_pivot else "pivot")
+    if source_range is not None:
+        source_end = min(source_end, source_range[1])
+    if target_range is not None:
+        target_end = min(target_end, target_range[1])
     if selected_orders[-1] >= source_end:
         return []
     source_vectors = cached_text_sequence_vectors(
-        [str(row["text_raw"]) for row in source_rows], model_cache_dir
+        [str(row["text_raw"]) for row in source_rows],
+        model_cache_dir,
+        model_id=model_id,
     )
     target_vectors = cached_text_sequence_vectors(
-        [str(row["text_raw"]) for row in target_rows], model_cache_dir
+        [str(row["text_raw"]) for row in target_rows],
+        model_cache_dir,
+        model_id=model_id,
     )
     if source_vectors is None or target_vectors is None:
         return []
@@ -1678,6 +1826,7 @@ def _semantic_paragraph_fallback(
         source_vectors[source_start:source_end],
         target_vectors[target_start:target_end],
         [order - source_start for order in selected_orders],
+        low_confidence_threshold=low_confidence_threshold,
     )
     if target_index is None:
         return []
@@ -2609,10 +2758,14 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
                     "target_source_file_id": row["target_source_file_id"],
                     "algorithm": row["algorithm"],
                     "algorithm_version": row["algorithm_version"],
+                    "embedding_model_id": _json_object(
+                        row["parameters_json"]
+                    ).get("embedding_model_id", DEFAULT_EMBEDDING_MODEL_ID),
                 }
                 for row in connection.execute(
                     "SELECT document_group_id, pivot_source_file_id, "
-                    "target_source_file_id, algorithm, algorithm_version "
+                    "target_source_file_id, algorithm, algorithm_version, "
+                    "parameters_json "
                     "FROM alignment_runs WHERE status = 'completed' "
                     "ORDER BY document_group_id, pivot_source_file_id, target_source_file_id"
                 )
@@ -2645,6 +2798,9 @@ def restore_alignment_recipe_snapshot(
         group_id = str(pair.get("document_group_id") or "")
         pivot_id = str(pair.get("pivot_source_file_id") or "")
         target_id = str(pair.get("target_source_file_id") or "")
+        model_id = str(
+            pair.get("embedding_model_id") or DEFAULT_EMBEDDING_MODEL_ID
+        )
         present = connection.execute(
             "SELECT COUNT(*) FROM source_files WHERE source_file_id IN (?, ?)",
             (pivot_id, target_id),
@@ -2662,6 +2818,7 @@ def restore_alignment_recipe_snapshot(
             target_id,
             model_cache_dir=model_cache_dir,
             embedding_provider=embedding_provider,
+            embedding_model_id=model_id,
         )
         restored += 1
     return restored

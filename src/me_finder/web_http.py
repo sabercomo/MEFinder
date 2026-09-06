@@ -39,6 +39,7 @@ DATA_ROOT_MUTATING_POST_PATHS = frozenset(
         "/api/mineru-local/component",
         "/api/local-ocr",
         "/api/local-ocr/component",
+        "/api/text-alignment/models",
         "/api/vision-providers",
         "/api/general-model",
         "/api/import",

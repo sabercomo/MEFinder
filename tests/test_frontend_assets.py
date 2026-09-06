@@ -79,6 +79,14 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertIn(f"MEFinder v{__version__}", HTML)
         self.assertIn(f"v{__version__}", HTML)
 
+    def test_group_title_uses_available_row_width(self):
+        css = _read("static/css/40-library.css")
+        match = re.search(r"\.grp-head2 \.grp-title\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(match)
+        declarations = match.group(1)
+        self.assertIn("max-width: 100%", declarations)
+        self.assertNotRegex(declarations, r"max-width:\s*\d+ch")
+
     def test_mineru_brand_asset_is_packaged(self):
         """MinerU 账号与统计页共用官方矢量标识，打包时不能漏掉。"""
 
@@ -420,10 +428,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 作品组：成员行语言码后加文件格式 chip（PDF/EPUB/Word，幽灵描边区别于语言码）。
     # 0.5.2 阅读器：右栏版本选择器改真下拉（多译本列全部对齐目标供切换）；删掉无用的 ⋯ 更多按钮
     #   （解析记录移到书名 tooltip）。
+    # 0.5.2 作品组修2：组标题取消 22ch 固定上限，避免较长中文标题在行内尚有空间时被裁切。
+    # 0.5.2 文本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     BASELINE_SHA256 = (
-        "15b6f2fc6b8f5cf0e7588e2710a8ad3122371636ed38eff3d85186ade16cd3c8"
+        "001b31f7b1422dadf0bab35964a180a93006d073bae47e1085043891d47576a3"
     )
-    BASELINE_BYTES = 1043563
+    BASELINE_BYTES = 1056449
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

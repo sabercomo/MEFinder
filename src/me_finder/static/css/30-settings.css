@@ -307,6 +307,34 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .pdf-open-option.selected .pdf-open-option-check,
 .document-export-option.selected .document-export-option-check { border: 4px solid var(--accent); }
 @media (max-width: 760px) { .pdf-open-options, .document-export-options { max-width: none; } }
+.embedding-model-options.is-busy { opacity: .62; pointer-events: none; }
+.embedding-model-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+.embedding-model-choice > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.embedding-model-check {
+  width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border-control);
+  border-radius: 50%;
+  background: var(--surface-primary);
+}
+.embedding-model-option.selected .embedding-model-check { border: 4px solid var(--accent); }
+.embedding-model-choice > input:focus-visible + .embedding-model-check { outline: 2px solid var(--accent); outline-offset: 3px; }
+.embedding-model-copy { display: grid; gap: 4px; min-width: 0; }
+.embedding-model-copy strong { color: var(--text-primary); font-size: 14px; font-weight: 650; }
+.embedding-model-copy strong em { margin-left: 5px; color: var(--accent-text); font-size: 11px; font-style: normal; font-weight: 600; }
+.embedding-model-copy small { color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
+.embedding-model-rerun-notice { margin-bottom: 8px; }
 /* 导出页码锚点（Markdown / EPUB 共用；页面噪声固定清理） */
 .export-cleanup-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
 .export-cleanup-head { display: grid; gap: 3px; }

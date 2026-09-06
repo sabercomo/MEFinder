@@ -57,11 +57,12 @@ def _install_text_segment_paragraph_spans(
 
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 through v5 are pure additive DDL and belong here.
+# file atomically. v3 through v6 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=install_document_group_schema),
     Migration(target_version=4, apply=install_text_alignment_schema),
     Migration(target_version=5, apply=_install_text_segment_paragraph_spans),
+    Migration(target_version=6, apply=install_text_alignment_schema),
 )
 
 

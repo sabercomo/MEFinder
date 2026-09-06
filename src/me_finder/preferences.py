@@ -9,6 +9,12 @@ import threading
 from pathlib import Path
 from typing import Any, Mapping
 
+from .embedding_models import (
+    DEFAULT_EMBEDDING_MODEL_ID,
+    EMBEDDING_MODELS,
+    default_alignment_threshold_settings,
+)
+
 
 DEFAULT_THEME = "frost-blue"
 DEFAULT_LIBRARY_VIEW = "list"
@@ -226,6 +232,28 @@ def _normalized_online_auto_match(value: Any) -> float:
     except (TypeError, ValueError):
         return DEFAULT_ONLINE_AUTO_MATCH
     return max(ONLINE_AUTO_MATCH_MIN, min(ONLINE_AUTO_MATCH_MAX, round(number, 2)))
+
+
+def _normalized_alignment_thresholds(value: Any) -> dict[str, dict[str, float]]:
+    normalized = default_alignment_threshold_settings()
+    if not isinstance(value, Mapping):
+        return normalized
+    for model_id, defaults in normalized.items():
+        candidate = value.get(model_id)
+        if not isinstance(candidate, Mapping):
+            continue
+        for key in ("low", "note_block", "margin"):
+            raw = candidate.get(key)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                continue
+            number = float(raw)
+            if (key == "margin" and 0.0 <= number <= 2.0) or (
+                key != "margin" and -1.0 <= number <= 1.0
+            ):
+                defaults[key] = number
+    return normalized
+
+
 _PREFERENCES_LOCK = threading.RLock()
 
 
@@ -290,6 +318,16 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     online_auto_match = _normalized_online_auto_match(
         payload.get("online_auto_match_threshold") if isinstance(payload, dict) else None
     )
+    alignment_embedding_model_id = (
+        payload.get("alignment_embedding_model_id")
+        if isinstance(payload, dict)
+        else None
+    )
+    if alignment_embedding_model_id not in EMBEDDING_MODELS:
+        alignment_embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
+    alignment_thresholds = _normalized_alignment_thresholds(
+        payload.get("alignment_thresholds") if isinstance(payload, dict) else None
+    )
     appearance = _normalized_appearance(
         payload.get("appearance") if isinstance(payload, dict) else None,
         theme,
@@ -313,6 +351,8 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "citation_style": citation_style,
         "lib_default_language": library_language,
         "online_auto_match_threshold": online_auto_match,
+        "alignment_embedding_model_id": alignment_embedding_model_id,
+        "alignment_thresholds": alignment_thresholds,
     }
 
 
@@ -482,6 +522,38 @@ def _save_preferences_locked(
         current["online_auto_match_threshold"] = _normalized_online_auto_match(
             updates["online_auto_match_threshold"]
         )
+    if "alignment_embedding_model_id" in updates:
+        model_id = updates["alignment_embedding_model_id"]
+        if model_id not in EMBEDDING_MODELS:
+            raise ValueError("不支持的语义对齐模型")
+        current["alignment_embedding_model_id"] = str(model_id)
+    if "alignment_thresholds" in updates:
+        threshold_updates = updates["alignment_thresholds"]
+        if not isinstance(threshold_updates, Mapping):
+            raise ValueError("语义对齐阈值设置必须是对象")
+        unknown_models = set(threshold_updates) - set(EMBEDDING_MODELS)
+        if unknown_models:
+            raise ValueError("语义对齐阈值包含不支持的模型")
+        merged_thresholds = {
+            model_id: dict(values)
+            for model_id, values in current["alignment_thresholds"].items()
+        }
+        for model_id, values in threshold_updates.items():
+            if not isinstance(values, Mapping):
+                raise ValueError("语义对齐阈值设置必须是对象")
+            unknown_keys = set(values) - {"low", "note_block", "margin"}
+            if unknown_keys:
+                raise ValueError("语义对齐阈值包含未知字段")
+            for key, raw in values.items():
+                if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                    raise ValueError("语义对齐阈值必须是数字")
+                number = float(raw)
+                if (key == "margin" and not 0.0 <= number <= 2.0) or (
+                    key != "margin" and not -1.0 <= number <= 1.0
+                ):
+                    raise ValueError("语义对齐阈值超出有效范围")
+                merged_thresholds[str(model_id)][str(key)] = number
+        current["alignment_thresholds"] = merged_thresholds
     if "appearance" in updates:
         appearance = _normalized_appearance(updates["appearance"], current["theme"])
         current["appearance"] = appearance

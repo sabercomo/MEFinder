@@ -13,7 +13,7 @@ from src.me_finder.local_ocr_settings import (
     load_local_ocr_config,
     local_ocr_config_summary,
     save_local_ocr_config,
-    test_local_ocr_engine,
+    test_local_ocr_engine as run_local_ocr_engine,
 )
 from src.me_finder.local_ocr_runtime import local_ocr_engine_lock
 
@@ -141,7 +141,7 @@ class LocalOCRSettingsTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        result = test_local_ocr_engine(
+        result = run_local_ocr_engine(
             {
                 "provider_id": "ndlocr-lite",
                 "python_path": sys.executable,
@@ -160,7 +160,7 @@ class LocalOCRSettingsTests(unittest.TestCase):
         engine_lock.acquire()
         try:
             with self.assertRaisesRegex(LocalOCRError, "正在安装"):
-                test_local_ocr_engine(
+                run_local_ocr_engine(
                     {
                         "provider_id": "ndlocr-lite",
                         "python_path": sys.executable,

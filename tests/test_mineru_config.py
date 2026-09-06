@@ -23,7 +23,7 @@ from src.me_finder.mineru_api import (
     resolve_mineru_config_path,
     save_mineru_config,
     submit_local_pdf_segments,
-    test_mineru_connection,
+    test_mineru_connection as run_mineru_connection,
 )
 
 
@@ -283,7 +283,7 @@ class MinerUConfigTests(unittest.TestCase):
             ) as upload, patch(
                 "urllib.request.OpenerDirector.open", side_effect=fake_open
             ):
-                result = test_mineru_connection(path)
+                result = run_mineru_connection(path)
 
             self.assertTrue(result["ok"])
             self.assertIn("latency_ms", result)
@@ -306,7 +306,7 @@ class MinerUConfigTests(unittest.TestCase):
                 "urllib.request.OpenerDirector.open", side_effect=response_error
             ):
                 with self.assertRaises(MinerUError) as caught:
-                    test_mineru_connection(path)
+                    run_mineru_connection(path)
             message = str(caught.exception)
             self.assertIn("401", message)
             self.assertNotIn("msgCode", message)

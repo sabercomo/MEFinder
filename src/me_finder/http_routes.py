@@ -81,6 +81,9 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
         "/api/components": (
             lambda _params: parser_settings_controller.component_diagnostics()
         ),
+        "/api/text-alignment/models": (
+            lambda _params: parser_settings_controller.text_alignment_models_component()
+        ),
         "/api/mineru-config": (
             lambda _params: parser_settings_controller.mineru_config()
         ),
@@ -113,6 +116,9 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
         "/api/local-ocr": parser_settings_controller.save_local_ocr_config,
         "/api/local-ocr/test": parser_settings_controller.test_local_ocr_config,
         "/api/local-ocr/component": parser_settings_controller.manage_local_ocr_component,
+        "/api/text-alignment/models": (
+            parser_settings_controller.manage_text_alignment_models_component
+        ),
         "/api/vision-providers": parser_settings_controller.update_vision_providers,
         "/api/vision-providers/models": parser_settings_controller.vision_models,
         "/api/vision-providers/test": parser_settings_controller.test_vision_provider,

@@ -23,7 +23,9 @@ from src.me_finder.mineru_local_settings import mineru_local_config_summary
 def _test_process_launcher(command, **kwargs):
     executable = Path(command[0])
     if sys.platform == "win32" and executable.read_bytes().startswith(b"#!"):
-        command = [sys.executable, *command]
+        # Launch the interpreter directly, not the venv redirector whose child
+        # can retain service.log briefly after the tracked process is stopped.
+        command = [sys._base_executable, *command]
     return subprocess.Popen(command, **kwargs)
 
 

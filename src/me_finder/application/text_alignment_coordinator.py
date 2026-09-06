@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 
+from ..embedding_models import resolve_alignment_thresholds
+from ..preferences import read_preferences, resolve_preferences_path
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
 
 
@@ -30,6 +32,13 @@ class TextAlignmentCoordinator:
         *,
         force: bool = False,
     ):
+        preferences = read_preferences(
+            resolve_preferences_path(self._paths.runtime_root)
+        )
+        model_id = str(preferences["alignment_embedding_model_id"])
+        thresholds = resolve_alignment_thresholds(
+            model_id, preferences["alignment_thresholds"]
+        )
         with self._index_runtime.mutation():
             try:
                 with self._durable_operations.operation():
@@ -45,6 +54,8 @@ class TextAlignmentCoordinator:
                             / "text-alignment"
                             / "models"
                         ),
+                        embedding_model_id=model_id,
+                        alignment_thresholds=thresholds,
                         write_window=self._write_window,
                     )
             except InvalidAlignmentRequest as exc:

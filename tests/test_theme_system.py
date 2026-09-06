@@ -10,6 +10,10 @@ from unittest import mock
 
 from desktop import error_html, loading_html
 from src.me_finder import __version__
+from src.me_finder.embedding_models import (
+    DEFAULT_EMBEDDING_MODEL_ID,
+    default_alignment_threshold_settings,
+)
 from src.me_finder.preferences import (
     DEFAULT_AUTO_UPDATE,
     DEFAULT_CALIBRATION_VIEW,
@@ -124,7 +128,34 @@ class PreferencePersistenceTests(unittest.TestCase):
             "citation_style": DEFAULT_CITATION_STYLE,
             "lib_default_language": DEFAULT_LIBRARY_LANGUAGE,
             "online_auto_match_threshold": DEFAULT_ONLINE_AUTO_MATCH,
+            "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
+            "alignment_thresholds": default_alignment_threshold_settings(),
         }
+
+    def test_alignment_embedding_model_and_thresholds_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "preferences.json"
+            saved = save_preferences(
+                {
+                    "alignment_embedding_model_id": "multilingual-e5-large",
+                    "alignment_thresholds": {
+                        "multilingual-e5-large": {"low": 0.77}
+                    },
+                },
+                path,
+            )
+
+            self.assertEqual(
+                saved["alignment_embedding_model_id"], "multilingual-e5-large"
+            )
+            self.assertEqual(
+                saved["alignment_thresholds"]["multilingual-e5-large"]["low"],
+                0.77,
+            )
+            with self.assertRaises(ValueError):
+                save_preferences(
+                    {"alignment_embedding_model_id": "unknown"}, path
+                )
 
     def test_scan_directories_round_trip_and_normalization(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -628,6 +659,7 @@ class ThemeMarkupTests(unittest.TestCase):
     def test_all_top_level_settings_sections_are_two_pane_panels(self) -> None:
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
+            "text-alignment-settings": "embedding-model-body",
             "mineru-api-settings": "mineru-api-body",
             "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",

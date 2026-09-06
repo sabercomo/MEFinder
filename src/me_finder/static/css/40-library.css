@@ -732,8 +732,9 @@
 .grp-chevron { width: 16px; height: 16px; transition: transform var(--transition-fast); }
 .grp-chevron.is-open { transform: rotate(90deg); }
 /* 组标题：纯文本外观的书名（衬线），点/聚焦才显出可编辑边框。
-   input 默认按 ~20 字符宽，会把语言摘要顶远——用 field-sizing/size 收成贴合内容的宽度。 */
-.grp-head2 .grp-title { flex: 0 1 auto; width: auto; min-width: 3ch; max-width: 22ch; field-sizing: content; height: auto; padding: 3px 6px; margin-left: -6px; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-weight: 650; font-size: 16px; border-color: transparent; background: transparent; }
+   input 默认按 ~20 字符宽，会把语言摘要顶远——用 field-sizing/size 收成贴合内容的宽度；
+   不设固定字符上限，避免中文长标题在整行仍有空间时被提前裁切。 */
+.grp-head2 .grp-title { flex: 0 1 auto; width: auto; min-width: 3ch; max-width: 100%; field-sizing: content; height: auto; padding: 3px 6px; margin-left: -6px; font-family: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif; font-weight: 650; font-size: 16px; border-color: transparent; background: transparent; }
 .grp-head2 .grp-title:focus-visible { border-color: var(--accent); background: var(--input-bg); }
 .grp-head-summary { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
 .grp-head-langs { color: var(--text-tertiary); font-size: 12px; background: transparent; border: none; padding: 0; white-space: nowrap; }

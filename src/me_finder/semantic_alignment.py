@@ -6,21 +6,29 @@ import math
 import os
 import re
 import hashlib
+import json
 import logging
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Sequence, Tuple
+from typing import Callable, Dict, List, Protocol, Sequence, Tuple
 
 import numpy as np
 
+from .embedding_models import (
+    AlignmentThresholds,
+    DEFAULT_EMBEDDING_MODEL_ID,
+    EmbeddingModelConfig,
+    embedding_model_config,
+)
 
-EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 EMBEDDING_RUNTIME_VERSION = "fastembed-0.8.0-mean-pooling"
-LOW_CONFIDENCE_THRESHOLD = 0.56
-NOTE_BLOCK_CONFIDENCE_THRESHOLD = 0.64
-NOTE_CANDIDATE_MARGIN = 0.05
+_DEFAULT_THRESHOLDS = embedding_model_config(DEFAULT_EMBEDDING_MODEL_ID).thresholds
+LOW_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.low
+NOTE_BLOCK_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.note_block
+NOTE_CANDIDATE_MARGIN = _DEFAULT_THRESHOLDS.margin
 SEMANTIC_ALIGNMENT_VERSION = "17"
+ALIGNMENT_REGION_VERSION = "1"
 _MAX_HEADING_NUMBER = 30
 _MAX_PARAGRAPH_NUMBER = 9999
 _MIN_COLLECTED_NOTE_RUN = 5
@@ -167,30 +175,81 @@ class _InlineNoteCandidate:
     start: int
 
 
-EmbeddingProvider = Callable[[Sequence[str], Path], np.ndarray]
+class EmbeddingProvider(Protocol):
+    def __call__(self, texts: Sequence[str], cache_dir: Path) -> np.ndarray: ...
 
 
-def embed_texts(texts: Sequence[str], cache_dir: Path) -> np.ndarray:
-    """Embed text with FastEmbed's CPU ONNX multilingual model."""
+@dataclass(frozen=True)
+class FastEmbedEmbeddingProvider:
+    model: EmbeddingModelConfig
 
-    try:
+    def __call__(self, texts: Sequence[str], cache_dir: Path) -> np.ndarray:
         from fastembed import TextEmbedding
 
-        model = TextEmbedding(
-            model_name=EMBEDDING_MODEL,
+        embedding = TextEmbedding(
+            model_name=self.model.hf_name,
             cache_dir=str(cache_dir),
             threads=max(1, min(8, os.cpu_count() or 1)),
         )
-        return np.asarray(list(model.embed(list(texts), batch_size=64)), dtype=np.float32)
+        method = (
+            embedding.query_embed
+            if self.model.prefix_mode == "query"
+            else embedding.embed
+        )
+        prepared_texts = (
+            [f"query: {text}" for text in texts]
+            if self.model.prefix_mode == "query"
+            else list(texts)
+        )
+        vectors = np.asarray(
+            # E5's large ONNX activations at batch 64 can exhaust desktop RAM.
+            list(method(prepared_texts, batch_size=4 if self.model.prefix_mode == "query" else 64)), dtype=np.float32
+        )
+        _write_model_receipt(cache_dir, self.model)
+        return vectors
+
+
+def _write_model_receipt(cache_dir: Path, model: EmbeddingModelConfig) -> None:
+    receipt = cache_dir / "installed" / f"{model.id}.json"
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    temporary = receipt.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(
+            {"id": model.id, "hf_name": model.hf_name},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    temporary.replace(receipt)
+
+
+def embed_texts(
+    texts: Sequence[str],
+    cache_dir: Path,
+    *,
+    model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+) -> np.ndarray:
+    """Embed text with FastEmbed's CPU ONNX multilingual model."""
+
+    try:
+        return FastEmbedEmbeddingProvider(embedding_model_config(model_id))(
+            texts, cache_dir
+        )
     except Exception as exc:
         raise SemanticAlignmentError(
             "跨语言语义模型加载失败；请检查网络后重试生成对齐。"
         ) from exc
 
 
-def _sequence_cache_path(texts: Sequence[str], cache_dir: Path) -> Path:
+def _sequence_cache_path(
+    texts: Sequence[str],
+    cache_dir: Path,
+    *,
+    model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+) -> Path:
     digest = hashlib.sha256()
-    digest.update(EMBEDDING_MODEL.encode("utf-8"))
+    digest.update(model_id.encode("utf-8"))
     digest.update(b"\0")
     digest.update(EMBEDDING_RUNTIME_VERSION.encode("ascii"))
     for text in texts:
@@ -205,10 +264,14 @@ def embed_text_sequences(
     cache_dir: Path,
     *,
     reusable_sequences: Sequence[Sequence[str]] = (),
+    model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
 ) -> List[np.ndarray]:
     """Cache document vectors and reuse unchanged segments after re-segmentation."""
 
-    paths = [_sequence_cache_path(texts, cache_dir) for texts in sequences]
+    paths = [
+        _sequence_cache_path(texts, cache_dir, model_id=model_id)
+        for texts in sequences
+    ]
     results: List[np.ndarray | None] = [None] * len(sequences)
     missing: List[int] = []
     for index, path in enumerate(paths):
@@ -219,7 +282,9 @@ def embed_text_sequences(
     if missing:
         vectors_by_text: Dict[str, np.ndarray] = {}
         for reusable_texts in reusable_sequences:
-            reusable_path = _sequence_cache_path(reusable_texts, cache_dir)
+            reusable_path = _sequence_cache_path(
+                reusable_texts, cache_dir, model_id=model_id
+            )
             if not reusable_path.is_file():
                 continue
             reusable_vectors = np.load(reusable_path, allow_pickle=False)
@@ -236,7 +301,9 @@ def embed_text_sequences(
             )
         )
         if uncached_texts:
-            uncached_vectors = embed_texts(uncached_texts, cache_dir)
+            uncached_vectors = embed_texts(
+                uncached_texts, cache_dir, model_id=model_id
+            )
             vectors_by_text.update(zip(uncached_texts, uncached_vectors))
         for index in missing:
             vectors = np.stack(
@@ -252,11 +319,14 @@ def embed_text_sequences(
 
 
 def cached_text_sequence_vectors(
-    texts: Sequence[str], cache_dir: Path
+    texts: Sequence[str],
+    cache_dir: Path,
+    *,
+    model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
 ) -> np.ndarray | None:
     """Load vectors already produced for one complete segment sequence."""
 
-    path = _sequence_cache_path(texts, cache_dir)
+    path = _sequence_cache_path(texts, cache_dir, model_id=model_id)
     if not path.is_file():
         return None
     vectors = np.load(path, allow_pickle=False, mmap_mode="r")
@@ -269,6 +339,8 @@ def mutual_nearest_target_index(
     source_vectors: np.ndarray,
     target_vectors: np.ndarray,
     selected_source_indices: Sequence[int],
+    *,
+    low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
 ) -> int | None:
     """Return the strongest target that also chooses the selected source."""
 
@@ -284,7 +356,7 @@ def mutual_nearest_target_index(
     selected_vector /= max(float(np.linalg.norm(selected_vector)), 1e-12)
     candidate_scores = target_vectors[candidates] @ selected_vector
     best_offset = int(np.argmax(candidate_scores))
-    if float(candidate_scores[best_offset]) < LOW_CONFIDENCE_THRESHOLD:
+    if float(candidate_scores[best_offset]) < low_confidence_threshold:
         return None
     return int(candidates[best_offset])
 
@@ -751,6 +823,66 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
     positions.update(decimal_positions)
     positions.update(_paragraph_heading_positions(texts))
     return positions
+
+
+def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
+    """Bound the main text using existing TOC-aware chapter detection.
+
+    A missing body heading is not evidence that the whole document is frontmatter.
+    Only leading title lines open backmatter; a prose mention never does.
+    Inline footnotes inside the body are left to the existing note workflow.
+    """
+    positions = _document_heading_positions(texts)
+    body_positions = [
+        index for key, index in positions.items()
+        if key.startswith("chapter:")
+        # Roman-numbered prose and CIP entries are not body boundaries.
+        and (key.count(":") == 1 or _DECIMAL_SECTION.fullmatch(texts[index].splitlines()[0].strip()))
+        and not re.match(r"^\d+\s+[a-z]", texts[index].strip())
+    ]
+    if "paragraph:1" in positions and re.match(
+        r"^(?:§|第\s*1\s*节)", texts[positions["paragraph:1"]].strip()
+    ):
+        body_positions = [positions["paragraph:1"]]
+    start = min(body_positions, default=0)
+    end = len(texts)
+    backmatter_titles = {
+        "译后记", "譯後記", "译者后记", "譯者後記", "后记", "後記",
+        "致谢", "致謝", "鸣谢", "鳴謝", "索引", "尾注", "尾註",
+        "注释", "註釋", "参考文献", "參考文獻",
+        "afterword", "translator'safterword", "translator’safterword",
+        "acknowledgments", "acknowledgements", "index", "notes", "endnotes",
+        "bibliography", "references", "anmerkungen", "nachwort", "register",
+        "bibliographie", "remerciements",
+    }
+    note_titles = {"注释", "註釋", "notes", "anmerkungen"}
+    note_positions = [
+        index for index in range(start + 1, len(texts))
+        if texts[index].strip().splitlines()
+        and re.sub(r"\s+", "", texts[index].strip().splitlines()[0]).casefold() in note_titles
+    ]
+    for index in range(start + 1, len(texts)):
+        lines = texts[index].strip().splitlines()
+        title = re.sub(r"\s+", "", lines[0]).casefold() if lines else ""
+        if title in backmatter_titles:
+            # Repeated chapter-note blocks are not a single end-of-book region.
+            # The existing anchor reader stops at Notes, so inspect later
+            # explicit chapter headings here without changing anchor/DP logic.
+            if title in note_titles and (
+                len(note_positions) > 1
+                or any(
+                    any(
+                        (match := _CHINESE_HEADING.fullmatch(line.strip())) is not None
+                        and match.group(2) in {"章", "篇", "部"}
+                        for line in text.splitlines()
+                    )
+                    for text in texts[index + 1:]
+                )
+            ):
+                continue
+            end = index
+            break
+    return start, end
 
 
 def find_heading_anchors(
@@ -1715,6 +1847,7 @@ def _align_partition(
     target_end: int,
     source_groups: Dict[int, np.ndarray],
     target_groups: Dict[int, np.ndarray],
+    low_confidence_threshold: float,
 ) -> List[SemanticLink]:
     source_count = source_end - source_offset
     target_count = target_end - target_offset
@@ -1868,7 +2001,7 @@ def _align_partition(
                     if not di or not dj
                     else (
                         "automatic"
-                        if confidence >= LOW_CONFIDENCE_THRESHOLD
+                        if confidence >= low_confidence_threshold
                         else "rejected"
                     )
                 ),
@@ -1890,6 +2023,7 @@ def _align_monotonic_sequences(
     source_language: str = "und",
     target_language: str = "und",
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
+    thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     source_count = len(source_texts)
     target_count = len(target_texts)
@@ -2002,6 +2136,7 @@ def _align_monotonic_sequences(
                 anchor.target_index,
                 source_groups,
                 target_groups,
+                thresholds.low,
             )
         )
         if anchor.key.startswith("folio:"):
@@ -2042,6 +2177,7 @@ def _align_monotonic_sequences(
             target_count,
             source_groups,
             target_groups,
+            thresholds.low,
         )
     )
     return links, anchors
@@ -2324,6 +2460,7 @@ def _directional_note_overrides(
     inline_texts: Sequence[str],
     collected_vectors: np.ndarray,
     inline_vectors: np.ndarray,
+    thresholds: AlignmentThresholds,
 ) -> List[SemanticLink]:
     blocks = _collected_note_blocks(collected_texts)
     candidates = _inline_note_candidates(inline_texts)
@@ -2370,9 +2507,9 @@ def _directional_note_overrides(
             ]
         ]
         scored.sort(key=lambda item: item[0])
-        if not scored or scored[-1][0] < NOTE_BLOCK_CONFIDENCE_THRESHOLD:
+        if not scored or scored[-1][0] < thresholds.note_block:
             continue
-        if len(scored) > 1 and scored[-1][0] - scored[-2][0] < NOTE_CANDIDATE_MARGIN:
+        if len(scored) > 1 and scored[-1][0] - scored[-2][0] < thresholds.margin:
             continue
         score, candidate, end = scored[-1]
         proposals.append((score, block, candidate, end))
@@ -2410,15 +2547,16 @@ def _note_override_links(
     target_texts: Sequence[str],
     source_vectors: np.ndarray,
     target_vectors: np.ndarray,
+    thresholds: AlignmentThresholds,
 ) -> List[SemanticLink]:
     forward = _directional_note_overrides(
-        source_texts, target_texts, source_vectors, target_vectors
+        source_texts, target_texts, source_vectors, target_vectors, thresholds
     )
     if forward:
         content = forward
     else:
         reverse = _directional_note_overrides(
-            target_texts, source_texts, target_vectors, source_vectors
+            target_texts, source_texts, target_vectors, source_vectors, thresholds
         )
         content = [
             SemanticLink(
@@ -2503,6 +2641,7 @@ def align_semantic_sequences(
     source_language: str = "und",
     target_language: str = "und",
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
+    thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     """Align segments with structural links and partition-only folio boundaries."""
 
@@ -2522,9 +2661,10 @@ def align_semantic_sequences(
         source_language=source_language,
         target_language=target_language,
         anchor_registry=anchor_registry,
+        thresholds=thresholds,
     )
     overrides = _note_override_links(
-        source_texts, target_texts, source_vectors, target_vectors
+        source_texts, target_texts, source_vectors, target_vectors, thresholds
     )
     aligned = _apply_note_overrides(links, overrides)
     rejected_keys = {
