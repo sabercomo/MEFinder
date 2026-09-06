@@ -27,7 +27,7 @@ _DEFAULT_THRESHOLDS = embedding_model_config(DEFAULT_EMBEDDING_MODEL_ID).thresho
 LOW_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.low
 NOTE_BLOCK_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.note_block
 NOTE_CANDIDATE_MARGIN = _DEFAULT_THRESHOLDS.margin
-SEMANTIC_ALIGNMENT_VERSION = "17"
+SEMANTIC_ALIGNMENT_VERSION = "18"
 ALIGNMENT_REGION_VERSION = "1"
 _MAX_HEADING_NUMBER = 30
 _MAX_PARAGRAPH_NUMBER = 9999
@@ -977,6 +977,19 @@ def find_heading_anchors(
 
 
 _ANCHOR_PRIORITY = {"term": 3, "number": 2, "name": 1}
+# Surface-matched anchors (a shared Latin term, a shared number, a shared name)
+# are trusted only when their two paragraphs also agree semantically.  Structural
+# anchors (paragraph/chapter/section/note/folio ordinals) are edition-independent
+# and never gated this way.
+_CONTEXT_GATED_ANCHOR_PREFIXES = ("term:", "number:", "name:")
+# Bare integers below this value are treated as recurring counters (note numbers,
+# list items) that reset per chapter, so they never seed a number anchor.  Rare
+# years and contextual numbers are captured by dedicated patterns and are exempt.
+_MIN_NUMBER_ANCHOR_VALUE = 100
+# A soft anchor whose corridor against the previous kept anchor compresses one
+# side more than this ratio is a runaway jump (e.g. a note number reused across
+# chapters), not a structural landmark.
+_MAX_ANCHOR_CORRIDOR_RATIO = 50
 _LATIN_ANCHOR_LANGUAGES = frozenset({"de", "en", "fr"})
 _LATIN_WORD = re.compile(r"[^\W\d_]+(?:[’'-][^\W\d_]+)*", re.UNICODE)
 _HAN_RUN = re.compile(r"[\u3400-\u9fff]+")
@@ -1260,6 +1273,8 @@ def _number_occurrences(
             occupied.append(match.span())
         for match in re.finditer(r"(?<![\w.])\d{2,}(?:\.\d+)?(?![\w.])", text):
             if any(start <= match.start() < end for start, end in occupied):
+                continue
+            if float(match.group(0)) < _MIN_NUMBER_ANCHOR_VALUE:
                 continue
             key = _canonical_decimal(match.group(0))
             occurrences.setdefault(key, []).append(index)
@@ -2013,6 +2028,55 @@ def _align_partition(
     return links
 
 
+def _validate_soft_anchors(
+    anchors: Sequence[HeadingAnchor],
+    source_prefix: np.ndarray,
+    target_prefix: np.ndarray,
+    low_threshold: float,
+) -> List[HeadingAnchor]:
+    """Refuse surface-matched anchors that fail semantic or corridor checks.
+
+    A registry anchor (term/number/name) forges an ``automatic`` link at the
+    similarity of its own paragraph pair.  If that similarity cannot clear the
+    same ``low`` floor a freely chosen accepted link must clear, the shared
+    surface token is a false friend -- the same phrase or number in unrelated
+    passages -- so it must not act as a hard structural landmark (A class).  A
+    surviving soft anchor whose corridor against the previous kept anchor
+    compresses one side by more than ``_MAX_ANCHOR_CORRIDOR_RATIO`` is a runaway
+    jump, e.g. a note number reused across chapters (B class).  Structural
+    anchors (paragraph/chapter/section/note/folio ordinals) are edition-
+    independent and always pass through untouched.
+    """
+
+    validated: List[HeadingAnchor] = []
+    previous: HeadingAnchor | None = None
+    for anchor in anchors:
+        if anchor.key.startswith(_CONTEXT_GATED_ANCHOR_PREFIXES):
+            similarity = _similarity(
+                source_prefix,
+                target_prefix,
+                anchor.source_index,
+                anchor.source_index + 1,
+                anchor.target_index,
+                anchor.target_index + 1,
+            )
+            if similarity < low_threshold:
+                continue
+            if previous is not None:
+                source_delta = anchor.source_index - previous.source_index
+                target_delta = anchor.target_index - previous.target_index
+                if (
+                    source_delta > 0
+                    and target_delta > 0
+                    and max(source_delta, target_delta)
+                    > _MAX_ANCHOR_CORRIDOR_RATIO * min(source_delta, target_delta)
+                ):
+                    continue
+        validated.append(anchor)
+        previous = anchor
+    return validated
+
+
 def _align_monotonic_sequences(
     source_texts: Sequence[str],
     target_texts: Sequence[str],
@@ -2120,6 +2184,9 @@ def _align_monotonic_sequences(
             ],
             key=lambda item: (item.source_index, item.target_index, item.key),
         )
+    anchors = _validate_soft_anchors(
+        anchors, source_prefix, target_prefix, thresholds.low
+    )
     links: List[SemanticLink] = []
     source_cursor = 0
     target_cursor = 0
