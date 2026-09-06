@@ -35,7 +35,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 先按当前行数封顶止血，再按既定顺序逐个拆分：
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
-            "text_alignment.py": 2875,
+            # 人工覆盖已拆出，上限随之下调（只降不升）。配方快照留在原处：
+            # database 的重建路径要 import 它，移出会把已知的 4 节点环拉长到
+            # 5 节点，待 bibliographic_metadata 解开领域纠缠后再拆。
+            "text_alignment.py": 2500,
+            "alignment_overrides.py": 425,
             # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
             "semantic_alignment.py": 1675,
             "alignment_anchors.py": 875,
