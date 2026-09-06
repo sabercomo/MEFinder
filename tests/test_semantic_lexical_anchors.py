@@ -4,16 +4,16 @@ import unittest
 
 import numpy as np
 
-from src.me_finder.semantic_alignment import (
+from src.me_finder.alignment_anchors import (
     DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     HeadingAnchor,
-    align_semantic_sequences,
     extract_chinese_japanese_name_anchors,
     extract_latin_name_anchors,
     extract_number_anchors,
     extract_parenthetical_term_anchors,
     normalize_numeric_text,
 )
+from src.me_finder.semantic_alignment import align_semantic_sequences
 
 
 class SemanticLexicalAnchorTests(unittest.TestCase):

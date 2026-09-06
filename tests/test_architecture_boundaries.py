@@ -31,6 +31,17 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 协议层拆出后应保持配置无关且稳定。
             "openai_compatible.py": 850,
             "vision_api.py": 950,
+            # 领域层四大模块此前完全不受约束，因而长到 1800~2900 行。
+            # 先按当前行数封顶止血，再按既定顺序逐个拆分：
+            # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
+            # → bibliographic_metadata 写库路径 → search 上帝类。
+            "text_alignment.py": 2875,
+            # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
+            "semantic_alignment.py": 1675,
+            "alignment_anchors.py": 875,
+            "alignment_structure.py": 500,
+            "bibliographic_metadata.py": 2400,
+            "search.py": 1850,
         }
         for relative, limit in limits.items():
             lines = (PACKAGE / relative).read_text(encoding="utf-8").splitlines()
