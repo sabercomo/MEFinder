@@ -1,7 +1,7 @@
-"""Regression fixtures for the anchor-admission fixes (A/B classes).
+"""Regression fixtures for the anchor-admission and segment-quality fixes (A/B/C).
 
-These reproduce the two false-anchor failure modes surfaced by the E5 full
-rerun review (reports/e5-full-rerun-2026-09-06.md):
+These reproduce the failure modes surfaced by the E5 full rerun review
+(reports/e5-full-rerun-2026-09-06.md):
 
 * A class -- same surface term, different meaning: ``term:l-age-d-or`` paired
   a French "golden age of fossil man" paragraph with a Chinese "golden age of
@@ -10,10 +10,12 @@ rerun review (reports/e5-full-rerun-2026-09-06.md):
   ``number:18`` paired a 6th-chapter side note with a 1st-chapter side note
   (R9, JA->ZH 战斗美少女, P693->T669, P2966->T670), collapsing a 2,273-segment
   source corridor into a single target segment.
+* C class -- a lone noise segment carries a body match: an OCR page-layout
+  ``|`` was paired with three Chinese body paragraphs at 0.85 (R14 P2512).
 
-Both are exercised at the ``align_semantic_sequences`` layer with synthetic
+All are exercised at the ``align_semantic_sequences`` layer with synthetic
 embeddings so the fixtures stay deterministic and model-free.  The frozen DP is
-untouched; only anchor admission changes.
+untouched; only anchor admission and post-alignment link quality change.
 """
 
 from __future__ import annotations
@@ -215,6 +217,63 @@ class AnchorCorridorRatioTests(unittest.TestCase):
             collapsed,
             [],
             f"an extreme-compression anchor survived: {_anchor_keys(anchors)}",
+        )
+
+
+class NoiseSegmentQualityGateTests(unittest.TestCase):
+    """C class: a lone noise segment must not carry a body match."""
+
+    def _accepted_link_for_source(self, links, source_index):
+        return [
+            link
+            for link in links
+            if link.source_start <= source_index < link.source_end
+            and link.review_status in ("automatic", "note_automatic")
+        ]
+
+    def test_lone_symbol_segment_does_not_carry_a_body_match(self) -> None:
+        # Uniform short lengths keep the DP on a clean 1:1 diagonal, so the "|"
+        # segment forms its own link (as in R14 P2512) instead of being absorbed
+        # into a neighbour group.
+        source = ["甲正文。", "|", "乙正文。"]
+        target = ["甲对应。", "是的。", "乙对应。"]
+        embeddings = _stack(
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+        )
+        links, _anchors = align_semantic_sequences(
+            source,
+            target,
+            embeddings,
+            source_language="zh",
+            target_language="zh",
+            thresholds=_THRESHOLDS,
+        )
+        self.assertEqual(
+            self._accepted_link_for_source(links, 1),
+            [],
+            "a lone '|' segment was accepted as a body match",
+        )
+
+    def test_short_real_sentence_still_matches(self) -> None:
+        # A four-character Chinese clause is real content and must survive.
+        source = ["前文正文段。", "他走了。", "后文正文段。"]
+        target = ["Body one.", "He left.", "Body three."]
+        embeddings = _stack(
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+        )
+        links, _anchors = align_semantic_sequences(
+            source,
+            target,
+            embeddings,
+            source_language="zh",
+            target_language="en",
+            thresholds=_THRESHOLDS,
+        )
+        self.assertTrue(
+            self._accepted_link_for_source(links, 1),
+            "a short but real sentence was wrongly demoted",
         )
 
 
