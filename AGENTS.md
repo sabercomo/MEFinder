@@ -126,7 +126,9 @@ EPUB 与 DOCX 共用文本语料通道(`corpus/raw_docx/`),不经 MinerU / PDF �
 
 ### 3.6 运行 / 测试 / lint 命令(权威)
 
-> 本机 PATH 上的 `python` 是 Windows Store 桩(不可用),`py -3` 太旧(3.8)。**一律用项目 venv 的解释器**:`D:\ME_Finder\.venv-windows\Scripts\python.exe`(Python 3.12)。以下命令在**仓库根目录**执行;测试用 `-t .` 从根发现,源码经 `from src.me_finder ...` 导入,**无需设置 `PYTHONPATH`**。
+> 本机 PATH 上的 `python` 是 Windows Store 桩(不可用),`py -3` 太旧(3.8)。**一律用项目 venv 的解释器**:`D:\ME_Finder\.venv-windows\Scripts\python.exe`(Python 3.12)或 `py` 启动器。以下命令在**仓库根目录**执行;测试用 `-t .` 从根发现,源码经 `from src.me_finder ...` 导入,**无需设置 `PYTHONPATH`**。
+>
+> ⚠️ **别把裸 `python` 放进管道**。桩不仅自身不可用,放在管道末端(如 `长脚本 | python -c ...`)时它会立即报错退出(exit 49),经 SIGPIPE 把**上游正在运行的命令一并打断**——曾导致一次生产库 force 重跑跑到第 1 个 run 就半途中断、库处于半迁移状态(靠事先备份才安全补齐)。管道各段一律用 venv 全路径解释器,或先 tee 到文件、再用 venv 解释器单独解析。**碰生产库的长命令尤其不要串裸 `python` 管道。**
 
 **全量测试(发布门禁,与 CI 一致):**
 
