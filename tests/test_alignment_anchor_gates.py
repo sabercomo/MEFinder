@@ -277,5 +277,119 @@ class NoiseSegmentQualityGateTests(unittest.TestCase):
         )
 
 
+class NoteBlockChannelTests(unittest.TestCase):
+    """C-class II: a footnote block must not carry a body match.
+
+    Reproduces R2/n33: a run of circled-digit footnote entries (② ③ ④ ...) plus
+    marker-less continuation lines was matched to English body paragraphs at
+    0.841.  A body paragraph that merely *references* a note with a superscript
+    ``$^{②}$`` marker (R3/n7, judged correct) must survive untouched.
+    """
+
+    def _accepted_link_for_source(self, links, source_index):
+        return [
+            link
+            for link in links
+            if link.source_start <= source_index < link.source_end
+            and link.review_status in ("automatic", "note_automatic")
+        ]
+
+    def test_circled_footnote_block_does_not_carry_body_matches(self) -> None:
+        source = [
+            "前文正文段落。",
+            "② 参见博尔斯坦《形象》。",
+            "③ 立体主义者追求空间的本质。",
+            "达达派或杜尚将客体与其功能剥离。",  # marker-less continuation
+            "④ 参见《消费之消费》。",
+            "后文正文段落。",
+        ]
+        target = [
+            "Body paragraph one.",
+            "Body paragraph two.",
+            "Body paragraph three.",
+            "Body paragraph four.",
+            "Body paragraph five.",
+            "Body paragraph six.",
+        ]
+        embeddings = _stack(
+            [
+                (1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 0.0, 0.0, 1.0),
+            ],
+            [
+                (1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0, 0.0, 0.0),
+                (0.0, 0.0, 0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 0.0, 0.0, 1.0),
+            ],
+        )
+        links, _anchors = align_semantic_sequences(
+            source,
+            target,
+            embeddings,
+            source_language="zh",
+            target_language="en",
+            thresholds=_THRESHOLDS,
+        )
+        for note_index in (1, 2, 3, 4):
+            self.assertEqual(
+                self._accepted_link_for_source(links, note_index),
+                [],
+                f"footnote segment {note_index} carried a body match",
+            )
+        # Real body around the block is untouched.
+        self.assertTrue(self._accepted_link_for_source(links, 0))
+        self.assertTrue(self._accepted_link_for_source(links, 5))
+
+    def test_superscript_note_reference_in_body_survives(self) -> None:
+        # A body paragraph that references a note ($^{②}$ ...) is not a footnote
+        # entry and must keep its body match.
+        source = ["前文段。", "$^{②}$ 这一段是正文，只是引用了脚注。", "后文段。"]
+        target = ["Body one.", "This is body text that cites a footnote.", "Body three."]
+        embeddings = _stack(
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+        )
+        links, _anchors = align_semantic_sequences(
+            source,
+            target,
+            embeddings,
+            source_language="zh",
+            target_language="en",
+            thresholds=_THRESHOLDS,
+        )
+        self.assertTrue(
+            self._accepted_link_for_source(links, 1),
+            "a body paragraph citing a footnote was wrongly demoted",
+        )
+
+    def test_lone_circled_marker_is_not_treated_as_a_note_block(self) -> None:
+        # A single circled marker (no run of >=3) is not a footnote block.
+        source = ["前文段。", "② 这一处只有一个圈号并非注释块。", "后文段。"]
+        target = ["Body one.", "A single item, not a note block.", "Body three."]
+        embeddings = _stack(
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+            [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)],
+        )
+        links, _anchors = align_semantic_sequences(
+            source,
+            target,
+            embeddings,
+            source_language="zh",
+            target_language="en",
+            thresholds=_THRESHOLDS,
+        )
+        self.assertTrue(
+            self._accepted_link_for_source(links, 1),
+            "a lone circled marker was wrongly treated as a note block",
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

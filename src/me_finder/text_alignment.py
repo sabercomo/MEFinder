@@ -50,11 +50,11 @@ from .semantic_alignment import (
 SEGMENTER = "me-finder-multilingual-sentence"
 SEGMENTER_VERSION = "12"
 ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
-ALIGNMENT_ALGORITHM_VERSION = "19"
+ALIGNMENT_ALGORITHM_VERSION = "20"
 # Anchor changes alter the alignment result even when stored span semantics match.
 READABLE_ALIGNMENT_VERSIONS = frozenset({ALIGNMENT_ALGORITHM_VERSION})
 RESTORABLE_ALIGNMENT_VERSIONS = frozenset(
-    {"16", "17", "18", ALIGNMENT_ALGORITHM_VERSION}
+    {"16", "17", "18", "19", ALIGNMENT_ALGORITHM_VERSION}
 )
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")

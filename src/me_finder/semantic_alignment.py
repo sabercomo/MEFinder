@@ -8,7 +8,7 @@ import re
 import hashlib
 import json
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Protocol, Sequence, Tuple
 
@@ -27,6 +27,10 @@ from .alignment_anchors import (
     HeadingAnchor,
     _CONTEXT_GATED_ANCHOR_PREFIXES,
     _MAX_ANCHOR_CORRIDOR_RATIO,
+)
+from .alignment_segment_quality import (
+    demote_noise_carried_links,
+    demote_note_block_links,
 )
 from .alignment_structure import (
     _CHINESE_HEADING,
@@ -48,7 +52,7 @@ _DEFAULT_THRESHOLDS = embedding_model_config(DEFAULT_EMBEDDING_MODEL_ID).thresho
 LOW_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.low
 NOTE_BLOCK_CONFIDENCE_THRESHOLD = _DEFAULT_THRESHOLDS.note_block
 NOTE_CANDIDATE_MARGIN = _DEFAULT_THRESHOLDS.margin
-SEMANTIC_ALIGNMENT_VERSION = "18"
+SEMANTIC_ALIGNMENT_VERSION = "19"
 ALIGNMENT_REGION_VERSION = "1"
 _MAX_PARAGRAPH_NUMBER = 9999
 _MIN_STRUCTURAL_NOTE_CHAIN = 3
@@ -659,18 +663,6 @@ def find_heading_anchors(
     )
 
 
-# A segment carrying fewer informative characters than this (a lone OCR page mark
-# such as "|", a stray rule, an empty line) is noise: it must not carry a body
-# match by itself.  Kept deliberately small so short but real sentences -- a
-# four-character Chinese clause -- always pass.
-_MIN_BODY_SEGMENT_INFO_CHARS = 2
-_SEGMENT_INFORMATION = re.compile(
-    "[0-9A-Za-z"
-    "À-ÖØ-öø-ÿ"  # Latin-1 letters
-    "぀-ヿ"  # kana
-    "㐀-鿿"  # CJK ideographs
-    "가-힯]"  # Hangul
-)
 
 
 
@@ -1562,50 +1554,6 @@ def _apply_note_overrides(
     )
 
 
-def _is_low_information_segment(text: str) -> bool:
-    """A segment with almost no linguistic content (a lone OCR page mark such as
-    ``|``, a stray rule, an empty line) that must not carry a body match."""
-
-    return len(_SEGMENT_INFORMATION.findall(text)) < _MIN_BODY_SEGMENT_INFO_CHARS
-
-
-def _demote_noise_carried_links(
-    links: Sequence[SemanticLink],
-    source_texts: Sequence[str],
-    target_texts: Sequence[str],
-) -> List[SemanticLink]:
-    """Reject accepted links whose entire pivot or target side is noise.
-
-    A body match presented on the strength of a lone symbol segment (e.g. an OCR
-    page-layout ``|`` paired with real paragraphs, R14 P2512) is spurious: the
-    counterpart paragraphs have no genuine parallel here.  Such a link is demoted
-    to ``rejected`` with its anchor key cleared, so it is preserved for
-    inspection but never offered as a location.  This is a segment-quality gate
-    on the alignment output; the frozen DP is untouched.
-    """
-
-    demoted: List[SemanticLink] = []
-    for link in links:
-        # Only body matches are gated.  Note-channel links (``note_automatic``)
-        # legitimately pair short markers such as a bare "1", so they pass.
-        if link.review_status == "automatic":
-            source_segments = source_texts[link.source_start : link.source_end]
-            target_segments = target_texts[link.target_start : link.target_end]
-            source_all_noise = bool(source_segments) and all(
-                _is_low_information_segment(text) for text in source_segments
-            )
-            target_all_noise = bool(target_segments) and all(
-                _is_low_information_segment(text) for text in target_segments
-            )
-            if source_all_noise or target_all_noise:
-                demoted.append(
-                    replace(link, review_status="rejected", anchor_key="")
-                )
-                continue
-        demoted.append(link)
-    return demoted
-
-
 def align_semantic_sequences(
     source_texts: Sequence[str],
     target_texts: Sequence[str],
@@ -1641,7 +1589,8 @@ def align_semantic_sequences(
         source_texts, target_texts, source_vectors, target_vectors, thresholds
     )
     aligned = _apply_note_overrides(links, overrides)
-    aligned = _demote_noise_carried_links(aligned, source_texts, target_texts)
+    aligned = demote_noise_carried_links(aligned, source_texts, target_texts)
+    aligned = demote_note_block_links(aligned, source_texts, target_texts)
     rejected_keys = {
         link.anchor_key
         for link in aligned
