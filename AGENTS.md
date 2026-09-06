@@ -161,15 +161,17 @@ PYTHONPATH=src .venv-windows/Scripts/python.exe -c "import tests.test_frontend_a
 
 ---
 
-## 4. 迭代收尾流程(每次迭代完成后强制执行)
+## 4. 迭代收尾流程(已授权的仓库实施迭代强制执行)
 
-按顺序完成以下五步,缺一不可。任何一步未完成,迭代不算结束:
+本节适用于已授权的仓库实施迭代。只读审阅、答疑和待审批方案不执行写入、提交、推送或存档。实施迭代保留 §2.2 的提交门禁与 §2.3 的发布门禁,完成以下五项后才算结束;存档与提交的顺序取决于现有归档策略,不自动改变该策略:
 
 1. **同步测试基线**:全量测试(§3.6 的 unittest 命令);若改了前端/偏好/schema,更新对应指纹、快照、预算断言。
 2. **更新文档**:按 §1.1 的"更新时机"列逐项检查——release notes、contracts、README、issues 记录、reports(有实验的话)。检查数量类断言是否全仓一致。
 3. **提交仓库**:按 §2.1 格式写提交信息,推送到远端;一次迭代一个主题提交。
-4. **压缩上下文(存档)**:执行 `project-save-load` 技能的 **`存档`** 流程。它把本次迭代结论固化进 `.project-memory/`(state / session-summary / todo / decisions / technical-notes / cautions / handover / logs),带脚本校验、去重与脱敏。完成后在本会话内声明"上下文已交接,新会话可从 `.project-memory/` 恢复(读档)"。**不再手写 `docs/agent/SESSION.md`**——该单文件交接机制已被 `project-save-load` 归档取代。
-5. **自检**:确认工作区干净(`git status` 无未跟踪的应提交文件)、`.project-memory/` 校验通过(`validate` 无致命告警)、无 `待核实` 之外的模板占位符残留。
+4. **压缩上下文(存档)**:执行 `project-save-load` 技能的 **`存档`** 流程。它把本次迭代结论固化进 `.project-memory/`(state / session-summary / todo / decisions / technical-notes / cautions / handover / logs),带脚本校验、去重与脱敏。归档若纳入版本控制,在第 3 项最终提交前完成存档及校验;归档若保持本地忽略,可在提交后存档。完成后在本会话内声明"上下文已交接,新会话可从 `.project-memory/` 恢复(读档)"。**不再手写 `docs/agent/SESSION.md`**——该单文件交接机制已被 `project-save-load` 归档取代。
+5. **自检**:确认本次应提交改动无遗漏、`.project-memory/` 校验通过(`validate` 无致命告警)、无 `待核实` 之外的模板占位符残留。既有用户修改、未跟踪文件及本地忽略归档不要求清空,不得为达成工作区干净而提交或删除它们。
+
+遇到外部阻塞时,完成其余可执行工作,明确报告已完成项、未通过门禁及恢复条件;不得声称整体完成,也不得绕过门禁提交或发布。
 
 > 交接载体的唯一真相是 `.project-memory/`(由 `project-save-load` 维护)。存/读档的具体文件结构、读取顺序、冲突处理规则以该技能的 `SKILL.md` 与 `references/schema.md` 为准,本文件不重复描述。
 
@@ -180,6 +182,6 @@ PYTHONPATH=src .venv-windows/Scripts/python.exe -c "import tests.test_frontend_a
 新会话的第一组动作:
 
 1. 读本文件(或经 `CLAUDE.md` 的 `@AGENTS.md` 自动加载)。
-2. 执行 `project-save-load` 技能的 **`读档`** 流程,从 `.project-memory/` 恢复工作状态(handover → state → todo → cautions → decisions → technical-notes → 最新 log)。
-3. `git log --oneline -15` 确认归档描述与远端一致;不一致时以 git 与当前工作区为准,并先修订归档。
-4. 从"未完成 / 下一步"取任务,开工。
+2. 执行 `project-save-load` 技能的只读 **`读档`** 流程,从现有 `.project-memory/` 恢复工作状态(handover → state → todo → cautions → decisions → technical-notes → 最新 log)。自动读档仅恢复背景,不构成停止点,也不授权执行旧 TODO;不初始化或修订归档。
+3. 用 `git log --oneline -15` 与当前工作区校对归档;本地日志不能证明远端状态,涉及推送结论时另行核验远端。归档缺失或过时,在当前回复中说明,以已核实的工作区证据为准继续可开展的任务;初始化、修订及冲突记录写入留到已授权的存档流程。
+4. 存在当前用户任务时,读档后继续当前任务。仅用户单独要求“读档”时报告状态后停止;只有用户要求继续项目工作时,才从归档“未完成 / 下一步”选择任务。
