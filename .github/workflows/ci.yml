@@ -15,8 +15,11 @@ concurrency:
 jobs:
   tests:
     # The release gate: run the entire tests/ tree the same way the build
-    # scripts do.  Tests needing the private corpus or optional dev deps
-    # skipUnless-skip visibly, so this stays green on a clean checkout.
+    # scripts do.  numpy / PyMuPDF / mcp are production dependencies that the
+    # suite imports at collection time, so they must be installed for the run
+    # to be real — a bare interpreter dies with ModuleNotFoundError before any
+    # test executes.  Tests needing the private corpus or a genuinely optional
+    # dep (node) still skipUnless-skip visibly.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -24,6 +27,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0"
       - name: Run the whole test suite
         run: python -m unittest discover -t . -s tests
 
@@ -40,6 +45,8 @@ jobs:
         with:
           python-version: "3.12"
           architecture: x64
+      - name: Install test dependencies
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0"
       - name: Run the whole test suite on Windows
         run: python -m unittest discover -t . -s tests
 

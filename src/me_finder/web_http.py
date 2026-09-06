@@ -161,6 +161,22 @@ def make_http_handler(context: WebHTTPContext):
             if 0 < length <= MAX_JSON_REQUEST_BYTES:
                 self.rfile.read(length)
 
+        def _drain_request_body(self) -> None:
+            # Consume the pending request body in full before replying. Uploads
+            # legitimately exceed MAX_JSON_REQUEST_BYTES, so this reads the whole
+            # declared Content-Length rather than the JSON-sized cap. Replying
+            # while inbound bytes are still unread makes Windows reset the socket,
+            # so the client would see a connection abort instead of our response.
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except (TypeError, ValueError):
+                return
+            while length > 0:
+                chunk = self.rfile.read(min(length, 1 << 20))
+                if not chunk:
+                    break
+                length -= len(chunk)
+
         def _validated_request_host(
             self,
         ) -> tuple[Optional[tuple[str, int]], Optional[int]]:
@@ -413,12 +429,18 @@ def make_http_handler(context: WebHTTPContext):
                     )
                     return
                 try:
-                    pdf_parse_mode, vision_provider_id = (
-                        validate_parse_options(
-                            self.headers.get("X-PDF-Parse-Mode", "auto"),
-                            self.headers.get("X-Vision-Provider-ID", ""),
-                        )
+                    pdf_parse_mode, vision_provider_id = validate_parse_options(
+                        self.headers.get("X-PDF-Parse-Mode", "auto"),
+                        self.headers.get("X-Vision-Provider-ID", ""),
                     )
+                except (mineru_error, vision_api_error, ValueError) as exc:
+                    # Rejected before the upload body is consumed; drain it first
+                    # so the 400 reaches the client instead of a reset socket on
+                    # Windows (see _drain_request_body).
+                    self._drain_request_body()
+                    self._send_json({"error": str(exc)}, status=400)
+                    return
+                try:
                     length = int(self.headers.get("Content-Length", "0"))
                     result = document_imports.import_stream(
                         filename,
