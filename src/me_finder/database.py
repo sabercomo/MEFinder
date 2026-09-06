@@ -25,6 +25,13 @@ from typing import (
 )
 
 from .persistence.connection import open_readonly_index
+from .persistence.paragraph_payload import (
+    PARAGRAPH_PAYLOAD_OMITTED_FIELDS as PARAGRAPH_PAYLOAD_OMITTED_FIELDS,
+    PARAGRAPH_SELECT_COLUMNS as PARAGRAPH_SELECT_COLUMNS,
+    PARAGRAPH_TYPED_COLUMNS as PARAGRAPH_TYPED_COLUMNS,
+    paragraph_from_database_row as paragraph_from_database_row,
+    paragraph_payload_for_storage as paragraph_payload_for_storage,
+)
 from .database_backup import (
     DATABASE_BACKUP_FREE_SPACE_MARGIN,
     DATABASE_BACKUP_RETENTION as DATABASE_BACKUP_RETENTION,
@@ -51,79 +58,12 @@ DATABASE_REPLACE_INITIAL_DELAY_SECONDS = 0.1
 DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 
-# These four large strings already have authoritative typed columns.  Keeping
-# them in payload_json as well made every paragraph carry two complete copies
-# of all searchable text representations.  New/rebuilt databases store a
-# sparse payload; paragraph_from_database_row transparently hydrates both old
-# full payloads and new sparse ones.
-PARAGRAPH_PAYLOAD_OMITTED_FIELDS = frozenset(
-    {"text_raw", "normalized_text", "compact_text", "plain_text", "sentences"}
-)
-
-PARAGRAPH_TYPED_COLUMNS = (
-    "paragraph_id",
-    "volume_id",
-    "work_id",
-    "source_file_id",
-    "source_type",
-    "paragraph_index",
-    "eligible_for_search",
-    "text_raw",
-    "normalized_text",
-    "compact_text",
-    "plain_text",
-    "page_display",
-    "page_source_type",
-    "page_confidence",
-    "citation_page_start",
-    "citation_page_end",
-    "pdf_page_start_index",
-    "pdf_page_end_index",
-    "pdf_page_start_label",
-    "pdf_page_end_label",
-)
-
-PARAGRAPH_SELECT_COLUMNS = ", ".join(
-    f"p.{column} AS {column}" for column in PARAGRAPH_TYPED_COLUMNS
-) + ", p.payload_json AS payload_json"
 
 _FTS_INSTALL_LOCK = threading.Lock()
 
 
-def paragraph_payload_for_storage(paragraph: Dict[str, object]) -> Dict[str, object]:
-    """Return the non-duplicated JSON portion of one paragraph record."""
-
-    return {
-        key: value
-        for key, value in paragraph.items()
-        if key not in PARAGRAPH_PAYLOAD_OMITTED_FIELDS
-    }
 
 
-def paragraph_from_database_row(row: sqlite3.Row) -> Dict[str, object]:
-    """Hydrate one canonical paragraph from a sparse or legacy database row."""
-
-    raw_payload = row["payload_json"]
-    try:
-        payload = json.loads(raw_payload) if raw_payload else {}
-    except (TypeError, ValueError, json.JSONDecodeError):
-        payload = {}
-    if not isinstance(payload, dict):
-        payload = {}
-    available = set(row.keys())
-    for column in PARAGRAPH_TYPED_COLUMNS:
-        if column not in available:
-            continue
-        value = row[column]
-        # A few pre-v1/import-recovery databases populated optional values in
-        # JSON but left the newer typed columns NULL. Preserve that legacy
-        # value; all current writers update both representations together.
-        if value is None and payload.get(column) not in (None, ""):
-            continue
-        if column == "eligible_for_search":
-            value = bool(value)
-        payload[column] = value
-    return payload
 
 
 def _fts_objects_present(connection: sqlite3.Connection) -> bool:
@@ -670,7 +610,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         read_document_group_snapshot,
         restore_document_group_snapshot,
     )
-    from .text_alignment import (
+    from .alignment_snapshots import (
         read_alignment_recipe_snapshot,
         restore_alignment_recipe_snapshot,
     )

@@ -22,7 +22,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web_http.py": 800,
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
-            "database.py": 1500,
+            # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
+            "database.py": 1325,
+            "persistence/paragraph_payload.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,
             # MCP 用例层：0.5.0 一轮加了 5 个工具就从 431 涨到 951 行，
@@ -35,16 +37,20 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 先按当前行数封顶止血，再按既定顺序逐个拆分：
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
-            # 人工覆盖已拆出，上限随之下调（只降不升）。配方快照留在原处：
-            # database 的重建路径要 import 它，移出会把已知的 4 节点环拉长到
-            # 5 节点，待 bibliographic_metadata 解开领域纠缠后再拆。
-            "text_alignment.py": 2500,
+            # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
+            "text_alignment.py": 2400,
+            "alignment_snapshots.py": 150,
             "alignment_overrides.py": 425,
             # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
             "semantic_alignment.py": 1675,
             "alignment_anchors.py": 875,
             "alignment_structure.py": 500,
-            "bibliographic_metadata.py": 2400,
+            # 共用取值底座与三类文献抽取器已拆出，上限随之下调。
+            "bibliographic_metadata.py": 1550,
+            "bibliographic_values.py": 325,
+            "bibliographic_thesis.py": 300,
+            "bibliographic_journal.py": 350,
+            "bibliographic_marx_engels.py": 175,
             "search.py": 1850,
         }
         for relative, limit in limits.items():
@@ -193,16 +199,13 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             if colors.get(module, 0) == 0:
                 visit(module, [])
 
+        # 0.4.x 遗留的
         # database <-> text_alignment <-> calibration_library <-> bibliographic_metadata
-        # 是 0.4.x 遗留的领域纠缠，由 database.py 内一条懒 import 兜住，尚未拆解。
-        known = {
-            (
-                "bibliographic_metadata",
-                "calibration_library",
-                "database",
-                "text_alignment",
-            )
-        }
+        # 已消除：根因是 bibliographic_metadata 为了一个纯函数
+        # (paragraph_payload_for_storage) 顶层依赖整个 database；该函数与段落行
+        # 补水一并下沉到 persistence/paragraph_payload.py 后，这条边不复存在。
+        # 包内现无循环依赖，任何新环都会让门禁失败。
+        known: set[tuple[str, ...]] = set()
         self.assertEqual(set(cycles), known)
 
     def test_persistence_layer_does_not_import_domain_modules(self) -> None:
