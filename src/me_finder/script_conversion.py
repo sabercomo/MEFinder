@@ -9,11 +9,16 @@ Two granularities are provided on purpose:
   dictionaries (e.g. "軟體" -> "软件").  Used for query expansion and for
   display text, where natural output matters and no offset mapping is
   required.
-* Character level -- ``fold_to_simplified_with_map`` converts one character
-  at a time so every folded character maps back to exactly one source
-  index, mirroring the ``normalize_with_map`` contract in
-  ``normalization.py``.  The search precise-match stage relies on this so
-  highlight offsets still land on the original (unconverted) text.
+* Segment level -- ``fold_to_simplified_with_map`` folds text with the same
+  phrase-level dictionaries, but sentence segment by sentence segment: a
+  folded segment is kept only when the conversion preserved its length,
+  otherwise the original segment is kept verbatim.  The output therefore
+  always has the same length as the input and the returned map is the
+  identity by construction, so highlight offsets computed on the folded
+  text still land on the original text -- the guarantee the search
+  precise-match stage relies on.  Length-changing phrase conversions (rare
+  in the generic ``t2s`` dictionary) simply opt their segment out of
+  folding instead of breaking offsets.
 
 The generic ``t2s``/``s2t`` configurations are used deliberately: locale
 variants (``tw2s``, ``hk2s``...) would split the folded search space, which
@@ -26,6 +31,7 @@ of the application keeps working.
 
 from __future__ import annotations
 
+import re
 import threading
 from functools import lru_cache
 from typing import List, Tuple
@@ -37,6 +43,11 @@ except Exception:  # pragma: no cover - depends on the environment
 
 _T2S_CONFIG = "t2s"
 _S2T_CONFIG = "s2t"
+
+# Phrase-level conversions almost never cross sentence/clause punctuation,
+# so folding per segment confines the length-change fallback to one segment
+# instead of discarding the fold of a whole paragraph.
+_SEGMENT_BOUNDARIES = re.compile(r"([。，、；：？！「」『』（）《》〈〉…—·\n])")
 
 _thread_local = threading.local()
 
@@ -67,7 +78,7 @@ def _converter(config: str):
     return converters[config]
 
 
-@lru_cache(maxsize=4096)
+@lru_cache(maxsize=16384)
 def _convert_cached(config: str, text: str) -> str:
     converter = _converter(config)
     if converter is None:
@@ -89,22 +100,18 @@ def to_traditional(text: str) -> str:
     return _convert_cached(_S2T_CONFIG, text)
 
 
-@lru_cache(maxsize=16384)
-def _fold_char(char: str) -> str:
-    converter = _converter(_T2S_CONFIG)
-    if converter is None:
-        return char
-    converted = converter.convert(char)
-    return converted if converted else char
-
-
 def fold_to_simplified_with_map(text: str) -> Tuple[str, List[int]]:
-    """Fold ``text`` to Simplified one character at a time.
+    """Fold ``text`` to Simplified with phrase-level dictionaries.
 
     Returns ``(folded_text, source_map)`` following the
     ``normalize_with_map`` contract: ``source_map[i]`` is the index in
-    ``text`` that produced ``folded_text[i]``.  Single-character conversion
-    keeps the mapping correct even for rare one-to-many dictionary entries.
+    ``text`` that produced ``folded_text[i]``.
+
+    Folding happens per sentence segment.  A folded segment is kept only
+    when the conversion preserved the segment length; otherwise the
+    original segment is kept verbatim.  The output therefore always has the
+    same length as the input and the map is the identity by construction --
+    offsets computed on the folded text are valid on the original text.
     Without OpenCC this degrades to the identity map.
     """
     if not text:
@@ -112,12 +119,13 @@ def fold_to_simplified_with_map(text: str) -> Tuple[str, List[int]]:
     if not is_available():
         return text, list(range(len(text)))
     pieces: List[str] = []
-    source_map: List[int] = []
-    for index, char in enumerate(text):
-        folded = _fold_char(char)
-        pieces.append(folded)
-        source_map.extend([index] * len(folded))
-    return "".join(pieces), source_map
+    for segment in _SEGMENT_BOUNDARIES.split(text):
+        if not segment:
+            continue
+        folded = to_simplified(segment)
+        pieces.append(folded if len(folded) == len(segment) else segment)
+    folded_text = "".join(pieces)
+    return folded_text, list(range(len(text)))
 
 
 def query_variants(query: str, *, enabled: bool = True) -> List[str]:
