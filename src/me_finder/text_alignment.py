@@ -43,23 +43,28 @@ from .semantic_alignment import (
     alignment_transitions,
     cached_text_sequence_vectors,
     embed_text_sequences,
+    find_heading_anchors,
     mutual_nearest_target_index,
 )
 
 
 SEGMENTER = "me-finder-multilingual-sentence"
-SEGMENTER_VERSION = "12"
+SEGMENTER_VERSION = "13"
 ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
-ALIGNMENT_ALGORITHM_VERSION = "20"
+ALIGNMENT_ALGORITHM_VERSION = "21"
 # Anchor changes alter the alignment result even when stored span semantics match.
 READABLE_ALIGNMENT_VERSIONS = frozenset({ALIGNMENT_ALGORITHM_VERSION})
 RESTORABLE_ALIGNMENT_VERSIONS = frozenset(
-    {"16", "17", "18", "19", ALIGNMENT_ALGORITHM_VERSION}
+    {"16", "17", "18", "19", "20", ALIGNMENT_ALGORITHM_VERSION}
 )
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
 _CLOSING_PUNCTUATION = frozenset("”’\"'）)]】》〉」』")
+_NUMBERED_PARAGRAPH_MARKER_LINE = re.compile(
+    r"(?:§\s*[0-9IlOoSs]{1,4}|第\s*[零〇一二两三四五六七八九十百0-9IlOoSs]{1,5}\s*节)\s*[.．、:]?",
+    re.IGNORECASE,
+)
 _STRUCTURAL_MARKER_LINE = re.compile(
     r"(?:"
     r"(?:§\s*[0-9IlOoSs]{1,4}|第\s*[零〇一二两三四五六七八九十百0-9IlOoSs]{1,5}\s*节)"
@@ -462,6 +467,7 @@ def segment_pdf_text(full_text: str, pages: Sequence[PageText]) -> List[SegmentD
                 key = re.sub(r"[0-9]+", "#", text.casefold())
                 excluded = excluded or bool(
                     key in repeated_margin_texts
+                    and _NUMBERED_PARAGRAPH_MARKER_LINE.fullmatch(text) is None
                     and (y_center <= 0.14 or y_center >= 0.86)
                 )
                 excluded = excluded or bool(
@@ -766,6 +772,13 @@ def align_segment_sequences(
                                 else alignment_body_bounds(source_texts))
     target_start, target_end = (reviewed_body_ranges["target"] if reviewed_body_ranges is not None
                                 else alignment_body_bounds(target_texts))
+    structural_anchors = [
+        replace(anchor, source_index=anchor.source_index - source_start,
+                target_index=anchor.target_index - target_start)
+        for anchor in find_heading_anchors(source_texts, target_texts)
+        if source_start <= anchor.source_index < source_end
+        and target_start <= anchor.target_index < target_end
+    ]
     aligned, anchors = align_semantic_sequences(
         source_texts[source_start:source_end],
         target_texts[target_start:target_end],
@@ -786,6 +799,7 @@ def align_segment_sequences(
         source_language=source_language,
         target_language=target_language,
         thresholds=active_thresholds,
+        structural_anchors=structural_anchors,
     )
     aligned = [
         replace(link,

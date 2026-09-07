@@ -441,6 +441,21 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
     toc_titles, toc_indices = _latin_toc_titles(
         texts, numbered_sections=numbered_sections
     )
+    last_heading_index = max(
+        (
+            index
+            for index, text in enumerate(texts)
+            if index not in toc_indices
+            and (
+                _heading_lines(text, numbered_sections=numbered_sections)
+                or any(
+                    _normalized_heading_title(line) in toc_titles
+                    for line in text.splitlines()
+                )
+            )
+        ),
+        default=-1,
+    )
     current_chapter = 0
     last_section = 0
     for index, text in enumerate(texts):
@@ -450,7 +465,7 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
         ]
         if index in toc_indices:
             continue
-        if (positions or decimal_positions) and any(
+        if index > last_heading_index and (positions or decimal_positions) and any(
             _ENDNOTES_HEADING.fullmatch(line) for line in normalized_lines
         ):
             break
@@ -1016,6 +1031,7 @@ def _align_monotonic_sequences(
     target_language: str = "und",
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
+    structural_anchors: Sequence[HeadingAnchor] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     source_count = len(source_texts)
     target_count = len(target_texts)
@@ -1029,7 +1045,8 @@ def _align_monotonic_sequences(
     target_groups = _group_rows(target_prefix)
     source_lengths = [max(1, sum(not char.isspace() for char in text)) for text in source_texts]
     target_lengths = [max(1, sum(not char.isspace() for char in text)) for text in target_texts]
-    structural_anchors = find_heading_anchors(source_texts, target_texts)
+    if structural_anchors is None:
+        structural_anchors = find_heading_anchors(source_texts, target_texts)
     paragraph_anchors = [
         anchor for anchor in structural_anchors if anchor.key.startswith("paragraph:")
     ]
@@ -1564,6 +1581,7 @@ def align_semantic_sequences(
     target_language: str = "und",
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
+    structural_anchors: Sequence[HeadingAnchor] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     """Align segments with structural links and partition-only folio boundaries."""
 
@@ -1584,6 +1602,7 @@ def align_semantic_sequences(
         target_language=target_language,
         anchor_registry=anchor_registry,
         thresholds=thresholds,
+        structural_anchors=structural_anchors,
     )
     overrides = _note_override_links(
         source_texts, target_texts, source_vectors, target_vectors, thresholds

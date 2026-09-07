@@ -376,6 +376,46 @@ class TextAlignmentTests(unittest.TestCase):
             ["Body one.", "Body two.", "Body three."],
         )
 
+    def test_pdf_segmenter_keeps_repeated_section_markers_at_top_margin(self) -> None:
+        page_texts = [
+            "§ 200\nBody two hundred.",
+            "§ 201\nBody two hundred one.",
+            "§ 202\nThe estates are determined.",
+        ]
+        full_text = "\n".join(page_texts)
+        pages = []
+        cursor = 0
+        for index, text in enumerate(page_texts):
+            marker_end = text.index("\n")
+            pages.append(
+                PageText(
+                    index,
+                    {
+                        "page_width": 1000,
+                        "page_height": 1000,
+                        "blocks": [
+                            {
+                                "text": text[:marker_end],
+                                "bbox_normalized": [0.45, 0.10, 0.55, 0.13],
+                                "page_char_start": 0,
+                                "page_char_end": marker_end,
+                            }
+                        ],
+                    },
+                    text,
+                    cursor,
+                    cursor + len(text),
+                )
+            )
+            cursor += len(text) + 1
+
+        segments = segment_pdf_text(full_text, pages)
+
+        self.assertEqual(
+            [segment.text for segment in segments if segment.text.startswith("§")],
+            ["§ 200", "§ 201", "§ 202"],
+        )
+
     def test_pdf_segmenter_keeps_body_heading_that_matches_running_header(self) -> None:
         page_texts = [
             "第一章 主体\n第一章 主体\n正文一。",
@@ -477,6 +517,120 @@ class TextAlignmentTests(unittest.TestCase):
             [(item.source_index, item.target_index) for item in anchors],
             [(1, 1), (2, 2), (3, 3)],
         )
+
+    def test_reviewed_body_slice_reuses_full_document_chapter_context(self) -> None:
+        source = [
+            "前言",
+            "第一章",
+            "源正文一。",
+            "第二章",
+            "源正文二。",
+            "第三章",
+            "源正文三。",
+            "第四章",
+            "源正文四。",
+            "第五章",
+            "源正文五。",
+            "第六章",
+            "源正文六。",
+        ]
+        target = [
+            "目录\n01 译一\n02 译二\n03 译三\n04 译四\n05 译五\n06 译六",
+            "广告残留\n译一\n副标题",
+            "译正文一。",
+            "译二\n译正文二。",
+            "译三\n副标题\n译正文三。",
+            "注释",
+            "本章注释。",
+            "译四\n副标题\n译正文四。",
+            "译五\n译正文五。",
+            "注释",
+            "译六\n译正文六。",
+        ]
+
+        _links, anchors = align_segment_sequences(
+            source,
+            target,
+            cache_dir=Path(self.directory.name) / "models",
+            source_language="ja",
+            target_language="zh-Hans",
+            reviewed_body_ranges={
+                "pivot": [1, len(source)],
+                "target": [1, len(target)],
+            },
+        )
+
+        self.assertEqual(
+            [
+                (anchor.source_index, anchor.target_index, anchor.key)
+                for anchor in anchors
+                if anchor.key.startswith("chapter:")
+            ],
+            [
+                (1, 1, "chapter:1"),
+                (3, 3, "chapter:2"),
+                (5, 4, "chapter:3"),
+                (7, 7, "chapter:4"),
+                (9, 8, "chapter:5"),
+                (11, 10, "chapter:6"),
+            ],
+        )
+
+    def test_missing_target_paragraph_heading_keeps_source_in_bounded_corridor(self) -> None:
+        source = [
+            "§ 201",
+            "source two zero one",
+            "§ 202",
+            "source two zero two",
+            "§ 203",
+            "source two zero three",
+            "§ 204",
+        ]
+        target = [
+            "§ 201",
+            "target two zero one",
+            "§ 202",
+            "target two zero two",
+            "target two zero three",
+            "target continuation two zero three",
+            "§ 204",
+        ]
+
+        def corridor_embeddings(texts, _cache_dir):
+            vectors = []
+            for text in texts:
+                if text in {"§ 201", "source two zero one", "target two zero one"}:
+                    vectors.append((1.0, 0.0, 0.0, 0.0))
+                elif text in {"§ 202", "source two zero two", "target two zero two"}:
+                    vectors.append((0.0, 1.0, 0.0, 0.0))
+                elif text in {
+                    "§ 203",
+                    "source two zero three",
+                    "target two zero three",
+                    "target continuation two zero three",
+                }:
+                    vectors.append((0.0, 0.0, 1.0, 0.0))
+                else:
+                    vectors.append((0.0, 0.0, 0.0, 1.0))
+            return np.asarray(vectors, dtype=np.float32)
+
+        links, anchors = align_segment_sequences(
+            source,
+            target,
+            cache_dir=Path(self.directory.name) / "models",
+            embedding_provider=corridor_embeddings,
+            reviewed_body_ranges={"pivot": [0, len(source)], "target": [0, len(target)]},
+        )
+
+        self.assertEqual(
+            [anchor.key for anchor in anchors],
+            ["paragraph:201", "paragraph:202", "paragraph:204"],
+        )
+        paragraph_203_link = next(
+            link for link in links if link.source_start <= 4 < link.source_end
+        )
+        self.assertGreaterEqual(paragraph_203_link.target_start, 3)
+        self.assertLessEqual(paragraph_203_link.target_end, 6)
 
     def test_low_confidence_link_is_stored_but_refused_for_location(self) -> None:
         def unrelated_embeddings(texts, _cache_dir):
