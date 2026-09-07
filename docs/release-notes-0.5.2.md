@@ -44,12 +44,10 @@ macOS 包目前为 ad-hoc 签名、尚未公证；首次打开可能需要在访
 
 | 使用方式 | 下载文件 | SHA-256 |
 | --- | --- | --- |
-| DMG（推荐） | **MEFinder-v0.5.2-macos-x86_64.dmg** | 待补充 |
-| ZIP（备用） | **MEFinder-v0.5.2-macos-x86_64.zip** | 待补充 |
+| DMG（推荐） | **MEFinder-v0.5.2-macos-x86_64.dmg** | `6742bc8041d04a143ae0fba53d16bd7dbf7b0572ad954e43748c87f0bbaf241f` |
+| ZIP（备用） | **MEFinder-v0.5.2-macos-x86_64.zip** | `137d7d671118423bd0afb222e643d03201fd5e6c88adefd5c97241bc9f40724d` |
 
-适用于 macOS 12 或更高版本，签名情况与 arm64 包相同（ad-hoc 签名、尚未公证）。
-
-> 发布前待办：x86_64 包尚未构建上传。在 Intel / Rosetta 环境完成构建后，把上表两个「待补充」换成实际 SHA-256，并连同安装包和同名 `.sha256.txt` 校验文件一起上传。
+适用于 macOS 12 或更高版本，签名情况与 arm64 包相同（ad-hoc 签名、尚未公证）。构建时 1990 项测试全部通过，应用和内置 MCP 组件均确认为 x86_64 原生。
 
 ## 界面优化
 
