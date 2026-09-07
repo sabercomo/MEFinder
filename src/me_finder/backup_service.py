@@ -279,7 +279,7 @@ def restore_backup(
         if version in {2, BACKUP_VERSION} and _DOCUMENT_GROUPS_FILE not in names:
             raise ValueError("备份缺少作品组快照。")
         if version == BACKUP_VERSION and _ALIGNMENTS_FILE not in names:
-            raise ValueError("备份缺少文本对齐快照。")
+            raise ValueError("备份缺少译本对齐快照。")
 
         for name in names:
             if not _is_safe_member(name):
@@ -312,12 +312,12 @@ def restore_backup(
                     archive.read(_ALIGNMENTS_FILE).decode("utf-8")
                 )
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise ValueError("文本对齐快照损坏。") from exc
+                raise ValueError("译本对齐快照损坏。") from exc
             if (
                 not isinstance(alignment_snapshot, dict)
                 or not isinstance(alignment_snapshot.get("alignment_pairs"), list)
             ):
-                raise ValueError("文本对齐快照格式无效。")
+                raise ValueError("译本对齐快照格式无效。")
             restored.append(_ALIGNMENTS_FILE)
 
         if _CONFIG_FILE in names:

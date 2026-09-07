@@ -804,10 +804,10 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id;
-      showToast('对齐模型已切换；请对已有配对重新运行对齐');
+      showToast('译本对齐模型已切换；请对已有配对重新运行对齐');
     } catch (e) {
       settingsStore.currentAlignmentEmbeddingModel = previous;
-      showToast('对齐模型保存失败：' + e.message, 'danger');
+      showToast('译本对齐模型保存失败：' + e.message, 'danger');
     } finally {
       settingsStore.alignmentEmbeddingModelSaving = false;
       renderAlignmentEmbeddingModel();
@@ -825,14 +825,26 @@
       var hint = document.getElementById('embedding-model-hint-' + model.id);
       var progress = document.getElementById('embedding-model-progress-' + model.id);
       if (!button || !state || !hint || !progress) return;
+      var progressFill = progress.querySelector('span');
       button.title = model.error || '';
       if (model.state === 'downloading') {
+        var transfer = alignmentModelDownloadProgress(model);
         downloading = true;
         state.className = 'settings-status';
-        state.textContent = '下载中';
-        hint.textContent = model.message || '正在下载模型…';
+        state.textContent = transfer ? '下载中 ' + transfer.percent + '%' : '下载中';
+        hint.textContent = transfer ? transfer.text : (model.message || '正在下载模型…');
         progress.hidden = false;
-        progress.classList.add('indeterminate');
+        progress.classList.toggle('indeterminate', !transfer);
+        if (progressFill) progressFill.style.width = transfer ? (transfer.ratio * 100) + '%' : '0%';
+        progress.setAttribute('aria-valuemin', '0');
+        progress.setAttribute('aria-valuemax', '100');
+        if (transfer) {
+          progress.setAttribute('aria-valuenow', String(transfer.percent));
+          progress.setAttribute('aria-valuetext', transfer.text);
+        } else {
+          progress.removeAttribute('aria-valuenow');
+          progress.removeAttribute('aria-valuetext');
+        }
         button.hidden = false;
         button.disabled = true;
         button.textContent = '正在下载…';
@@ -842,6 +854,7 @@
         hint.textContent = '模型保存在 MEFinder 组件目录，可离线使用';
         progress.hidden = true;
         progress.classList.remove('indeterminate');
+        if (progressFill) progressFill.style.width = '100%';
         button.hidden = true;
       } else {
         state.className = 'settings-status warning';
@@ -849,6 +862,7 @@
         hint.textContent = model.error ? '上次下载失败：' + model.error : '首次使用前需下载，文件只保存在本机';
         progress.hidden = true;
         progress.classList.remove('indeterminate');
+        if (progressFill) progressFill.style.width = '0%';
         button.hidden = false;
         button.disabled = false;
         button.textContent = model.state === 'failed' ? '重试下载' : '下载安装';
@@ -859,9 +873,10 @@
     });
     var status = document.getElementById('alignment-model-status');
     if (status && selected) {
+      var selectedTransfer = alignmentModelDownloadProgress(selected);
       status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
       status.textContent = selected.state === 'downloading'
-        ? '下载中'
+        ? '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '')
         : '当前 · ' + selected.display_name;
     }
     if (settingsStore.alignmentModelPollTimer) {
@@ -903,7 +918,7 @@
       if (!resp.ok || data.error) throw new Error(data.error || '下载启动失败');
       renderAlignmentModelComponent(data);
     } catch (e) {
-      showToast('模型下载失败：' + e.message, 'danger');
+      showToast('译本对齐模型下载失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
   }

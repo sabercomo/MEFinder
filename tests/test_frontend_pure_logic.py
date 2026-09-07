@@ -446,6 +446,49 @@ class FormatFileSizeTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class AlignmentModelDownloadProgressTests(unittest.TestCase):
+    def test_uses_estimated_model_size_and_percentage(self):
+        self.assertEqual(
+            _call(
+                "alignmentModelDownloadProgress",
+                {
+                    "downloaded_bytes": 560_000_000,
+                    "total_bytes": 2_240_000_000,
+                    "total_is_estimate": True,
+                    "size": "约 2.24 GB",
+                    "progress": 0.25,
+                },
+            ),
+            {
+                "ratio": 0.25,
+                "percent": 25,
+                "text": "已下载 560 MB / 约 2.24 GB · 25%",
+            },
+        )
+
+    def test_calculates_ratio_when_backend_progress_is_absent(self):
+        self.assertEqual(
+            _call(
+                "alignmentModelDownloadProgress",
+                {"downloaded_bytes": 50_000_000, "total_bytes": 200_000_000},
+            ),
+            {
+                "ratio": 0.25,
+                "percent": 25,
+                "text": "已下载 50.0 MB / 200 MB · 25%",
+            },
+        )
+
+    def test_missing_total_keeps_indeterminate_fallback(self):
+        self.assertIsNone(
+            _call(
+                "alignmentModelDownloadProgress",
+                {"downloaded_bytes": 50_000_000, "total_bytes": 0},
+            )
+        )
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class ImportStepsForTests(unittest.TestCase):
     """导入队列的处理步骤文案，随文件类型与解析路线分支。"""
 

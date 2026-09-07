@@ -280,6 +280,33 @@ function formatFileSize(bytes) {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
+function alignmentModelDownloadProgress(model) {
+  model = model || {};
+  var downloaded = Math.max(0, Number(model.downloaded_bytes) || 0);
+  var total = Math.max(0, Number(model.total_bytes) || 0);
+  if (!total) return null;
+  var ratio = typeof model.progress === 'number' && isFinite(model.progress)
+    ? model.progress
+    : downloaded / total;
+  ratio = Math.max(0, Math.min(1, ratio));
+  var percent = Math.floor(ratio * 100);
+  function decimalBytes(value) {
+    if (value >= 1000000000) return (value / 1000000000).toFixed(2) + ' GB';
+    if (value >= 1000000) {
+      return (value / 1000000).toFixed(value >= 100000000 ? 0 : 1) + ' MB';
+    }
+    if (value >= 1000) return (value / 1000).toFixed(1) + ' KB';
+    return Math.round(value) + ' B';
+  }
+  var totalLabel = model.size
+    || ((model.total_is_estimate ? '约 ' : '') + decimalBytes(total));
+  return {
+    ratio: ratio,
+    percent: percent,
+    text: '已下载 ' + decimalBytes(downloaded) + ' / ' + totalLabel + ' · ' + percent + '%'
+  };
+}
+
 // 导入队列的处理步骤文案。原在 80-import.js，纯映射，前移以便单测。
 function importStepsFor(q) {
   if (q.type === 'document_package') return ['读取文档包', '校验版本', '恢复书目与页码', '建立索引'];

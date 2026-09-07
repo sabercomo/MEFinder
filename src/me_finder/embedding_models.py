@@ -17,6 +17,8 @@ class AlignmentThresholds:
 class EmbeddingModelConfig:
     id: str
     hf_name: str
+    fastembed_cache_dirname: str
+    fastembed_archive_name: str | None
     dimension: int
     size_bytes: int
     size_label: str
@@ -31,6 +33,10 @@ EMBEDDING_MODELS = {
     DEFAULT_EMBEDDING_MODEL_ID: EmbeddingModelConfig(
         id=DEFAULT_EMBEDDING_MODEL_ID,
         hf_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        fastembed_cache_dirname=(
+            "models--qdrant--paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
+        ),
+        fastembed_archive_name=None,
         dimension=384,
         size_bytes=220_000_000,
         size_label="约 220 MB",
@@ -42,6 +48,8 @@ EMBEDDING_MODELS = {
     "multilingual-e5-large": EmbeddingModelConfig(
         id="multilingual-e5-large",
         hf_name="intfloat/multilingual-e5-large",
+        fastembed_cache_dirname="models--qdrant--multilingual-e5-large-onnx",
+        fastembed_archive_name="fast-multilingual-e5-large.tar.gz",
         dimension=1024,
         size_bytes=2_240_000_000,
         size_label="约 2.24 GB",
@@ -59,7 +67,7 @@ def embedding_model_config(model_id: str) -> EmbeddingModelConfig:
     try:
         return EMBEDDING_MODELS[model_id]
     except KeyError as exc:
-        raise ValueError(f"不支持的语义对齐模型：{model_id}") from exc
+        raise ValueError(f"不支持的译本对齐模型：{model_id}") from exc
 
 
 def default_alignment_threshold_settings() -> dict[str, dict[str, float]]:

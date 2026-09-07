@@ -525,7 +525,7 @@ def _save_preferences_locked(
     if "alignment_embedding_model_id" in updates:
         model_id = updates["alignment_embedding_model_id"]
         if model_id not in EMBEDDING_MODELS:
-            raise ValueError("不支持的语义对齐模型")
+            raise ValueError("不支持的译本对齐模型")
         current["alignment_embedding_model_id"] = str(model_id)
     if "alignment_thresholds" in updates:
         threshold_updates = updates["alignment_thresholds"]

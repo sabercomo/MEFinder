@@ -429,11 +429,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 阅读器：右栏版本选择器改真下拉（多译本列全部对齐目标供切换）；删掉无用的 ⋯ 更多按钮
     #   （解析记录移到书名 tooltip）。
     # 0.5.2 作品组修2：组标题取消 22ch 固定上限，避免较长中文标题在行内尚有空间时被裁切。
-    # 0.5.2 文本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
+    # 0.5.2 译本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     BASELINE_SHA256 = (
-        "001b31f7b1422dadf0bab35964a180a93006d073bae47e1085043891d47576a3"
+        "b5b6eda24c96801b2364cc39d9a01bafd088b09560ff2a00debc4bc7c529a251"
     )
-    BASELINE_BYTES = 1056449
+    BASELINE_BYTES = 1058469
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

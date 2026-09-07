@@ -44,6 +44,10 @@ class ManagedEmbeddingModelsTests(unittest.TestCase):
             self.assertEqual(model["dimension"], 1024)
             self.assertEqual(model["size"], "约 2.24 GB")
             self.assertEqual(model["prefix_mode"], "query")
+            self.assertEqual(model["downloaded_bytes"], 2_240_000_000)
+            self.assertEqual(model["total_bytes"], 2_240_000_000)
+            self.assertTrue(model["total_is_estimate"])
+            self.assertEqual(model["progress"], 1.0)
             self.assertEqual(
                 calls,
                 [
@@ -53,6 +57,65 @@ class ManagedEmbeddingModelsTests(unittest.TestCase):
                     )
                 ],
             )
+
+    def test_downloading_summary_reports_cached_blob_progress(self) -> None:
+        ready = threading.Event()
+        release = threading.Event()
+
+        def download(_model_id: str, cache_dir: Path) -> None:
+            blobs = (
+                cache_dir
+                / "models--qdrant--multilingual-e5-large-onnx"
+                / "blobs"
+            )
+            blobs.mkdir(parents=True)
+            (blobs / "model.onnx_data.incomplete").write_bytes(b"x" * 25)
+            ready.set()
+            release.wait(timeout=5)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            component = ManagedEmbeddingModels(Path(temp_dir), downloader=download)
+            component.perform(
+                {"model_id": "multilingual-e5-large", "action": "download"}
+            )
+            self.assertTrue(ready.wait(timeout=5))
+
+            model = next(
+                item
+                for item in component.summary()["models"]
+                if item["id"] == "multilingual-e5-large"
+            )
+            self.assertEqual(model["state"], "downloading")
+            self.assertEqual(model["downloaded_bytes"], 25)
+            self.assertEqual(model["total_bytes"], 2_240_000_000)
+            self.assertAlmostEqual(model["progress"], 25 / 2_240_000_000)
+
+            release.set()
+            component.wait_for_idle("multilingual-e5-large")
+
+    def test_failed_summary_preserves_partial_download_progress(self) -> None:
+        def download(_model_id: str, cache_dir: Path) -> None:
+            archive = cache_dir / "fast-multilingual-e5-large.tar.gz"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive.write_bytes(b"partial")
+            raise OSError("network interrupted")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            component = ManagedEmbeddingModels(Path(temp_dir), downloader=download)
+            component.perform(
+                {"model_id": "multilingual-e5-large", "action": "download"}
+            )
+            component.wait_for_idle("multilingual-e5-large")
+
+            model = next(
+                item
+                for item in component.summary()["models"]
+                if item["id"] == "multilingual-e5-large"
+            )
+            self.assertEqual(model["state"], "failed")
+            self.assertEqual(model["error"], "network interrupted")
+            self.assertEqual(model["downloaded_bytes"], len(b"partial"))
+            self.assertGreater(model["progress"], 0)
 
 
 if __name__ == "__main__":
