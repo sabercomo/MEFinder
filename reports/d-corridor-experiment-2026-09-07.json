@@ -1,0 +1,621 @@
+{
+  "fixtures": [
+    {
+      "n": 24,
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "automatic",
+      "pivot_v13": 2962,
+      "correct_target_v13": [
+        3542,
+        3543
+      ],
+      "wrong_link": {
+        "source": [
+          2962,
+          2964
+        ],
+        "target": [
+          3560,
+          3563
+        ],
+        "cost": 0.9108,
+        "similarity": 0.8653
+      },
+      "best_correct_grouping": {
+        "target": [
+          3542,
+          3544
+        ],
+        "cost": 0.5592,
+        "similarity": 0.8982
+      },
+      "exact_correct_span": {
+        "target": [
+          3542,
+          3544
+        ],
+        "cost": 0.5592,
+        "similarity": 0.8982
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          2911,
+          2967,
+          3481,
+          3568
+        ],
+        "pivot_target": [
+          3560,
+          3563
+        ],
+        "status": "automatic",
+        "confidence": 0.8653,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 16,
+        "gap_cost": 40.541
+      }
+    },
+    {
+      "n": 28,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "automatic",
+      "pivot_v13": 371,
+      "correct_target_v13": [
+        1193
+      ],
+      "wrong_link": {
+        "source": [
+          371,
+          372
+        ],
+        "target": [
+          1198,
+          1201
+        ],
+        "cost": 1.0382,
+        "similarity": 0.8376
+      },
+      "best_correct_grouping": {
+        "target": [
+          1193,
+          1194
+        ],
+        "cost": 0.5112,
+        "similarity": 0.8353
+      },
+      "exact_correct_span": {
+        "target": [
+          1193,
+          1194
+        ],
+        "cost": 0.5112,
+        "similarity": 0.8353
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          0,
+          405,
+          0,
+          1273
+        ],
+        "pivot_target": [
+          1156,
+          1159
+        ],
+        "status": "automatic",
+        "confidence": 0.839,
+        "reached_correct": false,
+        "reproduces_frozen": false
+      },
+      "gap_to_correct": {
+        "gapped_segments": 4,
+        "gap_cost": 9.509
+      }
+    },
+    {
+      "n": 41,
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "new_status": "automatic",
+      "pivot_v13": 4655,
+      "correct_target_v13": [
+        6503,
+        6504,
+        6505,
+        6506,
+        6507,
+        6508
+      ],
+      "wrong_link": {
+        "source": [
+          4655,
+          4658
+        ],
+        "target": [
+          5119,
+          5121
+        ],
+        "cost": 0.9746,
+        "similarity": 0.864
+      },
+      "best_correct_grouping": {
+        "target": [
+          6504,
+          6506
+        ],
+        "cost": 0.7999,
+        "similarity": 0.903
+      },
+      "exact_correct_span": {
+        "target": [
+          6503,
+          6509
+        ],
+        "cost": 0.8193,
+        "similarity": 0.9331
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          4583,
+          4688,
+          5087,
+          5135
+        ],
+        "pivot_target": [
+          5119,
+          5121
+        ],
+        "status": "automatic",
+        "confidence": 0.864,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 1382,
+        "gap_cost": 3560.073
+      }
+    },
+    {
+      "n": 53,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "new_status": "unmatched",
+      "pivot_v13": 547,
+      "correct_target_v13": [
+        562,
+        563,
+        564
+      ],
+      "wrong_link": {
+        "source": [
+          547,
+          548
+        ],
+        "target": [
+          562,
+          563
+        ],
+        "cost": 0.2281,
+        "similarity": 0.9278
+      },
+      "best_correct_grouping": {
+        "target": [
+          562,
+          563
+        ],
+        "cost": 0.2281,
+        "similarity": 0.9278
+      },
+      "exact_correct_span": {
+        "target": [
+          562,
+          565
+        ],
+        "cost": 0.743,
+        "similarity": 0.9201
+      },
+      "correct_cheaper_than_wrong": false,
+      "correct_over_threshold": true,
+      "verdict": "not-reachable-e5-prefers-wrong",
+      "armB_redp": {
+        "corridor": [
+          458,
+          574,
+          579,
+          583
+        ],
+        "pivot_target": [
+          582,
+          582
+        ],
+        "status": "unmatched",
+        "confidence": 0.0,
+        "reached_correct": false,
+        "reproduces_frozen": false
+      }
+    },
+    {
+      "n": 60,
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "new_status": "automatic",
+      "pivot_v13": 1468,
+      "correct_target_v13": [
+        3075
+      ],
+      "wrong_link": {
+        "source": [
+          1468,
+          1469
+        ],
+        "target": [
+          3079,
+          3082
+        ],
+        "cost": 1.0551,
+        "similarity": 0.8323
+      },
+      "best_correct_grouping": {
+        "target": [
+          3075,
+          3076
+        ],
+        "cost": 0.4361,
+        "similarity": 0.8894
+      },
+      "exact_correct_span": {
+        "target": [
+          3075,
+          3076
+        ],
+        "cost": 0.4361,
+        "similarity": 0.8894
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          1467,
+          1470,
+          3074,
+          3088
+        ],
+        "pivot_target": [
+          3079,
+          3082
+        ],
+        "status": "automatic",
+        "confidence": 0.8323,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 3,
+        "gap_cost": 7.675
+      }
+    },
+    {
+      "n": 80,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "automatic",
+      "pivot_v13": 742,
+      "correct_target_v13": [
+        1883,
+        1884
+      ],
+      "wrong_link": {
+        "source": [
+          741,
+          743
+        ],
+        "target": [
+          1868,
+          1871
+        ],
+        "cost": 0.8644,
+        "similarity": 0.8713
+      },
+      "best_correct_grouping": {
+        "target": [
+          1882,
+          1884
+        ],
+        "cost": 0.5686,
+        "similarity": 0.8957
+      },
+      "exact_correct_span": {
+        "target": [
+          1883,
+          1885
+        ],
+        "cost": 0.6365,
+        "similarity": 0.8733
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          705,
+          804,
+          1811,
+          1979
+        ],
+        "pivot_target": [
+          1868,
+          1871
+        ],
+        "status": "automatic",
+        "confidence": 0.8713,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 12,
+        "gap_cost": 29.898
+      }
+    },
+    {
+      "n": 82,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "automatic",
+      "pivot_v13": 2266,
+      "correct_target_v13": [
+        4521
+      ],
+      "wrong_link": {
+        "source": [
+          2266,
+          2267
+        ],
+        "target": [
+          4516,
+          4519
+        ],
+        "cost": 0.8735,
+        "similarity": 0.8371
+      },
+      "best_correct_grouping": {
+        "target": [
+          4521,
+          4522
+        ],
+        "cost": 0.3432,
+        "similarity": 0.9159
+      },
+      "exact_correct_span": {
+        "target": [
+          4521,
+          4522
+        ],
+        "cost": 0.3432,
+        "similarity": 0.9159
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          2263,
+          2291,
+          4510,
+          4569
+        ],
+        "pivot_target": [
+          4516,
+          4519
+        ],
+        "status": "automatic",
+        "confidence": 0.8371,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 2,
+        "gap_cost": 5.2
+      }
+    },
+    {
+      "n": 88,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "automatic",
+      "pivot_v13": 1854,
+      "correct_target_v13": [],
+      "wrong_link": {
+        "source": [
+          1854,
+          1856
+        ],
+        "target": [
+          3763,
+          3766
+        ],
+        "cost": 0.8561,
+        "similarity": 0.9176
+      },
+      "verdict": "allow-unfixable",
+      "armB_redp": {
+        "corridor": [
+          1842,
+          1876,
+          3758,
+          3783
+        ],
+        "pivot_target": [
+          3763,
+          3766
+        ],
+        "status": "automatic",
+        "confidence": 0.9176,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      }
+    },
+    {
+      "n": 93,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "new_status": "rejected",
+      "pivot_v13": 2314,
+      "correct_target_v13": [
+        4605,
+        4606,
+        4607,
+        4608,
+        4609,
+        4610,
+        4611,
+        4612,
+        4613,
+        4614,
+        4615,
+        4616,
+        4617,
+        4618,
+        4619,
+        4620,
+        4621,
+        4622,
+        4623,
+        4624,
+        4625,
+        4626,
+        4627,
+        4628,
+        4629,
+        4630,
+        4631,
+        4632,
+        4633,
+        4634,
+        4635,
+        4636,
+        4637,
+        4638,
+        4639,
+        4640
+      ],
+      "wrong_link": {
+        "source": [
+          2313,
+          2315
+        ],
+        "target": [
+          4609,
+          4612
+        ],
+        "cost": 1.6876,
+        "similarity": 0.83
+      },
+      "best_correct_grouping": {
+        "target": [
+          4619,
+          4621
+        ],
+        "cost": 0.4999,
+        "similarity": 0.93
+      },
+      "exact_correct_span": {
+        "target": [
+          4605,
+          4641
+        ],
+        "cost": 1.7648,
+        "similarity": 0.9185
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          2312,
+          2326,
+          4606,
+          4640
+        ],
+        "pivot_target": [
+          4609,
+          4612
+        ],
+        "status": "rejected",
+        "confidence": 0.83,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 0,
+        "gap_cost": 0
+      }
+    },
+    {
+      "n": 98,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "new_status": "automatic",
+      "pivot_v13": 1813,
+      "correct_target_v13": [
+        3115,
+        3116
+      ],
+      "wrong_link": {
+        "source": [
+          1811,
+          1814
+        ],
+        "target": [
+          3133,
+          3136
+        ],
+        "cost": 0.8735,
+        "similarity": 0.8991
+      },
+      "best_correct_grouping": {
+        "target": [
+          3114,
+          3116
+        ],
+        "cost": 0.7284,
+        "similarity": 0.9311
+      },
+      "exact_correct_span": {
+        "target": [
+          3115,
+          3117
+        ],
+        "cost": 0.7674,
+        "similarity": 0.9175
+      },
+      "correct_cheaper_than_wrong": true,
+      "correct_over_threshold": true,
+      "verdict": "arm-reachable",
+      "armB_redp": {
+        "corridor": [
+          1751,
+          1907,
+          3062,
+          3252
+        ],
+        "pivot_target": [
+          3133,
+          3136
+        ],
+        "status": "automatic",
+        "confidence": 0.8991,
+        "reached_correct": false,
+        "reproduces_frozen": true
+      },
+      "gap_to_correct": {
+        "gapped_segments": 16,
+        "gap_cost": 40.488
+      }
+    }
+  ]
+}
