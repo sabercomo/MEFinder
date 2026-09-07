@@ -745,7 +745,7 @@ def add_mcp_parallel_fixture(database_path: Path) -> None:
         "status, created_at, completed_at) VALUES "
         "('fixture-parallel-run', 'fixture-parallel-work', ?, ?, "
         "'fixture-parallel-source-set', 'fixture-parallel-target-set', "
-        "'chapter-anchored-semantic-dp', '18', '{\"heading_anchors\": []}', "
+        "'chapter-anchored-semantic-dp', '20', '{\"heading_anchors\": []}', "
         "'completed', 't', 't')",
         (PDF_SOURCE_ID, PARALLEL_SOURCE_ID),
     )

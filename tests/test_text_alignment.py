@@ -19,6 +19,10 @@ from src.me_finder.database import (
     replace_source_in_database,
 )
 from src.me_finder.document_groups import add_group_member, set_document_group_base
+from src.me_finder.alignment_snapshots import (
+    read_alignment_recipe_snapshot,
+    replace_alignment_recipe_snapshot,
+)
 from src.me_finder.persistence.index_schema import SCHEMA
 from src.me_finder.persistence.connection import open_readonly_index
 from src.me_finder.text_alignment import (
@@ -29,8 +33,6 @@ from src.me_finder.text_alignment import (
     generate_alignment,
     list_alignment_targets,
     locate_alignment,
-    read_alignment_recipe_snapshot,
-    replace_alignment_recipe_snapshot,
     segment_paragraph_text,
     segment_pdf_text,
     PageText,

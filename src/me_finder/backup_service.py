@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 
 from .document_groups import read_document_group_snapshot
 from .import_config_store import import_config_lock, save_import_config
-from .text_alignment import read_alignment_recipe_snapshot
+from .alignment_snapshots import read_alignment_recipe_snapshot
 
 BACKUP_MARKER = "me_finder_backup"
 BACKUP_VERSION = 3

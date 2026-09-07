@@ -16,16 +16,18 @@ from pathlib import Path
 from unittest import mock
 
 from src.me_finder.persistence.index_schema import SCHEMA
+from src.me_finder.alignment_overrides import (
+    confirm_override,
+    create_override_proposal,
+    list_overrides,
+    resolve_override_context,
+    revoke_override,
+)
 from src.me_finder.text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
-    confirm_override,
-    create_override_proposal,
     generate_alignment,
-    list_overrides,
     locate_alignment,
-    resolve_override_context,
-    revoke_override,
 )
 from tests.test_text_alignment import _fake_embedding_sequences, _page
 

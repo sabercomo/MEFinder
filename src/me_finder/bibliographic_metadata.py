@@ -6,147 +6,69 @@ import re
 import json
 import sqlite3
 import unicodedata
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .collection_metadata import infer_collection_metadata
-from .database import paragraph_payload_for_storage
-
-METADATA_FIELDS = (
-    "title", "author", "country", "translator", "publisher", "publish_place",
-    "publish_year", "isbn", "journal_name", "volume", "issue", "page_range",
-    "doi", "issn",
+from .bibliographic_journal import (
+    _JOURNAL_MAX_FALLBACK_PAGES,
+    _extract_journal_article,
+    _extract_journal_name,
+    _has_book_only_markers,
+    looks_like_journal_article as looks_like_journal_article,
+    normalize_doi as normalize_doi,
+    normalize_issn as normalize_issn,
 )
-DOCUMENT_TYPES = ("book", "translated_book", "journal_article", "thesis")
-# 人工可指定的语言：自动识别失败（如英译本+德文原名前页判为平局→und）时的兜底。
-MANUAL_LANGUAGE_CODES = frozenset(
-    {"zh-Hans", "zh-Hant", "en", "de", "fr", "es", "it", "pt", "ru", "ja", "ko", "und"}
+from .bibliographic_marx_engels import (
+    marx_engels_collection_metadata as marx_engels_collection_metadata,
+    marx_engels_first_edition_metadata as marx_engels_first_edition_metadata,
+    marx_engels_second_edition_metadata as marx_engels_second_edition_metadata,
 )
-RESPONSIBILITY_STATUSES = ("present", "none", "unknown")
-PUBLISHER_PLACES = {
-    "上海古籍出版社": "上海",
-    "上海人民出版社": "上海",
-    "上海译文出版社": "上海",
-    "商务印书馆": "北京",
-    "人民出版社": "北京",
-    "北京大学出版社": "北京",
-    "清华大学出版社": "北京",
-    "中信出版社": "北京",
-    "中信出版集团": "北京",
-    "中信出版集团股份有限公司": "北京",
-    "生活·读书·新知三联书店": "北京",
-    "三联书店": "北京",
-    "江苏人民出版社": "南京",
-    "南京大学出版社": "南京",
-    "译林出版社": "南京",
-    "华东师范大学出版社": "上海",
-    "复旦大学出版社": "上海",
-    "广西师范大学出版社": "桂林",
-    "重庆出版社": "重庆",
-    "社会科学文献出版社": "北京",
-    "中国社会科学出版社": "北京",
-    "中华书局": "北京",
-}
-KNOWN_PUBLISHERS = sorted(PUBLISHER_PLACES, key=len, reverse=True)
-INVALID_PLACEHOLDERS = {"unknown", "unrecognized", "未识别", "未知", "暂无", "null", "none"}
-INVALID_PUBLICATION_PLACES = {
-    "出版",
-    "出版地",
-    "出版者",
-    "出版社",
-    "出版发行",
-    "发行",
-    "策划推广",
-    "图书在版编目",
-}
-PUBLISHER_ALIASES = {
-    "China CITIC Press": "中信出版社",
-    "CHINA CITIC PRESS": "中信出版社",
-    "SDX Joint Publishing Company": "生活·读书·新知三联书店",
-    "中華書局": "中华书局",
-    "商務印書館": "商务印书馆",
-}
-MARX_ENGELS_FIRST_EDITION_YEARS = {
-    1: "1956", 2: "1957", 3: "1960", 4: "1958", 5: "1958",
-    6: "1961", 7: "1959", 8: "1961", 9: "1961", 10: "1962",
-    11: "1962", 12: "1962", 13: "1962", 14: "1964", 15: "1963",
-    16: "1964", 17: "1963", 18: "1964", 19: "1963", 20: "1971",
-    21: "1965", 22: "1965", 23: "1972", 24: "1972", 25: "1974",
-    27: "1972", 28: "1973", 29: "1972", 30: "1975", 31: "1972",
-    32: "1975", 33: "1973", 34: "1972", 35: "1971", 36: "1974",
-    37: "1971", 38: "1972", 39: "1974", 40: "1982", 41: "1982",
-    42: "1979", 43: "1982", 44: "1982", 45: "1985", 47: "1979",
-    48: "1985", 49: "1982", 50: "1985",
-}
-MARX_ENGELS_FIRST_EDITION_PART_YEARS = {
-    (26, "一"): "1972",
-    (26, "二"): "1973",
-    (26, "三"): "1974",
-    (46, "上"): "1979",
-    (46, "下"): "1980",
-}
-# 《马克思恩格斯全集》中文第二版逐卷出版年份，由用户提供。
-# 第二版仍在陆续出版，表中没有的卷次一律不给年份，不做任何推断。
-MARX_ENGELS_SECOND_EDITION_YEARS = {
-    1: "1995", 2: "2005", 3: "2002", 10: "1998", 11: "1995",
-    12: "1998", 13: "1998", 14: "2013", 16: "2007", 19: "2006",
-    21: "2003", 25: "2001", 26: "2014", 28: "2018", 29: "2021",
-    30: "1995", 31: "1998", 32: "1998", 33: "2004", 34: "2008",
-    35: "2013", 36: "2015", 37: "2019", 38: "2019", 42: "2016",
-    43: "2016", 44: "2001", 45: "2003", 46: "2003", 47: "2004",
-    48: "2007", 49: "2016", 50: "2022",
-}
-_CHINESE_DIGITS = "零一二三四五六七八九"
-MIN_AUTO_CONFIDENCE = {
-    "title": 0.9,
-    "author": 0.88,
-    "country": 0.88,
-    "translator": 0.9,
-    "publisher": 0.88,
-    "publish_place": 0.88,
-    "publish_year": 0.86,
-    "isbn": 0.88,
-    "doi": 0.9,
-    "issn": 0.9,
-}
-
-_CHINESE_PUBLISHER_SUFFIX = (
-    r"(?:出版(?:集团|集團)(?:股份有限公司|有限公司)?|"
-    r"出版中心|出版社|印书馆|印書館|书局|書局)"
+from .bibliographic_thesis import (
+    _extract_thesis_metadata,
+    _looks_like_thesis,
+    _strip_thesis_author_prefix,
 )
-_CHINESE_NAME_CHARS = r"\u3400-\u4dbf\u4e00-\u9fff·•.．・‧\-—A-Za-z"
-_ENGLISH_NAME_CHARS = r"A-Za-zÀ-ÖØ-öø-ÿĀ-ž'’.\-\s"
+from .bibliographic_values import (
+    DOCUMENT_TYPES as DOCUMENT_TYPES,
+    INVALID_PLACEHOLDERS as INVALID_PLACEHOLDERS,
+    INVALID_PUBLICATION_PLACES,
+    KNOWN_PUBLISHERS,
+    MANUAL_LANGUAGE_CODES as MANUAL_LANGUAGE_CODES,
+    METADATA_FIELDS as METADATA_FIELDS,
+    MIN_AUTO_CONFIDENCE as MIN_AUTO_CONFIDENCE,
+    PUBLISHER_ALIASES,
+    PUBLISHER_PLACES,
+    RESPONSIBILITY_STATUSES as RESPONSIBILITY_STATUSES,
+    _CHINESE_NAME_CHARS,
+    _CHINESE_PUBLISHER_SUFFIX,
+    _ENGLISH_NAME_CHARS,
+    _MetadataCandidate,
+    _add_candidate,
+    _candidate_group_score,
+    _candidate_values_are_compatible,
+    _canonical_metadata,
+    _clean_people,
+    _clean_publisher,
+    _compact_value_key,
+    _has_suspicious_person_punctuation,
+    _is_plausible_person_name,
+    _json,
+    _repair_english_title_casing,
+    canonical_metadata as canonical_metadata,
+    is_valid_bibliographic_value as is_valid_bibliographic_value,
+)
+from .persistence.paragraph_payload import paragraph_payload_for_storage
 
 
-@dataclass(frozen=True)
-class _MetadataCandidate:
-    value: str
-    page_idx: int
-    evidence_text: str
-    confidence: float
-    rule: str
 
 
-def canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
-    return _canonical_metadata(value)
 
 
-def is_valid_bibliographic_value(value: object) -> bool:
-    text = str(value or "").strip()
-    if not text or text.lower() in INVALID_PLACEHOLDERS or "\ufffd" in text:
-        return False
-    question_count = text.count("?") + text.count("？")
-    if question_count >= 2 and question_count / max(len(text), 1) >= 0.3:
-        return False
-    return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text))
 
 
-def _has_suspicious_person_punctuation(value: object) -> bool:
-    """Question marks inside a person's name usually indicate encoding loss."""
 
-    text = str(value or "").strip()
-    return bool(re.search(r"[A-Za-z\u3400-\u9fff][?？][A-Za-z\u3400-\u9fff]", text))
+
 
 
 def invalid_metadata_fields(metadata: Mapping[str, object]) -> List[str]:
@@ -161,119 +83,12 @@ def invalid_metadata_fields(metadata: Mapping[str, object]) -> List[str]:
     ]
 
 
-def marx_engels_first_edition_metadata(file_name: object) -> Dict[str, str]:
-    """Return trusted catalog defaults for Chinese first-edition全集 scans."""
-
-    stem = Path(str(file_name or "")).stem.strip()
-    normalized = unicodedata.normalize("NFKC", stem)
-    match = re.fullmatch(
-        r"\s*《?\s*(?:马克思恩格斯|马恩)全集\s*》?\s*"
-        r"第\s*0*(?P<volume>\d{1,2})\s*卷"
-        r"(?:\s*\(?\s*(?P<part>上|中|下|一|二|三|1|2|3|上册|中册|下册|第一册|第二册|第三册)\s*\)?)?\s*",
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    if not match:
-        return {}
-    volume = int(match.group("volume"))
-    if not 1 <= volume <= 50:
-        return {}
-    part_aliases = {
-        "1": "一", "2": "二", "3": "三",
-        "第一册": "一", "第二册": "二", "第三册": "三",
-        "上册": "上", "中": "二", "中册": "二", "下册": "下",
-    }
-    part = part_aliases.get(str(match.group("part") or ""), str(match.group("part") or ""))
-    allowed_parts = {
-        1: {"上", "下"},
-        14: {"上", "下"},
-        25: {"上", "下"},
-        26: {"一", "二", "三"},
-        28: {"上", "下"},
-        30: {"上", "下"},
-        31: {"上", "下"},
-        39: {"上", "下"},
-        46: {"上", "下"},
-    }
-    if part and part not in allowed_parts.get(volume, set()):
-        return {}
-    year = MARX_ENGELS_FIRST_EDITION_PART_YEARS.get(
-        (volume, part), MARX_ENGELS_FIRST_EDITION_YEARS.get(volume)
-    )
-    if not year:
-        return {}
-    part_labels = {"一": "第一册", "二": "第二册", "三": "第三册", "上": "上册", "下": "下册"}
-    volume_label = (
-        f"{volume}卷{part_labels[part]}"
-        if part and volume in {26, 46}
-        else str(volume)
-    )
-    return {
-        "title": stem,
-        "author": "马克思、恩格斯",
-        "publisher": "人民出版社",
-        "publish_place": "北京",
-        "publish_year": year,
-        "volume": volume_label,
-        "document_type": "book",
-    }
 
 
-def _chinese_volume_numeral(volume: int) -> str:
-    """Render 1–50 the way the volume title pages do (三十一, not 31)."""
-
-    if volume < 10:
-        return _CHINESE_DIGITS[volume]
-    tens, ones = divmod(volume, 10)
-    prefix = "十" if tens == 1 else f"{_CHINESE_DIGITS[tens]}十"
-    return prefix + (_CHINESE_DIGITS[ones] if ones else "")
 
 
-def marx_engels_second_edition_metadata(file_name: object) -> Dict[str, str]:
-    """Return catalog defaults for Chinese second-edition全集 scans.
-
-    The user's second-edition scans are named ``me2-<volume>``; that naming is
-    a deterministic signal, unlike the OCR title which lands on some volumes
-    and not others. Volumes the second edition has not published yet carry no
-    year here — the card must show the year as missing rather than borrow one.
-    """
-
-    stem = Path(str(file_name or "")).stem.strip()
-    normalized = unicodedata.normalize("NFKC", stem)
-    match = re.fullmatch(
-        r"\s*me2\s*[-_ ]\s*0*(?P<volume>\d{1,2})\s*",
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    if not match:
-        return {}
-    volume = int(match.group("volume"))
-    if not 1 <= volume <= 50:
-        return {}
-    defaults = {
-        "title": f"马克思恩格斯全集第{_chinese_volume_numeral(volume)}卷",
-        "author": "马克思、恩格斯",
-        "publisher": "人民出版社",
-        "publish_place": "北京",
-        "volume": str(volume),
-        "document_type": "book",
-    }
-    year = MARX_ENGELS_SECOND_EDITION_YEARS.get(volume)
-    if year:
-        defaults["publish_year"] = year
-    return defaults
 
 
-def marx_engels_collection_metadata(file_name: object) -> Tuple[Dict[str, str], str]:
-    """Return ``(defaults, rule)`` for whichever全集 edition the name matches."""
-
-    defaults = marx_engels_first_edition_metadata(file_name)
-    if defaults:
-        return defaults, "marx_engels_chinese_first_edition"
-    defaults = marx_engels_second_edition_metadata(file_name)
-    if defaults:
-        return defaults, "marx_engels_chinese_second_edition"
-    return {}, ""
 
 
 def _looks_like_pdf_file_label(value: object) -> bool:
@@ -1290,557 +1105,34 @@ def _extract_from_front_matter(
     return detected, evidence, confidence, conflicts
 
 
-# GB/T 中文期刊首页的固定标记。专著的内容提要同样会出现「摘要」「关键词」，
-# 版权页也可能印中图分类号，因此书刊判定必须先看专著独有的版权信息。
-_JOURNAL_MARKERS = ("中图分类号", "文献标识码", "文献标志码")
-_JOURNAL_WEAK_MARKERS = ("摘要", "关键词", "DOI:", "doi:")
-# 版权页/CIP 专有标记，只属于正式出版的专著。含美国国会图书馆 CIP 短语，
-# 用于识别没有中文版权页、也没印 ISBN 的外文专著。
-# 强图书标记：版权页/CIP 专有，出现在任意页都足以判定为图书。
-_BOOK_STRONG_MARKERS = ("图书在版编目", "出版发行", "版次", "定价", "Cataloging-in-Publication")
-# 版权页/CIP 语境线索（去空格、casefold 后匹配）。裸 ISBN 只有与这些线索同页时才算
-# 图书信号——外文/中文论文的参考文献会引用他书的 ISBN 甚至“出版社”，但绝不会出现
-# ©、版权、Identifiers:、Library of Congress 这类版权页专有字样，据此把两者分开。
-_BOOK_ISBN_CONTEXT = (
-    "版权", "©", "allrightsreserved", "firstpublished",
-    "libraryofcongress", "cataloging", "identifiers:", "description:",
-)
-# 用于期刊 GB/T 判定的排除标记：只在首页文本上判断，故含 ISBN 是安全的。
-_BOOK_ONLY_MARKERS = _BOOK_STRONG_MARKERS + ("ISBN",)
-# 学位论文封面用语：识别为独立文献类型。
-_THESIS_MARKERS = ("硕士学位论文", "博士学位论文", "专业学位论文", "学位论文")
-_THESIS_FIELD_LABEL_RE = re.compile(
-    r"^(?:"
-    r"(?:中文)?(?:学位)?论文(?:题目|题名)(?:名称)?|题目|题名|"
-    r"作者(?:姓名)?|研究生(?:姓名)?|"
-    r"学位授予单位|培养单位|授予单位|学校|院校|"
-    r"答辩日期|论文日期|提交日期|完成日期|学位授予日期|"
-    r"学号|指导教师|导师|学科(?:专业)?|专业(?:名称)?|学院|院系|"
-    r"英文(?:题目|题名)|分类号|密级|UDC"
-    r")\s*[:：]?"
-)
-_THESIS_TITLE_LABEL_RE = re.compile(
-    r"^(?:(?:中文)?(?:学位)?论文(?:题目|题名)(?:名称)?|题目|题名)\s*[:：]?\s*(?P<value>.*)$"
-)
-_THESIS_AUTHOR_LABEL_RE = re.compile(
-    r"^(?:作者(?:姓名)?|研究生(?:姓名)?)\s*[:：]?\s*(?P<value>.*)$"
-)
-_THESIS_SCHOOL_LABEL_RE = re.compile(
-    r"^(?:学位授予单位|培养单位|授予单位|学校|院校)\s*[:：]?\s*(?P<value>.*)$"
-)
-_THESIS_DATE_LABEL_RE = re.compile(
-    r"^(?:答辩日期|论文日期|提交日期|完成日期|学位授予日期)\s*[:：]?\s*(?P<value>.*)$"
-)
-_THESIS_INSTITUTION_RE = re.compile(
-    r"^[\u3400-\u9fff·]{2,30}(?:大学|学院|研究院|党校)$"
-)
-# 无版权页/CIP 标记且总页数不超过该阈值的 PDF 视为单篇论文而非专著。学位论文
-# 另由封面标记识别、与页数无关；阈值取 60 以容纳较长的外文期刊论文，真实专著
-# 通常在 200 页以上，不会被误判。
-_JOURNAL_MAX_FALLBACK_PAGES = 60
-
-# 从中文期刊首页版式里认出刊名用的后缀与佐证词。多数近年期刊会把刊名印在首页
-# 报头（常与「YYYY 年第 N 期」或英文刊名相邻）。抽印本若没印刊名则保持缺失。
-_JOURNAL_NAME_SUFFIXES = (
-    "学报", "学刊", "论丛", "季刊", "月刊", "与现实", "战线", "评论", "论坛",
-    "研究", "科学", "世界", "文摘", "杂志", "通讯", "动态", "译丛", "丛刊", "前沿", "探索",
-)
-# 独立成行、缺其它佐证时只接受较强后缀且长度更短，避免把文章标题误当刊名。
-_JOURNAL_NAME_SUFFIXES_STANDALONE = (
-    "学报", "学刊", "论丛", "季刊", "月刊", "与现实", "战线", "研究", "科学", "世界", "文摘",
-)
-# 与中文刊名相邻的英文刊名常含这些词，用作强佐证以排除英文文章标题。
-_JOURNAL_EN_HINTS = (
-    "journal", "university", "review", "studies", "science", "sciences",
-    "academic", "bulletin", "acta", "annals", "quarterly", "tribune",
-)
-_JOURNAL_NAME_CHARS = r"[㐀-鿿()·—\-]"
-
-# 例：文章编号 0439-8041(2020)09-0015-13
-#     ISSN 0439-8041、2020 年、第 09 期、起始页 15、共 13 页 → 15-27。
-_ARTICLE_NUMBER_RE = re.compile(
-    r"文章编\s*号\s*[:：]?\s*"
-    r"(?P<issn>[0-9]{4}\s*-\s*[0-9]{3}[0-9Xx])"
-    r"\s*\(\s*(?P<year>\d{4})\s*\)\s*"
-    r"(?P<issue>\d{1,3})\s*-\s*"
-    r"(?P<start>\d{1,5})\s*-\s*"
-    r"(?P<length>\d{1,4})"
-)
-_DOI_RE = re.compile(
-    r"(?:https?://(?:dx\.)?doi\.org/|\bDOI\s*[:：]?\s*)"
-    r"(?P<doi>10\.\d{4,9}/[-._;()/:A-Z0-9]+)",
-    re.IGNORECASE,
-)
-_ISSN_RE = re.compile(r"\b(?P<issn>\d{4}(?:\s*-\s*|\s+)\d{3}[\dXx])\b")
-# 期刊版式常见的卷期行：「第 52 卷第 9 期」「2020 年第 9 期」。
-_VOLUME_ISSUE_RE = re.compile(r"第\s*(?P<volume>\d{1,3})\s*卷\s*第\s*(?P<issue>\d{1,3})\s*期")
-_YEAR_ISSUE_RE = re.compile(r"(?P<year>\d{4})\s*年\s*第\s*(?P<issue>\d{1,3})\s*期")
-# 「作者张双利，复旦大学哲学学院教授（上海 200433）。」
-_AUTHOR_STATEMENT_RE = re.compile(r"^作\s*者\s*[:：]?\s*(?P<author>[^，,。（(]{2,20})")
 
 
-def looks_like_journal_article(text: str) -> bool:
-    """Report whether a page carries the GB/T markers of a journal article."""
-
-    normalized = unicodedata.normalize("NFKC", text)
-    compact = re.sub(r"\s+", "", normalized)
-    # 文章编号是期刊独有的 GB/T 编码，可直接判定。
-    if _ARTICLE_NUMBER_RE.search(compact):
-        return True
-    # 版权页信息只属于专著；出现即排除期刊，避免内容提要里的“摘要/关键词”误导。
-    if any(marker.casefold() in compact.casefold() for marker in _BOOK_ONLY_MARKERS):
-        return False
-    if any(marker in compact for marker in _JOURNAL_MARKERS):
-        return True
-    return sum(1 for marker in _JOURNAL_WEAK_MARKERS if marker in compact) >= 2
 
 
-def normalize_doi(value: object) -> Optional[str]:
-    text = unicodedata.normalize("NFKC", str(value or "")).strip()
-    match = _DOI_RE.search(text)
-    if match is None:
-        match = re.search(r"(?P<doi>10\.\d{4,9}/[-._;()/:A-Z0-9]+)", text, re.IGNORECASE)
-    if match is None:
-        return None
-    doi = match.group("doi").rstrip(".,;:。；，）)]}").strip()
-    return doi.casefold() if doi else None
 
 
-def normalize_issn(value: object) -> Optional[str]:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    match = _ISSN_RE.search(text)
-    if match is None:
-        return None
-    compact = re.sub(r"\s|-", "", match.group("issn")).upper()
-    if len(compact) != 8:
-        return None
-    total = sum(int(char) * weight for char, weight in zip(compact[:7], range(8, 1, -1)))
-    check = 10 if compact[7] == "X" else int(compact[7])
-    if (total + check) % 11 != 0:
-        return None
-    return compact[:4] + "-" + compact[4:]
 
 
-def _looks_like_thesis(texts: Sequence[Tuple[int, str]]) -> bool:
-    """Report whether the front pages carry degree-thesis cover markers."""
-
-    for page_idx, text in texts:
-        if page_idx >= 2:
-            continue
-        compact = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text))
-        if any(marker in compact for marker in _THESIS_MARKERS):
-            return True
-    return False
 
 
-def _compact_thesis_cover_text(value: object) -> str:
-    """Normalize spacing introduced by PDF glyph positioning on thesis covers."""
-
-    text = unicodedata.normalize("NFKC", str(value or "")).strip()
-    text = re.sub(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])", "", text)
-    return re.sub(r"\s+", " ", text).strip(" \t:：")
 
 
-def _following_thesis_cover_value(
-    lines: Sequence[Tuple[int, str]],
-    index: int,
-) -> Tuple[Optional[str], Optional[int], Optional[str]]:
-    """Read a cover field whose label and value were extracted on separate lines."""
-
-    for next_index in range(index + 1, min(len(lines), index + 4)):
-        page_idx, raw_line = lines[next_index]
-        value = _compact_thesis_cover_text(raw_line)
-        if not value:
-            continue
-        if _THESIS_FIELD_LABEL_RE.match(value):
-            break
-        if any(marker in value for marker in _THESIS_MARKERS):
-            continue
-        return value, page_idx, raw_line
-    return None, None, None
 
 
-# 学位论文文件名分隔符：半角/全角连字符、破折号、下划线、间隔号、冒号。
-_THESIS_TITLE_AUTHOR_PREFIX_SEP = re.compile(r"^[\s\-‐-―－_·・:：]+")
 
 
-def _strip_thesis_author_prefix(
-    result: Dict[str, object],
-    evidence: Dict[str, object],
-) -> None:
-    """Drop a leading ``作者 - `` prefix from a thesis title.
-
-    Descriptive filenames often read ``作者 - 篇名``.  Because the author is
-    already stored separately, the title must not repeat it.  Only strip when
-    the title starts with the exact author name *and* a real separator follows,
-    so genuine titles that merely begin with the author's characters survive.
-    """
-
-    author = str(result.get("author") or "").strip()
-    title = str(result.get("title") or "").strip()
-    if not author or not title or not title.startswith(author):
-        return
-    remainder = title[len(author):]
-    separator = _THESIS_TITLE_AUTHOR_PREFIX_SEP.match(remainder)
-    if not separator or separator.end() == 0:
-        return
-    stripped = remainder[separator.end():].strip()
-    if not is_valid_bibliographic_value(stripped):
-        return
-    result["title"] = stripped
-    field_evidence = dict(evidence.get("title") or {}) if isinstance(evidence.get("title"), Mapping) else {}
-    field_evidence["author_prefix_stripped"] = title
-    evidence["title"] = field_evidence
 
 
-def _extract_thesis_metadata(
-    texts: Sequence[Tuple[int, str]],
-) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
-    """Extract thesis title, author, degree-granting school and defense year.
-
-    Thesis covers do not contain book publication statements or journal
-    mastheads.  This precision-first path therefore reads only the first two
-    pages and only accepts cover labels, a standalone degree-granting
-    institution, or a cover date.  The school is stored in ``publisher`` for
-    compatibility with the existing bibliographic schema.
-    """
-
-    lines: List[Tuple[int, str]] = []
-    for page_idx, text in texts:
-        if page_idx >= 2:
-            continue
-        lines.extend(
-            (page_idx, line.strip())
-            for line in unicodedata.normalize("NFKC", text).splitlines()
-            if line.strip()
-        )
-
-    candidates: Dict[str, List[Tuple[float, int, int, str, str, str]]] = {
-        field: [] for field in ("title", "author", "publisher", "publish_year")
-    }
-
-    def record(
-        field: str,
-        value: object,
-        page_idx: int,
-        line_index: int,
-        evidence_text: str,
-        rule: str,
-        score: float,
-    ) -> None:
-        cleaned = _compact_thesis_cover_text(value)
-        if field == "author":
-            cleaned = _clean_people(cleaned)
-        elif field == "publisher":
-            cleaned = re.sub(r"\s+", "", cleaned)
-        elif field == "title":
-            cleaned = cleaned.strip("《》")
-        elif field == "publish_year":
-            year = re.search(r"(?<!\d)((?:19|20)\d{2})(?!\d)", cleaned)
-            cleaned = year.group(1) if year else ""
-        if not is_valid_bibliographic_value(cleaned):
-            return
-        if field == "author" and not _is_plausible_person_name(cleaned):
-            return
-        candidates[field].append((score, page_idx, line_index, cleaned, evidence_text, rule))
-
-    marker_line_indexes: List[int] = []
-    for line_index, (page_idx, raw_line) in enumerate(lines):
-        line = _compact_thesis_cover_text(raw_line)
-        if any(marker in line for marker in _THESIS_MARKERS):
-            marker_line_indexes.append(line_index)
-
-        for field, pattern, rule in (
-            ("title", _THESIS_TITLE_LABEL_RE, "thesis_title_label"),
-            ("author", _THESIS_AUTHOR_LABEL_RE, "thesis_author_label"),
-            ("publisher", _THESIS_SCHOOL_LABEL_RE, "thesis_school_label"),
-            ("publish_year", _THESIS_DATE_LABEL_RE, "thesis_defense_date"),
-        ):
-            match = pattern.match(line)
-            if not match:
-                continue
-            value = match.group("value").strip()
-            value_page_idx, value_evidence = page_idx, raw_line
-            if not value:
-                value, following_page_idx, following_line = _following_thesis_cover_value(
-                    lines, line_index
-                )
-                if value and following_page_idx is not None and following_line is not None:
-                    value_page_idx = following_page_idx
-                    value_evidence = f"{raw_line} / {following_line}"
-            if value:
-                record(field, value, value_page_idx, line_index, value_evidence, rule, 0.99)
-
-        institution = re.sub(r"\s+", "", line)
-        if (
-            _THESIS_INSTITUTION_RE.fullmatch(institution)
-            and "出版社" not in institution
-            and not _THESIS_FIELD_LABEL_RE.match(line)
-        ):
-            score = 0.99 if institution.endswith("大学") else 0.92
-            record(
-                "publisher",
-                institution,
-                page_idx,
-                line_index,
-                raw_line,
-                "thesis_cover_institution",
-                score,
-            )
-
-        if re.fullmatch(r"(?:19|20)\d{2}\s*年(?:\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*日)?)?", line):
-            record(
-                "publish_year",
-                line,
-                page_idx,
-                line_index,
-                raw_line,
-                "thesis_cover_date",
-                0.93,
-            )
-
-    # Some covers put an unlabeled Chinese title directly below the thesis
-    # marker.  Accept only the first plausible line before the next field label.
-    if not candidates["title"]:
-        for marker_index in marker_line_indexes:
-            for line_index in range(marker_index + 1, min(len(lines), marker_index + 7)):
-                page_idx, raw_line = lines[line_index]
-                line = _compact_thesis_cover_text(raw_line)
-                if _THESIS_FIELD_LABEL_RE.match(line):
-                    break
-                if (
-                    len(line) >= 5
-                    and re.search(r"[\u3400-\u9fff]", line)
-                    and not _THESIS_INSTITUTION_RE.fullmatch(re.sub(r"\s+", "", line))
-                    and not any(marker in line for marker in _THESIS_MARKERS)
-                    and not re.search(r"(?:申请|学位|专业|学科|导师|指导教师)", line)
-                    and not re.fullmatch(r"(?:19|20)\d{2}.*", line)
-                ):
-                    record(
-                        "title",
-                        line,
-                        page_idx,
-                        line_index,
-                        raw_line,
-                        "thesis_title_after_marker",
-                        0.93,
-                    )
-                    break
-            if candidates["title"]:
-                break
-
-    values: Dict[str, str] = {}
-    evidence: Dict[str, object] = {}
-    confidence: Dict[str, float] = {}
-    for field, items in candidates.items():
-        if not items:
-            continue
-        score, page_idx, _line_index, value, evidence_text, rule = sorted(
-            items, key=lambda item: (-item[0], item[1], item[2])
-        )[0]
-        values[field] = value
-        evidence[field] = {
-            "source": "thesis_cover_text",
-            "source_page": page_idx + 1,
-            "evidence_text": evidence_text,
-            "rule": rule,
-            "confidence": score,
-        }
-        confidence[field] = score
-    return values, evidence, confidence
 
 
-def _has_book_only_markers(texts: Sequence[Tuple[int, str]]) -> bool:
-    """Report whether any scanned page shows a book copyright/CIP marker.
-
-    Strong CIP markers count on any page; a bare ISBN counts only on the front
-    pages so a cited book's ISBN in a foreign article's reference list does not
-    misclassify the article as a monograph.
-    """
-
-    for _page_idx, text in texts:
-        folded = re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).casefold()
-        if any(marker.casefold() in folded for marker in _BOOK_STRONG_MARKERS):
-            return True
-        if "isbn" in folded and any(cue in folded for cue in _BOOK_ISBN_CONTEXT):
-            return True
-    return False
 
 
-def _looks_like_english_journal(line: str) -> bool:
-    """Report whether a line reads like an English journal title, not prose."""
-
-    stripped = line.strip().lower()
-    letters = sum(1 for ch in stripped if ch.isascii() and ch.isalpha())
-    if len(stripped) < 6 or letters < len(stripped.replace(" ", "")) * 0.6:
-        return False
-    return any(word in stripped for word in _JOURNAL_EN_HINTS)
 
 
-def _extract_journal_name(
-    texts: Sequence[Tuple[int, str]],
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Read the journal title from the first page's masthead when it is printed.
-
-    Precision-first: only returns a name when the layout gives a strong signal
-    (a ``刊名 + 年 + 期`` line, a Chinese name next to an English journal title,
-    or a short standalone name line). Offprints that never print the journal
-    name return ``None`` rather than a guess -- the field stays missing.
-    """
-
-    first = next((text for idx, text in texts if idx == 0), None)
-    if not first:
-        return None, None, None
-    lines = [
-        re.sub(r"\s+", " ", unicodedata.normalize("NFKC", line)).strip()
-        for line in first.splitlines()
-        if line.strip()
-    ]
-    head = lines[:15]
-    # 规则1：同一行「刊名 YYYY 年第 N 期」。
-    for line in head:
-        match = re.match(
-            r"^(" + _JOURNAL_NAME_CHARS + r"{2,20}?)\s*(?:19|20)\d{2}\s*年", line
-        )
-        if match and any(sfx in match.group(1) for sfx in _JOURNAL_NAME_SUFFIXES):
-            return re.sub(r"\s+", "", match.group(1)), line, "masthead_name_year"
-    # 规则2：中文刊名行紧跟英文刊名行。
-    for i in range(len(head) - 1):
-        compact = re.sub(r"\s+", "", head[i])
-        if (
-            2 <= len(compact) <= 20
-            and re.fullmatch(_JOURNAL_NAME_CHARS + r"+", compact)
-            and any(sfx in compact for sfx in _JOURNAL_NAME_SUFFIXES)
-            and _looks_like_english_journal(head[i + 1])
-        ):
-            return compact, f"{head[i]} / {head[i + 1]}", "masthead_cn_en"
-    # 规则3：首几行里独立成行的短刊名。
-    for line in head[:5]:
-        compact = re.sub(r"\s+", "", line)
-        if (
-            2 <= len(compact) <= 8
-            and re.fullmatch(_JOURNAL_NAME_CHARS + r"+", compact)
-            and any(sfx in compact for sfx in _JOURNAL_NAME_SUFFIXES_STANDALONE)
-        ):
-            return compact, line, "masthead_suffix_line"
-    return None, None, None
 
 
-def _extract_journal_article(
-    texts: Sequence[Tuple[int, str]],
-    file_stem: str,
-) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
-    """Read the fields a Chinese journal offprint actually encodes.
 
-    ``文章编号`` is a registered GB/T code rather than a guess: it carries the
-    year, issue and the article's own page span.  The journal name and volume
-    are deliberately *not* inferred -- CNKI offprints usually print neither,
-    and inventing them would be exactly the kind of fabricated citation this
-    project refuses to produce.  They stay missing so the user is prompted.
-    """
 
-    values: Dict[str, str] = {}
-    evidence: Dict[str, object] = {}
-    confidence: Dict[str, float] = {}
-
-    def record(
-        field: str,
-        value: str,
-        page_idx: Optional[int],
-        source: str,
-        score: float,
-        text: str,
-        rule: str,
-    ) -> None:
-        if field in values or not is_valid_bibliographic_value(value):
-            return
-        values[field] = value
-        evidence[field] = {
-            "source": source,
-            "source_page": page_idx + 1 if page_idx is not None else None,
-            "evidence_text": text,
-            "rule": rule,
-        }
-        confidence[field] = score
-
-    first_page = next((item for item in texts if item[0] == 0), None)
-
-    for page_idx, raw_text in texts:
-        normalized = unicodedata.normalize("NFKC", raw_text)
-        compact = re.sub(r"[ \t]+", "", normalized)
-
-        match = _ARTICLE_NUMBER_RE.search(compact)
-        if match:
-            issn = normalize_issn(match.group("issn"))
-            year = match.group("year")
-            issue = str(int(match.group("issue")))
-            start = int(match.group("start"))
-            length = int(match.group("length"))
-            if issn:
-                record("issn", issn, page_idx, "article_number", 0.99, match.group(0), "article_number_issn")
-            record("publish_year", year, page_idx, "article_number", 0.97, match.group(0), "article_number_year")
-            record("issue", issue, page_idx, "article_number", 0.97, match.group(0), "article_number_issue")
-            if start > 0 and length > 0:
-                record(
-                    "page_range",
-                    f"{start}-{start + length - 1}",
-                    page_idx,
-                    "article_number",
-                    0.95,
-                    match.group(0),
-                    "article_number_page_span",
-                )
-
-        doi_match = _DOI_RE.search(normalized)
-        doi = normalize_doi(doi_match.group(0)) if doi_match else None
-        if doi:
-            record("doi", doi, page_idx, "journal_front_page", 0.98, doi_match.group(0), "explicit_doi")
-
-        issn_match = _ISSN_RE.search(normalized)
-        issn = normalize_issn(issn_match.group(0)) if issn_match else None
-        if issn:
-            record("issn", issn, page_idx, "journal_front_page", 0.96, issn_match.group(0), "explicit_issn")
-
-        volume_match = _VOLUME_ISSUE_RE.search(compact)
-        if volume_match:
-            record("volume", str(int(volume_match.group("volume"))), page_idx, "masthead", 0.9, volume_match.group(0), "masthead_volume")
-            record("issue", str(int(volume_match.group("issue"))), page_idx, "masthead", 0.9, volume_match.group(0), "masthead_issue")
-        year_match = _YEAR_ISSUE_RE.search(compact)
-        if year_match:
-            record("publish_year", year_match.group("year"), page_idx, "masthead", 0.88, year_match.group(0), "masthead_year")
-            record("issue", str(int(year_match.group("issue"))), page_idx, "masthead", 0.88, year_match.group(0), "masthead_issue")
-
-    # 篇名与作者：期刊首页顶部依次是篇名、作者，随后才是摘要。
-    if first_page is not None:
-        lines = [
-            re.sub(r"\s+", " ", line).strip()
-            for line in unicodedata.normalize("NFKC", first_page[1]).splitlines()
-            if line.strip()
-        ]
-        for line in lines[:12]:
-            statement = _AUTHOR_STATEMENT_RE.match(line)
-            if statement:
-                record("author", _clean_person(statement.group("author")), 0, "author_statement", 0.93, line, "journal_author_statement")
-                break
-        heading: List[str] = []
-        for line in lines:
-            if re.match(r"^(摘\s*要|关\s*键\s*词|中图分类号|文献标[识志]码|文章编\s*号|作\s*者)", line):
-                break
-            heading.append(line)
-        if heading:
-            record("title", heading[0], 0, "journal_title_line", 0.9, heading[0], "journal_title_line")
-            if len(heading) > 1 and _is_plausible_person_name(heading[1]):
-                record("author", _clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1], "journal_author_line")
-
-    # CNKI 导出件的文件名是「篇名_作者」，可为版面抽取提供独立佐证。
-    stem_match = re.match(r"^(?P<title>.+?)_(?P<author>[^_]{2,20})$", file_stem.strip())
-    if stem_match:
-        record("title", stem_match.group("title").strip(), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
-        candidate = stem_match.group("author").strip()
-        if _is_plausible_person_name(candidate):
-            record("author", _clean_person(candidate), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
-
-    return values, evidence, confidence
 
 
 def _is_bibliographic_page(page_idx: int, text: str) -> bool:
@@ -1887,76 +1179,14 @@ def _is_bibliographic_page(page_idx: int, text: str) -> bool:
     return page_idx < 8
 
 
-def _add_candidate(
-    candidates: Dict[str, List[_MetadataCandidate]],
-    field: str,
-    value: object,
-    page_idx: int,
-    evidence_text: str,
-    confidence: float,
-    rule: str,
-) -> None:
-    cleaned = str(value or "").strip(" ,，:：;；.|｜")
-    if field == "publisher":
-        cleaned = PUBLISHER_ALIASES.get(cleaned, cleaned)
-    if not cleaned or not is_valid_bibliographic_value(cleaned):
-        return
-    if field in {"author", "translator"} and not _is_plausible_person_name(cleaned):
-        return
-    if field == "publish_place" and cleaned in INVALID_PUBLICATION_PLACES:
-        return
-    candidate = _MetadataCandidate(cleaned, page_idx, evidence_text, confidence, rule)
-    for index, item in enumerate(candidates[field]):
-        if (
-            item.value == candidate.value
-            and item.page_idx == candidate.page_idx
-            and item.evidence_text == candidate.evidence_text
-        ):
-            if candidate.confidence > item.confidence:
-                candidates[field][index] = candidate
-            return
-    candidates[field].append(candidate)
 
 
-def _compact_value_key(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9㐀-鿿]", "", str(value or "")).casefold()
 
 
-def _repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -> Optional[str]:
-    """LoC CIP 的书名是全小写；若书名页有大小写规范的同一书名，用其写法。"""
-
-    target = _compact_value_key(title)
-    if not target:
-        return None
-    for _page_idx, text in texts:
-        lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
-        for index in range(len(lines)):
-            for width in (1, 2, 3):
-                parts = lines[index:index + width]
-                if len(parts) < width:
-                    break
-                joined = " ".join(parts)
-                if _compact_value_key(joined) != target:
-                    continue
-                if joined.upper() == joined:
-                    continue  # 全大写的书名页写法不如 CIP 原文
-                if width > 1 and ":" not in joined:
-                    return f"{parts[0]}: {' '.join(parts[1:])}"
-                return joined
-    return None
 
 
-def _candidate_group_score(items: Sequence[_MetadataCandidate]) -> float:
-    return max(item.confidence for item in items) + min(0.04, 0.015 * (len(items) - 1))
 
 
-def _candidate_values_are_compatible(first: str, second: str) -> bool:
-    def compact(value: str) -> str:
-        return re.sub(r"[^A-Za-z0-9\u3400-\u9fff]", "", value).casefold()
-
-    left = compact(first)
-    right = compact(second)
-    return bool(left and right and (left in right or right in left))
 
 
 def _translator_parts_from_filename(file_stem: str) -> List[str]:
@@ -1996,23 +1226,8 @@ def _reconcile_fused_people(ocr_value: str, filename_parts: Sequence[str]) -> Op
     return "，".join(slices)
 
 
-_ARTIFACT_AUTHOR_NAMES = {
-    "cnki", "中国知网", "知网", "superstar", "超星", "adobe", "acrobat",
-    "microsoft", "word", "wps", "office", "unknown", "admin", "administrator",
-    "user", "pdf", "epub", "z-library", "zlibrary", "kdc",
-}
 
 
-def _is_plausible_person_name(value: str) -> bool:
-    compact = re.sub(r"\s+", "", value)
-    # 产库/软件署名不是作者（知网 PDF 的内嵌 Author 常是"CNKI"）。
-    if compact.casefold() in _ARTIFACT_AUTHOR_NAMES:
-        return False
-    if compact in {"作者", "著者", "译者", "主编", "编辑", "的翻", "的译", "本书", "此书"}:
-        return False
-    if re.match(r"^(?:本书|此书|该书|由此|其中|的翻|的译)", compact):
-        return False
-    return bool(re.search(r"[A-Za-z\u3400-\u9fff]", compact))
 
 
 def _extract_chinese_people(
@@ -2305,80 +1520,11 @@ def _embedded_pdf_metadata(path: Path) -> Dict[str, str]:
     return result
 
 
-def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
-    nested = value.get("bibliographic_metadata")
-    source = dict(nested) if isinstance(nested, Mapping) else dict(value)
-    result: Dict[str, object] = {}
-    aliases = {
-        "title": ("title", "document_title", "display_title"),
-        "author": ("author", "author_label"),
-        "country": ("country", "nationality"),
-        "translator": ("translator",),
-        "publisher": ("publisher", "press"),
-        "publish_place": ("publish_place", "publication_place"),
-        "publish_year": ("publish_year", "publication_year"),
-        "isbn": ("isbn",),
-        "journal_name": ("journal_name", "journal_title", "journal", "periodical"),
-        "volume": ("volume", "journal_volume"),
-        "issue": ("issue", "issue_number", "journal_issue"),
-        "page_range": ("page_range", "pages", "article_pages"),
-        "doi": ("doi", "DOI"),
-        "issn": ("issn", "ISSN"),
-    }
-    for field, keys in aliases.items():
-        result[field] = next((source.get(key) for key in keys if source.get(key) not in (None, "")), None)
-    for field in (
-        "document_type",
-        "metadata_status",
-        "metadata_source",
-        "metadata_confidence",
-        "metadata_evidence",
-        "metadata_conflicts",
-        "metadata_missing_fields",
-        "responsibility_status",
-        "language_code_manual",
-    ):
-        if source.get(field) not in (None, ""):
-            result[field] = source[field]
-    return result
 
 
-def _clean_person(value: str) -> str:
-    return _clean_people(value)
 
 
-def _clean_people(value: str) -> str:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    text = text.replace("•", "·").replace("・", "·").replace("‧", "·")
-    text = re.sub(r"^[\[［【(（〔][^\]］】)）〕]{1,8}[\]］】)）〕]\s*", "", text)
-    text = re.sub(r"\s*(?:/|／)\s*$", "", text)
-    text = text.strip(" ,，、:：;；.。[]［］【】〔〕()（）")
-    text = re.sub(r"\s*(?:,|，|、|;|；|&|\band\b)\s*", "、", text, flags=re.IGNORECASE)
-    text = re.sub(r"、+", "、", text).strip("、")
-
-    if re.search(r"[\u3400-\u9fff]", text):
-        groups: List[str] = []
-        for group in text.split("、"):
-            tokens = group.split()
-            if len(tokens) > 1 and all(re.fullmatch(r"[\u3400-\u9fff·]{2,6}", token) for token in tokens):
-                groups.extend(tokens)
-            else:
-                groups.append(re.sub(r"\s+", "", group))
-        text = "、".join(item for item in groups if item)
-    else:
-        text = re.sub(r"\s+", " ", text)
-    return text
 
 
-def _clean_publisher(value: str) -> str:
-    text = unicodedata.normalize("NFKC", str(value or ""))
-    text = text.replace("•", "·").replace("・", "·").replace("‧", "·")
-    text = text.strip(" ,，:：;；.。[]［］【】〔〕()（）")
-    # 引文里不带英文公司后缀（Rowman & Littlefield International, Ltd. →
-    # Rowman & Littlefield International）。
-    text = re.sub(r"[\s,，]*\b(?:Ltd|Limited|Inc|Incorporated|LLC|GmbH)\.?$", "", text, flags=re.IGNORECASE)
-    return text.strip(" ,，:：;；.。")
 
 
-def _json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))

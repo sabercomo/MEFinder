@@ -22,7 +22,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web_http.py": 800,
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
-            "database.py": 1500,
+            # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
+            "database.py": 1325,
+            "persistence/paragraph_payload.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,
             # MCP 用例层：0.5.0 一轮加了 5 个工具就从 431 涨到 951 行，
@@ -31,6 +33,27 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 协议层拆出后应保持配置无关且稳定。
             "openai_compatible.py": 850,
             "vision_api.py": 950,
+            # 领域层四大模块此前完全不受约束，因而长到 1800~2900 行。
+            # 先按当前行数封顶止血，再按既定顺序逐个拆分：
+            # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
+            # → bibliographic_metadata 写库路径 → search 上帝类。
+            # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
+            "text_alignment.py": 2400,
+            "alignment_snapshots.py": 150,
+            "alignment_overrides.py": 425,
+            # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
+            "semantic_alignment.py": 1675,
+            "alignment_anchors.py": 875,
+            "alignment_structure.py": 500,
+            # 对齐产出的段质量门（噪声段/脚注块降级）拆为独立叶模块。
+            "alignment_segment_quality.py": 200,
+            # 共用取值底座与三类文献抽取器已拆出，上限随之下调。
+            "bibliographic_metadata.py": 1550,
+            "bibliographic_values.py": 325,
+            "bibliographic_thesis.py": 300,
+            "bibliographic_journal.py": 350,
+            "bibliographic_marx_engels.py": 175,
+            "search.py": 1850,
         }
         for relative, limit in limits.items():
             lines = (PACKAGE / relative).read_text(encoding="utf-8").splitlines()
@@ -178,16 +201,13 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             if colors.get(module, 0) == 0:
                 visit(module, [])
 
+        # 0.4.x 遗留的
         # database <-> text_alignment <-> calibration_library <-> bibliographic_metadata
-        # 是 0.4.x 遗留的领域纠缠，由 database.py 内一条懒 import 兜住，尚未拆解。
-        known = {
-            (
-                "bibliographic_metadata",
-                "calibration_library",
-                "database",
-                "text_alignment",
-            )
-        }
+        # 已消除：根因是 bibliographic_metadata 为了一个纯函数
+        # (paragraph_payload_for_storage) 顶层依赖整个 database；该函数与段落行
+        # 补水一并下沉到 persistence/paragraph_payload.py 后，这条边不复存在。
+        # 包内现无循环依赖，任何新环都会让门禁失败。
+        known: set[tuple[str, ...]] = set()
         self.assertEqual(set(cycles), known)
 
     def test_persistence_layer_does_not_import_domain_modules(self) -> None:

@@ -12,7 +12,7 @@ from typing import Callable, Dict, Mapping, Protocol
 from ..app_context import AppPaths
 from ..backup_service import restore_backup, write_backup
 from ..document_groups import replace_document_group_snapshot
-from ..text_alignment import replace_alignment_recipe_snapshot
+from ..alignment_snapshots import replace_alignment_recipe_snapshot
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..mineru_api import MinerUError
 from ..import_config_store import import_config_lock

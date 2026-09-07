@@ -4,16 +4,16 @@ import unittest
 
 import numpy as np
 
-from src.me_finder.semantic_alignment import (
+from src.me_finder.alignment_anchors import (
     DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     HeadingAnchor,
-    align_semantic_sequences,
     extract_chinese_japanese_name_anchors,
     extract_latin_name_anchors,
     extract_number_anchors,
     extract_parenthetical_term_anchors,
     normalize_numeric_text,
 )
+from src.me_finder.semantic_alignment import align_semantic_sequences
 
 
 class SemanticLexicalAnchorTests(unittest.TestCase):
@@ -238,7 +238,19 @@ class SemanticLexicalAnchorTests(unittest.TestCase):
     def test_alignment_uses_registered_anchor_as_a_hard_partition(self) -> None:
         source = ["前文。", "罗诉韦德案（Roe v. Wade）。", "后文。"]
         target = ["Before.", "Roe v. Wade.", "After."]
-        embeddings = np.zeros((6, 3), dtype=np.float32)
+        # A registered term only anchors when its two paragraphs also agree
+        # semantically, so the anchor pair (source[1], target[1]) shares a vector.
+        embeddings = np.asarray(
+            [
+                [0.0, 1.0, 0.0],  # source[0]
+                [1.0, 0.0, 0.0],  # source[1] -- anchor paragraph
+                [0.0, 1.0, 0.0],  # source[2]
+                [0.0, 1.0, 0.0],  # target[0]
+                [1.0, 0.0, 0.0],  # target[1] -- anchor paragraph
+                [0.0, 1.0, 0.0],  # target[2]
+            ],
+            dtype=np.float32,
+        )
 
         links, anchors = align_semantic_sequences(
             source,
