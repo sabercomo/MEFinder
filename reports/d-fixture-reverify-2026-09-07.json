@@ -1,0 +1,389 @@
+{
+  "fixtures": [
+    {
+      "n": 11,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "label_v20": "错配",
+      "pivot_v12_order": 3328,
+      "pivot_v13_order": 3328,
+      "pivot_text": "どういうことだろうか。",
+      "old_wrong_target_v12": [
+        1942,
+        1943,
+        1944
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.942443311214447,
+      "new_v21_targets": [
+        {
+          "order": 3163,
+          "text": "$^{30}$ 对于性别的质问，无非就是对存在本身的质问。"
+        },
+        {
+          "order": 3164,
+          "text": "这种质问朝向的是象征界，即大写的他者。"
+        }
+      ],
+      "correct_target_v13": [
+        3162,
+        3163,
+        3164,
+        3165
+      ],
+      "new_overlaps_correct": true
+    },
+    {
+      "n": 24,
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 2962,
+      "pivot_v13_order": 2962,
+      "pivot_text": "真实的良心包含在下一章所讨论的伦理性的情\n绪中。",
+      "old_wrong_target_v12": [
+        3553,
+        3554,
+        3555
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8652701377868652,
+      "new_v21_targets": [
+        {
+          "order": 3560,
+          "text": "very!"
+        },
+        {
+          "order": 3561,
+          "text": "hing wJlich arises in \n-lm-E pro uce \ny this aCllvity oǸ."
+        },
+        {
+          "order": 3562,
+          "text": "On the other \nhand, this point of view is defective inasmuch as it is merely abstract."
+        }
+      ],
+      "correct_target_v13": [
+        3542,
+        3543
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 28,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 371,
+      "pivot_v13_order": 371,
+      "pivot_text": "26–27\nEinleitung\nwahrhafte Bedeutung, so wie damit ihre Rechtfertigung.",
+      "old_wrong_target_v12": [
+        1198,
+        1199,
+        1200
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8375957608222961,
+      "new_v21_targets": [
+        {
+          "order": 1198,
+          "text": "Ð!"
+        },
+        {
+          "order": 1199,
+          "text": "ification is \n˽eXfÑiIictude˼˻fic;"
+        },
+        {
+          "order": 1200,
+          "text": "tio;"
+        }
+      ],
+      "correct_target_v13": [
+        1193
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 41,
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "label_v20": "错配",
+      "pivot_v12_order": 4655,
+      "pivot_v13_order": 4655,
+      "pivot_text": "对不伤害你的人不加伤害;",
+      "old_wrong_target_v12": [
+        5119,
+        5120
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8639768362045288,
+      "new_v21_targets": [
+        {
+          "order": 5119,
+          "text": "Addition (G)."
+        },
+        {
+          "order": 5120,
+          "text": "The state in and for itself is the ethical whole, the actualization of freedom, and it is the absolute end of reason that freedom should be actual."
+        }
+      ],
+      "correct_target_v13": [
+        6503,
+        6504,
+        6505,
+        6506,
+        6507,
+        6508
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 53,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "label_v20": "错配",
+      "pivot_v12_order": 547,
+      "pivot_v13_order": 547,
+      "pivot_text": "これはひとつの作品世界にのみべったり惚れ込んでしまうのではなく、どこか醒めつつ熱狂しているような姿勢につながる。",
+      "old_wrong_target_v12": [
+        291
+      ],
+      "new_v21_status": "unmatched",
+      "new_v21_confidence": 0.0,
+      "new_v21_targets": [],
+      "correct_target_v13": [
+        562,
+        563,
+        564
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 60,
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "label_v20": "错配",
+      "pivot_v12_order": 1452,
+      "pivot_v13_order": 1468,
+      "pivot_text": "C) und H) der Subjektivität ist schon mit den \nMomenten C) und H) der Objektivität zusammengefallen.",
+      "old_wrong_target_v12": [
+        3079,
+        3080,
+        3081
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8323144912719727,
+      "new_v21_targets": [
+        {
+          "order": 3079,
+          "text": "In connection with formal right, we noted that it contained only prohibitions, and that an action strictly in keeping with right consequently had a purely negative determination in respect of the will of others."
+        },
+        {
+          "order": 3080,
+          "text": "In morality, on the other hand, the determination of my will with reference to the will of others is positive – that is, the will which has being in itself is inwardly present in what the subjective will realizes."
+        },
+        {
+          "order": 3081,
+          "text": "This entails the production or alteration of something existent, which in turn has reference to the will of others."
+        }
+      ],
+      "correct_target_v13": [
+        3075
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 80,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 738,
+      "pivot_v13_order": 742,
+      "pivot_text": "her das Wissen seiner als Gegenstands, aber als durch \ndas Denken in die einfache Unendlichkeit erhobenen und \ndadurch mit sich reinidentischen Gegenstandes.",
+      "old_wrong_target_v12": [
+        1861,
+        1862,
+        1863
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8712788820266724,
+      "new_v21_targets": [
+        {
+          "order": 1868,
+          "text": "but \nindeterminacy itself, when opposed to the determinate, takes on the \ndetermination of being something determinate;"
+        },
+        {
+          "order": 1869,
+          "text": "it is abstract identity \nwhich here constitutes its determinacy;"
+        },
+        {
+          "order": 1870,
+          "text": "the wil thereby becomes an \nindividual wil - the person."
+        }
+      ],
+      "correct_target_v13": [
+        1883,
+        1884
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 82,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 2236,
+      "pivot_v13_order": 2266,
+      "pivot_text": "Die Bedürfnisse und die Mittel werden als reelles Dasein ein \nSein für andere, durch deren Bedürfnisse und Arbeit die \nBefriedigung gegenseitig bedingt ist.",
+      "old_wrong_target_v12": [
+        4506,
+        4507,
+        4508
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8370836973190308,
+      "new_v21_targets": [
+        {
+          "order": 4516,
+          "text": "Addition (H)."
+        },
+        {
+          "order": 4517,
+          "text": "What the English call 'comfortable'· is something utterly \ninexhaustible;"
+        },
+        {
+          "order": 4518,
+          "text": "its ramifications are infinite, for every comfort in tum \nreveals its less comfortable side, and the resulting inventions are endless."
+        }
+      ],
+      "correct_target_v13": [
+        4521
+      ],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 88,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 1835,
+      "pivot_v13_order": 1854,
+      "pivot_text": "Solches Gesetz ist zu \neinem nur äußern Buchstaben, in der Tat einem leeren \nWort heruntergesetzt, denn erst durch meine Überzeugung \nwird es zu einem Gesetze, | einem mich verpflichtenden \nund bindenden, gemacht.",
+      "old_wrong_target_v12": [
+        3790,
+        3791,
+        3792
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.9176117181777954,
+      "new_v21_targets": [
+        {
+          "order": 3763,
+          "text": "- Such a law may have the authority of God and \nthe state behind it, and the authority of the thousands of \nyears for which it was the bond by which human beings \nand all their deeds and destinies were held together and \nsustained -\nauthorities which encompass countless \nindividual conviaions."
+        },
+        {
+          "order": 3764,
+          "text": "If I then set against all this the auth­\nority of my individual conviction - and as my subjective \nconviction its validity is merely [that of] authority - this \nmay at first appear a monstrous presumption."
+        },
+        {
+          "order": 3765,
+          "text": "But this \nappearance is refuted by the very principle which takes \nsubjective conviction as its criterion."
+        }
+      ],
+      "correct_target_v13": [],
+      "new_overlaps_correct": false
+    },
+    {
+      "n": 93,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "label_v20": "错配",
+      "pivot_v12_order": 2283,
+      "pivot_v13_order": 2314,
+      "pivot_text": "§ 203",
+      "old_wrong_target_v12": [
+        4593,
+        4594,
+        4595
+      ],
+      "new_v21_status": "rejected",
+      "new_v21_confidence": 0.8299681544303894,
+      "new_v21_targets": [
+        {
+          "order": 4609,
+          "text": "But because of the conditions to which it is subject, this \nprovision retains the character of a [mode of] subsistence [Subsistenz] \nin which reflection and the wil of the individual play a lesser role, and \nthus its substantial disposition in general is that of an immediate \nethical life based on the family relationship and on trust."
+        },
+        {
+          "order": 4610,
+          "text": "The proper beginning and original foundation of states has \nrightly been equated \\vith the introduction of agriculture and of \nmarriage."
+        },
+        {
+          "order": 4611,
+          "text": "For the fonner principle brings with it the cultiva­\ntion of the soil, and in consequence exclusively private prop­\nerty (cf."
+        }
+      ],
+      "correct_target_v13": [
+        4605,
+        4606,
+        4607,
+        4608,
+        4609,
+        4610,
+        4611,
+        4612,
+        4613,
+        4614,
+        4615,
+        4616,
+        4617,
+        4618,
+        4619,
+        4620,
+        4621,
+        4622,
+        4623,
+        4624,
+        4625,
+        4626,
+        4627,
+        4628,
+        4629,
+        4630,
+        4631,
+        4632,
+        4633,
+        4634,
+        4635,
+        4636,
+        4637,
+        4638,
+        4639,
+        4640
+      ],
+      "new_overlaps_correct": true
+    },
+    {
+      "n": 98,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "label_v20": "错配",
+      "pivot_v12_order": 1794,
+      "pivot_v13_order": 1813,
+      "pivot_text": "So \nmuß auch mein Wohl, meiner Familie Wohl höhern Zwek-\nken nach- und somit zu Mitteln herabgesetzt werden.",
+      "old_wrong_target_v12": [
+        3120,
+        3121,
+        3122
+      ],
+      "new_v21_status": "automatic",
+      "new_v21_confidence": 0.8991190195083618,
+      "new_v21_targets": [
+        {
+          "order": 3133,
+          "text": "在行动中所抱的善良意图以及我对这一\n点的信念，就可使我的行为成为善的。"
+        },
+        {
+          "order": 3134,
+          "text": "我们在判断和评估一\n种行为时，如果依照这种原则，那只好以行为人的意图和信念\n① \"他感到完全具有信心，对这一点我是绝不怀疑。"
+        },
+        {
+          "order": 3135,
+          "text": "但是世间多少人不是开始都\n由于这种确信的感觉而干出了罪大恶极的勾当!"
+        }
+      ],
+      "correct_target_v13": [
+        3115,
+        3116
+      ],
+      "new_overlaps_correct": false
+    }
+  ]
+}
