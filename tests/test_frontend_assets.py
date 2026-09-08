@@ -264,7 +264,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         # 运行时同样让 onclick="name()" 可解析，所以两种都算「已定义」。
         defined = set(
             re.findall(
-                r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
+                r"^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
                 HTML,
                 re.MULTILINE,
             )
@@ -276,6 +276,14 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
                 re.MULTILINE,
             )
         )
+        # Namespaced commands may expose a declared function under a shorter key.
+        # Only accept aliases whose implementation is actually declared above;
+        # the page-export UI test also executes these handlers through the namespace.
+        for alias, target in re.findall(
+            r"\b([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])", HTML
+        ):
+            if target in defined:
+                defined.add(alias)
         referenced = set()
         for attr in re.findall(r"\bon\w+\s*=\s*\"([^\"]*)\"", HTML):
             referenced.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", attr))
@@ -432,9 +440,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 作品组修2：组标题取消 22ch 固定上限，避免较长中文标题在行内尚有空间时被裁切。
     # 0.5.2 译本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     BASELINE_SHA256 = (
-        "065464244ec07972bf94934123523001db49fee71a712daead4db2040917140f"
+        "a70e9bb2d5e63c71e76d0cba1bd01d93e40fd56711e09aa93374b7c18ba3dde1"
     )
-    BASELINE_BYTES = 1058469
+    BASELINE_BYTES = 1064224
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

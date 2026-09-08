@@ -139,3 +139,35 @@
 @media (prefers-reduced-motion: reduce) {
   .toast, .toast.is-leaving { animation-duration: 1ms; }
 }
+
+/* component: Markdown page export dialog; genre: utility form.
+   pre-emit critique: distinct page semantics, visible errors, native focus trap.
+   检查: contrast uses theme tokens; slop no decoration; chrome one action row;
+   tokens no literal colors; responsive bounded width and scrollable height. */
+.markdown-page-dialog {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  margin: auto;
+  padding: 22px;
+  color: var(--text-primary);
+  background: var(--dialog-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+.markdown-page-dialog::backdrop { background: var(--dialog-backdrop); }
+.markdown-page-dialog h2 { margin: 0 0 12px; font-size: 18px; }
+.markdown-page-dialog p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.markdown-page-dialog fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.markdown-page-dialog label { display: block; margin: 14px 0 6px; }
+.markdown-page-dialog input, .markdown-page-dialog select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px;
+  color: var(--text-primary);
+  background: var(--dialog-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+.markdown-page-dialog #md-page-error { color: var(--danger); }
