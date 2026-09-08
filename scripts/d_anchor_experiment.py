@@ -30,6 +30,7 @@ from pathlib import Path
 import sqlite3
 import sys
 
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import src.me_finder.semantic_alignment as SA  # noqa: E402
@@ -63,12 +64,40 @@ def _leave_one_out_displacement(anchors, i, sp, tp, sg, tg, sl, tl, low):
     return abs(landed - a.target_index) if landed is not None else 0
 
 
+BETTER_ALT_MARGIN = 0.05  # a false friend's source has a clearly better target than the anchor
+
+
+def _is_false_friend(a, source_prefix, target_prefix, tvec_unit):
+    """True iff the anchor's source has a target clearly better than the anchor itself.
+
+    A correct anchor is (near) the mutual-best match for its source; a false friend
+    (shared surface token pairing different sentences) is not.  This spares good
+    anchors that a hard/noisy neighbourhood inflates the displacement of (e.g. the
+    'died 1642' anchor), which displacement alone wrongly flags.
+    """
+    svec = source_prefix[a.source_index + 1] - source_prefix[a.source_index]
+    n = float(np.linalg.norm(svec))
+    if n == 0:
+        return False
+    svec = svec / n
+    anchor_sim = float(svec @ tvec_unit[a.target_index])
+    best_sim = float((tvec_unit @ svec).max())
+    return best_sim - anchor_sim > BETTER_ALT_MARGIN
+
+
 def enhanced_validate(anchors, source_prefix, target_prefix, low_threshold):
-    """Original validation, then iterative worst-first leave-one-out removal."""
+    """Original validation, then iterative worst-first leave-one-out removal.
+
+    Removal requires BOTH a large leave-one-out displacement AND that the anchor is
+    a false friend (its source has a clearly better target elsewhere).  The second
+    gate protects correct anchors whose displacement is inflated by a hard region.
+    """
     kept = list(_orig_validate(anchors, source_prefix, target_prefix, low_threshold))
     sg, tg = _group_rows(source_prefix), _group_rows(target_prefix)
     sl = _BODY_LENGTHS["source"] or [1] * (source_prefix.shape[0] - 1)
     tl = _BODY_LENGTHS["target"] or [1] * (target_prefix.shape[0] - 1)
+    trows = target_prefix[1:] - target_prefix[:-1]
+    tvec_unit = trows / np.clip(np.linalg.norm(trows, axis=1, keepdims=True), 1e-12, None)
     removed = []
     while True:
         worst_i, worst_d = None, DISPLACEMENT_LIMIT
@@ -76,7 +105,7 @@ def enhanced_validate(anchors, source_prefix, target_prefix, low_threshold):
             if not a.key.startswith(_CONTEXT_GATED_ANCHOR_PREFIXES):
                 continue
             d = _leave_one_out_displacement(kept, i, source_prefix, target_prefix, sg, tg, sl, tl, low_threshold)
-            if d > worst_d:
+            if d > worst_d and _is_false_friend(a, source_prefix, target_prefix, tvec_unit):
                 worst_i, worst_d = i, d
         if worst_i is None:
             break
@@ -136,20 +165,24 @@ def run(args):
         DISPLACEMENT_LIMIT = args.limit
     enhanced_validate.removed = []
 
+    import time
+
     def _run(validator):
         SA._validate_soft_anchors = validator
+        t0 = time.monotonic()
         try:
             res = generate_alignment(db, gid, args.pivot, args.target, force=True,
                                      model_cache_dir=cache, embedding_model_id="multilingual-e5-large",
                                      reviewed_body_ranges=bounds)
         finally:
             SA._validate_soft_anchors = _orig_validate
+        seconds = time.monotonic() - t0
         with closing(sqlite3.connect(db.as_uri() + "?mode=ro", uri=True)) as c:
             c.row_factory = sqlite3.Row
-            return res, _accepted_links(c, res["alignment_run_id"], 0, 10_000)
+            return res, _accepted_links(c, res["alignment_run_id"], 0, 10_000), seconds
 
-    _, baseline = _run(_orig_validate)          # production baseline (stateless, no reliance on current run)
-    result, enhanced = _run(enhanced_validate)  # enhanced anchor validation
+    _, baseline, base_secs = _run(_orig_validate)          # production baseline (stateless)
+    result, enhanced, enh_secs = _run(enhanced_validate)   # enhanced anchor validation
 
     # Gold regression on this pair's human-"correct" golds (+n74), by full accepted status.
     gold_rows = []
@@ -184,11 +217,14 @@ def run(args):
               "removed_anchors": getattr(enhanced_validate, "removed", []),
               "baseline_accepted": sum(1 for v in baseline.values() if v["status"] == "automatic"),
               "enhanced_accepted": sum(1 for v in enhanced.values() if v["status"] == "automatic"),
-              "changed_links": changed, "golds": gold_rows,
+              "changed_links": changed, "golds": gold_rows, "threshold": DISPLACEMENT_LIMIT,
+              "seconds": {"baseline": round(base_secs, 2), "enhanced": round(enh_secs, 2),
+                          "leave_one_out_overhead": round(enh_secs - base_secs, 2)},
               "result": {k: result[k] for k in ("accepted_link_count", "unmatched_link_count", "heading_anchor_count")}}
     Path(args.out).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"removed anchors: {record['removed_anchors']}")
+    print(f"threshold={DISPLACEMENT_LIMIT} removed anchors: {record['removed_anchors']}")
     print(f"accepted links: {record['baseline_accepted']} -> {record['enhanced_accepted']}; changed: {len(changed)}")
+    print(f"timing: baseline={base_secs:.2f}s enhanced={enh_secs:.2f}s (leave-one-out overhead {enh_secs-base_secs:+.2f}s)")
     if gold_rows:
         changed_golds = [g["n"] for g in gold_rows if g["changed"]]
         print(f"golds in pair: {len(gold_rows)}; changed: {changed_golds or 'none'}")

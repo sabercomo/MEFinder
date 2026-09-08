@@ -1,0 +1,466 @@
+{
+  "pairs": {
+    "R9(权威)": {
+      "removed": [
+        [
+          331,
+          376,
+          "name:权威",
+          77
+        ]
+      ],
+      "type_totals": {
+        "new": 48,
+        "target-changed": 0,
+        "lost": 10
+      },
+      "classification_counts": {
+        "direct": 14,
+        "wrong": 5,
+        "nearby": 1
+      },
+      "samples": [
+        {
+          "type": "new",
+          "pivot_source": [
+            542,
+            545
+          ],
+          "source_text": "おたくはまさに、虚構の虚構性に対してすら多層的なリアリティを発見する。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            556,
+            559
+          ],
+          "final_status": "automatic",
+          "final_target_text": "在此意义上，御宅虽然绝不会“将虚构与现实混为一谈”，但也不会那么看重“虚构与现实的对立”。",
+          "reference_best_target": 558,
+          "reference_best_sim": 0.911,
+          "reference_best_text": "毫无疑问，御宅甚至能够从虚构的虚构性中发现多维度的真实。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            565,
+            567
+          ],
+          "source_text": "もちろんそういう反応も多数あった。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            575,
+            577
+          ],
+          "final_status": "automatic",
+          "final_target_text": "当然，很多人也有这种反应。",
+          "reference_best_target": 575,
+          "reference_best_sim": 0.948,
+          "reference_best_text": "当然，很多人也有这种反应。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            499,
+            500
+          ],
+          "source_text": "われわれが言語を獲得して以来、未来永劫「神経症者」でしかありえないという想定なくして、精神分析は成立しないのだ。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            531,
+            532
+          ],
+          "final_status": "automatic",
+          "final_target_text": "若不假定自从我们获得语言以来，永远都只可能是“神经症者”，那么精神分析就无法成立。",
+          "reference_best_target": 531,
+          "reference_best_sim": 0.95,
+          "reference_best_text": "若不假定自从我们获得语言以来，永远都只可能是“神经症者”，那么精神分析就无法成立。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            528,
+            530
+          ],
+          "source_text": "そして、この「媒介される」媒介されない」という意識の差異は、まさに想像的なものでしかないのだ。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            548,
+            549
+          ],
+          "final_status": "automatic",
+          "final_target_text": "再强调一遍，对于我们神经症者而言，“日常性现实”并不具有本质上的优越性。",
+          "reference_best_target": 547,
+          "reference_best_sim": 0.922,
+          "reference_best_text": "反过来说，“日常性现实”不过是在“未被媒介化的意识”下产生的体验，而这个“被媒介化—未被媒介化”的意识差异，只可能是想象性的事物。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            467,
+            470
+          ],
+          "source_text": "想像界は、イメージや表象の領域であり、主体の内部にあるため、ナルシシズムの領域でもある。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            511,
+            512
+          ],
+          "final_status": "automatic",
+          "final_target_text": "语言即他者，这意味着对于我们主体而言，语言系统是位于外部的、超越论的存在。",
+          "reference_best_target": 513,
+          "reference_best_sim": 0.902,
+          "reference_best_text": "想象界是形象或表象的领域。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            456,
+            458
+          ],
+          "source_text": "条件付きにせよ、これを受け入れるか否かで社会への適応度が問われる。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            501,
+            503
+          ],
+          "final_status": "automatic",
+          "final_target_text": "不过，这个虚构被最广泛地共享。",
+          "reference_best_target": 502,
+          "reference_best_sim": 0.926,
+          "reference_best_text": "尽管带有附加条件，接不接受也只关乎对社会的适应程度。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            530,
+            533
+          ],
+          "source_text": "このことは神経症",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            549,
+            550
+          ],
+          "final_status": "automatic",
+          "final_target_text": "下述临床事实也印证了这一点：对于离人症 $^{15}$ （属于神经症范围内的病理）患者而言，就连日常性现实都会被体验为一种虚构。",
+          "reference_best_target": 3199,
+          "reference_best_sim": 0.856,
+          "reference_best_text": "在这一点上，癔症发生了反转。",
+          "classification": "wrong"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            548,
+            551
+          ],
+          "source_text": "作品世界へのべったりとしたオブジェクト・レヴェルでの惚れ込みは、おたくの本質と無関係のものである。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            561,
+            563
+          ],
+          "final_status": "automatic",
+          "final_target_text": "没错，御宅不仅以掌握大量信息见长，还必须拥有这种瞬间鉴定虚构水平的能力，以及切换鉴赏层次的技术。",
+          "reference_best_target": 563,
+          "reference_best_sim": 0.904,
+          "reference_best_text": "在客体层面沉迷于作品世界，这与御宅的本质无关。",
+          "classification": "direct"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            473,
+            476
+          ],
+          "source_text": "その意味では「日常的現実」と「虚構」との間に本質的な区別はありえない。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            514,
+            516
+          ],
+          "final_status": "automatic",
+          "final_target_text": "它位于主体内部 $^{11}$ ，因而也是自恋症的领域。",
+          "reference_best_target": 520,
+          "reference_best_sim": 0.963,
+          "reference_best_text": "在此意义上，“日常性现实”和“虚构”之间不可能有本质区别。",
+          "classification": "nearby"
+        },
+        {
+          "type": "new",
+          "pivot_source": [
+            551,
+            554
+          ],
+          "source_text": "ただし近年では、もう一人の自分が自分の体や行動を外からながめているような体験を指す場合もある。",
+          "baseline_target": null,
+          "baseline_target_text": null,
+          "final_target": [
+            563,
+            565
+          ],
+          "final_status": "automatic",
+          "final_target_text": "在客体层面沉迷于作品世界，这与御宅的本质无关。",
+          "reference_best_target": 757,
+          "reference_best_sim": 0.925,
+          "reference_best_text": "不过，“离人症”近年来也用来指称如下体验，即另一个自己从外部看自己的身体和行为。",
+          "classification": "wrong"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            453,
+            454
+          ],
+          "source_text": "そう、いうまでもなく「現実」もまた虚構の一種だ。",
+          "baseline_target": [
+            545,
+            548
+          ],
+          "baseline_target_text": "只有通过“体验即被媒介化”这个意识——而非“事实”——“虚构”才得以成立。",
+          "final_target": [
+            497,
+            499
+          ],
+          "final_status": "automatic",
+          "final_target_text": "这让大家明白了，“实际体验 = 现实”这个等式根本就是错的。",
+          "reference_best_target": 499,
+          "reference_best_sim": 0.953,
+          "reference_best_text": "没错，现实当然也是一种虚构。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            457,
+            458
+          ],
+          "source_text": "その意味では最も権威ある虚構と言うるかもしれない。",
+          "baseline_target": [
+            578,
+            579
+          ],
+          "baseline_target_text": "他们不一定把作者看成绝对权威，有时可能超越单纯作为动画迷的立场，而成为鉴赏者、评论者，乃至作者本身。",
+          "final_target": [
+            501,
+            503
+          ],
+          "final_status": "automatic",
+          "final_target_text": "不过，这个虚构被最广泛地共享。",
+          "reference_best_target": 503,
+          "reference_best_sim": 0.923,
+          "reference_best_text": "在此意义上，现实或可谓最有力的虚构。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            463,
+            466
+          ],
+          "source_text": "これは人間の心的領域を位相的に区分したものであり、私なりの解釈では、それがどのように「不可能の領域」であり、体験することが不可能であるがゆえに存在するという、パラドクシカルな領域である。",
+          "baseline_target": [
+            579,
+            580
+          ],
+          "baseline_target_text": "这或许也是御宅的一个特征：接受者和发送者之间差距极小，界限极其模糊。",
+          "final_target": [
+            505,
+            508
+          ],
+          "final_status": "automatic",
+          "final_target_text": "“现实”的别名就是“不可能”，至少拉康是这样认为的。",
+          "reference_best_target": 507,
+          "reference_best_sim": 0.898,
+          "reference_best_text": "这是将人类的精神领域分成不同位相。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            549,
+            552
+          ],
+          "source_text": "S・キングの映画化された小説『ミザリー』には、こうした惚れ(15) 自己や外界の実在感、現実感が希薄になり、自分が自分ではなくなった感じ、あるいは他人や風景が膜一枚をへだてたように現実性に乏しく感じられ、このために苦痛を訴えるという精神症状",
+          "baseline_target": [
+            582,
+            583
+          ],
+          "baseline_target_text": "多重定向\n精神医学有个术语叫“双重定向”，一般认为见于统合失调症患者身上。",
+          "final_target": [
+            561,
+            563
+          ],
+          "final_status": "automatic",
+          "final_target_text": "没错，御宅不仅以掌握大量信息见长，还必须拥有这种瞬间鉴定虚构水平的能力，以及切换鉴赏层次的技术。",
+          "reference_best_target": 756,
+          "reference_best_sim": 0.883,
+          "reference_best_text": "15 “离人症”是一种精神症状，即患者感到缺乏对自己、对外界的实在感、现实感，觉得自己不再是自己，或感觉缺乏现实性，好像自己和他人、自己和景物之间隔着一层膜，因而感到痛苦，多见于神经症、抑郁症、精神分裂症等患者身上。",
+          "classification": "wrong"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            455,
+            456
+          ],
+          "source_text": "しかしそれは、もっとも広範囲に共有されている虚構である。",
+          "baseline_target": [
+            555,
+            558
+          ],
+          "baseline_target_text": "如前所述，他们把现实看成一种虚构，因此不一定会认为现实具有优越性，而这很可能被人理解为逃避现实。",
+          "final_target": [
+            499,
+            501
+          ],
+          "final_status": "automatic",
+          "final_target_text": "没错，现实当然也是一种虚构。",
+          "reference_best_target": 501,
+          "reference_best_sim": 0.95,
+          "reference_best_text": "不过，这个虚构被最广泛地共享。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            454,
+            455
+          ],
+          "source_text": "少なくとも、われわれが使う一般語としての「現実」は「このわれわれが生きる日常世界」という名の虚構を意味している。",
+          "baseline_target": [
+            548,
+            551
+          ],
+          "baseline_target_text": "再强调一遍，对于我们神经症者而言，“日常性现实”并不具有本质上的优越性。",
+          "final_target": [
+            499,
+            501
+          ],
+          "final_status": "automatic",
+          "final_target_text": "没错，现实当然也是一种虚构。",
+          "reference_best_target": 500,
+          "reference_best_sim": 0.957,
+          "reference_best_text": "至少，我们通常使用的“现实”一词，就是名为“我们生活的日常世界”的虚构。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            452,
+            453
+          ],
+          "source_text": "それでは今一度問う、現実とは何か。",
+          "baseline_target": [
+            534,
+            537
+          ],
+          "baseline_target_text": "今后，我将始终把论点聚焦于媒体与想象界的相互作用，而不假定象征界与实在界会发生任何变质和变样。",
+          "final_target": [
+            497,
+            499
+          ],
+          "final_status": "automatic",
+          "final_target_text": "这让大家明白了，“实际体验 = 现实”这个等式根本就是错的。",
+          "reference_best_target": 498,
+          "reference_best_sim": 0.938,
+          "reference_best_text": "那么，我再问一遍，现实是什么？",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            456,
+            457
+          ],
+          "source_text": "条件付きにせよ、これを受け入れるか否かで社会への適応度が問われる。",
+          "baseline_target": [
+            559,
+            562
+          ],
+          "baseline_target_text": "动画角色自不必说，从脚本、角色设计、作画导演到市场营销、评论，乃至鉴赏技巧，他们能够从虚构的方方面面发现真实，并享受其中的乐趣。",
+          "final_target": [
+            501,
+            503
+          ],
+          "final_status": "automatic",
+          "final_target_text": "不过，这个虚构被最广泛地共享。",
+          "reference_best_target": 502,
+          "reference_best_sim": 0.926,
+          "reference_best_text": "尽管带有附加条件，接不接受也只关乎对社会的适应程度。",
+          "classification": "direct"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            483,
+            486
+          ],
+          "source_text": "それ自体は興味深い\n(11) ここでの「主体の内部／外部」といった区分は、理解を容易にするための暫定的なものであり、精神分析に厳密な立場からは、こうした区分はほんらい無効なものである。",
+          "baseline_target": [
+            580,
+            581
+          ],
+          "baseline_target_text": "没错，在此意义上，若只论御宅面对虚构的方式，那么大泽的观点是正确的。",
+          "final_target": [
+            520,
+            522
+          ],
+          "final_status": "automatic",
+          "final_target_text": "在此意义上，“日常性现实”和“虚构”之间不可能有本质区别。",
+          "reference_best_target": 734,
+          "reference_best_sim": 0.918,
+          "reference_best_text": "11 为了便于理解，这里暂时设定了所谓“主体内部/外部”的区分。",
+          "classification": "wrong"
+        },
+        {
+          "type": "lost",
+          "pivot_source": [
+            487,
+            490
+          ],
+          "source_text": "本書においては想像界と象徴界の関係性が記述の中心に置かれる。",
+          "baseline_target": [
+            581,
+            582
+          ],
+          "baseline_target_text": "就御宅而言，理应属于超越性他者的作者，无限接近于内在性他者的位置。",
+          "final_target": [
+            522,
+            524
+          ],
+          "final_status": "automatic",
+          "final_target_text": "区别是否在于，象征界、实在界对“日常性现实”参与程度更高呢？",
+          "reference_best_target": 739,
+          "reference_best_sim": 0.944,
+          "reference_best_text": "本书将想象界与象征界的关系置于描述的中心。",
+          "classification": "wrong"
+        }
+      ]
+    },
+    "DE->ZH(number:1642 spared)": {
+      "removed": [],
+      "type_totals": {
+        "new": 0,
+        "target-changed": 0,
+        "lost": 0
+      },
+      "classification_counts": {},
+      "samples": []
+    }
+  }
+}
