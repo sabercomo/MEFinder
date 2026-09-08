@@ -47,6 +47,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "alignment_structure.py": 500,
             # 对齐产出的段质量门（噪声段/脚注块降级）拆为独立叶模块。
             "alignment_segment_quality.py": 200,
+            # 共有词假锚点移除（leave-one-out + 源端更优替代门）拆为独立叶模块。
+            "alignment_anchor_validation.py": 150,
             # 共用取值底座与三类文献抽取器已拆出，上限随之下调。
             "bibliographic_metadata.py": 1550,
             "bibliographic_values.py": 325,

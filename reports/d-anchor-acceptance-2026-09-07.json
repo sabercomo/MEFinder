@@ -38,7 +38,9 @@
           "reference_best_target": 558,
           "reference_best_sim": 0.911,
           "reference_best_text": "毫无疑问，御宅甚至能够从虚构的虚构性中发现多维度的真实。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH558 逐字对应：御宅从虚构的虚构性中发现多维度真实"
         },
         {
           "type": "new",
@@ -58,7 +60,9 @@
           "reference_best_target": 575,
           "reference_best_sim": 0.948,
           "reference_best_text": "当然，很多人也有这种反应。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH575 逐字：当然很多人也有这种反应"
         },
         {
           "type": "new",
@@ -78,7 +82,9 @@
           "reference_best_target": 531,
           "reference_best_sim": 0.95,
           "reference_best_text": "若不假定自从我们获得语言以来，永远都只可能是“神经症者”，那么精神分析就无法成立。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH531 逐字：获得语言以来永远是神经症者→精神分析才成立"
         },
         {
           "type": "new",
@@ -98,7 +104,9 @@
           "reference_best_target": 547,
           "reference_best_sim": 0.922,
           "reference_best_text": "反过来说，“日常性现实”不过是在“未被媒介化的意识”下产生的体验，而这个“被媒介化—未被媒介化”的意识差异，只可能是想象性的事物。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH547 对应：被媒介/未被媒介的意识差异只是想象的"
         },
         {
           "type": "new",
@@ -118,7 +126,9 @@
           "reference_best_target": 513,
           "reference_best_sim": 0.902,
           "reference_best_text": "想象界是形象或表象的领域。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "nearby",
+          "reading_basis": "linked ZH511-512 是象征界/语言(主体外部)；JA467 讲想象界(主体内部/自恋)，正确在 ZH513-514，差约2-3段"
         },
         {
           "type": "new",
@@ -138,7 +148,9 @@
           "reference_best_target": 502,
           "reference_best_sim": 0.926,
           "reference_best_text": "尽管带有附加条件，接不接受也只关乎对社会的适应程度。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH502 逐字：尽管带附加条件，接不接受只关乎对社会的适应程度"
         },
         {
           "type": "new",
@@ -158,7 +170,9 @@
           "reference_best_target": 3199,
           "reference_best_sim": 0.856,
           "reference_best_text": "在这一点上，癔症发生了反转。",
-          "classification": "wrong"
+          "machine_classification": "wrong",
+          "reading_review": "nearby",
+          "reading_basis": "源为残句『このことは神経症』；linked ZH549 在神经症/离人临床讨论内，同段可寻"
         },
         {
           "type": "new",
@@ -178,7 +192,9 @@
           "reference_best_target": 563,
           "reference_best_sim": 0.904,
           "reference_best_text": "在客体层面沉迷于作品世界，这与御宅的本质无关。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "nearby",
+          "reading_basis": "正确 ZH563(客体层面沉迷与御宅本质无关)；linked ZH561-562 差约1段"
         },
         {
           "type": "new",
@@ -198,7 +214,9 @@
           "reference_best_target": 520,
           "reference_best_sim": 0.963,
           "reference_best_text": "在此意义上，“日常性现实”和“虚构”之间不可能有本质区别。",
-          "classification": "nearby"
+          "machine_classification": "nearby",
+          "reading_review": "nearby",
+          "reading_basis": "正确 ZH520(日常现实与虚构无本质区别)；linked ZH514-515 差约6段，同节可寻"
         },
         {
           "type": "new",
@@ -218,7 +236,9 @@
           "reference_best_target": 757,
           "reference_best_sim": 0.925,
           "reference_best_text": "不过，“离人症”近年来也用来指称如下体验，即另一个自己从外部看自己的身体和行为。",
-          "classification": "wrong"
+          "machine_classification": "wrong",
+          "reading_review": "disputed",
+          "reading_basis": "JA 讲离人(从外部看自己的身体)；linked ZH563-564 是沉迷/Misery，非离人；离人内容约在 ZH565+，差约2-4段——完整上下文见报告"
         },
         {
           "type": "lost",
@@ -241,7 +261,9 @@
           "reference_best_target": 499,
           "reference_best_sim": 0.953,
           "reference_best_text": "没错，现实当然也是一种虚构。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH499(现实也是一种虚构)在 linked 497-499 邻内；旧 ZH545 错约50段"
         },
         {
           "type": "lost",
@@ -264,7 +286,9 @@
           "reference_best_target": 503,
           "reference_best_sim": 0.923,
           "reference_best_text": "在此意义上，现实或可谓最有力的虚构。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH503(最有力的虚构)邻 linked 501-502；旧 ZH578 错约75段"
         },
         {
           "type": "lost",
@@ -287,7 +311,9 @@
           "reference_best_target": 507,
           "reference_best_sim": 0.898,
           "reference_best_text": "这是将人类的精神领域分成不同位相。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH505-507(不可能领域/位相区分/悖论)对应；旧 ZH579 错"
         },
         {
           "type": "lost",
@@ -310,7 +336,9 @@
           "reference_best_target": 756,
           "reference_best_sim": 0.883,
           "reference_best_text": "15 “离人症”是一种精神症状，即患者感到缺乏对自己、对外界的实在感、现实感，觉得自己不再是自己，或感觉缺乏现实性，好像自己和他人、自己和景物之间隔着一层膜，因而感到痛苦，多见于神经症、抑郁症、精神分裂症等患者身上。",
-          "classification": "wrong"
+          "machine_classification": "wrong",
+          "reading_review": "disputed",
+          "reading_basis": "Misery 真配在 ZH564；linked ZH561-562 差约2-3段；旧 ZH582 错——完整上下文见报告"
         },
         {
           "type": "lost",
@@ -333,7 +361,9 @@
           "reference_best_target": 501,
           "reference_best_sim": 0.95,
           "reference_best_text": "不过，这个虚构被最广泛地共享。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH501(最广泛共享的虚构)邻 linked 499-500；旧 ZH555 错"
         },
         {
           "type": "lost",
@@ -356,7 +386,9 @@
           "reference_best_target": 500,
           "reference_best_sim": 0.957,
           "reference_best_text": "至少，我们通常使用的“现实”一词，就是名为“我们生活的日常世界”的虚构。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH500 逐字：一般语『现实』=名为日常世界的虚构；旧 ZH548 错"
         },
         {
           "type": "lost",
@@ -379,7 +411,9 @@
           "reference_best_target": 498,
           "reference_best_sim": 0.938,
           "reference_best_text": "那么，我再问一遍，现实是什么？",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH498 逐字：那么我再问一遍，现实是什么；旧 ZH534 错"
         },
         {
           "type": "lost",
@@ -402,7 +436,9 @@
           "reference_best_target": 502,
           "reference_best_sim": 0.926,
           "reference_best_text": "尽管带有附加条件，接不接受也只关乎对社会的适应程度。",
-          "classification": "direct"
+          "machine_classification": "direct",
+          "reading_review": "direct",
+          "reading_basis": "ZH502 逐字：尽管带附加条件，接不接受只关乎对社会的适应程度"
         },
         {
           "type": "lost",
@@ -425,7 +461,9 @@
           "reference_best_target": 734,
           "reference_best_sim": 0.918,
           "reference_best_text": "11 为了便于理解，这里暂时设定了所谓“主体内部/外部”的区分。",
-          "classification": "wrong"
+          "machine_classification": "wrong",
+          "reading_review": "uncertain",
+          "reading_basis": "脚注(11)主体内外区分暂定；linked ZH520-521 在相关/脚注区，脚注跨版排序难定——完整上下文见报告"
         },
         {
           "type": "lost",
@@ -448,9 +486,21 @@
           "reference_best_target": 739,
           "reference_best_sim": 0.944,
           "reference_best_text": "本书将想象界与象征界的关系置于描述的中心。",
-          "classification": "wrong"
+          "machine_classification": "wrong",
+          "reading_review": "uncertain",
+          "reading_basis": "『本书以想象界-象征界关系为中心』；linked ZH522-523 在象征界讨论，非精确对应——完整上下文见报告"
         }
-      ]
+      ],
+      "reading_summary": {
+        "total": 20,
+        "counts": {
+          "direct": 12,
+          "nearby": 4,
+          "disputed": 2,
+          "uncertain": 2
+        },
+        "note": "reading_review=人工阅读复核(粗定位);machine_classification=机器初判(基于参照最近邻,会因远处重复词误判);nearby≠精确正确"
+      }
     },
     "DE->ZH(number:1642 spared)": {
       "removed": [],

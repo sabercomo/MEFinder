@@ -67,13 +67,15 @@ def _leave_one_out_displacement(anchors, i, sp, tp, sg, tg, sl, tl, low):
 BETTER_ALT_MARGIN = 0.05  # a false friend's source has a clearly better target than the anchor
 
 
-def _is_false_friend(a, source_prefix, target_prefix, tvec_unit):
-    """True iff the anchor's source has a target clearly better than the anchor itself.
+def _source_has_better_alternative(a, source_prefix, target_prefix, tvec_unit):
+    """True iff the anchor's SOURCE segment has a clearly better target than the anchor.
 
-    A correct anchor is (near) the mutual-best match for its source; a false friend
-    (shared surface token pairing different sentences) is not.  This spares good
-    anchors that a hard/noisy neighbourhood inflates the displacement of (e.g. the
-    'died 1642' anchor), which displacement alone wrongly flags.
+    Source-side better-alternative gate (not a bidirectional mutual-nearest test):
+    a false friend pairs a shared surface token in two different sentences, so its
+    source's best target is elsewhere; a correct anchor is its source's own best
+    target.  This spares correct anchors whose leave-one-out displacement is inflated
+    by a hard/noisy neighbourhood (e.g. the 'died 1642' Galileo-footnote anchor),
+    which displacement alone wrongly flags.
     """
     svec = source_prefix[a.source_index + 1] - source_prefix[a.source_index]
     n = float(np.linalg.norm(svec))
@@ -105,7 +107,7 @@ def enhanced_validate(anchors, source_prefix, target_prefix, low_threshold):
             if not a.key.startswith(_CONTEXT_GATED_ANCHOR_PREFIXES):
                 continue
             d = _leave_one_out_displacement(kept, i, source_prefix, target_prefix, sg, tg, sl, tl, low_threshold)
-            if d > worst_d and _is_false_friend(a, source_prefix, target_prefix, tvec_unit):
+            if d > worst_d and _source_has_better_alternative(a, source_prefix, target_prefix, tvec_unit):
                 worst_i, worst_d = i, d
         if worst_i is None:
             break

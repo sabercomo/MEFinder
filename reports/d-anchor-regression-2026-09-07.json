@@ -1,36 +1,12 @@
 {
+  "rule": "iterative worst-first leave-one-out soft-anchor validation + source-better-alternative gate (margin 0.05)",
   "threshold": 50,
-  "rule": "iterative worst-first leave-one-out soft-anchor validation (real body-relative lengths)",
   "gold_total": 61,
   "gold_changed": 0,
   "pairs_with_removals": [
     {
-      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
-      "removed_anchors": [
-        [
-          2664,
-          4083,
-          "number:1642",
-          55
-        ]
-      ],
-      "accepted_baseline": 1998,
-      "accepted_enhanced": 2001,
-      "changed_links": 105,
-      "golds": [
-        {
-          "n": 56,
-          "changed": false
-        },
-        {
-          "n": 74,
-          "changed": false
-        }
-      ]
-    },
-    {
       "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
-      "removed_anchors": [
+      "removed": [
         [
           331,
           376,
@@ -38,11 +14,29 @@
           77
         ]
       ],
-      "accepted_baseline": 1773,
-      "accepted_enhanced": 1811,
-      "changed_links": 159,
-      "golds": []
+      "accepted": [
+        1773,
+        1811
+      ]
     }
+  ],
+  "overhead_seconds": [
+    2.12,
+    0.81,
+    -0.25,
+    -0.06,
+    0.81,
+    0.33,
+    1.45,
+    0.56,
+    2.19,
+    2.45,
+    0.05,
+    0.44,
+    0.69,
+    -0.25,
+    1.44,
+    0.72
   ],
   "all_pairs": [
     {
@@ -51,6 +45,12 @@
       "accepted_baseline": 1412,
       "accepted_enhanced": 1412,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.55,
+        "enhanced": 6.67,
+        "leave_one_out_overhead": 2.12
+      },
       "golds": [
         {
           "n": 72,
@@ -64,6 +64,12 @@
       "accepted_baseline": 852,
       "accepted_enhanced": 852,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 3.3,
+        "enhanced": 4.11,
+        "leave_one_out_overhead": 0.81
+      },
       "golds": [
         {
           "n": 30,
@@ -89,6 +95,12 @@
       "accepted_baseline": 1286,
       "accepted_enhanced": 1286,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 5.73,
+        "enhanced": 5.49,
+        "leave_one_out_overhead": -0.25
+      },
       "golds": [
         {
           "n": 25,
@@ -110,6 +122,12 @@
       "accepted_baseline": 2312,
       "accepted_enhanced": 2312,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 6.03,
+        "enhanced": 5.97,
+        "leave_one_out_overhead": -0.06
+      },
       "golds": [
         {
           "n": 14,
@@ -155,6 +173,12 @@
       "accepted_baseline": 2217,
       "accepted_enhanced": 2217,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 7.19,
+        "enhanced": 8.0,
+        "leave_one_out_overhead": 0.81
+      },
       "golds": [
         {
           "n": 8,
@@ -188,6 +212,12 @@
       "accepted_baseline": 1998,
       "accepted_enhanced": 1998,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 5.28,
+        "enhanced": 5.61,
+        "leave_one_out_overhead": 0.33
+      },
       "golds": [
         {
           "n": 63,
@@ -205,6 +235,12 @@
       "accepted_baseline": 1387,
       "accepted_enhanced": 1387,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.67,
+        "enhanced": 6.12,
+        "leave_one_out_overhead": 1.45
+      },
       "golds": [
         {
           "n": 3,
@@ -238,6 +274,12 @@
       "accepted_baseline": 1342,
       "accepted_enhanced": 1342,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.72,
+        "enhanced": 5.28,
+        "leave_one_out_overhead": 0.56
+      },
       "golds": [
         {
           "n": 85,
@@ -251,6 +293,12 @@
       "accepted_baseline": 1941,
       "accepted_enhanced": 1941,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.06,
+        "enhanced": 6.25,
+        "leave_one_out_overhead": 2.19
+      },
       "golds": [
         {
           "n": 0,
@@ -276,6 +324,12 @@
       "accepted_baseline": 2211,
       "accepted_enhanced": 2211,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 5.58,
+        "enhanced": 8.03,
+        "leave_one_out_overhead": 2.45
+      },
       "golds": [
         {
           "n": 7,
@@ -325,6 +379,12 @@
       "accepted_baseline": 2009,
       "accepted_enhanced": 2009,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 6.03,
+        "enhanced": 6.08,
+        "leave_one_out_overhead": 0.05
+      },
       "golds": [
         {
           "n": 37,
@@ -346,17 +406,16 @@
     },
     {
       "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
-      "removed_anchors": [
-        [
-          2664,
-          4083,
-          "number:1642",
-          55
-        ]
-      ],
+      "removed_anchors": [],
       "accepted_baseline": 1998,
-      "accepted_enhanced": 2001,
-      "changed_links": 105,
+      "accepted_enhanced": 1998,
+      "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.8,
+        "enhanced": 5.24,
+        "leave_one_out_overhead": 0.44
+      },
       "golds": [
         {
           "n": 56,
@@ -374,6 +433,12 @@
       "accepted_baseline": 1897,
       "accepted_enhanced": 1897,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 6.92,
+        "enhanced": 7.61,
+        "leave_one_out_overhead": 0.69
+      },
       "golds": [
         {
           "n": 4,
@@ -398,6 +463,12 @@
       "accepted_baseline": 1773,
       "accepted_enhanced": 1811,
       "changed_links": 159,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 6.67,
+        "enhanced": 6.42,
+        "leave_one_out_overhead": -0.25
+      },
       "golds": []
     },
     {
@@ -406,6 +477,12 @@
       "accepted_baseline": 757,
       "accepted_enhanced": 757,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 1.83,
+        "enhanced": 3.26,
+        "leave_one_out_overhead": 1.44
+      },
       "golds": [
         {
           "n": 71,
@@ -423,6 +500,12 @@
       "accepted_baseline": 1082,
       "accepted_enhanced": 1082,
       "changed_links": 0,
+      "threshold": 50,
+      "seconds": {
+        "baseline": 4.03,
+        "enhanced": 4.75,
+        "leave_one_out_overhead": 0.72
+      },
       "golds": [
         {
           "n": 21,

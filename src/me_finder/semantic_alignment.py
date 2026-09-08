@@ -28,6 +28,7 @@ from .alignment_anchors import (
     _CONTEXT_GATED_ANCHOR_PREFIXES,
     _MAX_ANCHOR_CORRIDOR_RATIO,
 )
+from .alignment_anchor_validation import drop_false_friend_anchors
 from .alignment_segment_quality import (
     demote_noise_carried_links,
     demote_note_block_links,
@@ -58,6 +59,12 @@ _MAX_PARAGRAPH_NUMBER = 9999
 _MIN_STRUCTURAL_NOTE_CHAIN = 3
 _MAX_INLINE_NOTE_WINDOW = 24
 _SEARCH_BAND = 96
+# Shared-token false-friend soft anchors (issue #18): drop a context-gated anchor
+# whose leave-one-out re-placement jumps this many segments AND whose source has a
+# clearly better target than the anchor (so a correct anchor merely sitting in a
+# hard neighbourhood is spared).  See reports/d-anchor-acceptance-2026-09-07.md.
+_ANCHOR_DISPLACEMENT_LIMIT = 50
+_ANCHOR_BETTER_ALT_MARGIN = 0.05
 _TRANSITIONS: Tuple[Tuple[int, int, float], ...] = (
     (1, 1, 0.0),
     (1, 2, 0.15),
@@ -976,6 +983,10 @@ def _validate_soft_anchors(
     source_prefix: np.ndarray,
     target_prefix: np.ndarray,
     low_threshold: float,
+    source_lengths: Sequence[int] = (),
+    target_lengths: Sequence[int] = (),
+    source_groups: Dict[int, np.ndarray] | None = None,
+    target_groups: Dict[int, np.ndarray] | None = None,
 ) -> List[HeadingAnchor]:
     """Refuse surface-matched anchors that fail semantic or corridor checks.
 
@@ -1017,6 +1028,15 @@ def _validate_soft_anchors(
                     continue
         validated.append(anchor)
         previous = anchor
+    if source_groups is not None and target_groups is not None and len(source_lengths):
+        validated = drop_false_friend_anchors(
+            validated, source_prefix, target_prefix, source_lengths,
+            target_lengths, source_groups, target_groups, low_threshold,
+            align_partition=_align_partition,
+            context_prefixes=_CONTEXT_GATED_ANCHOR_PREFIXES,
+            displacement_limit=_ANCHOR_DISPLACEMENT_LIMIT,
+            better_alt_margin=_ANCHOR_BETTER_ALT_MARGIN,
+        )
     return validated
 
 
@@ -1130,7 +1150,8 @@ def _align_monotonic_sequences(
             key=lambda item: (item.source_index, item.target_index, item.key),
         )
     anchors = _validate_soft_anchors(
-        anchors, source_prefix, target_prefix, thresholds.low
+        anchors, source_prefix, target_prefix, thresholds.low,
+        source_lengths, target_lengths, source_groups, target_groups,
     )
     links: List[SemanticLink] = []
     source_cursor = 0
