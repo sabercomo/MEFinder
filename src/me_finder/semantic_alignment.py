@@ -20,6 +20,11 @@ from .embedding_models import (
     EmbeddingModelConfig,
     embedding_model_config,
 )
+from .embedding_runtime import (
+    SemanticAlignmentCancelled,
+    embedding_cancel_requested,
+    embedding_thread_count,
+)
 
 from .alignment_anchors import (
     AnchorExtractorRegistry,
@@ -150,7 +155,7 @@ class FastEmbedEmbeddingProvider:
         embedding = TextEmbedding(
             model_name=self.model.hf_name,
             cache_dir=str(cache_dir),
-            threads=max(1, min(8, os.cpu_count() or 1)),
+            threads=embedding_thread_count(),
         )
         method = (
             embedding.query_embed
@@ -162,9 +167,20 @@ class FastEmbedEmbeddingProvider:
             if self.model.prefix_mode == "query"
             else list(texts)
         )
-        vectors = np.asarray(
-            # E5's large ONNX activations at batch 64 can exhaust desktop RAM.
-            list(method(prepared_texts, batch_size=4 if self.model.prefix_mode == "query" else 64)), dtype=np.float32
+        # E5's large ONNX activations at batch 64 can exhaust desktop RAM.
+        batch_size = 4 if self.model.prefix_mode == "query" else 64
+        collected: List[np.ndarray] = []
+        # FastEmbed yields per document; the generator hands control back to
+        # Python between ONNX batches, which is the only point a cooperative
+        # cancel can interrupt the otherwise all-native inference.
+        for vector in method(prepared_texts, batch_size=batch_size):
+            if embedding_cancel_requested():
+                raise SemanticAlignmentCancelled("已取消译本对齐。")
+            collected.append(np.asarray(vector, dtype=np.float32))
+        vectors = (
+            np.stack(collected, axis=0)
+            if collected
+            else np.empty((0, 0), dtype=np.float32)
         )
         _write_model_receipt(cache_dir, self.model)
         return vectors

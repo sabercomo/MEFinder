@@ -106,6 +106,7 @@
     "/api/scan-directories/choose",
     "/api/search",
     "/api/text-alignment/models",
+    "/api/text-alignments/cancel",
     "/api/text-alignments/generate",
     "/api/text-alignments/locate",
     "/api/update/check",

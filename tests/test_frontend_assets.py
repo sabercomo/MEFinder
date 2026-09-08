@@ -443,10 +443,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3：文献库新增「按页导出 Markdown」对话框（范围输入 + 页码模式），装配指纹随之更新。
     # 0.5.3 UI 修复：文献检索设置的繁简选项补齐图标/勾选槽（修一字一行塌缩）；
     #   按页导出对话框改分段控件（原书/物理页码）并统一间距。
+    # 0.5.3 对齐可取消：对齐/重新对齐按钮在运行中翻转为「取消对齐」（.is-cancel）。
     BASELINE_SHA256 = (
-        "8b389e92a331bcde1a3e7f3be302d735a1320b67aadec2630d7becbb12bb8736"
+        "47ba834ea209effcb2bb38a3380b3efc23231eb88c165a7dd5dcf2394aaadbc6"
     )
-    BASELINE_BYTES = 1071641
+    BASELINE_BYTES = 1073375
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

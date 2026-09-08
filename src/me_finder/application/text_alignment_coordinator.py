@@ -7,6 +7,10 @@ from contextlib import contextmanager
 
 from ..embedding_models import resolve_alignment_thresholds
 from ..preferences import read_preferences, resolve_preferences_path
+from ..embedding_runtime import (
+    SemanticAlignmentCancelled,
+    begin_embedding_run,
+)
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
 
 
@@ -16,6 +20,10 @@ class TextAlignmentRejected(ValueError):
 
 class TextAlignmentFailed(RuntimeError):
     """Alignment computation or index publication failed."""
+
+
+class TextAlignmentCancelled(Exception):
+    """The in-flight alignment was cancelled by the user."""
 
 
 class TextAlignmentCoordinator:
@@ -39,6 +47,7 @@ class TextAlignmentCoordinator:
         thresholds = resolve_alignment_thresholds(
             model_id, preferences["alignment_thresholds"]
         )
+        begin_embedding_run()
         with self._index_runtime.mutation():
             try:
                 with self._durable_operations.operation():
@@ -58,6 +67,8 @@ class TextAlignmentCoordinator:
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
                     )
+            except SemanticAlignmentCancelled as exc:
+                raise TextAlignmentCancelled(str(exc)) from exc
             except InvalidAlignmentRequest as exc:
                 raise TextAlignmentRejected(str(exc)) from exc
             except (OSError, sqlite3.Error, RuntimeError) as exc:

@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from .application.text_alignment_coordinator import (
+    TextAlignmentCancelled,
     TextAlignmentCoordinator,
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
+from .embedding_runtime import request_embedding_cancel
 from .text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
@@ -60,6 +62,8 @@ class TextAlignmentController:
                 payload["target_source_file_id"],
                 force=payload.get("force", False),
             )
+        except TextAlignmentCancelled:
+            return 200, {"ok": False, "cancelled": True}
         except TextAlignmentRejected as exc:
             return 400, {"error": str(exc)}
         except TextAlignmentFailed:
@@ -70,6 +74,12 @@ class TextAlignmentController:
             "result": result,
             "event": "library_changed",
         }
+
+    def cancel(self, payload: object) -> AlignmentResponse:
+        """Ask an in-flight alignment to stop at the next batch boundary."""
+
+        request_embedding_cancel()
+        return 200, {"ok": True, "cancelled": True}
 
     def targets(
         self, params: Mapping[str, Sequence[object]]

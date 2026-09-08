@@ -703,6 +703,9 @@
 .group-manage-foot { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--divider); background: var(--dialog-bg); }
 .group-manage-foot .action-btn { min-height: 44px; white-space: nowrap; }
 .group-realign-all { margin-right: auto; }
+/* Alignment buttons flip to a cancel affordance while a run is in flight. */
+.action-btn.is-cancel { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+.action-btn.is-cancel:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
 .grp-input { height: 44px; padding: 0 12px; border: 1px solid var(--border-default); outline: 2px solid transparent; outline-offset: 1px; border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 13px; }
 .grp-input:focus-visible { border-color: var(--accent); outline-color: var(--accent); }
 .grp-input:active { border-color: var(--accent); }

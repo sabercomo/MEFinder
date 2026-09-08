@@ -1270,7 +1270,30 @@
     });
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
-    return data.result || {};
+    if (data.cancelled) return {cancelled: true};
+    return {result: data.result || {}};
+  }
+
+  function requestTextAlignmentCancel() {
+    return fetch('/api/text-alignments/cancel', {method: 'POST'}).catch(function() {});
+  }
+
+  function armAlignmentCancelButton(button) {
+    if (!button) return function() {};
+    var previousOnclick = button.onclick;
+    button.disabled = false;
+    button.textContent = '取消对齐';
+    if (button.classList) button.classList.add('is-cancel');
+    button.onclick = function(event) {
+      if (event && event.preventDefault) event.preventDefault();
+      button.disabled = true;
+      button.textContent = '正在取消…';
+      requestTextAlignmentCancel();
+    };
+    return function disarm() {
+      button.onclick = previousOnclick || null;
+      if (button.classList) button.classList.remove('is-cancel');
+    };
   }
 
   async function realignAllTextAlignmentsAction(button) {
@@ -1284,27 +1307,33 @@
       {title: '重新对齐已有译本？', confirmText: '开始重新对齐'}
     )) return;
     button.disabled = true;
+    var disarmCancel = armAlignmentCancelButton(button);
     var completed = 0;
     var failures = [];
+    var cancelled = false;
     for (var index = 0; index < pairs.length; index += 1) {
       var pair = pairs[index];
-      button.textContent = '正在重新对齐 ' + (index + 1) + '/' + pairs.length;
+      button.textContent = '取消对齐（' + (index + 1) + '/' + pairs.length + '）';
       try {
-        await requestTextAlignment(
+        var response = await requestTextAlignment(
           pair.document_group_id,
           pair.pivot_source_file_id,
           pair.target_source_file_id,
           true
         );
+        if (response.cancelled) { cancelled = true; break; }
         completed += 1;
       } catch (error) {
         failures.push(error.message || '自动对齐失败');
       }
     }
+    disarmCancel();
     await loadDocumentGroups();
     renderGroupScopeSelector();
     renderDocumentGroupManager();
-    if (failures.length) {
+    if (cancelled) {
+      showToast('已取消重新对齐，已完成 ' + completed + '/' + pairs.length + ' 组', 'warning');
+    } else if (failures.length) {
       showToast(
         '重新对齐完成：' + completed + '/' + pairs.length + ' 组成功，'
           + failures.length + ' 组失败。' + failures[0],
@@ -1325,15 +1354,17 @@
       showToast('请选择两个不同版本', 'warning');
       return;
     }
+    var disarmCancel = function() {};
     if (button) {
       button.disabled = true;
       button.textContent = '对齐中…';
+      disarmCancel = armAlignmentCancelButton(button);
     }
     try {
       var existingAlignment = documentGroupAlignmentForPair(
         group, pivotSourceId, targetSourceId
       );
-      var result = await requestTextAlignment(
+      var response = await requestTextAlignment(
         groupId,
         existingAlignment ? existingAlignment.pivot_source_file_id : pivotSourceId,
         existingAlignment ? existingAlignment.target_source_file_id : targetSourceId,
@@ -1342,6 +1373,11 @@
       await loadDocumentGroups();
       renderGroupScopeSelector();
       renderDocumentGroupManager();
+      if (response.cancelled) {
+        showToast('已取消译本对齐', 'warning');
+        return;
+      }
+      var result = response.result || {};
       var rejected = Number(result.rejected_link_count || 0);
       var unmatched = Number(result.unmatched_link_count || 0);
       showToast(
@@ -1353,6 +1389,8 @@
     } catch (e) {
       renderDocumentGroupManager();
       showToast(e.message || '自动对齐失败', 'danger');
+    } finally {
+      disarmCancel();
     }
   }
 

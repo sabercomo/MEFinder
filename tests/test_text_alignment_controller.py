@@ -5,9 +5,11 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.application.text_alignment_coordinator import (
+    TextAlignmentCancelled,
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
+from src.me_finder import embedding_runtime
 from src.me_finder.text_alignment import AlignmentNotFound
 from src.me_finder.text_alignment_controller import TextAlignmentController
 
@@ -123,6 +125,26 @@ class TextAlignmentControllerTests(unittest.TestCase):
         self.ready = False
         self.assertEqual(self.controller.targets({"source_id": ["pdf-de"]})[0], 503)
         self.assertEqual(self.controller.locate(self._locate_payload())[0], 503)
+
+    def test_cancelled_alignment_is_reported_not_failed(self) -> None:
+        self.coordinator.error = TextAlignmentCancelled("stopped")
+        status, body = self.controller.generate(self._generate_payload())
+        self.assertEqual(status, 200)
+        self.assertTrue(body["cancelled"])
+        self.assertFalse(body["ok"])
+        # A cancellation is a user action, not an error to log.
+        self.assertEqual(self.logged, [])
+
+    def test_cancel_endpoint_signals_the_embedding_run(self) -> None:
+        embedding_runtime.begin_embedding_run()
+        self.assertFalse(embedding_runtime.embedding_cancel_requested())
+        try:
+            status, body = self.controller.cancel(None)
+            self.assertEqual(status, 200)
+            self.assertTrue(body["cancelled"])
+            self.assertTrue(embedding_runtime.embedding_cancel_requested())
+        finally:
+            embedding_runtime.begin_embedding_run()
 
 
 if __name__ == "__main__":

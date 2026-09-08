@@ -195,6 +195,7 @@ def assemble_reader_routes(
     post_routes = {
         "/api/document/citation": structured_reader_controller.citation,
         "/api/text-alignments/generate": text_alignment_controller.generate,
+        "/api/text-alignments/cancel": text_alignment_controller.cancel,
         "/api/text-alignments/locate": text_alignment_controller.locate,
     }
     return get_routes, post_routes

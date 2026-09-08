@@ -62,6 +62,7 @@ POST_API_ROUTES = frozenset(
         "/api/document-groups/version-label",
         "/api/document/citation",
         "/api/text-alignments/generate",
+        "/api/text-alignments/cancel",
         "/api/text-alignments/locate",
         "/api/text-alignment/models",
         "/api/document/export",
