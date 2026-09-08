@@ -270,6 +270,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .document-export-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
 .pdf-open-option.selected,
 .document-export-option.selected { background: var(--surface-selected); }
+.pdf-open-option.is-disabled { cursor: default; opacity: .6; }
+.pdf-open-option.is-disabled:hover { background: var(--surface-primary); }
 .pdf-open-option > input,
 .document-export-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pdf-open-option-icon,

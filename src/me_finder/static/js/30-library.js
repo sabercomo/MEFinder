@@ -1778,15 +1778,23 @@
   var markdownPageBusy = false;
   var markdownPagePreviousFocus = null;
 
+  function markdownPageMode() {
+    var physical = document.getElementById('md-page-mode-physical');
+    return physical && physical.checked ? 'physical' : 'printed';
+  }
+
   function openMarkdownPageExport(sourceId) {
     if (markdownPageBusy) return;
     markdownPageSource = sourceId;
     markdownPagePreviousFocus = document.activeElement;
     var source = libraryStore.sources.find(function(s) { return s.source_file_id === sourceId; });
     var epub = source && sourceFormatLabel(source) === 'EPUB';
-    var mode = document.getElementById('md-page-mode');
-    mode.value = 'printed';
-    mode.querySelector('option[value="physical"]').disabled = !!epub;
+    var printed = document.getElementById('md-page-mode-printed');
+    if (printed) printed.checked = true;
+    var physical = document.getElementById('md-page-mode-physical');
+    if (physical) { physical.checked = false; physical.disabled = !!epub; }
+    var physicalItem = document.getElementById('md-page-mode-physical-item');
+    if (physicalItem) physicalItem.classList.toggle('is-disabled', !!epub);
     document.getElementById('md-page-input').value = '';
     document.getElementById('md-page-error').textContent = '';
     document.getElementById('md-page-note').textContent = epub
@@ -1809,7 +1817,7 @@
     var pages = document.getElementById('md-page-input').value.trim();
     var errorNode = document.getElementById('md-page-error');
     if (!pages) { errorNode.textContent = '请填写要导出的页码。'; return; }
-    var selection = {mode: document.getElementById('md-page-mode').value, pages: pages};
+    var selection = {mode: markdownPageMode(), pages: pages};
     markdownPageBusy = true;
     var controls = document.getElementById('md-page-fields');
     controls.disabled = true;

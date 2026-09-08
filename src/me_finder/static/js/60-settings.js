@@ -1040,6 +1040,12 @@
       input.checked = settingsStore.scriptFoldingEnabled;
       input.disabled = settingsStore.scriptFoldingSaving || !settingsStore.scriptFoldingAvailable;
     }
+    var option = document.getElementById('script-folding-option');
+    if (option) {
+      option.classList.toggle('selected', settingsStore.scriptFoldingEnabled);
+      option.classList.toggle('is-disabled', !settingsStore.scriptFoldingAvailable);
+      option.setAttribute('aria-checked', settingsStore.scriptFoldingEnabled ? 'true' : 'false');
+    }
     var status = document.getElementById('script-folding-status');
     if (status) status.textContent = settingsStore.scriptFoldingAvailable
       ? '用简体或繁体关键词检索，结果、页码和导出保留原文。'

@@ -441,10 +441,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 译本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     # 0.5.3：作品组初始化不再默认自动展开第一个作品组；toggleGroupExpand 加入 module.exports 供白盒测试。
     # 0.5.3：文献库新增「按页导出 Markdown」对话框（范围输入 + 页码模式），装配指纹随之更新。
+    # 0.5.3 UI 修复：文献检索设置的繁简选项补齐图标/勾选槽（修一字一行塌缩）；
+    #   按页导出对话框改分段控件（原书/物理页码）并统一间距。
     BASELINE_SHA256 = (
-        "94fbfe6509e437dd922c7532457d8e3dca541e504318fce781dbdfde56e1a06b"
+        "8b389e92a331bcde1a3e7f3be302d735a1320b67aadec2630d7becbb12bb8736"
     )
-    BASELINE_BYTES = 1067196
+    BASELINE_BYTES = 1071641
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

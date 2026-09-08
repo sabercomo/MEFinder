@@ -546,7 +546,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <section class="settings-section" id="script-search-settings" role="tabpanel">
             <div class="settings-section-head"><span class="settings-section-heading-copy"><span class="settings-section-title">文献检索</span></span></div>
             <div class="settings-collapse-body" id="script-search-body">
-              <label class="pdf-open-option"><input type="checkbox" id="script-folding-enabled" checked disabled onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status"><span class="pdf-open-option-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span></label>
+              <div class="pdf-open-options" id="script-folding-options" role="group" aria-label="繁简统一检索">
+                <label class="pdf-open-option" id="script-folding-option">
+                  <input type="checkbox" id="script-folding-enabled" checked disabled onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
+                  <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h9M8.5 5v2.5c0 3.4-1.8 6-4.5 7.2"/><path d="M6 10.5c1 2 2.8 3.4 5 4.2"/><path d="m13 20 3.5-8 3.5 8M14.4 17h4.2"/></svg></span>
+                  <span class="pdf-open-option-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
+                  <span class="pdf-open-option-check" aria-hidden="true"></span>
+                </label>
+              </div>
             </div>
           </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
@@ -1097,18 +1104,33 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
 
 
 <dialog id="markdown-page-dialog" class="markdown-page-dialog" aria-labelledby="md-page-title" aria-describedby="md-page-note" oncancel="MEFinder.library.pageExport.cancel(event)">
-  <form onsubmit="MEFinder.library.pageExport.submit(event)">
-    <h2 id="md-page-title">按页导出 Markdown</h2>
-    <p id="md-page-note"></p>
-    <fieldset id="md-page-fields">
-      <label for="md-page-mode">页码类型</label>
-      <select id="md-page-mode"><option value="printed">原书页码</option><option value="physical">PDF 物理页码（从 1 开始）</option></select>
-      <label for="md-page-input">要导出的页码</label>
-      <input id="md-page-input" type="text" maxlength="512" required placeholder="例如：12-18,25" aria-describedby="md-page-help md-page-error">
-      <p id="md-page-help">用逗号分隔页码，数字范围用短横线；序言页可逐个填写原书标签，如 iv,v。</p>
+  <form class="md-page-form" onsubmit="MEFinder.library.pageExport.submit(event)">
+    <header class="md-page-head">
+      <h2 id="md-page-title">按页导出 Markdown</h2>
+      <p id="md-page-note" class="md-page-note"></p>
+    </header>
+    <fieldset id="md-page-fields" class="md-page-fields">
+      <div class="md-page-field">
+        <span class="md-page-field-label">页码类型</span>
+        <div class="md-page-segment" role="radiogroup" aria-label="页码类型">
+          <label class="md-page-segment-item" id="md-page-mode-printed-item">
+            <input type="radio" name="md-page-mode" id="md-page-mode-printed" value="printed" checked>
+            <span class="md-page-segment-face">原书页码</span>
+          </label>
+          <label class="md-page-segment-item" id="md-page-mode-physical-item">
+            <input type="radio" name="md-page-mode" id="md-page-mode-physical" value="physical">
+            <span class="md-page-segment-face">PDF 物理页码</span>
+          </label>
+        </div>
+      </div>
+      <div class="md-page-field">
+        <label class="md-page-field-label" for="md-page-input">要导出的页码</label>
+        <input id="md-page-input" type="text" maxlength="512" required placeholder="例如：12-18,25" aria-describedby="md-page-help md-page-error" autocomplete="off">
+        <p id="md-page-help" class="md-page-help">用逗号分隔页码，数字范围用短横线；序言页可逐个填写原书标签，如 iv,v。</p>
+      </div>
+      <p id="md-page-error" class="md-page-error" role="alert"></p>
       <div class="app-dialog-actions"><button class="action-btn" type="button" onclick="MEFinder.library.pageExport.close()">取消</button><button class="action-btn primary" type="submit">导出所选页</button></div>
     </fieldset>
-    <p id="md-page-error" role="alert"></p>
   </form>
 </dialog>
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>

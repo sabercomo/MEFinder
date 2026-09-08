@@ -11,10 +11,11 @@ class MarkdownPageExportUiTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[1] / 'src/me_finder/static/js/30-library.js'
         script = r'''
 const vm = require('vm'), fs = require('fs'), assert = require('assert');
-const option = {}, nodes = {}, calls = [], toasts = [];
+const nodes = {}, calls = [], toasts = [];
 let picker = '/exports', resolveFetch;
-for (const id of ['md-page-mode','md-page-input','md-page-error','md-page-note','md-page-fields','markdown-page-dialog']) {
-  nodes[id] = {value:'',textContent:'',disabled:false,focus(){},querySelector(){return option;},
+function classList(){const set=new Set();return {toggle(name,on){on?set.add(name):set.delete(name);},contains(name){return set.has(name);}};}
+for (const id of ['md-page-mode-printed','md-page-mode-physical','md-page-mode-printed-item','md-page-mode-physical-item','md-page-input','md-page-error','md-page-note','md-page-fields','markdown-page-dialog']) {
+  nodes[id] = {value:'',textContent:'',disabled:false,checked:false,classList:classList(),focus(){},querySelector(){return null;},
     showModal(){this.open=true;},close(){this.open=false;}};
 }
 const context = {module:{exports:{}}, libraryStore:{sources:[{source_file_id:'pdf',source_type:'pdf'}, {source_file_id:'epub',source_type:'word'}]},
@@ -26,11 +27,15 @@ const context = {module:{exports:{}}, libraryStore:{sources:[{source_file_id:'pd
 vm.createContext(context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 const event = {preventDefault(){}};
 (async()=>{
-  context.MEFinder.library.pageExport.open('epub'); assert.equal(option.disabled,true);
+  context.MEFinder.library.pageExport.open('epub');
+  assert.equal(nodes['md-page-mode-physical'].disabled,true);
+  assert.equal(nodes['md-page-mode-physical-item'].classList.contains('is-disabled'),true);
   assert.ok(nodes['md-page-note'].textContent.includes('脚注'));
   context.MEFinder.library.pageExport.close();
-  context.MEFinder.library.pageExport.open('pdf'); assert.equal(option.disabled,false);
-  assert.equal(nodes['md-page-mode'].value,'printed');
+  context.MEFinder.library.pageExport.open('pdf');
+  assert.equal(nodes['md-page-mode-physical'].disabled,false);
+  assert.equal(nodes['md-page-mode-physical-item'].classList.contains('is-disabled'),false);
+  assert.equal(nodes['md-page-mode-printed'].checked,true);
   await context.MEFinder.library.pageExport.submit(event); assert.equal(calls.length,0);
   nodes['md-page-input'].value='12-18,25';
   picker=null; await context.MEFinder.library.pageExport.submit(event);
