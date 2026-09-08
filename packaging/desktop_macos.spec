@@ -4,7 +4,7 @@
 import os
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 from src.me_finder import __version__
 
 
@@ -36,6 +36,7 @@ a = Analysis(
     pathex=[str(project_root)],
     binaries=[],
     datas=[
+        *collect_data_files("opencc"),
         (
             str(project_root / "src" / "me_finder" / "templates"),
             "src/me_finder/templates",
@@ -62,6 +63,7 @@ a = Analysis(
         ),
     ],
     hiddenimports=[
+        "opencc",
         "src",
         "src.me_finder",
         "src.me_finder.web",

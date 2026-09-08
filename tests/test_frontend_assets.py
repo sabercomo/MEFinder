@@ -432,9 +432,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 作品组修2：组标题取消 22ch 固定上限，避免较长中文标题在行内尚有空间时被裁切。
     # 0.5.2 译本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     BASELINE_SHA256 = (
-        "065464244ec07972bf94934123523001db49fee71a712daead4db2040917140f"
+        "01cca495de92060bd9705c5a994bce232746e7801da878c30be51123870e78df"
     )
-    BASELINE_BYTES = 1058469
+    BASELINE_BYTES = 1061573
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

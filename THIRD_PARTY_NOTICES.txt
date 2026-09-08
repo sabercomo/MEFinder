@@ -282,3 +282,10 @@ Additional complete license texts are distributed in THIRD_PARTY_LICENSES.
 Corresponding source for these exact versions is available from the source
 links above. Official MEFinder source releases are available at
 https://github.com/sabercomo/MEFinder/releases.
+
+opencc-python-reimplemented 0.1.7
+--------------------------------
+Source: https://github.com/yichen0831/opencc-python
+License: Apache-2.0. Bundled OpenCC configuration and dictionary data enable
+offline Chinese query conversion. See
+THIRD_PARTY_LICENSES/opencc-python-reimplemented-0.1.7-LICENSE.txt.

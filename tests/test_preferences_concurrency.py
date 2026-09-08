@@ -25,6 +25,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             {"pdf_parse_mode": "mineru"},
             {"document_export_mode": "with_pdf"},
             {"auto_update": True},
+            {"script_folding": False},
             {"citation_styles": ["chinese", "gb", "apa"]},
         )
         expected = {
@@ -44,6 +45,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "pdf_parse_mode": "mineru",
             "document_export_mode": "with_pdf",
             "reader_line_mode": "flow",
+            "script_folding": False,
             "export_page_cleanup": {
                 "page_marker_mode": "printed",
                 "remove_visible_page_numbers": True,

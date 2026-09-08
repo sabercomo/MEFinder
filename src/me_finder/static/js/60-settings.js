@@ -948,6 +948,9 @@
     settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id === 'multilingual-e5-large'
       ? 'multilingual-e5-large'
       : 'minilm-l12-v2';
+    settingsStore.scriptFoldingEnabled = data.script_folding !== false;
+    settingsStore.scriptFoldingAvailable = data.script_folding_available === true;
+    renderScriptFolding();
     settingsStore.autoUpdateEnabled = data.auto_update === true;
     enabledCitationStyles = normalizeCitationStyles(loadLocalCitationStyles() || data.citation_styles);
     saveLocalCitationStyles(enabledCitationStyles);
@@ -1028,6 +1031,44 @@
     // 结构化阅读器据此切换 white-space：flow=回流，physical=保留 PDF 断行。
     if (global.document && global.document.documentElement) {
       global.document.documentElement.dataset.readerLineMode = mode;
+    }
+  }
+
+  function renderScriptFolding() {
+    var input = document.getElementById('script-folding-enabled');
+    if (input) {
+      input.checked = settingsStore.scriptFoldingEnabled;
+      input.disabled = settingsStore.scriptFoldingSaving || !settingsStore.scriptFoldingAvailable;
+    }
+    var status = document.getElementById('script-folding-status');
+    if (status) status.textContent = settingsStore.scriptFoldingAvailable
+      ? '用简体或繁体关键词检索，结果、页码和导出保留原文。'
+      : '当前版本未能加载繁简转换组件，仍可按原文检索。';
+  }
+
+  async function setScriptFolding(enabled) {
+    if (settingsStore.scriptFoldingSaving || settingsStore.preferencesLoadPromise || !settingsStore.scriptFoldingAvailable) {
+      renderScriptFolding();
+      return;
+    }
+    var previous = settingsStore.scriptFoldingEnabled;
+    settingsStore.scriptFoldingEnabled = enabled === true;
+    settingsStore.scriptFoldingSaving = true;
+    renderScriptFolding();
+    try {
+      var resp = await fetch('/api/preferences', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({script_folding: settingsStore.scriptFoldingEnabled})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
+      settingsStore.scriptFoldingEnabled = data.script_folding === true;
+    } catch (e) {
+      settingsStore.scriptFoldingEnabled = previous;
+      showToast('繁简统一检索保存失败：' + e.message);
+    } finally {
+      settingsStore.scriptFoldingSaving = false;
+      renderScriptFolding();
     }
   }
 
@@ -1518,6 +1559,7 @@
   global.downloadAlignmentModel = downloadAlignmentModel;
   global.setDocumentExportMode = setDocumentExportMode;
   global.loadPreferences = loadPreferences;
+  global.setScriptFolding = setScriptFolding;
   global.checkForUpdates = checkForUpdates;
   global.runUpdateAction = runUpdateAction;
   global.setAutoUpdate = setAutoUpdate;

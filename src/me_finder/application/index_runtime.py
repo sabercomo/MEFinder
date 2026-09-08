@@ -22,7 +22,8 @@ from typing import (
 
 from ..app_context import AppPaths
 from ..search import SearchEngine
-from .search_service import SearchRequest, SearchService
+from .search_service import SearchRequest
+from .script_search import execute_with_script_folding
 
 
 EngineFactory = Callable[[Path], SearchEngine]
@@ -42,7 +43,9 @@ class IndexRuntime:
         engine_factory: EngineFactory,
         rebuild_index: RebuildIndex,
         replace_source: ReplaceSource,
+        script_folding_enabled: Callable[[], bool] | None = None,
     ) -> None:
+        self._script_folding_enabled = script_folding_enabled or (lambda: False)
         self.paths = paths
         self._engine_factory = engine_factory
         self._rebuild_index = rebuild_index
@@ -98,7 +101,9 @@ class IndexRuntime:
         with self._state_lock:
             if self._rebuilding or self._engine is None:
                 return None
-            return SearchService.execute(self._engine, request)
+            return execute_with_script_folding(
+                self._engine, request, enabled=self._script_folding_enabled()
+            )
 
     def run_when_ready(
         self,
