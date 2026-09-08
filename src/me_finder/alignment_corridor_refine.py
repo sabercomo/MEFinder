@@ -88,23 +88,217 @@ def path_cost(
     )
 
 
-def gap_to_reach_correct(
-    source_lengths: Sequence[int], target_lengths: Sequence[int],
-    frozen_target: Tuple[int, int], correct_target: Tuple[int, int],
-    *, gap_penalty: float = 2.2,
-) -> Dict[str, float]:
-    """Cost of gapping the target segments between the frozen and correct spans.
+SEARCH_BAND = 96  # semantic_alignment._SEARCH_BAND
 
-    Reaching the correct target for a phase-shifted pivot means gapping every
-    edition-only / OCR-noise target segment in between at the flat gap penalty.
-    This quantifies why the frozen (wrong) path is globally cheaper even when the
-    correct link is locally cheaper.
+
+def corridor_ratio(source_lengths: Sequence[int], target_lengths: Sequence[int],
+                   s0: int, s1: int, t0: int, t1: int) -> float:
+    """Per-corridor local length ratio, exactly as ``_align_partition`` computes it."""
+    return sum(target_lengths[t0:t1]) / max(sum(source_lengths[s0:s1]), 1)
+
+
+def _band_bounds(source_index: int, source_count: int, target_count: int, band: int) -> Tuple[int, int]:
+    if not source_count:
+        return 0, target_count
+    expected = round(source_index * target_count / source_count)
+    return max(0, expected - band), min(target_count, expected + band)
+
+
+def align_corridor(
+    source_prefix: np.ndarray, target_prefix: np.ndarray,
+    source_lengths: Sequence[int], target_lengths: Sequence[int],
+    s0: int, s1: int, t0: int, t1: int, ratio: float,
+    *, force_link: Tuple[int, int, int, int] | None = None,
+) -> Dict[str, object]:
+    """Banded corridor DP reproducing ``_align_partition``'s cost and band.
+
+    Returns the minimum-cost path (absolute (s0,s1,t0,t1) links), its total cost
+    and gap count.  With ``force_link`` (an absolute matched span the path must
+    contain as one link) it returns the cheapest path *constrained* to pass
+    through that link, on the same corridor, ratio and band — no splitting.
+    ``feasible`` is False when the forced link is off-band or not an admissible
+    transition; the gold constraint is a diagnostic, never an algorithm input.
     """
-    lo, hi = sorted([frozen_target, correct_target], key=lambda s: s[0])
-    span = range(lo[1], hi[0]) if lo[1] <= hi[0] else range(0, 0)
-    count = len(span)
-    cost = sum(gap_penalty + math.log1p(target_lengths[o]) / 12.0 for o in span if o < len(target_lengths))
-    return {"gapped_segments": count, "gap_cost": round(cost, 3)}
+    sc, tc = s1 - s0, t1 - t0
+    band = max(SEARCH_BAND, math.ceil(tc / max(sc, 1)) + 3)
+    inf = math.inf
+
+    def cost(di: int, dj: int, ai: int, aj: int) -> float:
+        return link_cost(source_prefix, target_prefix, source_lengths, target_lengths,
+                         ai - di, ai, aj - dj, aj, ratio)[0]
+
+    # forward[i] maps j -> (best_cost, di, dj) of the transition entering (i, j).
+    # fcost[i] is filled *in place* as j increases so intra-row (0,1) gaps — which
+    # reference fcost[i][j-1] — resolve, exactly as _align_partition's row array does.
+    forward: list[Dict[int, Tuple[float, int, int]]] = [dict() for _ in range(sc + 1)]
+    fcost: list[Dict[int, float]] = [dict() for _ in range(sc + 1)]
+    for i in range(sc + 1):
+        lo, hi = _band_bounds(i, sc, tc, band)
+        for j in range(lo, hi + 1):
+            if i == 0 and j == 0:
+                fcost[i][j] = 0.0
+                forward[i][j] = (0.0, -1, -1)
+                continue
+            best, bdi, bdj = inf, 0, 0
+            for di, dj, _pen in TRANSITIONS:
+                pi, pj = i - di, j - dj
+                if pi < 0 or pj < 0:
+                    continue
+                pv = fcost[pi].get(pj)  # pi==i is allowed: current row already holds j' < j
+                if pv is None or pv == inf:
+                    continue
+                cand = pv + cost(di, dj, s0 + i, t0 + j)
+                if cand < best:
+                    best, bdi, bdj = cand, di, dj
+            fcost[i][j] = best
+            forward[i][j] = (best, bdi, bdj)
+
+    def reconstruct(back: list[Dict[int, Tuple[float, int, int]]], end_i: int, end_j: int):
+        links, i, j = [], end_i, end_j
+        while i > 0 or j > 0:
+            step = back[i].get(j)
+            if step is None:
+                return None  # unreachable cell
+            _c, di, dj = step
+            if di < 0 or (di == 0 and dj == 0):
+                return None  # start marker or dead cell without a real predecessor
+            links.append((s0 + i - di, s0 + i, t0 + j - dj, t0 + j))
+            i, j = i - di, j - dj
+        links.reverse()
+        return links
+
+    total = fcost[sc].get(tc, inf)
+    unconstrained = (reconstruct(forward, sc, tc) or []) if total < inf else []
+
+    result: Dict[str, object] = {
+        "cost": round(total, 4) if total < inf else None,
+        "path": unconstrained,
+        "gaps": sum(1 for a, b, c, d in unconstrained if a == b or c == d),
+        "band": band,
+    }
+    if force_link is None:
+        return result
+
+    gi0, gi1, gj0, gj1 = force_link[0] - s0, force_link[1] - s0, force_link[2] - t0, force_link[3] - t0
+    di, dj = gi1 - gi0, gj1 - gj0
+    legal = (di, dj) in _PENALTY and di > 0 and dj > 0
+    in_band = False
+    if 0 <= gi0 <= sc and 0 <= gi1 <= sc:
+        lo0, hi0 = _band_bounds(gi0, sc, tc, band)
+        lo1, hi1 = _band_bounds(gi1, sc, tc, band)
+        in_band = lo0 <= gj0 <= hi0 and lo1 <= gj1 <= hi1
+    if not (legal and in_band):
+        result["constrained"] = {"feasible": False, "legal_transition": legal, "in_band": in_band}
+        return result
+
+    # Backward pass: bcost[i][j] = min cost from (i, j) to (sc, tc).
+    bcost: list[Dict[int, float]] = [dict() for _ in range(sc + 1)]
+    bback: list[Dict[int, Tuple[int, int]]] = [dict() for _ in range(sc + 1)]
+    bcost[sc][tc] = 0.0
+    for i in range(sc, -1, -1):
+        lo, hi = _band_bounds(i, sc, tc, band)
+        for j in range(hi, lo - 1, -1):
+            if i == sc and j == tc:
+                continue
+            best, bdi, bdj = inf, 0, 0
+            for di2, dj2, _pen in TRANSITIONS:
+                ni, nj = i + di2, j + dj2
+                if ni > sc or nj > tc or ni >= len(bcost):
+                    continue
+                nv = bcost[ni].get(nj)
+                if nv is None or nv == inf:
+                    continue
+                cand = nv + cost(di2, dj2, s0 + ni, t0 + nj)
+                if cand < best:
+                    best, bdi, bdj = cand, di2, dj2
+            if best < inf:
+                bcost[i][j] = best
+                bback[i][j] = (bdi, bdj)
+    fwd = fcost[gi0].get(gj0, inf)
+    bwd = bcost[gi1].get(gj1, inf)
+    if fwd == inf or bwd == inf:
+        result["constrained"] = {"feasible": False, "legal_transition": True, "in_band": True,
+                                 "reason": "gold endpoints unreachable within band"}
+        return result
+    glink = cost(di, dj, force_link[1], force_link[3])
+    ctotal = fwd + glink + bwd
+    # reconstruct constrained path: forward to (gi0,gj0), gold link, backward from (gi1,gj1)
+    head = reconstruct(forward, gi0, gj0) or []
+    tail, i, j = [], gi1, gj1
+    while i < sc or j < tc:
+        step = bback[i].get(j)
+        if step is None:
+            break
+        di2, dj2 = step
+        tail.append((s0 + i, s0 + i + di2, t0 + j, t0 + j + dj2))
+        i, j = i + di2, j + dj2
+    cpath = head + [tuple(force_link)] + tail
+    result["constrained"] = {
+        "feasible": ctotal < inf,
+        "legal_transition": True, "in_band": True,
+        "cost": round(ctotal, 4) if ctotal < inf else None,
+        "extra_cost_vs_unconstrained": round(ctotal - total, 4) if (ctotal < inf and total < inf) else None,
+        "path": cpath,
+        "gaps": sum(1 for a, b, c, d in cpath if a == b or c == d),
+    }
+    return result
+
+
+def arm_a_refine(
+    source_prefix: np.ndarray, target_prefix: np.ndarray,
+    source_lengths: Sequence[int], target_lengths: Sequence[int],
+    path: Sequence[Tuple[int, int, int, int]], ratio: float,
+) -> Dict[str, object]:
+    """Arm A: relocate one boundary segment between adjacent links while it
+    lowers the corridor total; iterate to convergence.
+
+    Operates on the full frozen corridor path (matched *and* gap links) with the
+    corridor's own length ratio.  A boundary move perturbs one internal vertex of
+    the monotone path by +/-1 on the source or target axis, keeping both incident
+    links admissible (spans 1..3, or a 1:0 / 0:1 gap).  Returns the refined path,
+    the number of moves applied and the total cost improvement.
+    """
+    links = [tuple(p) for p in path]
+    if not links:
+        return {"path": [], "moves": 0, "improvement": 0.0}
+
+    def lc(link) -> float:
+        return link_cost(source_prefix, target_prefix, source_lengths, target_lengths, *link, ratio)[0]
+
+    def admissible(link) -> bool:
+        di, dj = link[1] - link[0], link[3] - link[2]
+        if di < 0 or dj < 0:
+            return False
+        if di == 0 and dj == 0:
+            return False
+        if di == 0 or dj == 0:
+            return max(di, dj) == 1  # only unit gaps
+        return di <= 3 and dj <= 3
+
+    moves = 0
+    improvement = 0.0
+    changed = True
+    while changed:
+        changed = False
+        for k in range(len(links) - 1):
+            a, b = links[k], links[k + 1]
+            assert a[1] == b[0] and a[3] == b[2]  # contiguous vertex
+            base = lc(a) + lc(b)
+            best_delta, best = 0.0, None
+            for ds, dt in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                na = (a[0], a[1] + ds, a[2], a[3] + dt)
+                nb = (b[0] + ds, b[1], b[2] + dt, b[3])
+                if not (admissible(na) and admissible(nb)):
+                    continue
+                delta = base - (lc(na) + lc(nb))
+                if delta > best_delta + 1e-9:
+                    best_delta, best = delta, (na, nb)
+            if best:
+                links[k], links[k + 1] = best
+                improvement += best_delta
+                moves += 1
+                changed = True
+    return {"path": links, "moves": moves, "improvement": round(improvement, 4)}
 
 
 def best_target_grouping(

@@ -1,4 +1,191 @@
 {
+  "validations": {
+    "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98": {
+      "reproduced": 2184,
+      "total": 2276,
+      "missing_sample": [
+        [
+          875,
+          876,
+          1103,
+          1104
+        ],
+        [
+          876,
+          878,
+          1104,
+          1107
+        ],
+        [
+          878,
+          880,
+          1107,
+          1110
+        ],
+        [
+          880,
+          883,
+          1110,
+          1113
+        ],
+        [
+          883,
+          885,
+          1113,
+          1116
+        ]
+      ]
+    },
+    "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98": {
+      "reproduced": 2015,
+      "total": 2066,
+      "missing_sample": [
+        [
+          329,
+          330,
+          1111,
+          1114
+        ],
+        [
+          330,
+          331,
+          1118,
+          1121
+        ],
+        [
+          331,
+          332,
+          1125,
+          1126
+        ],
+        [
+          332,
+          333,
+          1126,
+          1127
+        ],
+        [
+          333,
+          334,
+          1127,
+          1130
+        ]
+      ]
+    },
+    "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7": {
+      "reproduced": 2321,
+      "total": 2383,
+      "missing_sample": [
+        [
+          875,
+          876,
+          1354,
+          1355
+        ],
+        [
+          876,
+          879,
+          1355,
+          1358
+        ],
+        [
+          879,
+          881,
+          1358,
+          1360
+        ],
+        [
+          881,
+          883,
+          1360,
+          1362
+        ],
+        [
+          883,
+          886,
+          1362,
+          1365
+        ]
+      ]
+    },
+    "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba": {
+      "reproduced": 1776,
+      "total": 1776,
+      "missing_sample": []
+    },
+    "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7": {
+      "reproduced": 2084,
+      "total": 2134,
+      "missing_sample": [
+        [
+          329,
+          330,
+          1362,
+          1365
+        ],
+        [
+          330,
+          331,
+          1368,
+          1371
+        ],
+        [
+          331,
+          332,
+          1371,
+          1372
+        ],
+        [
+          332,
+          333,
+          1372,
+          1374
+        ],
+        [
+          333,
+          334,
+          1374,
+          1377
+        ]
+      ]
+    },
+    "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right": {
+      "reproduced": 1990,
+      "total": 2086,
+      "missing_sample": [
+        [
+          326,
+          327,
+          875,
+          876
+        ],
+        [
+          327,
+          328,
+          876,
+          879
+        ],
+        [
+          328,
+          329,
+          879,
+          882
+        ],
+        [
+          329,
+          330,
+          882,
+          885
+        ],
+        [
+          330,
+          331,
+          889,
+          892
+        ]
+      ]
+    }
+  },
   "fixtures": [
     {
       "n": 24,
@@ -9,7 +196,7 @@
         3542,
         3543
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           2962,
           2964
@@ -18,47 +205,301 @@
           3560,
           3563
         ],
-        "cost": 0.9108,
-        "similarity": 0.8653
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          3542,
-          3544
-        ],
-        "cost": 0.5592,
-        "similarity": 0.8982
+      "corridor": [
+        2911,
+        2967,
+        3481,
+        3568
+      ],
+      "annotation": {
+        "local_ratio": 3.524,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.8982
       },
-      "exact_correct_span": {
-        "target": [
-          3542,
-          3544
-        ],
-        "cost": 0.5592,
-        "similarity": 0.8982
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 24.3598,
+        "gaps": 0,
+        "links": 30,
+        "my_pivot_link": [
+          2962,
+          2964,
+          3560,
+          3563
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          2911,
-          2967,
-          3481,
-          3568
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 57.6126,
+        "extra_cost_vs_unconstrained": 33.2527,
+        "path": [
+          [
+            2911,
+            2913,
+            3481,
+            3483
+          ],
+          [
+            2913,
+            2916,
+            3483,
+            3486
+          ],
+          [
+            2916,
+            2918,
+            3486,
+            3488
+          ],
+          [
+            2918,
+            2921,
+            3488,
+            3491
+          ],
+          [
+            2921,
+            2924,
+            3491,
+            3494
+          ],
+          [
+            2924,
+            2927,
+            3494,
+            3497
+          ],
+          [
+            2927,
+            2928,
+            3497,
+            3500
+          ],
+          [
+            2928,
+            2929,
+            3500,
+            3503
+          ],
+          [
+            2929,
+            2931,
+            3503,
+            3506
+          ],
+          [
+            2931,
+            2932,
+            3506,
+            3509
+          ],
+          [
+            2932,
+            2935,
+            3509,
+            3512
+          ],
+          [
+            2935,
+            2937,
+            3512,
+            3515
+          ],
+          [
+            2937,
+            2940,
+            3515,
+            3518
+          ],
+          [
+            2940,
+            2942,
+            3518,
+            3520
+          ],
+          [
+            2942,
+            2944,
+            3520,
+            3522
+          ],
+          [
+            2944,
+            2947,
+            3522,
+            3525
+          ],
+          [
+            2947,
+            2950,
+            3525,
+            3528
+          ],
+          [
+            2950,
+            2953,
+            3528,
+            3531
+          ],
+          [
+            2953,
+            2955,
+            3531,
+            3534
+          ],
+          [
+            2955,
+            2956,
+            3534,
+            3536
+          ],
+          [
+            2956,
+            2959,
+            3536,
+            3539
+          ],
+          [
+            2959,
+            2962,
+            3539,
+            3542
+          ],
+          [
+            2962,
+            2964,
+            3542,
+            3544
+          ],
+          [
+            2964,
+            2964,
+            3544,
+            3545
+          ],
+          [
+            2964,
+            2964,
+            3545,
+            3546
+          ],
+          [
+            2964,
+            2965,
+            3546,
+            3549
+          ],
+          [
+            2965,
+            2965,
+            3549,
+            3550
+          ],
+          [
+            2965,
+            2966,
+            3550,
+            3553
+          ],
+          [
+            2966,
+            2967,
+            3553,
+            3556
+          ],
+          [
+            2967,
+            2967,
+            3556,
+            3557
+          ],
+          [
+            2967,
+            2967,
+            3557,
+            3558
+          ],
+          [
+            2967,
+            2967,
+            3558,
+            3559
+          ],
+          [
+            2967,
+            2967,
+            3559,
+            3560
+          ],
+          [
+            2967,
+            2967,
+            3560,
+            3561
+          ],
+          [
+            2967,
+            2967,
+            3561,
+            3562
+          ],
+          [
+            2967,
+            2967,
+            3562,
+            3563
+          ],
+          [
+            2967,
+            2967,
+            3563,
+            3564
+          ],
+          [
+            2967,
+            2967,
+            3564,
+            3565
+          ],
+          [
+            2967,
+            2967,
+            3565,
+            3566
+          ],
+          [
+            2967,
+            2967,
+            3566,
+            3567
+          ],
+          [
+            2967,
+            2967,
+            3567,
+            3568
+          ]
         ],
-        "pivot_target": [
+        "gaps": 15
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          2962,
+          2964,
           3560,
           3563
         ],
-        "status": "automatic",
-        "confidence": 0.8653,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 16,
-        "gap_cost": 40.541
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -69,7 +510,7 @@
       "correct_target_v13": [
         1193
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           371,
           372
@@ -78,47 +519,415 @@
           1198,
           1201
         ],
-        "cost": 1.0382,
-        "similarity": 0.8376
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          1193,
-          1194
-        ],
-        "cost": 0.5112,
-        "similarity": 0.8353
+      "corridor": [
+        326,
+        405,
+        1103,
+        1273
+      ],
+      "annotation": {
+        "local_ratio": 1.469,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.8353
       },
-      "exact_correct_span": {
-        "target": [
-          1193,
-          1194
-        ],
-        "cost": 0.5112,
-        "similarity": 0.8353
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 49.4368,
+        "gaps": 0,
+        "links": 58,
+        "my_pivot_link": [
+          371,
+          372,
+          1198,
+          1201
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          0,
-          405,
-          0,
-          1273
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 51.4143,
+        "extra_cost_vs_unconstrained": 1.9775,
+        "path": [
+          [
+            326,
+            327,
+            1103,
+            1104
+          ],
+          [
+            327,
+            328,
+            1104,
+            1107
+          ],
+          [
+            328,
+            329,
+            1107,
+            1110
+          ],
+          [
+            329,
+            330,
+            1110,
+            1113
+          ],
+          [
+            330,
+            331,
+            1113,
+            1116
+          ],
+          [
+            331,
+            333,
+            1116,
+            1119
+          ],
+          [
+            333,
+            334,
+            1119,
+            1122
+          ],
+          [
+            334,
+            335,
+            1122,
+            1125
+          ],
+          [
+            335,
+            337,
+            1125,
+            1128
+          ],
+          [
+            337,
+            339,
+            1128,
+            1131
+          ],
+          [
+            339,
+            340,
+            1131,
+            1133
+          ],
+          [
+            340,
+            341,
+            1133,
+            1136
+          ],
+          [
+            341,
+            342,
+            1136,
+            1139
+          ],
+          [
+            342,
+            343,
+            1139,
+            1142
+          ],
+          [
+            343,
+            344,
+            1142,
+            1145
+          ],
+          [
+            344,
+            345,
+            1145,
+            1148
+          ],
+          [
+            345,
+            346,
+            1148,
+            1151
+          ],
+          [
+            346,
+            347,
+            1151,
+            1154
+          ],
+          [
+            347,
+            348,
+            1154,
+            1157
+          ],
+          [
+            348,
+            350,
+            1157,
+            1160
+          ],
+          [
+            350,
+            352,
+            1160,
+            1163
+          ],
+          [
+            352,
+            353,
+            1163,
+            1166
+          ],
+          [
+            353,
+            354,
+            1166,
+            1169
+          ],
+          [
+            354,
+            355,
+            1169,
+            1172
+          ],
+          [
+            355,
+            356,
+            1172,
+            1175
+          ],
+          [
+            356,
+            358,
+            1175,
+            1178
+          ],
+          [
+            358,
+            361,
+            1178,
+            1181
+          ],
+          [
+            361,
+            363,
+            1181,
+            1183
+          ],
+          [
+            363,
+            365,
+            1183,
+            1185
+          ],
+          [
+            365,
+            367,
+            1185,
+            1188
+          ],
+          [
+            367,
+            368,
+            1188,
+            1190
+          ],
+          [
+            368,
+            371,
+            1190,
+            1193
+          ],
+          [
+            371,
+            372,
+            1193,
+            1194
+          ],
+          [
+            372,
+            373,
+            1194,
+            1197
+          ],
+          [
+            373,
+            374,
+            1197,
+            1200
+          ],
+          [
+            374,
+            375,
+            1200,
+            1203
+          ],
+          [
+            375,
+            376,
+            1203,
+            1206
+          ],
+          [
+            376,
+            377,
+            1206,
+            1209
+          ],
+          [
+            377,
+            378,
+            1209,
+            1212
+          ],
+          [
+            378,
+            379,
+            1212,
+            1215
+          ],
+          [
+            379,
+            381,
+            1215,
+            1218
+          ],
+          [
+            381,
+            382,
+            1218,
+            1221
+          ],
+          [
+            382,
+            383,
+            1221,
+            1224
+          ],
+          [
+            383,
+            384,
+            1224,
+            1227
+          ],
+          [
+            384,
+            385,
+            1227,
+            1230
+          ],
+          [
+            385,
+            386,
+            1230,
+            1233
+          ],
+          [
+            386,
+            387,
+            1233,
+            1236
+          ],
+          [
+            387,
+            389,
+            1236,
+            1239
+          ],
+          [
+            389,
+            391,
+            1239,
+            1242
+          ],
+          [
+            391,
+            392,
+            1242,
+            1245
+          ],
+          [
+            392,
+            395,
+            1245,
+            1248
+          ],
+          [
+            395,
+            397,
+            1248,
+            1250
+          ],
+          [
+            397,
+            398,
+            1250,
+            1253
+          ],
+          [
+            398,
+            399,
+            1253,
+            1256
+          ],
+          [
+            399,
+            400,
+            1256,
+            1259
+          ],
+          [
+            400,
+            401,
+            1259,
+            1262
+          ],
+          [
+            401,
+            402,
+            1262,
+            1265
+          ],
+          [
+            402,
+            403,
+            1265,
+            1268
+          ],
+          [
+            403,
+            404,
+            1268,
+            1270
+          ],
+          [
+            404,
+            405,
+            1270,
+            1273
+          ]
         ],
-        "pivot_target": [
-          1156,
-          1159
-        ],
-        "status": "automatic",
-        "confidence": 0.839,
-        "reached_correct": false,
-        "reproduces_frozen": false
+        "gaps": 0
       },
-      "gap_to_correct": {
-        "gapped_segments": 4,
-        "gap_cost": 9.509
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          371,
+          372,
+          1198,
+          1201
+        ],
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -134,7 +943,7 @@
         6507,
         6508
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           4655,
           4658
@@ -143,47 +952,49 @@
           5119,
           5121
         ],
-        "cost": 0.9746,
-        "similarity": 0.864
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          6504,
-          6506
-        ],
-        "cost": 0.7999,
-        "similarity": 0.903
+      "corridor": [
+        4583,
+        4688,
+        5087,
+        5135
+      ],
+      "annotation": {
+        "local_ratio": 1.505,
+        "band": 96,
+        "correct_in_corridor": false,
+        "correct_in_band": false,
+        "gold_grouping_exceeds_max_transition(3)": true,
+        "pivot_correct_similarity": 0.9023
       },
-      "exact_correct_span": {
-        "target": [
-          6503,
-          6509
-        ],
-        "cost": 0.8193,
-        "similarity": 0.9331
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 32.3143,
+        "gaps": 0,
+        "links": 35,
+        "my_pivot_link": [
+          4655,
+          4658,
+          5119,
+          5121
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          4583,
-          4688,
-          5087,
-          5135
-        ],
-        "pivot_target": [
+      "constrained_through_gold": {
+        "feasible": false,
+        "reason": "gold_out_of_corridor"
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          4655,
+          4658,
           5119,
           5121
         ],
-        "status": "automatic",
-        "confidence": 0.864,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 1382,
-        "gap_cost": 3560.073
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -196,52 +1007,55 @@
         563,
         564
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           547,
           548
         ],
-        "target": [
-          562,
-          563
-        ],
-        "cost": 0.2281,
-        "similarity": 0.9278
+        "target": null,
+        "status": "unmatched"
       },
-      "best_correct_grouping": {
-        "target": [
-          562,
-          563
-        ],
-        "cost": 0.2281,
-        "similarity": 0.9278
+      "corridor": [
+        458,
+        574,
+        579,
+        583
+      ],
+      "annotation": {
+        "local_ratio": 0.029,
+        "band": 96,
+        "correct_in_corridor": false,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.9201
       },
-      "exact_correct_span": {
-        "target": [
-          562,
-          565
-        ],
-        "cost": 0.743,
-        "similarity": 0.9201
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 263.8085,
+        "gaps": 104,
+        "links": 108,
+        "my_pivot_link": [
+          547,
+          548,
+          582,
+          582
+        ]
       },
-      "correct_cheaper_than_wrong": false,
-      "correct_over_threshold": true,
-      "verdict": "not-reachable-e5-prefers-wrong",
-      "armB_redp": {
-        "corridor": [
-          458,
-          574,
-          579,
-          583
-        ],
-        "pivot_target": [
+      "constrained_through_gold": {
+        "feasible": false,
+        "reason": "gold_out_of_corridor"
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          547,
+          548,
           582,
           582
         ],
-        "status": "unmatched",
-        "confidence": 0.0,
-        "reached_correct": false,
-        "reproduces_frozen": false
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -252,7 +1066,7 @@
       "correct_target_v13": [
         3075
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           1468,
           1469
@@ -261,47 +1075,127 @@
           3079,
           3082
         ],
-        "cost": 1.0551,
-        "similarity": 0.8323
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          3075,
-          3076
-        ],
-        "cost": 0.4361,
-        "similarity": 0.8894
+      "corridor": [
+        1467,
+        1470,
+        3074,
+        3088
+      ],
+      "annotation": {
+        "local_ratio": 3.104,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.8894
       },
-      "exact_correct_span": {
-        "target": [
-          3075,
-          3076
-        ],
-        "cost": 0.4361,
-        "similarity": 0.8894
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 15.1754,
+        "gaps": 5,
+        "links": 8,
+        "my_pivot_link": [
+          1468,
+          1469,
+          3079,
+          3082
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          1467,
-          1470,
-          3074,
-          3088
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 24.9588,
+        "extra_cost_vs_unconstrained": 9.7834,
+        "path": [
+          [
+            1467,
+            1468,
+            3074,
+            3075
+          ],
+          [
+            1468,
+            1469,
+            3075,
+            3076
+          ],
+          [
+            1469,
+            1469,
+            3076,
+            3077
+          ],
+          [
+            1469,
+            1469,
+            3077,
+            3078
+          ],
+          [
+            1469,
+            1469,
+            3078,
+            3079
+          ],
+          [
+            1469,
+            1470,
+            3079,
+            3082
+          ],
+          [
+            1470,
+            1470,
+            3082,
+            3083
+          ],
+          [
+            1470,
+            1470,
+            3083,
+            3084
+          ],
+          [
+            1470,
+            1470,
+            3084,
+            3085
+          ],
+          [
+            1470,
+            1470,
+            3085,
+            3086
+          ],
+          [
+            1470,
+            1470,
+            3086,
+            3087
+          ],
+          [
+            1470,
+            1470,
+            3087,
+            3088
+          ]
         ],
-        "pivot_target": [
+        "gaps": 9
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          1468,
+          1469,
           3079,
           3082
         ],
-        "status": "automatic",
-        "confidence": 0.8323,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 3,
-        "gap_cost": 7.675
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -313,7 +1207,7 @@
         1883,
         1884
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           741,
           743
@@ -322,47 +1216,397 @@
           1868,
           1871
         ],
-        "cost": 0.8644,
-        "similarity": 0.8713
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          1882,
-          1884
-        ],
-        "cost": 0.5686,
-        "similarity": 0.8957
+      "corridor": [
+        705,
+        804,
+        1811,
+        1979
+      ],
+      "annotation": {
+        "local_ratio": 1.598,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.8733
       },
-      "exact_correct_span": {
-        "target": [
-          1883,
-          1885
-        ],
-        "cost": 0.6365,
-        "similarity": 0.8733
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 46.5713,
+        "gaps": 0,
+        "links": 58,
+        "my_pivot_link": [
+          741,
+          743,
+          1868,
+          1871
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          705,
-          804,
-          1811,
-          1979
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 47.5588,
+        "extra_cost_vs_unconstrained": 0.9875,
+        "path": [
+          [
+            705,
+            706,
+            1811,
+            1814
+          ],
+          [
+            706,
+            707,
+            1814,
+            1817
+          ],
+          [
+            707,
+            708,
+            1817,
+            1820
+          ],
+          [
+            708,
+            709,
+            1820,
+            1823
+          ],
+          [
+            709,
+            710,
+            1823,
+            1826
+          ],
+          [
+            710,
+            712,
+            1826,
+            1829
+          ],
+          [
+            712,
+            713,
+            1829,
+            1832
+          ],
+          [
+            713,
+            715,
+            1832,
+            1835
+          ],
+          [
+            715,
+            717,
+            1835,
+            1838
+          ],
+          [
+            717,
+            718,
+            1838,
+            1841
+          ],
+          [
+            718,
+            719,
+            1841,
+            1844
+          ],
+          [
+            719,
+            721,
+            1844,
+            1847
+          ],
+          [
+            721,
+            724,
+            1847,
+            1850
+          ],
+          [
+            724,
+            725,
+            1850,
+            1853
+          ],
+          [
+            725,
+            726,
+            1853,
+            1856
+          ],
+          [
+            726,
+            728,
+            1856,
+            1859
+          ],
+          [
+            728,
+            729,
+            1859,
+            1862
+          ],
+          [
+            729,
+            732,
+            1862,
+            1865
+          ],
+          [
+            732,
+            735,
+            1865,
+            1868
+          ],
+          [
+            735,
+            737,
+            1868,
+            1871
+          ],
+          [
+            737,
+            738,
+            1871,
+            1874
+          ],
+          [
+            738,
+            739,
+            1874,
+            1877
+          ],
+          [
+            739,
+            740,
+            1877,
+            1880
+          ],
+          [
+            740,
+            741,
+            1880,
+            1883
+          ],
+          [
+            741,
+            743,
+            1883,
+            1885
+          ],
+          [
+            743,
+            746,
+            1885,
+            1888
+          ],
+          [
+            746,
+            748,
+            1888,
+            1891
+          ],
+          [
+            748,
+            750,
+            1891,
+            1894
+          ],
+          [
+            750,
+            751,
+            1894,
+            1897
+          ],
+          [
+            751,
+            753,
+            1897,
+            1900
+          ],
+          [
+            753,
+            754,
+            1900,
+            1903
+          ],
+          [
+            754,
+            756,
+            1903,
+            1906
+          ],
+          [
+            756,
+            758,
+            1906,
+            1909
+          ],
+          [
+            758,
+            761,
+            1909,
+            1912
+          ],
+          [
+            761,
+            763,
+            1912,
+            1915
+          ],
+          [
+            763,
+            766,
+            1915,
+            1918
+          ],
+          [
+            766,
+            768,
+            1918,
+            1921
+          ],
+          [
+            768,
+            770,
+            1921,
+            1924
+          ],
+          [
+            770,
+            771,
+            1924,
+            1926
+          ],
+          [
+            771,
+            772,
+            1926,
+            1928
+          ],
+          [
+            772,
+            773,
+            1928,
+            1931
+          ],
+          [
+            773,
+            774,
+            1931,
+            1934
+          ],
+          [
+            774,
+            775,
+            1934,
+            1937
+          ],
+          [
+            775,
+            777,
+            1937,
+            1940
+          ],
+          [
+            777,
+            778,
+            1940,
+            1943
+          ],
+          [
+            778,
+            780,
+            1943,
+            1946
+          ],
+          [
+            780,
+            783,
+            1946,
+            1949
+          ],
+          [
+            783,
+            786,
+            1949,
+            1952
+          ],
+          [
+            786,
+            789,
+            1952,
+            1955
+          ],
+          [
+            789,
+            791,
+            1955,
+            1958
+          ],
+          [
+            791,
+            792,
+            1958,
+            1961
+          ],
+          [
+            792,
+            794,
+            1961,
+            1964
+          ],
+          [
+            794,
+            797,
+            1964,
+            1967
+          ],
+          [
+            797,
+            799,
+            1967,
+            1970
+          ],
+          [
+            799,
+            801,
+            1970,
+            1973
+          ],
+          [
+            801,
+            802,
+            1973,
+            1976
+          ],
+          [
+            802,
+            804,
+            1976,
+            1979
+          ]
         ],
-        "pivot_target": [
+        "gaps": 0
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          741,
+          743,
           1868,
           1871
         ],
-        "status": "automatic",
-        "confidence": 0.8713,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 12,
-        "gap_cost": 29.898
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -373,7 +1617,7 @@
       "correct_target_v13": [
         4521
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           2266,
           2267
@@ -382,47 +1626,187 @@
           4516,
           4519
         ],
-        "cost": 0.8735,
-        "similarity": 0.8371
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          4521,
-          4522
-        ],
-        "cost": 0.3432,
-        "similarity": 0.9159
+      "corridor": [
+        2263,
+        2291,
+        4510,
+        4569
+      ],
+      "annotation": {
+        "local_ratio": 1.568,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.9159
       },
-      "exact_correct_span": {
-        "target": [
-          4521,
-          4522
-        ],
-        "cost": 0.3432,
-        "similarity": 0.9159
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 16.5728,
+        "gaps": 0,
+        "links": 20,
+        "my_pivot_link": [
+          2266,
+          2267,
+          4516,
+          4519
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          2263,
-          2291,
-          4510,
-          4569
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 22.0066,
+        "extra_cost_vs_unconstrained": 5.4338,
+        "path": [
+          [
+            2263,
+            2264,
+            4510,
+            4513
+          ],
+          [
+            2264,
+            2265,
+            4513,
+            4516
+          ],
+          [
+            2265,
+            2265,
+            4516,
+            4517
+          ],
+          [
+            2265,
+            2265,
+            4517,
+            4518
+          ],
+          [
+            2265,
+            2266,
+            4518,
+            4521
+          ],
+          [
+            2266,
+            2267,
+            4521,
+            4522
+          ],
+          [
+            2267,
+            2269,
+            4522,
+            4525
+          ],
+          [
+            2269,
+            2271,
+            4525,
+            4528
+          ],
+          [
+            2271,
+            2273,
+            4528,
+            4531
+          ],
+          [
+            2273,
+            2274,
+            4531,
+            4534
+          ],
+          [
+            2274,
+            2276,
+            4534,
+            4537
+          ],
+          [
+            2276,
+            2277,
+            4537,
+            4540
+          ],
+          [
+            2277,
+            2278,
+            4540,
+            4543
+          ],
+          [
+            2278,
+            2280,
+            4543,
+            4546
+          ],
+          [
+            2280,
+            2281,
+            4546,
+            4549
+          ],
+          [
+            2281,
+            2282,
+            4549,
+            4552
+          ],
+          [
+            2282,
+            2284,
+            4552,
+            4555
+          ],
+          [
+            2284,
+            2285,
+            4555,
+            4558
+          ],
+          [
+            2285,
+            2287,
+            4558,
+            4561
+          ],
+          [
+            2287,
+            2288,
+            4561,
+            4564
+          ],
+          [
+            2288,
+            2289,
+            4564,
+            4566
+          ],
+          [
+            2289,
+            2291,
+            4566,
+            4569
+          ]
         ],
-        "pivot_target": [
+        "gaps": 2
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          2266,
+          2267,
           4516,
           4519
         ],
-        "status": "automatic",
-        "confidence": 0.8371,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 2,
-        "gap_cost": 5.2
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     },
     {
@@ -431,7 +1815,7 @@
       "new_status": "automatic",
       "pivot_v13": 1854,
       "correct_target_v13": [],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           1854,
           1856
@@ -440,25 +1824,20 @@
           3763,
           3766
         ],
-        "cost": 0.8561,
-        "similarity": 0.9176
+        "status": "automatic"
       },
-      "verdict": "allow-unfixable",
-      "armB_redp": {
-        "corridor": [
-          1842,
-          1876,
-          3758,
-          3783
-        ],
-        "pivot_target": [
-          3763,
-          3766
-        ],
-        "status": "automatic",
-        "confidence": 0.9176,
-        "reached_correct": false,
-        "reproduces_frozen": true
+      "corridor": [
+        1842,
+        1876,
+        3758,
+        3783
+      ],
+      "annotation": {
+        "correct_in_corridor": false,
+        "reason": "no corridor or allow-unfixable"
+      },
+      "armA": {
+        "moves": 0
       }
     },
     {
@@ -504,7 +1883,7 @@
         4639,
         4640
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           2313,
           2315
@@ -513,47 +1892,50 @@
           4609,
           4612
         ],
-        "cost": 1.6876,
-        "similarity": 0.83
+        "status": "rejected"
       },
-      "best_correct_grouping": {
-        "target": [
-          4619,
-          4621
-        ],
-        "cost": 0.4999,
-        "similarity": 0.93
+      "corridor": [
+        2312,
+        2326,
+        4606,
+        4640
+      ],
+      "annotation": {
+        "local_ratio": 1.387,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": true,
+        "pivot_correct_similarity": 0.8986
       },
-      "exact_correct_span": {
-        "target": [
-          4605,
-          4641
-        ],
-        "cost": 1.7648,
-        "similarity": 0.9185
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 11.6467,
+        "gaps": 0,
+        "links": 12,
+        "my_pivot_link": [
+          2313,
+          2315,
+          4609,
+          4612
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          2312,
-          2326,
-          4606,
-          4640
-        ],
-        "pivot_target": [
+      "constrained_through_gold": {
+        "feasible": false,
+        "legal_transition": true,
+        "in_band": false
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          2313,
+          2315,
           4609,
           4612
         ],
-        "status": "rejected",
-        "confidence": 0.83,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 0,
-        "gap_cost": 0
+        "fixed_full_member_set": false,
+        "partial_overlap": true
       }
     },
     {
@@ -565,7 +1947,7 @@
         3115,
         3116
       ],
-      "wrong_link": {
+      "frozen_link": {
         "source": [
           1811,
           1814
@@ -574,47 +1956,469 @@
           3133,
           3136
         ],
-        "cost": 0.8735,
-        "similarity": 0.8991
+        "status": "automatic"
       },
-      "best_correct_grouping": {
-        "target": [
-          3114,
-          3116
-        ],
-        "cost": 0.7284,
-        "similarity": 0.9311
+      "corridor": [
+        1751,
+        1907,
+        3062,
+        3252
+      ],
+      "annotation": {
+        "local_ratio": 0.422,
+        "band": 96,
+        "correct_in_corridor": true,
+        "correct_in_band": true,
+        "gold_grouping_exceeds_max_transition(3)": false,
+        "pivot_correct_similarity": 0.9175
       },
-      "exact_correct_span": {
-        "target": [
-          3115,
-          3117
-        ],
-        "cost": 0.7674,
-        "similarity": 0.9175
+      "frozen_link_reproduced": true,
+      "unconstrained": {
+        "cost": 56.9815,
+        "gaps": 0,
+        "links": 65,
+        "my_pivot_link": [
+          1811,
+          1814,
+          3133,
+          3136
+        ]
       },
-      "correct_cheaper_than_wrong": true,
-      "correct_over_threshold": true,
-      "verdict": "arm-reachable",
-      "armB_redp": {
-        "corridor": [
-          1751,
-          1907,
-          3062,
-          3252
+      "constrained_through_gold": {
+        "feasible": true,
+        "legal_transition": true,
+        "in_band": true,
+        "cost": 57.7874,
+        "extra_cost_vs_unconstrained": 0.8059,
+        "path": [
+          [
+            1751,
+            1754,
+            3062,
+            3064
+          ],
+          [
+            1754,
+            1757,
+            3064,
+            3066
+          ],
+          [
+            1757,
+            1760,
+            3066,
+            3068
+          ],
+          [
+            1760,
+            1763,
+            3068,
+            3070
+          ],
+          [
+            1763,
+            1765,
+            3070,
+            3071
+          ],
+          [
+            1765,
+            1768,
+            3071,
+            3073
+          ],
+          [
+            1768,
+            1771,
+            3073,
+            3075
+          ],
+          [
+            1771,
+            1774,
+            3075,
+            3077
+          ],
+          [
+            1774,
+            1777,
+            3077,
+            3080
+          ],
+          [
+            1777,
+            1780,
+            3080,
+            3083
+          ],
+          [
+            1780,
+            1783,
+            3083,
+            3086
+          ],
+          [
+            1783,
+            1785,
+            3086,
+            3088
+          ],
+          [
+            1785,
+            1787,
+            3088,
+            3090
+          ],
+          [
+            1787,
+            1789,
+            3090,
+            3092
+          ],
+          [
+            1789,
+            1791,
+            3092,
+            3094
+          ],
+          [
+            1791,
+            1794,
+            3094,
+            3097
+          ],
+          [
+            1794,
+            1797,
+            3097,
+            3100
+          ],
+          [
+            1797,
+            1800,
+            3100,
+            3103
+          ],
+          [
+            1800,
+            1802,
+            3103,
+            3105
+          ],
+          [
+            1802,
+            1804,
+            3105,
+            3108
+          ],
+          [
+            1804,
+            1806,
+            3108,
+            3110
+          ],
+          [
+            1806,
+            1808,
+            3110,
+            3112
+          ],
+          [
+            1808,
+            1811,
+            3112,
+            3115
+          ],
+          [
+            1811,
+            1814,
+            3115,
+            3117
+          ],
+          [
+            1814,
+            1816,
+            3117,
+            3120
+          ],
+          [
+            1816,
+            1817,
+            3120,
+            3123
+          ],
+          [
+            1817,
+            1820,
+            3123,
+            3126
+          ],
+          [
+            1820,
+            1823,
+            3126,
+            3129
+          ],
+          [
+            1823,
+            1825,
+            3129,
+            3132
+          ],
+          [
+            1825,
+            1826,
+            3132,
+            3135
+          ],
+          [
+            1826,
+            1827,
+            3135,
+            3138
+          ],
+          [
+            1827,
+            1829,
+            3138,
+            3141
+          ],
+          [
+            1829,
+            1830,
+            3141,
+            3144
+          ],
+          [
+            1830,
+            1832,
+            3144,
+            3147
+          ],
+          [
+            1832,
+            1834,
+            3147,
+            3150
+          ],
+          [
+            1834,
+            1835,
+            3150,
+            3153
+          ],
+          [
+            1835,
+            1836,
+            3153,
+            3156
+          ],
+          [
+            1836,
+            1839,
+            3156,
+            3159
+          ],
+          [
+            1839,
+            1842,
+            3159,
+            3162
+          ],
+          [
+            1842,
+            1845,
+            3162,
+            3165
+          ],
+          [
+            1845,
+            1848,
+            3165,
+            3168
+          ],
+          [
+            1848,
+            1851,
+            3168,
+            3171
+          ],
+          [
+            1851,
+            1854,
+            3171,
+            3174
+          ],
+          [
+            1854,
+            1855,
+            3174,
+            3177
+          ],
+          [
+            1855,
+            1856,
+            3177,
+            3180
+          ],
+          [
+            1856,
+            1857,
+            3180,
+            3183
+          ],
+          [
+            1857,
+            1859,
+            3183,
+            3186
+          ],
+          [
+            1859,
+            1862,
+            3186,
+            3189
+          ],
+          [
+            1862,
+            1865,
+            3189,
+            3192
+          ],
+          [
+            1865,
+            1867,
+            3192,
+            3195
+          ],
+          [
+            1867,
+            1869,
+            3195,
+            3198
+          ],
+          [
+            1869,
+            1871,
+            3198,
+            3201
+          ],
+          [
+            1871,
+            1874,
+            3201,
+            3204
+          ],
+          [
+            1874,
+            1877,
+            3204,
+            3207
+          ],
+          [
+            1877,
+            1880,
+            3207,
+            3210
+          ],
+          [
+            1880,
+            1883,
+            3210,
+            3213
+          ],
+          [
+            1883,
+            1885,
+            3213,
+            3216
+          ],
+          [
+            1885,
+            1887,
+            3216,
+            3219
+          ],
+          [
+            1887,
+            1888,
+            3219,
+            3222
+          ],
+          [
+            1888,
+            1890,
+            3222,
+            3225
+          ],
+          [
+            1890,
+            1893,
+            3225,
+            3228
+          ],
+          [
+            1893,
+            1894,
+            3228,
+            3231
+          ],
+          [
+            1894,
+            1895,
+            3231,
+            3234
+          ],
+          [
+            1895,
+            1898,
+            3234,
+            3237
+          ],
+          [
+            1898,
+            1901,
+            3237,
+            3240
+          ],
+          [
+            1901,
+            1904,
+            3240,
+            3243
+          ],
+          [
+            1904,
+            1905,
+            3243,
+            3246
+          ],
+          [
+            1905,
+            1906,
+            3246,
+            3249
+          ],
+          [
+            1906,
+            1907,
+            3249,
+            3252
+          ]
         ],
-        "pivot_target": [
+        "gaps": 0
+      },
+      "armA": {
+        "moves": 0,
+        "cost_improvement": 0.0,
+        "pivot_target_after": [
+          1811,
+          1814,
           3133,
           3136
         ],
-        "status": "automatic",
-        "confidence": 0.8991,
-        "reached_correct": false,
-        "reproduces_frozen": true
-      },
-      "gap_to_correct": {
-        "gapped_segments": 16,
-        "gap_cost": 40.488
+        "fixed_full_member_set": false,
+        "partial_overlap": false
       }
     }
   ]

@@ -30,11 +30,31 @@ class LinkCostFidelity(unittest.TestCase):
             self.assertAlmostEqual(mine_cost, prod_cost, places=5, msg=f"cost {di}:{dj}")
             self.assertAlmostEqual(mine_sim, prod_sim, places=5, msg=f"sim {di}:{dj}")
 
-    def test_gap_to_reach_correct_counts_intervening_segments(self) -> None:
-        tlen = [10] * 30
-        gap = refine.gap_to_reach_correct([1] * 10, tlen, (5, 8), (10, 11))
-        self.assertEqual(gap["gapped_segments"], 2)  # target segments 8, 9
-        self.assertGreater(gap["gap_cost"], 2 * 2.2)
+    def test_align_corridor_reproduces_align_partition(self) -> None:
+        rng = np.random.default_rng(613)
+        src = sa._normalized_rows(rng.standard_normal((18, 8)).astype(np.float32))
+        tgt = sa._normalized_rows(rng.standard_normal((26, 8)).astype(np.float32))
+        sp, tp = refine.prefix_sums(src), refine.prefix_sums(tgt)
+        sg, tg = sa._group_rows(sp), sa._group_rows(tp)
+        slen = [max(1, int(v)) for v in rng.integers(3, 40, size=18)]
+        tlen = [max(1, int(v)) for v in rng.integers(3, 40, size=26)]
+        ratio = refine.corridor_ratio(slen, tlen, 0, 18, 0, 26)
+        prod = [(link.source_start, link.source_end, link.target_start, link.target_end)
+                for link in sa._align_partition(sp, tp, slen, tlen, 0, 18, 0, 26, sg, tg, 0.83)]
+        mine = refine.align_corridor(sp, tp, slen, tlen, 0, 18, 0, 26, ratio)["path"]
+        self.assertEqual(prod, mine)
+
+    def test_constrained_path_never_cheaper_than_unconstrained(self) -> None:
+        rng = np.random.default_rng(71)
+        src = sa._normalized_rows(rng.standard_normal((12, 8)).astype(np.float32))
+        tgt = sa._normalized_rows(rng.standard_normal((14, 8)).astype(np.float32))
+        sp, tp = refine.prefix_sums(src), refine.prefix_sums(tgt)
+        slen, tlen = [7] * 12, [7] * 14
+        ratio = refine.corridor_ratio(slen, tlen, 0, 12, 0, 14)
+        res = refine.align_corridor(sp, tp, slen, tlen, 0, 12, 0, 14, ratio, force_link=(5, 6, 3, 4))
+        con = res["constrained"]
+        if con.get("feasible"):
+            self.assertGreaterEqual(con["extra_cost_vs_unconstrained"], -1e-6)
 
 
 if __name__ == "__main__":
