@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
+
+LOGGER = logging.getLogger(__name__)
 
 from .application.text_alignment_coordinator import (
     TextAlignmentCancelled,
@@ -55,6 +58,13 @@ class TextAlignmentController:
             or not isinstance(payload.get("force", False), bool)
         ):
             return 400, {"error": "自动对齐请求字段无效。"}
+        LOGGER.info(
+            "text alignment requested: group=%s pivot=%s target=%s force=%s",
+            payload["document_group_id"],
+            payload["pivot_source_file_id"],
+            payload["target_source_file_id"],
+            payload.get("force", False),
+        )
         try:
             result = self._coordinator.generate(
                 payload["document_group_id"],
@@ -63,12 +73,23 @@ class TextAlignmentController:
                 force=payload.get("force", False),
             )
         except TextAlignmentCancelled:
+            LOGGER.info("text alignment cancelled by user")
             return 200, {"ok": False, "cancelled": True}
         except TextAlignmentRejected as exc:
+            # A rejection is the user-visible "失败" reason; record it so the
+            # cause is diagnosable from the log, not only shown once in a toast.
+            LOGGER.warning("text alignment rejected: %s", exc)
             return 400, {"error": str(exc)}
         except TextAlignmentFailed:
             self._log_exception("automatic text alignment failed")
             return 500, {"error": "自动对齐失败，请检查两本文献的解析文本。"}
+        if isinstance(result, Mapping):
+            LOGGER.info(
+                "text alignment done: accepted=%s rejected=%s unmatched=%s",
+                result.get("accepted_link_count"),
+                result.get("rejected_link_count"),
+                result.get("unmatched_link_count"),
+            )
         return 200, {
             "ok": True,
             "result": result,
