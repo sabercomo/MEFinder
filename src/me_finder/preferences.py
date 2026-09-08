@@ -23,6 +23,7 @@ DEFAULT_PDF_OPEN_MODE = "native"
 DEFAULT_PDF_PARSE_MODE = "auto"
 DEFAULT_DOCUMENT_EXPORT_MODE = "data_only"
 DEFAULT_AUTO_UPDATE = False
+DEFAULT_SCRIPT_FOLDING = True
 DEFAULT_CITATION_STYLES = ("chinese", "gb")
 DEFAULT_CITATION_STYLE = "chinese"
 VALID_CITATION_STYLES = ("chinese", "gb", "chicago", "apa", "mla")
@@ -298,6 +299,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     )
     if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
         document_export_mode = DEFAULT_DOCUMENT_EXPORT_MODE
+    script_folding = payload.get("script_folding") if isinstance(payload, dict) else None
+    if not isinstance(script_folding, bool):
+        script_folding = DEFAULT_SCRIPT_FOLDING
     reader_line_mode = payload.get("reader_line_mode") if isinstance(payload, dict) else None
     if reader_line_mode not in VALID_READER_LINE_MODES:
         reader_line_mode = DEFAULT_READER_LINE_MODE
@@ -345,6 +349,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "pdf_parse_mode": pdf_parse_mode,
         "document_export_mode": document_export_mode,
         "reader_line_mode": reader_line_mode,
+        "script_folding": script_folding,
         "export_page_cleanup": export_page_cleanup,
         "auto_update": auto_update,
         "citation_styles": citation_styles,
@@ -453,6 +458,10 @@ def _save_preferences_locked(
         if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
             raise ValueError("不支持的文档包导出方式")
         current["document_export_mode"] = str(document_export_mode)
+    if "script_folding" in updates:
+        if not isinstance(updates["script_folding"], bool):
+            raise ValueError("繁简统一检索开关必须为布尔值")
+        current["script_folding"] = updates["script_folding"]
     if "reader_line_mode" in updates:
         reader_line_mode = updates["reader_line_mode"]
         if reader_line_mode not in VALID_READER_LINE_MODES:
@@ -525,7 +534,7 @@ def _save_preferences_locked(
     if "alignment_embedding_model_id" in updates:
         model_id = updates["alignment_embedding_model_id"]
         if model_id not in EMBEDDING_MODELS:
-            raise ValueError("不支持的语义对齐模型")
+            raise ValueError("不支持的译本对齐模型")
         current["alignment_embedding_model_id"] = str(model_id)
     if "alignment_thresholds" in updates:
         threshold_updates = updates["alignment_thresholds"]

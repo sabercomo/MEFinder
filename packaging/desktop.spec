@@ -5,6 +5,7 @@
 
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files
 
 # This spec lives in packaging/; PyInstaller 6.x resolves the Analysis script
 # (and other relative paths) against the spec's own directory, so resolve every
@@ -23,11 +24,13 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=[],
     datas=[
+        *collect_data_files("opencc"),
         (str(ROOT / 'src' / 'me_finder' / 'templates'), 'src/me_finder/templates'),
         (str(ROOT / 'src' / 'me_finder' / 'static'), 'src/me_finder/static'),
         (str(ROOT / 'src' / 'me_finder' / 'local_ocr_manifest.json'), 'src/me_finder'),
     ],
     hiddenimports=[
+        "opencc",
         'src',
         'src.me_finder',
         'src.me_finder.web',

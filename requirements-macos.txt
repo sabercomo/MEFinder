@@ -11,3 +11,6 @@ pyobjc-framework-Cocoa==11.1
 pyobjc-framework-Quartz==11.1
 pyobjc-framework-WebKit==11.1
 pyobjc-framework-Security==11.1
+
+# 本地繁简查询变体（包含词典）
+opencc-python-reimplemented==0.1.7

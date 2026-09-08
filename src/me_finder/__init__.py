@@ -1,3 +1,3 @@
 """Local Marx/Engels source locator."""
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"

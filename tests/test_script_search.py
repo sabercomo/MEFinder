@@ -1,6 +1,7 @@
 """Tests for the script-folding dual-track search wrapper (issue #16)."""
 
 import unittest
+from typing import Dict, List
 
 from src.me_finder import script_conversion
 from src.me_finder.application import SearchRequest, SearchService
@@ -81,7 +82,7 @@ class ScriptFoldingSearchTests(unittest.TestCase):
                   "text": "……剩餘價值……", "match_start": 5}
         self.result_table = {
             "剩余价值": {"total": 1, "results": [shared]},
-            "剩餘價值": {"total": 1, "results": [dict(shared, match_start=0)]},
+            "剩餘價值": {"total": 1, "results": [dict(shared)]},
         }
         out = execute_with_script_folding(None, SearchRequest(query="剩余价值"))
         self.assertEqual(len(out["results"]), 1)

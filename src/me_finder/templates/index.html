@@ -487,7 +487,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <nav class="settings-nav" role="tablist" aria-label="设置分类">
           <div class="settings-nav-group plat-desktop" role="presentation">阅读</div>
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" onclick="showSettingsCategory('text-alignment-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>文本对齐</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" onclick="showSettingsCategory('text-alignment-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="script-search-settings" onclick="showSettingsCategory('script-search-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><span>文献检索</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
@@ -542,9 +543,15 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             </div>
           </section>
+          <section class="settings-section" id="script-search-settings" role="tabpanel">
+            <div class="settings-section-head"><span class="settings-section-heading-copy"><span class="settings-section-title">文献检索</span></span></div>
+            <div class="settings-collapse-body" id="script-search-body">
+              <label class="pdf-open-option"><input type="checkbox" id="script-folding-enabled" checked disabled onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status"><span class="pdf-open-option-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span></label>
+            </div>
+          </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
             <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">文本对齐模型</span><span class="settings-section-note">选择跨语言全文对齐使用的本地模型</span></span>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">译本对齐模型</span><span class="settings-section-note">选择跨语言全文对齐使用的本地模型</span></span>
               <span id="alignment-model-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="embedding-model-body">
@@ -552,7 +559,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg>
                 <span>切换模型不会覆盖旧结果；请对需要更新的配对重新运行对齐。</span>
               </div>
-              <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="文本对齐模型">
+              <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型">
                 <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">
                   <div class="local-ocr-component-head">
                     <label class="embedding-model-choice">

@@ -7,6 +7,7 @@ from pathlib import Path
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.pdf_extractors import pdf_page_text_hash
+from src.me_finder.text_alignment import ALIGNMENT_ALGORITHM_VERSION
 
 
 PDF_SOURCE_ID = "fixture-pdf"
@@ -745,9 +746,9 @@ def add_mcp_parallel_fixture(database_path: Path) -> None:
         "status, created_at, completed_at) VALUES "
         "('fixture-parallel-run', 'fixture-parallel-work', ?, ?, "
         "'fixture-parallel-source-set', 'fixture-parallel-target-set', "
-        "'chapter-anchored-semantic-dp', '20', '{\"heading_anchors\": []}', "
+        "'chapter-anchored-semantic-dp', ?, '{\"heading_anchors\": []}', "
         "'completed', 't', 't')",
-        (PDF_SOURCE_ID, PARALLEL_SOURCE_ID),
+        (PDF_SOURCE_ID, PARALLEL_SOURCE_ID, ALIGNMENT_ALGORITHM_VERSION),
     )
     connection.execute(
         "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "

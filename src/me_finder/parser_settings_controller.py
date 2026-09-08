@@ -164,7 +164,7 @@ class ParserSettingsController:
     def text_alignment_models_component(self) -> ParserSettingsResponse:
         component = self._managed_components.get("text-alignment-models")
         if component is None:
-            return 400, {"error": "当前运行方式不支持下载语义对齐模型。"}
+            return 400, {"error": "当前运行方式不支持下载译本对齐模型。"}
         try:
             return 200, component.summary()
         except (ManagedEmbeddingModelsError, OSError, ValueError) as exc:
@@ -174,17 +174,17 @@ class ParserSettingsController:
         self, payload: object
     ) -> ParserSettingsResponse:
         if not isinstance(payload, Mapping):
-            return 400, {"error": "语义对齐模型操作必须是 JSON 对象。"}
+            return 400, {"error": "译本对齐模型操作必须是 JSON 对象。"}
         component = self._managed_components.get("text-alignment-models")
         if component is None:
-            return 400, {"error": "当前运行方式不支持下载语义对齐模型。"}
+            return 400, {"error": "当前运行方式不支持下载译本对齐模型。"}
         try:
             result = component.perform(payload)
         except (ManagedEmbeddingModelsError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except OSError:
             logging.exception("Embedding model component operation failed")
-            return 500, {"error": "语义对齐模型操作失败。"}
+            return 500, {"error": "译本对齐模型操作失败。"}
         return 200, {"ok": True, **result}
 
     def mineru_accounts(self) -> ParserSettingsResponse:

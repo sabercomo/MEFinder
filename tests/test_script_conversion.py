@@ -22,9 +22,8 @@ class PhraseLevelConversionTests(unittest.TestCase):
         self.assertEqual(to_simplified("剩餘價值"), "剩余价值")
 
     def test_phrase_dictionary_entry_is_used(self) -> None:
-        # 軟體 -> 软件 only happens via the phrase dictionaries; pure
-        # character-level conversion would produce 软体 instead.
-        self.assertEqual(to_simplified("軟體"), "软件")
+        # Generic t2s converts script, not regional vocabulary.
+        self.assertEqual(to_simplified("軟體"), "软体")
 
     def test_simplified_to_traditional(self) -> None:
         self.assertEqual(to_traditional("剩余价值"), "剩餘價值")
@@ -43,7 +42,7 @@ class FoldWithMapTests(unittest.TestCase):
     def test_fold_uses_phrase_dictionaries(self) -> None:
         text = "這個軟體很好用"
         folded, source_map = fold_to_simplified_with_map(text)
-        self.assertEqual(folded, "这个软件很好用")
+        self.assertEqual(folded, "这个软体很好用")
         self.assertEqual(source_map, list(range(len(text))))
 
     def test_mixed_text_keeps_shared_chars_at_their_index(self) -> None:

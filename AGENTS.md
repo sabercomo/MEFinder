@@ -105,6 +105,7 @@ feat(alignment): 模型选择持久化、正文区域参数化、DB v6
 
 - 新功能必须带测试;涉及偏好的功能要同步 `test_theme_system.py` 的全量偏好快照断言(历史教训:`reader_line_mode` 加了偏好但快照没更新)。
 - 测试命名 `test_<模块>_<场景>.py`;实验验证类测试(如 `test_bertalign_corridor_experiment.py`)允许存在,但须注明是实验路径。
+- **测试与其驱动同进退**:入库的测试不得依赖未入库的模块。实验驱动脚本(`scripts/` 下的 `bertalign_corridor_experiment.py` 等)要么随实验分支一并入库,要么显式写进 `.gitignore` 并让对应测试在缺失时 `skipUnless` 跳过——不允许再出现"测试入库、驱动既未入库也未忽略"的悬空(clean checkout / CI 上直接 `ModuleNotFoundError`,历史教训见合并入 #19 的 `test_bertalign_corridor_experiment` 修复)。
 - 修 bug 先写复现测试,再修,提交正文引用测试名。
 - **测试运行器是 `unittest`(与 CI 一致),不是 pytest**;命令见 §3.6。
 

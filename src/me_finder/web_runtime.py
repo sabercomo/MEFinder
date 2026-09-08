@@ -217,6 +217,7 @@ def build_application_runtime(
     index_runtime = IndexRuntime(
         context.paths,
         engine_factory=lambda path: SearchEngine(path),
+        script_folding_enabled=lambda: read_preferences(resolve_preferences_path(root))["script_folding"],
         rebuild_index=lambda runtime_root, on_progress, *, database_path: (
             rebuild_local_index(
                 runtime_root,

@@ -122,6 +122,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "pdf_parse_mode": DEFAULT_PDF_PARSE_MODE,
             "document_export_mode": DEFAULT_DOCUMENT_EXPORT_MODE,
             "reader_line_mode": DEFAULT_READER_LINE_MODE,
+            "script_folding": True,
             "export_page_cleanup": dict(DEFAULT_EXPORT_PAGE_CLEANUP),
             "auto_update": DEFAULT_AUTO_UPDATE,
             "citation_styles": list(DEFAULT_CITATION_STYLES),
@@ -660,6 +661,7 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "text-alignment-settings": "embedding-model-body",
+            "script-search-settings": "script-search-body",
             "mineru-api-settings": "mineru-api-body",
             "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",

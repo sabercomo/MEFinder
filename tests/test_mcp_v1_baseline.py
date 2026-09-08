@@ -32,7 +32,7 @@ class McpV1BaselineTests(unittest.TestCase):
         self.assertEqual(contract["contract"], "mefinder.mcp.v1")
         self.assertEqual(contract["schema_version"], "1")
         self.assertEqual(contract["release"], "0.5.0")
-        self.assertEqual(__version__, "0.5.2")
+        self.assertEqual(__version__, "0.5.3")
 
         tools = {tool["name"]: tool for tool in contract["tools"]}
         self.assertEqual(

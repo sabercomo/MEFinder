@@ -38,6 +38,15 @@ SEARCH_SERVICE_SOURCE = Path(
 
 
 class SearchControlsAndViewsTests(unittest.TestCase):
+    def test_edition_alignment_model_download_shows_determinate_progress(self) -> None:
+        self.assertIn("<span>译本对齐</span>", HTML)
+        self.assertIn(">译本对齐模型</span>", HTML)
+        self.assertIn('aria-label="译本对齐模型"', HTML)
+        self.assertNotIn("<span>文本对齐</span>", HTML)
+        self.assertIn("alignmentModelDownloadProgress(model)", HTML)
+        self.assertIn("progress.setAttribute('aria-valuenow'", HTML)
+        self.assertIn("transfer.ratio * 100", HTML)
+
     def test_search_controls_share_one_row_without_native_source_or_limit_selects(self) -> None:
         self.assertIn('class="search-controls-row"', HTML)
         self.assertIn('id="query" class="search-box" placeholder="搜索引文"', HTML)
@@ -693,6 +702,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "appearance-card",
             "pdf-reader-settings",
             "text-alignment-settings",
+            "script-search-settings",
             "software-update-settings",
             "macos-update-settings",
             "data-location-settings",

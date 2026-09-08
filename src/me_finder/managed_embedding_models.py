@@ -68,6 +68,27 @@ class ManagedEmbeddingModels:
         )
         temporary.replace(receipt)
 
+    def _downloaded_bytes(self, model_id: str) -> int:
+        model = embedding_model_config(model_id)
+        blobs_dir = self._cache_dir / model.fastembed_cache_dirname / "blobs"
+        blob_bytes = 0
+        if blobs_dir.is_dir():
+            for path in blobs_dir.iterdir():
+                try:
+                    if path.is_file() and not path.is_symlink():
+                        blob_bytes += path.stat().st_size
+                except FileNotFoundError:
+                    # Hugging Face renames completed .incomplete files atomically.
+                    continue
+        archive_bytes = 0
+        if model.fastembed_archive_name:
+            archive = self._cache_dir / model.fastembed_archive_name
+            try:
+                archive_bytes = archive.stat().st_size
+            except FileNotFoundError:
+                pass
+        return max(blob_bytes, archive_bytes)
+
     def summary(self) -> Dict[str, object]:
         with self._lock:
             models = []
@@ -78,6 +99,15 @@ class ManagedEmbeddingModels:
                 current_state = state.state
                 if installed and current_state == "not_installed":
                     current_state = "installed"
+                total_bytes = int(model["size_bytes"])
+                downloaded_bytes = (
+                    total_bytes if installed else self._downloaded_bytes(model_id)
+                )
+                progress = (
+                    1.0
+                    if installed
+                    else min(downloaded_bytes / total_bytes, 0.99)
+                )
                 models.append(
                     {
                         **model,
@@ -85,6 +115,10 @@ class ManagedEmbeddingModels:
                         "state": current_state,
                         "message": state.message,
                         "error": state.error,
+                        "downloaded_bytes": downloaded_bytes,
+                        "total_bytes": total_bytes,
+                        "total_is_estimate": True,
+                        "progress": progress,
                     }
                 )
             return {
@@ -98,11 +132,11 @@ class ManagedEmbeddingModels:
         embedding_model_config(model_id)
         action = str(payload.get("action") or "")
         if action != "download":
-            raise ManagedEmbeddingModelsError("不支持的语义模型组件操作。")
+            raise ManagedEmbeddingModelsError("不支持的译本对齐模型操作。")
         with self._lock:
             state = self._states[model_id]
             if state.thread is not None and state.thread.is_alive():
-                raise ManagedEmbeddingModelsError("该语义模型正在下载。")
+                raise ManagedEmbeddingModelsError("该译本对齐模型正在下载。")
             if self._receipt_path(model_id).is_file():
                 state.state = "installed"
                 state.message = "模型已下载"

@@ -6,7 +6,7 @@ reused from the normalization, search, and UI layers without import cycles.
 Two granularities are provided on purpose:
 
 * Phrase level -- ``to_simplified`` / ``to_traditional`` run OpenCC's full
-  dictionaries (e.g. "軟體" -> "软件").  Used for query expansion and for
+  dictionaries (e.g. "軟體" -> "软体").  Used for query expansion and for
   display text, where natural output matters and no offset mapping is
   required.
 * Segment level -- ``fold_to_simplified_with_map`` folds text with the same
@@ -15,8 +15,7 @@ Two granularities are provided on purpose:
   otherwise the original segment is kept verbatim.  The output therefore
   always has the same length as the input and the returned map is the
   identity by construction, so highlight offsets computed on the folded
-  text still land on the original text -- the guarantee the search
-  precise-match stage relies on.  Length-changing phrase conversions (rare
+  text still land on the original text -- a standalone utility, not used by query expansion.  Length-changing phrase conversions (rare
   in the generic ``t2s`` dictionary) simply opt their segment out of
   folding instead of breaking offsets.
 
@@ -53,8 +52,8 @@ _thread_local = threading.local()
 
 
 def is_available() -> bool:
-    """Return True when the OpenCC runtime is importable."""
-    return _opencc_module is not None
+    """Return True when both converters and their dictionary data load."""
+    return _converter(_T2S_CONFIG) is not None and _converter(_S2T_CONFIG) is not None
 
 
 def _converter(config: str):

@@ -334,3 +334,5 @@ MEFinder 自有代码依据 GNU Affero General Public License Version 3 only
 ---
 
 MEFinder 的目标很简单：**让“我记得这句话，但我忘了它在哪”不再变成翻几十本书的体力活。**
+
+繁简统一检索：设置 → 文献检索，默认开启；简体关键词可命中繁体原文，结果、页码与导出保留原文。

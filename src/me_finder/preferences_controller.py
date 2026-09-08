@@ -9,6 +9,7 @@ from typing import Callable, Dict, Mapping, Optional, Tuple
 from .application.index_runtime import IndexRuntime
 from .pdf_import_service import scan_directories_for_documents
 from .preferences import read_preferences, save_preferences
+from .script_conversion import is_available
 
 
 PreferencesResponse = Tuple[int, Dict[str, object]]
@@ -41,7 +42,7 @@ class PreferencesController:
         self._scan_directories = scan_directories
 
     def preferences(self) -> PreferencesResponse:
-        return 200, self._read(self._preferences_path)
+        return 200, {**self._read(self._preferences_path), "script_folding_available": is_available()}
 
     def save_preferences(
         self,

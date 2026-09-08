@@ -751,6 +751,42 @@ class SemanticSectionAnchorTests(unittest.TestCase):
             ],
         )
 
+    def test_cjk_toc_chapters_continue_after_intermediate_note_sections(self) -> None:
+        source = [
+            "第一章",
+            "第二章",
+            "第三章",
+            "第四章",
+            "第五章",
+            "第六章",
+        ]
+        target = [
+            "目录\n01 译一\n02 译二\n03 译三\n04 译四\n05 译五\n06 译六",
+            "广告残留\n译一\n副标题",
+            "译二\n译正文二。",
+            "译三\n副标题\n译正文三。",
+            "注释",
+            "本章注释。",
+            "译四\n副标题\n译正文四。",
+            "译五\n译正文五。",
+            "注释",
+            "译六\n译正文六。",
+        ]
+
+        anchors = find_heading_anchors(source, target)
+
+        self.assertEqual(
+            [(anchor.source_index, anchor.target_index, anchor.key) for anchor in anchors],
+            [
+                (0, 1, "chapter:1"),
+                (1, 2, "chapter:2"),
+                (2, 3, "chapter:3"),
+                (3, 6, "chapter:4"),
+                (4, 7, "chapter:5"),
+                (5, 9, "chapter:6"),
+            ],
+        )
+
     def test_chinese_slash_toc_maps_part_titles_without_using_printed_pages(self) -> None:
         source = [
             "目录\n1 / 第一章 物的形式礼拜仪式\n1 / 丰盛\n28 / 第二章 消费理论\n28 / 消费的社会逻辑",
