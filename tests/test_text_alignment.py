@@ -1072,6 +1072,31 @@ class TextAlignmentTests(unittest.TestCase):
         self.assertNotEqual(regenerated["alignment_run_id"], first["alignment_run_id"])
         self.assertEqual(regenerated["algorithm_version"], ALIGNMENT_ALGORITHM_VERSION)
 
+    def test_version21_remains_readable_but_is_not_reused_for_new_generation(self) -> None:
+        first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            connection.execute("UPDATE alignment_runs SET algorithm_version = '21'")
+            connection.commit()
+        located = locate_alignment(
+            self.db, "pdf-de", "epub-en",
+            start_page_index=0, end_page_index=0, start_offset=0, end_offset=3,
+        )
+        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Spirit is actual.")
+        regenerated = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        self.assertFalse(regenerated["reused"])
+        self.assertNotEqual(regenerated["alignment_run_id"], first["alignment_run_id"])
+        self.assertEqual(regenerated["algorithm_version"], "22")
+
+    def test_version21_recipe_is_restored_using_current_algorithm(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            connection.execute("UPDATE alignment_runs SET algorithm_version = '21'")
+            connection.commit()
+        snapshot = read_alignment_recipe_snapshot(self.db)
+        self.assertEqual(replace_alignment_recipe_snapshot(snapshot, self.db), 1)
+        restored = read_alignment_recipe_snapshot(self.db)["alignment_pairs"]
+        self.assertEqual(restored[0]["algorithm_version"], "22")
+
     def test_version16_recipe_is_restored_using_current_algorithm(self) -> None:
         generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         with closing(sqlite3.connect(str(self.db))) as connection:
