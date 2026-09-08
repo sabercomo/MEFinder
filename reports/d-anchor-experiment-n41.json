@@ -1,0 +1,12 @@
+{
+  "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+  "removed_anchors": [],
+  "baseline_accepted": 2312,
+  "enhanced_accepted": 2312,
+  "changed_links": [],
+  "result": {
+    "accepted_link_count": 2312,
+    "unmatched_link_count": 169,
+    "heading_anchor_count": 370
+  }
+}
