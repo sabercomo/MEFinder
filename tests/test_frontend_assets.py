@@ -445,10 +445,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   按页导出对话框改分段控件（原书/物理页码）并统一间距。
     # 0.5.3 对齐可取消：对齐/重新对齐按钮在运行中翻转为「取消对齐」（.is-cancel）。
     # 0.5.3 繁简开关：文献检索设置的繁简统一检索改为独立开关（.setting-switch-*），默认开。
+    # 0.5.3 按页导出改版：页码输入框为主，页码制（原书/物理）降为下方紧凑次要行。
     BASELINE_SHA256 = (
-        "b8b1d6f327f66ceaa526a73a044d7aba67d54c7cd837443c00d7dbdca8a397ce"
+        "fd49973b7c87352d169d79b0887880386bac6030b38a71a0e3de52dde486c753"
     )
-    BASELINE_BYTES = 1074538
+    BASELINE_BYTES = 1075073
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
