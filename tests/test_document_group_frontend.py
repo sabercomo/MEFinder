@@ -86,7 +86,11 @@ const context = {
   }]},
   document: {getElementById() {return body;}},
   esc: value => value, sourceFormatLabel: () => 'PDF',
-  libLangChipLabel: () => '英语', libLangCode: () => 'EN'
+  libLangChipLabel: () => '英语', libLangCode: () => 'EN',
+  // toggleGroupExpand 内部会以模块级依赖重渲一次；在隔离环境里补上这些全局，避免 ReferenceError。
+  documentSupportsTextAlignment: () => true,
+  libraryLanguageCode: () => 'en',
+  syncDocumentGroupPairAction: () => {}
 };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
@@ -103,7 +107,13 @@ assert.ok(menu.includes('管理作品组…'), menu);
 library.renderDocumentGroupManager(dependencies);
 assert.ok(body.innerHTML.includes('id="grp-create-input"'));
 assert.ok(body.innerHTML.includes('onclick="createDocumentGroupInline()">新建</button>'));
-// 手风琴默认展开首个作品组，成员行降噪：解析器/格式收进标题 tooltip，不再单独占一行。
+// 首屏所有作品组默认折叠，不再自动展开首个组。
+assert.ok(body.innerHTML.includes('aria-expanded="false"'), body.innerHTML);
+// 展开该组后再校验成员行细节。
+library.toggleGroupExpand('group');
+library.renderDocumentGroupManager(dependencies);
+assert.ok(body.innerHTML.includes('aria-expanded="true"'), body.innerHTML);
+// 成员行降噪：解析器/格式收进标题 tooltip，不再单独占一行。
 for (const parser of ['原生文本', 'MinerU']) {
   assert.ok(body.innerHTML.includes('title="Same book · PDF · ' + parser + '"'), body.innerHTML);
 }

@@ -344,13 +344,10 @@
     renderDocumentGroupManager();
   }
 
-  // 打开添加文献选择器 / 对照的组，保证处于展开态；首屏给一个默认展开的组。
+  // 打开添加文献选择器 / 对照的组，保证处于展开态；首屏所有作品组默认折叠。
   function syncExpandedGroups() {
     if (!groupsInitialized) {
       groupsInitialized = true;
-      if (libraryStore.documentGroups.length && !Object.keys(expandedGroups).length) {
-        expandedGroups[libraryStore.documentGroups[0].document_group_id] = true;
-      }
     }
     if (groupPicker.groupId) expandedGroups[groupPicker.groupId] = true;
     if (expandedPairGroupId) expandedGroups[expandedPairGroupId] = true;
@@ -2007,6 +2004,7 @@
       autoGroupTitle: autoGroupTitle,
       autoGroupBaseId: autoGroupBaseId,
       toggleGroupPicker: toggleGroupPicker,
+      toggleGroupExpand: toggleGroupExpand,
       deleteDocumentGroupAction: deleteDocumentGroupAction,
       requestLibraryDocumentMarkdownExport: requestLibraryDocumentMarkdownExport,
       requestLibraryDocumentEpubExport: requestLibraryDocumentEpubExport
