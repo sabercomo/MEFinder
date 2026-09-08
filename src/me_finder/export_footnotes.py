@@ -54,6 +54,7 @@ class FootnoteReference:
 class FootnoteText(ExportBlock):
     references: tuple[FootnoteReference, ...] = ()
     source_fragment: Optional[SourceFragment] = None
+    export_physical_page: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -328,6 +329,7 @@ def normalize_document_export(
                     str(block["text"]).strip(), heading_level(block),
                     tuple(sorted(block_refs[position], key=lambda ref: ref.start)),
                     block.get("_export_source_fragment"),
+                    physical,
                 )))
 
     result: list[PageMarker | FootnoteText | Footnote] = []

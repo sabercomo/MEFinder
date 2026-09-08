@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import re
 import sqlite3
@@ -32,6 +33,9 @@ from .markdown_export import (
     safe_markdown_filename,
 )
 from .export_footnotes import normalize_document_export
+from .markdown_page_selection import (
+    PageSelection, resolve_pdf_pages, select_normalized_pages, select_epub_paragraphs,
+)
 from .markdown_export_normalize import ExportOptions
 from .export_page_reconstruction import attach_export_layout
 from .pdf_extractors import file_sha256
@@ -248,6 +252,7 @@ def export_indexed_pdf_markdown(
     output_dir: Path,
     runtime_root: Optional[Path] = None,
     options: Optional[ExportOptions] = None,
+    page_selection: Optional[PageSelection] = None,
 ) -> Dict[str, object]:
     """Export one indexed PDF or EPUB as UTF-8 Markdown.
 
@@ -257,6 +262,8 @@ def export_indexed_pdf_markdown(
     """
 
     options = options or ExportOptions()
+    selection_result = None
+    warnings = []
 
     source_id = str(source_file_id or "").strip()
     if not source_id or len(source_id) > 256:
@@ -332,7 +339,16 @@ def export_indexed_pdf_markdown(
                 source_file_id=source_id,
             )
         pages = _text_export_pages(database, source_id, runtime_root)
+        selected = resolve_pdf_pages(pages, page_selection) if page_selection is not None else None
         normalized = normalize_document_export(pages, options=options)
+        if selected is not None:
+            normalized = select_normalized_pages(normalized, pages, selected, options)
+            item_count = len(selected)
+            selection_result = {'mode': page_selection.mode, 'pages': page_selection.expression,
+                                'physical_pages': selected,
+                                'note_count': normalized.footnote_report['selection']['note_count']}
+            if normalized.footnote_report.get('unresolved_ref_count', 0):
+                warnings.append('原书存在未能可靠配对的脚注；原标记保留，未猜测页外脚注。')
         markdown = document_to_markdown(
             pages,
             title=title,
@@ -352,6 +368,12 @@ def export_indexed_pdf_markdown(
                     ),
                 )
             )
+        if page_selection is not None:
+            paragraphs = select_epub_paragraphs(paragraphs, page_selection)
+            item_count = len(paragraphs)
+            selection_result = {'mode': 'printed', 'pages': page_selection.expression,
+                                'labels': list(page_selection.labels)}
+            warnings.append('EPUB 当前入库文本未保留超链接脚注关系；按页导出不保证带出页外脚注。')
         markdown = epub_paragraphs_to_markdown(
             paragraphs,
             title=title,
@@ -360,7 +382,20 @@ def export_indexed_pdf_markdown(
         )
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
-    destination = destination_dir / safe_markdown_filename(title)
+    export_title = title
+    if page_selection is not None:
+        label = '原书页' if page_selection.mode == 'printed' else 'PDF页'
+        # Keep the selection suffix even for titles longer than the filename cap.
+        stem = safe_markdown_filename(title)[:-3].encode('utf-8')[:48].decode('utf-8', errors='ignore')
+        digest = hashlib.sha256(repr(page_selection).encode()).hexdigest()[:8]
+        expression = page_selection.expression.encode('utf-8')[:32].decode('utf-8', errors='ignore')
+        export_title = f'{stem}-{label}-{digest}-{expression}'
+        metadata = json.dumps({'mode': page_selection.mode, 'pages': page_selection.expression}, ensure_ascii=False)
+        boundary = markdown.index('\n---\n') + len('\n---\n')
+        markdown = markdown[:boundary] + '\n<!-- MEFinder page_selection: ' + metadata + ' -->\n' + markdown[boundary:]
+        if warnings:
+            markdown += '\n> 导出说明：' + '；'.join(warnings) + '\n'
+    destination = destination_dir / safe_markdown_filename(export_title)
     partial = destination.with_name(destination.name + ".partial")
     partial.write_text(markdown, encoding="utf-8", newline="\n")
     partial.replace(destination)
@@ -371,6 +406,11 @@ def export_indexed_pdf_markdown(
         "size_bytes": destination.stat().st_size,
         "page_count": item_count if is_pdf else int(source.get("epub_page_count") or 0),
     }
+    if selection_result is not None:
+        result['page_selection'] = selection_result
+        result['warnings'] = warnings
+        if is_epub:
+            result['page_count'] = len(page_selection.labels)
     if is_pdf:
         result["footnote_report"] = normalized.footnote_report
         result["reconstruction_report"] = normalized.reconstruction_report

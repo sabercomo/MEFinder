@@ -14,6 +14,7 @@ from .document_export_service import (
     export_indexed_pdf_markdown,
 )
 from .markdown_export_normalize import ExportOptions
+from .markdown_page_selection import PageSelection
 from .mineru_api import MinerUError
 
 
@@ -103,7 +104,11 @@ class ArchiveTransferController:
         # options remain available to programmatic callers for diagnostics.
         options = ExportOptions.from_mapping(payload.get("export_options"))
         try:
+            selection = {}
+            if "page_selection" in payload:
+                selection["page_selection"] = PageSelection.from_mapping(payload["page_selection"])
             result = self._export_document_markdown(
+                **selection,
                 database_path=self._database_path,
                 runtime_root=self._runtime_root,
                 source_file_id=str(payload.get("source_id") or ""),

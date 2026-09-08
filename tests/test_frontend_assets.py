@@ -264,7 +264,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         # 运行时同样让 onclick="name()" 可解析，所以两种都算「已定义」。
         defined = set(
             re.findall(
-                r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
+                r"^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(",
                 HTML,
                 re.MULTILINE,
             )
@@ -276,6 +276,14 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
                 re.MULTILINE,
             )
         )
+        # Namespaced commands may expose a declared function under a shorter key.
+        # Only accept aliases whose implementation is actually declared above;
+        # the page-export UI test also executes these handlers through the namespace.
+        for alias, target in re.findall(
+            r"\b([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)\s*(?=[,}])", HTML
+        ):
+            if target in defined:
+                defined.add(alias)
         referenced = set()
         for attr in re.findall(r"\bon\w+\s*=\s*\"([^\"]*)\"", HTML):
             referenced.update(re.findall(r"\b([A-Za-z_$][\w$]*)\s*\(", attr))
@@ -432,10 +440,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.2 作品组修2：组标题取消 22ch 固定上限，避免较长中文标题在行内尚有空间时被裁切。
     # 0.5.2 译本对齐模型：下载区复用本地 OCR 的无外框组件分组、行内状态与进度样式。
     # 0.5.3：作品组初始化不再默认自动展开第一个作品组；toggleGroupExpand 加入 module.exports 供白盒测试。
+    # 0.5.3：文献库新增「按页导出 Markdown」对话框（范围输入 + 页码模式），装配指纹随之更新。
     BASELINE_SHA256 = (
-        "baadc2d1f63d1c8d0ff068af9b4c5fc75fcdc140ffd82a341934aeb2af64064f"
+        "94fbfe6509e437dd922c7532457d8e3dca541e504318fce781dbdfde56e1a06b"
     )
-    BASELINE_BYTES = 1061441
+    BASELINE_BYTES = 1067196
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

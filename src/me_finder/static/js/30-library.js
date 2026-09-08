@@ -1726,6 +1726,7 @@
     }
     if (canExportMarkdown) {
       items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">导出 Markdown</button>';
+      items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();MEFinder.library.pageExport.open(\'' + sid + '\')">按页导出 Markdown…</button>';
     }
     if (src.source_type === 'pdf') {
       items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentEpub(\'' + sid + '\')">导出 EPUB</button>';
@@ -1773,6 +1774,67 @@
     return data;
   }
 
+  var markdownPageSource = null;
+  var markdownPageBusy = false;
+  var markdownPagePreviousFocus = null;
+
+  function openMarkdownPageExport(sourceId) {
+    if (markdownPageBusy) return;
+    markdownPageSource = sourceId;
+    markdownPagePreviousFocus = document.activeElement;
+    var source = libraryStore.sources.find(function(s) { return s.source_file_id === sourceId; });
+    var epub = source && sourceFormatLabel(source) === 'EPUB';
+    var mode = document.getElementById('md-page-mode');
+    mode.value = 'printed';
+    mode.querySelector('option[value="physical"]').disabled = !!epub;
+    document.getElementById('md-page-input').value = '';
+    document.getElementById('md-page-error').textContent = '';
+    document.getElementById('md-page-note').textContent = epub
+      ? '仅采用出版方页码。EPUB 入库文本未保留脚注链接，选页不能保证带出页外脚注。'
+      : '原书页码依赖已有页码映射；PDF 物理页码从 1 开始。已配对的脚注随正文导出，原文保持不变。';
+    document.getElementById('markdown-page-dialog').showModal();
+    document.getElementById('md-page-input').focus();
+  }
+
+  function closeMarkdownPageExport() {
+    if (markdownPageBusy) return;
+    document.getElementById('markdown-page-dialog').close();
+    markdownPageSource = null;
+    if (markdownPagePreviousFocus && markdownPagePreviousFocus.isConnected) markdownPagePreviousFocus.focus();
+  }
+
+  async function submitMarkdownPageExport(event) {
+    event.preventDefault();
+    if (markdownPageBusy || !markdownPageSource) return;
+    var pages = document.getElementById('md-page-input').value.trim();
+    var errorNode = document.getElementById('md-page-error');
+    if (!pages) { errorNode.textContent = '请填写要导出的页码。'; return; }
+    var selection = {mode: document.getElementById('md-page-mode').value, pages: pages};
+    markdownPageBusy = true;
+    var controls = document.getElementById('md-page-fields');
+    controls.disabled = true;
+    errorNode.textContent = '';
+    try {
+      var directory = await chooseDesktopExportDirectory();
+      if (directory === null) return;
+      var data = await requestLibraryDocumentMarkdownExport(markdownPageSource, directory, selection);
+      markdownPageBusy = false;
+      closeMarkdownPageExport();
+      showToast('已导出 ' + data.page_count + ' 页到：' + data.path);
+      if (data.warnings && data.warnings.length) showToast(data.warnings.join('；'), 'warning');
+    } catch (error) {
+      errorNode.textContent = error && error.message ? error.message : '导出失败';
+    } finally {
+      markdownPageBusy = false;
+      controls.disabled = false;
+    }
+  }
+
+  function cancelMarkdownPageExport(event) {
+    event.preventDefault();
+    closeMarkdownPageExport();
+  }
+
   async function exportLibraryDocumentMarkdown(sourceId) {
     if (!sourceId) return;
     try {
@@ -1786,8 +1848,9 @@
     }
   }
 
-  async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory) {
+  async function requestLibraryDocumentMarkdownExport(sourceId, outputDirectory, pageSelection) {
     var payload = {source_id: sourceId};
+    if (pageSelection) payload.page_selection = pageSelection;
     if (outputDirectory) payload.output_dir = outputDirectory;
     var response = await fetch('/api/document/export-markdown', {
       method: 'POST',
@@ -2013,6 +2076,8 @@
 
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.library = {
+    pageExport: {open: openMarkdownPageExport, close: closeMarkdownPageExport,
+      submit: submitMarkdownPageExport, cancel: cancelMarkdownPageExport},
     applyCatalog: applyLibraryCatalog,
     load: loadLibrary,
     loadDocumentGroups: loadDocumentGroups,
