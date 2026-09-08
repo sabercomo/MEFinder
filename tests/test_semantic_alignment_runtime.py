@@ -80,6 +80,54 @@ class EmbeddingCancellationTests(unittest.TestCase):
                 provider(["one", "two", "three"], cache_dir=None)
         self.assertEqual(emitted, [0])
 
+    def test_embed_texts_surfaces_cancellation_not_model_failure(self) -> None:
+        # A cancel raised mid-run must reach the caller as a cancellation, not
+        # be masked as "模型加载失败" by embed_texts' broad failure wrapper.
+        def fake_embed(texts, batch_size):
+            for index in range(len(texts)):
+                embedding_runtime.request_embedding_cancel()
+                yield [float(index)]
+
+        class _FakeTextEmbedding:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def embed(self, texts, batch_size):
+                return fake_embed(texts, batch_size)
+
+        with mock.patch.dict(
+            "sys.modules",
+            {"fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding)},
+        ), mock.patch.object(semantic_alignment, "_write_model_receipt"):
+            with self.assertRaises(semantic_alignment.SemanticAlignmentCancelled):
+                semantic_alignment.embed_texts(
+                    ["a", "b"], None, model_id="minilm-l12-v2"
+                )
+
+    def test_embed_texts_clears_stale_cancel_before_running(self) -> None:
+        # A stale flag left by a prior shutdown must not fail a fresh run.
+        embedding_runtime.request_embedding_cancel()
+
+        def fake_embed(texts, batch_size):
+            for index in range(len(texts)):
+                yield [float(index)]
+
+        class _FakeTextEmbedding:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def embed(self, texts, batch_size):
+                return fake_embed(texts, batch_size)
+
+        with mock.patch.dict(
+            "sys.modules",
+            {"fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding)},
+        ), mock.patch.object(semantic_alignment, "_write_model_receipt"):
+            vectors = semantic_alignment.embed_texts(
+                ["a", "b"], None, model_id="minilm-l12-v2"
+            )
+        self.assertEqual(vectors.shape, (2, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

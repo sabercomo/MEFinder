@@ -444,10 +444,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 UI 修复：文献检索设置的繁简选项补齐图标/勾选槽（修一字一行塌缩）；
     #   按页导出对话框改分段控件（原书/物理页码）并统一间距。
     # 0.5.3 对齐可取消：对齐/重新对齐按钮在运行中翻转为「取消对齐」（.is-cancel）。
+    # 0.5.3 繁简开关：文献检索设置的繁简统一检索改为独立开关（.setting-switch-*），默认开。
     BASELINE_SHA256 = (
-        "47ba834ea209effcb2bb38a3380b3efc23231eb88c165a7dd5dcf2394aaadbc6"
+        "b8b1d6f327f66ceaa526a73a044d7aba67d54c7cd837443c00d7dbdca8a397ce"
     )
-    BASELINE_BYTES = 1073375
+    BASELINE_BYTES = 1074538
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

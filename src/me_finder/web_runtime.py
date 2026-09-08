@@ -648,6 +648,13 @@ def build_application_runtime(
     def begin_shutdown() -> None:
         """Reject new writes and stop accepting background work."""
 
+        # A translation alignment runs its multi-minute embedding inside a
+        # durable operation; shutdown waits for that operation to drain. Signal
+        # the embedding loop to stop at its next batch so the wait returns in
+        # seconds instead of blocking the whole app close on a full-book run.
+        from .embedding_runtime import request_embedding_cancel
+
+        request_embedding_cancel()
         durable_operations.begin_shutdown()
         index_runtime.begin_shutdown()
         import_task_queue.shutdown(wait=False)

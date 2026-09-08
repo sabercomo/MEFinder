@@ -22,6 +22,7 @@ from .embedding_models import (
 )
 from .embedding_runtime import (
     SemanticAlignmentCancelled,
+    begin_embedding_run,
     embedding_cancel_requested,
     embedding_thread_count,
 )
@@ -209,10 +210,19 @@ def embed_texts(
 ) -> np.ndarray:
     """Embed text with FastEmbed's CPU ONNX multilingual model."""
 
+    # A fresh run starts un-cancelled: a cancel is only meaningful once the
+    # inference loop is underway (the cancel endpoint / shutdown set the flag
+    # while it runs). Clearing here also stops a stale flag left by an earlier
+    # shutdown from failing an unrelated later run.
+    begin_embedding_run()
     try:
         return FastEmbedEmbeddingProvider(embedding_model_config(model_id))(
             texts, cache_dir
         )
+    except SemanticAlignmentCancelled:
+        # A user cancellation is not a model-load failure; keep it distinct so
+        # the coordinator reports "cancelled", not "对齐失败".
+        raise
     except Exception as exc:
         raise SemanticAlignmentError(
             "跨语言语义模型加载失败；请检查网络后重试生成对齐。"

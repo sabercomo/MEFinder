@@ -1042,9 +1042,7 @@
     }
     var option = document.getElementById('script-folding-option');
     if (option) {
-      option.classList.toggle('selected', settingsStore.scriptFoldingEnabled);
       option.classList.toggle('is-disabled', !settingsStore.scriptFoldingAvailable);
-      option.setAttribute('aria-checked', settingsStore.scriptFoldingEnabled ? 'true' : 'false');
     }
     var status = document.getElementById('script-folding-status');
     if (status) status.textContent = settingsStore.scriptFoldingAvailable

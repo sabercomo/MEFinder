@@ -546,14 +546,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <section class="settings-section" id="script-search-settings" role="tabpanel">
             <div class="settings-section-head"><span class="settings-section-heading-copy"><span class="settings-section-title">文献检索</span></span></div>
             <div class="settings-collapse-body" id="script-search-body">
-              <div class="pdf-open-options" id="script-folding-options" role="group" aria-label="繁简统一检索">
-                <label class="pdf-open-option" id="script-folding-option">
-                  <input type="checkbox" id="script-folding-enabled" checked disabled onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
-                  <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h9M8.5 5v2.5c0 3.4-1.8 6-4.5 7.2"/><path d="M6 10.5c1 2 2.8 3.4 5 4.2"/><path d="m13 20 3.5-8 3.5 8M14.4 17h4.2"/></svg></span>
-                  <span class="pdf-open-option-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
-                  <span class="pdf-open-option-check" aria-hidden="true"></span>
-                </label>
-              </div>
+              <label class="setting-switch-row" id="script-folding-option">
+                <span class="setting-switch-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
+                <input type="checkbox" id="script-folding-enabled" class="setting-switch-input" role="switch" checked onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
+                <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+              </label>
             </div>
           </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
