@@ -109,8 +109,16 @@ def align_corridor(
     source_lengths: Sequence[int], target_lengths: Sequence[int],
     s0: int, s1: int, t0: int, t1: int, ratio: float,
     *, force_link: Tuple[int, int, int, int] | None = None,
+    flagged_targets: frozenset = frozenset(), flagged_sources: frozenset = frozenset(),
+    flagged_gap_penalty: float | None = None,
 ) -> Dict[str, object]:
     """Banded corridor DP reproducing ``_align_partition``'s cost and band.
+
+    The single experimental variable is the gap penalty for *flagged* segments:
+    a (0,1) gap over a target in ``flagged_targets`` (or a (1,0) gap over a source
+    in ``flagged_sources``) uses ``flagged_gap_penalty`` instead of 2.2 when it is
+    given.  Everything else — embeddings, similarity, match cost, band, threshold
+    — is identical to production.
 
     Returns the minimum-cost path (absolute (s0,s1,t0,t1) links), its total cost
     and gap count.  With ``force_link`` (an absolute matched span the path must
@@ -124,6 +132,11 @@ def align_corridor(
     inf = math.inf
 
     def cost(di: int, dj: int, ai: int, aj: int) -> float:
+        if flagged_gap_penalty is not None:
+            if di == 0 and dj == 1 and (aj - 1) in flagged_targets:
+                return flagged_gap_penalty + math.log1p(target_lengths[aj - 1]) / 12.0
+            if dj == 0 and di == 1 and (ai - 1) in flagged_sources:
+                return flagged_gap_penalty + math.log1p(source_lengths[ai - 1]) / 12.0
         return link_cost(source_prefix, target_prefix, source_lengths, target_lengths,
                          ai - di, ai, aj - dj, aj, ratio)[0]
 
@@ -242,6 +255,78 @@ def align_corridor(
         "gaps": sum(1 for a, b, c, d in cpath if a == b or c == d),
     }
     return result
+
+
+def detect_no_counterpart(
+    source_rows: np.ndarray, target_rows: np.ndarray,
+    s0: int, s1: int, t0: int, t1: int, *, threshold: float,
+) -> Dict[str, list]:
+    """Flag corridor segments whose best cross-side cosine is below ``threshold``.
+
+    Explainable, corpus-general signal for an edition-only insertion or an OCR
+    noise segment: the model finds no counterpart on the other side of the
+    corridor.  Uses each segment's own normalised vector (single-row group), the
+    same cosine the DP scores with.  No fixture id, position, or gold answer
+    enters this rule; the caller supplies only a similarity threshold.
+    """
+    src = source_rows[s0:s1]
+    tgt = target_rows[t0:t1]
+    result: Dict[str, list] = {"target": [], "source": []}
+    if len(src) and len(tgt):
+        sims = tgt @ src.T  # (target, source) cosine
+        tgt_max = sims.max(axis=1)
+        src_max = sims.max(axis=0)
+        result["target"] = [t0 + int(j) for j in np.flatnonzero(tgt_max < threshold)]
+        result["source"] = [s0 + int(i) for i in np.flatnonzero(src_max < threshold)]
+    return result
+
+
+import re  # noqa: E402
+
+# Editorial-apparatus label vocabulary shared across editions of a work — these
+# segments are structural markers (a note/addition/remark heading), not running
+# text, so they have no counterpart in the other edition's body.  This flags the
+# *label* segment only; it never assumes the block after it lacks correspondence.
+_APPARATUS_LABEL = re.compile(
+    r"^\s*[\"'(\[]*\s*("
+    r"addition|zusatz|zusatze|anmerkung|randbemerkung|remark|note|"
+    r"translator|editor|herausgeber|ubersetzer|footnote|fussnote"
+    r")\b", re.IGNORECASE)
+
+
+def _alpha_ratio(text: str) -> float:
+    stripped = [c for c in text if not c.isspace()]
+    if not stripped:
+        return 1.0
+    alpha = sum(1 for c in stripped if c.isalpha())
+    return alpha / len(stripped)
+
+
+def is_ocr_noise(text: str) -> bool:
+    """OCR-garbage segment: mostly punctuation/symbols, or a tiny symbolic scrap."""
+    nonspace = [c for c in text if not c.isspace()]
+    if not nonspace:
+        return True
+    if len(nonspace) <= 3 and _alpha_ratio(text) < 1.0:
+        return True
+    return _alpha_ratio(text) < 0.5
+
+
+def is_apparatus_label(text: str) -> bool:
+    """Short editorial-apparatus label (a heading marker), corpus-general."""
+    head = text.strip()
+    return bool(_APPARATUS_LABEL.match(head)) and len(head) <= 60
+
+
+def detect_edition_apparatus(texts: Sequence[str], t0: int, t1: int) -> list[int]:
+    """Structural edition-only segments in [t0, t1): apparatus labels + OCR noise.
+
+    Text-structure only — no fixture id, position, embedding, or gold answer.
+    Deliberately conservative: flags markers/noise, never elaboration content
+    (whose correspondence status cannot be decided structurally).
+    """
+    return [j for j in range(t0, t1)
+            if j < len(texts) and (is_apparatus_label(texts[j]) or is_ocr_noise(texts[j]))]
 
 
 def arm_a_refine(

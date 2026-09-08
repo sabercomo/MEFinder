@@ -44,6 +44,27 @@ class LinkCostFidelity(unittest.TestCase):
         mine = refine.align_corridor(sp, tp, slen, tlen, 0, 18, 0, 26, ratio)["path"]
         self.assertEqual(prod, mine)
 
+    def test_edition_apparatus_detector_flags_labels_and_ocr_only(self) -> None:
+        texts = ["Real running sentence about needs and means.",
+                 "Addition (H).",           # apparatus label (short) -> flagged
+                 "Another full content sentence with real words here.",
+                 "1'1 \n' ;",               # OCR noise -> flagged
+                 "Note, in passing, that this is a long ordinary sentence which merely happens to open with the word note."]
+        flagged = refine.detect_edition_apparatus(texts, 0, len(texts))
+        self.assertEqual(flagged, [1, 3])  # short label + OCR only; running content (even index 4 >60 chars) not flagged
+
+    def test_flagged_gap_penalty_lowers_only_flagged_gap_cost(self) -> None:
+        rng = np.random.default_rng(9)
+        src = sa._normalized_rows(rng.standard_normal((6, 8)).astype(np.float32))
+        tgt = sa._normalized_rows(rng.standard_normal((9, 8)).astype(np.float32))
+        sp, tp = refine.prefix_sums(src), refine.prefix_sums(tgt)
+        slen, tlen = [7] * 6, [7] * 9
+        ratio = refine.corridor_ratio(slen, tlen, 0, 6, 0, 9)
+        base = refine.align_corridor(sp, tp, slen, tlen, 0, 6, 0, 9, ratio)
+        disc = refine.align_corridor(sp, tp, slen, tlen, 0, 6, 0, 9, ratio,
+                                     flagged_targets=frozenset(range(9)), flagged_gap_penalty=0.1)
+        self.assertLessEqual(disc["cost"], base["cost"])  # cheaper gaps cannot raise the optimum
+
     def test_constrained_path_never_cheaper_than_unconstrained(self) -> None:
         rng = np.random.default_rng(71)
         src = sa._normalized_rows(rng.standard_normal((12, 8)).astype(np.float32))

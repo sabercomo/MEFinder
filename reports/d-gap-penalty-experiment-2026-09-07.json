@@ -1,0 +1,4096 @@
+{
+  "summary": {
+    "levels": {
+      "1.5": {
+        "fixtures_fixed_full_member_set": [],
+        "gold_regressions": [],
+        "gold_links_changed": [],
+        "fixture_links_changed": [],
+        "n74_baseline": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        },
+        "n74_level": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        }
+      },
+      "1.0": {
+        "fixtures_fixed_full_member_set": [],
+        "gold_regressions": [],
+        "gold_links_changed": [],
+        "fixture_links_changed": [],
+        "n74_baseline": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        },
+        "n74_level": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        }
+      },
+      "0.5": {
+        "fixtures_fixed_full_member_set": [],
+        "gold_regressions": [],
+        "gold_links_changed": [],
+        "fixture_links_changed": [
+          28
+        ],
+        "n74_baseline": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        },
+        "n74_level": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        }
+      }
+    }
+  },
+  "golds": [
+    {
+      "n": 0,
+      "label": "正确",
+      "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 2276,
+      "gold_target_v13": [
+        2940,
+        2941
+      ],
+      "baseline": {
+        "source": [
+          2276,
+          2277
+        ],
+        "target": [
+          2940,
+          2942
+        ],
+        "confidence": 0.9304,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2276,
+            2277
+          ],
+          "target": [
+            2940,
+            2942
+          ],
+          "confidence": 0.9304,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2276,
+            2277
+          ],
+          "target": [
+            2940,
+            2942
+          ],
+          "confidence": 0.9304,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2276,
+            2277
+          ],
+          "target": [
+            2940,
+            2942
+          ],
+          "confidence": 0.9304,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 3,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 560,
+      "gold_target_v13": [
+        552,
+        553
+      ],
+      "baseline": {
+        "source": [
+          560,
+          562
+        ],
+        "target": [
+          552,
+          554
+        ],
+        "confidence": 0.9117,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            560,
+            562
+          ],
+          "target": [
+            552,
+            554
+          ],
+          "confidence": 0.9117,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            560,
+            562
+          ],
+          "target": [
+            552,
+            554
+          ],
+          "confidence": 0.9117,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            560,
+            562
+          ],
+          "target": [
+            552,
+            554
+          ],
+          "confidence": 0.9117,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 4,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 1440,
+      "gold_target_v13": [
+        3109
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 6,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 778,
+      "gold_target_v13": [
+        769,
+        770
+      ],
+      "baseline": {
+        "source": [
+          778,
+          780
+        ],
+        "target": [
+          769,
+          771
+        ],
+        "confidence": 0.9263,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            778,
+            780
+          ],
+          "target": [
+            769,
+            771
+          ],
+          "confidence": 0.9263,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            778,
+            780
+          ],
+          "target": [
+            769,
+            771
+          ],
+          "confidence": 0.9263,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            778,
+            780
+          ],
+          "target": [
+            769,
+            771
+          ],
+          "confidence": 0.9263,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 7,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 3001,
+      "gold_target_v13": [
+        2417,
+        2418
+      ],
+      "baseline": {
+        "source": [
+          3001,
+          3003
+        ],
+        "target": [
+          2417,
+          2419
+        ],
+        "confidence": 0.9427,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3001,
+            3003
+          ],
+          "target": [
+            2417,
+            2419
+          ],
+          "confidence": 0.9427,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3001,
+            3003
+          ],
+          "target": [
+            2417,
+            2419
+          ],
+          "confidence": 0.9427,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3001,
+            3003
+          ],
+          "target": [
+            2417,
+            2419
+          ],
+          "confidence": 0.9427,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 8,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 4493,
+      "gold_target_v13": [
+        5162
+      ],
+      "baseline": {
+        "source": [
+          4493,
+          4495
+        ],
+        "target": [
+          5162,
+          5163
+        ],
+        "confidence": 0.8915,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            4493,
+            4495
+          ],
+          "target": [
+            5162,
+            5163
+          ],
+          "confidence": 0.8915,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            4493,
+            4495
+          ],
+          "target": [
+            5162,
+            5163
+          ],
+          "confidence": 0.8915,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            4493,
+            4495
+          ],
+          "target": [
+            5162,
+            5163
+          ],
+          "confidence": 0.8915,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 9,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 1642,
+      "gold_target_v13": [
+        1639
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 10,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 926,
+      "gold_target_v13": [
+        913,
+        914
+      ],
+      "baseline": {
+        "source": [
+          926,
+          928
+        ],
+        "target": [
+          913,
+          915
+        ],
+        "confidence": 0.9145,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            926,
+            928
+          ],
+          "target": [
+            913,
+            915
+          ],
+          "confidence": 0.9145,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            926,
+            928
+          ],
+          "target": [
+            913,
+            915
+          ],
+          "confidence": 0.9145,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            926,
+            928
+          ],
+          "target": [
+            913,
+            915
+          ],
+          "confidence": 0.9145,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 14,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 5598,
+      "gold_target_v13": [
+        5977
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 15,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 4696,
+      "gold_target_v13": [
+        5362
+      ],
+      "baseline": {
+        "source": [
+          4696,
+          4699
+        ],
+        "target": [
+          5362,
+          5363
+        ],
+        "confidence": 0.8824,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            4696,
+            4699
+          ],
+          "target": [
+            5362,
+            5363
+          ],
+          "confidence": 0.8824,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            4696,
+            4699
+          ],
+          "target": [
+            5362,
+            5363
+          ],
+          "confidence": 0.8824,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            4696,
+            4699
+          ],
+          "target": [
+            5362,
+            5363
+          ],
+          "confidence": 0.8824,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 18,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 2344,
+      "gold_target_v13": [
+        2784,
+        2785
+      ],
+      "baseline": {
+        "source": [
+          2344,
+          2347
+        ],
+        "target": [
+          2784,
+          2786
+        ],
+        "confidence": 0.9087,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2344,
+            2347
+          ],
+          "target": [
+            2784,
+            2786
+          ],
+          "confidence": 0.9087,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2344,
+            2347
+          ],
+          "target": [
+            2784,
+            2786
+          ],
+          "confidence": 0.9087,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2344,
+            2347
+          ],
+          "target": [
+            2784,
+            2786
+          ],
+          "confidence": 0.9087,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 21,
+      "label": "正确",
+      "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+      "pivot_v13": 878,
+      "gold_target_v13": [
+        462,
+        463
+      ],
+      "baseline": {
+        "source": [
+          878,
+          880
+        ],
+        "target": [
+          462,
+          464
+        ],
+        "confidence": 0.9099,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            878,
+            880
+          ],
+          "target": [
+            462,
+            464
+          ],
+          "confidence": 0.9099,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            878,
+            880
+          ],
+          "target": [
+            462,
+            464
+          ],
+          "confidence": 0.9099,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            878,
+            880
+          ],
+          "target": [
+            462,
+            464
+          ],
+          "confidence": 0.9099,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 23,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2221,
+      "gold_target_v13": [
+        2649,
+        2650,
+        2651
+      ],
+      "baseline": {
+        "source": [
+          2221,
+          2222
+        ],
+        "target": [
+          2649,
+          2652
+        ],
+        "confidence": 0.8838,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2221,
+            2222
+          ],
+          "target": [
+            2649,
+            2652
+          ],
+          "confidence": 0.8838,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2221,
+            2222
+          ],
+          "target": [
+            2649,
+            2652
+          ],
+          "confidence": 0.8838,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2221,
+            2222
+          ],
+          "target": [
+            2649,
+            2652
+          ],
+          "confidence": 0.8838,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 25,
+      "label": "正确",
+      "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 1973,
+      "gold_target_v13": [
+        2107,
+        2108
+      ],
+      "baseline": {
+        "source": [
+          1973,
+          1975
+        ],
+        "target": [
+          2107,
+          2109
+        ],
+        "confidence": 0.9102,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1973,
+            1975
+          ],
+          "target": [
+            2107,
+            2109
+          ],
+          "confidence": 0.9102,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1973,
+            1975
+          ],
+          "target": [
+            2107,
+            2109
+          ],
+          "confidence": 0.9102,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1973,
+            1975
+          ],
+          "target": [
+            2107,
+            2109
+          ],
+          "confidence": 0.9102,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 26,
+      "label": "正确",
+      "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 2409,
+      "gold_target_v13": [
+        3086
+      ],
+      "baseline": {
+        "source": [
+          2409,
+          2410
+        ],
+        "target": [
+          3086,
+          3087
+        ],
+        "confidence": 0.9538,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2409,
+            2410
+          ],
+          "target": [
+            3086,
+            3087
+          ],
+          "confidence": 0.9538,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2409,
+            2410
+          ],
+          "target": [
+            3086,
+            3087
+          ],
+          "confidence": 0.9538,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2409,
+            2410
+          ],
+          "target": [
+            3086,
+            3087
+          ],
+          "confidence": 0.9538,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 27,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 3342,
+      "gold_target_v13": [
+        3798,
+        3799
+      ],
+      "baseline": {
+        "source": [
+          3342,
+          3344
+        ],
+        "target": [
+          3798,
+          3800
+        ],
+        "confidence": 0.8914,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3342,
+            3344
+          ],
+          "target": [
+            3798,
+            3800
+          ],
+          "confidence": 0.8914,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3342,
+            3344
+          ],
+          "target": [
+            3798,
+            3800
+          ],
+          "confidence": 0.8914,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3342,
+            3344
+          ],
+          "target": [
+            3798,
+            3800
+          ],
+          "confidence": 0.8914,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 30,
+      "label": "正确",
+      "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+      "pivot_v13": 265,
+      "gold_target_v13": [
+        364
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 33,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 2191,
+      "gold_target_v13": [
+        1706,
+        1707
+      ],
+      "baseline": {
+        "source": [
+          2191,
+          2193
+        ],
+        "target": [
+          1706,
+          1708
+        ],
+        "confidence": 0.941,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2191,
+            2193
+          ],
+          "target": [
+            1706,
+            1708
+          ],
+          "confidence": 0.941,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2191,
+            2193
+          ],
+          "target": [
+            1706,
+            1708
+          ],
+          "confidence": 0.941,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2191,
+            2193
+          ],
+          "target": [
+            1706,
+            1708
+          ],
+          "confidence": 0.941,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 34,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 4936,
+      "gold_target_v13": [
+        5608,
+        5609,
+        5610
+      ],
+      "baseline": {
+        "source": [
+          4936,
+          4938
+        ],
+        "target": [
+          5608,
+          5611
+        ],
+        "confidence": 0.9181,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            4936,
+            4938
+          ],
+          "target": [
+            5608,
+            5611
+          ],
+          "confidence": 0.9181,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            4936,
+            4938
+          ],
+          "target": [
+            5608,
+            5611
+          ],
+          "confidence": 0.9181,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            4936,
+            4938
+          ],
+          "target": [
+            5608,
+            5611
+          ],
+          "confidence": 0.9181,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 35,
+      "label": "正确",
+      "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+      "pivot_v13": 1013,
+      "gold_target_v13": [
+        1019
+      ],
+      "baseline": {
+        "source": [
+          1013,
+          1014
+        ],
+        "target": [
+          1019,
+          1020
+        ],
+        "confidence": 0.9349,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1013,
+            1014
+          ],
+          "target": [
+            1019,
+            1020
+          ],
+          "confidence": 0.9349,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1013,
+            1014
+          ],
+          "target": [
+            1019,
+            1020
+          ],
+          "confidence": 0.9349,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1013,
+            1014
+          ],
+          "target": [
+            1019,
+            1020
+          ],
+          "confidence": 0.9349,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 36,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 3339,
+      "gold_target_v13": [
+        3316,
+        3317
+      ],
+      "baseline": {
+        "source": [
+          3339,
+          3341
+        ],
+        "target": [
+          3316,
+          3318
+        ],
+        "confidence": 0.9221,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3339,
+            3341
+          ],
+          "target": [
+            3316,
+            3318
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3339,
+            3341
+          ],
+          "target": [
+            3316,
+            3318
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3339,
+            3341
+          ],
+          "target": [
+            3316,
+            3318
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 37,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 2479,
+      "gold_target_v13": [
+        4715,
+        4716
+      ],
+      "baseline": {
+        "source": [
+          2479,
+          2480
+        ],
+        "target": [
+          4715,
+          4717
+        ],
+        "confidence": 0.9169,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2479,
+            2480
+          ],
+          "target": [
+            4715,
+            4717
+          ],
+          "confidence": 0.9169,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2479,
+            2480
+          ],
+          "target": [
+            4715,
+            4717
+          ],
+          "confidence": 0.9169,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2479,
+            2480
+          ],
+          "target": [
+            4715,
+            4717
+          ],
+          "confidence": 0.9169,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 38,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 4575,
+      "gold_target_v13": [
+        3921,
+        3922
+      ],
+      "baseline": {
+        "source": [
+          4575,
+          4577
+        ],
+        "target": [
+          3921,
+          3923
+        ],
+        "confidence": 0.9476,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            4575,
+            4577
+          ],
+          "target": [
+            3921,
+            3923
+          ],
+          "confidence": 0.9476,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            4575,
+            4577
+          ],
+          "target": [
+            3921,
+            3923
+          ],
+          "confidence": 0.9476,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            4575,
+            4577
+          ],
+          "target": [
+            3921,
+            3923
+          ],
+          "confidence": 0.9476,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 39,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 2402,
+      "gold_target_v13": [
+        1820,
+        1821
+      ],
+      "baseline": {
+        "source": [
+          2402,
+          2404
+        ],
+        "target": [
+          1820,
+          1822
+        ],
+        "confidence": 0.9423,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2402,
+            2404
+          ],
+          "target": [
+            1820,
+            1822
+          ],
+          "confidence": 0.9423,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2402,
+            2404
+          ],
+          "target": [
+            1820,
+            1822
+          ],
+          "confidence": 0.9423,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2402,
+            2404
+          ],
+          "target": [
+            1820,
+            1822
+          ],
+          "confidence": 0.9423,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 42,
+      "label": "正确",
+      "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 737,
+      "gold_target_v13": [
+        1373,
+        1374
+      ],
+      "baseline": {
+        "source": [
+          737,
+          739
+        ],
+        "target": [
+          1373,
+          1375
+        ],
+        "confidence": 0.9456,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            737,
+            739
+          ],
+          "target": [
+            1373,
+            1375
+          ],
+          "confidence": 0.9456,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            737,
+            739
+          ],
+          "target": [
+            1373,
+            1375
+          ],
+          "confidence": 0.9456,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            737,
+            739
+          ],
+          "target": [
+            1373,
+            1375
+          ],
+          "confidence": 0.9456,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 45,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 4361,
+      "gold_target_v13": [
+        4837
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 46,
+      "label": "正确",
+      "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+      "pivot_v13": 2795,
+      "gold_target_v13": [
+        2252,
+        2253,
+        2254
+      ],
+      "baseline": {
+        "source": [
+          2795,
+          2797
+        ],
+        "target": [
+          2252,
+          2255
+        ],
+        "confidence": 0.916,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2795,
+            2797
+          ],
+          "target": [
+            2252,
+            2255
+          ],
+          "confidence": 0.916,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2795,
+            2797
+          ],
+          "target": [
+            2252,
+            2255
+          ],
+          "confidence": 0.916,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2795,
+            2797
+          ],
+          "target": [
+            2252,
+            2255
+          ],
+          "confidence": 0.916,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 48,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 5976,
+      "gold_target_v13": [
+        6311
+      ],
+      "baseline": {
+        "source": [
+          5976,
+          5977
+        ],
+        "target": [
+          6311,
+          6312
+        ],
+        "confidence": 0.9106,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            5976,
+            5977
+          ],
+          "target": [
+            6311,
+            6312
+          ],
+          "confidence": 0.9106,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            5976,
+            5977
+          ],
+          "target": [
+            6311,
+            6312
+          ],
+          "confidence": 0.9106,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            5976,
+            5977
+          ],
+          "target": [
+            6311,
+            6312
+          ],
+          "confidence": 0.9106,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 50,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 1550,
+      "gold_target_v13": [
+        3235,
+        3236,
+        3237
+      ],
+      "baseline": {
+        "source": [
+          1550,
+          1553
+        ],
+        "target": [
+          3235,
+          3238
+        ],
+        "confidence": 0.9372,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1550,
+            1553
+          ],
+          "target": [
+            3235,
+            3238
+          ],
+          "confidence": 0.9372,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1550,
+            1553
+          ],
+          "target": [
+            3235,
+            3238
+          ],
+          "confidence": 0.9372,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1550,
+            1553
+          ],
+          "target": [
+            3235,
+            3238
+          ],
+          "confidence": 0.9372,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 52,
+      "label": "正确",
+      "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+      "pivot_v13": 892,
+      "gold_target_v13": [
+        914
+      ],
+      "baseline": {
+        "source": [
+          892,
+          893
+        ],
+        "target": [
+          914,
+          915
+        ],
+        "confidence": 0.9292,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            892,
+            893
+          ],
+          "target": [
+            914,
+            915
+          ],
+          "confidence": 0.9292,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            892,
+            893
+          ],
+          "target": [
+            914,
+            915
+          ],
+          "confidence": 0.9292,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            892,
+            893
+          ],
+          "target": [
+            914,
+            915
+          ],
+          "confidence": 0.9292,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 55,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 5477,
+      "gold_target_v13": [
+        4603
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 56,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "pivot_v13": 3179,
+      "gold_target_v13": [
+        5315
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 57,
+      "label": "正确",
+      "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 2644,
+      "gold_target_v13": [
+        3329
+      ],
+      "baseline": {
+        "source": [
+          2644,
+          2645
+        ],
+        "target": [
+          3329,
+          3330
+        ],
+        "confidence": 0.953,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2644,
+            2645
+          ],
+          "target": [
+            3329,
+            3330
+          ],
+          "confidence": 0.953,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2644,
+            2645
+          ],
+          "target": [
+            3329,
+            3330
+          ],
+          "confidence": 0.953,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2644,
+            2645
+          ],
+          "target": [
+            3329,
+            3330
+          ],
+          "confidence": 0.953,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 58,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 679,
+      "gold_target_v13": [
+        663,
+        664
+      ],
+      "baseline": {
+        "source": [
+          679,
+          681
+        ],
+        "target": [
+          663,
+          665
+        ],
+        "confidence": 0.9497,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            679,
+            681
+          ],
+          "target": [
+            663,
+            665
+          ],
+          "confidence": 0.9497,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            679,
+            681
+          ],
+          "target": [
+            663,
+            665
+          ],
+          "confidence": 0.9497,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            679,
+            681
+          ],
+          "target": [
+            663,
+            665
+          ],
+          "confidence": 0.9497,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 59,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 2977,
+      "gold_target_v13": [
+        2395,
+        2396
+      ],
+      "baseline": {
+        "source": [
+          2977,
+          2979
+        ],
+        "target": [
+          2395,
+          2397
+        ],
+        "confidence": 0.9278,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2977,
+            2979
+          ],
+          "target": [
+            2395,
+            2397
+          ],
+          "confidence": 0.9278,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2977,
+            2979
+          ],
+          "target": [
+            2395,
+            2397
+          ],
+          "confidence": 0.9278,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2977,
+            2979
+          ],
+          "target": [
+            2395,
+            2397
+          ],
+          "confidence": 0.9278,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 62,
+      "label": "正确",
+      "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 1666,
+      "gold_target_v13": [
+        1817,
+        1818,
+        1819
+      ],
+      "baseline": {
+        "source": [
+          1666,
+          1669
+        ],
+        "target": [
+          1817,
+          1820
+        ],
+        "confidence": 0.9023,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1666,
+            1669
+          ],
+          "target": [
+            1817,
+            1820
+          ],
+          "confidence": 0.9023,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1666,
+            1669
+          ],
+          "target": [
+            1817,
+            1820
+          ],
+          "confidence": 0.9023,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1666,
+            1669
+          ],
+          "target": [
+            1817,
+            1820
+          ],
+          "confidence": 0.9023,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 63,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-6a0325052e779b9e",
+      "pivot_v13": 3921,
+      "gold_target_v13": [
+        2282
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 64,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 3741,
+      "gold_target_v13": [
+        4246,
+        4247
+      ],
+      "baseline": {
+        "source": [
+          3741,
+          3744
+        ],
+        "target": [
+          4246,
+          4248
+        ],
+        "confidence": 0.9221,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3741,
+            3744
+          ],
+          "target": [
+            4246,
+            4248
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3741,
+            3744
+          ],
+          "target": [
+            4246,
+            4248
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3741,
+            3744
+          ],
+          "target": [
+            4246,
+            4248
+          ],
+          "confidence": 0.9221,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 65,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 5061,
+      "gold_target_v13": [
+        5466,
+        5467
+      ],
+      "baseline": {
+        "source": [
+          5061,
+          5064
+        ],
+        "target": [
+          5466,
+          5468
+        ],
+        "confidence": 0.9332,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            5061,
+            5064
+          ],
+          "target": [
+            5466,
+            5468
+          ],
+          "confidence": 0.9332,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            5061,
+            5064
+          ],
+          "target": [
+            5466,
+            5468
+          ],
+          "confidence": 0.9332,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            5061,
+            5064
+          ],
+          "target": [
+            5466,
+            5468
+          ],
+          "confidence": 0.9332,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 66,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 2482,
+      "gold_target_v13": [
+        4722
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 67,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 1773,
+      "gold_target_v13": [
+        2136,
+        2137,
+        2138
+      ],
+      "baseline": {
+        "source": [
+          1773,
+          1776
+        ],
+        "target": [
+          2136,
+          2139
+        ],
+        "confidence": 0.8904,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1773,
+            1776
+          ],
+          "target": [
+            2136,
+            2139
+          ],
+          "confidence": 0.8904,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1773,
+            1776
+          ],
+          "target": [
+            2136,
+            2139
+          ],
+          "confidence": 0.8904,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1773,
+            1776
+          ],
+          "target": [
+            2136,
+            2139
+          ],
+          "confidence": 0.8904,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 68,
+      "label": "正确",
+      "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+      "pivot_v13": 2361,
+      "gold_target_v13": [
+        1844,
+        1845
+      ],
+      "baseline": {
+        "source": [
+          2361,
+          2363
+        ],
+        "target": [
+          1844,
+          1846
+        ],
+        "confidence": 0.9035,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2361,
+            2363
+          ],
+          "target": [
+            1844,
+            1846
+          ],
+          "confidence": 0.9035,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2361,
+            2363
+          ],
+          "target": [
+            1844,
+            1846
+          ],
+          "confidence": 0.9035,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2361,
+            2363
+          ],
+          "target": [
+            1844,
+            1846
+          ],
+          "confidence": 0.9035,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 70,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 4450,
+      "gold_target_v13": [
+        3782,
+        3783
+      ],
+      "baseline": {
+        "source": [
+          4450,
+          4452
+        ],
+        "target": [
+          3782,
+          3784
+        ],
+        "confidence": 0.946,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            4450,
+            4452
+          ],
+          "target": [
+            3782,
+            3784
+          ],
+          "confidence": 0.946,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            4450,
+            4452
+          ],
+          "target": [
+            3782,
+            3784
+          ],
+          "confidence": 0.946,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            4450,
+            4452
+          ],
+          "target": [
+            3782,
+            3784
+          ],
+          "confidence": 0.946,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 71,
+      "label": "正确",
+      "pair": "pdf-import-e63bdea39567e3ac -> pdf-import-d574027d045ce657",
+      "pivot_v13": 518,
+      "gold_target_v13": [
+        476,
+        477,
+        478
+      ],
+      "baseline": {
+        "source": [
+          518,
+          521
+        ],
+        "target": [
+          476,
+          479
+        ],
+        "confidence": 0.9268,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            518,
+            521
+          ],
+          "target": [
+            476,
+            479
+          ],
+          "confidence": 0.9268,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            518,
+            521
+          ],
+          "target": [
+            476,
+            479
+          ],
+          "confidence": 0.9268,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            518,
+            521
+          ],
+          "target": [
+            476,
+            479
+          ],
+          "confidence": 0.9268,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 72,
+      "label": "正确",
+      "pair": "epub-238424f6926e518201c245cd359d0668 -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 2565,
+      "gold_target_v13": [
+        2174,
+        2175,
+        2176
+      ],
+      "baseline": {
+        "source": [
+          2565,
+          2568
+        ],
+        "target": [
+          2174,
+          2177
+        ],
+        "confidence": 0.9027,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2565,
+            2568
+          ],
+          "target": [
+            2174,
+            2177
+          ],
+          "confidence": 0.9027,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2565,
+            2568
+          ],
+          "target": [
+            2174,
+            2177
+          ],
+          "confidence": 0.9027,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2565,
+            2568
+          ],
+          "target": [
+            2174,
+            2177
+          ],
+          "confidence": 0.9027,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 73,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-6a0325052e779b9e",
+      "pivot_v13": 2534,
+      "gold_target_v13": [
+        1420,
+        1421,
+        1422
+      ],
+      "baseline": {
+        "source": [
+          2534,
+          2536
+        ],
+        "target": [
+          1420,
+          1423
+        ],
+        "confidence": 0.9239,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2534,
+            2536
+          ],
+          "target": [
+            1420,
+            1423
+          ],
+          "confidence": 0.9239,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2534,
+            2536
+          ],
+          "target": [
+            1420,
+            1423
+          ],
+          "confidence": 0.9239,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2534,
+            2536
+          ],
+          "target": [
+            1420,
+            1423
+          ],
+          "confidence": 0.9239,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 75,
+      "label": "正确",
+      "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+      "pivot_v13": 2905,
+      "gold_target_v13": [
+        3128,
+        3129
+      ],
+      "baseline": {
+        "source": [
+          2905,
+          2907
+        ],
+        "target": [
+          3128,
+          3130
+        ],
+        "confidence": 0.921,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2905,
+            2907
+          ],
+          "target": [
+            3128,
+            3130
+          ],
+          "confidence": 0.921,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2905,
+            2907
+          ],
+          "target": [
+            3128,
+            3130
+          ],
+          "confidence": 0.921,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2905,
+            2907
+          ],
+          "target": [
+            3128,
+            3130
+          ],
+          "confidence": 0.921,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 76,
+      "label": "正确",
+      "pair": "pdf-import-e63bdea39567e3ac -> pdf-import-d574027d045ce657",
+      "pivot_v13": 1607,
+      "gold_target_v13": [
+        1488,
+        1489,
+        1490
+      ],
+      "baseline": {
+        "source": [
+          1606,
+          1608
+        ],
+        "target": [
+          1487,
+          1489
+        ],
+        "confidence": 0.9702,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1606,
+            1608
+          ],
+          "target": [
+            1487,
+            1489
+          ],
+          "confidence": 0.9702,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1606,
+            1608
+          ],
+          "target": [
+            1487,
+            1489
+          ],
+          "confidence": 0.9702,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1606,
+            1608
+          ],
+          "target": [
+            1487,
+            1489
+          ],
+          "confidence": 0.9702,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 78,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 3717,
+      "gold_target_v13": [
+        6726
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 79,
+      "label": "正确",
+      "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+      "pivot_v13": 932,
+      "gold_target_v13": [
+        945,
+        946
+      ],
+      "baseline": {
+        "source": [
+          932,
+          934
+        ],
+        "target": [
+          945,
+          947
+        ],
+        "confidence": 0.9525,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            932,
+            934
+          ],
+          "target": [
+            945,
+            947
+          ],
+          "confidence": 0.9525,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            932,
+            934
+          ],
+          "target": [
+            945,
+            947
+          ],
+          "confidence": 0.9525,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            932,
+            934
+          ],
+          "target": [
+            945,
+            947
+          ],
+          "confidence": 0.9525,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 81,
+      "label": "正确",
+      "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+      "pivot_v13": 1293,
+      "gold_target_v13": [
+        843,
+        844
+      ],
+      "baseline": {
+        "source": [
+          1293,
+          1296
+        ],
+        "target": [
+          843,
+          845
+        ],
+        "confidence": 0.8975,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1293,
+            1296
+          ],
+          "target": [
+            843,
+            845
+          ],
+          "confidence": 0.8975,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1293,
+            1296
+          ],
+          "target": [
+            843,
+            845
+          ],
+          "confidence": 0.8975,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1293,
+            1296
+          ],
+          "target": [
+            843,
+            845
+          ],
+          "confidence": 0.8975,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 83,
+      "label": "正确",
+      "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+      "pivot_v13": 2366,
+      "gold_target_v13": [
+        1849,
+        1850,
+        1851
+      ],
+      "baseline": {
+        "source": [
+          2366,
+          2369
+        ],
+        "target": [
+          1849,
+          1852
+        ],
+        "confidence": 0.9083,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            2366,
+            2369
+          ],
+          "target": [
+            1849,
+            1852
+          ],
+          "confidence": 0.9083,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            2366,
+            2369
+          ],
+          "target": [
+            1849,
+            1852
+          ],
+          "confidence": 0.9083,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            2366,
+            2369
+          ],
+          "target": [
+            1849,
+            1852
+          ],
+          "confidence": 0.9083,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 85,
+      "label": "正确",
+      "pair": "pdf-import-49635cecdd201dd9 -> pdf-consumer-society",
+      "pivot_v13": 1764,
+      "gold_target_v13": [
+        2258,
+        2259,
+        2260
+      ],
+      "baseline": {
+        "source": [
+          1764,
+          1767
+        ],
+        "target": [
+          2258,
+          2261
+        ],
+        "confidence": 0.923,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            1764,
+            1767
+          ],
+          "target": [
+            2258,
+            2261
+          ],
+          "confidence": 0.923,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            1764,
+            1767
+          ],
+          "target": [
+            2258,
+            2261
+          ],
+          "confidence": 0.923,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            1764,
+            1767
+          ],
+          "target": [
+            2258,
+            2261
+          ],
+          "confidence": 0.923,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 87,
+      "label": "正确",
+      "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+      "pivot_v13": 3179,
+      "gold_target_v13": [
+        3149,
+        3150
+      ],
+      "baseline": {
+        "source": [
+          3179,
+          3181
+        ],
+        "target": [
+          3149,
+          3151
+        ],
+        "confidence": 0.9336,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3179,
+            3181
+          ],
+          "target": [
+            3149,
+            3151
+          ],
+          "confidence": 0.9336,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3179,
+            3181
+          ],
+          "target": [
+            3149,
+            3151
+          ],
+          "confidence": 0.9336,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3179,
+            3181
+          ],
+          "target": [
+            3149,
+            3151
+          ],
+          "confidence": 0.9336,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 90,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 3163,
+      "gold_target_v13": [
+        2585
+      ],
+      "baseline": {
+        "source": [
+          3163,
+          3164
+        ],
+        "target": [
+          2585,
+          2586
+        ],
+        "confidence": 0.9367,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3163,
+            3164
+          ],
+          "target": [
+            2585,
+            2586
+          ],
+          "confidence": 0.9367,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3163,
+            3164
+          ],
+          "target": [
+            2585,
+            2586
+          ],
+          "confidence": 0.9367,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3163,
+            3164
+          ],
+          "target": [
+            2585,
+            2586
+          ],
+          "confidence": 0.9367,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 91,
+      "label": "正确",
+      "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+      "pivot_v13": 3164,
+      "gold_target_v13": [
+        2586
+      ],
+      "baseline": {
+        "source": [
+          3164,
+          3165
+        ],
+        "target": [
+          2586,
+          2587
+        ],
+        "confidence": 0.9364,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3164,
+            3165
+          ],
+          "target": [
+            2586,
+            2587
+          ],
+          "confidence": 0.9364,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3164,
+            3165
+          ],
+          "target": [
+            2586,
+            2587
+          ],
+          "confidence": 0.9364,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3164,
+            3165
+          ],
+          "target": [
+            2586,
+            2587
+          ],
+          "confidence": 0.9364,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 92,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 5077,
+      "gold_target_v13": [
+        5749,
+        5750,
+        5751
+      ],
+      "baseline": {
+        "source": [
+          5077,
+          5078
+        ],
+        "target": [
+          5749,
+          5752
+        ],
+        "confidence": 0.8681,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            5077,
+            5078
+          ],
+          "target": [
+            5749,
+            5752
+          ],
+          "confidence": 0.8681,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            5077,
+            5078
+          ],
+          "target": [
+            5749,
+            5752
+          ],
+          "confidence": 0.8681,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            5077,
+            5078
+          ],
+          "target": [
+            5749,
+            5752
+          ],
+          "confidence": 0.8681,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 94,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 5084,
+      "gold_target_v13": [
+        5487,
+        5488
+      ],
+      "baseline": {
+        "source": [
+          5084,
+          5086
+        ],
+        "target": [
+          5487,
+          5489
+        ],
+        "confidence": 0.9113,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            5084,
+            5086
+          ],
+          "target": [
+            5487,
+            5489
+          ],
+          "confidence": 0.9113,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            5084,
+            5086
+          ],
+          "target": [
+            5487,
+            5489
+          ],
+          "confidence": 0.9113,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            5084,
+            5086
+          ],
+          "target": [
+            5487,
+            5489
+          ],
+          "confidence": 0.9113,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 96,
+      "label": "正确",
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 3322,
+      "gold_target_v13": [
+        3781,
+        3782,
+        3783
+      ],
+      "baseline": {
+        "source": [
+          3322,
+          3325
+        ],
+        "target": [
+          3781,
+          3784
+        ],
+        "confidence": 0.902,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            3322,
+            3325
+          ],
+          "target": [
+            3781,
+            3784
+          ],
+          "confidence": 0.902,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            3322,
+            3325
+          ],
+          "target": [
+            3781,
+            3784
+          ],
+          "confidence": 0.902,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            3322,
+            3325
+          ],
+          "target": [
+            3781,
+            3784
+          ],
+          "confidence": 0.902,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    },
+    {
+      "n": 97,
+      "label": "正确",
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 951,
+      "gold_target_v13": [
+        2300
+      ],
+      "baseline": null,
+      "levels": {
+        "1.5": null,
+        "1.0": null,
+        "0.5": null
+      },
+      "baseline_correct": false
+    },
+    {
+      "n": 74,
+      "label": "部分对应",
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "pivot_v13": 701,
+      "gold_target_v13": [
+        1484,
+        1485,
+        1486
+      ],
+      "baseline": {
+        "source": [
+          701,
+          702
+        ],
+        "target": [
+          1484,
+          1487
+        ],
+        "confidence": 0.846,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        },
+        "1.0": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        },
+        "0.5": {
+          "source": [
+            701,
+            702
+          ],
+          "target": [
+            1484,
+            1487
+          ],
+          "confidence": 0.846,
+          "accepted": true
+        }
+      },
+      "baseline_correct": true
+    }
+  ],
+  "fixtures": [
+    {
+      "n": 11,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "pivot_v13": 3328,
+      "gold_target_v13": [
+        3162,
+        3163,
+        "..."
+      ],
+      "gold_is_range": true,
+      "baseline": {
+        "source": [
+          3328,
+          3331
+        ],
+        "target": [
+          3163,
+          3165
+        ],
+        "confidence": 0.9424,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              3328,
+              3331
+            ],
+            "target": [
+              3163,
+              3165
+            ],
+            "confidence": 0.9424,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": true
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              3328,
+              3331
+            ],
+            "target": [
+              3163,
+              3165
+            ],
+            "confidence": 0.9424,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": true
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              3328,
+              3331
+            ],
+            "target": [
+              3163,
+              3165
+            ],
+            "confidence": 0.9424,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": true
+        }
+      }
+    },
+    {
+      "n": 24,
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2962,
+      "gold_target_v13": [
+        3542,
+        3543
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          2962,
+          2964
+        ],
+        "target": [
+          3560,
+          3563
+        ],
+        "confidence": 0.8653,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              2962,
+              2964
+            ],
+            "target": [
+              3560,
+              3563
+            ],
+            "confidence": 0.8653,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              2962,
+              2964
+            ],
+            "target": [
+              3560,
+              3563
+            ],
+            "confidence": 0.8653,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              2962,
+              2964
+            ],
+            "target": [
+              3560,
+              3563
+            ],
+            "confidence": 0.8653,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 28,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 371,
+      "gold_target_v13": [
+        1193
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          371,
+          372
+        ],
+        "target": [
+          1198,
+          1201
+        ],
+        "confidence": 0.8376,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              371,
+              372
+            ],
+            "target": [
+              1198,
+              1201
+            ],
+            "confidence": 0.8376,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              371,
+              372
+            ],
+            "target": [
+              1198,
+              1201
+            ],
+            "confidence": 0.8376,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              371,
+              372
+            ],
+            "target": [
+              1201,
+              1204
+            ],
+            "confidence": 0.844,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 41,
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 4655,
+      "gold_target_v13": [
+        6503,
+        6504,
+        "..."
+      ],
+      "gold_is_range": true,
+      "baseline": {
+        "source": [
+          4655,
+          4658
+        ],
+        "target": [
+          5119,
+          5121
+        ],
+        "confidence": 0.864,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              4655,
+              4658
+            ],
+            "target": [
+              5119,
+              5121
+            ],
+            "confidence": 0.864,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              4655,
+              4658
+            ],
+            "target": [
+              5119,
+              5121
+            ],
+            "confidence": 0.864,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              4655,
+              4658
+            ],
+            "target": [
+              5119,
+              5121
+            ],
+            "confidence": 0.864,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 53,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "pivot_v13": 547,
+      "gold_target_v13": [
+        562,
+        563,
+        564
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "target": null,
+        "accepted": false,
+        "confidence": 0.0
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "target": null,
+            "accepted": false,
+            "confidence": 0.0
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "target": null,
+            "accepted": false,
+            "confidence": 0.0
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "target": null,
+            "accepted": false,
+            "confidence": 0.0
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 60,
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 1468,
+      "gold_target_v13": [
+        3075
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          1468,
+          1469
+        ],
+        "target": [
+          3079,
+          3082
+        ],
+        "confidence": 0.8323,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              1468,
+              1469
+            ],
+            "target": [
+              3079,
+              3082
+            ],
+            "confidence": 0.8323,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              1468,
+              1469
+            ],
+            "target": [
+              3079,
+              3082
+            ],
+            "confidence": 0.8323,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              1468,
+              1469
+            ],
+            "target": [
+              3079,
+              3082
+            ],
+            "confidence": 0.8323,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 80,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 742,
+      "gold_target_v13": [
+        1883,
+        1884
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          741,
+          743
+        ],
+        "target": [
+          1868,
+          1871
+        ],
+        "confidence": 0.8713,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              741,
+              743
+            ],
+            "target": [
+              1868,
+              1871
+            ],
+            "confidence": 0.8713,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              741,
+              743
+            ],
+            "target": [
+              1868,
+              1871
+            ],
+            "confidence": 0.8713,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              741,
+              743
+            ],
+            "target": [
+              1868,
+              1871
+            ],
+            "confidence": 0.8713,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 82,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2266,
+      "gold_target_v13": [
+        4521
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          2266,
+          2267
+        ],
+        "target": [
+          4516,
+          4519
+        ],
+        "confidence": 0.8371,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              2266,
+              2267
+            ],
+            "target": [
+              4516,
+              4519
+            ],
+            "confidence": 0.8371,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              2266,
+              2267
+            ],
+            "target": [
+              4516,
+              4519
+            ],
+            "confidence": 0.8371,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              2266,
+              2267
+            ],
+            "target": [
+              4516,
+              4519
+            ],
+            "confidence": 0.8371,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 88,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 1854,
+      "gold_target_v13": [],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          1854,
+          1856
+        ],
+        "target": [
+          3763,
+          3766
+        ],
+        "confidence": 0.9176,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              1854,
+              1856
+            ],
+            "target": [
+              3763,
+              3766
+            ],
+            "confidence": 0.9176,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              1854,
+              1856
+            ],
+            "target": [
+              3763,
+              3766
+            ],
+            "confidence": 0.9176,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              1854,
+              1856
+            ],
+            "target": [
+              3763,
+              3766
+            ],
+            "confidence": 0.9176,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 93,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2314,
+      "gold_target_v13": [
+        4605,
+        4606,
+        "..."
+      ],
+      "gold_is_range": true,
+      "baseline": {
+        "source": [
+          2313,
+          2315
+        ],
+        "target": [
+          4609,
+          4612
+        ],
+        "confidence": 0.83,
+        "accepted": false
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              2313,
+              2315
+            ],
+            "target": [
+              4609,
+              4612
+            ],
+            "confidence": 0.83,
+            "accepted": false
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              2313,
+              2315
+            ],
+            "target": [
+              4609,
+              4612
+            ],
+            "confidence": 0.83,
+            "accepted": false
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              2313,
+              2315
+            ],
+            "target": [
+              4609,
+              4612
+            ],
+            "confidence": 0.83,
+            "accepted": false
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    },
+    {
+      "n": 98,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "pivot_v13": 1813,
+      "gold_target_v13": [
+        3115,
+        3116
+      ],
+      "gold_is_range": false,
+      "baseline": {
+        "source": [
+          1811,
+          1814
+        ],
+        "target": [
+          3133,
+          3136
+        ],
+        "confidence": 0.8991,
+        "accepted": true
+      },
+      "levels": {
+        "1.5": {
+          "link": {
+            "source": [
+              1811,
+              1814
+            ],
+            "target": [
+              3133,
+              3136
+            ],
+            "confidence": 0.8991,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "1.0": {
+          "link": {
+            "source": [
+              1811,
+              1814
+            ],
+            "target": [
+              3133,
+              3136
+            ],
+            "confidence": 0.8991,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        },
+        "0.5": {
+          "link": {
+            "source": [
+              1811,
+              1814
+            ],
+            "target": [
+              3133,
+              3136
+            ],
+            "confidence": 0.8991,
+            "accepted": true
+          },
+          "fixed_full_member_set": false,
+          "partial_overlap": false
+        }
+      }
+    }
+  ]
+}
