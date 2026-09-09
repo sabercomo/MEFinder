@@ -789,6 +789,28 @@
     return language + (format ? ' · ' + format : '') + ' · ' + displayName;
   }
 
+  // 记住每本书上次选择的对照目标，避免每次打开都回退到成员顺序里的首个（常是英文版）。
+  // 按源文献 id 存入 localStorage；不可用或读写失败时静默回退，不影响阅读。
+  var COMPARISON_TARGET_STORE_PREFIX = 'mef-reader-comparison-target:';
+
+  function rememberComparisonTarget(sourceId, targetId) {
+    if (!sourceId || !targetId) return;
+    try {
+      global.localStorage.setItem(COMPARISON_TARGET_STORE_PREFIX + sourceId, targetId);
+    } catch (error) {
+      /* 隐私模式或禁用存储：忽略。*/
+    }
+  }
+
+  function recallComparisonTarget(sourceId) {
+    if (!sourceId) return '';
+    try {
+      return global.localStorage.getItem(COMPARISON_TARGET_STORE_PREFIX + sourceId) || '';
+    } catch (error) {
+      return '';
+    }
+  }
+
   function renderAlignmentActions() {
     if (!state.elements) return;
     state.elements.alignmentActions.replaceChildren();
@@ -804,16 +826,24 @@
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
     });
-    // 模式轴：[阅读 | 译本对照]。「译本对照」默认对齐首个（或当前打开的）版本。
+    // 模式轴：[阅读 | 译本对照]。默认目标优先级：正在对照的版本 > 本书上次选择的版本 >
+    // 成员顺序首个。避免每次打开都被重置回英文版而需手动切换。
     if (targets.length) {
+      var remembered = recallComparisonTarget(state.sourceId);
+      var rememberedValid = remembered && targets.some(function (t) {
+        return String(t.source_file_id || '') === remembered;
+      }) ? remembered : '';
       var defaultTarget = state.comparison.open && state.comparison.targetSourceId
         ? state.comparison.targetSourceId
-        : String(targets[0].source_file_id || '');
+        : (rememberedValid || String(targets[0].source_file_id || ''));
+      var defaultTargetObj = targets.filter(function (t) {
+        return String(t.source_file_id || '') === defaultTarget;
+      })[0] || targets[0];
       var readBtn = createButton('阅读', 'mef-reader-mode-btn', 'reader-single');
       var compBtn = createButton('译本对照', 'mef-reader-mode-btn', 'open-comparison');
       compBtn.dataset.readerTarget = defaultTarget;
       // 语言/格式落在提示里（拆开原来「译本对照 · 英语 · EPUB · 英文」那颗胶囊）。
-      compBtn.title = '译本对照 · ' + alignmentTargetDisplayLabel(targets[0]);
+      compBtn.title = '译本对照 · ' + alignmentTargetDisplayLabel(defaultTargetObj);
       seg.appendChild(readBtn);
       seg.appendChild(compBtn);
       seg.hidden = false;
@@ -1160,6 +1190,7 @@
     var changedTarget = comparison.targetSourceId !== targetSourceId;
     comparison.open = true;
     comparison.targetSourceId = targetSourceId;
+    rememberComparisonTarget(state.sourceId, targetSourceId);
     comparison.targetDisplayName = targetDisplayName ||
       String(payload.targetTitle || payload.target_title || '对齐版本');
     comparison.targetTitle = String(payload.targetTitle || payload.target_title || '');

@@ -38,6 +38,28 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("headRow.appendChild(close)", READER_JS)
         self.assertNotIn("mef-reader-overflow", READER_JS)
 
+    def test_comparison_default_target_remembers_last_choice_per_book(self) -> None:
+        # 对照默认目标要记住每本书上次的选择，避免每次都回退到成员顺序首个（常是英文版）。
+        self.assertIn("mef-reader-comparison-target:", READER_JS)
+        self.assertIn("function rememberComparisonTarget(sourceId, targetId)", READER_JS)
+        self.assertIn("function recallComparisonTarget(sourceId)", READER_JS)
+        # 存取都要包 try/catch，隐私模式或禁用存储时静默回退。
+        self.assertIn("global.localStorage.setItem(COMPARISON_TARGET_STORE_PREFIX", READER_JS)
+        self.assertIn("global.localStorage.getItem(COMPARISON_TARGET_STORE_PREFIX", READER_JS)
+        # 选定目标时写入记忆。
+        show_start = READER_JS.index("function showComparison(")
+        show_end = READER_JS.index("function closeComparison()", show_start)
+        self.assertIn(
+            "rememberComparisonTarget(state.sourceId, targetSourceId)",
+            READER_JS[show_start:show_end],
+        )
+        # 渲染模式轴时按「记忆且仍有效」优先选默认目标。
+        render_start = READER_JS.index("function renderAlignmentActions()")
+        render_end = READER_JS.index("function syncModeSegment()", render_start)
+        render_body = READER_JS[render_start:render_end]
+        self.assertIn("var remembered = recallComparisonTarget(state.sourceId)", render_body)
+        self.assertIn("rememberedValid || String(targets[0].source_file_id", render_body)
+
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)
         self.assertIn("state.source.parser_label", READER_JS)
