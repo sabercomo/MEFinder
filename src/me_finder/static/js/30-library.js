@@ -1622,8 +1622,11 @@
     var isSelected = src.source_file_id === libraryStore.selectedId;
     var isDeleteSelectable = isLibraryDeleteSelectable(src);
     var isDeleteSelected = libraryStore.deleteSelection.has(src.source_file_id);
-    var typeCls = isPdf ? (src.parser_label === 'MinerU' ? 'mineru' : 'pdf') : 'word';
-    var typeLabel = isPdf ? (src.parser_label || 'PDF') : sourceFormatLabel(src);
+    // 徽标只表「格式」：PDF 结构化解析(MinerU/OCR/视觉模型，产物为 content_list.json)后成
+    // JSON，仅有原生文本层的仍是 PDF；EPUB/Word 用各自格式。具体解析器移到详情面板「解析方式」。
+    var isStructuredPdf = isPdf && /_structured$/.test(src.parser_type || '');
+    var typeCls = isPdf ? (isStructuredPdf ? 'json' : 'pdf') : 'word';
+    var typeLabel = isPdf ? (isStructuredPdf ? 'JSON' : 'PDF') : sourceFormatLabel(src);
     var itemStatus = isPdf ? (calTransientStatus[src.source_file_id] || src.status) : '';
     var statusGroup = isPdf ? calibrationStatusGroup(itemStatus) : '';
     var statusChip = isPdf
@@ -1724,6 +1727,13 @@
     if (src.source_type === 'pdf' && src.pdf_profile) {
       info += drawerInfoRow('PDF 页数', src.pdf_profile.pdf_page_count + ' 页');
       info += drawerInfoRow('PDF 类型', pdfTypeLabel(src.pdf_profile.detected_pdf_type));
+      // 「用什么解析的」：具体解析器 + 模型，从列表徽标移到此处，徽标只留格式。
+      var parserWay = src.parser_type === 'native_text'
+        ? '原生文本层（PDF 自带文本）'
+        : ((src.parser_label || pdfTypeLabel(src.pdf_profile.detected_pdf_type))
+            + (src.pdf_profile.model ? ' · ' + src.pdf_profile.model : '')
+            + '（结构化 JSON）');
+      info += drawerInfoRow('解析方式', parserWay);
       info += drawerInfoRow('页码状态', mappingStatusLabel(src.pdf_profile.mapping_status));
       if (src.pdf_profile.auto_page_mapping) {
         var autoMap = src.pdf_profile.auto_page_mapping;

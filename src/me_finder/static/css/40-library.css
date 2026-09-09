@@ -29,6 +29,7 @@
 .type-badge.pdf { background: var(--warning-soft); color: var(--warning); }
 .type-badge.package { background: var(--success-soft); color: var(--success); }
 .type-badge.mineru { background: var(--success-soft); color: var(--success); }
+.type-badge.json { background: var(--success-soft); color: var(--success); }
 
 /* ── Library page layout ──────────────────────────────────── */
 .library-toolbar { padding: 0 32px 16px; }
