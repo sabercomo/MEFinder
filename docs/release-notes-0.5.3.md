@@ -104,3 +104,16 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 已安装到本机 `/Applications/MEFinder.app`；旧应用与数据库已分别备份。
   原生界面实测中文 EPUB 导论显示英文对照，作品组 PDF→英文 EPUB 后台生成完成并恢复按钮。
 - 本地修复候选，ad-hoc 签名；未构建 Windows 包，未合并 PR、打 tag 或发布 Release。
+
+## 2026-09-09 21:30：Windows x64 候选包（未发布）
+
+- 官方 `build_windows_installer.ps1` / `build_portable_release.ps1`，Python 3.12.14 x64
+  与 PyInstaller 6.21.0；全量 `unittest` 2082 项通过、32 项按条件跳过，全部前端
+  JavaScript `node --check` 通过。
+- 主应用与 `MEFinderMCP.exe` 均由 PyInstaller 生成；打包后 MCP sidecar STDIO 冒烟、
+  空索引 FTS5 trigram 校验、隐私/许可材料门禁通过。安装包经 Inno Setup 编译。
+- 安装包：`MEFinder-v0.5.3-windows-setup.exe`，139,965,216 bytes，SHA-256
+  `ba077acdca43db71d21126993a3f13c0ce0050752114d1906cce58b494779062`。
+- 便携包：`MEFinder-v0.5.3-windows-portable.zip`，163,640,383 bytes，SHA-256
+  `c64790fcdfc84724d481cd6aaf46cddc43bf6b226a8b774f653bf9506962893c`。
+- 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
