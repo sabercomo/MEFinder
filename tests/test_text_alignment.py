@@ -779,6 +779,9 @@ class TextAlignmentTests(unittest.TestCase):
         reverse = list_alignment_targets(self.db, "pdf-zh")
         self.assertEqual(forward["targets"][0]["source_file_id"], "pdf-zh")
         self.assertEqual(reverse["targets"][0]["source_file_id"], "pdf-de")
+        # 阅读器需要作品组 id 才能一键在两版本间生成直接对照（两跳中转修复）。
+        self.assertEqual(forward["document_group_id"], "work-one")
+        self.assertEqual(reverse["document_group_id"], "work-one")
 
         located = locate_alignment(
             self.db,

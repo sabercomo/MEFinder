@@ -1405,7 +1405,11 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
                     "source_format": _source_kind(member),
                 }
             )
-        return {"source_file_id": source_id, "targets": targets}
+        return {
+            "source_file_id": source_id,
+            "document_group_id": group_id,
+            "targets": targets,
+        }
     finally:
         connection.close()
 

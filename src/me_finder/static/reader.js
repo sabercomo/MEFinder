@@ -11,6 +11,8 @@
     citationEndpoint: '/api/document/citation',
     alignmentTargetsEndpoint: '/api/text-alignments/targets',
     alignmentLocateEndpoint: '/api/text-alignments/locate',
+    alignmentStartEndpoint: '/api/text-alignments/start',
+    alignmentStatusEndpoint: '/api/text-alignments/status',
     batchSize: 20,
     radiusBatches: 1,
     estimatedItemHeight: 360
@@ -21,6 +23,8 @@
     citationEndpoint: DEFAULTS.citationEndpoint,
     alignmentTargetsEndpoint: DEFAULTS.alignmentTargetsEndpoint,
     alignmentLocateEndpoint: DEFAULTS.alignmentLocateEndpoint,
+    alignmentStartEndpoint: DEFAULTS.alignmentStartEndpoint,
+    alignmentStatusEndpoint: DEFAULTS.alignmentStatusEndpoint,
     batchSize: DEFAULTS.batchSize,
     radiusBatches: DEFAULTS.radiusBatches,
     estimatedItemHeight: DEFAULTS.estimatedItemHeight,
@@ -63,8 +67,10 @@
     citationLoading: false,
     citationRequestSerial: 0,
     alignmentTargets: [],
+    alignmentGroupId: '',
     alignmentLoading: false,
     alignmentRequestSerial: 0,
+    directAlignmentPending: false,
     comparison: {
       open: false,
       targetSourceId: '',
@@ -497,8 +503,23 @@
       'title',
       '此处对齐为粗定位，可能锚到相邻段落或注释；点此了解如何校正'
     );
+    // 两跳中转提示：当前对照经第三个版本（基准）中转（via_source_file_id）时，完整度受限，
+    // 提供「生成直接对照」一键在两版本间直接对齐，避免中转丢段。
+    var comparisonRouteNotice = document.createElement('div');
+    comparisonRouteNotice.className = 'mef-reader-route-notice';
+    comparisonRouteNotice.hidden = true;
+    var comparisonRouteText = document.createElement('span');
+    comparisonRouteText.className = 'mef-reader-route-text';
+    var comparisonRouteButton = createButton(
+      '生成直接对照',
+      'mef-reader-route-action',
+      'generate-direct-comparison'
+    );
+    comparisonRouteNotice.appendChild(comparisonRouteText);
+    comparisonRouteNotice.appendChild(comparisonRouteButton);
     comparisonPane.appendChild(comparisonHeader);
     comparisonPane.appendChild(comparisonWarn);
+    comparisonPane.appendChild(comparisonRouteNotice);
     comparisonPane.appendChild(comparisonViewport);
 
     readerBody.appendChild(sourcePane);
@@ -544,6 +565,7 @@
         locateInAlignedVersion(trigger.dataset.readerTarget || '', sourceCenterRange());
       }
       if (action === 'report-misalignment') reportMisalignment();
+      if (action === 'generate-direct-comparison') generateDirectComparison();
       if (action === 'open-comparison') {
         locateInAlignedVersion(
           trigger.dataset.readerTarget || '',
@@ -593,6 +615,9 @@
       content: content,
       comparisonPane: comparisonPane,
       comparisonWarn: comparisonWarn,
+      comparisonRouteNotice: comparisonRouteNotice,
+      comparisonRouteText: comparisonRouteText,
+      comparisonRouteButton: comparisonRouteButton,
       comparisonTitle: comparisonTitle,
       comparisonTitleText: comparisonTitleText,
       comparisonVersionMenu: comparisonVersionMenu,
@@ -883,6 +908,7 @@
         return;
       }
       state.alignmentTargets = Array.isArray(payload.targets) ? payload.targets : [];
+      state.alignmentGroupId = String(payload.document_group_id || '');
       renderAlignmentActions();
     } catch (error) {
       if (serial !== state.alignmentRequestSerial) return;
@@ -900,6 +926,92 @@
       return String(candidate.source_file_id || '') === targetSourceId;
     });
     return target ? String(target.display_name || '') : '';
+  }
+
+  // 当前对照目标经基准版本两跳中转（via_source_file_id 非空）时，完整度受限：
+  // 显示提示并允许一键在两版本间直接对齐。直接对齐存在或不可判定时隐藏提示。
+  function updateComparisonRouteNotice(targetObj) {
+    if (!state.elements || !state.elements.comparisonRouteNotice) return;
+    var notice = state.elements.comparisonRouteNotice;
+    var routed = !!(targetObj && targetObj.via_source_file_id);
+    var canGenerate = !!(state.alignmentGroupId && state.sourceId
+      && state.comparison.targetSourceId);
+    if (!routed || !canGenerate) {
+      notice.hidden = true;
+      return;
+    }
+    var viaName = alignmentTargetName(String(targetObj.via_source_file_id || ''));
+    state.elements.comparisonRouteText.textContent = state.directAlignmentPending
+      ? '正在生成直接对照…'
+      : ('当前对照经' + (viaName ? '「' + viaName + '」' : '第三个版本')
+        + '中转，可能漏配；建议生成两版本的直接对照。');
+    state.elements.comparisonRouteButton.hidden = state.directAlignmentPending;
+    notice.hidden = false;
+  }
+
+  async function generateDirectComparison() {
+    var comparison = state.comparison;
+    if (state.directAlignmentPending) return;
+    if (!state.alignmentGroupId || !state.sourceId || !comparison.targetSourceId) {
+      setAlert('缺少作品组信息，无法生成直接对照。', 'warning');
+      return;
+    }
+    var targetId = comparison.targetSourceId;
+    state.directAlignmentPending = true;
+    updateComparisonRouteNotice(currentComparisonTargetObj());
+    try {
+      var startResp = await fetchFunction()(config.alignmentStartEndpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({
+          document_group_id: state.alignmentGroupId,
+          pivot_source_file_id: state.sourceId,
+          target_source_file_id: targetId
+        })
+      });
+      var startPayload = await startResp.json();
+      if (!startResp.ok || startPayload.error || !startPayload.job_id) {
+        throw new Error(startPayload.error || '生成直接对照失败');
+      }
+      await pollDirectComparison(startPayload.job_id, targetId);
+    } catch (error) {
+      setAlert(error && error.message ? error.message : '生成直接对照失败', 'warning');
+    } finally {
+      state.directAlignmentPending = false;
+      updateComparisonRouteNotice(currentComparisonTargetObj());
+    }
+  }
+
+  function currentComparisonTargetObj() {
+    var id = state.comparison.targetSourceId;
+    return (state.alignmentTargets || []).filter(function (t) {
+      return String(t.source_file_id || '') === id;
+    })[0];
+  }
+
+  async function pollDirectComparison(jobId, targetId) {
+    // 后台生成期间每 ~1.5s 查询一次任务状态，直到非 202（完成或失败）。
+    for (var attempt = 0; attempt < 400; attempt += 1) {
+      await new Promise(function (resolve) { global.setTimeout(resolve, 1500); });
+      if (!state.comparison.open || state.sourceId == null) return;
+      var resp = await fetchFunction()(
+        config.alignmentStatusEndpoint + '?job_id=' + encodeURIComponent(jobId),
+        {headers: {'Accept': 'application/json'}}
+      );
+      if (resp.status === 202) continue;
+      var payload = await resp.json();
+      if (!resp.ok || payload.error || payload.ok === false) {
+        throw new Error(payload.error || '生成直接对照失败');
+      }
+      // 成功：刷新对齐目标（此时已有直接 run），再按当前源栏重新定位到直接对照。
+      await loadAlignmentTargets(state.sourceId);
+      if (state.comparison.open && state.comparison.targetSourceId === targetId) {
+        locateInAlignedVersion(targetId, sourceCenterRange());
+      }
+      notify('已生成直接对照，完整度已提升。');
+      return;
+    }
+    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试。');
   }
 
   function nearestTextOffset(text, requestedOffset) {
@@ -1218,6 +1330,7 @@
       'is-switchable',
       (state.alignmentTargets || []).length > 1
     );
+    updateComparisonRouteNotice(targetObj);
     // 精确高亮不可用 = 粗定位 → 显式标注低置信，给「校正」入口。
     var lowConfidence = (payload.preciseHighlightAvailable != null
       ? payload.preciseHighlightAvailable
@@ -1257,6 +1370,7 @@
     state.elements.comparisonPane.hidden = true;
     state.elements.sourcePaneHeader.hidden = true;
     state.elements.comparisonWarn.hidden = true;
+    state.elements.comparisonRouteNotice.hidden = true;
     closeVersionMenu();
     state.elements.comparisonContent.replaceChildren();
     syncModeSegment();

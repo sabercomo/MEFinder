@@ -60,6 +60,28 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("var remembered = recallComparisonTarget(state.sourceId)", render_body)
         self.assertIn("rememberedValid || String(targets[0].source_file_id", render_body)
 
+    def test_two_hop_routed_comparison_offers_direct_alignment(self) -> None:
+        # 两跳中转对照（via_source_file_id 非空）时提示并给「生成直接对照」一键入口。
+        self.assertIn("function updateComparisonRouteNotice(targetObj)", READER_JS)
+        self.assertIn("targetObj && targetObj.via_source_file_id", READER_JS)
+        self.assertIn("generate-direct-comparison", READER_JS)
+        self.assertIn("function generateDirectComparison()", READER_JS)
+        # 用作品组 id + 源/目标发起后台直接对齐，再轮询状态。
+        self.assertIn("config.alignmentStartEndpoint", READER_JS)
+        self.assertIn("config.alignmentStatusEndpoint", READER_JS)
+        self.assertIn("document_group_id: state.alignmentGroupId", READER_JS)
+        self.assertIn("pivot_source_file_id: state.sourceId", READER_JS)
+        # 成功后刷新目标并按当前源栏重新定位到直接对照。
+        poll_start = READER_JS.index("async function pollDirectComparison(")
+        poll_end = READER_JS.index("function nearestTextOffset(", poll_start)
+        poll_body = READER_JS[poll_start:poll_end]
+        self.assertIn("await loadAlignmentTargets(state.sourceId)", poll_body)
+        self.assertIn("locateInAlignedVersion(targetId, sourceCenterRange())", poll_body)
+        # 关闭对照要隐藏中转提示。
+        self.assertIn("state.elements.comparisonRouteNotice.hidden = true", READER_JS)
+        # 目标响应要带作品组 id 供前端发起直接对齐。
+        self.assertIn("state.alignmentGroupId = String(payload.document_group_id", READER_JS)
+
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)
         self.assertIn("state.source.parser_label", READER_JS)

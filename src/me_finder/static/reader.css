@@ -436,6 +436,35 @@
 .mef-reader-align-warn:hover { filter: brightness(.98); }
 .mef-reader-align-warn:focus-visible { outline: 2px solid var(--warning); outline-offset: -2px; }
 
+/* 两跳中转对照提示：信息色底 + 一键「生成直接对照」。 */
+.mef-reader-route-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--info-border);
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.mef-reader-route-notice[hidden] { display: none; }
+.mef-reader-route-text { flex: 1; line-height: 1.5; }
+.mef-reader-route-action {
+  flex: none;
+  padding: 4px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent-fill);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mef-reader-route-action[hidden] { display: none; }
+.mef-reader-route-action:hover { background: var(--accent-hover); }
+.mef-reader-route-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .mef-reader-comparison-navigation {
   display: flex;
   flex: 0 0 auto;

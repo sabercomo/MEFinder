@@ -1,0 +1,78 @@
+{
+  "run_id": "alignment-run-33e2d03405004fde92721f176e809efc",
+  "summary": {
+    "gen_seconds": 368.6,
+    "pivot_segments_ZH_PDF": 4000,
+    "target_segments_ZH_EPUB": 3951,
+    "links": 3100,
+    "review_status": {
+      "rejected": 435,
+      "automatic": 2665
+    },
+    "pivot_covered": 4000,
+    "target_covered": 3951,
+    "pivot_uncovered": 0,
+    "target_uncovered": 0,
+    "pivot_coverage_pct": 100.0,
+    "target_coverage_pct": 100.0,
+    "top_link_shapes": [
+      [
+        [
+          1,
+          1
+        ],
+        2182
+      ],
+      [
+        [
+          3,
+          1
+        ],
+        280
+      ],
+      [
+        [
+          1,
+          3
+        ],
+        224
+      ],
+      [
+        [
+          2,
+          3
+        ],
+        139
+      ],
+      [
+        [
+          1,
+          0
+        ],
+        70
+      ],
+      [
+        [
+          3,
+          2
+        ],
+        51
+      ],
+      [
+        [
+          2,
+          2
+        ],
+        47
+      ],
+      [
+        [
+          3,
+          3
+        ],
+        38
+      ]
+    ]
+  },
+  "params": "{\"transitions\":[[1,1],[1,2],[2,1],[2,2],[1,3],[3,1],[2,3],[3,2],[3,3],[1,0],[0,1]],\"length_unit\":\"non_whitespace_unicode_codepoint\",\"embedding_model_id\":\"minilm-l12-v2\",\"embedding_model_hf_name\":\"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\",\"embedding_runtime_version\":\"fastembed-0.8.0-mean-pooling\",\"semantic_alignment_version\":\"20\",\"alignment_region_version\":\"2\",\"body_range_source\":\"detected\",\"body_ranges\":{\"pivot\":[28,3958],\"target\":[3,3918]},\"similarity\":\"cosine\",\"low_confidence_threshold\":0.56,\"note_block_confidence_threshold\":0.64,\"note_candidate_margin\":0.05,\"pivot_language\":\"zh-Hans\",\"target_language\":\"zh-Hans\",\"heading_anchors\":[{\"key\":\"number:1845\",\"pivot_order_index\":175,\"target_order_index\":170},{\"key\":\"number:1929\",\"pivot_order_index\":333,\"target_order_index\":353},{\"key\":\"chapter:1\",\"pivot_order_index\":503,\"target_order_index\":539},{\"key\":\"number:percent-30\",\"pivot_order_index\":866,\"target_order_index\":1011},{\"key\":\"chapter:2\",\"pivot_order_index\":952,\"target_order_index\":1117},{\"key\":\"number:century-13\",\"pivot_order_index\":1061,\"target_order_index\":1250},{\"key\":\"chapter:3\",\"pivot_order_index\":1212,\"target_order_index\":1417},{\"key\":\"number:1646\",\"pivot_order_index\":1332,\"target_order_index\":1556},{\"key\":\"number:184\",\"pivot_order_index\":1351,\"target_order_index\":1579},{\"key\":\"chapter:4\",\"pivot_order_index\":1447,\"target_order_index\":1686},{\"key\":\"number:1965\",\"pivot_order_index\":1628,\"target_order_index\":1894},{\"key\":\"chapter:5\",\"pivot_order_index\":1705,\"target_order_index\":1976},{\"key\":\"number:percent-60\",\"pivot_order_index\":1942,\"target_order_index\":2268},{\"key\":\"chapter:6\",\"pivot_order_index\":2191,\"target_order_index\":2556},{\"key\":\"chapter:7\",\"pivot_order_index\":2439,\"target_order_index\":2835},{\"key\":\"number:percent-13.7\",\"pivot_order_index\":2466,\"target_order_index\":2881},{\"key\":\"number:percent-1\",\"pivot_order_index\":2505,\"target_order_index\":2925},{\"key\":\"number:1966\",\"pivot_order_index\":2522,\"target_order_index\":2945},{\"key\":\"number:1895\",\"pivot_order_index\":2532,\"target_order_index\":2960},{\"key\":\"chapter:8\",\"pivot_order_index\":2636,\"target_order_index\":3094},{\"key\":\"chapter:9\",\"pivot_order_index\":2720,\"target_order_index\":3193},{\"key\":\"chapter:10\",\"pivot_order_index\":2897,\"target_order_index\":3432},{\"key\":\"number:1871\",\"pivot_order_index\":2974,\"target_order_index\":3506}],\"edition_folio_anchors\":[]}"
+}
