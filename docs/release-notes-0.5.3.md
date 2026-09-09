@@ -1,7 +1,7 @@
 # MEFinder v0.5.3
 
 2026-09-09：修复 Mac 上译本对齐会卡死整机的问题（限核 + 可取消），并修两处界面缺陷；
-按页 Markdown 导出与已配对 PDF 脚注随页保留仍在本版内。安装包按需本地构建，尚未正式发布。
+按页 Markdown 导出与已配对 PDF 脚注随页保留仍在本版内。macOS arm64 候选包已构建并验证，尚未正式发布。
 译本粗定位 v22 已完成独立副本验证；四条争议样本仍未判定，E5 仍属实验档。
 
 ## 2026-09-09：对齐正文区域纳入作者导论
@@ -49,7 +49,7 @@
 - 默认启用 OpenCC 查询变体，在“设置 → 文献检索”即时切换；不转换源文档或导出内容。
 - 修复多变体排序、字符区间去重、限额与截断统计；兼容存量索引。
 - 固定 OpenCC 0.1.7，补 Windows/macOS 词典收集与第三方许可。
-- 验证详见 `reports/issue-16-script-search-validation-2026-09-08.md`；安装包构建与大库性能尚未验证。
+- 验证详见 `reports/issue-16-script-search-validation-2026-09-08.md`；macOS arm64 成品构建已通过，大库性能尚未验证。
 
 ## 2026-09-08：Markdown 按页导出（开发中）
 
@@ -57,7 +57,7 @@
 - PDF 先恢复整书脚注关系，再按正文来源选页；只带出所引用定义，保留章末组织及链接。
 - 独立文件名保留整书导出；范围缺失/歧义、合页半页或无法重建的跨页文本明确报错。
 - EPUB 只接受出版方页码，明确提示原始超链接脚注关系尚未入库。
-- 详见 `reports/markdown-page-export-validation-2026-09-08.md`；尚未验证 Windows/macOS 成品构建。
+- 详见 `reports/markdown-page-export-validation-2026-09-08.md`；macOS arm64 成品构建已通过，Windows 成品尚未验证。
 
 ## 2026-09-08：锚点候选接入后的版本与试用验证（未发布）
 
@@ -67,3 +67,16 @@
 - 全量 unittest 2051 项，结果 OK（条件跳过 50 项）；Ruff F 全绿。跳过原因及证据见
   `reports/alignment-v22-trial-validation-2026-09-08.md`。
 - 已准备本地粗定位试读入口；本次未重算生产库，未改变默认模型，未引入翻译模型或继续扩大 DP 实验。
+
+## 2026-09-09：macOS arm64 候选包（未发布）
+
+- 使用 Python 3.12.10 arm64 与 PyInstaller 6.21.0 运行官方 `build_macos.sh`；全量
+  `unittest` 2078 项通过，21 项按条件跳过，Ruff F 与全部前端 JavaScript 语法门禁通过。
+- 主应用与 `MEFinderMCP` 均为 arm64；独立扫描包内 127 个 Mach-O，无 x86_64。
+  ZIP 解包与 DMG 挂载后的严格签名、sidecar 冒烟、DMG 校验、Applications 捷径、
+  AppleDouble 与私人状态文件反查均通过。
+- ZIP：165,962,362 bytes，SHA-256
+  `4a15e83ca3d4066182e927953b7bf4206659a5b9ab37ff21228c638a60f8ec18`。
+- DMG：176,519,724 bytes，SHA-256
+  `92ad9073cacc3a342d6f57f7afc594483858a7a729717e6f0fa1d1af2f062e80`。
+- 当前是 ad-hoc 签名的本地验收候选；未做 Developer ID 公证，未构建 Windows 产物，未发布 Release。
