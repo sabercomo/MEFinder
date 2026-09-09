@@ -142,3 +142,15 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   根因是 EPUB 内联脚注 vs PDF 译本重定位脚注的**分段不对称**,**非 E5 阈值问题**;故 **E5 仍维持
   实验档**,不据此宣称新增准确率。详见 `reports/e5-disputed-four-adjudication-2026-09-09.md`。
 - 余下 macOS Developer ID 公证与正式 Release 发布仍为未决项,不在本地候选范围内。
+
+## 2026-09-10 01:13：当前 macOS arm64 候选包（未发布）
+
+- 基于 `80ecc93`重建，已包含译本对照默认目标记忆与两跳中转提示／一键生成直接对照。
+- 官方 `build_macos.sh` 完整测试 2084 项通过（21 skip）；Ruff F、全部前端 JavaScript 语法、
+  主应用／MCP sidecar arm64、严格签名、ZIP 解包、DMG 挂载与拖出、checksum 门禁通过。
+- ZIP：165,967,350 bytes，SHA-256
+  `d982123f197bb5d6a1ced26a1f4b3fdea16d6c93a1178c390803e371babaff75`。
+- DMG：175,841,115 bytes，SHA-256
+  `7a2ab82c1dded37c70f208e50e19d6e29deb4c0213c581a7ad310375911223e0`。
+- 已替换并启动本机 `/Applications/MEFinder.app`；原生界面显示 `MEFinder v0.5.3`。
+  当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未创建 tag 或正式 Release。
