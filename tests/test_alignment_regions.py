@@ -5,7 +5,7 @@ from unittest import TestCase
 import numpy as np
 
 from src.me_finder.embedding_models import embedding_model_config
-from src.me_finder.semantic_alignment import alignment_body_bounds
+from src.me_finder.alignment_regions import alignment_body_bounds
 from src.me_finder.text_alignment import align_segment_sequences
 
 
@@ -13,6 +13,25 @@ class AlignmentRegionTests(TestCase):
     def test_frontmatter_and_spaced_afterword(self):
         texts = ["封面", "导读", "第一章 主体", "正文。", "译 后 记", "译者致谢。"]
         self.assertEqual(alignment_body_bounds(texts), (2, 4))
+
+    def test_author_introduction_before_chapter_one_is_body(self):
+        # An author Introduction (导论) that precedes 第一章 is body content, not
+        # frontmatter — regression for「所选文字属于副文本区域」on intro passages.
+        texts = [
+            "封面",
+            "导论 社会性别意识形态和对破坏的恐惧",
+            "为什么会有人害怕社会性别呢？",
+            "第一章 全球局势",
+            "正文。",
+            "致谢",
+            "感谢。",
+        ]
+        self.assertEqual(alignment_body_bounds(texts), (1, 5))
+
+    def test_editor_reading_guide_stays_frontmatter(self):
+        # 导读 (an editor's reading guide) is NOT an author introduction.
+        texts = ["封面", "导读", "第一章 主体", "正文。"]
+        self.assertEqual(alignment_body_bounds(texts)[0], 2)
 
     def test_prose_mention_does_not_start_backmatter(self):
         texts = ["Chapter 1 Subjects", "The index of power is discussed here.", "Body."]

@@ -1752,26 +1752,39 @@
     var sid = esc(src.source_file_id);
     var moreSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
     var items = '';
-    var canExportMarkdown = src.source_type === 'pdf' || sourceFormatLabel(src) === 'EPUB';
-    if (src.source_type === 'pdf') {
+    var isPdf = src.source_type === 'pdf';
+    var canExportMarkdown = isPdf || sourceFormatLabel(src) === 'EPUB';
+
+    // 解析组(仅 PDF):重解析 + 自动映射动作。
+    var parseItems = '';
+    if (isPdf) {
       var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
       var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
-      items += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' onclick="bibCloseMenus();submitMineruReparse(\'' + sid + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
+      parseItems += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' onclick="bibCloseMenus();submitMineruReparse(\'' + sid + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
       var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
-      if (am && am.applied_segments && am.applied_segments.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
-      if (am && am.exception_pages && am.exception_pages.length) items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
-      items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">导出 MEFinder 文档包</button>';
+      if (am && am.applied_segments && am.applied_segments.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
+      if (am && am.exception_pages && am.exception_pages.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
+    }
+
+    // 导出组:统一「导出为」小标题,项内不再重复「导出」前缀。
+    var exportItems = '';
+    if (isPdf) {
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">MEFinder 文档包</button>';
     }
     if (canExportMarkdown) {
-      items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">导出 Markdown</button>';
-      items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();MEFinder.library.pageExport.open(\'' + sid + '\')">按页导出 Markdown…</button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">Markdown</button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();MEFinder.library.pageExport.open(\'' + sid + '\')">按页 Markdown<span class="bib-menu-note">选页</span></button>';
     }
-    if (src.source_type === 'pdf') {
-      items += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentEpub(\'' + sid + '\')">导出 EPUB</button>';
+    if (isPdf) {
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentEpub(\'' + sid + '\')">EPUB</button>';
     }
-    if (canExportMarkdown || src.source_type === 'pdf') {
-      items += '<div class="bib-menu-sep"></div>';
+
+    if (parseItems) items += '<div class="bib-menu-head">解析</div>' + parseItems;
+    if (exportItems) {
+      if (parseItems) items += '<div class="bib-menu-sep"></div>';
+      items += '<div class="bib-menu-head">导出为</div>' + exportItems;
     }
+    if (parseItems || exportItems) items += '<div class="bib-menu-sep"></div>';
     items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
     return '<div class="drawer-actions">'
       + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + sid + '\', null)">打开原文</button>' : '')

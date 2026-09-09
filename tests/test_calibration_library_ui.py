@@ -437,9 +437,15 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('id="drawer-more-menu"', HTML)
         self.assertIn('class="bib-menu bib-menu-end drawer-actions-menu"', HTML)
         self.assertIn('aria-expanded="false" aria-controls="drawer-more-menu"', HTML)
-        self.assertIn("var canExportMarkdown = src.source_type === 'pdf' || sourceFormatLabel(src) === 'EPUB';", HTML)
+        self.assertIn("var canExportMarkdown = isPdf || sourceFormatLabel(src) === 'EPUB';", HTML)
         self.assertIn("if (canExportMarkdown) {", HTML)
-        self.assertIn(">导出 Markdown</button>", HTML)
+        # 菜单分组:解析 / 导出为 小标题；导出项去「导出」前缀,「按页 Markdown」不带省略号,右侧淡字「选页」。
+        self.assertIn(">解析</div>", HTML)
+        self.assertIn(">导出为</div>", HTML)
+        self.assertIn(">Markdown</button>", HTML)
+        self.assertIn("按页 Markdown<span class=\"bib-menu-note\">选页</span>", HTML)
+        self.assertNotIn(">导出 Markdown</button>", HTML)
+        self.assertNotIn("按页导出 Markdown</button>", HTML)
         drawer_menu_rule = HTML.split('.bib-menu.drawer-actions-menu {', 1)[1].split('}', 1)[0]
         self.assertIn('top: auto;', drawer_menu_rule)
         self.assertIn('bottom: calc(100% + 6px);', drawer_menu_rule)

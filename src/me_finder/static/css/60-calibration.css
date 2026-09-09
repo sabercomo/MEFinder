@@ -214,6 +214,7 @@
 .bib-menu-item:hover { background: var(--surface-hover); }
 .bib-menu-item.active { color: var(--accent); font-weight: 500; }
 .bib-menu-note { margin-left: auto; padding-left: 16px; font-size: 11px; color: var(--text-secondary); }
+.bib-menu-head { padding: 6px 10px 3px; font-size: 11px; letter-spacing: 0.3px; color: var(--text-tertiary); }
 .bib-menu-sep { height: 1px; margin: 5px 4px; background: var(--divider); }
 .cnki-candidate-list { display: grid; gap: 8px; margin-top: 8px; }
 .cnki-candidate {

@@ -31,6 +31,7 @@ from .embedding_models import (
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
+from .alignment_regions import alignment_body_bounds
 from .semantic_alignment import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
@@ -39,7 +40,6 @@ from .semantic_alignment import (
     EmbeddingProvider,
     SemanticLink,
     align_semantic_sequences,
-    alignment_body_bounds,
     alignment_transitions,
     cached_text_sequence_vectors,
     embed_text_sequences,
