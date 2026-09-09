@@ -447,10 +447,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 繁简开关：文献检索设置的繁简统一检索改为独立开关（.setting-switch-*），默认开。
     # 0.5.3 按页导出改版：页码输入框为主，页码制（原书/物理）降为下方紧凑次要行。
     # 0.5.3 文档「更多操作」菜单分组：解析 / 导出为 小标题（.bib-menu-head），导出项去「导出」前缀与末尾省略号。
+    # 0.5.3 通用本地模型整体改用「其他解析 API」的 .settings-editor 卡片 + 字段范式（浅色卡片、标签左对齐、整宽输入、底部分隔操作条）。
     BASELINE_SHA256 = (
-        "644e654858ec84b6864197668a7f05ab16a6d0723346b1c09b1a41eb5c1c7edf"
+        "96e23f772937006c93eafcc42c14847d3bdff5927fa1eb962df841e3f2db8811"
     )
-    BASELINE_BYTES = 1075663
+    BASELINE_BYTES = 1075989
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

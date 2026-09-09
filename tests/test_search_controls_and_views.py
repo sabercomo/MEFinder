@@ -557,12 +557,13 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             'class="settings-actions settings-save-row local-ocr-save-row"',
             HTML,
         )
-        # 两处：MinerU 本地部署的保存行 + 通用本地模型卡的保存行（同一范式）。
+        # 一处：MinerU 本地部署的网格内保存行（settings-control 网格子项范式）。
         self.assertEqual(
             HTML.count('class="settings-control settings-actions settings-save-row"'),
-            2,
+            1,
         )
-        self.assertEqual(HTML.count('class="settings-editor-actions"'), 2)
+        # 三处编辑卡操作条：MinerU 账号卡 + 通用本地模型卡 + 其他解析 API 卡（同一范式）。
+        self.assertEqual(HTML.count('class="settings-editor-actions"'), 3)
         self.assertIn(".settings-save-row > .action-btn.primary", HTML)
         self.assertIn(".settings-editor-actions > .action-btn.primary", HTML)
         self.assertIn('"/api/local-ocr"', WEB_SOURCE)

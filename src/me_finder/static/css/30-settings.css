@@ -970,11 +970,11 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .mineru-local-notice svg { flex: 0 0 auto; width: 17px; height: 17px; margin-top: 1px; color: var(--accent); }
 .mineru-local-notice code { color: var(--text-primary); font-size: 10px; }
-.mineru-local-grid { margin-top: 16px; }
-.mineru-local-grid .settings-input { max-width: none; height: 42px; }
-.mineru-local-grid .action-btn:disabled { cursor: wait; opacity: .58; }
-.mineru-local-enable-row { padding-top: 6px; }
-.mineru-local-enable-row > small { max-width: 62ch; }
+/* 通用本地模型整体复用「其他解析 API」的 .settings-editor 卡片 + .settings-editor-form
+   字段范式：浅色背景、标签左列、输入右列、底部带分隔线的操作条。 */
+.mineru-local-card { margin-top: 16px; }
+.mineru-local-card .action-btn:disabled { cursor: wait; opacity: .58; }
+.mineru-local-enable-control { display: flex; align-items: center; }
 @media (max-width: 760px) {
   .managed-mineru-heading { align-items: flex-start; flex-wrap: wrap; }
   .managed-mineru-heading > span { flex: 1 1 220px; }
@@ -1855,8 +1855,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
     margin-top: 20px;
     padding: 22px 0;
   }
-  .mineru-service-control .settings-input,
-  .mineru-local-grid .settings-input { height: 46px; max-width: none; }
+  .mineru-service-control .settings-input { height: 46px; max-width: none; }
   .mineru-service-control .action-btn { min-height: 46px; }
   .mineru-service-copy strong,
   .mineru-table-heading strong,
