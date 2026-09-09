@@ -61,7 +61,10 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 默认启用 OpenCC 查询变体，在“设置 → 文献检索”即时切换；不转换源文档或导出内容。
 - 修复多变体排序、字符区间去重、限额与截断统计；兼容存量索引。
 - 固定 OpenCC 0.1.7，补 Windows/macOS 词典收集与第三方许可。
-- 验证详见 `reports/issue-16-script-search-validation-2026-09-08.md`；macOS arm64 成品构建已通过，大库性能尚未验证。
+- 验证详见 `reports/issue-16-script-search-validation-2026-09-08.md`；macOS arm64 成品构建已通过。
+  大库性能已实测(63,344 段落 / 64 部快照副本):精确/短语检索双轨开销可忽略(≈0.1ms),
+  宽泛高频词最坏约翻倍(p50 594→1224ms,~2.07x)仍在 ~1.2s 交互区间,开关前后命中 0 变化;
+  详见 `reports/script-search-large-library-perf-2026-09-09.md`。
 
 ## 2026-09-08：Markdown 按页导出（开发中）
 
@@ -117,3 +120,11 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 便携包：`MEFinder-v0.5.3-windows-portable.zip`，163,640,383 bytes，SHA-256
   `c64790fcdfc84724d481cd6aaf46cddc43bf6b226a8b774f653bf9506962893c`。
 - 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
+
+## 2026-09-09：候选汇总议题(#23)未决项收尾
+
+- **繁简大库性能**:已实测(见上「Markdown/繁简」段与 `reports/script-search-large-library-perf-2026-09-09.md`)。
+- **E5 四条争议样本**:已逐条读原文判定(不再悬置)——4 条在粗定位标准下均可接受、无严重错配,
+  根因是 EPUB 内联脚注 vs PDF 译本重定位脚注的**分段不对称**,**非 E5 阈值问题**;故 **E5 仍维持
+  实验档**,不据此宣称新增准确率。详见 `reports/e5-disputed-four-adjudication-2026-09-09.md`。
+- 余下 macOS Developer ID 公证与正式 Release 发布仍为未决项,不在本地候选范围内。
