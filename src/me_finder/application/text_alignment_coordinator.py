@@ -11,6 +11,7 @@ from ..embedding_runtime import (
     SemanticAlignmentCancelled,
     begin_embedding_run,
 )
+from ..lifecycle import DurableOperationClosedError
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
 
 
@@ -67,7 +68,11 @@ class TextAlignmentCoordinator:
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
                     )
-            except SemanticAlignmentCancelled as exc:
+            except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:
+                # Both mean "the run stopped because the app is shutting down or
+                # the user cancelled" — a cancellation, not a parse/data failure.
+                # A queued alignment that never started (DurableOperationClosed)
+                # must not surface the misleading "请检查两本文献的解析文本".
                 raise TextAlignmentCancelled(str(exc)) from exc
             except InvalidAlignmentRequest as exc:
                 raise TextAlignmentRejected(str(exc)) from exc

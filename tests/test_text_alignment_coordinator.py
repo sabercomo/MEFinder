@@ -7,8 +7,10 @@ from types import SimpleNamespace
 from unittest import mock
 
 from src.me_finder.application.text_alignment_coordinator import (
+    TextAlignmentCancelled,
     TextAlignmentCoordinator,
 )
+from src.me_finder.lifecycle import DurableOperationClosedError
 
 
 class _IndexRuntime:
@@ -110,6 +112,32 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             coordinator.generate("group", "pdf-de", "epub-en", force=True)
 
         self.assertTrue(generate.call_args.kwargs["force"])
+
+    def test_shutdown_closed_durable_gate_reports_cancellation_not_failure(self) -> None:
+        # A queued alignment that never starts because the app is closing must
+        # surface as a cancellation, not the misleading "请检查解析文本" failure.
+        class _ClosedDurableOperations:
+            @contextmanager
+            def operation(self):
+                raise DurableOperationClosedError("应用正在关闭，未开始的持久化操作已取消。")
+                yield  # pragma: no cover - unreachable, keeps this a generator
+
+        index_runtime = _IndexRuntime()
+        paths = SimpleNamespace(
+            index_path=Path("D:/runtime/data/index.sqlite3"),
+            runtime_root=Path("D:/runtime"),
+        )
+        coordinator = TextAlignmentCoordinator(
+            paths, index_runtime, _ClosedDurableOperations()
+        )
+        with mock.patch(
+            "src.me_finder.application.text_alignment_coordinator.generate_alignment",
+        ) as generate:
+            with self.assertRaises(TextAlignmentCancelled):
+                coordinator.generate("group", "pdf-de", "epub-en")
+        generate.assert_not_called()
+        # The mutation window must still close cleanly on the cancel path.
+        self.assertEqual(index_runtime.events[-1], "mutation-exit")
 
 
 if __name__ == "__main__":
