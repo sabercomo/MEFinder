@@ -108,18 +108,20 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   原生界面实测中文 EPUB 导论显示英文对照，作品组 PDF→英文 EPUB 后台生成完成并恢复按钮。
 - 本地修复候选，ad-hoc 签名；未构建 Windows 包，未合并 PR、打 tag 或发布 Release。
 
-## 2026-09-09 21:30：Windows x64 候选包（未发布）
+## 2026-09-09 23:16：Windows x64 候选包（含译本对照两处修复，未发布）
 
-- 官方 `build_windows_installer.ps1` / `build_portable_release.ps1`，Python 3.12.14 x64
-  与 PyInstaller 6.21.0；全量 `unittest` 2082 项通过、32 项按条件跳过，全部前端
-  JavaScript `node --check` 通过。
+- 在译本对照两处修复(默认目标记忆、两跳中转提示+一键直接对照)之后重建;
+  官方 `build_windows_installer.ps1` / `build_portable_release.ps1`，Python 3.12.14 x64
+  与 PyInstaller 6.21.0；全量 `unittest` 2084 项通过、1 项按条件跳过(装 OpenCC 后其余
+  条件跳过项均执行)，全部前端 JavaScript `node --check` 通过。
 - 主应用与 `MEFinderMCP.exe` 均由 PyInstaller 生成；打包后 MCP sidecar STDIO 冒烟、
   空索引 FTS5 trigram 校验、隐私/许可材料门禁通过。安装包经 Inno Setup 编译。
-- 安装包：`MEFinder-v0.5.3-windows-setup.exe`，139,965,216 bytes，SHA-256
-  `ba077acdca43db71d21126993a3f13c0ce0050752114d1906cce58b494779062`。
-- 便携包：`MEFinder-v0.5.3-windows-portable.zip`，163,640,383 bytes，SHA-256
-  `c64790fcdfc84724d481cd6aaf46cddc43bf6b226a8b774f653bf9506962893c`。
+- 安装包：`MEFinder-v0.5.3-windows-setup.exe`，140,329,373 bytes，SHA-256
+  `502ef4b09385f1b3fef8be9831c6e0848d4e9c3a81c45e24b0f1e728d95449f8`。
+- 便携包：`MEFinder-v0.5.3-windows-portable.zip`，164,119,527 bytes，SHA-256
+  `d85db9577334466caba8de5eed89811a570b904aa0700b012ba692832e3aadb3`。
 - 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
+- (前一版 21:30 候选构建于 `c9c6de1`，早于上述阅读器修复，已被本次重建取代。)
 
 ## 2026-09-09：译本对照两处修复
 
