@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
+import uuid
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -44,19 +46,67 @@ class TextAlignmentController:
         self._list_targets = list_targets
         self._locate = locate
         self._log_exception = log_exception
+        self._job_lock = threading.Lock()
+        self._job_id: str | None = None
+        self._job_payload: Dict[str, object] | None = None
+        self._job_response: AlignmentResponse | None = None
 
-    def generate(self, payload: object) -> AlignmentResponse:
+    @staticmethod
+    def _valid_generate_payload(payload: object) -> bool:
         required = {
             "document_group_id",
             "pivot_source_file_id",
             "target_source_file_id",
         }
-        if (
-            not isinstance(payload, Mapping)
-            or not required.issubset(payload)
-            or not set(payload).issubset(required | {"force"})
-            or not isinstance(payload.get("force", False), bool)
-        ):
+        return (
+            isinstance(payload, Mapping)
+            and required.issubset(payload)
+            and set(payload).issubset(required | {"force"})
+            and isinstance(payload.get("force", False), bool)
+        )
+
+    def start(self, payload: object) -> AlignmentResponse:
+        """Start one background run without holding a browser request open."""
+        if not self._valid_generate_payload(payload):
+            return 400, {"error": "自动对齐请求字段无效。"}
+        with self._job_lock:
+            if self._job_id is not None and self._job_response is None:
+                if payload != self._job_payload:
+                    return 409, {"error": "已有译本正在对齐，请等待完成或取消后再试"}
+                return 202, {"job_id": self._job_id, "status": "running"}
+            self._job_id = uuid.uuid4().hex
+            self._job_payload = dict(payload)
+            self._job_response = None
+            self._job_thread = threading.Thread(
+                target=self._generate_job, args=(dict(payload),), daemon=True,
+            )
+            self._job_thread.start()
+            return 202, {"job_id": self._job_id, "status": "running"}
+
+    def _generate_job(self, payload: Dict[str, object]) -> None:
+        try:
+            response = self.generate(payload)
+        except (OSError, sqlite3.Error, RuntimeError, ValueError):
+            # Surface worker failures to the polling client instead of leaving
+            # a dead worker permanently displayed as running.
+            self._log_exception("background text alignment failed")
+            response = 500, {"error": "自动对齐发生错误，请查看运行日志"}
+        with self._job_lock:
+            self._job_response = response
+
+    def status(self, params: Mapping[str, Sequence[object]]) -> AlignmentResponse:
+        """Return the active or most recently finished background run."""
+        job_ids = params.get("job_id", [])
+        if set(params) != {"job_id"} or len(job_ids) != 1:
+            return 400, {"error": "job_id 必须提供一次"}
+        with self._job_lock:
+            if self._job_id is None or job_ids[0] != self._job_id:
+                return 404, {"error": "对齐任务不存在，请刷新作品组查看已保存的结果"}
+            return self._job_response or (202, {"job_id": self._job_id, "status": "running"})
+
+    def generate(self, payload: object) -> AlignmentResponse:
+        """Generate synchronously for existing API clients and the worker."""
+        if not self._valid_generate_payload(payload):
             return 400, {"error": "自动对齐请求字段无效。"}
         LOGGER.info(
             "text alignment requested: group=%s pivot=%s target=%s force=%s",

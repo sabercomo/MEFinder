@@ -1015,6 +1015,27 @@ class TextAlignmentTests(unittest.TestCase):
         self.assertFalse(second["reused"])
         self.assertNotEqual(second["alignment_run_id"], first["alignment_run_id"])
 
+    def test_old_detected_body_range_requests_regeneration_instead_of_blaming_text(self):
+        first = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        with closing(sqlite3.connect(str(self.db))) as connection:
+            parameters = json.loads(connection.execute(
+                "SELECT parameters_json FROM alignment_runs WHERE alignment_run_id=?",
+                (first["alignment_run_id"],),
+            ).fetchone()[0])
+            parameters["body_ranges"]["pivot"][0] = 1
+            parameters["alignment_region_version"] = "1"
+            connection.execute("UPDATE alignment_runs SET parameters_json=?",
+                               (json.dumps(parameters),))
+            connection.commit()
+        with self.assertRaisesRegex(AlignmentNotFound, "正文范围.*重新生成"):
+            locate_alignment(self.db, "pdf-de", "epub-en", start_page_index=0,
+                             end_page_index=0, start_offset=0, end_offset=3)
+        regenerated = generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        self.assertFalse(regenerated["reused"])
+        located = locate_alignment(self.db, "pdf-de", "epub-en", start_page_index=0,
+                                   end_page_index=0, start_offset=0, end_offset=3)
+        self.assertEqual(located["page_match_spans"][0]["match_quote"], "Spirit is actual.")
+
     def test_force_recomputes_an_unchanged_completed_pair(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         second = generate_alignment(

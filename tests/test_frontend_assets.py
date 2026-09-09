@@ -450,9 +450,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 通用本地模型整体改用「其他解析 API」的 .settings-editor 卡片 + 字段范式（浅色卡片、标签左对齐、整宽输入、底部分隔操作条）。
     # 0.5.3 文献库徽标只表格式：PDF 结构化解析后显示 JSON、原生文本仍显示 PDF（+.type-badge.json）；具体解析器移到详情面板「解析方式」行。
     BASELINE_SHA256 = (
-        "7a32f847a8928ba7bdc1bbe7eb1a0f817fcfd33207c3144cbd0f7d4f0256fe1f"
+        "8980582f2fe60394632865dd46f034f28de324cfdc1399e4375d4370c59787ae"
     )
-    BASELINE_BYTES = 1076858
+    BASELINE_BYTES = 1077275
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -68,6 +68,44 @@ const invoke = () => action === 'create' ? library.createDocumentGroupInline(dep
 
 @unittest.skipUnless(NODE, "node is required for frontend execution tests")
 class DocumentGroupActionTests(unittest.TestCase):
+    def test_alignment_polls_until_finished_without_resubmitting(self) -> None:
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+async function run(terminal, status) {
+  const requests = [];
+  const context = {
+    module: {exports: {}},
+    setTimeout(resolve) { resolve(); },
+    fetch: async (url, options) => {
+      requests.push([url, options]);
+      const pending = requests.length < 4;
+      return {ok: pending || status === 200, status: pending ? 202 : status,
+        json: async () => pending ? {job_id: 'job-one', status: 'running'} : terminal};
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+  const result = context.module.exports.requestTextAlignment('group', 'pdf', 'epub', false);
+  if (terminal.error) await assert.rejects(result, new RegExp(terminal.error));
+  else assert.deepEqual(JSON.parse(JSON.stringify(await result)),
+    terminal.cancelled ? {cancelled: true} : {result: terminal.result});
+  assert.equal(requests.length, 4);
+  assert.equal(requests[0][0], '/api/text-alignments/start');
+  assert.equal(requests[0][1].method, 'POST');
+  assert.deepEqual(requests.slice(1).map(r => r[0]),
+    Array(3).fill('/api/text-alignments/status?job_id=job-one'));
+}
+(async () => {
+  await run({ok: true, result: {accepted_link_count: 42}}, 200);
+  await run({ok: false, cancelled: true}, 200);
+  await run({error: 'model unavailable'}, 500);
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+        subprocess.run([NODE, "-e", script, str(LIBRARY_JS)], check=True,
+                       capture_output=True, text=True)
+
     def test_group_manager_keeps_creation_and_distinguishes_same_title_versions(self) -> None:
         script = r"""
 const assert = require('node:assert/strict');

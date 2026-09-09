@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 import unittest
 from pathlib import Path
 
@@ -24,6 +25,49 @@ class _Coordinator:
 
 
 class TextAlignmentControllerTests(unittest.TestCase):
+    def test_background_generation_returns_before_computation_and_deduplicates(self):
+        entered, release = threading.Event(), threading.Event()
+        original = self.coordinator.generate
+
+        def slow_generate(*args, **kwargs):
+            entered.set()
+            self.assertTrue(release.wait(5))
+            return original(*args, **kwargs)
+
+        self.coordinator.generate = slow_generate
+        try:
+            status, job = self.controller.start(self._generate_payload())
+            self.assertEqual(status, 202)
+            self.assertTrue(entered.wait(2))
+            self.assertEqual(self.controller.start(self._generate_payload()), (202, job))
+            self.assertEqual(self.controller.start(self._generate_payload() | {"force": True})[0], 409)
+            self.assertEqual(self.controller.status({"job_id": [job["job_id"]]})[0], 202)
+        finally:
+            release.set()
+            if hasattr(self.controller, "_job_thread"):
+                self.controller._job_thread.join(5)
+        status, result = self.controller.status({"job_id": [job["job_id"]]})
+        self.assertEqual(status, 200)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["result"]["status"], "completed")
+
+    def test_background_terminal_errors_and_cancellation_are_returned_to_polling(self):
+        for error, expected in ((TextAlignmentRejected("bad pair"), 400),
+                                (TextAlignmentFailed("disk"), 500),
+                                (TextAlignmentCancelled("stop"), 200),
+                                (ValueError("unexpected worker error"), 500)):
+            with self.subTest(error=error):
+                self.coordinator.error = error
+                status, job = self.controller.start(self._generate_payload())
+                self.assertEqual(status, 202)
+                self.controller._job_thread.join(5)
+                status, result = self.controller.status({"job_id": [job["job_id"]]})
+                self.assertEqual(status, expected)
+                self.assertTrue(result.get("cancelled") or result.get("error"))
+        self.assertEqual(self.controller.status({})[0], 400)
+        self.assertEqual(self.controller.status({"job_id": ["missing"]})[0], 404)
+        self.assertEqual(self.controller.start({})[0], 400)
+
     def setUp(self) -> None:
         self.path = Path("/runtime/data/index.sqlite3")
         self.ready = True

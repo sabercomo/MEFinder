@@ -191,10 +191,12 @@ def assemble_reader_routes(
     get_routes = {
         "/api/document/pages": structured_reader_controller.pages,
         "/api/text-alignments/targets": text_alignment_controller.targets,
+        "/api/text-alignments/status": text_alignment_controller.status,
     }
     post_routes = {
         "/api/document/citation": structured_reader_controller.citation,
         "/api/text-alignments/generate": text_alignment_controller.generate,
+        "/api/text-alignments/start": text_alignment_controller.start,
         "/api/text-alignments/cancel": text_alignment_controller.cancel,
         "/api/text-alignments/locate": text_alignment_controller.locate,
     }

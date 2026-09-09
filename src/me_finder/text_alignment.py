@@ -1632,7 +1632,8 @@ def _map_segments_through_run(
         source_side = "target"
     else:
         raise TextAlignmentError("对齐记录不包含请求的源版本。")
-    body_range = _json_object(run["parameters_json"]).get("body_ranges", {}).get(source_side)
+    parameters = _json_object(run["parameters_json"])
+    body_range = parameters.get("body_ranges", {}).get(source_side)
     if body_range is not None:
         selected_orders = connection.execute(
             "SELECT order_index FROM text_segments WHERE segment_id IN ("
@@ -1640,6 +1641,14 @@ def _map_segments_through_run(
             tuple(source_segments),
         ).fetchall()
         if any(not body_range[0] <= row[0] < body_range[1] for row in selected_orders):
+            if parameters.get("body_range_source") == "detected":
+                texts = connection.execute(
+                    "SELECT text_raw FROM text_segments WHERE segment_set_id=? ORDER BY order_index",
+                    (run[source_side + "_segment_set_id"],),
+                ).fetchall()
+                current_start, current_end = alignment_body_bounds([row[0] for row in texts])
+                if all(current_start <= row[0] < current_end for row in selected_orders):
+                    raise AlignmentNotFound("已保存对齐的正文范围已更新，请在作品组中重新生成对照")
             raise AlignmentNotFound("所选文字属于副文本区域，请通过人工修正指定对应段落。")
     placeholders = ",".join("?" for _ in source_segments)
     link_rows = connection.execute(
@@ -2380,7 +2389,6 @@ def locate_alignment(
         return result
     finally:
         connection.close()
-
 
 
 

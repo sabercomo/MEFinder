@@ -1258,7 +1258,7 @@
   }
 
   async function requestTextAlignment(groupId, pivotSourceId, targetSourceId, force) {
-    var response = await fetch('/api/text-alignments/generate', {
+    var response = await fetch('/api/text-alignments/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1269,6 +1269,13 @@
       })
     });
     var data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
+    var jobId = data.job_id;
+    while (response.status === 202) {
+      await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+      response = await fetch('/api/text-alignments/status?job_id=' + encodeURIComponent(jobId));
+      data = await response.json();
+    }
     if (!response.ok || data.error) throw new Error(data.error || '自动对齐失败');
     if (data.cancelled) return {cancelled: true};
     return {result: data.result || {}};
@@ -2129,6 +2136,7 @@
       groupScopeManageOptionsHTML: groupScopeManageOptionsHTML,
       renderDocumentGroupManager: renderDocumentGroupManager,
       documentGroupExistingAlignmentPairs: documentGroupExistingAlignmentPairs,
+      requestTextAlignment: requestTextAlignment,
       realignAllTextAlignmentsAction: realignAllTextAlignmentsAction,
       createDocumentGroupInline: createDocumentGroupInline,
       assignSelectedToGroupAction: assignSelectedToGroupAction,

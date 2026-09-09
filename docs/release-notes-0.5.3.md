@@ -1,8 +1,20 @@
 # MEFinder v0.5.3
 
-2026-09-09：修复 Mac 上译本对齐会卡死整机的问题（限核 + 可取消），并修两处界面缺陷；
-按页 Markdown 导出与已配对 PDF 脚注随页保留仍在本版内。macOS arm64 候选包已构建并验证，尚未正式发布。
-译本粗定位 v22 已完成独立副本验证；四条争议样本仍未判定，E5 仍属实验档。
+2026-09-09：修复作品组译本对齐约一分钟后误报 `Load failed`，并补齐导论旧对齐结果的恢复路径。
+MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配对上均生成成功；
+24 次开篇与截图选句双向定位检查通过。E5 仍为实验档，尚未正式发布。
+
+## 2026-09-09：长任务超时与导论存量对齐恢复
+
+- 复现 WKWebView 本地长请求在 61.006 秒返回 `Load failed`，后台却继续计算。
+  生成改为后台任务与每秒短请求查询状态；相同运行中请求去重，取消和真实错误照常返回。
+  70 秒桌面等待实验在 70.284 秒收到成功结果，没有提前报失败。
+- 旧自动正文范围误排除正文时，提示重新生成，不再误导用户去人工修正正文；
+  区域版本升为 2，防止生成复用旧范围。人工复核范围和置信度门槛保持原样。
+- 新增 `/api/text-alignments/start`、`/api/text-alignments/status`，原同步 `/generate` 兼容。
+  见 `docs/contracts/v0.5.3-alignment-jobs.md` 与 `v0.5.3-http-api.json`。
+- 真实库副本六组生成、24 次定位检查通过；全量 unittest 2082 项通过（21 skip），
+  ruff 与前端守卫通过。详细证据见 `reports/gender-alignment-recovery-2026-09-09.md`。
 
 ## 2026-09-09：对齐正文区域纳入作者导论
 
@@ -68,7 +80,7 @@
   `reports/alignment-v22-trial-validation-2026-09-08.md`。
 - 已准备本地粗定位试读入口；本次未重算生产库，未改变默认模型，未引入翻译模型或继续扩大 DP 实验。
 
-## 2026-09-09：macOS arm64 候选包（未发布）
+## 2026-09-09 17:27：旧 macOS arm64 候选包（已被本日晚间修复包替代）
 
 - 使用 Python 3.12.10 arm64 与 PyInstaller 6.21.0 运行官方 `build_macos.sh`；全量
   `unittest` 2078 项通过，21 项按条件跳过，Ruff F 与全部前端 JavaScript 语法门禁通过。
@@ -80,3 +92,15 @@
 - DMG：176,519,724 bytes，SHA-256
   `92ad9073cacc3a342d6f57f7afc594483858a7a729717e6f0fa1d1af2f062e80`。
 - 当前是 ad-hoc 签名的本地验收候选；未做 Developer ID 公证，未构建 Windows 产物，未发布 Release。
+
+## 2026-09-09 20:37：当前 macOS arm64 修复包（未发布）
+
+- 官方构建完整测试 2082 项通过（21 skip），93.898 秒；主应用／MCP sidecar、Node 语法、
+  严格签名、ZIP 解包、DMG 挂载与拖出副本、checksum 门禁通过，Ruff F 全绿。
+- ZIP：165,965,692 bytes，SHA-256
+  `947ab126184360b75e5b06a6659d05cf71e3442fcd2e7c422be7d64fa62bdee6`。
+- DMG：175,840,379 bytes，SHA-256
+  `237a09388d56b5c69b8ee93999d98d0a952fbe6a3b217e7fa39d19b2c99c4456`。
+- 已安装到本机 `/Applications/MEFinder.app`；旧应用与数据库已分别备份。
+  原生界面实测中文 EPUB 导论显示英文对照，作品组 PDF→英文 EPUB 后台生成完成并恢复按钮。
+- 本地修复候选，ad-hoc 签名；未构建 Windows 包，未合并 PR、打 tag 或发布 Release。
