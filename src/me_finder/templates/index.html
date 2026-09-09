@@ -1123,23 +1123,24 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     </header>
     <fieldset id="md-page-fields" class="md-page-fields">
       <div class="md-page-field md-page-field-primary">
-        <label class="md-page-field-label" for="md-page-input">要导出的页码</label>
-        <input id="md-page-input" type="text" maxlength="512" required placeholder="例如：12-18,25" aria-describedby="md-page-help md-page-error" autocomplete="off">
-        <p id="md-page-help" class="md-page-help">用逗号分隔页码，数字范围用短横线；序言页可逐个填写原书标签，如 iv,v。</p>
+        <label class="md-page-field-label" for="md-page-input">页码</label>
+        <input id="md-page-input" type="text" maxlength="512" required placeholder="例如：5, 12-18, 25" aria-describedby="md-page-help md-page-error" autocomplete="off">
+        <p id="md-page-help" class="md-page-help">可输入单页、连续页或两者组合；多个页码或范围用逗号分隔</p>
       </div>
       <div class="md-page-typerow">
-        <span class="md-page-typerow-label">页码按</span>
-        <div class="md-page-segment md-page-segment-compact" role="radiogroup" aria-label="页码类型">
+        <span class="md-page-typerow-label">页码依据</span>
+        <div class="md-page-segment md-page-segment-compact" role="radiogroup" aria-label="页码依据" aria-describedby="md-page-mode-help">
           <label class="md-page-segment-item" id="md-page-mode-printed-item">
-            <input type="radio" name="md-page-mode" id="md-page-mode-printed" value="printed" checked>
+            <input type="radio" name="md-page-mode" id="md-page-mode-printed" value="printed" checked onchange="MEFinder.library.pageExport.updateHelp()">
             <span class="md-page-segment-face">原书页码</span>
           </label>
           <label class="md-page-segment-item" id="md-page-mode-physical-item">
-            <input type="radio" name="md-page-mode" id="md-page-mode-physical" value="physical">
+            <input type="radio" name="md-page-mode" id="md-page-mode-physical" value="physical" onchange="MEFinder.library.pageExport.updateHelp()">
             <span class="md-page-segment-face">PDF 物理页</span>
           </label>
         </div>
       </div>
+      <p id="md-page-mode-help" class="md-page-help">按书中印刷页码导出；序言页可输入 iv、v 等页码标签</p>
       <p id="md-page-error" class="md-page-error" role="alert"></p>
       <div class="app-dialog-actions"><button class="action-btn" type="button" onclick="MEFinder.library.pageExport.close()">取消</button><button class="action-btn primary" type="submit">导出所选页</button></div>
     </fieldset>

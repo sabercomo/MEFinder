@@ -451,10 +451,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 文献库徽标只表格式：PDF 结构化解析后显示 JSON、原生文本仍显示 PDF（+.type-badge.json）；具体解析器移到详情面板「解析方式」行。
     # 0.5.3 对照默认目标记忆：reader.js 按源文献 id 用 localStorage 记住上次对照版本，默认不再固定回退英文版。
     # 0.5.3 两跳中转对照修复：reader.js/reader.css 加「经基准中转」提示 + 一键生成直接对照（轮询后台任务）。
+    # 0.5.3 按页导出文案：明示单页、连续范围与组合输入，原书/PDF 页码依据说明随选项切换。
     BASELINE_SHA256 = (
-        "7d62d9e4fa1eb20eace6469199683ad0b2d3b3066c83a69827eb3af06c721620"
+        "29db919322aee48bcf2c131bd7bbff4ac2269114b3be4a8f3acd0950d4152201"
     )
-    BASELINE_BYTES = 1085097
+    BASELINE_BYTES = 1085745
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

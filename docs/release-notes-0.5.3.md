@@ -143,7 +143,7 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   实验档**,不据此宣称新增准确率。详见 `reports/e5-disputed-four-adjudication-2026-09-09.md`。
 - 余下 macOS Developer ID 公证与正式 Release 发布仍为未决项,不在本地候选范围内。
 
-## 2026-09-10 01:13：当前 macOS arm64 候选包（未发布）
+## 2026-09-10 01:13：前一版 macOS arm64 候选包（已被页码文案修订包替代）
 
 - 基于 `80ecc93`重建，已包含译本对照默认目标记忆与两跳中转提示／一键生成直接对照。
 - 官方 `build_macos.sh` 完整测试 2084 项通过（21 skip）；Ruff F、全部前端 JavaScript 语法、
@@ -154,3 +154,21 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   `7a2ab82c1dded37c70f208e50e19d6e29deb4c0213c581a7ad310375911223e0`。
 - 已替换并启动本机 `/Applications/MEFinder.app`；原生界面显示 `MEFinder v0.5.3`。
   当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未创建 tag 或正式 Release。
+
+## 2026-09-10：按页导出的页码说明
+
+- 页码输入框同时示例单页、连续范围和组合输入：`5, 12-18, 25`，不再让用户猜测是否支持单页。
+- “页码按”改为“页码依据”；选择原书页码时说明印刷页及罗马数字标签，选择 PDF 物理页时说明从文件第 1 页计数。
+
+## 2026-09-10 01:46：当前 macOS arm64 候选包（未发布）
+
+- 包含按页导出页码说明修订；已在源码预览和安装后原生应用中验收单页示例、组合输入与页码依据动态说明。
+- 官方 `build_macos.sh` 完整测试 2085 项通过（21 skip）；Ruff F、前端 JavaScript 语法、
+  主应用／MCP sidecar arm64、严格签名、ZIP 解包、DMG 挂载与拖出、checksum 门禁通过。
+- ZIP：165,967,546 bytes，SHA-256
+  `b293b191f5c512976c13a0be9e272c1abafb137461e62fa1e9acdeaa8218c68e`。
+- DMG：175,841,243 bytes，SHA-256
+  `b9773adcd3683176b6ac9205e3c1a24629809665a6156238d2638ed748782fdc`。
+- 已替换并启动本机 `/Applications/MEFinder.app`；替换前应用备份位于
+  `~/Library/Application Support/MEFinder/app-backups/20260910-014701/MEFinder.app`。
+  当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未正式发布。
