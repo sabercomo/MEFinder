@@ -575,7 +575,14 @@ def main() -> None:
 
         pdf_viewer = WindowsPDFViewer(webview, theme)
 
+    from src.me_finder.reader_windows import ReaderWindows
+
+    reader_windows = ReaderWindows(
+        webview, lambda: theme_palette(read_preferences(preferences_path)["theme"])["app_bg"]
+    )
     window, window_controller = create_main_window(webview, theme)
+    window.expose(reader_windows.open_reader)
+    window.events.closed += reader_windows.close_all
     if sys.platform == "darwin":
         window.events.closing += pdf_viewer.close
     native_theme_setter = None
@@ -733,6 +740,7 @@ def main() -> None:
                 handler.close_runtime()
                 return
             url = "http://127.0.0.1:%d/" % port
+            reader_windows.set_base_url(url)
             logging.info("backend ready at %s", url)
             with state_lock:
                 closing = bool(state["closing"])

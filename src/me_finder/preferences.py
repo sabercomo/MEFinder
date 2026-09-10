@@ -42,6 +42,7 @@ VALID_CALIBRATION_VIEWS = frozenset({"list", "grid"})
 VALID_PDF_OPEN_MODES = frozenset({"native", "system"})
 # 结构化阅读器正文排版：flow=回流填满阅读列（默认）；physical=复刻 PDF 物理断行。
 DEFAULT_READER_LINE_MODE = "flow"
+DEFAULT_READER_WINDOW_ENABLED = False
 VALID_READER_LINE_MODES = frozenset({"flow", "physical"})
 VALID_PDF_PARSE_MODES = frozenset(
     {"auto", "mineru", "mineru-local", "vision", "general-local-model"}
@@ -302,6 +303,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     script_folding = payload.get("script_folding") if isinstance(payload, dict) else None
     if not isinstance(script_folding, bool):
         script_folding = DEFAULT_SCRIPT_FOLDING
+    reader_window_enabled = payload.get("reader_window_enabled") if isinstance(payload, dict) else None
+    if not isinstance(reader_window_enabled, bool):
+        reader_window_enabled = DEFAULT_READER_WINDOW_ENABLED
     reader_line_mode = payload.get("reader_line_mode") if isinstance(payload, dict) else None
     if reader_line_mode not in VALID_READER_LINE_MODES:
         reader_line_mode = DEFAULT_READER_LINE_MODE
@@ -349,6 +353,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "pdf_parse_mode": pdf_parse_mode,
         "document_export_mode": document_export_mode,
         "reader_line_mode": reader_line_mode,
+        "reader_window_enabled": reader_window_enabled,
         "script_folding": script_folding,
         "export_page_cleanup": export_page_cleanup,
         "auto_update": auto_update,
@@ -462,6 +467,10 @@ def _save_preferences_locked(
         if not isinstance(updates["script_folding"], bool):
             raise ValueError("繁简统一检索开关必须为布尔值")
         current["script_folding"] = updates["script_folding"]
+    if "reader_window_enabled" in updates:
+        if not isinstance(updates["reader_window_enabled"], bool):
+            raise ValueError("独立阅读窗口设置必须是布尔值。")
+        current["reader_window_enabled"] = updates["reader_window_enabled"]
     if "reader_line_mode" in updates:
         reader_line_mode = updates["reader_line_mode"]
         if reader_line_mode not in VALID_READER_LINE_MODES:

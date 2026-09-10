@@ -452,9 +452,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 对照默认目标记忆：reader.js 按源文献 id 用 localStorage 记住上次对照版本，默认不再固定回退英文版。
     # 0.5.3 两跳中转对照修复：reader.js/reader.css 加「经基准中转」提示 + 一键生成直接对照（轮询后台任务）。
     BASELINE_SHA256 = (
-        "7d62d9e4fa1eb20eace6469199683ad0b2d3b3066c83a69827eb3af06c721620"
+        "891252ae028347362cd30bb526f2b2907219740519a0ea52191f3f7aa9d69024"
     )
-    BASELINE_BYTES = 1085097
+    BASELINE_BYTES = 1089455
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

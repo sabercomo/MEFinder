@@ -29,7 +29,9 @@
     radiusBatches: DEFAULTS.radiusBatches,
     estimatedItemHeight: DEFAULTS.estimatedItemHeight,
     fetch: null,
-    notify: null
+    notify: null,
+    openExternal: null,
+    onClose: null
   };
 
   var state = {
@@ -260,7 +262,7 @@
     var panel = document.createElement('section');
     panel.className = 'mef-reader-panel';
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-modal', document.documentElement.dataset.readerWindow === 'true' ? 'false' : 'true');
     panel.setAttribute('aria-labelledby', 'mef-reader-title');
 
     var header = document.createElement('header');
@@ -1759,7 +1761,7 @@
     var locationObject = locationValue || global.location;
     if (!locationObject) return null;
     var pathname = String(locationObject.pathname || '');
-    if (pathname !== '/reader' && pathname !== '/reader/') return null;
+    if (pathname !== '/reader' && pathname !== '/reader/' && pathname !== '/reader-window') return null;
     var search = String(locationObject.search || '');
     if (search.length > 1024) return null;
     var params = new URLSearchParams(search);
@@ -1868,7 +1870,8 @@
     }
     if (/^[0-9a-f]{16}$/i.test(pageTextHash)) params.set('h', pageTextHash);
     if (quote) params.set('q', quote);
-    var url = '/reader?' + params.toString();
+    var readerPath = document.documentElement.dataset.readerWindow === 'true' ? '/reader-window' : '/reader';
+    var url = readerPath + '?' + params.toString();
     if (url.length > 1024) return;
     global.history.replaceState(
       {meFinderReader: true, sourceId: state.sourceId, anchorId: anchorId},
@@ -2740,6 +2743,8 @@
     if (options.alignmentLocateEndpoint) {
       config.alignmentLocateEndpoint = String(options.alignmentLocateEndpoint);
     }
+    if (typeof options.openExternal === 'function') config.openExternal = options.openExternal;
+    if (typeof options.onClose === 'function') config.onClose = options.onClose;
     if (typeof options.fetch === 'function') config.fetch = options.fetch;
     if (typeof options.notify === 'function') config.notify = options.notify;
     if (options.notify === null) config.notify = null;
@@ -2765,6 +2770,7 @@
     options = options || parseReaderDeepLink(global.location) || state.lastSession || {};
     var sourceId = String(options.sourceId || options.source_id || '');
     if (!sourceId) throw new Error('缺少文献标识，无法打开结构化文本');
+    if (config.openExternal && await config.openExternal(options)) return true;
     ensureDom();
     if (state.comparison.open) closeComparison();
 
@@ -2953,6 +2959,7 @@
       state.restoreFocus.focus();
     }
     state.restoreFocus = null;
+    if (config.onClose) config.onClose();
   }
 
   function destroy() {
@@ -3020,6 +3027,7 @@
   });
 
   function restoreInitialDeepLink() {
+    if (document.documentElement.dataset.readerWindow === 'true') return;
     if (!state.open && parseReaderDeepLink(global.location)) {
       restoreReaderLocation();
     }

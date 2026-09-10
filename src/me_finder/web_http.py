@@ -89,7 +89,7 @@ class WebHTTPContext:
     controller_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
     shell_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
     shell_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    render_html: Callable[[str], str]
+    render_html: Callable[..., str]
     package_dir: Path
     read_preferences: Callable[[Path], Mapping[str, object]]
     resolve_preferences_path: Callable[[Path], Path]
@@ -330,10 +330,10 @@ def make_http_handler(context: WebHTTPContext):
                 status, payload = shell_route()
                 self._send_json(payload, status=status)
                 return
-            if parsed.path in {"/", "/index.html", "/reader", "/reader/"}:
+            if parsed.path in {"/", "/index.html", "/reader", "/reader/", "/reader-window"}:
                 preferences_path = resolve_preferences_path(root)
                 theme = read_preferences(preferences_path)["theme"]
-                body = render_html(theme).encode("utf-8")
+                body = (render_html(theme, reader_window=True) if parsed.path == "/reader-window" else render_html(theme)).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
             if parsed.path.startswith("/static/brands/"):
@@ -370,10 +370,10 @@ def make_http_handler(context: WebHTTPContext):
             if parsed.path.startswith("/source/"):
                 self._send_source(parsed.path, send_body=False)
                 return
-            if parsed.path in {"/", "/index.html", "/reader", "/reader/"}:
+            if parsed.path in {"/", "/index.html", "/reader", "/reader/", "/reader-window"}:
                 preferences_path = resolve_preferences_path(root)
                 theme = read_preferences(preferences_path)["theme"]
-                content_length = len(render_html(theme).encode("utf-8"))
+                content_length = len((render_html(theme, reader_window=True) if parsed.path == "/reader-window" else render_html(theme)).encode("utf-8"))
                 self._send(200, b"", "text/html; charset=utf-8", content_length=content_length, send_body=False)
                 return
             self._send(404, b"", "text/plain; charset=utf-8", send_body=False)

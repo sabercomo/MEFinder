@@ -945,6 +945,7 @@
       ? 'with_pdf'
       : 'data_only';
     settingsStore.currentReaderLineMode = data.reader_line_mode === 'physical' ? 'physical' : 'flow';
+    global.MEFinder.readerHost.syncPreferences(data);
     settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id === 'multilingual-e5-large'
       ? 'multilingual-e5-large'
       : 'minilm-l12-v2';

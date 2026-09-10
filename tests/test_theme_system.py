@@ -122,6 +122,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "pdf_parse_mode": DEFAULT_PDF_PARSE_MODE,
             "document_export_mode": DEFAULT_DOCUMENT_EXPORT_MODE,
             "reader_line_mode": DEFAULT_READER_LINE_MODE,
+            "reader_window_enabled": False,
             "script_folding": True,
             "export_page_cleanup": dict(DEFAULT_EXPORT_PAGE_CLEANUP),
             "auto_update": DEFAULT_AUTO_UPDATE,
