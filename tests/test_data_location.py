@@ -56,6 +56,12 @@ def _create_current_data_root(root: Path) -> None:
         '{"theme": "midnight"}\n',
         encoding="utf-8",
     )
+    # Simulate locked webview-data that would be auto-recreated.
+    webview_data = root / "runtime" / "webview-data"
+    webview_data.mkdir(parents=True)
+    (webview_data / "Cookies").write_bytes(b"session-data")
+    (webview_data / "LocalStorage" / "data.db").parent.mkdir(parents=True)
+    (webview_data / "LocalStorage" / "data.db").write_bytes(b"storage")
 
 
 def _request_json(
@@ -251,6 +257,8 @@ class DataLocationTests(unittest.TestCase):
                 connection.close()
             self.assertFalse((target / "runtime/data/index.sqlite3-wal").exists())
             self.assertFalse((target / "runtime/data/index.sqlite3-shm").exists())
+            # webview-data should be skipped (locked at runtime, auto-recreated).
+            self.assertFalse((target / "runtime/webview-data").exists())
             self.assertEqual(
                 (current / DATA_ROOT_MARKER).read_text(encoding="utf-8").strip(),
                 str(target.resolve()),
