@@ -36,6 +36,13 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 运行时策略拆入 `embedding_runtime.py`（线程预算 + 取消原语），与对齐算法模块分离。
 - 界面：文献检索设置的「繁简统一检索」补齐图标／勾选槽，修一字一行塌缩；按页导出
   对话框改主流打印式分段控件（原书页码／PDF 物理页码）并统一间距与聚焦态。
+- 文献库列表徽标语义从「解析器」改为「格式」（PDF／EPUB／Word／JSON）：PDF 经结构化解析
+  （产物 content_list.json）后显示 JSON，仅原生文本层的仍显示 PDF。具体「用什么解析的」
+  （本地 MinerU／MinerU／NDL 日文 OCR／视觉模型 + 模型名）移到详情面板新增的「解析方式」行。
+- 设置里的通用本地模型编辑改为卡片式范式（标签左对齐、输入整宽、底部操作条），与「其他解析
+  API」编辑卡一致，移除旧的双栏网格特例。
+- 作品组初始化不再默认展开第一个作品组，首屏所有组默认折叠。
+- 对齐请求与结果／拒绝原因记入日志，便于诊断「对齐失败」。
 
 ## 本次变更
 
@@ -172,3 +179,18 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 已替换并启动本机 `/Applications/MEFinder.app`；替换前应用备份位于
   `~/Library/Application Support/MEFinder/app-backups/20260910-014701/MEFinder.app`。
   当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未正式发布。
+
+## 2026-09-10 13:03：当前 Windows x64 候选包（含按页导出页码说明修订，未发布）
+
+- 基于 `d142fef` 重建，已包含译本对照默认目标记忆、两跳中转提示／一键直接对照，以及按页
+  导出页码输入示例与「页码依据」动态说明。取代 09-09 23:16（`80ecc93`）候选。
+- 官方 `build_windows_installer.ps1` / `build_portable_release.ps1`，Python 3.12.14 x64 与
+  PyInstaller 6.21.0；全量 `unittest` 2085 项通过、1 项按条件跳过（装 OpenCC 后其余条件跳过项
+  均执行），全部前端 JavaScript `node --check` 通过。
+- 主应用与 `MEFinderMCP.exe` 均由 PyInstaller 生成；打包后 MCP sidecar STDIO 冒烟、空索引
+  FTS5 trigram 校验、隐私/许可材料门禁通过。安装包经 Inno Setup 编译。
+- 安装包：`MEFinder-v0.5.3-windows-setup.exe`，140,313,745 bytes，SHA-256
+  `32810fc82534c2f7a6ce439beec0726113b483bc310bb7d8426f17ac62f094f7`。
+- 便携包：`MEFinder-v0.5.3-windows-portable.zip`，164,118,826 bytes，SHA-256
+  `04f414fb1339d092b3133b666457c34ae4cd4e6ed8082e2034f514b2f192dd55`。
+- 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
