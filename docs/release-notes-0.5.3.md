@@ -36,6 +36,13 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 运行时策略拆入 `embedding_runtime.py`（线程预算 + 取消原语），与对齐算法模块分离。
 - 界面：文献检索设置的「繁简统一检索」补齐图标／勾选槽，修一字一行塌缩；按页导出
   对话框改主流打印式分段控件（原书页码／PDF 物理页码）并统一间距与聚焦态。
+- 文献库列表徽标语义从「解析器」改为「格式」（PDF／EPUB／Word／JSON）：PDF 经结构化解析
+  （产物 content_list.json）后显示 JSON，仅原生文本层的仍显示 PDF。具体「用什么解析的」
+  （本地 MinerU／MinerU／NDL 日文 OCR／视觉模型 + 模型名）移到详情面板新增的「解析方式」行。
+- 设置里的通用本地模型编辑改为卡片式范式（标签左对齐、输入整宽、底部操作条），与「其他解析
+  API」编辑卡一致，移除旧的双栏网格特例。
+- 作品组初始化不再默认展开第一个作品组，首屏所有组默认折叠。
+- 对齐请求与结果／拒绝原因记入日志，便于诊断「对齐失败」。
 
 ## 本次变更
 
@@ -143,7 +150,7 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   实验档**,不据此宣称新增准确率。详见 `reports/e5-disputed-four-adjudication-2026-09-09.md`。
 - 余下 macOS Developer ID 公证与正式 Release 发布仍为未决项,不在本地候选范围内。
 
-## 2026-09-10 01:13：当前 macOS arm64 候选包（未发布）
+## 2026-09-10 01:13：前一版 macOS arm64 候选包（已被页码文案修订包替代）
 
 - 基于 `80ecc93`重建，已包含译本对照默认目标记忆与两跳中转提示／一键生成直接对照。
 - 官方 `build_macos.sh` 完整测试 2084 项通过（21 skip）；Ruff F、全部前端 JavaScript 语法、
@@ -154,3 +161,59 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
   `7a2ab82c1dded37c70f208e50e19d6e29deb4c0213c581a7ad310375911223e0`。
 - 已替换并启动本机 `/Applications/MEFinder.app`；原生界面显示 `MEFinder v0.5.3`。
   当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未创建 tag 或正式 Release。
+
+## 2026-09-10：按页导出的页码说明
+
+- 页码输入框同时示例单页、连续范围和组合输入：`5, 12-18, 25`，不再让用户猜测是否支持单页。
+- “页码按”改为“页码依据”；选择原书页码时说明印刷页及罗马数字标签，选择 PDF 物理页时说明从文件第 1 页计数。
+
+## 2026-09-10 01:46：当前 macOS arm64 候选包（未发布）
+
+- 包含按页导出页码说明修订；已在源码预览和安装后原生应用中验收单页示例、组合输入与页码依据动态说明。
+- 官方 `build_macos.sh` 完整测试 2085 项通过（21 skip）；Ruff F、前端 JavaScript 语法、
+  主应用／MCP sidecar arm64、严格签名、ZIP 解包、DMG 挂载与拖出、checksum 门禁通过。
+- ZIP：165,967,546 bytes，SHA-256
+  `b293b191f5c512976c13a0be9e272c1abafb137461e62fa1e9acdeaa8218c68e`。
+- DMG：175,841,243 bytes，SHA-256
+  `b9773adcd3683176b6ac9205e3c1a24629809665a6156238d2638ed748782fdc`。
+- 已替换并启动本机 `/Applications/MEFinder.app`；替换前应用备份位于
+  `~/Library/Application Support/MEFinder/app-backups/20260910-014701/MEFinder.app`。
+  当前仍为 ad-hoc 签名候选，未做 Developer ID 公证，未正式发布。
+
+## 2026-09-10 13:03：当前 Windows x64 候选包（含按页导出页码说明修订，未发布）
+
+- 基于 `d142fef` 重建，已包含译本对照默认目标记忆、两跳中转提示／一键直接对照，以及按页
+  导出页码输入示例与「页码依据」动态说明。取代 09-09 23:16（`80ecc93`）候选。
+- 官方 `build_windows_installer.ps1` / `build_portable_release.ps1`，Python 3.12.14 x64 与
+  PyInstaller 6.21.0；全量 `unittest` 2085 项通过、1 项按条件跳过（装 OpenCC 后其余条件跳过项
+  均执行），全部前端 JavaScript `node --check` 通过。
+- 主应用与 `MEFinderMCP.exe` 均由 PyInstaller 生成；打包后 MCP sidecar STDIO 冒烟、空索引
+  FTS5 trigram 校验、隐私/许可材料门禁通过。安装包经 Inno Setup 编译。
+- 安装包：`MEFinder-v0.5.3-windows-setup.exe`，140,313,745 bytes，SHA-256
+  `32810fc82534c2f7a6ce439beec0726113b483bc310bb7d8426f17ac62f094f7`。
+- 便携包：`MEFinder-v0.5.3-windows-portable.zip`，164,118,826 bytes，SHA-256
+  `04f414fb1339d092b3133b666457c34ae4cd4e6ed8082e2034f514b2f192dd55`。
+- 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
+
+## 2026-09-10：macOS Intel（x86_64）候选包与正式发布产物
+
+- 用 x86_64 Python 3.12.10 与 PyInstaller 6.21.0 运行官方 `build_macos.sh`
+  （`MEFINDER_TARGET_ARCH=x86_64`），补齐此前只有 arm64 的 Mac 产物。全量测试与
+  Ruff F、前端 `node --check`、严格签名、ZIP 解包、DMG 挂载与拖出、checksum 门禁通过。
+- 主应用与 `MEFinderMCP` 经 `lipo` 确认均为纯 `x86_64`，包内无任何 arm64 Mach-O；
+  OpenCC 词典（繁简统一检索）已随包收集。
+- x86_64 DMG：181,372,328 bytes，SHA-256
+  `de058f8ffb4c8bb5dd79653b4b1e7d690fcb941c553746a3dae986cd89ba9a3b`。
+- x86_64 ZIP：171,256,949 bytes，SHA-256
+  `806a12517d8cc5a2c0d0e4f8027d89845e1b1441cf24ef0fc32ea6571700426f`。
+- ad-hoc 签名，未做 Developer ID 公证；Intel 发布包最低支持 macOS 12。
+- **正式发布产物（Release v0.5.3 实际上传）汇总**：
+  - macOS arm64 DMG `b9773adcd3683176b6ac9205e3c1a24629809665a6156238d2638ed748782fdc`、
+    ZIP `b293b191f5c512976c13a0be9e272c1abafb137461e62fa1e9acdeaa8218c68e`（对应
+    01:46 页码说明修订包）。
+  - macOS x86_64 DMG / ZIP 见上。
+  - Windows 安装版 `MEFinder-v0.5.3-windows-setup.exe` SHA-256
+    `32810fc82534c2f7a6ce439beec0726113b483bc310bb7d8426f17ac62f094f7`、便携版
+    `MEFinder-v0.5.3-windows-portable.zip` SHA-256
+    `04f414fb1339d092b3133b666457c34ae4cd4e6ed8082e2034f514b2f192dd55`（即上文 13:03
+    基于 `d142fef` 的重建，以本条为实际发布值）。

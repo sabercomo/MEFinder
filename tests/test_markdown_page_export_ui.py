@@ -5,6 +5,14 @@ import subprocess
 import unittest
 
 
+class MarkdownPageExportCopyTests(unittest.TestCase):
+    def test_dialog_copy_explains_single_page_range_and_combination(self):
+        template = (Path(__file__).resolve().parents[1] / 'src/me_finder/templates/index.html').read_text(encoding='utf-8')
+        self.assertIn('placeholder="例如：5, 12-18, 25"', template)
+        self.assertIn('可输入单页、连续页或两者组合', template)
+        self.assertIn('<span class="md-page-typerow-label">页码依据</span>', template)
+
+
 @unittest.skipUnless(shutil.which('node'), 'Node unavailable')
 class MarkdownPageExportUiTests(unittest.TestCase):
     def test_dialog_selection_cancel_failure_retry_and_duplicate_submit(self):
@@ -14,7 +22,7 @@ const vm = require('vm'), fs = require('fs'), assert = require('assert');
 const nodes = {}, calls = [], toasts = [];
 let picker = '/exports', resolveFetch;
 function classList(){const set=new Set();return {toggle(name,on){on?set.add(name):set.delete(name);},contains(name){return set.has(name);}};}
-for (const id of ['md-page-mode-printed','md-page-mode-physical','md-page-mode-printed-item','md-page-mode-physical-item','md-page-input','md-page-error','md-page-note','md-page-fields','markdown-page-dialog']) {
+for (const id of ['md-page-mode-printed','md-page-mode-physical','md-page-mode-printed-item','md-page-mode-physical-item','md-page-input','md-page-error','md-page-note','md-page-mode-help','md-page-fields','markdown-page-dialog']) {
   nodes[id] = {value:'',textContent:'',disabled:false,checked:false,classList:classList(),focus(){},querySelector(){return null;},
     showModal(){this.open=true;},close(){this.open=false;}};
 }
@@ -36,6 +44,12 @@ const event = {preventDefault(){}};
   assert.equal(nodes['md-page-mode-physical'].disabled,false);
   assert.equal(nodes['md-page-mode-physical-item'].classList.contains('is-disabled'),false);
   assert.equal(nodes['md-page-mode-printed'].checked,true);
+  assert.ok(nodes['md-page-mode-help'].textContent.includes('印刷页码'));
+  nodes['md-page-mode-printed'].checked=false; nodes['md-page-mode-physical'].checked=true;
+  context.MEFinder.library.pageExport.updateHelp();
+  assert.ok(nodes['md-page-mode-help'].textContent.includes('第 1 页通常是封面'));
+  nodes['md-page-mode-printed'].checked=true; nodes['md-page-mode-physical'].checked=false;
+  context.MEFinder.library.pageExport.updateHelp();
   await context.MEFinder.library.pageExport.submit(event); assert.equal(calls.length,0);
   nodes['md-page-input'].value='12-18,25';
   picker=null; await context.MEFinder.library.pageExport.submit(event);

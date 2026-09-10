@@ -1851,6 +1851,14 @@
     return physical && physical.checked ? 'physical' : 'printed';
   }
 
+  function updateMarkdownPageHelp() {
+    var help = document.getElementById('md-page-mode-help');
+    if (!help) return;
+    help.textContent = markdownPageMode() === 'physical'
+      ? '按 PDF 文件顺序计数，第 1 页通常是封面'
+      : '按书中印刷页码导出；序言页可输入 iv、v 等页码标签';
+  }
+
   function openMarkdownPageExport(sourceId) {
     if (markdownPageBusy) return;
     markdownPageSource = sourceId;
@@ -1863,6 +1871,7 @@
     if (physical) { physical.checked = false; physical.disabled = !!epub; }
     var physicalItem = document.getElementById('md-page-mode-physical-item');
     if (physicalItem) physicalItem.classList.toggle('is-disabled', !!epub);
+    updateMarkdownPageHelp();
     document.getElementById('md-page-input').value = '';
     document.getElementById('md-page-error').textContent = '';
     document.getElementById('md-page-note').textContent = epub
@@ -2154,7 +2163,8 @@
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.library = {
     pageExport: {open: openMarkdownPageExport, close: closeMarkdownPageExport,
-      submit: submitMarkdownPageExport, cancel: cancelMarkdownPageExport},
+      submit: submitMarkdownPageExport, cancel: cancelMarkdownPageExport,
+      updateHelp: updateMarkdownPageHelp},
     applyCatalog: applyLibraryCatalog,
     load: loadLibrary,
     loadDocumentGroups: loadDocumentGroups,
