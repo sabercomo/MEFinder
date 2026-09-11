@@ -90,3 +90,9 @@ Windows 旧构建记录（来自远端提交 `adb810f`，本机未重新构建�
 |---|---:|---|
 | `MEFinder-v0.5.4-macos-arm64.dmg` | 176365724 | `d5dcca9df8be256ccf10e6807141863989cefa737b0e8b35f81c8b746aea84e9` |
 | `MEFinder-v0.5.4-macos-arm64.zip` | 166176890 | `f29b2a337d73584fd56e4dbbd0b397fe2b76bc2217acea96bbda87ca5137e647` |
+
+## 2026-09-11 — 搜索管线固定契约与职责拆分
+
+- 把 1,845 行的 `search.py` 拆为单向依赖的阶段模块:召回(`search_recall`)、评分去重(`search_scoring`)、位置锚点(`search_anchors`)、引文信息(`search_citation`)、结果组装(`search_assembly`);`SearchEngine` 保留为兼容门面,`search`/`search_passages` 签名与响应 JSON 键不变。
+- 搜索契约用固定公开语料 + 18 条查询的金样测试钉死(命中、顺序、去重、页码、字符区间、引文格式逐字节一致),另加 AST 边界测试钉住阶段依赖方向;见 [拆分说明](issues/search-pipeline-split.md)。
+- 真实库端到端核验:重构前后各 40 请求的结果身份完全一致,成功延迟 p50 比值 0.99–1.08(噪声内)。全量 2115 项 unittest 通过(22 skip),Ruff 零告警。
