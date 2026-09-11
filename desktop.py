@@ -34,6 +34,8 @@ from src.me_finder.preferences import (
     resolve_native_shell_theme,
 )
 from src.me_finder import runtime_location
+from src.me_finder.desktop_backend import DesktopBackend
+from src.me_finder.desktop_host import PywebviewDesktopHost
 
 APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = runtime_location.PORTABLE_MARKER
@@ -607,191 +609,62 @@ def main() -> None:
             on_install_started=close_for_update,
         )
 
-    state_lock = threading.Lock()
-    state = {
-        "server": None,
-        "handler": None,
-        "closing": False,
-        "pdf_viewer": pdf_viewer,
-        "update_service": update_service,
-    }
+    host = PywebviewDesktopHost(
+        window,
+        webview,
+        pdf_viewer=pdf_viewer,
+        native_theme_setter=native_theme_setter,
+        app_data_root=app_data_root,
+    )
 
-    def choose_folders(
-        initial_directory: Path | None,
-        *,
-        allow_multiple: bool = False,
-    ) -> list[str]:
-        """Open the platform folder picker. Works on macOS and Windows alike."""
+    def render_error(title: str, detail: str) -> None:
+        window.load_html(error_html(title, detail, theme, sys.platform))
 
-        start = initial_directory
-        if start is None or not start.is_dir():
-            start = Path.home()
-        selection = window.create_file_dialog(
-            webview.FileDialog.FOLDER,
-            directory=str(start),
-            allow_multiple=allow_multiple,
-        )
-        if not selection:
-            return []
-        if isinstance(selection, (str, Path)):
-            selection = [selection]
-        return [str(folder) for folder in selection]
+    from src.me_finder.web import make_handler
 
-    def choose_data_directory() -> str | None:
-        if app_data_root is None:
-            return None
-        selection = choose_folders(app_data_root.parent)
-        return selection[0] if selection else None
+    backend = DesktopBackend(
+        index_path=root / "data" / "index.sqlite3",
+        create_handler=lambda: make_handler(
+            root / "data" / "index.sqlite3",
+            app_context=AppContext.create(
+                root,
+                index_path=root / "data" / "index.sqlite3",
+                app_data_root=app_data_root,
+                default_app_data_root=default_app_data_root,
+            ),
+            native_pdf_opener=host.capabilities().pdf_opener,
+            native_theme_setter=host.capabilities().theme_setter,
+            update_service=update_service,
+            native_directory_chooser=host.capabilities().directory_chooser,
+            native_export_directory_chooser=(
+                host.capabilities().export_directory_chooser
+                if sys.platform in {"darwin", "win32"}
+                else None
+            ),
+            native_scan_directory_chooser=host.capabilities().scan_directory_chooser,
+            native_backup_file_chooser=host.capabilities().backup_file_chooser,
+        ),
+        index_missing_detail=lambda: (
+            "请把 index.sqlite3 放到：\n%s\n\n"
+            "索引数据库可在项目目录用命令生成：\n"
+            "%s -m src.me_finder build-index"
+            % (root / "data" / "index.sqlite3", python_launcher())
+        ),
+    )
 
-    def choose_backup_file() -> str | None:
-        try:
-            selection = window.create_file_dialog(
-                webview.FileDialog.OPEN,
-                directory=str(Path.home()),
-                allow_multiple=False,
-                file_types=("MEFinder 备份 (*.zip)",),
-            )
-        except webview.errors.WebViewException as exc:
-            raise RuntimeError(str(exc)) from exc
-        if not selection:
-            return None
-        if isinstance(selection, (str, Path)):
-            return str(selection)
-        return str(selection[0])
-
-    def choose_export_directory() -> str | None:
-        try:
-            selection = choose_folders(Path.home() / "Downloads")
-        except webview.errors.WebViewException as exc:
-            raise RuntimeError(str(exc)) from exc
-        return selection[0] if selection else None
-
-    def choose_scan_directories() -> list[str]:
-        # Never start at the home folder: picking it is one click away there,
-        # and scanning it would walk the user's whole personal library.
-        return choose_folders(Path.home() / "Documents", allow_multiple=True)
-
-    def start_backend(win) -> None:
-        handler = None
-        server = None
-        server_started = False
-        try:
-            with state_lock:
-                if state["closing"]:
-                    return
-            index_path = root / "data" / "index.sqlite3"
-            if not index_path.exists():
-                logging.error("index not found: %s", index_path)
-                with state_lock:
-                    closing = bool(state["closing"])
-                if not closing:
-                    win.load_html(error_html(
-                        "未找到索引数据库 data/index.sqlite3",
-                        "请把 index.sqlite3 放到：\n%s\n\n"
-                        "索引数据库可在项目目录用命令生成：\n"
-                        "%s -m src.me_finder build-index" % (index_path, python_launcher()),
-                        theme,
-                        sys.platform,
-                    ))
-                return
-            logging.info("loading index from %s", index_path)
-            from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
-
-            handler = make_handler(
-                index_path,
-                app_context=AppContext.create(
-                    root,
-                    index_path=index_path,
-                    app_data_root=app_data_root,
-                    default_app_data_root=default_app_data_root,
-                ),
-                native_pdf_opener=pdf_viewer.open if pdf_viewer is not None else None,
-                native_theme_setter=native_theme_setter,
-                update_service=update_service,
-                native_directory_chooser=choose_data_directory,
-                native_export_directory_chooser=(
-                    choose_export_directory
-                    if sys.platform in {"darwin", "win32"}
-                    else None
-                ),
-                native_scan_directory_chooser=choose_scan_directories,
-                native_backup_file_chooser=choose_backup_file,
-            )
-            server = ManagedThreadingHTTPServer(("127.0.0.1", 0), handler)
-            port = int(server.server_address[1])
-            server_thread = threading.Thread(
-                target=server.serve_forever,
-                daemon=True,
-            )
-            # BaseServer.shutdown() blocks until serve_forever() has entered
-            # its loop.  Publish the pair only after Thread.start succeeds,
-            # while serializing with the close path so an immediately closed
-            # WebView cannot leave behind a late-starting backend.
-            with state_lock:
-                if state["closing"]:
-                    handler.begin_shutdown()
-                else:
-                    server_thread.start()
-                    server_started = True
-                    state["handler"] = handler
-                    state["server"] = server
-            if not server_started:
-                server.server_close()
-                handler.close_runtime()
-                return
-            url = "http://127.0.0.1:%d/" % port
+    def start_backend() -> None:
+        def announce(url: str) -> None:
             reader_windows.set_base_url(url)
             logging.info("backend ready at %s", url)
-            with state_lock:
-                closing = bool(state["closing"])
-            if not closing:
-                win.load_url(url)
-        except Exception:
-            logging.exception("backend failed to start")
-            if not server_started:
-                if handler is not None:
-                    handler.begin_shutdown()
-                if server is not None:
-                    server.server_close()
-                if handler is not None:
-                    handler.close_runtime()
-            with state_lock:
-                closing = bool(state["closing"])
-            if not closing:
-                win.load_html(
-                    error_html(
-                        "后台启动失败",
-                        traceback.format_exc(),
-                        theme,
-                        sys.platform,
-                    )
-                )
 
-    webview.start(start_backend, window, storage_path=webview_storage_path(root, portable))
-    with state_lock:
-        state["closing"] = True
-        server = state["server"]
-        handler = state["handler"]
-    if handler is not None:
-        handler.begin_shutdown()
-    if server is not None:
-        server.shutdown()
-        server.server_close()
-    handlers_stopped = (
-        server is None or server.wait_for_handlers(timeout=2.0)
-    )
-    if handler is not None:
-        # A half-open request must not block Windows/WebView2 shutdown forever,
-        # but a config+SQLite mutation that already started must reach either
-        # commit or rollback before the process is allowed to disappear.
-        handler.wait_for_durable_operations()
-    if not handlers_stopped and server is not None:
-        handlers_stopped = server.wait_for_handlers(timeout=2.0)
-    if not handlers_stopped:
-        logging.warning("active backend requests did not finish before desktop exit")
-    if handler is not None and handlers_stopped:
-        if not handler.close_runtime():
-            logging.warning("backend workers did not finish before desktop exit")
+        backend.start(
+            on_ready=announce,
+            load_main_page=window.load_url,
+            show_error=render_error,
+        )
+
+    webview.start(start_backend, storage_path=webview_storage_path(root, portable))
+    backend.stop()
     logging.info("window closed, exiting")
 
 

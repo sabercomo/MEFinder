@@ -79,33 +79,41 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
 
     def test_scan_directory_picker_enables_native_multiple_selection(self) -> None:
-        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
+        host_source = Path("src/me_finder/desktop_host.py").read_text(
+            encoding="utf-8"
+        )
 
-        self.assertIn("def choose_scan_directories()", desktop_source)
+        self.assertIn("def choose_scan_directories(self)", host_source)
         self.assertIn(
-            "choose_folders(Path.home() / \"Documents\", allow_multiple=True)",
-            desktop_source,
+            'scan_start_directory: Path = Path.home() / "Documents"',
+            host_source,
         )
 
     def test_backup_picker_uses_native_single_zip_selection(self) -> None:
         desktop_source = Path("desktop.py").read_text(encoding="utf-8")
 
-        self.assertIn("def choose_backup_file()", desktop_source)
-        self.assertIn("webview.FileDialog.OPEN", desktop_source)
-        self.assertIn('file_types=("MEFinder 备份 (*.zip)",)', desktop_source)
+        host_source = Path("src/me_finder/desktop_host.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("def choose_backup_file(self)", host_source)
+        self.assertIn("webview.FileDialog.OPEN", host_source)
+        self.assertIn('file_types=("MEFinder 备份 (*.zip)",)', host_source)
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
         self.assertIn(
-            "native_backup_file_chooser=choose_backup_file",
+            "backup_file_chooser=host.capabilities().backup_file_chooser",
             desktop_source,
         )
 
     def test_desktop_export_picker_uses_native_folder_selection(self) -> None:
-        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
-
-        self.assertIn("def choose_export_directory()", desktop_source)
-        self.assertIn(
-            'choose_folders(Path.home() / "Downloads")',
-            desktop_source,
+        host_source = Path("src/me_finder/desktop_host.py").read_text(
+            encoding="utf-8"
         )
+        self.assertIn("def choose_export_directory(self)", host_source)
+        self.assertIn(
+            "export_start_directory: Path = Path.home() / \"Downloads\"",
+            host_source,
+        )
+        desktop_source = Path("desktop.py").read_text(encoding="utf-8")
         self.assertIn(
             'if sys.platform in {"darwin", "win32"}',
             desktop_source,

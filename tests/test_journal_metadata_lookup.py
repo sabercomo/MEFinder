@@ -20,7 +20,8 @@ from src.me_finder.journal_metadata_lookup import (
     parse_cnki_detail_page,
     parse_cnki_search_results,
 )
-from src.me_finder.web import make_handler, open_external_cnki_url
+from src.me_finder.native_document_open import open_external_cnki_url
+from src.me_finder.web import make_handler
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -213,11 +214,11 @@ class CNKILookupParserTests(unittest.TestCase):
     def test_external_open_url_is_strictly_allowlisted(self) -> None:
         valid = "https://oversea.cnki.net/kns8s/search?kw=%E6%B5%8B%E8%AF%95"
         if os.name == "nt":
-            with patch("src.me_finder.web.os.startfile") as startfile:
+            with patch("src.me_finder.native_document_open.os.startfile") as startfile:
                 open_external_cnki_url(valid)
             startfile.assert_called_once_with(valid)
         else:
-            with patch("src.me_finder.web.subprocess.Popen") as popen:
+            with patch("src.me_finder.native_document_open.subprocess.Popen") as popen:
                 open_external_cnki_url(valid)
             popen.assert_called_once()
         for url in (

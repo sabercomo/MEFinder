@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from src.me_finder.preferences import save_preferences
-from src.me_finder import web
+from src.me_finder import native_document_open as web
 
 
 class PlatformOpenTests(unittest.TestCase):
