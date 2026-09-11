@@ -51,9 +51,7 @@ class BackendStandaloneProcessTests(unittest.TestCase):
         self._temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self._temporary.cleanup)
         self.root = Path(self._temporary.name)
-        fixture = create_fixture(
-            self.root, documents=2, paragraphs=12, alignment_paragraphs=8
-        )
+        create_fixture(self.root, documents=2, paragraphs=12, alignment_paragraphs=8)
         # create_fixture's bilingual pair: bench-002 (pivot) / bench-003 (target).
         self.pivot, self.target = "bench-002", "bench-003"
         self._link_model_cache()
