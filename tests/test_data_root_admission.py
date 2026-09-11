@@ -50,7 +50,7 @@ class DataRootAdmissionGateTests(unittest.TestCase):
                 with gate.operation():
                     pass
             except DataRootAdmissionError as exc:
-                self.assertIn("正在迁移", str(exc))
+                self.assertIn("正在变更", str(exc))
                 break
             if time.monotonic() >= deadline:
                 self.fail("migration did not close new admission")
@@ -91,7 +91,7 @@ class DataRootAdmissionGateTests(unittest.TestCase):
         gate = DataRootAdmissionGate()
 
         with gate.migration():
-            with self.assertRaisesRegex(DataRootAdmissionError, "正在迁移"):
+            with self.assertRaisesRegex(DataRootAdmissionError, "正在变更"):
                 with gate.migration():
                     pass
 

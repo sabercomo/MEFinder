@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 
@@ -90,13 +91,57 @@ def data_location_summary(
 ) -> dict[str, object]:
     current = Path(current_root).expanduser().resolve()
     default = Path(default_root).expanduser().resolve()
+    next_root = read_data_root(default, fallback_root=current)
     return {
         "available": available,
         "current_path": str(current),
         "default_path": str(default),
         "is_custom": current != default,
-        "restart_required": False,
+        "restart_required": next_root != current,
+        "pending_path": str(next_root) if next_root != current else None,
     }
+
+
+def inspect_existing_data_root(selected_folder: str | Path) -> dict[str, object]:
+    """Validate an existing library read-only without importing or copying files."""
+    # Keep path discovery lightweight for the MCP service; load SQLite only on inspection.
+    import sqlite3
+    from .persistence.index_schema import DATABASE_SCHEMA_VERSION
+
+    target = Path(selected_folder).expanduser()
+    if not target.is_absolute():
+        raise DataLocationError("请选择完整的资料库文件夹路径。")
+    target = target.resolve()
+    database = target / "runtime" / "data" / "index.sqlite3"
+    if not database.is_file():
+        raise DataLocationError("这里没有已有资料库。请选择包含 runtime/data/index.sqlite3 的文件夹，并确认云盘文件已下载到本机。")
+    try:
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
+            if connection.execute("PRAGMA user_version").fetchone()[0] > DATABASE_SCHEMA_VERSION:
+                raise DataLocationError("资料库来自更新版本的 MEFinder，请先升级应用。")
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {"source_files", "paragraphs", "pdf_pages", "metadata"} <= tables:
+                raise DataLocationError("这个数据库不是完整的 MEFinder 资料库。")
+            if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise DataLocationError("资料库完整性校验未通过，请等待同步完成或恢复备份。")
+            documents = connection.execute("SELECT count(*) FROM source_files").fetchone()[0]
+            paragraphs = connection.execute("SELECT count(*) FROM paragraphs").fetchone()[0]
+    except sqlite3.Error as exc:
+        raise DataLocationError("无法读取资料库，请确认文件已完整同步且数据库未损坏。") from exc
+    return {"target_path": str(target), "document_count": documents, "paragraph_count": paragraphs}
+
+
+def switch_data_root(current_root: Path, target_root: Path, default_root: Path) -> dict[str, object]:
+    """Select an existing library for next launch, leaving both libraries intact."""
+    current = Path(current_root).expanduser().resolve()
+    inspected = inspect_existing_data_root(target_root)
+    target = Path(inspected["target_path"])
+    if current == target:
+        raise DataLocationError("所选资料库就是当前资料库。")
+    _write_root_marker(data_root_marker_path(default_root), target)
+    return {"ok": True, **inspected, "current_path": str(current),
+            "restart_required": True, "old_data_retained": True,
+            "message": "资料库已选定，重启应用后读取；原资料库和所选资料库均未复制或覆盖。"}
 
 
 def _is_within(path: Path, parent: Path) -> bool:
@@ -188,6 +233,10 @@ def migrate_data_root(
             ):
                 if database_name in names:
                     ignored.add(database_name)
+        # Skip webview-data: locked by EdgeWebView2 at runtime, auto-recreated.
+        runtime_dir = current / "runtime"
+        if directory_path == runtime_dir and "webview-data" in names:
+            ignored.add("webview-data")
         return ignored
 
     try:

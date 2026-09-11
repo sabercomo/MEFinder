@@ -93,3 +93,37 @@ macOS 常见位置为 `~/Library/Application Support/MEFinder/runtime/components
 若要修改测试集或请求节奏，建立新的协议基线，不将两种负载的数值解释成优化收益。
 
 机制测试：`<venv-python> -B -m unittest tests.test_performance_baseline`。CI 只验证测量逻辑与夹具正确性，模型基准需按上面命令显式执行。
+
+## Windows 同步真实库（独立协议）
+
+2026-09-11：新增 `scripts/bench_real_library.py`。保留上面的合成协议；真实书库结果不能与合成数据直接计算优化收益。
+
+先用 SQLite 在线备份从已有库只读取得独立快照，包含已提交的 WAL 数据。只复制索引，不读取原库凭据、不复制源文件或向量缓存；导出和对齐读取已入库内容。快照与查询清单属于私人资料，应放在本机忽略目录，不能提交仓库。
+
+```bash
+# 首次准备；所有 ID 从本机已有库选择。目录必须尚不存在。
+<venv-python> scripts/bench_real_library.py \
+  --source-library "<同步完成的 MEFinder 文件夹>" \
+  --snapshot "<本机私人快照目录>" \
+  --export-source "<导出文献 ID>" \
+  --group "<已有作品组 ID>" --pivot "<基准文献 ID>" --target "<中文目标文献 ID>" \
+  --english-source "<英文查询来源 ID>"
+
+# 三轮、每条至少五次，四种场景；实际任务期间的请求才计入并发统计。
+<venv-python> scripts/bench_real_library.py \
+  --snapshot "<同一私人快照目录>" --models "<已有 MiniLM 模型缓存根目录>" \
+  --output reports/performance-real-before.json
+
+# 后续优化使用同一快照、模型、解释器及参数。
+<venv-python> scripts/bench_real_library.py \
+  --snapshot "<同一私人快照目录>" --models "<同一模型缓存根目录>" \
+  --compare reports/performance-real-before.json --output reports/performance-real-after.json
+```
+
+真实查询集固定为：中文正文片段、繁体“社會”、英文正文片段、高频“社会”、英文“gender”、增加标点的中文片段、确定无命中字符串、限定 PDF 的“社会”。中英文片段从指定文献第 10 段之后、长度超过 200 字符的首个可检索规范化正文中确定抽取；实际查询在首次准备时冻结。预检要求命中条件、字符区间和 PDF 页内锚点全部有效，失败时修正测试集并重新建立基线，不修改原库来满足测试。
+
+每轮从同一快照复制数据库，保留其中已有对齐历史；通过 `force=true` 重新计算指定版本对。模型文件复制到临时目录、文献向量缓存为空，首轮计算真实嵌入。禁止外部网络。原始测量 JSON 仅含查询摘要、数量和计时，不含书籍正文、标题、原库路径或 API 配置。`configuration.manifest_sha256` 冻结工作负载，`fixture.content_sha256` 冻结数据库；组合驱动哈希同时涵盖真实库脚本和 HTTP 测量脚本。
+
+启动/退出仍是 Python 后端生命周期，不包含 macOS 启动动画、WebView 首屏或打包程序的解压时间。指标和限制沿用上文。对齐期间若出现 503，应作为产品可用性结果保留，不能混进成功响应时间。
+
+快照复制和查询预热会影响操作系统文件缓存；“新进程/新向量缓存”不等于冷盘或冷机启动。重复测量保留这一准备顺序，不应与重启机器后首次打开应用的耗时混用。

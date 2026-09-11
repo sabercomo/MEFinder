@@ -421,7 +421,7 @@ class DesktopShellControllerTests(unittest.TestCase):
 
         self.assertEqual(
             response,
-            (409, {"error": "文件正在上传，请完成或取消后再迁移。"}),
+            (409, {"error": "文件正在上传，请完成或取消后再更改位置。"}),
         )
         self.migrate_data_root.assert_not_called()
         with self.data_root_gate.operation():
@@ -446,7 +446,7 @@ class DesktopShellControllerTests(unittest.TestCase):
                 has_active_jobs=lambda: True,
                 migrate_data_root=migrate,
             ).migrate_data_location({"target_path": "/target/MEFinder"}),
-            (409, {"error": "文献正在导入或索引正在更新，请完成后再迁移。"}),
+            (409, {"error": "文献正在导入或索引正在更新，请完成后再更改位置。"}),
         )
         migrate.assert_not_called()
 
@@ -472,7 +472,7 @@ class DesktopShellControllerTests(unittest.TestCase):
 
         self.assertEqual(
             response,
-            (409, {"error": "索引正在更新，请稍后再迁移。"}),
+            (409, {"error": "索引正在更新，请稍后再更改位置。"}),
         )
         self.runtime_mutation.assert_called_once_with()
         migrate.assert_called_once_with(

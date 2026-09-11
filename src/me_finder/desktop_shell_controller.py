@@ -7,7 +7,10 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
-from .data_location import DataLocationError, data_location_summary, proposed_data_root
+from .data_location import (
+    DataLocationError, data_location_summary, proposed_data_root,
+    inspect_existing_data_root, switch_data_root,
+)
 from .lifecycle import DurableOperationGate
 from .mineru_api import MinerUError
 
@@ -61,6 +64,7 @@ class DesktopShellController:
         has_active_jobs: HasActiveJobs,
         runtime_mutation: RuntimeMutation,
         migrate_data_root: MigrateDataRoot,
+        select_existing_data_root: MigrateDataRoot = switch_data_root,
         update_service: Optional[UpdateServicePort] = None,
         native_directory_chooser: Optional[NativeDirectoryChooser] = None,
         native_export_directory_chooser: Optional[NativeExportDirectoryChooser] = None,
@@ -80,6 +84,7 @@ class DesktopShellController:
         self._has_active_jobs = has_active_jobs
         self._runtime_mutation = runtime_mutation
         self._migrate_data_root = migrate_data_root
+        self._select_existing_data_root = select_existing_data_root
         self._update_service = update_service
         self._native_directory_chooser = native_directory_chooser
         self._native_export_directory_chooser = native_export_directory_chooser
@@ -172,7 +177,13 @@ class DesktopShellController:
             "folders": folders,
         }
 
-    def choose_data_location(self) -> ShellResponse:
+    def choose_data_location(self, payload: object = None) -> ShellResponse:
+        """Choose a migration destination or inspect an existing library."""
+        if payload is not None and not isinstance(payload, Mapping):
+            return 400, {"error": "数据位置请求必须是 JSON 对象。"}
+        mode = (payload or {}).get("mode", "migrate")
+        if mode not in ("migrate", "existing"):
+            return 400, {"error": "请选择迁移或打开已有资料库。"}
         if (
             self._app_data_root is None
             or self._default_app_data_root is None
@@ -183,6 +194,9 @@ class DesktopShellController:
             selected_folder = self._native_directory_chooser()
             if not selected_folder:
                 return 200, {"ok": True, "cancelled": True}
+            if mode == "existing":
+                return 200, {"ok": True, "cancelled": False,
+                             **inspect_existing_data_root(selected_folder)}
             target = proposed_data_root(selected_folder)
         except (DataLocationError, OSError) as exc:
             return 400, {"error": str(exc)}
@@ -246,9 +260,14 @@ class DesktopShellController:
     def migrate_data_location(
         self,
         payload: Mapping[str, object],
+        *,
+        existing: bool = False,
     ) -> ShellResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "数据位置请求必须是 JSON 对象。"}
+        action = "切换资料库" if existing else "迁移数据"
         if self._app_data_root is None or self._default_app_data_root is None:
-            return 400, {"error": "当前运行方式不支持迁移数据位置。"}
+            return 400, {"error": f"当前运行方式不支持{action}。"}
         target_value = str(payload.get("target_path") or "").strip()
         if not target_value:
             return 400, {"error": "请先选择新的数据位置。"}
@@ -260,26 +279,31 @@ class DesktopShellController:
             ):
                 if self._has_active_uploads():
                     raise MinerUError(
-                        "文件正在上传，请完成或取消后再迁移。"
+                        "文件正在上传，请完成或取消后再更改位置。"
                     )
                 if self._has_active_jobs():
                     raise MinerUError(
-                        "文献正在导入或索引正在更新，请完成后再迁移。"
+                        "文献正在导入或索引正在更新，请完成后再更改位置。"
                     )
-                result = self._migrate_data_root(
+                operation = self._select_existing_data_root if existing else self._migrate_data_root
+                result = operation(
                     self._app_data_root,
                     Path(target_value),
                     self._default_app_data_root,
                 )
                 if result is None:
-                    raise MinerUError("索引正在更新，请稍后再迁移。")
+                    raise MinerUError("索引正在更新，请稍后再更改位置。")
         except MinerUError as exc:
             return 409, {"error": str(exc)}
         except DataLocationError as exc:
             return 400, {"error": str(exc)}
         except (OSError, sqlite3.Error) as exc:
-            return 500, {"error": f"迁移数据失败：{exc}"}
+            return 500, {"error": f"{action}失败：{exc}"}
         return 200, result
+
+    def switch_data_location(self, payload: Mapping[str, object]) -> ShellResponse:
+        """Seal current-root writes after selecting an existing library."""
+        return self.migrate_data_location(payload, existing=True)
 
     def open_source(self, payload: Mapping[str, object]) -> ShellResponse:
         source_id = str(payload.get("source_id") or "")

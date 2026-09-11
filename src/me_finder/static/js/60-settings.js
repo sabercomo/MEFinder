@@ -654,8 +654,18 @@
     if (!badge || !current) return;
     current.textContent = data.current_path || '未知位置';
     current.title = data.current_path || '';
-    badge.className = 'settings-status' + (data.is_custom ? ' ready' : '');
-    badge.textContent = data.is_custom ? '自定义位置' : '默认位置';
+    settingsStore.dataLocationRestartRequired = Boolean(data.restart_required);
+    badge.className = 'settings-status' + (data.restart_required ? ' warning' : data.is_custom ? ' ready' : '');
+    badge.textContent = data.restart_required ? '重启后生效' : data.is_custom ? '自定义位置' : '默认位置';
+    ['data-location-choose', 'data-location-open'].forEach(function(id) {
+      document.getElementById(id).disabled = settingsStore.dataLocationRestartRequired;
+    });
+    if (data.restart_required) {
+      renderPendingDataLocation(data.pending_path, 'existing');
+      document.getElementById('data-location-pending-label').textContent = '下次启动使用';
+      document.getElementById('data-location-pending-note').textContent = '已保存选择，请退出并重新打开应用';
+      document.getElementById('data-location-migrate').hidden = true;
+    }
   }
 
   async function loadDataLocation() {
@@ -688,86 +698,77 @@
     }
   }
 
-  function renderPendingDataLocation(targetPath) {
+  function renderPendingDataLocation(targetPath, mode, library) {
     settingsStore.pendingDataLocation = targetPath || '';
+    settingsStore.pendingDataLocationMode = mode || 'migrate';
+    var existing = settingsStore.pendingDataLocationMode === 'existing';
     var pending = document.getElementById('data-location-pending');
     var target = document.getElementById('data-location-target');
-    if (pending) pending.style.display = settingsStore.pendingDataLocation ? 'flex' : 'none';
-    if (target) {
-      target.textContent = settingsStore.pendingDataLocation;
-      target.title = settingsStore.pendingDataLocation;
-    }
+    pending.style.display = settingsStore.pendingDataLocation ? 'flex' : 'none';
+    target.textContent = settingsStore.pendingDataLocation;
+    target.title = settingsStore.pendingDataLocation;
+    document.getElementById('data-location-pending-label').textContent = existing ? '已有资料库' : '迁移到';
+    document.getElementById('data-location-pending-note').textContent = existing
+      ? (library ? library.document_count + ' 部文献 · ' + library.paragraph_count + ' 个段落。' : '') + '重启后读取此资料库，不复制或覆盖资料'
+      : '复制当前资料到新位置，重启后使用；原位置的数据保留';
+    var button = document.getElementById('data-location-migrate');
+    button.hidden = false;
+    button.textContent = existing ? '使用此资料库' : '迁移并切换';
   }
 
-  async function chooseDataLocation() {
-    var button = document.getElementById('data-location-choose');
-    if (button && button.disabled) return;
-    if (button) {
-      button.disabled = true;
-      button.textContent = '正在选择…';
-    }
+  async function chooseDataLocation(mode) {
+    mode = mode || 'migrate';
+    if (settingsStore.dataLocationRestartRequired) return;
+    var button = document.getElementById(mode === 'existing' ? 'data-location-open' : 'data-location-choose');
+    if (button.disabled) return;
+    var buttons = ['data-location-choose', 'data-location-open', 'data-location-migrate'].map(function(id) { return document.getElementById(id); });
+    buttons.forEach(function(item) { item.disabled = true; });
+    button.textContent = '选择并检查…';
     try {
       var resp = await fetch('/api/data-location/choose', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: '{}'
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: mode})
       });
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '选择位置失败');
-      if (!data.cancelled) {
-        renderPendingDataLocation(data.target_path);
-        showToast('已选择新位置，确认后开始迁移');
-      }
+      if (!data.cancelled) renderPendingDataLocation(data.target_path, mode, data);
     } catch (e) {
       showToast('选择数据位置失败：' + e.message);
     } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = '选择位置';
-      }
+      buttons.forEach(function(item) { item.disabled = false; });
+      button.textContent = mode === 'existing' ? '选择已有库' : '选择新位置';
     }
   }
 
   async function migrateDataLocation() {
-    if (!settingsStore.pendingDataLocation) return;
+    if (!settingsStore.pendingDataLocation || settingsStore.dataLocationRestartRequired) return;
+    var existing = settingsStore.pendingDataLocationMode === 'existing';
+    var action = existing ? '使用此资料库' : '迁移并切换';
     if (!await showAppConfirm(
-      '将把索引、语料和本机设置复制到：\n\n'
+      (existing ? '重启后将读取：\n\n' : '将把当前索引、原文与设置复制到：\n\n')
       + settingsStore.pendingDataLocation
-      + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留',
-      {title:'迁移数据位置？', confirmText:'开始迁移', tone:'warning'}
+      + (existing ? '\n\n不会复制或覆盖两处资料。请先退出另一台电脑上的 MEFinder 并等待同步完成'
+        : '\n\n迁移期间请不要关闭应用。完成后需重启，原位置的数据保留'),
+      {title: existing ? '切换已有资料库？' : '迁移当前资料库？', confirmText: action}
     )) return;
     var button = document.getElementById('data-location-migrate');
-    var choose = document.getElementById('data-location-choose');
-    if (button) {
-      button.disabled = true;
-      button.textContent = '正在迁移…';
-    }
-    if (choose) choose.disabled = true;
+    if (button.disabled) return;
+    var buttons = ['data-location-choose', 'data-location-open', 'data-location-migrate'].map(function(id) { return document.getElementById(id); });
+    buttons.forEach(function(item) { item.disabled = true; });
+    button.textContent = existing ? '正在切换…' : '正在迁移…';
     try {
-      var resp = await fetch('/api/data-location/migrate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+      var resp = await fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({target_path: settingsStore.pendingDataLocation})
       });
       var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '迁移失败');
-      var badge = document.getElementById('data-location-status');
-      if (badge) {
-        badge.className = 'settings-status warning';
-        badge.textContent = '重启后生效';
-      }
-      var pending = document.getElementById('data-location-pending');
-      var hint = pending ? pending.querySelector('small') : null;
-      if (hint) hint.textContent = '迁移完成。退出并重新打开应用后将使用此位置；旧位置的数据仍保留';
-      if (button) button.style.display = 'none';
-      showToast('数据迁移完成，请重启应用');
+      if (!resp.ok || data.error) throw new Error(data.error || action + '失败');
+      renderDataLocation({current_path: data.current_path, pending_path: data.target_path, restart_required: true});
+      showToast('数据位置已保存，请重启应用');
     } catch (e) {
-      showToast('迁移数据失败：' + e.message);
-      if (button) {
-        button.disabled = false;
-        button.textContent = '迁移并切换';
-      }
-      if (choose) choose.disabled = false;
+      showToast(action + '失败：' + e.message);
+      buttons.forEach(function(item) { item.disabled = false; });
+      button.textContent = action;
     }
   }
 

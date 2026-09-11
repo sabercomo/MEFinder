@@ -1,6 +1,6 @@
 # MEFinder 0.5.4
 
-2026-09-11：独立阅读窗口入口置顶，译本对照默认选择跨语言版本，检索详情去除外框；macOS arm64 测试包已构建，等待用户实际验收，未正式发布。独立阅读窗口的关闭回执死锁已修复，macOS 隐藏原生窗口及自然退出回归通过。
+2026-09-11：macOS arm64 测试包已加入打开已有资料库、阅读及数据位置设置修订，并同步 Windows 迁移缓存修复；全量测试及包校验通过，等待用户安装验收，未正式发布本轮修订。
 
 ## 更新内容
 
@@ -56,3 +56,37 @@ macOS 原生测试单独启用通过：默认弹层、独立锚点与对照状�
 |---|---:|---|
 | `MEFinder-v0.5.4-macos-arm64.dmg` | 176212061 | `c79646d82ae7087193728cc4b9eb3c3ded43cbaf5c43df1cb7eb6c1ed25fc6b7` |
 | `MEFinder-v0.5.4-macos-arm64.zip` | 166172740 | `6eaccd6c626fb9a16de43d9e400ebfbf2c796ed85ee8bc37fd654f4db4bca3c0` |
+
+## 2026-09-11 — 同步 Windows 迁移修复
+
+合入 `origin/codex/v0.5.3` 的 `6027a95`、`adb810f`。共享迁移逻辑跳过 `runtime/webview-data`，避免复制运行中被锁定或变化的 WebView 缓存，Mac 与 Windows 共用此修复。
+远端旧说明中的 `exists_and_not_empty()` 反向判断不对应实际补丁；以缓存排除的代码与回归测试为准。
+
+Windows 旧构建记录（来自远端提交 `adb810f`，本机未重新构建或核验产物，也不代表包含此后 Mac/本轮新增功能）：
+
+| 文件 | SHA-256 | 字节 |
+|---|---|---:|
+| MEFinder-v0.5.4-windows-setup.exe | `06d12f965421b35e184444ce15f908c6dd36b7b910301a5f1ed4e67a25bafb81` | 140311461 |
+| MEFinder-v0.5.4-windows-portable.zip | `8e28a2f9037d7ad44ede43e6de16befdbd276b70ab1aa6d24fad0273d6aacba0` | 164119084 |
+
+## 2026-09-11 — 已有资料库与设置修订
+
+- 设置 → 数据位置新增「打开已有资料库」，只读验证已有索引，保存下次启动的读取位置，不复制或覆盖原库；原来的搬迁操作独立保留为「迁移当前资料库」。
+- 切换与迁移共用任务互斥和旧库写入封闭，失败可重试，重启前重新进入设置仍显示待使用位置。
+- PDF 阅读分成阅读窗口、PDF 原文、正文排版三个一致的小节，保留顶部独立窗口开关；取消整行选中色和图标底框。数据位置采用当前路径和两条操作行。主题与字体不变。
+- 同步 Windows 远端迁移缓存修复，同时修复其发布测试与 Windows workflow 的 0.5.3/0.5.4 文件名不一致。
+- 新增真实书库快照基准驱动：65 本真实文献的隔离快照、固定八条查询、真实 Markdown/EPUB 导出及 MiniLM 对齐；计时结果只保留摘要，不提交私人书库及原句。首轮三轮基线见 [真实库基线报告](../reports/performance-real-v0.5.4-2026-09-11.md)。
+
+细节与边界见 [已有资料库说明](issues/existing-library-location.md)、[测量协议](performance-baseline.md)。
+
+### 本轮验证与测试包
+
+全量 2111 项 unittest 通过（22 skip），Ruff F 与 Node/前端守卫通过。最终 `build_macos.sh` 再跑 2111 项通过；主程序/MCP、严格签名、STDIO 冒烟、ZIP 解包、DMG 校验/挂载/复制均通过。
+隔离无头渲染覆盖两个面板的 sage-ivory/midnight 主题及 320/375/414/768 宽度，16 项无水平溢出；另核对完整桌面布局。说明文字沿用 text-secondary，相关明暗表面对比度最低 5.62:1。未操作或替换用户正在使用的应用。
+
+以下是本轮新测试包，取代前文同名本地产物；Windows 旧包不包含本轮新增功能：
+
+| 产物 | 字节数 | SHA-256 |
+|---|---:|---|
+| `MEFinder-v0.5.4-macos-arm64.dmg` | 176365724 | `d5dcca9df8be256ccf10e6807141863989cefa737b0e8b35f81c8b746aea84e9` |
+| `MEFinder-v0.5.4-macos-arm64.zip` | 166176890 | `f29b2a337d73584fd56e4dbbd0b397fe2b76bc2217acea96bbda87ca5137e647` |

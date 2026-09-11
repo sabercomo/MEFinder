@@ -1900,3 +1900,57 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   .theme-option-name { font-size: 16px; }
   .theme-option-description { font-size: 14px; }
 }
+
+/* Hallmark · component: reading and library settings · genre: modern-minimal
+ * theme: existing tokens · pre-emit critique: P5 H5 E4 S5 R5 V4
+ * states: default/hover/focus/active/disabled/loading/error/success
+ * checks: contrast 40–41 · slop 42–46 · chrome 47 · tokens 48 · responsive 49–57 */
+#pdf-reader-body, #data-location-body { max-width: 960px; }
+#pdf-reader-body .settings-subhead { margin: 28px 0 10px; gap: 4px; }
+#pdf-reader-body .settings-subhead:first-child { margin-top: 4px; }
+#pdf-reader-body .settings-subhead .settings-section-title { font-size: 14px; font-weight: 600; }
+#pdf-reader-body .pdf-open-options { margin-top: 0; }
+#pdf-reader-body .reading-window-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px; margin-top: 0; padding: 16px;
+}
+#pdf-reader-body .pdf-open-option { padding: 14px 16px; gap: 12px; }
+#pdf-reader-body .pdf-open-option.selected { background: var(--surface-primary); }
+#pdf-reader-body .pdf-open-option-icon,
+#pdf-reader-body .pdf-open-option.selected .pdf-open-option-icon {
+  border: 0; background: transparent; color: var(--text-secondary);
+}
+#pdf-reader-body .pdf-open-option.selected .pdf-open-option-icon { color: var(--accent); }
+#pdf-reader-body .pdf-open-option-copy strong,
+#pdf-reader-body .setting-switch-copy strong { font-size: 14px; font-weight: 600; }
+#pdf-reader-body .pdf-open-option-copy small,
+#pdf-reader-body .setting-switch-copy small { font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+#pdf-reader-body .reading-window-row:has(input:disabled) { cursor: wait; opacity: .6; }
+#pdf-reader-body .reading-window-row:active,
+#pdf-reader-body .pdf-open-option:active { background: var(--surface-selected); }
+@media (hover: hover) {
+  #pdf-reader-body .pdf-open-option:hover { background: var(--surface-hover); }
+}
+#data-location-body .data-location-card { padding: 18px 0; border: 0; background: transparent; }
+#data-location-current { overflow-wrap: anywhere; white-space: normal; font-size: 13px; }
+.data-location-actions { margin: 12px 0 20px; border-top: 1px solid var(--divider); }
+.data-location-action {
+  display: flex; align-items: center; gap: 24px;
+  padding: 20px 0; border-bottom: 1px solid var(--divider);
+}
+.data-location-action > div { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.data-location-action strong { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.data-location-action small { font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+.data-location-action .action-btn { flex: none; white-space: nowrap; }
+#data-location-body .data-location-pending code { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 760px) {
+  .data-location-action { align-items: flex-start; flex-direction: column; gap: 12px; }
+  #pdf-reader-body .reading-window-row { grid-template-columns: minmax(0, 1fr) auto; }
+  #pdf-reader-body .reading-window-row > .pdf-open-option-icon { display: none; }
+}
+
+#pdf-reader-settings .settings-section-note,
+#data-location-settings .settings-section-note,
+#data-location-settings .data-location-copy small,
+#data-location-settings .data-location-pending small,
+#data-location-settings .data-location-warning { color: var(--text-secondary); }

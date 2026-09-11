@@ -532,11 +532,12 @@ class ThemeMarkupTests(unittest.TestCase):
             "showSettingsCategory('data-location-settings')",
             HTML,
         )
-        self.assertIn("外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive", HTML)
-        self.assertIn("function chooseDataLocation()", HTML)
+        self.assertIn("打开已有资料库", HTML)
+        self.assertIn("迁移当前资料库", HTML)
+        self.assertIn("function chooseDataLocation(mode)", HTML)
         self.assertIn("function migrateDataLocation()", HTML)
         self.assertIn("fetch('/api/data-location/choose'", HTML)
-        self.assertIn("fetch('/api/data-location/migrate'", HTML)
+        self.assertIn("fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate'", HTML)
         self.assertIn("旧位置的数据会保留", HTML)
         self.assertIn("不要让两台电脑同时打开同一份云盘或 NAS 数据库", HTML)
         self.assertIn(

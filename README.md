@@ -130,6 +130,8 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 - 打开 DMG 后将 `MEFinder.app` 拖入 `Applications`；
 - 应用数据保存在 `~/Library/Application Support/MEFinder/`。
 
+桌面应用可在「设置 → 数据位置」打开已有 MEFinder 资料库（例如从另一台电脑同步的文件夹），或迁移当前资料到新位置。两种操作均在重启后生效；打开已有库不复制或覆盖资料。跨设备使用云盘库时，先退出另一端并等待同步完成。
+
 <a id="快速开始"></a>
 
 ## 📖 快速开始

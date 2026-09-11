@@ -212,7 +212,7 @@ def run_round(root: Path, fixture: dict, scenario: str, repeats: int, round_id: 
                                     if k.endswith("count") or k in ("cached", "embedding_model_id")}
                     else:
                         route = "/api/document/export-" + scenario.removeprefix("export_")
-                        code, response = request(port, route, {"source_id": "bench-000"})
+                        code, response = request(port, route, {"source_id": fixture.get("export_source_id", "bench-000")})
                         if code != 200:
                             raise RuntimeError(f"Export failed: {code} {response}")
                         artifact = Path(response["path"])

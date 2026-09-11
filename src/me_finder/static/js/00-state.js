@@ -146,6 +146,8 @@ const settingsStore = {
   updateState: {status: 'idle', can_self_update: false},
   dataLocationLoaded: false,
   pendingDataLocation: '',
+  pendingDataLocationMode: 'migrate',
+  dataLocationRestartRequired: false,
   preferencesLoadPromise: null,
   pdfOpenModeSaving: false,
   documentExportModeSaving: false,

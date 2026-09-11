@@ -242,9 +242,10 @@ def assemble_shell_routes(
             lambda _payload: desktop_shell_controller.choose_export_directory()
         ),
         "/api/data-location/choose": (
-            lambda _payload: desktop_shell_controller.choose_data_location()
+            lambda payload: desktop_shell_controller.choose_data_location(payload)
         ),
         "/api/data-location/migrate": desktop_shell_controller.migrate_data_location,
+        "/api/data-location/switch": desktop_shell_controller.switch_data_location,
         "/api/open-source": desktop_shell_controller.open_source,
         "/api/bibliographic-metadata/open-cnki": desktop_shell_controller.open_cnki,
         "/api/open-mineru-token": lambda _payload: open_mineru_token_route(),
