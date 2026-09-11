@@ -38,6 +38,17 @@ SEARCH_SERVICE_SOURCE = Path(
 
 
 class SearchControlsAndViewsTests(unittest.TestCase):
+    def test_search_detail_is_flush_without_outer_card_frame(self):
+        for selector in ("results-detail-pane", "detail-card", "detail-scroll", "detail-actions"):
+            rules = re.findall(r"\." + selector + r"\s*\{([^}]*)\}", HTML)
+            self.assertTrue(rules, selector)
+            for rule in rules:
+                self.assertNotIn("border-radius:", rule, selector)
+                if selector == "results-detail-pane":
+                    self.assertNotIn("padding:", rule)
+                if selector == "detail-card":
+                    self.assertNotIn("border:", rule)
+
     def test_edition_alignment_model_download_shows_determinate_progress(self) -> None:
         self.assertIn("<span>译本对齐</span>", HTML)
         self.assertIn(">译本对齐模型</span>", HTML)

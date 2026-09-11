@@ -240,8 +240,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: var(--bg);
-  padding: 28px 32px;
+  background: var(--surface);
 }
 #detail-panel {
   height: 100%;
@@ -349,8 +348,6 @@
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border-radius: var(--card-radius);
-  border: 1px solid var(--divider);
   overflow: visible;
 }
 .detail-mobile-toolbar { display: none; }
@@ -359,7 +356,6 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: var(--card-radius) var(--card-radius) 0 0;
 }
 .detail-header {
   padding: 24px 28px 20px;
@@ -549,7 +545,6 @@
   position: relative;
   z-index: 2;
   background: var(--surface);
-  border-radius: 0 0 var(--card-radius) var(--card-radius);
   overflow: visible;
 }
 .action-btn {
@@ -594,7 +589,6 @@
 
 @media (max-width: 1100px) {
   .results-list-pane { width: 360px; min-width: 280px; }
-  .results-detail-pane { padding: 18px; }
   .detail-header { padding: 20px 20px 16px; }
   .detail-body { padding: 18px 20px; }
   .detail-actions { padding: 7px 10px; gap: 6px; }
@@ -611,7 +605,6 @@
   .results-detail-pane {
     display: none;
     width: 100%;
-    padding: 12px;
   }
   .results-area.is-detail-open > .results-list-pane { display: none; }
   .results-area.is-detail-open > .results-detail-pane {
@@ -638,7 +631,6 @@
   .detail-back-button:hover { background: var(--accent-light); }
   .detail-back-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .detail-back-button svg { width: 16px; height: 16px; }
-  .detail-scroll { border-radius: 0; }
 }
 
 /* ── Empty / placeholder states ────────────────────────────── */
