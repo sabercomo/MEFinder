@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 
@@ -68,6 +69,25 @@ def embedding_model_config(model_id: str) -> EmbeddingModelConfig:
         return EMBEDDING_MODELS[model_id]
     except KeyError as exc:
         raise ValueError(f"不支持的译本对齐模型：{model_id}") from exc
+
+
+def model_component_dir(cache_root, model_id: str) -> Path:
+    """Local cache directory of one managed model component."""
+
+    return Path(cache_root) / embedding_model_config(model_id).fastembed_cache_dirname
+
+
+def model_component_installed(cache_root, model_id: str) -> bool:
+    """Whether the managed model files exist locally (compute is usable offline).
+
+    The model files are a managed component downloaded from the settings UI;
+    search, reading and locating stored alignment results never need them.
+    """
+
+    directory = model_component_dir(cache_root, model_id)
+    if not directory.is_dir():
+        return False
+    return any(directory.rglob("*"))
 
 
 def default_alignment_threshold_settings() -> dict[str, dict[str, float]]:

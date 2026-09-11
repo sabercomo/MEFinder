@@ -5,7 +5,10 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 
-from ..embedding_models import resolve_alignment_thresholds
+from ..embedding_models import (
+    model_component_installed,
+    resolve_alignment_thresholds,
+)
 from ..preferences import read_preferences, resolve_preferences_path
 from ..embedding_runtime import (
     SemanticAlignmentCancelled,
@@ -48,6 +51,14 @@ class TextAlignmentCoordinator:
         thresholds = resolve_alignment_thresholds(
             model_id, preferences["alignment_thresholds"]
         )
+        cache_dir = self._paths.runtime_root / "components" / "text-alignment" / "models"
+        if not model_component_installed(cache_dir, model_id):
+            # The managed model component is a settings-UI download. Starting a
+            # generation job without it must fail clearly and locally — never
+            # trigger a hidden network download from inside the job.
+            raise TextAlignmentFailed(
+                "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
+            )
         begin_embedding_run()
         with self._index_runtime.mutation():
             try:

@@ -43,6 +43,17 @@ class _DurableOperations:
 
 
 class TextAlignmentCoordinatorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # These tests cover write windows and shutdown semantics; the managed
+        # model component is assumed installed.
+        self.component_patch = mock.patch(
+            "src.me_finder.application.text_alignment_coordinator."
+            "model_component_installed",
+            return_value=True,
+        )
+        self.component_patch.start()
+        self.addCleanup(self.component_patch.stop)
+
     def test_generation_suspends_only_the_two_short_write_windows(self) -> None:
         index_runtime = _IndexRuntime()
         paths = SimpleNamespace(

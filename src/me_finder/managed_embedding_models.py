@@ -13,7 +13,6 @@ from .embedding_models import (
     embedding_model_config,
     embedding_model_summaries,
 )
-from .semantic_alignment import embed_texts
 
 
 class ManagedEmbeddingModelsError(RuntimeError):
@@ -29,6 +28,14 @@ class _ModelState:
 
 
 def download_embedding_model(model_id: str, cache_dir: Path) -> None:
+    """Install one model component and verify it with a local probe embed.
+
+    The algorithm module (and its numeric stack) is imported lazily: managing,
+    summarising or uninstalling components must not require the compute stack.
+    """
+
+    from .semantic_alignment import embed_texts
+
     embed_texts(["MEFinder semantic alignment model probe"], cache_dir, model_id=model_id)
 
 
