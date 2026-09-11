@@ -23,6 +23,7 @@ from .app_context import AppContext
 from .application.backup_coordinator import BackupCoordinator
 from .application.bibliographic_metadata_coordinator import BibliographicMetadataCoordinator
 from .application.data_root_admission import DataRootAdmissionGate
+from .application.document_heading_enrichment import DocumentHeadingEnrichment
 from .application.document_deletion_coordinator import DocumentDeletionCoordinator
 from .application.document_group_coordinator import DocumentGroupCoordinator
 from .application.document_import_coordinator import DocumentImportCoordinator
@@ -34,7 +35,7 @@ from .application.import_orchestrator import ImportOrchestrator
 from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .application.text_alignment_coordinator import TextAlignmentCoordinator
-from .archive_transfer_controller import ArchiveTransferController
+from .archive_transfer_controller import build_archive_transfer_controller
 from .backup_service import (
     restore_backup,
     write_backup,
@@ -56,7 +57,6 @@ from .data_location import migrate_data_root
 from .database import replace_source_in_database
 from .desktop_shell_controller import DesktopShellController
 from .document_deletion import DocumentDeletionService
-from .document_export_service import export_indexed_pdf
 from .document_group_controller import DocumentGroupController
 from .document_lifecycle_controller import DocumentLifecycleController
 from .import_job_controller import ImportJobController
@@ -266,16 +266,10 @@ def build_application_runtime(
         durable_operations,
         import_task_queue,
         import_job_journal,
-        parse_with_mineru=lambda *args, **kwargs: parse_pdf_with_mineru(
-            *args, **kwargs
-        ),
-        parse_with_provider=lambda *args, **kwargs: parse_pdf_with_provider(
-            *args, **kwargs
-        ),
-        parse_with_local_ocr=lambda *args, **kwargs: parse_pdf_with_local_ocr(
-            *args, **kwargs
-        ),
-        extract_pdf=lambda *args, **kwargs: extract_pdf_source(*args, **kwargs),
+        parse_with_mineru=parse_pdf_with_mineru,
+        parse_with_provider=parse_pdf_with_provider,
+        parse_with_local_ocr=parse_pdf_with_local_ocr,
+        extract_pdf=extract_pdf_source,
         detect_metadata=document_queries.detect_bibliographic_metadata,
         persist_metadata=(
             lambda source_id, payload: metadata_coordinator.persist_detected(
@@ -313,8 +307,8 @@ def build_application_runtime(
         index_runtime,
         durable_operations,
         import_orchestrator,
-        lock_config=lambda path: locked_import_config(path),
-        save_config=lambda path, data: save_import_config(path, data),
+        lock_config=locked_import_config,
+        save_config=save_import_config,
         update_database=(
             lambda path, source_id, metadata: update_metadata_in_database(
                 path,
@@ -339,8 +333,8 @@ def build_application_runtime(
             lambda *args, **kwargs: extract_pdf_source(*args, **kwargs)
         ),
         config_lock=lambda: import_config_lock(),
-        load_config=lambda path: load_import_config(path),
-        save_config=lambda path, data: save_import_config(path, data),
+        load_config=load_import_config,
+        save_config=save_import_config,
         apply_mapping=(
             lambda *args, **kwargs: apply_mapping_to_database(
                 *args,
@@ -354,18 +348,21 @@ def build_application_runtime(
         durable_operations,
         import_orchestrator,
         app_data_root=lambda: app_data_directory,
-        write=lambda *args, **kwargs: write_backup(*args, **kwargs),
-        restore=lambda *args, **kwargs: restore_backup(*args, **kwargs),
+        write=write_backup,
+        restore=restore_backup,
         config_lock=lambda: import_config_lock(),
     )
-    archive_transfer_controller = ArchiveTransferController(
+    archive_transfer_controller = build_archive_transfer_controller(
         backup_coordinator,
         database_path=index_path,
         runtime_root=root,
         document_output_dir=app_data_directory / "exports",
-        export_document=(
-            lambda **kwargs: export_indexed_pdf(**kwargs)
-        ),
+        prepare_document_export=DocumentHeadingEnrichment(
+            database_path=index_path,
+            runtime_root=root,
+            durable_operations=durable_operations,
+            index_runtime=index_runtime,
+        ).enrich,
     )
     deletion_coordinator = DocumentDeletionCoordinator(
         context.paths,

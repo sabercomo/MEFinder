@@ -55,7 +55,17 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "bibliographic_thesis.py": 300,
             "bibliographic_journal.py": 350,
             "bibliographic_marx_engels.py": 175,
-            "search.py": 1850,
+            # 任务 2 已把 search 上帝类拆为 recall/scoring/anchors/citation/
+            # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
+            # 新模块按当前行数封顶。
+            "search.py": 350,
+            "search_recall.py": 650,
+            "search_scoring.py": 250,
+            "search_anchors.py": 240,
+            "search_citation.py": 140,
+            "search_assembly.py": 400,
+            "search_contract.py": 60,
+            "application/document_heading_enrichment.py": 330,
         }
         for relative, limit in limits.items():
             lines = (PACKAGE / relative).read_text(encoding="utf-8").splitlines()

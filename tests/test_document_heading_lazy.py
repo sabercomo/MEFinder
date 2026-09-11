@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder import database as dbmod
-from src.me_finder.document_export_service import ensure_document_headings
+from src.me_finder.application.document_heading_enrichment import ensure_document_headings
 from src.me_finder.document_heading import DOCUMENT_HEADING_VERSION
 
 
@@ -161,7 +161,7 @@ class LazyEnrichmentTests(unittest.TestCase):
             "entries": [{"title": "Preface\udcc0\udc80\udcc0\udc80", "page": 9, "level": 1}],
         }
         with mock.patch(
-            "src.me_finder.document_export_service.enrich_pdf_headings",
+            "src.me_finder.application.document_heading_enrichment.enrich_pdf_headings",
             return_value=tainted_outline,
         ):
             # Must not raise UnicodeEncodeError.

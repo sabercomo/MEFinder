@@ -43,6 +43,7 @@ class ArchiveTransferController:
         export_document: DocumentExporter = export_indexed_pdf,
         export_document_markdown: DocumentExporter = export_indexed_pdf_markdown,
         export_document_epub: DocumentExporter = export_indexed_pdf_epub,
+        prepare_document_export: DocumentExporter | None = None,
     ) -> None:
         self._backup = backup
         self._database_path = Path(database_path)
@@ -51,6 +52,7 @@ class ArchiveTransferController:
         self._export_document = export_document
         self._export_document_markdown = export_document_markdown
         self._export_document_epub = export_document_epub
+        self._prepare_document_export = prepare_document_export
 
     def export_backup(self, payload: object) -> ArchiveTransferResponse:
         try:
@@ -68,6 +70,7 @@ class ArchiveTransferController:
         include_source_pdf = payload.get("include_source_pdf", False)
         if not isinstance(include_source_pdf, bool):
             return 400, {"error": "文档包原 PDF 选项必须是布尔值。"}
+        self._prepare(source_file_id=str(payload.get("source_id") or ""))
         try:
             output_dir = (
                 _requested_output_directory(payload) or self._document_output_dir
@@ -94,6 +97,7 @@ class ArchiveTransferController:
     def export_document_markdown(self, payload: object) -> ArchiveTransferResponse:
         if not isinstance(payload, Mapping):
             return 400, {"error": "单书 Markdown 导出请求必须是 JSON 对象。"}
+        self._prepare(source_file_id=str(payload.get("source_id") or ""))
         try:
             output_dir = (
                 _requested_output_directory(payload) or self._document_output_dir
@@ -127,6 +131,7 @@ class ArchiveTransferController:
     def export_document_epub(self, payload: object) -> ArchiveTransferResponse:
         if not isinstance(payload, Mapping):
             return 400, {"error": "单书 EPUB 导出请求必须是 JSON 对象。"}
+        self._prepare(source_file_id=str(payload.get("source_id") or ""))
         try:
             output_dir = (
                 _requested_output_directory(payload) or self._document_output_dir
@@ -154,6 +159,20 @@ class ArchiveTransferController:
             }
         return 200, result
 
+    def _prepare(self, *, source_file_id: str) -> None:
+        """Run heading enrichment as a separate coordinated operation.
+
+        Failures never block the export; the exported file then reflects the
+        library exactly as it is stored.
+        """
+
+        if self._prepare_document_export is None:
+            return
+        try:
+            self._prepare_document_export(source_file_id)
+        except Exception:
+            logging.exception("document heading preparation failed; exporting current state")
+
     def restore_backup(self, payload: object) -> ArchiveTransferResponse:
         if not isinstance(payload, Mapping):
             return 400, {"error": "请填写备份文件路径。"}
@@ -167,6 +186,28 @@ class ArchiveTransferController:
         except OSError as exc:
             return 500, {"error": f"读取备份失败：{exc}"}
         return 200, {"ok": True, "job_id": job_id}
+
+
+def build_archive_transfer_controller(
+    backup,
+    *,
+    database_path: Path,
+    runtime_root: Path,
+    document_output_dir: Path,
+    prepare_document_export=None,
+) -> ArchiveTransferController:
+    """Compose backup coordination and the read-only document exporters."""
+
+    from .document_export_service import export_indexed_pdf
+
+    return ArchiveTransferController(
+        backup,
+        database_path=database_path,
+        runtime_root=runtime_root,
+        document_output_dir=document_output_dir,
+        export_document=export_indexed_pdf,
+        prepare_document_export=prepare_document_export,
+    )
 
 
 def _requested_output_directory(payload: object) -> Path | None:
