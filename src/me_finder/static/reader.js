@@ -69,6 +69,7 @@
     citationLoading: false,
     citationRequestSerial: 0,
     alignmentTargets: [],
+    alignmentSourceLanguage: '',
     alignmentGroupId: '',
     alignmentLoading: false,
     alignmentRequestSerial: 0,
@@ -816,7 +817,7 @@
     return language + (format ? ' · ' + format : '') + ' · ' + displayName;
   }
 
-  // 记住每本书上次选择的对照目标，避免每次打开都回退到成员顺序里的首个（常是英文版）。
+  // 记住每本书上次选择的对照目标；重新打开时只在跨语言候选中恢复记忆。
   // 按源文献 id 存入 localStorage；不可用或读写失败时静默回退，不影响阅读。
   var COMPARISON_TARGET_STORE_PREFIX = 'mef-reader-comparison-target:';
 
@@ -853,16 +854,22 @@
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
     });
-    // 模式轴：[阅读 | 译本对照]。默认目标优先级：正在对照的版本 > 本书上次选择的版本 >
-    // 成员顺序首个。避免每次打开都被重置回英文版而需手动切换。
+    // 模式轴：[阅读 | 译本对照]。新开对照先选不同语言；正在阅读时保留手动选择。
     if (targets.length) {
       var remembered = recallComparisonTarget(state.sourceId);
-      var rememberedValid = remembered && targets.some(function (t) {
+      var sourceLanguage = state.alignmentSourceLanguage.toLowerCase().split('-')[0];
+      var otherLanguageTargets = targets.filter(function (target) {
+        var language = String(target.language_code || '').toLowerCase().split('-')[0];
+        return sourceLanguage && sourceLanguage !== 'und' && language &&
+          language !== 'und' && language !== sourceLanguage;
+      });
+      var defaultTargets = otherLanguageTargets.length ? otherLanguageTargets : targets;
+      var rememberedValid = remembered && defaultTargets.some(function (t) {
         return String(t.source_file_id || '') === remembered;
       }) ? remembered : '';
       var defaultTarget = state.comparison.open && state.comparison.targetSourceId
         ? state.comparison.targetSourceId
-        : (rememberedValid || String(targets[0].source_file_id || ''));
+        : (rememberedValid || String(defaultTargets[0].source_file_id || ''));
       var defaultTargetObj = targets.filter(function (t) {
         return String(t.source_file_id || '') === defaultTarget;
       })[0] || targets[0];
@@ -910,11 +917,13 @@
         return;
       }
       state.alignmentTargets = Array.isArray(payload.targets) ? payload.targets : [];
+      state.alignmentSourceLanguage = String(payload.source_language_code || '');
       state.alignmentGroupId = String(payload.document_group_id || '');
       renderAlignmentActions();
     } catch (error) {
       if (serial !== state.alignmentRequestSerial) return;
       state.alignmentTargets = [];
+      state.alignmentSourceLanguage = '';
       renderAlignmentActions();
       setAlert(
         error && error.message ? error.message : '对齐版本读取失败',
@@ -2821,6 +2830,7 @@
     state.citationMenuOpen = false;
     state.citationLoading = false;
     state.alignmentTargets = [];
+    state.alignmentSourceLanguage = '';
     state.alignmentLoading = false;
     state.currentIndex = resolveTargetIndex(options);
     prepareHighlights(options);
@@ -2933,6 +2943,7 @@
     state.resolvedHighlights.clear();
     state.citationRange = null;
     state.alignmentTargets = [];
+    state.alignmentSourceLanguage = '';
     state.alignmentLoading = false;
     state.selectionDragging = false;
     state.citationMenuOpen = false;

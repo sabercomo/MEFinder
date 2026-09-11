@@ -39,6 +39,11 @@ class ReaderWindowTests(unittest.TestCase):
         self.windows.set_base_url("http://127.0.0.1:1234/")
 
     @unittest.skipUnless(importlib.util.find_spec("webview"), "pywebview unavailable")
+    def test_window_setting_is_at_top_of_pdf_reading_panel(self):
+        html = render_html("midnight")
+        panel = html[html.index('id="pdf-reader-body"'):]
+        self.assertLess(panel.index('id="reader-window-enabled"'), panel.index('aria-label="PDF 打开方式"'))
+
     def test_close_notification_uses_real_bridge_without_reply_to_destroyed_window(self):
         from webview.state import State
         from webview.util import js_bridge_call

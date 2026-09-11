@@ -454,9 +454,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 按页导出文案：明示单页、连续范围与组合输入，原书/PDF 页码依据说明随选项切换。
     # 0.5.4 检索详情铺满面板；同步当前集成分支的装配指纹。
     BASELINE_SHA256 = (
-        "8265be1fedad6022c1e0c7e1a152ef2cfda2d167e5f1376757f3e57c8b127374"
+        "f820a2e63ba65cc7709be5de5b8cad57dbba3339fabb0c10689ef2f45bb8cb66"
     )
-    BASELINE_BYTES = 1089793
+    BASELINE_BYTES = 1090587
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

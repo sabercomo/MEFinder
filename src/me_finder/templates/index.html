@@ -512,6 +512,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="settings-section-heading-copy"><span class="settings-section-title">PDF 阅读</span><span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span></span>
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
+            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span><span class="settings-section-note">结构化阅读与译本对照的打开方式</span></div>
+            <label class="setting-switch-row">
+              <span class="setting-switch-copy"><strong>独立阅读窗口</strong><small>开启后，结构化阅读和译本对照在可独立拖动、缩放的窗口中打开；下次打开阅读时生效</small></span>
+              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
+              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+            </label>
             <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
               <label class="pdf-open-option selected" data-pdf-open-choice="native">
                 <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
@@ -526,11 +532,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="pdf-open-option-check" aria-hidden="true"></span>
               </label>
             </div>
-            <label class="setting-switch-row">
-              <span class="setting-switch-copy"><strong>独立阅读窗口</strong><small>开启后，结构化阅读和译本对照在可独立拖动、缩放的窗口中打开；下次打开阅读时生效</small></span>
-              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
-              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
-            </label>
             <div class="settings-subhead"><span class="settings-section-title">结构化文本排版</span><span class="settings-section-note">在应用内阅读器里，正文如何断行</span></div>
             <div class="pdf-open-options" role="radiogroup" aria-label="结构化文本排版">
               <label class="pdf-open-option selected" data-reader-line-choice="flow">
