@@ -262,7 +262,6 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   white-space: normal;
 }
 
-.pdf-open-options,
 .document-export-options {
   display: flex;
   flex-direction: column;
@@ -275,9 +274,9 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   background: var(--surface-primary);
   transition: opacity var(--transition-fast);
 }
-.pdf-open-options.is-busy,
 .document-export-options.is-busy { opacity: .62; pointer-events: none; }
-.pdf-open-option,
+/* 下拉版的 PDF 打开方式：保存期间整组不可点，与卡片版同一语义。 */
+.pdf-open-options.is-busy { opacity: .62; pointer-events: none; }
 .document-export-option {
   position: relative;
   display: grid;
@@ -293,15 +292,31 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   cursor: pointer;
   transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.pdf-open-option:first-of-type,
 .document-export-option:first-of-type { border-top: 0; }
-.pdf-open-option:hover,
 .document-export-option:hover { background: var(--surface-hover); }
-.pdf-open-option:focus-within,
 .document-export-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
-.pdf-open-option.selected,
 .document-export-option.selected { background: var(--surface-selected); }
 /* Single boolean preference rendered as a switch row (e.g. 繁简统一检索). */
+/* 设置行内的选择：短而熟悉的显示选项走自绘下拉，说明随选择更新（DESIGN.md §5）。 */
+.settings-choice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.settings-choice-copy { min-width: 0; display: grid; gap: 4px; }
+.settings-choice-copy strong { color: var(--text-primary); font-size: 15px; font-weight: 500; }
+.settings-choice-copy small { max-width: 70ch; color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
+.settings-choice-copy small[hidden] { display: none; }
+.settings-choice-select { position: relative; flex: 0 0 auto; }
+.settings-choice-select .app-select-trigger { min-width: 184px; font-size: 14px; }
+.settings-choice-select .app-select-caret { width: 11px; height: 11px; }
+.settings-choice-menu { left: auto; right: 0; width: max-content; min-width: 100%; }
+.settings-choice-menu .app-select-option { font-size: 14px; }
+.settings-choice-menu .app-select-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
 /* DESIGN.md §2「用层级做减法」：普通设置项不逐条套卡片，改用分隔线分行。 */
 .setting-switch-row {
   position: relative;
@@ -346,8 +361,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .setting-switch-input:focus-visible ~ .setting-switch-track { box-shadow: var(--focus-ring); }
 .setting-switch-row.is-disabled { cursor: not-allowed; opacity: .55; }
 .setting-switch-row.is-disabled:hover { background: none; }
-.pdf-open-option > input,
-.document-export-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.document-export-option > input,
+.pdf-open-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pdf-open-option-icon,
 .document-export-option-icon {
   display: grid;
@@ -1927,22 +1942,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   gap: 12px; margin-top: 0; padding: 16px;
 }
 #pdf-reader-body .pdf-open-option { padding: 14px 16px; gap: 12px; }
-#pdf-reader-body .pdf-open-option.selected { background: var(--surface-primary); }
-#pdf-reader-body .pdf-open-option-icon,
-#pdf-reader-body .pdf-open-option.selected .pdf-open-option-icon {
-  border: 0; background: transparent; color: var(--text-secondary);
-}
-#pdf-reader-body .pdf-open-option.selected .pdf-open-option-icon { color: var(--accent); }
-#pdf-reader-body .pdf-open-option-copy strong,
-#pdf-reader-body .setting-switch-copy strong { font-size: 14px; font-weight: 600; }
-#pdf-reader-body .pdf-open-option-copy small,
-#pdf-reader-body .setting-switch-copy small { font-size: 12px; line-height: 1.6; color: var(--text-secondary); }
+#pdf-reader-body .setting-switch-copy strong { font-size: 15px; font-weight: 500; }
+#pdf-reader-body .setting-switch-copy small { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
 #pdf-reader-body .reading-window-row:has(input:disabled) { cursor: wait; opacity: .6; }
-#pdf-reader-body .reading-window-row:active,
-#pdf-reader-body .pdf-open-option:active { background: var(--surface-selected); }
-@media (hover: hover) {
-  #pdf-reader-body .pdf-open-option:hover { background: var(--surface-hover); }
-}
+#pdf-reader-body .reading-window-row:active { background: var(--surface-selected); }
 #data-location-body .data-location-card { padding: 18px 0; border: 0; background: transparent; }
 #data-location-current { overflow-wrap: anywhere; white-space: normal; font-size: 13px; }
 .data-location-actions { margin: 12px 0 20px; border-top: 1px solid var(--divider); }

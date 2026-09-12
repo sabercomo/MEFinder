@@ -513,19 +513,25 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
             <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span><span class="settings-section-note">从搜索结果打开原始 PDF 的方式</span></div>
-            <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
-              <label class="pdf-open-option selected" data-pdf-open-choice="native">
-                <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>应用内阅读器</strong><small id="pdf-native-description">直接跳到搜索命中的 PDF 物理页码</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
-              <label class="pdf-open-option" data-pdf-open-choice="system">
-                <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
-                <span class="pdf-open-option-copy"><strong id="pdf-system-title">系统默认 PDF 阅读器</strong><small id="pdf-system-description">使用系统默认应用打开；命中页码可能需要手动翻到</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>打开 PDF 原文</strong>
+                <small id="pdf-native-description" data-pdf-open-description="native">直接跳到搜索命中的 PDF 物理页码</small>
+                <small id="pdf-system-description" data-pdf-open-description="system" hidden>使用系统默认应用打开；命中页码可能需要手动翻到</small>
+              </span>
+              <span class="app-select settings-choice-select pdf-open-options" id="pdf-open-select">
+                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">应用内阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="PDF 打开方式">
+                  <label class="app-select-option is-selected" data-pdf-open-choice="native">
+                    <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
+                    <span id="pdf-native-title">应用内阅读器</span>
+                  </label>
+                  <label class="app-select-option" data-pdf-open-choice="system">
+                    <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
+                    <span id="pdf-system-title">系统默认 PDF 阅读器</span>
+                  </label>
+                </span>
+              </span>
             </div>
             <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span><span class="settings-section-note">用于结构化阅读和译本对照</span></div>
             <label class="setting-switch-row reading-window-row">
@@ -535,19 +541,25 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
             </label>
             <div class="settings-subhead"><span class="settings-section-title">正文排版</span><span class="settings-section-note">结构化阅读中的段落显示方式</span></div>
-            <div class="pdf-open-options" role="radiogroup" aria-label="正文排版">
-              <label class="pdf-open-option selected" data-reader-line-choice="flow">
-                <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 11h14M5 15h14M5 19h9"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>流式查看</strong><small>正文回流填满阅读列，不受 PDF 物理断行限制</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
-              <label class="pdf-open-option" data-reader-line-choice="physical">
-                <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h11M5 11h14M5 15h8M5 19h12"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>复刻 PDF 物理断行</strong><small>按原 PDF 每行字数断行，便于逐字比对原书版面</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>段落显示方式</strong>
+                <small data-reader-line-description="flow">正文回流填满阅读列，不受 PDF 物理断行限制</small>
+                <small data-reader-line-description="physical" hidden>按原 PDF 每行字数断行，便于逐字比对原书版面</small>
+              </span>
+              <span class="app-select settings-choice-select reader-line-options" id="reader-line-select">
+                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式查看</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="正文排版">
+                  <label class="app-select-option is-selected" data-reader-line-choice="flow">
+                    <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
+                    <span>流式查看</span>
+                  </label>
+                  <label class="app-select-option" data-reader-line-choice="physical">
+                    <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
+                    <span>复刻 PDF 物理断行</span>
+                  </label>
+                </span>
+              </span>
             </div>
             </div>
           </section>

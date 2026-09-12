@@ -549,11 +549,20 @@
   }
 
   function renderPdfOpenMode() {
-    document.querySelectorAll('.pdf-open-option').forEach(function(option) {
+    document.querySelectorAll('[data-pdf-open-choice]').forEach(function(option) {
       var selected = option.dataset.pdfOpenChoice === settingsStore.currentPdfOpenMode;
       option.classList.toggle('selected', selected);
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
       var input = option.querySelector('input[name="pdf-open-mode"]');
       if (input) input.checked = selected;
+      // 触发器显示当前选项的标题，行内说明只留当前这条（另一条 hidden）。
+      var title = option.querySelector('span');
+      var label = document.getElementById('pdf-open-select-label');
+      if (selected && title && label) label.textContent = title.textContent;
+    });
+    document.querySelectorAll('[data-pdf-open-description]').forEach(function(copy) {
+      copy.hidden = copy.dataset.pdfOpenDescription !== settingsStore.currentPdfOpenMode;
     });
     var current = document.getElementById('pdf-reader-current');
     if (current) {
@@ -987,10 +996,20 @@
       if (systemTitle) systemTitle.textContent = 'macOS 预览';
       if (systemDescription) systemDescription.textContent = '在预览.app 中打开；命中页码需要手动翻到';
     }
+    renderPdfOpenMode();
+  }
+
+  function closeChoiceSelect(selectId) {
+    var select = document.getElementById(selectId);
+    if (!select || !select.classList.contains('is-open')) return;
+    select.classList.remove('is-open');
+    var trigger = select.querySelector('.app-select-trigger');
+    if (trigger) { trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
   }
 
   async function setPdfOpenMode(mode) {
     if (mode !== 'native' && mode !== 'system') return;
+    closeChoiceSelect('pdf-open-select');
     if (settingsStore.pdfOpenModeSaving || settingsStore.preferencesLoadPromise) {
       renderPdfOpenMode();
       return;
@@ -1024,11 +1043,19 @@
 
   function renderReaderLineMode() {
     var mode = settingsStore.currentReaderLineMode === 'physical' ? 'physical' : 'flow';
-    document.querySelectorAll('.pdf-open-option[data-reader-line-choice]').forEach(function(option) {
+    document.querySelectorAll('[data-reader-line-choice]').forEach(function(option) {
       var selected = option.dataset.readerLineChoice === mode;
       option.classList.toggle('selected', selected);
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
       var input = option.querySelector('input[name="reader-line-mode"]');
       if (input) input.checked = selected;
+      var title = option.querySelector('span');
+      var label = document.getElementById('reader-line-select-label');
+      if (selected && title && label) label.textContent = title.textContent;
+    });
+    document.querySelectorAll('[data-reader-line-description]').forEach(function(copy) {
+      copy.hidden = copy.dataset.readerLineDescription !== mode;
     });
     // 结构化阅读器据此切换 white-space：flow=回流，physical=保留 PDF 断行。
     if (global.document && global.document.documentElement) {
@@ -1079,6 +1106,7 @@
   }
 
   async function setReaderLineMode(mode) {
+    closeChoiceSelect('reader-line-select');
     if (mode !== 'flow' && mode !== 'physical') return;
     if (settingsStore.readerLineModeSaving || settingsStore.preferencesLoadPromise) {
       renderReaderLineMode();
