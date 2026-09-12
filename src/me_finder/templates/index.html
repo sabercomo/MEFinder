@@ -684,6 +684,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
               <span id="local-ocr-status" class="settings-status">读取中…</span>
+              <button class="action-btn" id="local-ocr-reload" type="button" hidden onclick="loadLocalOCRConfig()">重新读取</button>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
               <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</span></div>

@@ -870,6 +870,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .icon-btn svg { width: 16px; height: 16px; }
 .icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .icon-btn.danger:hover { background: var(--danger-soft); color: var(--danger); }
+/* display:inline-flex 会盖掉 [hidden]，未安装时要真的收起开关（DESIGN.md §6）。 */
+.ui-switch[hidden] { display: none; }
 .ui-switch {
   position: relative;
   display: inline-flex;

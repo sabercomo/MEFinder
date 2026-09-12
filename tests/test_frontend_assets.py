@@ -466,10 +466,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   说明随选择切换；卡片样式保留给文档传输。
     # 0.5.4 MinerU 账号状态按 DESIGN.md §6 如实呈现：未检测过不再显示"可用"，
     #   本会话检测结果就地回显，改 Token/服务地址后旧结论失效。
+    # 0.5.4 本地 OCR 六态按 DESIGN.md §6 呈现：读取失败=状态未知(不按未安装处理、
+    #   不允许触发安装，提供重新读取)，未安装不摆启用开关，失败态显示失败与重试。
     BASELINE_SHA256 = (
-        "8d538dcbac19d7e938fe44a1c028e0e1181fc0aa4adae8e28d8d0cd7e3899240"
+        "1eb628a2d997ab9529d8e9e95483de91ed65a490401d1ae7117bda13ea38d6e1"
     )
-    BASELINE_BYTES = 1100911
+    BASELINE_BYTES = 1103541
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

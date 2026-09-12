@@ -65,7 +65,11 @@
       };
       if (fields.managedState) {
         fields.managedState.className = 'settings-status ' + (installed ? 'ready' : 'warning');
-        fields.managedState.textContent = labels[managed.state] || (managed.update_available ? '可更新 · tag ' + managed.tag : installed ? '已安装 · tag ' + managed.tag : '未安装');
+        // 上次操作失败的组件既不是「已安装」也不该只写「未安装」——失败本身要说出来。
+        fields.managedState.textContent = labels[managed.state]
+          || (managed.update_available ? '可更新 · tag ' + managed.tag
+            : installed ? '已安装 · tag ' + managed.tag
+            : managed.error ? '安装失败' : '未安装');
       }
       if (fields.installHint) {
         var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
@@ -85,7 +89,8 @@
       if (fields.install) {
         fields.install.hidden = (installed && !managed.update_available) || busy;
         fields.install.disabled = !installer.supported;
-        fields.install.textContent = managed.update_available ? '更新组件' : '下载安装';
+        fields.install.textContent = managed.update_available ? '更新组件'
+          : (!installed && managed.error) ? '重试安装' : '下载安装';
         fields.install.onclick = function() {
           manageLocalOCRComponent(engine.provider_id, managed.update_available ? 'update' : 'install', fields.install);
         };
@@ -94,6 +99,14 @@
       if (fields.uninstall) fields.uninstall.hidden = !installed || busy;
       if (fields.cancel) fields.cancel.hidden = !busy;
       if (fields.enabled) fields.enabled.disabled = busy;
+      // DESIGN.md §6：未安装时先完成安装，不摆一个看起来可用的启用开关。
+      var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
+      if (enabledLabel) enabledLabel.hidden = !installed;
+      if (fields.installHint && installed && !busy && !managed.error) {
+        fields.installHint.textContent = fields.enabled && fields.enabled.checked
+          ? '导入图像型 PDF 时按文献语言自动使用，全程在本机运行'
+          : '已安装但尚未启用：导入时不会用到它，启用后才参与识别';
+      }
       if (fields.python) fields.python.disabled = busy;
       if (fields.script) fields.script.disabled = busy;
     });
@@ -112,7 +125,38 @@
     parserStore.localOCRPollTimer = active ? setTimeout(loadLocalOCRConfig, 700) : null;
   }
 
+  function renderLocalOCRUnknown(reason) {
+    parserStore.localOCRConfig = null;
+    if (parserStore.localOCRPollTimer) {
+      clearTimeout(parserStore.localOCRPollTimer);
+      parserStore.localOCRPollTimer = null;
+    }
+    var status = document.getElementById('local-ocr-status');
+    if (status) { status.className = 'settings-status warning'; status.textContent = '状态未知'; }
+    var reload = document.getElementById('local-ocr-reload');
+    if (reload) reload.hidden = false;
+    ['ndlocr-lite', 'ndlkotenocr-lite'].forEach(function(providerId) {
+      var fields = localOCREngineFields(providerId);
+      if (fields.managedState) {
+        fields.managedState.className = 'settings-status warning';
+        fields.managedState.textContent = '状态未知';
+      }
+      if (fields.installHint) {
+        fields.installHint.textContent = '读不到组件状态：' + reason + '。未确认状态前不会开始安装。';
+      }
+      if (fields.progress) fields.progress.hidden = true;
+      [fields.install, fields.validate, fields.uninstall, fields.cancel].forEach(function(button) {
+        if (button) button.hidden = true;
+      });
+      var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
+      if (enabledLabel) enabledLabel.hidden = true;
+    });
+    showToast('读取本地 OCR 设置失败：' + reason, 'danger');
+  }
+
   function renderLocalOCRConfig(config) {
+    var reload = document.getElementById('local-ocr-reload');
+    if (reload) reload.hidden = true;
     parserStore.localOCRConfig = config;
     (config.engines || []).forEach(function(engine) {
       var fields = localOCREngineFields(engine.provider_id);
@@ -141,8 +185,9 @@
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
     } catch (error) {
-      if (status) { status.className = 'settings-status warning'; status.textContent = '读取失败'; }
-      showToast('读取本地 OCR 设置失败：' + error.message, 'danger');
+      // DESIGN.md §2/§6：读取失败意味着状态未知，不是未安装；此时不得据错误状态
+      // 触发安装或启用，只给「重新读取」。
+      renderLocalOCRUnknown(error.message);
     }
     loadGeneralModelConfig();
   }
