@@ -1074,21 +1074,19 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="settings-section-heading-copy"><span class="settings-section-title">数据备份</span><span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span></span>
             </div>
             <div class="settings-collapse-body" id="backup-settings-body">
-            <div class="settings-grid">
-            <span class="settings-label">导出</span>
-            <div class="settings-control">
-              <div class="settings-actions">
-                <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-              </div>
-              <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>导出备份</strong>
+                <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
+              </span>
+              <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
             </div>
-            <span class="settings-label">导入</span>
-            <div class="settings-control">
-              <div class="settings-actions">
-                <button class="action-btn settings-toggle" id="backup-import-choose" type="button" onclick="importBackup()">选择备份并恢复</button>
-              </div>
-              <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内</small>
-            </div>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>从备份恢复</strong>
+                <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内</small>
+              </span>
+              <button class="action-btn settings-toggle" id="backup-import-choose" type="button" onclick="importBackup()">选择备份并恢复</button>
             </div>
             </div>
           </section>

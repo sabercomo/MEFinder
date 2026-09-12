@@ -468,10 +468,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   本会话检测结果就地回显，改 Token/服务地址后旧结论失效。
     # 0.5.4 本地 OCR 六态按 DESIGN.md §6 呈现：读取失败=状态未知(不按未安装处理、
     #   不允许触发安装，提供重新读取)，未安装不摆启用开关，失败态显示失败与重试。
+    # 0.5.4 引文格式改为分隔线行、数据备份改为「名称+说明 / 动作」行，
+    #   与设置页其余分类的行式布局统一。
     BASELINE_SHA256 = (
-        "1eb628a2d997ab9529d8e9e95483de91ed65a490401d1ae7117bda13ea38d6e1"
+        "416bae54cdb4caa130ec7cb3d9594c4ff1671096f93cc25e8ce591c202705103"
     )
-    BASELINE_BYTES = 1103541
+    BASELINE_BYTES = 1103213
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

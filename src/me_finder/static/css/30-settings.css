@@ -430,12 +430,11 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .export-cleanup-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
 .export-cleanup-head { display: grid; gap: 3px; }
 .citation-format-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: none;
-  margin-top: 14px;
+  margin-top: 6px;
   transition: opacity var(--transition-fast);
 }
 .citation-format-options.is-busy { opacity: .62; pointer-events: none; }
@@ -444,23 +443,22 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 12px;
-  min-height: 64px;
+  gap: 20px;
   box-sizing: border-box;
-  padding: 12px 14px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-primary);
+  padding: 18px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: none;
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
-.citation-format-option:hover { border-color: var(--border-strong); background: var(--surface-hover); }
-.citation-format-option:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.citation-format-option.selected { border-color: var(--accent); background: var(--surface-selected); }
+.citation-format-option:last-of-type { border-bottom: 0; }
+.citation-format-option:focus-within { box-shadow: none; }
+.citation-format-option:focus-within .citation-format-check { box-shadow: var(--focus-ring); }
 .citation-format-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .citation-format-copy { min-width: 0; display: grid; gap: 4px; }
-.citation-format-copy strong { color: var(--text-primary); font-size: 13px; font-weight: 650; }
-.citation-format-copy small { color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.citation-format-copy strong { color: var(--text-primary); font-size: 15px; font-weight: 500; }
+.citation-format-copy small { max-width: 70ch; color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
 .citation-format-check {
   display: grid;
   place-items: center;
