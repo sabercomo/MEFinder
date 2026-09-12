@@ -20,12 +20,16 @@ import hashlib
 import importlib.metadata
 import json
 import platform
-import resource
 import subprocess
 import sys
 import threading
 import time
 import tracemalloc
+
+try:
+    import resource  # Unix-only; absent on Windows.
+except ImportError:  # pragma: no cover - platform-dependent
+    resource = None  # type: ignore[assignment]
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,16 +58,27 @@ def psutil_samples() -> Tuple[int, int]:
     return process.memory_info().rss, children_rss
 
 
-def ru_maxrss_bytes() -> int:
-    """OS high-water RSS of this process (bytes on macOS, KiB units elsewhere)."""
+def ru_maxrss_bytes() -> int | None:
+    """OS high-water RSS of this process (bytes on macOS, KiB units elsewhere).
 
+    Returns ``None`` where ``resource`` is unavailable (Windows) so the metric
+    is reported as missing rather than a fabricated zero.
+    """
+
+    if resource is None:
+        return None
     value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return value if sys.platform == "darwin" else value * 1024
 
 
-def ru_maxrss_children_bytes() -> int:
-    """OS high-water RSS accumulated by waited-for children (same unit rule)."""
+def ru_maxrss_children_bytes() -> int | None:
+    """OS high-water RSS accumulated by waited-for children (same unit rule).
 
+    ``None`` when ``resource`` is unavailable (Windows).
+    """
+
+    if resource is None:
+        return None
     value = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return value if sys.platform == "darwin" else value * 1024
 
@@ -74,6 +89,10 @@ class PhaseSpan:
     group: str
     started: float
     ended: float | None = None
+    # tracemalloc counters attached to this exact span (not shared by name), so
+    # repeated same-name phases across rounds keep independent statistics.
+    traced_current: int | None = None
+    traced_peak: int | None = None
 
 
 class MemoryProbe:
@@ -96,7 +115,10 @@ class MemoryProbe:
         self._samples: List[Tuple[float, int, int]] = []
         self._events: List[dict] = []
         self._phases: List[PhaseSpan] = []
-        self._traced: List[dict] = []
+        # Stack of currently-open traced phases (innermost last). tracemalloc's
+        # peak is a single global counter, so nested phases hand their peak up to
+        # every enclosing span before resetting — the outer peak is never lost.
+        self._trace_stack: List[PhaseSpan] = []
         self._site_reports: List[dict] = []
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -155,6 +177,13 @@ class MemoryProbe:
         with self._lock:
             self._phases.append(span)
         if self.traced:
+            # The peak reached so far belongs to whatever phases are already
+            # open; absorb it into them before this phase resets the counter.
+            _current, peak = tracemalloc.get_traced_memory()
+            for frame in self._trace_stack:
+                frame.traced_peak = max(frame.traced_peak or 0, peak)
+            span.traced_peak = 0
+            self._trace_stack.append(span)
             tracemalloc.reset_peak()
         self.event(f"{name}:start", group)
         try:
@@ -166,10 +195,15 @@ class MemoryProbe:
             span.ended = end_event["t"]
             if self.traced:
                 current, peak = tracemalloc.get_traced_memory()
-                with self._lock:
-                    self._traced.append(
-                        {"phase": name, "group": group, "current": current, "peak": peak}
-                    )
+                if self._trace_stack and self._trace_stack[-1] is span:
+                    self._trace_stack.pop()
+                span.traced_current = current
+                span.traced_peak = max(span.traced_peak or 0, peak)
+                # Hand this window's peak up to still-open enclosing phases and
+                # reset so a parent keeps measuring without losing what we saw.
+                for frame in self._trace_stack:
+                    frame.traced_peak = max(frame.traced_peak or 0, span.traced_peak)
+                tracemalloc.reset_peak()
                 if name in self.site_phases:
                     self._record_site_snapshot(name, group)
 
@@ -193,46 +227,73 @@ class MemoryProbe:
     # -- stats -------------------------------------------------------------
 
     def _snapshot_locked(self) -> tuple[list, list]:
-        return list(self._samples), list(self._events)
+        # Copy under the lock: the sampler thread appends to _samples
+        # concurrently, so an unlocked copy can raise mid-iteration.
+        with self._lock:
+            return list(self._samples), list(self._events)
 
     def stats_between(self, started: float, ended: float | None) -> dict:
         samples, events = self._snapshot_locked()
         limit = ended if ended is not None else self.clock()
         inside = [sample for sample in samples if started <= sample[0] <= limit]
         boundary = [event for event in events if started <= event["t"] <= limit]
-        if boundary:
-            first, last = boundary[0], boundary[-1]
-        elif inside:
-            first, last = inside[0], inside[-1]
-        else:
-            return {"duration_s": max(0.0, limit - started)}
-        rss_values = [sample[1] for sample in inside] or [first["rss"], last["rss"]]
-        children_values = [sample[2] for sample in inside] or [0]
-        return {
+        # Both interval samples and boundary-event RSS are valid observations;
+        # the max/min must span both so a transient captured only at a boundary
+        # is not dropped.
+        rss_obs = [sample[1] for sample in inside] + [
+            event["rss"] for event in boundary
+        ]
+        children_obs = [sample[2] for sample in inside] + [
+            event["children_rss"] for event in boundary
+        ]
+        base = {
             "t_start": started,
             "t_end": limit,
             "duration_s": max(0.0, limit - started),
-            "rss_start": first["rss"],
-            "rss_end": last["rss"],
-            "rss_min": min(rss_values),
-            "rss_max": max(rss_values),
-            "children_rss_max": max(children_values),
-            "ru_maxrss_end": last["ru_maxrss"],
-            "ru_maxrss_delta": last["ru_maxrss"] - first["ru_maxrss"],
+            "samples": len(inside),
+            "events": len(boundary),
         }
+        if not rss_obs:
+            # A window with neither samples nor events: report the duration and
+            # leave the RSS metrics absent rather than fabricating values.
+            return base
+        # Anchor start/end on boundary events when present (they bracket the
+        # phase exactly); otherwise use the first/last timed sample.
+        if boundary:
+            rss_start, rss_end = boundary[0]["rss"], boundary[-1]["rss"]
+        else:
+            rss_start, rss_end = inside[0][1], inside[-1][1]
+        base.update(
+            {
+                "rss_start": rss_start,
+                "rss_end": rss_end,
+                "rss_min": min(rss_obs),
+                "rss_max": max(rss_obs),
+                "children_rss_max": max(children_obs) if children_obs else 0,
+            }
+        )
+        ru_values = [
+            event["ru_maxrss"]
+            for event in boundary
+            if event.get("ru_maxrss") is not None
+        ]
+        if ru_values:
+            base["ru_maxrss_end"] = ru_values[-1]
+            base["ru_maxrss_delta"] = ru_values[-1] - ru_values[0]
+        return base
 
     def phase_stats(self, group: str) -> List[dict]:
         with self._lock:
             spans = [span for span in self._phases if span.group == group]
-            traced = {item["phase"]: item for item in self._traced}
         results = []
         for span in spans:
             stats = self.stats_between(span.started, span.ended)
             stats["phase"] = span.name
-            if self.traced and span.name in traced:
-                item = traced[span.name]
-                stats["traced_current_end"] = item["current"]
-                stats["traced_peak"] = item["peak"]
+            # Traced counters live on the span itself, so repeated same-name
+            # phases across rounds never share a statistics record.
+            if self.traced and span.traced_peak is not None:
+                stats["traced_current_end"] = span.traced_current
+                stats["traced_peak"] = span.traced_peak
             results.append(stats)
         return results
 
@@ -291,7 +352,12 @@ def environment_info() -> dict:
         "platform": platform.platform(),
         "machine": platform.machine(),
         "python": platform.python_version(),
-        "ru_maxrss_unit": "bytes" if sys.platform == "darwin" else "kib",
+        "ru_maxrss_available": resource is not None,
+        "ru_maxrss_unit": (
+            None
+            if resource is None
+            else ("bytes" if sys.platform == "darwin" else "kib")
+        ),
     }
     if sys.platform == "darwin":
         info["cpu_model"] = subprocess.check_output(
@@ -322,6 +388,21 @@ def git_metadata() -> dict:
 
 def sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def sha256_file(path: Path, chunk_bytes: int = 1024 * 1024) -> str:
+    """Stream-hash a file in bounded chunks.
+
+    Never materialises the whole file, so summarising a large export cannot
+    inflate this process's RSS/ru_maxrss and contaminate a resident-memory
+    measurement. Returns the same digest as ``sha256_bytes`` over the contents.
+    """
+
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(chunk_bytes), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _assert_report_safe(payload: object, path: str = "report") -> None:

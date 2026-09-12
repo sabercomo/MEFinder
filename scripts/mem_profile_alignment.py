@@ -490,11 +490,13 @@ def _run_rounds(arguments, probe, coordinator, workload, instrumentation) -> lis
             workload["group"], workload["pivot"], workload["target"], force=True
         )
         result = instrumentation.last_result or {}
+        # Measure the product residue before summarising the result, so the
+        # summary's own allocations never inflate the stable-resident number.
+        settled_after = probe.settle()
         counts = _extract_counts(result)
         identity = common.sha256_bytes(
             json.dumps(result, ensure_ascii=False, sort_keys=True).encode("utf-8")
         )
-        settled_after = probe.settle()
         probe.event("round_end", group)
         phases = {item["phase"]: item for item in probe.phase_stats(group)}
         rounds.append(

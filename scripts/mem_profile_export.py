@@ -212,10 +212,16 @@ def _run_rounds(arguments, probe, root: Path) -> list:
         probe.event("round_start", group)
         result = _export_once(arguments, root)
         output_file = Path(str(result["path"]))
-        identity = common.sha256_bytes(output_file.read_bytes())
         size_bytes = result.get("size_bytes")
-        output_file.unlink(missing_ok=True)
+        # Measure the product residue BEFORE summarising the output, so the
+        # summary's own reads never inflate the stable-resident number.
         settled_after = probe.settle()
+        # The file summary is a diagnostic step, not the product task: hash it
+        # with a bounded stream inside its own phase so its footprint is
+        # attributed to the tool, separate from task_total and the resident RSS.
+        with probe.phase("summary_hash", group):
+            identity = common.sha256_file(output_file)
+        output_file.unlink(missing_ok=True)
         probe.event("round_end", group)
         phases = {item["phase"]: item for item in probe.phase_stats(group)}
         entry_point = (
