@@ -20,7 +20,7 @@ class AlignmentOfflineBoundaryTests(unittest.TestCase):
 
     def test_generation_loads_only_local_files(self):
         constructor = Mock(return_value=SimpleNamespace(embed=lambda *a, **kw: iter([[1., 0.]])))
-        with TemporaryDirectory() as directory, patch.dict('sys.modules', {'fastembed': SimpleNamespace(TextEmbedding=constructor)}):
+        with TemporaryDirectory() as directory, patch.dict('sys.modules', {'fastembed': SimpleNamespace(TextEmbedding=constructor), 'onnxruntime': SimpleNamespace(disable_telemetry_events=lambda: None)}):
             FastEmbedEmbeddingProvider(embedding_model_config('minilm-l12-v2'))(['test'], Path(directory))
         self.assertTrue(constructor.call_args.kwargs.get('local_files_only'))
 

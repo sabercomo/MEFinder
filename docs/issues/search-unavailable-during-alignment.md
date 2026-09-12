@@ -39,7 +39,8 @@
 
 ### 修复与为什么安全
 
-- `_write_window` 不再 suspend/reopen。对齐写只触及 `alignment_runs` / `alignment_links`(+members) 与 segment 表，段落、页面、目录元数据均不变，因此活的只读引擎（`query_only` + busy_timeout 30 s）在整个写事务期间继续服务搜索。回滚日志模式下，读者最多等待写者短暂的 EXCLUSIVE 提交段（实测 ~170 ms），写者也以 busy_timeout 等待在途读者——这与导出读事务、增量导入等其他并发方早已接受的锁语义一致，不引入新的等待量级。
+- `_write_window` 不再 suspend/reopen。对齐写只触及 `alignment_runs` / `alignment_links`(+members) 与 segment 表，段落、页面、目录元数据均不变，因此活的只读引擎（`query_only` + busy_timeout 30 s）在整个写事务期间继续服务搜索。写者也以 busy_timeout 等待在途读者——这与导出读事务、增量导入等其他并发方早已接受的锁语义一致，不引入新的等待量级。
+  - **更正（2026-09-12 审计）**：本条早前写作"读者最多等待写者短暂的 EXCLUSIVE 提交段（实测 ~170 ms）"，此前提不成立，见下方"2026-09-12 审计更正"。SQLite 锁的是整库文件；首次大书分段写入溢出 page cache 后会在提交前即升级到持有 EXCLUSIVE，跨表读被阻塞的是整段写入而非仅提交。修复仍成立（把即时不可读转成有界等待），但读者等待被 30 s busy_timeout 上界约束、并非"仅短暂提交"，也非无条件成功。
 - 保留不变：对齐算法/阈值/模型/正文范围/锚点语义、两段事务结构与发布原子性（`BEGIN IMMEDIATE` + commit/rollback）、mutation + durable operation 对并发删除/题录修改/取消/退出的协调、失败回滚后可恢复。`IndexRuntime.replace_source` / `rebuild` 的 suspend/reopen 语义不变——它们发布的是搜索可见的数据变更。
 - 不需要工作进程：写窗口收窄后 503 归零，`alignment-component-isolation.md` 提出的进程化触发条件未触发。
 
@@ -53,3 +54,21 @@
 ### 验证期间发现并一并修复的独立退出崩溃
 
 首轮正式复测第 3 轮对齐场景进程以非零码退出（对齐、全部 56 个重叠搜索与恢复校验均成功之后、收到 stop 的退出阶段）。macOS 崩溃报告（`Python-2026-09-12-174546.ips`）定位：onnxruntime 1.29.0 内置遥测模块（`Microsoft::Applications::Events`）的原生上传 WorkerThread 在 `recursive_mutex::lock()` 抛出未捕获 `std::system_error` → abort。该线程由任何 ORT 会话创建而起，与 503 修复无关；但它 (a) 使正式协议无法稳定完成，(b) 自带 HTTP 上传路径与本地优先原则相悖。修复：`FastEmbedEmbeddingProvider.__call__` 在创建会话前调用 `onnxruntime.disable_telemetry_events()`（回归测试钉住"先禁用、后建会话"的顺序），移除该线程。
+
+## 2026-09-12 审计更正（`ea26e13` 复审）
+
+外部审计（复审 `ea26e13`）指出前述结论有三处需收紧，均已处理，后续轮次以本节为准，不要再引用被更正的旧表述：
+
+1. **`_write_window` 的"仅短暂提交"前提错误**。SQLite 锁的是整库文件而非单表：首次大书分段写入溢出默认 page cache 后，在提交前即从 RESERVED 升级为持有 EXCLUSIVE，跨表读（搜索命中 `paragraphs`）被阻塞的是整段写入而非仅最后提交。修复方向（不关引擎、把即时不可读转成有界等待）仍成立，但读者等待受 30 s `busy_timeout` 上界约束，**不是"仅短暂提交"，也不保证一定成功**（写锁若超 30 s 仍会 503）。注释已更正（`text_alignment_coordinator._write_window`）。
+2. **CI 无 ONNX Runtime 时 5 项模拟测试报 `ModuleNotFoundError`**。provider 新增 `import onnxruntime` + `disable_telemetry_events()` 后，只 stub `fastembed` 的测试在缺依赖环境直接 error。已给这些 `sys.modules` patch 补上 `onnxruntime` stub（保留"不装计算组件"的测试环境，而非强装计算组件）：`tests/test_semantic_alignment_runtime.py`、`tests/test_text_alignment.py`、`tests/test_alignment_offline_boundary.py`。以阻断 `onnxruntime` 导入的元路径 finder 复现并验证修复。
+3. **性能报告 503 结论过强、混淆两类耗时**。报告已收紧为"本样本未观察到 503（有界等待窗口内未超时），非普适保证"，并把**搜索延迟**与**对齐任务耗时**分列，两者均标注"归因待定、需交错新旧代码复测"。
+
+### 新增可用性测试（覆盖范围与边界，勿越界引用为"已覆盖"）
+
+`tests/test_alignment_write_window_availability.py` 增 `AlignmentSpillingWriteAvailabilityTests`：把写连接 page cache 缩小（`PRAGMA cache_size`）以在小夹具上确定性复现 EXCLUSIVE 升级。**已覆盖**：持锁期间短超时探针读确被阻塞（证伪"仅提交"前提）、生产 30 s busy_timeout 下共享引擎搜索仍返回一致 payload 而非 503、准备事务提交之后（计算阶段）取消不落已发布对齐。
+
+**待验证（本轮未覆盖，禁止当作已覆盖引用）**：
+
+- 持锁写入进行中（尚未提交）取消或退出——当前取消仅在嵌入 batch 边界检查，事务内无取消钩子可驱动；
+- 搜索正在等待该锁时应用退出的行为；
+- **默认 page cache 下**首次大书真实对齐的实际锁等待时长——缩小 cache 只是确定性复现溢写，未测量生产规模书目产生的真实等待墙钟时间。

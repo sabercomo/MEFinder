@@ -102,8 +102,20 @@ class TextAlignmentCoordinator:
         # Alignment writes touch only alignment_runs/alignment_links(+members)
         # and segment tables; search-visible data (paragraphs, pages, catalog)
         # is unchanged, so the live engine keeps serving across the write
-        # transactions. Rollback-journal locking bounds any reader wait to the
-        # writer's short EXCLUSIVE commit (both sides run busy_timeout); closing
-        # the engine here would 503 every overlapping search for the whole
-        # window with no consistency benefit.
+        # transactions. SQLite locks the whole database file, not per table: a
+        # first-time large-book segmentation write overflows the page cache and
+        # escalates from RESERVED to a held EXCLUSIVE lock *before* commit, so an
+        # overlapping search read can be blocked for much of the write, not just
+        # the final commit. That block is a bounded wait, not an immediate
+        # failure: both sides run a 30s busy_timeout, so a reader waits the lock
+        # out and serves *as long as the writer clears the lock within that
+        # window* — it is not a guarantee, a write that stayed locked past 30s
+        # would still surface to the reader as a lock error (503). Keeping the
+        # engine open is therefore strictly better than closing it (which would
+        # 503 every overlapping search for the whole window with no consistency
+        # benefit), but it converts unavailability into a bounded wait rather
+        # than eliminating it. The spilling-write availability path is pinned by
+        # tests/test_alignment_write_window_availability.py (which forces the
+        # EXCLUSIVE escalation with a shrunk page cache); the real-default-cache
+        # big-book lock-wait duration is measured separately, not by that test.
         yield

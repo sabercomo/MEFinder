@@ -53,13 +53,42 @@ class _DurableOperations:
         yield
 
 
-class AlignmentWriteWindowAvailabilityTests(unittest.TestCase):
+class _AlignmentWriteWindowHarness:
+    # Shared real harness (fixture + IndexRuntime + coordinator). Fixture size
+    # and the writer's page-cache budget are class attributes so a second test
+    # class can drive the same harness against a first-time "big book"
+    # segmentation write that overflows the cache mid-transaction. Concrete test
+    # classes mix this in beside ``unittest.TestCase``; it defines no tests of
+    # its own so neither class inherits the other's interleaving.
+    FIXTURE = dict(documents=2, paragraphs=12, alignment_paragraphs=8)
+    WRITER_CACHE_PAGES: int | None = None
+
     def setUp(self) -> None:
         self._temporary = TemporaryDirectory()
         self.addCleanup(self._temporary.cleanup)
         self.root = Path(self._temporary.name)
-        create_fixture(self.root, documents=2, paragraphs=12, alignment_paragraphs=8)
+        create_fixture(self.root, **self.FIXTURE)
         self.paths = AppPaths.create(self.root)
+        if self.WRITER_CACHE_PAGES is not None:
+            # Shrink only the alignment writer's page cache so a modest fixture
+            # spills to disk during the segment INSERTs — the same escalation
+            # from RESERVED to a held EXCLUSIVE lock that a real large first
+            # alignment triggers, without megabytes of fixture text.
+            real_open = text_alignment_module.open_writable_index
+            pages = self.WRITER_CACHE_PAGES
+
+            def open_with_small_cache(db_path):
+                connection = real_open(db_path)
+                connection.execute(f"PRAGMA cache_size = {pages}")
+                return connection
+
+            patcher = mock.patch.object(
+                text_alignment_module,
+                "open_writable_index",
+                side_effect=open_with_small_cache,
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.index_runtime = IndexRuntime(
             self.paths,
             engine_factory=lambda path: SearchEngine(path),
@@ -146,6 +175,10 @@ class AlignmentWriteWindowAvailabilityTests(unittest.TestCase):
         self.assertEqual(runs, 0)
         self.assertEqual(links, 0)
 
+
+class AlignmentWriteWindowAvailabilityTests(
+    _AlignmentWriteWindowHarness, unittest.TestCase
+):
     # -- the reproduction --------------------------------------------------
 
     def test_search_serves_through_prepare_compute_and_publish(self) -> None:
@@ -400,6 +433,157 @@ class AlignmentWriteWindowAvailabilityTests(unittest.TestCase):
         self.assertNotEqual(
             json.dumps(served, sort_keys=True, ensure_ascii=False), warmup
         )
+
+
+class AlignmentSpillingWriteAvailabilityTests(
+    _AlignmentWriteWindowHarness, unittest.TestCase
+):
+    """First-time big-book segmentation that overflows the writer page cache.
+
+    The base tests exercise a tiny write that never leaves the RESERVED lock, so
+    concurrent readers are never actually blocked. That does not cover a real
+    first alignment of a large book: once the segment INSERTs overflow the page
+    cache, SQLite escalates to a held EXCLUSIVE lock *before* commit, and every
+    cross-table read (search hits ``paragraphs``) is blocked for the whole
+    remaining write, not merely the final commit.
+
+    What these tests DO pin:
+    - the EXCLUSIVE escalation is reproduced deterministically by shrinking only
+      the alignment writer's page cache (``WRITER_CACHE_PAGES``), so a modest
+      fixture spills — this is a stand-in for a real large book, not a real
+      large book;
+    - while that lock is held, a short-timeout probe read really is blocked
+      (refuting the "only the short commit blocks readers" premise), and the
+      shared-engine search, run under the production 30s busy_timeout, still
+      serves the unchanged payload instead of 503;
+    - a cancel raised by the embedding provider *after the prepare transaction
+      has already committed its segments* (i.e. during compute, between the two
+      write transactions) leaves no published alignment behind.
+
+    What these tests do NOT yet cover (tracked as 待验证 in
+    docs/issues/search-unavailable-during-alignment.md, do not cite as covered):
+    - cancel or app-exit *while the EXCLUSIVE lock is still held mid-write*
+      (cancellation is only checked at embedding-batch boundaries, so there is
+      no in-transaction cancel hook to exercise today);
+    - app-exit while a search is parked waiting on that lock;
+    - the actual lock-wait duration a real first big-book alignment imposes under
+      the *default* page cache — this stand-in forces the spill, it does not
+      measure the wall-clock wait a production-sized book produces.
+    """
+
+    FIXTURE = dict(documents=2, paragraphs=12, alignment_paragraphs=80)
+    WRITER_CACHE_PAGES = 16
+
+    def _probe_read_is_locked(self) -> bool:
+        # A raw reader with a short busy_timeout: it fails fast iff an EXCLUSIVE
+        # lock is currently held on the database. Used to prove the prepare
+        # window really blocks cross-table reads (the premise the old comment
+        # denied), independent of whether the patient 30s search waits it out.
+        probe = sqlite3.connect(self.paths.index_path, timeout=0)
+        try:
+            probe.execute("PRAGMA busy_timeout = 150")
+            probe.execute("SELECT COUNT(*) FROM paragraphs").fetchone()
+            return False
+        except sqlite3.OperationalError as exc:
+            self.assertIn("locked", str(exc).lower())
+            return True
+        finally:
+            probe.close()
+
+    def test_search_waits_but_serves_when_first_segmentation_spills_cache(
+        self,
+    ) -> None:
+        warmup = self._warmup_search()
+        window_entered = threading.Event()
+        release_prepare = threading.Event()
+
+        real_folio = text_alignment_module.detect_folio_boundary_candidates
+
+        def gated_folio(*args, **kwargs):
+            # By now the segment INSERTs have overflowed the tiny cache, so the
+            # prepare transaction already holds EXCLUSIVE. Hold the window open
+            # until the main thread has both probed the lock and started the
+            # real search against it.
+            window_entered.set()
+            if not release_prepare.wait(timeout=WINDOW_WAIT_TIMEOUT):
+                raise RuntimeError("prepare window never released")
+            return real_folio(*args, **kwargs)
+
+        with mock.patch.object(
+            text_alignment_module,
+            "detect_folio_boundary_candidates",
+            side_effect=gated_folio,
+        ):
+            worker, outcome = self._run_generate_in_thread()
+            self.assertTrue(
+                window_entered.wait(timeout=WINDOW_WAIT_TIMEOUT),
+                "prepare window never entered",
+            )
+
+            self.assertTrue(
+                self._probe_read_is_locked(),
+                "the spilling prepare write did not block cross-table reads; "
+                "the reader-wait premise is untested",
+            )
+
+            search_outcome: dict = {}
+
+            def run_search():
+                try:
+                    search_outcome["result"] = self._search()
+                except BaseException as exc:  # surfaced to the main asserts
+                    search_outcome["error"] = exc
+
+            searcher = threading.Thread(target=run_search, name="probe-search")
+            searcher.start()
+            # The writer cannot progress past the gate until we release, so a
+            # read started now is deterministically still blocked on the lock.
+            time.sleep(0.2)
+            self.assertTrue(
+                searcher.is_alive(),
+                "search returned before the writer released the EXCLUSIVE lock",
+            )
+
+            release_prepare.set()
+            searcher.join(timeout=WINDOW_WAIT_TIMEOUT)
+            worker.join(timeout=WINDOW_WAIT_TIMEOUT)
+
+        self.assertFalse(searcher.is_alive(), "search hung waiting on the lock")
+        self.assertFalse(worker.is_alive(), "alignment hung")
+        self.assertNotIn("error", search_outcome)
+        self.assertIsNotNone(
+            search_outcome["result"],
+            "search 503'd instead of waiting out the spilling write",
+        )
+        self.assertEqual(
+            json.dumps(
+                search_outcome["result"], sort_keys=True, ensure_ascii=False
+            ),
+            warmup,
+        )
+        self.assertNotIn("error", outcome)
+        self.assertEqual(outcome["result"]["status"], "completed")
+        with sqlite3.connect(self.paths.index_path) as connection:
+            runs = connection.execute(
+                "SELECT COUNT(*) FROM alignment_runs WHERE status = 'completed'"
+            ).fetchone()[0]
+        self.assertEqual(runs, 1)
+
+    def test_cancel_during_spilling_run_rolls_back_and_search_recovers(
+        self,
+    ) -> None:
+        warmup = self._warmup_search()
+
+        def cancelled_embeddings(texts, cache_dir):
+            # Cancel lands after the spilling prepare write has committed its
+            # segments but before any alignment is published.
+            raise SemanticAlignmentCancelled("user cancelled")
+
+        with self.assertRaises(TextAlignmentCancelled):
+            self._generate_with(provider=cancelled_embeddings)
+
+        self._assert_no_partial_publish()
+        self.assertEqual(self._warmup_search(), warmup)
 
 
 if __name__ == "__main__":

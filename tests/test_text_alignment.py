@@ -1519,7 +1519,10 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
             "sys.modules",
-            {"fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding)},
+            {
+                "fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding),
+                "onnxruntime": SimpleNamespace(disable_telemetry_events=lambda: None),
+            },
         ):
             vectors = embed_texts(
                 ["source text", "target text"],
