@@ -49,9 +49,11 @@
     select.classList.toggle('is-open', shouldOpen);
     var trigger = select.querySelector('.app-select-trigger');
     if (trigger) trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    if (shouldOpen) syncAppSelectAria(select);
     if (shouldOpen && selectId === 'document-select') {
       await ensureSearchDocuments();
       renderSearchDocumentOptions();
+      syncAppSelectAria(select);
       var input = document.getElementById('document-filter-query');
       if (input) { input.value = ''; requestAnimationFrame(function() { input.focus(); }); }
     } else if (shouldOpen) {
@@ -71,6 +73,18 @@
      never existed. This document-level handler fulfils that contract for every
      .app-select at once — Arrow/Home/End move the roving focus, Esc closes and
      returns focus to the trigger. Menus with a search field keep native typing. */
+  /* role="listbox" 承诺每个选项都是 role="option" 且带 aria-selected，但选项分散在
+     多处渲染（搜索范围、条数、引文格式、书目语言、阅读器分段样式…）。此处在打开时
+     统一补齐，读屏只在菜单展开时需要该语义，避免 29 处渲染点各写一遍而漏掉。 */
+  function syncAppSelectAria(select) {
+    var menu = select.querySelector('[role="listbox"]');
+    if (!menu) return;
+    menu.querySelectorAll('.app-select-option').forEach(function(option) {
+      if (option.getAttribute('role') !== 'option') option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', option.classList.contains('is-selected') ? 'true' : 'false');
+    });
+  }
+
   function appSelectOptionList(select) {
     return Array.prototype.filter.call(
       select.querySelectorAll('.app-select-option'),

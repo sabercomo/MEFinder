@@ -460,10 +460,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 设置页空间与控件规范（DESIGN.md §4/§5）：页面标题 23px 独占一行、说明
     #   换行不再 ellipsis 截断，内容留白随窗口收敛，开关行由卡片改为分隔线行，
     #   开关轨道收敛到 36×22/16，PDF 原文小节提到阅读窗口之前。
+    # 0.5.4 自绘下拉补齐 listbox 语义（打开时统一补 role=option/aria-selected）
+    #   与 150ms 浮层进入动效。
     BASELINE_SHA256 = (
-        "cc0b9d9abc51221ca7a8bed95c126b2d108ea682bdfca2b2b87aed200b804ce4"
+        "4383c5b2b6116a4b8a33b1404e2784157bdb8bd64c8b2826a496a1f664a8b1f1"
     )
-    BASELINE_BYTES = 1095644
+    BASELINE_BYTES = 1096856
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -18,6 +18,8 @@
         "-m",
         "src.me_finder",
         "serve",
+        "--index",
+        "data/ui-preview-index.sqlite3",
         "--port",
         "8765"
       ],
