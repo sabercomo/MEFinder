@@ -457,10 +457,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   无分组徽章，.vision-model-badge 样式删除；装配指纹随之更新。
     # 0.5.4 外观模式卡在 macOS(WKWebView) 塌成 0 高度：<button> 作 flex 容器时
     #   子项不被 stretch，.mode-preview 的 aspect-ratio 解不出高度，补 width:100%。
+    # 0.5.4 设置页空间与控件规范（DESIGN.md §4/§5）：页面标题 23px 独占一行、说明
+    #   换行不再 ellipsis 截断，内容留白随窗口收敛，开关行由卡片改为分隔线行，
+    #   开关轨道收敛到 36×22/16，PDF 原文小节提到阅读窗口之前。
     BASELINE_SHA256 = (
-        "c05086bc61a3a9deccc3b32ae2a9f45ef356de043bc8a24a3a61e0ded0e8ddad"
+        "cc0b9d9abc51221ca7a8bed95c126b2d108ea682bdfca2b2b87aed200b804ce4"
     )
-    BASELINE_BYTES = 1094127
+    BASELINE_BYTES = 1095644
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

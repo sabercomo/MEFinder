@@ -442,9 +442,10 @@ input[type=range]::-webkit-slider-thumb{
 .theme-name{font-size:14px;font-weight:500}
 .theme-tag{padding:2px 7px;border-radius:var(--radius-pill);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:600}
 .theme-desc{display:block;padding:0 12px 12px;font-size:12px;line-height:1.45;color:var(--text-tertiary)}
-.colorgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:4px}
-.colorfield{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--text-secondary)}
-.colorfield input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:none;cursor:pointer}
+.colorgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,190px));gap:10px 18px;margin-top:4px;max-width:820px}
+.colorfield{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--text-secondary)}
+.colorfield span{flex:1;min-width:0}
+.colorfield input[type=color]{flex:0 0 34px;width:34px;height:26px;padding:0;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:none;cursor:pointer}
 
 /* 演示状态选择器 */
 .demobar{

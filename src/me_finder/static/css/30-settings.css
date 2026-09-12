@@ -72,7 +72,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 28px 32px 48px;
+  padding: 32px clamp(24px, 4vw, 48px) 72px;
 }
 .settings-section {
   display: none;
@@ -86,10 +86,9 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #statistics-settings.active { max-width: none; }
 .settings-section-head {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-height: 30px;
-  margin-bottom: 2px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .settings-section-title {
   flex: 0 0 auto;
@@ -116,6 +115,30 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   min-width: 0;
 }
 .settings-section-heading-copy .settings-section-note { flex: 0 1 auto; }
+/* 页面标题占一行、说明折到下一行完整显示（不再 nowrap+ellipsis 截断），
+   状态与主按钮留在右侧。DESIGN.md §4：页面标题 23–24px，辅助说明不承担唯一状态。 */
+.settings-section-head > .settings-section-heading-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.settings-section-head > .settings-section-heading-copy > .settings-section-title {
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: .01em;
+}
+.settings-section-head > .settings-section-heading-copy > .settings-section-note {
+  flex: 0 1 auto;
+  max-width: 70ch;
+  overflow: visible;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  text-overflow: clip;
+  white-space: normal;
+}
+.settings-section-head > .settings-status,
+.settings-section-head > .action-btn { margin-top: 4px; }
 .settings-collapse-head {
   width: 100%;
   padding: 0;
@@ -228,7 +251,15 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin: 24px 2px 12px;
+  margin: 30px 2px 6px;
+}
+.settings-subhead > .settings-section-title { font-size: 14px; font-weight: 650; }
+.settings-subhead > .settings-section-note {
+  max-width: 70ch;
+  overflow: visible;
+  font-size: 13px;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .pdf-open-options,
@@ -271,50 +302,50 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .pdf-open-option.selected,
 .document-export-option.selected { background: var(--surface-selected); }
 /* Single boolean preference rendered as a switch row (e.g. 繁简统一检索). */
+/* DESIGN.md §2「用层级做减法」：普通设置项不逐条套卡片，改用分隔线分行。 */
 .setting-switch-row {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  margin-top: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-primary);
+  gap: 20px;
+  margin-top: 0;
+  padding: 20px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: none;
   cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
-.setting-switch-row:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .setting-switch-copy { min-width: 0; display: grid; gap: 4px; }
-.setting-switch-copy strong { color: var(--text-primary); font-size: 13px; font-weight: 650; }
-.setting-switch-copy small { color: var(--text-tertiary); font-size: 12px; line-height: 1.45; }
+.setting-switch-copy strong { color: var(--text-primary); font-size: 15px; font-weight: 500; }
+.setting-switch-copy small { max-width: 70ch; color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
 .setting-switch-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .setting-switch-track {
   position: relative;
   flex: none;
-  width: 40px;
-  height: 24px;
+  width: 36px;
+  height: 22px;
   border-radius: var(--radius-pill);
   background: var(--border-strong);
-  transition: background var(--transition-fast);
+  transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .setting-switch-thumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--surface-primary);
   box-shadow: var(--shadow-card);
-  transition: transform var(--transition-fast);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .setting-switch-input:checked ~ .setting-switch-track { background: var(--accent); }
-.setting-switch-input:checked ~ .setting-switch-track .setting-switch-thumb { transform: translateX(16px); }
+.setting-switch-input:checked ~ .setting-switch-track .setting-switch-thumb { transform: translateX(14px); }
 .setting-switch-input:focus-visible ~ .setting-switch-track { box-shadow: var(--focus-ring); }
 .setting-switch-row.is-disabled { cursor: not-allowed; opacity: .55; }
-.setting-switch-row.is-disabled:hover { border-color: var(--border-default); background: var(--surface-primary); }
+.setting-switch-row.is-disabled:hover { background: none; }
 .pdf-open-option > input,
 .document-export-option > input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pdf-open-option-icon,
@@ -1041,6 +1072,12 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 /* .action-btn sets display:flex, which beats the UA [hidden]{display:none};
    restore it so hidden action buttons (测试连接 etc.) actually hide. */
 .action-btn[hidden] { display: none; }
+/* DESIGN.md §7：按下立即反馈，约 120ms 轻微缩放；只声明需要过渡的属性。 */
+.settings-content .action-btn { transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+.settings-content .action-btn:active:not(:disabled) { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .settings-content .action-btn:active:not(:disabled) { transform: none; }
+}
 .mineru-table-heading {
   display: flex;
   align-items: end;

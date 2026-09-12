@@ -512,13 +512,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="settings-section-heading-copy"><span class="settings-section-title">PDF 阅读</span><span class="settings-section-note">分别设置阅读窗口、PDF 原文与正文排版</span></span>
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
-            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span><span class="settings-section-note">用于结构化阅读和译本对照</span></div>
-            <label class="setting-switch-row reading-window-row">
-              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 9v11"/></svg></span>
-              <span class="setting-switch-copy"><strong>独立阅读窗口</strong><small>开启后可单独拖动、缩放阅读窗口；下次打开阅读时生效</small></span>
-              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
-              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
-            </label>
             <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span><span class="settings-section-note">从搜索结果打开原始 PDF 的方式</span></div>
             <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
               <label class="pdf-open-option selected" data-pdf-open-choice="native">
@@ -534,6 +527,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="pdf-open-option-check" aria-hidden="true"></span>
               </label>
             </div>
+            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span><span class="settings-section-note">用于结构化阅读和译本对照</span></div>
+            <label class="setting-switch-row reading-window-row">
+              <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 9v11"/></svg></span>
+              <span class="setting-switch-copy"><strong>独立阅读窗口</strong><small>开启后可单独拖动、缩放阅读窗口；下次打开阅读时生效</small></span>
+              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
+              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+            </label>
             <div class="settings-subhead"><span class="settings-section-title">正文排版</span><span class="settings-section-note">结构化阅读中的段落显示方式</span></div>
             <div class="pdf-open-options" role="radiogroup" aria-label="正文排版">
               <label class="pdf-open-option selected" data-reader-line-choice="flow">

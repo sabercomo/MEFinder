@@ -39,10 +39,19 @@ class ReaderWindowTests(unittest.TestCase):
         self.windows.set_base_url("http://127.0.0.1:1234/")
 
     @unittest.skipUnless(importlib.util.find_spec("webview"), "pywebview unavailable")
-    def test_window_setting_is_at_top_of_pdf_reading_panel(self):
+    def test_pdf_open_mode_precedes_window_setting_in_pdf_reading_panel(self):
+        # 用户 2026-09-12 指定的小节顺序：PDF 原文 → 阅读窗口 → 正文排版。
+        # 此前该面板把独立阅读窗口置顶，本断言随之调转。
         html = render_html("midnight")
         panel = html[html.index('id="pdf-reader-body"'):]
-        self.assertLess(panel.index('id="reader-window-enabled"'), panel.index('aria-label="PDF 打开方式"'))
+        self.assertLess(
+            panel.index('aria-label="PDF 打开方式"'),
+            panel.index('id="reader-window-enabled"'),
+        )
+        self.assertLess(
+            panel.index('id="reader-window-enabled"'),
+            panel.index('aria-label="正文排版"'),
+        )
 
     def test_close_notification_uses_real_bridge_without_reply_to_destroyed_window(self):
         from webview.state import State
