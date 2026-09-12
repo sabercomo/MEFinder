@@ -1,0 +1,268 @@
+{
+  "alignment_real_pair": {
+    "batch_size_control_round1": {
+      "batch16_peak_mib": 976.1,
+      "batch4_peak_mib": 872.1,
+      "batch64_natural_peak_mib": 1277.2,
+      "batch8_peak_mib": 911.7,
+      "embed_duration_s": {
+        "batch16": 55.7,
+        "batch4": 53.2,
+        "batch64": 73.2,
+        "batch8": 58.3
+      }
+    },
+    "children_rss_max_mib": 0.0,
+    "natural_lifecycle": {
+      "os_high_water_mib": 1283.0,
+      "per_phase_round1": {
+        "compute": {
+          "duration_s": 2.25,
+          "rss_end": 702.7,
+          "rss_max": 702.7,
+          "rss_start": 696.8,
+          "ru_maxrss_delta": 0.0,
+          "ru_maxrss_end": 1283.0
+        },
+        "embed": {
+          "duration_s": 73.18,
+          "rss_end": 696.5,
+          "rss_max": 1277.2,
+          "rss_start": 115.6,
+          "ru_maxrss_delta": 1167.4,
+          "ru_maxrss_end": 1283.0
+        },
+        "embed_compute": {
+          "duration_s": 73.15,
+          "rss_end": 696.5,
+          "rss_max": 1277.2,
+          "rss_start": 115.6,
+          "ru_maxrss_delta": 1167.4,
+          "ru_maxrss_end": 1283.0
+        },
+        "model_load": {
+          "duration_s": 0.52,
+          "rss_end": 843.3,
+          "rss_max": 843.1,
+          "rss_start": 115.6,
+          "ru_maxrss_delta": 727.7,
+          "ru_maxrss_end": 843.3
+        },
+        "publish": {
+          "duration_s": 1.41,
+          "rss_end": 702.7,
+          "rss_max": 702.7,
+          "rss_start": 702.7,
+          "ru_maxrss_delta": 0.0,
+          "ru_maxrss_end": 1283.0
+        },
+        "task_total": {
+          "duration_s": 77.8,
+          "rss_end": 699.7,
+          "rss_max": 1277.2,
+          "rss_start": 98.5,
+          "ru_maxrss_delta": 1184.5,
+          "ru_maxrss_end": 1283.0
+        }
+      },
+      "stable_rss_after_round_mib": [
+        699.7,
+        702.5,
+        704.5,
+        704.5
+      ]
+    },
+    "reembed_control_fresh_vectors_6rounds": {
+      "os_high_water_mib": 1348.4,
+      "round1_embed_peak": 1177.5,
+      "round6_embed_peak": 1348.3,
+      "slope_mib_per_round_after_first": 17.1,
+      "stable_rss_after_round_mib": [
+        642.0,
+        647.2,
+        666.4,
+        689.0,
+        700.2,
+        715.9
+      ]
+    },
+    "tracemalloc_control_2rounds": {
+      "embed_python_traced_peak_mib": [
+        58.3,
+        60.0
+      ],
+      "note": "tracemalloc slows embedding; not comparable with untraced durations",
+      "python_traced_end_after_task_mib": [
+        2.7,
+        3.3
+      ],
+      "stable_rss_after_round_mib": [
+        659.4,
+        716.8
+      ]
+    },
+    "workload": {
+      "database_bytes": 3471327232,
+      "kind": "real-snapshot",
+      "links": 967,
+      "segments": {
+        "pivot": 2047,
+        "target": 1901
+      }
+    }
+  },
+  "environment": {
+    "cpu_model": "Apple M4",
+    "embedding_thread_count": 3,
+    "packages": {
+      "fastembed": "0.8.0",
+      "numpy": "2.5.2",
+      "onnxruntime": "1.29.0",
+      "psutil": "7.2.2"
+    },
+    "python": "3.12.10"
+  },
+  "export_real_book": {
+    "children_rss_max_mib": 0.0,
+    "epub": {
+      "output_bytes": 135612,
+      "stable_rss_after_round_mib": [
+        58.8,
+        60.1,
+        60.3,
+        60.6
+      ],
+      "task_duration_s": 0.17
+    },
+    "markdown": {
+      "output_bytes": 308717,
+      "stable_rss_after_round_mib": [
+        58.0,
+        59.0,
+        59.5,
+        60.8
+      ],
+      "task_duration_s": 0.15
+    },
+    "workload": {
+      "kind": "real-snapshot",
+      "paragraphs": 474,
+      "pdf_pages": 242
+    }
+  },
+  "measured_at": "2026-09-12",
+  "measurement_caveats": [
+    "absolute stable RSS varies across processes by up to ~100 MiB with machine history; within-run round-over-round deltas are the leak signal",
+    "tracemalloc runs are a separate mode; durations and RSS from them are not comparable with untraced runs",
+    "synthetic fixture is built in a subprocess so ru_maxrss of the measured process stays clean"
+  ],
+  "protocol_version": "memory-profile-1",
+  "synthetic_scales": {
+    "alignment_scale_series": {
+      "fake_dp_12800pair": {
+        "round1_task_peak": 172.8,
+        "segments": 38400,
+        "stable": [
+          168.8,
+          174.3,
+          174.8
+        ]
+      },
+      "fake_dp_3200pair": {
+        "round1_task_peak": 144.5,
+        "segments": 9600,
+        "stable": [
+          144.5,
+          147.1
+        ]
+      },
+      "fake_dp_800pair": {
+        "round1_task_peak": 102.7,
+        "segments": 2400,
+        "stable": [
+          108.7,
+          110.0
+        ]
+      },
+      "real_model_1600pair": {
+        "round1_task_peak": 911.1,
+        "segments": 4800,
+        "stable": [
+          628.1,
+          633.4,
+          633.5
+        ]
+      },
+      "real_model_400pair": {
+        "round1_task_peak": 844.6,
+        "segments": 1200,
+        "stable": [
+          542.4,
+          542.0
+        ]
+      }
+    },
+    "export_50000_traced_python_heap_peak_mib": {
+      "load_pages": 44.6,
+      "normalize": 81.0,
+      "render_markdown": 64.3
+    },
+    "export_stable_rss_after_round_mib": {
+      "epub_20000": [
+        65.6,
+        86.9,
+        93.7
+      ],
+      "epub_5000": [
+        46.7,
+        51.5,
+        53.6
+      ],
+      "epub_50000": [
+        104.6,
+        147.7,
+        167.5
+      ],
+      "markdown_20000": [
+        70.6,
+        92.1,
+        100.7
+      ],
+      "markdown_5000": [
+        46.8,
+        53.7,
+        55.9
+      ],
+      "markdown_50000": [
+        103.5,
+        136.9,
+        156.4
+      ],
+      "markdown_50000_6rounds": [
+        102.1,
+        144.9,
+        168.9,
+        170.1,
+        171.0,
+        177.8
+      ]
+    },
+    "export_task_peak_rss_round1_mib": {
+      "markdown_20000": 74.3,
+      "markdown_5000": 47.4,
+      "markdown_50000": 133.9
+    },
+    "fixture": {
+      "fixture_version": 1,
+      "generator": "scripts/performance_fixture.create_fixture",
+      "note": "paragraphs ~1 segment each; pair docs are zh/en translations",
+      "seed": 20260910
+    }
+  },
+  "tool_scripts": [
+    "scripts/mem_profile_common.py",
+    "scripts/mem_profile_alignment.py",
+    "scripts/mem_profile_export.py"
+  ],
+  "unit": "MiB (MiB = 1048576 bytes)"
+}
