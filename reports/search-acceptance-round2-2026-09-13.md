@@ -1,6 +1,6 @@
 # 第二轮搜索优化验收(高频短词,真实繁简联合路径)
 
-2026-09-13。**核心更正:round-2 的"18ms"是单路变体(`SearchEngine.search`)的耗时,不是用户实际收到的响应。** 默认繁简联合(script folding)下,用户搜"社会"会同时检索简体"社会"与繁体"社會"并合并——真实用户请求由稀有繁体变体的全表扫描主导,当前约 **3.6s**,而非 18ms。本轮验收如实记录单路与联合两个量,不沿用 18ms 结论。
+2026-09-13。**核心更正:round-2 的"18ms"是单路变体(`SearchEngine.search`)的耗时,不是用户实际收到的响应。** 默认繁简联合(script folding)下,用户搜"社会"会同时检索简体"社会"与繁体"社會"并合并——真实用户请求由稀有繁体变体的全表扫描主导,服务器级 p50 **≈2.4 s(机器安静时,见"附")**/函数级 A/B ≈3.6 s(并发负载下),均 **远非 18 ms**。本轮验收如实记录单路与联合两个量,不沿用 18ms 结论。
 
 ## 一、真实应用路径 A/B(冻结快照 `.codex-tmp/real-library-20260911`,62,729 eligible 段)
 
@@ -40,7 +40,7 @@ budget=`max(64, limit*8)`。钉住:命中 <budget → total 精确、`total_is_e
 
 ## 五、限制与未完成(如实)
 
-- **正式三轮四场景服务器基准 `bench_real_library.py --compare` 本轮未跑**:测量期间本机有另一会话并发编辑+内存 profiling,服务器级 p50/p95 计时不可靠(上表 scoped_pdf 的反常即负载噪声)。推迟到机器安静时按原协议复测,以 `reports/performance-real-alignment503-fix-2026-09-12.json` 为兼容基线;届时报告须区分单路查询与用户完整请求。
+- **服务器级基准:normal(搜索)场景已在机器安静后补跑**(见"附",3 轮 valid=true,逐查询 p50 坐实"社会"联合请求 ~2.4 s);但**完整四场景 `--compare` 仍未跑**——alignment 场景需模型缓存(本地缺失),export 两场景本轮未纳入。完整四场景 + `--compare performance-real-alignment503-fix-2026-09-12.json` 待模型缓存就位后补,届时须继续区分单路与用户完整请求。
 - **繁体稀有短词全表扫描未解决**:这是联合请求的真实瓶颈。`+rowid 早停`对命中<budget 的稀有变体无效(永远填不满、无法早停),2 字子串又无 trigram 可用。**不在本轮实施**任何新索引(遵守"先交方案"约束),见下"建议"。
 
 ## 六、建议(仅方案,未实施,待授权)
@@ -50,3 +50,25 @@ budget=`max(64, limit*8)`。钉住:命中 <budget → total 精确、`total_is_e
 2. **bigram FTS 辅助表**:对 <3 字查询提供 2-gram MATCH。代价:额外 FTS 表(体积、写入、迁移)。
 
 两者都涉及 schema 迁移与同步目录(OneDrive rollback-journal)兼容性评估,须先出"收益/体积/迁移时间/写入成本/兼容性"完整方案并获授权,再实施与验收;数值收益不能仅凭"很小/很大"接受。
+
+## 附:正式服务器级基准(normal 场景,3 轮,真实 localhost HTTP)
+
+2026-09-13 机器安静后补跑 `bench_real_library.py --scenario normal --rounds 3 --repeats 5`(同冻结快照,`valid=true`,全 200,`identity_mismatches=0`,`overlapping_requests=0`;数据 [JSON](search-acceptance-round2-normal-bench-2026-09-13.json))。**四场景中的 alignment 场景因本地无模型缓存未跑**,仅 normal(搜索)场景;故此非完整四场景 `--compare`,是搜索半场的服务器级绝对基准。
+
+真实 HTTP 逐查询 p50(毫秒,3 轮):
+
+| 查询(query_id) | 类型 | r1 | r2 | r3 |
+|---|---|---:|---:|---:|
+| common_zh(社会,auto) | **用户完整联合请求** | 2334 | 2496 | 2519 |
+| scoped(社会,pdf) | 联合(pdf 域) | 2214 | 2258 | 2459 |
+| script_variant(社會,exact) | 繁体单变体 | 2430 | 2411 | 2552 |
+| common_en(gender) | FTS | 198 | 196 | 215 |
+| zh_exact / en_exact / normalized / no_hit | 精确长句/无命中 | 32–50 | 30–68 | 42–58 |
+
+**关键读法(区分单路与用户完整请求)**:
+- 用户搜"社会"的**完整请求**(common_zh,含繁简两变体)服务器级 p50 **≈2.4 s**,不是 18ms;繁简任一含全表扫描变体的查询(common_zh/scoped/script_variant)都在 ~2.2–2.6 s。
+- **聚合 `search_ms` p50(47/68/162ms)具误导性**:它是 40 个样本(8 查询×5)的中位数,而 8 条里 5 条是快查询(~30–50ms),中位数落在快组,掩盖了高频短词请求实为 ~2.4 s。报告与门禁必须用**逐查询**而非聚合中位数。
+- 进程峰值 RSS ~89–92 MiB(纯搜索、无对齐/无模型),startup ~330–360ms、shutdown ~310–490ms。
+- 机器非完全空闲(system 进程占用,common_zh 逐轮 2334→2519 轻微漂移),但足以支撑"用户完整短词请求 ~2.4 s"这一量级结论。
+
+这坐实上文:round-2 把简体单路降到 ~22ms 有效,但**用户完整繁简联合请求仍 ~2.4 s**,瓶颈是繁体稀有变体全表扫描;真正加速需先落"六"的索引方案。
