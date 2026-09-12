@@ -72,3 +72,12 @@
 - 持锁写入进行中（尚未提交）取消或退出——当前取消仅在嵌入 batch 边界检查，事务内无取消钩子可驱动；
 - 搜索正在等待该锁时应用退出的行为；
 - **默认 page cache 下**首次大书真实对齐的实际锁等待时长——缩小 cache 只是确定性复现溢写，未测量生产规模书目产生的真实等待墙钟时间。
+
+## 2026-09-13 — 锁超时的 HTTP 503 错误契约
+
+第二轮搜索验收补齐了"读被写锁挡到超时"这一路径的 HTTP 边界契约(此前 `_post_search` 未捕获 `sqlite3.OperationalError`,锁超时会变成掉连接/未处理 500):
+
+- **契约**:`POST /api/search` 时,若底层读在 30s `busy_timeout` 内未能取得读锁(写者持锁超时),`index_runtime.search` 抛 `sqlite3.OperationalError('database is locked'/'busy')`,`_post_search` 将其映射为 **503** `{"error": "索引正忙（写入未在超时内完成），请稍候重试。", "retriable": true}`——与"索引正在重建"(重建期 503)区分,可重试。
+- **不吞错、不空结果**:绝不把锁超时降级成空的 `results`(会被误读成"无命中")。非锁类 `OperationalError`(如 schema 错误)是真实故障,按 **500** `{"error": "搜索失败…"}` 记日志暴露,不当作瞬时可重试。
+- **验证**:`tests/test_search_http_lock_contract.py` 起真实 `ThreadingHTTPServer`,在引擎接缝注入 `OperationalError` 驱动整条 HTTP 栈(socket→do_POST→_post_search),断言 200/503-retriable/500 三态;真实 SQLite 锁行为仍由 `tests/test_alignment_write_window_availability.py` 覆盖。
+- 这落实了本文件"有界等待、非无条件成功"的结论:等待有 30s 上界,超界时以明确的 503 契约呈现,而非静默失败。

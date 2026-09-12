@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -303,7 +304,32 @@ def make_http_handler(context: WebHTTPContext):
             except ValueError as exc:
                 self._send_json({"error": str(exc)}, status=400)
                 return
-            result = index_runtime.search(request)
+            try:
+                result = index_runtime.search(request)
+            except sqlite3.OperationalError as exc:
+                # A read that sat out the full busy_timeout on a concurrent
+                # writer's lock surfaces here as "database is locked" (or
+                # "busy"). Map that to a distinct, retriable 503 — never swallow
+                # it into an empty result that would falsely read as "no hits".
+                # Any other operational error is a real fault and must not be
+                # masked as a transient, so it propagates to the 500 handler.
+                message = str(exc).lower()
+                if "locked" in message or "busy" in message:
+                    self._send_json(
+                        {
+                            "error": "索引正忙（写入未在超时内完成），请稍候重试。",
+                            "retriable": True,
+                        },
+                        status=503,
+                    )
+                    return
+                # A non-lock operational error is a real fault: surface it as a
+                # logged 500, not a dropped connection and not an empty result.
+                logging.exception("search query failed")
+                self._send_json(
+                    {"error": "搜索失败，请查看 desktop.log。"}, status=500
+                )
+                return
             if result is None:
                 self._send_json(
                     {"error": "索引正在重建，请稍候再搜索。"},
