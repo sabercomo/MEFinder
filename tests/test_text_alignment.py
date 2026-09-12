@@ -1533,6 +1533,33 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
         )
         self.assertEqual(vectors.shape, (2, 2))
 
+    def test_onnxruntime_telemetry_is_disabled_before_session_creation(self) -> None:
+        # ORT's built-in telemetry worker aborts the process at interpreter
+        # exit (native recursive_mutex race) and its HTTP upload path violates
+        # the local-first boundary; the provider must disable it first.
+        calls: list[str] = []
+
+        class StubTextEmbedding:
+            def __init__(self, **kwargs):
+                calls.append("session")
+
+            def embed(self, texts, *, batch_size):
+                return [np.asarray([1.0, 0.0], dtype=np.float32) for _ in texts]
+
+        stub_ort = SimpleNamespace(
+            disable_telemetry_events=lambda: calls.append("disable")
+        )
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            "sys.modules",
+            {
+                "fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding),
+                "onnxruntime": stub_ort,
+            },
+        ):
+            embed_texts(["source text"], Path(temp_dir))
+
+        self.assertEqual(calls, ["disable", "session"])
+
     def test_model_ids_produce_distinct_document_vector_cache_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             cache_dir = Path(temp_dir)

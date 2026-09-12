@@ -59,7 +59,14 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
         self.component_patch.start()
         self.addCleanup(self.component_patch.stop)
 
-    def test_generation_suspends_only_the_two_short_write_windows(self) -> None:
+    def test_generation_keeps_the_runtime_available_across_write_windows(
+        self,
+    ) -> None:
+        # The alignment 503 fix: write windows must not suspend/reopen the
+        # shared engine (that mapped to HTTP 503 for every overlapping
+        # search). Availability behavior is proven end-to-end in
+        # tests.test_alignment_write_window_availability; here the contract
+        # is that the coordinator never touches the runtime's live engine.
         index_runtime = _IndexRuntime()
         paths = SimpleNamespace(
             index_path=Path("D:/runtime/data/index.sqlite3"),
@@ -77,6 +84,7 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             index_runtime.events.append("embedding")
             with write_window():
                 index_runtime.events.append("publish-write")
+            self.assertFalse(index_runtime.suspended)
             return expected
 
         with mock.patch(
@@ -90,16 +98,13 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             index_runtime.events,
             [
                 "mutation-enter",
-                "suspend",
                 "prepare-write",
-                "reopen-5",
                 "embedding",
-                "suspend",
                 "publish-write",
-                "reopen-5",
                 "mutation-exit",
             ],
         )
+        self.assertFalse(index_runtime.suspended)
         self.assertEqual(
             generate.call_args.kwargs["model_cache_dir"],
             Path("D:/runtime/components/text-alignment/models"),

@@ -23,6 +23,7 @@ import sys
 import tempfile
 import time
 import unittest
+import urllib.error
 import urllib.request
 
 REPO = Path(__file__).resolve().parents[1]
@@ -138,12 +139,26 @@ class BackendStandaloneProcessTests(unittest.TestCase):
                 self.assertEqual(status, 202, start)
                 job_route = f"/api/text-alignments/status?job_id={start['job_id']}"
                 deadline = time.monotonic() + 240
+                overlapping_searches = 0
                 status, job = get_json(port, job_route)
                 while status == 202 and time.monotonic() < deadline:
                     time.sleep(0.5)
+                    # 与生成重叠的搜索不允许 503(对齐期间搜索保持可用)。
+                    try:
+                        search_status, search_body = post_json(
+                            port, "/api/search",
+                            {"query": "社会", "mode": "auto", "limit": 5},
+                        )
+                    except urllib.error.HTTPError as error:
+                        self.fail(
+                            f"search during alignment failed: HTTP {error.code}"
+                        )
+                    self.assertEqual(search_status, 200, search_body)
+                    overlapping_searches += 1
                     status, job = get_json(port, job_route)
                 self.assertEqual(status, 200, job)
                 self.assertTrue(job.get("ok"), job)
+                self.assertGreaterEqual(overlapping_searches, 1)
 
                 with sqlite3.connect(self.root / "data/index.sqlite3") as connection:
                     links = connection.execute(

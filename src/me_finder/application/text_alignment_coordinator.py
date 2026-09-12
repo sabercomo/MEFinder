@@ -99,14 +99,11 @@ class TextAlignmentCoordinator:
 
     @contextmanager
     def _write_window(self):
-        self._index_runtime.suspend()
-        try:
-            yield
-        except (OSError, sqlite3.Error, RuntimeError, ValueError) as write_error:
-            try:
-                self._index_runtime.reopen(attempts=5)
-            except (OSError, sqlite3.Error, RuntimeError, ValueError) as reopen_error:
-                write_error.add_note(f"runtime reopen also failed: {reopen_error}")
-                raise write_error.with_traceback(write_error.__traceback__)
-            raise
-        self._index_runtime.reopen(attempts=5)
+        # Alignment writes touch only alignment_runs/alignment_links(+members)
+        # and segment tables; search-visible data (paragraphs, pages, catalog)
+        # is unchanged, so the live engine keeps serving across the write
+        # transactions. Rollback-journal locking bounds any reader wait to the
+        # writer's short EXCLUSIVE commit (both sides run busy_timeout); closing
+        # the engine here would 503 every overlapping search for the whole
+        # window with no consistency benefit.
+        yield

@@ -165,8 +165,14 @@ class FastEmbedEmbeddingProvider:
 
     def __call__(self, texts: Sequence[str], cache_dir: Path) -> np.ndarray:
         import numpy as np
+        import onnxruntime
         from fastembed import TextEmbedding
 
+        # onnxruntime keeps a native telemetry upload worker thread (with its
+        # own HTTP client) whose internal mutex races abort the whole process
+        # at interpreter exit; the upload path is also unacceptable for a
+        # local-first application, so telemetry is disabled before any session.
+        onnxruntime.disable_telemetry_events()
         embedding = TextEmbedding(
             model_name=self.model.hf_name,
             cache_dir=str(cache_dir),
