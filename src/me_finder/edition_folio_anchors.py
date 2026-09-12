@@ -8,7 +8,10 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
 
@@ -340,6 +343,7 @@ def verify_folio_boundary_candidates(
     target_vectors: np.ndarray,
 ) -> List[FolioBoundaryCandidate]:
     """Confirm an edition-page stream from the bilingual text around each marker."""
+    import numpy as np
 
     if len(candidates) < MIN_FOLIO_CHAIN:
         return []

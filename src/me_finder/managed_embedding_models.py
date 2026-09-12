@@ -12,6 +12,7 @@ from .embedding_models import (
     EMBEDDING_MODELS,
     embedding_model_config,
     embedding_model_summaries,
+    model_component_installed,
 )
 
 
@@ -36,7 +37,8 @@ def download_embedding_model(model_id: str, cache_dir: Path) -> None:
 
     from .semantic_alignment import embed_texts
 
-    embed_texts(["MEFinder semantic alignment model probe"], cache_dir, model_id=model_id)
+    embed_texts(["MEFinder semantic alignment model probe"], cache_dir,
+                model_id=model_id, local_files_only=False)
 
 
 class ManagedEmbeddingModels:
@@ -102,10 +104,10 @@ class ManagedEmbeddingModels:
             for model in embedding_model_summaries():
                 model_id = str(model["id"])
                 state = self._states[model_id]
-                installed = self._receipt_path(model_id).is_file()
+                installed = model_component_installed(self._cache_dir, model_id)
                 current_state = state.state
-                if installed and current_state == "not_installed":
-                    current_state = "installed"
+                if current_state in {"installed", "not_installed"}:
+                    current_state = "installed" if installed else "not_installed"
                 total_bytes = int(model["size_bytes"])
                 downloaded_bytes = (
                     total_bytes if installed else self._downloaded_bytes(model_id)
@@ -144,7 +146,7 @@ class ManagedEmbeddingModels:
             state = self._states[model_id]
             if state.thread is not None and state.thread.is_alive():
                 raise ManagedEmbeddingModelsError("该译本对齐模型正在下载。")
-            if self._receipt_path(model_id).is_file():
+            if model_component_installed(self._cache_dir, model_id):
                 state.state = "installed"
                 state.message = "模型已下载"
                 state.error = ""

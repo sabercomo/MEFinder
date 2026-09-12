@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Protocol, Sequence, Tuple
 
-import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from .embedding_models import (
     AlignmentThresholds,
@@ -158,14 +161,17 @@ class EmbeddingProvider(Protocol):
 @dataclass(frozen=True)
 class FastEmbedEmbeddingProvider:
     model: EmbeddingModelConfig
+    local_files_only: bool = True
 
     def __call__(self, texts: Sequence[str], cache_dir: Path) -> np.ndarray:
+        import numpy as np
         from fastembed import TextEmbedding
 
         embedding = TextEmbedding(
             model_name=self.model.hf_name,
             cache_dir=str(cache_dir),
             threads=embedding_thread_count(),
+            local_files_only=self.local_files_only,
         )
         method = (
             embedding.query_embed
@@ -216,6 +222,7 @@ def embed_texts(
     cache_dir: Path,
     *,
     model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+    local_files_only: bool = True,
 ) -> np.ndarray:
     """Embed text with FastEmbed's CPU ONNX multilingual model."""
 
@@ -225,7 +232,7 @@ def embed_texts(
     # shutdown from failing an unrelated later run.
     begin_embedding_run()
     try:
-        return FastEmbedEmbeddingProvider(embedding_model_config(model_id))(
+        return FastEmbedEmbeddingProvider(embedding_model_config(model_id), local_files_only)(
             texts, cache_dir
         )
     except SemanticAlignmentCancelled:
@@ -234,7 +241,7 @@ def embed_texts(
         raise
     except Exception as exc:
         raise SemanticAlignmentError(
-            "跨语言语义模型加载失败；请检查网络后重试生成对齐。"
+            "跨语言语义模型加载失败；请在设置 → 译本对齐中检查计算依赖并重新下载完整模型。"
         ) from exc
 
 
@@ -263,6 +270,7 @@ def embed_text_sequences(
     model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
 ) -> List[np.ndarray]:
     """Cache document vectors and reuse unchanged segments after re-segmentation."""
+    import numpy as np
 
     paths = [
         _sequence_cache_path(texts, cache_dir, model_id=model_id)
@@ -321,9 +329,15 @@ def cached_text_sequence_vectors(
     model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
 ) -> np.ndarray | None:
     """Load vectors already produced for one complete segment sequence."""
-
     path = _sequence_cache_path(texts, cache_dir, model_id=model_id)
     if not path.is_file():
+        return None
+    try:
+        import numpy as np
+    except ModuleNotFoundError as exc:
+        if exc.name != "numpy":
+            raise
+        # Stored links remain readable without optional semantic refinement.
         return None
     vectors = np.load(path, allow_pickle=False, mmap_mode="r")
     if len(vectors) != len(texts):
@@ -339,6 +353,7 @@ def mutual_nearest_target_index(
     low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
 ) -> int | None:
     """Return the strongest target that also chooses the selected source."""
+    import numpy as np
 
     if not len(source_vectors) or not len(target_vectors):
         return None
@@ -711,16 +726,19 @@ def find_heading_anchors(
 
 
 def _normalized_rows(vectors: np.ndarray) -> np.ndarray:
+    import numpy as np
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     return vectors / np.maximum(norms, 1e-12)
 
 
 def _group_vector(prefix: np.ndarray, start: int, end: int) -> np.ndarray:
+    import numpy as np
     vector = prefix[end] - prefix[start]
     return vector / max(float(np.linalg.norm(vector)), 1e-12)
 
 
 def _group_rows(prefix: np.ndarray) -> Dict[int, np.ndarray]:
+    import numpy as np
     groups: Dict[int, np.ndarray] = {}
     for count in range(1, 4):
         if len(prefix) <= count:
@@ -740,6 +758,7 @@ def _similarity(
     target_start: int,
     target_end: int,
 ) -> float:
+    import numpy as np
     if source_start == source_end or target_start == target_end:
         return 0.0
     source = _group_vector(source_prefix, source_start, source_end)
@@ -789,6 +808,7 @@ def _align_partition(
     target_groups: Dict[int, np.ndarray],
     low_confidence_threshold: float,
 ) -> List[SemanticLink]:
+    import numpy as np
     source_count = source_end - source_offset
     target_count = target_end - target_offset
     if not source_count and not target_count:
@@ -1028,6 +1048,7 @@ def _align_monotonic_sequences(
     thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
     structural_anchors: Sequence[HeadingAnchor] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
+    import numpy as np
     source_count = len(source_texts)
     target_count = len(target_texts)
     source_prefix = np.vstack(
@@ -1397,6 +1418,7 @@ def _directional_note_overrides(
     inline_vectors: np.ndarray,
     thresholds: AlignmentThresholds,
 ) -> List[SemanticLink]:
+    import numpy as np
     blocks = _collected_note_blocks(collected_texts)
     candidates = _inline_note_candidates(inline_texts)
     if not blocks or not candidates:
@@ -1580,6 +1602,7 @@ def align_semantic_sequences(
     structural_anchors: Sequence[HeadingAnchor] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     """Align segments with structural links and partition-only folio boundaries."""
+    import numpy as np
 
     source_count = len(source_texts)
     target_count = len(target_texts)

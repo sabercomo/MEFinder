@@ -302,10 +302,10 @@ Roadmap 只是当前的改进方向，不代表固定发布日期；实际进度
 
 ## 🛠️ 开发与构建
 
-源码模式需要 Python 3；PDF 原生文本解析推荐安装 PyMuPDF。
+源码模式需要 Python 3.12。`requirements-core.txt` 提供不含对齐计算栈的后端依赖；需要离线生成对照时再安装 `requirements-alignment.txt`，并在设置中下载模型。缺少计算组件仍可搜索、结构化阅读和查看已有对照。当前桌面完整构建继续包含计算运行时，尚未提供精简桌面包或运行时下载器。
 
 ```bash
-python3 -m pip install PyMuPDF
+python3 -m pip install -r requirements-core.txt
 python3 -m src.me_finder build-index --include-pdf
 python3 -m src.me_finder serve --host 127.0.0.1 --port 8765
 ```

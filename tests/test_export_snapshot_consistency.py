@@ -121,23 +121,24 @@ def _concurrent_rewriter(database: Path, source_id: str):
     """A writer that plays the role of a metadata save plus re-parsed pages."""
 
     def rewrite() -> None:
-        update_metadata_in_database(
-            database, source_id, {"title": "并发修改后的标题", "author": "某作者"}
-        )
-        for page in _page_payloads(database, source_id):
-            page["text_raw"] = page["text_raw"].replace("版本甲", "版本乙")
-            page["blocks"][0]["text"] = page["text_raw"]
-            import sqlite3
+        import sqlite3
 
-            with sqlite3.connect(database) as connection:
+        source = _source_payload(database, source_id)
+        source["bibliographic_metadata"]["title"] = "并发修改后的标题"
+        pages = _page_payloads(database, source_id)
+        # A logical document version must be published in one transaction.
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "UPDATE source_files SET payload_json=? WHERE source_file_id=?",
+                (json.dumps(source, ensure_ascii=False), source_id),
+            )
+            for page in pages:
+                page["text_raw"] = page["text_raw"].replace("版本甲", "版本乙")
+                page["blocks"][0]["text"] = page["text_raw"]
                 connection.execute(
                     "UPDATE pdf_pages SET payload_json = ? "
                     "WHERE source_file_id = ? AND pdf_page_index = ?",
-                    (
-                        json.dumps(page, ensure_ascii=False),
-                        source_id,
-                        int(page["pdf_page_index"]),
-                    ),
+                    (json.dumps(page, ensure_ascii=False), source_id, int(page["pdf_page_index"])),
                 )
 
     return rewrite
@@ -271,6 +272,8 @@ class ExportSnapshotConsistencyTests(unittest.TestCase):
             def delete_document() -> None:
                 import sqlite3
 
+                if not page_read_started.wait(5):
+                    return
                 with sqlite3.connect(database) as connection:
                     connection.execute(
                         "DELETE FROM pdf_pages WHERE source_file_id = ?", (source_id,)
@@ -377,6 +380,56 @@ class _RecordingCoordinationPort:
 
 class CoordinatedEnrichmentOperationTests(unittest.TestCase):
     """Enrichment runs as its own operation inside the existing write gates."""
+
+    def test_completed_heading_preparation_does_not_wait_for_alignment_mutation(self):
+        from src.me_finder.document_heading import DOCUMENT_HEADING_VERSION
+        import sqlite3
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database, source_id = _snapshot_fixture(root)
+            with sqlite3.connect(database) as db:
+                source = json.loads(db.execute('SELECT payload_json FROM source_files').fetchone()[0])
+                source['document_heading_profile'] = {'version': DOCUMENT_HEADING_VERSION, 'status': 'complete'}
+                db.execute('UPDATE source_files SET payload_json=?', (json.dumps(source),))
+            port = mock.Mock()
+            port.mutation.side_effect = AssertionError('unnecessary wait on alignment mutation')
+            operation = DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port)
+            self.assertEqual(operation.enrich(source_id)['status'], 'complete')
+            port.mutation.assert_not_called()
+
+    def test_epub_export_does_not_enter_alignment_mutation(self):
+        from scripts.performance_fixture import create_fixture
+        from src.me_finder.archive_transfer_controller import ArchiveTransferController
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_fixture(root, documents=2, paragraphs=12, alignment_paragraphs=8)
+            database = root / 'data/index.sqlite3'
+            port = mock.Mock()
+            port.mutation.side_effect = AssertionError('EPUB export must not wait for alignment')
+            enrichment = DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port)
+            controller = ArchiveTransferController(
+                mock.Mock(), database_path=database, runtime_root=root,
+                document_output_dir=root / 'exports', prepare_document_export=enrichment.enrich)
+            status, body = controller.export_document_markdown({'source_id': 'bench-002'})
+            self.assertEqual(status, 200, body)
+            self.assertTrue(list((root / 'exports').glob('*.md')))
+            port.mutation.assert_not_called()
+
+    def test_heading_computation_runs_before_write_coordination(self):
+        from src.me_finder.application import document_heading_enrichment as module
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database, source_id = _snapshot_fixture(root)
+            port = _RecordingCoordinationPort()
+            original = module.enrich_pdf_headings
+            observed = []
+            def compute(*args, **kwargs):
+                observed.append(port.entered)
+                return original(*args, **kwargs)
+            with mock.patch.object(module, 'enrich_pdf_headings', side_effect=compute):
+                DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port).enrich(source_id)
+            self.assertEqual(port.entered, 1)
+            self.assertEqual(observed, [0])
 
     def test_enrichment_operation_enters_write_coordination(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

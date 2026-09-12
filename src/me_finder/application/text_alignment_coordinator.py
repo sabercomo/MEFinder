@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from importlib.util import find_spec
 from contextlib import contextmanager
 
 from ..embedding_models import (
@@ -58,6 +59,11 @@ class TextAlignmentCoordinator:
             # trigger a hidden network download from inside the job.
             raise TextAlignmentFailed(
                 "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
+            )
+        missing = [name for name in ("numpy", "fastembed", "onnxruntime") if find_spec(name) is None]
+        if missing:
+            raise TextAlignmentFailed(
+                "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。"
             )
         begin_embedding_run()
         with self._index_runtime.mutation():

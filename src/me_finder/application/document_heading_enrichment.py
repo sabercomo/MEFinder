@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from contextlib import AbstractContextManager, ExitStack, closing
+from contextlib import AbstractContextManager, ExitStack, closing, contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Mapping, Optional, Protocol
+from typing import Callable, Dict, Mapping, Optional, Protocol
 
 from ..database import _sanitize_surrogates_in_place
 from ..document_heading import (
@@ -66,18 +66,22 @@ class DocumentHeadingEnrichment:
         self._index_runtime = index_runtime
 
     def enrich(self, source_file_id: str) -> Dict[str, object]:
-        """Enrich one document, serialized with other library writers."""
+        """Compute outside the mutation gate; coordinate only fresh-state publication."""
+        return ensure_document_headings(
+            database_path=self._database_path,
+            runtime_root=self._runtime_root,
+            source_file_id=str(source_file_id),
+            write_window=self._write_window,
+        )
 
+    @contextmanager
+    def _write_window(self):
         with ExitStack() as coordination:
-            if self._durable_operations is not None:
-                coordination.enter_context(self._durable_operations.operation())
             if self._index_runtime is not None:
                 coordination.enter_context(self._index_runtime.mutation())
-            return ensure_document_headings(
-                database_path=self._database_path,
-                runtime_root=self._runtime_root,
-                source_file_id=str(source_file_id),
-            )
+            if self._durable_operations is not None:
+                coordination.enter_context(self._durable_operations.operation())
+            yield
 
 
 def ensure_document_headings(
@@ -85,6 +89,7 @@ def ensure_document_headings(
     database_path: Path,
     runtime_root: Path,
     source_file_id: str,
+    write_window: Callable[[], AbstractContextManager] = nullcontext,
 ) -> Dict[str, object]:
     """Lazily enrich an indexed PDF with canonical document heading metadata.
 
@@ -195,7 +200,7 @@ def ensure_document_headings(
     for page in pages:
         _sanitize_surrogates_in_place(page)
 
-    with closing(_connect(database)) as connection:
+    with write_window(), closing(_connect(database)) as connection:
         try:
             connection.execute("BEGIN IMMEDIATE")
             current_row = connection.execute(

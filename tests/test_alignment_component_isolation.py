@@ -16,6 +16,8 @@ import json
 import shutil
 import sqlite3
 import tempfile
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -72,6 +74,35 @@ def store_alignment_links(database: Path) -> None:
 
 
 class ComponentIsolationTests(unittest.TestCase):
+    def test_core_cold_start_and_stored_location_without_numeric_dependencies(self):
+        script = '''
+import importlib.abc, sys
+from pathlib import Path
+class NoCompute(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'numpy', 'fastembed', 'onnxruntime'}:
+            raise ModuleNotFoundError(fullname, name=fullname)
+sys.meta_path.insert(0, NoCompute())
+from src.me_finder.web import make_handler
+from src.me_finder.app_context import AppContext
+from src.me_finder.text_alignment import locate_alignment, list_alignment_targets
+root=Path(sys.argv[1]); db=root/'data/index.sqlite3'
+handler=make_handler(db,app_context=AppContext.create(root,index_path=db))
+try:
+    from src.me_finder.search import SearchEngine
+    engine=SearchEngine(db)
+    assert engine.search('社会')['total']>0
+    engine.close()
+    assert list_alignment_targets(db,'bench-002')['targets']
+    located=locate_alignment(db,'bench-002','bench-003',start_page_index=0,start_offset=0,end_page_index=0,end_offset=6)
+    assert located['page_match_spans'], located
+finally:
+    assert handler.close_runtime()
+'''
+        result = subprocess.run([sys.executable, '-B', '-c', script, str(self.root)],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def setUp(self) -> None:
         self._temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self._temporary.cleanup)

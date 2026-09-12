@@ -13,8 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-import numpy as np
-
 from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
 from .calibration_library import _item_language_code
 from .document_group_metadata import member_display_name
@@ -750,6 +748,7 @@ def align_segment_sequences(
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
 ) -> Tuple[List[SemanticLink], list]:
     """Return chapter-anchored semantic links and the anchors used."""
+    import numpy as np
 
     active_thresholds = thresholds or embedding_model_config(
         embedding_model_id

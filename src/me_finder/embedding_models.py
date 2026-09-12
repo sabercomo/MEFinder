@@ -27,6 +27,7 @@ class EmbeddingModelConfig:
     display_name: str
     description: str
     thresholds: AlignmentThresholds
+    required_files: tuple[str, ...]
 
 
 DEFAULT_EMBEDDING_MODEL_ID = "minilm-l12-v2"
@@ -45,6 +46,8 @@ EMBEDDING_MODELS = {
         display_name="MiniLM 多语言模型",
         description="默认模型，速度更快",
         thresholds=AlignmentThresholds(low=0.56, note_block=0.64, margin=0.05),
+        required_files=("model_optimized.onnx", "config.json", "tokenizer.json",
+                        "tokenizer_config.json", "special_tokens_map.json"),
     ),
     "multilingual-e5-large": EmbeddingModelConfig(
         id="multilingual-e5-large",
@@ -60,6 +63,8 @@ EMBEDDING_MODELS = {
         # low：2026-09-05 单书 37 条原书复核后的实验值，须结合区域排除使用。
         # note_block / margin 待标定；不能把单书分层样本外推为全库准确率。
         thresholds=AlignmentThresholds(low=0.83, note_block=0.80, margin=0.05),
+        required_files=("model.onnx", "model.onnx_data", "config.json", "tokenizer.json",
+                        "tokenizer_config.json", "special_tokens_map.json"),
     ),
 }
 
@@ -78,16 +83,23 @@ def model_component_dir(cache_root, model_id: str) -> Path:
 
 
 def model_component_installed(cache_root, model_id: str) -> bool:
-    """Whether the managed model files exist locally (compute is usable offline).
+    """Check required files in the active HF snapshot or supported archive cache.
 
-    The model files are a managed component downloaded from the settings UI;
-    search, reading and locating stored alignment results never need them.
+    File presence is a preflight, not proof of valid ONNX contents. The offline
+    provider performs the definitive load without attempting a repair download.
     """
-
+    model = embedding_model_config(model_id)
     directory = model_component_dir(cache_root, model_id)
-    if not directory.is_dir():
-        return False
-    return any(directory.rglob("*"))
+    candidates = []
+    reference = directory / "refs/main"
+    if reference.is_file():
+        revision = reference.read_text().strip()
+        if len(revision) == 40 and all(char in '0123456789abcdef' for char in revision):
+            candidates.append(directory / "snapshots" / revision)
+    if model.fastembed_archive_name:
+        candidates.append(Path(cache_root) / model.fastembed_archive_name.removesuffix('.tar.gz'))
+    return any(all((base / name).is_file() and (base / name).stat().st_size > 0
+                   for name in model.required_files) for base in candidates)
 
 
 def default_alignment_threshold_settings() -> dict[str, dict[str, float]]:

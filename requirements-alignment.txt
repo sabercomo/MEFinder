@@ -1,0 +1,2 @@
+# 可选对齐计算运行时（含 NumPy / ONNX Runtime）；模型由设置页另行下载。
+fastembed==0.8.0

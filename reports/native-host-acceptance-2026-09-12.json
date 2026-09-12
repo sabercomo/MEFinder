@@ -1,0 +1,24 @@
+{
+  "search": {
+    "ok": true,
+    "note": "真实 SPA 搜索，核对命中文本与字符区间"
+  },
+  "locate": {
+    "ok": true,
+    "note": "阅读正文、sourceId、页索引、锚点 ID 和高亮均匹配搜索结果"
+  },
+  "multi_window": {
+    "ok": true,
+    "note": "双窗不同文献独立定位、原生移动、bridge 关闭与重开定位通过（隐藏窗口）"
+  },
+  "pdf_open": {
+    "ok": true,
+    "note": "WK 消息请求原生 PDF 窗口打开合成三页 PDF，跳转第 2 页且核对正文"
+  },
+  "exit": {
+    "ok": true,
+    "note": "原生事件循环已返回；后台 stop 后实际退出码",
+    "backend_exit_code": 0,
+    "host_exit_code": 0
+  }
+}

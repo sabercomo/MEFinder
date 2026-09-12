@@ -27,3 +27,17 @@
 ## 验证
 
 `tests/test_alignment_component_isolation.py` 5 项;既有对齐套件(test_text_alignment / overrides / runtime / anchor_gates)77 项全绿。
+
+## 2026-09-12 复核与修正：冷启动、完整缓存和离线边界
+
+**事实**：原测试预先导入了业务模块，只屏蔽 FastEmbed/ONNX Runtime，未覆盖 NumPy 缺失的冷启动。实际 `web → backup → alignment_snapshots → semantic_alignment` 以及页码锚点模块会在启动阶段加载 NumPy。原来的目录非空判断也会把仅含 `blobs/*.incomplete` 的残缺下载视为已安装；生成时没有强制 `local_files_only`，可能隐式联网修复。
+
+本次将 NumPy 导入移到实际数值计算处，保持已验证算法和阈值不变。已有链接照常定位；缺少 NumPy 时跳过可选的缓存向量细化，使用已有链接和锚点。模块传递依赖损坏等其他导入错误仍抛出。
+
+模型安装状态改为核对活动 HF snapshot／受支持 archive 缓存中的必要非空文件，包括 E5 外部权重 `model.onnx_data`。回执不能代替文件完整性；损坏缓存允许在设置中重新下载。文件预检不等于模型内容校验，实际 ONNX 加载仍决定模型是否有效。生成默认 `local_files_only=True`，只有设置中的明确下载动作使用 False；模型在但数值运行时不在时，生成在进入写入协调前给出明确提示。
+
+验证分两层：`test_core_without_alignment` 在新进程禁止三种计算依赖，覆盖 HTTP 搜索、阅读页面、已有对照目标和定位、管理状态、可选向量缓存缺失降级、生成拒绝与关闭；同一测试另在**无第三方包的空白虚拟环境**实跑。CI 新增独立空白环境步骤。完整环境的原有数值算法套件和真实离线模型验收继续保留。
+
+`requirements-core.txt` 提供不含计算栈的源码后端依赖，`requirements-alignment.txt` 提供可选数值运行时；既有 macOS/Windows 完整构建仍包含计算运行时。**尚未实现设置内下载 Python 二进制运行时的独立安装器，也未发布精简桌面包**，不能把依赖隔离等同于完整插件产品。
+
+**对工作进程的判断（修正推断）**：迁移计算进程可以改善 CPU/内存隔离，但若仍通过同样的 `suspend/reopen` 发布结果，503 不会自动消失。必须先测量和缩短搜索不可用窗口，再按数据决定进程化；“>5%”只是上文提出的工程目标，不是质量实验得出的阈值。

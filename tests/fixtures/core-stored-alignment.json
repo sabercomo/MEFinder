@@ -1,0 +1,690 @@
+{
+  "segment_sets": [
+    {
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "source_file_id": "bench-002",
+      "source_text_hash": "ce4d4d2fcd9b12aa7d09da1bf904efbb391d9f8f30d2ec55a43fa3d4f4f3cdd8",
+      "segmenter": "me-finder-multilingual-sentence",
+      "segmenter_version": "13",
+      "language_code": "zh-Hans",
+      "created_at": "2026-09-11T22:50:32.187868+00:00"
+    },
+    {
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "source_file_id": "bench-003",
+      "source_text_hash": "938a910fb981c2bfe67cd57de3f4d3d5b1f37220d5bb2ab6311ea4ee28aea392",
+      "segmenter": "me-finder-multilingual-sentence",
+      "segmenter_version": "13",
+      "language_code": "en",
+      "created_at": "2026-09-11T22:50:32.188362+00:00"
+    }
+  ],
+  "text_segments": [
+    {
+      "segment_id": "segment-c93252e6c957101e9f791c18",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 0,
+      "text_raw": "第0000项观察讨论社会及其历史条件。"
+    },
+    {
+      "segment_id": "segment-1ba8019abc0af98f9e1981cb",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 1,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-f5c0fa201c348e885e674ca5",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 2,
+      "text_raw": "档案编号847701133保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-dea3a82a39ee66e0ff80152d",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 3,
+      "text_raw": "第0001项观察讨论历史及其历史条件。"
+    },
+    {
+      "segment_id": "segment-a54ba364284b1b604312f76d",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 4,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-99315f83d91b3290487dc704",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 5,
+      "text_raw": "档案编号529056624保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-806125bec0df90e000521af2",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 6,
+      "text_raw": "第0002项观察讨论生产及其历史条件。"
+    },
+    {
+      "segment_id": "segment-998fcb49df8fea9596f63531",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 7,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-31abbc5b298f15cbf88295bb",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 8,
+      "text_raw": "档案编号722543298保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-da9256408ea0f8ea582e05ba",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 9,
+      "text_raw": "第0003项观察讨论理论及其历史条件。"
+    },
+    {
+      "segment_id": "segment-be385e6a7cfa1668b48d6ae7",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 10,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-594334584b2e734e1ab30f9f",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 11,
+      "text_raw": "档案编号590009236保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-8530f7477a1ef3432346ef57",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 12,
+      "text_raw": "第0004项观察讨论实践及其历史条件。"
+    },
+    {
+      "segment_id": "segment-c496abc3d7432cf38bb9f924",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 13,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-abc726c549d5462cb610e101",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 14,
+      "text_raw": "档案编号987175383保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-eba7b51a42b6966ef61ed34f",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 15,
+      "text_raw": "第0005项观察讨论知识及其历史条件。"
+    },
+    {
+      "segment_id": "segment-665fc372dff02608d4ce327f",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 16,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-7e94927ccf7932f7c7b3ac1a",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 17,
+      "text_raw": "档案编号516020293保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-f7d5d881ad4a62bd32102012",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 18,
+      "text_raw": "第0006项观察讨论劳动及其历史条件。"
+    },
+    {
+      "segment_id": "segment-e2d999450e6685eec5a9887b",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 19,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-51134d4b6518f31762952624",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 20,
+      "text_raw": "档案编号657785923保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-146d30492cb6cf667d4c9bf1",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 21,
+      "text_raw": "第0007项观察讨论制度及其历史条件。"
+    },
+    {
+      "segment_id": "segment-ae0da2f3e786c257d6338f98",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 22,
+      "text_raw": "人们通过共同劳动形成制度，并在实践经验中检验知识与解释之间的关系。"
+    },
+    {
+      "segment_id": "segment-ada56a1a06cc5e931d16ba45",
+      "segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "order_index": 23,
+      "text_raw": "档案编号543197342保留了本次记录。"
+    },
+    {
+      "segment_id": "segment-ded6a90129d8316bffb34491",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 0,
+      "text_raw": "Observation 0000 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-57d132ebfa40dba0cab5a29b",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 1,
+      "text_raw": "Workers discuss institutions and practical experience in archive 608672292."
+    },
+    {
+      "segment_id": "segment-ad0bca4e1bca1c17f14b6e55",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 2,
+      "text_raw": "Observation 0001 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-cad49fa2f8e7be58f0d548ae",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 3,
+      "text_raw": "Workers discuss institutions and practical experience in archive 671239491."
+    },
+    {
+      "segment_id": "segment-c86bf90e58c5b98ed6849a4a",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 4,
+      "text_raw": "Observation 0002 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-a73713ac94fe073623c7baf0",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 5,
+      "text_raw": "Workers discuss institutions and practical experience in archive 182069868."
+    },
+    {
+      "segment_id": "segment-78c5fd716f86921e54c378da",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 6,
+      "text_raw": "Observation 0003 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-156d1cc67668b866d13f148e",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 7,
+      "text_raw": "Workers discuss institutions and practical experience in archive 476550475."
+    },
+    {
+      "segment_id": "segment-e93241925b3cbd8480cb8111",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 8,
+      "text_raw": "Observation 0004 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-c956fd36873cd8d0bc8c71f5",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 9,
+      "text_raw": "Workers discuss institutions and practical experience in archive 682493765."
+    },
+    {
+      "segment_id": "segment-5cbb01ad409d4f6dcf87fff3",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 10,
+      "text_raw": "Observation 0005 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-8a5c9bd3e81c852e05228393",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 11,
+      "text_raw": "Workers discuss institutions and practical experience in archive 830168004."
+    },
+    {
+      "segment_id": "segment-13ce6084257b201e9678cc34",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 12,
+      "text_raw": "Observation 0006 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-941004f6bbc5c9daf079af52",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 13,
+      "text_raw": "Workers discuss institutions and practical experience in archive 639151441."
+    },
+    {
+      "segment_id": "segment-054dfe2606406cfa8b091bd2",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 14,
+      "text_raw": "Observation 0007 considers social relations and historical knowledge."
+    },
+    {
+      "segment_id": "segment-f74c6df20cd6bf32b07f2c41",
+      "segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "order_index": 15,
+      "text_raw": "Workers discuss institutions and practical experience in archive 300858212."
+    }
+  ],
+  "text_segment_spans": [],
+  "text_segment_paragraph_spans": [
+    {
+      "segment_id": "segment-c93252e6c957101e9f791c18",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000000",
+      "paragraph_index": 0,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-1ba8019abc0af98f9e1981cb",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000000",
+      "paragraph_index": 0,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-f5c0fa201c348e885e674ca5",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000000",
+      "paragraph_index": 0,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-dea3a82a39ee66e0ff80152d",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000001",
+      "paragraph_index": 1,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-a54ba364284b1b604312f76d",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000001",
+      "paragraph_index": 1,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-99315f83d91b3290487dc704",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000001",
+      "paragraph_index": 1,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-806125bec0df90e000521af2",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000002",
+      "paragraph_index": 2,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-998fcb49df8fea9596f63531",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000002",
+      "paragraph_index": 2,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-31abbc5b298f15cbf88295bb",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000002",
+      "paragraph_index": 2,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-da9256408ea0f8ea582e05ba",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000003",
+      "paragraph_index": 3,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-be385e6a7cfa1668b48d6ae7",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000003",
+      "paragraph_index": 3,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-594334584b2e734e1ab30f9f",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000003",
+      "paragraph_index": 3,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-8530f7477a1ef3432346ef57",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000004",
+      "paragraph_index": 4,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-c496abc3d7432cf38bb9f924",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000004",
+      "paragraph_index": 4,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-abc726c549d5462cb610e101",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000004",
+      "paragraph_index": 4,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-eba7b51a42b6966ef61ed34f",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000005",
+      "paragraph_index": 5,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-665fc372dff02608d4ce327f",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000005",
+      "paragraph_index": 5,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-7e94927ccf7932f7c7b3ac1a",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000005",
+      "paragraph_index": 5,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-f7d5d881ad4a62bd32102012",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000006",
+      "paragraph_index": 6,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-e2d999450e6685eec5a9887b",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000006",
+      "paragraph_index": 6,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-51134d4b6518f31762952624",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000006",
+      "paragraph_index": 6,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-146d30492cb6cf667d4c9bf1",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000007",
+      "paragraph_index": 7,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 19,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-ae0da2f3e786c257d6338f98",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000007",
+      "paragraph_index": 7,
+      "paragraph_char_start": 19,
+      "paragraph_char_end": 52,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-ada56a1a06cc5e931d16ba45",
+      "source_file_id": "bench-002",
+      "paragraph_id": "bench-002-p000007",
+      "paragraph_index": 7,
+      "paragraph_char_start": 52,
+      "paragraph_char_end": 73,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-ded6a90129d8316bffb34491",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000000",
+      "paragraph_index": 0,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-57d132ebfa40dba0cab5a29b",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000000",
+      "paragraph_index": 0,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-ad0bca4e1bca1c17f14b6e55",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000001",
+      "paragraph_index": 1,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-cad49fa2f8e7be58f0d548ae",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000001",
+      "paragraph_index": 1,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-c86bf90e58c5b98ed6849a4a",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000002",
+      "paragraph_index": 2,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-a73713ac94fe073623c7baf0",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000002",
+      "paragraph_index": 2,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-78c5fd716f86921e54c378da",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000003",
+      "paragraph_index": 3,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-156d1cc67668b866d13f148e",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000003",
+      "paragraph_index": 3,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-e93241925b3cbd8480cb8111",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000004",
+      "paragraph_index": 4,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-c956fd36873cd8d0bc8c71f5",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000004",
+      "paragraph_index": 4,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-5cbb01ad409d4f6dcf87fff3",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000005",
+      "paragraph_index": 5,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-8a5c9bd3e81c852e05228393",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000005",
+      "paragraph_index": 5,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-13ce6084257b201e9678cc34",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000006",
+      "paragraph_index": 6,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-941004f6bbc5c9daf079af52",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000006",
+      "paragraph_index": 6,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-054dfe2606406cfa8b091bd2",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000007",
+      "paragraph_index": 7,
+      "paragraph_char_start": 0,
+      "paragraph_char_end": 69,
+      "span_order": 0
+    },
+    {
+      "segment_id": "segment-f74c6df20cd6bf32b07f2c41",
+      "source_file_id": "bench-003",
+      "paragraph_id": "bench-003-p000007",
+      "paragraph_index": 7,
+      "paragraph_char_start": 70,
+      "paragraph_char_end": 145,
+      "span_order": 0
+    }
+  ],
+  "alignment_runs": [
+    {
+      "alignment_run_id": "alignment-run-43c5575068c54804afb455872dcaf984",
+      "document_group_id": "bench-pair",
+      "pivot_source_file_id": "bench-002",
+      "target_source_file_id": "bench-003",
+      "pivot_segment_set_id": "segment-set-d76af2ed820aea30a245f6dd",
+      "target_segment_set_id": "segment-set-64a350cf2683a782054eda56",
+      "algorithm": "chapter-anchored-semantic-dp",
+      "algorithm_version": "22",
+      "parameters_json": "{\"transitions\":[[1,1],[1,2],[2,1],[2,2],[1,3],[3,1],[2,3],[3,2],[3,3],[1,0],[0,1]],\"length_unit\":\"non_whitespace_unicode_codepoint\",\"embedding_model_id\":\"minilm-l12-v2\",\"embedding_model_hf_name\":\"sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\",\"embedding_runtime_version\":\"fastembed-0.8.0-mean-pooling\",\"semantic_alignment_version\":\"20\",\"alignment_region_version\":\"2\",\"body_range_source\":\"detected\",\"body_ranges\":{\"pivot\":[0,24],\"target\":[0,16]},\"similarity\":\"cosine\",\"low_confidence_threshold\":0.56,\"note_block_confidence_threshold\":0.64,\"note_candidate_margin\":0.05,\"pivot_language\":\"zh-Hans\",\"target_language\":\"en\",\"heading_anchors\":[],\"edition_folio_anchors\":[]}",
+      "status": "completed",
+      "created_at": "2026-09-11T22:50:32.189026+00:00",
+      "completed_at": "2026-09-11T22:50:32.189026+00:00"
+    }
+  ],
+  "alignment_links": [
+    {
+      "alignment_link_id": "alignment-link-c0ecab56c54447c19d449821ccacf139",
+      "alignment_run_id": "alignment-run-43c5575068c54804afb455872dcaf984",
+      "order_index": 0,
+      "cost": 0.09,
+      "confidence": 0.91,
+      "anchor_key": "chapter:1",
+      "review_status": "automatic"
+    },
+    {
+      "alignment_link_id": "alignment-link-6c1e5e9fec414cd8ba3978d4699bdca3",
+      "alignment_run_id": "alignment-run-43c5575068c54804afb455872dcaf984",
+      "order_index": 1,
+      "cost": 0.17,
+      "confidence": 0.83,
+      "anchor_key": "chapter:1",
+      "review_status": "automatic"
+    }
+  ],
+  "alignment_link_members": [
+    {
+      "alignment_link_id": "alignment-link-c0ecab56c54447c19d449821ccacf139",
+      "side": "pivot",
+      "segment_id": "segment-c93252e6c957101e9f791c18",
+      "member_order": 0
+    },
+    {
+      "alignment_link_id": "alignment-link-c0ecab56c54447c19d449821ccacf139",
+      "side": "target",
+      "segment_id": "segment-ded6a90129d8316bffb34491",
+      "member_order": 0
+    },
+    {
+      "alignment_link_id": "alignment-link-6c1e5e9fec414cd8ba3978d4699bdca3",
+      "side": "pivot",
+      "segment_id": "segment-1ba8019abc0af98f9e1981cb",
+      "member_order": 0
+    },
+    {
+      "alignment_link_id": "alignment-link-6c1e5e9fec414cd8ba3978d4699bdca3",
+      "side": "target",
+      "segment_id": "segment-57d132ebfa40dba0cab5a29b",
+      "member_order": 0
+    }
+  ],
+  "alignment_manual_overrides": []
+}

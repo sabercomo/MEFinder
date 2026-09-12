@@ -5,6 +5,7 @@ import threading
 import unittest
 from pathlib import Path
 
+from src.me_finder.embedding_models import embedding_model_config
 from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
 
 
@@ -16,6 +17,14 @@ class ManagedEmbeddingModelsTests(unittest.TestCase):
         def download(model_id: str, cache_dir: Path) -> None:
             calls.append((model_id, cache_dir))
             release.wait(timeout=5)
+            config = embedding_model_config(model_id)
+            base = cache_dir / config.fastembed_cache_dirname
+            (base / "refs").mkdir(parents=True)
+            (base / "refs/main").write_text("a" * 40)
+            snapshot = base / "snapshots" / ("a" * 40)
+            snapshot.mkdir(parents=True)
+            for name in config.required_files:
+                (snapshot / name).write_bytes(b"test fixture")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

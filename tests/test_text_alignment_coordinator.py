@@ -51,6 +51,11 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             "model_component_installed",
             return_value=True,
         )
+        runtime_patch = mock.patch(
+            "src.me_finder.application.text_alignment_coordinator.find_spec", return_value=object()
+        )
+        runtime_patch.start()
+        self.addCleanup(runtime_patch.stop)
         self.component_patch.start()
         self.addCleanup(self.component_patch.stop)
 

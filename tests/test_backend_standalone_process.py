@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -72,7 +73,8 @@ class BackendStandaloneProcessTests(unittest.TestCase):
         target_root.mkdir(parents=True, exist_ok=True)
         for candidate in candidates:
             if (candidate / config.fastembed_cache_dirname).is_dir():
-                os.symlink(candidate, target_root / "models")
+                shutil.copytree(candidate / config.fastembed_cache_dirname,
+                                target_root / "models" / config.fastembed_cache_dirname)
                 self.model_available = True
                 return
         self.model_available = False
