@@ -227,7 +227,7 @@ revoke_alignment_correction
 配置文件位于：
 
 ```text
-C:\Users\<你的用户名>\.claude\settings.json
+C:\Users\<你的用户名>\.claude.json
 ```
 
 用文本编辑器打开，在其中加入（或新建）`mcpServers` 字段：
@@ -551,10 +551,10 @@ claude mcp list
 也可以手动编辑配置文件，效果完全一样。文件位于：
 
 ```text
-~/.claude/settings.json
+~/.claude.json
 ```
 
-在其中加入 `mcpServers` 字段：
+注意这是 Claude Code 自己维护的状态文件（还包含登录会话等其他内容），只需把 `mcpServers` 字段加进去，不要改动或覆盖其他已有字段：
 
 ```json
 {
