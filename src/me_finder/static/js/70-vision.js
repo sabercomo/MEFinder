@@ -571,10 +571,18 @@
     var rows = parserStore.mineruAccounts.map(function(item) {
       var usage = usageByAccount[item.account_id] || {};
       var healthy = item.health_status === 'healthy' || !item.health_status;
+      // 本会话内点过「测试」的结果；后端账号摘要没有 last_checked_at，
+      // 因此未测过的账号只陈述能确认的事实（密钥已保存），不写成"可用"。
+      var probe = parserStore.mineruProbeResults[item.account_id];
       var state = !item.configured ? '缺少 Token' : !item.enabled ? '已停用'
         : item.health_status === 'unauthorized' ? '认证失效'
-        : item.health_status === 'cooldown' ? '冷却中' : '可用';
-      var stateClass = item.enabled && item.configured && healthy ? 'ready' : 'warning';
+        : item.health_status === 'cooldown' ? '冷却中'
+        : probe === 'ok' ? '刚刚检测：连接正常'
+        : probe === 'failed' ? '刚刚检测：连接失败'
+        : '密钥已保存 · 尚未检测';
+      var stateClass = probe === 'ok' ? 'ready'
+        : probe === 'failed' ? 'warning'
+        : item.enabled && item.configured && healthy ? 'neutral' : 'warning';
       var expires = item.expires_at ? esc(item.expires_at.replace(/-/g, '/')) : '—';
       var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
       return '<tr><td data-label="账号"><span class="mineru-account-identity"><span class="mineru-account-avatar" aria-hidden="true"><span class="mineru-brand-glyph"></span></span><span class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + (item.configured ? 'Token 已保存' : '需要 Token') + '</small></span></span></td>' +
@@ -870,6 +878,7 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       parserStore.mineruSelectedAccountId = data.saved_account_id || accountId;
+      if (payload.token) delete parserStore.mineruProbeResults[parserStore.mineruSelectedAccountId];
       parserStore.mineruConfigLoaded = false;
       await loadMineruConfig();
       hideMineruEditor();
@@ -885,6 +894,8 @@
     var button = document.getElementById('mineru-service-save');
     var status = document.getElementById('mineru-config-status');
     var apiBase = document.getElementById('mineru-api-base').value.trim();
+    // 地址是所有账号共用的连接前提，改了就让旧检测结论全部失效。
+    parserStore.mineruProbeResults = {};
     button.disabled = true;
     button.textContent = '保存中…';
     try {
@@ -975,8 +986,12 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
       if (status) { status.className = 'settings-status ready'; status.textContent = '连接正常 · ' + data.latency_ms + ' ms'; }
+      parserStore.mineruProbeResults[accountId] = 'ok';
+      renderMineruAccountList();
     } catch (e) {
       if (status) { status.className = 'settings-status warning'; status.textContent = '连接失败'; }
+      parserStore.mineruProbeResults[accountId] = 'failed';
+      renderMineruAccountList();
       showToast('MinerU 连接失败：' + e.message, 'danger');
     } finally {
       if (button) { button.disabled = false; if (buttonHTML !== null) button.innerHTML = buttonHTML; }

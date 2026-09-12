@@ -464,10 +464,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   与 150ms 浮层进入动效。
     # 0.5.4「打开 PDF 原文」「段落显示方式」由并列卡片改为自绘下拉行，
     #   说明随选择切换；卡片样式保留给文档传输。
+    # 0.5.4 MinerU 账号状态按 DESIGN.md §6 如实呈现：未检测过不再显示"可用"，
+    #   本会话检测结果就地回显，改 Token/服务地址后旧结论失效。
     BASELINE_SHA256 = (
-        "5efa2bce237e28b60cabe979cad3ed42695c4dfeeb416c4336f4a128b3f887a8"
+        "8d538dcbac19d7e938fe44a1c028e0e1181fc0aa4adae8e28d8d0cd7e3899240"
     )
-    BASELINE_BYTES = 1099398
+    BASELINE_BYTES = 1100911
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

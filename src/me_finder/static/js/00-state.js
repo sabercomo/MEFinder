@@ -107,6 +107,9 @@ const parserStore = {
   visionModelOptions: [],
   visionModelRequestSerial: 0,
   mineruAccounts: [],
+  // 本会话内「测试连接」的结果（account_id -> 'ok' | 'failed'）。后端账号摘要
+  // 不带 last_checked_at，跨会话无从判断，因此只在本会话陈述刚测到的结论。
+  mineruProbeResults: {},
   mineruStatistics: {parsed_book_count:0, parsed_page_count:0, credentials:[]},
   parserStatistics: {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]},
   mineruSelectedAccountId: '',

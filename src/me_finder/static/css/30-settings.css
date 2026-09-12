@@ -1177,6 +1177,16 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   font-weight: 650;
 }
 .mineru-account-state.ready { color: var(--success); background: var(--success-soft); }
+/* 「密钥已保存 · 尚未检测」是事实陈述，不是警告：不套色块、不冒充可用。 */
+.mineru-account-state.neutral {
+  padding-left: 0;
+  padding-right: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font-weight: 500;
+}
+.mineru-account-state { font-size: 11px; }
+.mineru-account-status-cell { flex-wrap: wrap; row-gap: 4px; }
 .mineru-row-switch { min-width: 44px; min-height: 44px; justify-content: center; }
 .mineru-table-date,
 .mineru-table-usage { font-variant-numeric: tabular-nums; white-space: nowrap; }
