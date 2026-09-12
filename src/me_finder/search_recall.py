@@ -136,6 +136,39 @@ class CandidateRecall:
             return sql
         return sql + f" LIMIT {max(1, int(candidate_budget)) + 1}"
 
+    @staticmethod
+    def _is_unscoped(
+        source_type: str, source_file_id: Optional[str], scope: Scope
+    ) -> bool:
+        return source_type == "all" and not source_file_id and scope is None
+
+    def _instr_eligibility_clause(
+        self, source_type: str, source_file_id: Optional[str], scope: Scope
+    ) -> str:
+        """Eligibility predicate for the non-FTS ``instr`` substring scans.
+
+        Short queries (< 3 chars) have no trigram MATCH, so recall falls back to
+        an ``instr`` scan ordered ``BY p.rowid`` with ``LIMIT budget+1``. Left to
+        its own devices SQLite drives that scan through
+        ``idx_paragraphs_searchable(eligible_for_search, source_type)``; because
+        that index is not rowid-ordered it must funnel every matching row into a
+        temp B-tree to satisfy the ORDER BY, i.e. scan *all* eligible paragraphs
+        even though only the first ``budget`` are kept. On a whole-library search
+        (no source filter) the leading index column is non-selective — nearly
+        every paragraph is eligible — so we suppress the index with a unary
+        ``+``. SQLite then walks the table in rowid order, which satisfies the
+        ORDER BY for free and lets ``LIMIT budget+1`` stop as soon as enough
+        matches are found: for a high-frequency short query like "社会" this
+        turns a full-table scan into an early exit. The returned rows are
+        identical (the same lowest-rowid matches, same order) — only the access
+        path changes. A *scoped* search keeps the index, where ``source_type`` /
+        ``source_file_id`` is selective and a full rowid scan would be slower.
+        """
+
+        if self._is_unscoped(source_type, source_file_id, scope):
+            return "+p.eligible_for_search = 1"
+        return "p.eligible_for_search = 1"
+
     def sql_source_filter(
         self,
         source_type: str,
@@ -203,7 +236,8 @@ class CandidateRecall:
         else:
             sql = (
                 f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
-                "WHERE p.eligible_for_search = 1"
+                "WHERE "
+                + self._instr_eligibility_clause(source_type, source_file_id, scope)
                 + source_clause
                 + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
                 "ORDER BY p.rowid"
@@ -260,7 +294,8 @@ class CandidateRecall:
         else:
             sql = (
                 f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
-                "WHERE p.eligible_for_search = 1"
+                "WHERE "
+                + self._instr_eligibility_clause(source_type, source_file_id, scope)
                 + source_clause
                 + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
             )
