@@ -148,154 +148,15 @@ def _models_endpoints(api_base: str) -> list[str]:
 def _models_endpoint(api_base: str) -> str:
     return _models_endpoints(api_base)[0]
 
-def _model_has_image_input(item: Mapping[str, object]) -> bool:
-    modalities = item.get("input_modalities") or item.get("modalities")
-    return isinstance(modalities, list) and any(
-        str(modality).strip().lower() in {"image", "images", "vision"}
-        for modality in modalities
-    )
+def _normalize_model_list(data: object) -> list[Dict[str, object]]:
+    """Normalize a /models payload into plain ``{id, owned_by}`` entries.
 
-def _vision_model_capability(
-    model_id: str,
-    item: Mapping[str, object],
-) -> Dict[str, object]:
-    """Classify model-list entries for the visual-parser picker.
-
-    The catalog is advisory UI metadata, not an invocation allow-list.  Keep
-    the labels deliberately simple for non-technical users: OCR models are
-    promoted, documented capabilities are shown directly, and unknown models
-    stay unconfirmed until the real image connection test succeeds.
+    Model capabilities are deliberately NOT classified here: model names
+    churn too fast for any hardcoded catalog to stay truthful, so the list
+    stays alphabetical and neutral.  Whether a model actually accepts images
+    is settled by the real connection test, not by name guessing.
     """
 
-    normalized = model_id.strip().lower()
-    basename = normalized.rsplit("/", 1)[-1]
-    qwen37_max_snapshot = re.fullmatch(
-        r"qwen3\.7-max-(20\d{2}-\d{2}-\d{2})",
-        basename,
-    )
-    qwen37_max_has_vision = bool(
-        qwen37_max_snapshot
-        and qwen37_max_snapshot.group(1) >= "2026-06-08"
-    )
-
-    if "ocr" in basename:
-        if basename == "qwen3.5-ocr":
-            label = "OCR专用 · 推荐"
-            priority = 0
-        elif basename.endswith("-latest"):
-            label = "OCR专用"
-            priority = 1
-        elif re.search(r"[-_]20\d{2}[-_]\d{2}[-_]\d{2}$", basename):
-            label = "OCR专用 · 固定版本"
-            priority = 2
-        else:
-            label = "OCR专用"
-            priority = 3
-        return {
-            "capability": "ocr",
-            "capability_label": label,
-            "capability_priority": priority,
-            "likely_vision": True,
-        }
-
-    vision_hints = (
-        "vision",
-        "qwen-vl",
-        "qwen2-vl",
-        "qwen2.5-vl",
-        "qwen3-vl",
-        "qwen3.5-",
-        "qwen3.6-plus",
-        "qwen3.6-flash",
-        "qwen3.6-35b-a3b",
-        "qwen3.7-plus",
-        "qwen3.7-flash",
-        "qwen3.7-max-2026-06-08",
-        "qwen3.8-",
-        "omni",
-        "qvq",
-        "internvl",
-        "minicpm-v",
-        "glm-4v",
-        "glm-4.5v",
-        "glm-4.6v",
-        "kimi-vl",
-        "yi-vision",
-        "step-1v",
-        "pixtral",
-        "llava",
-        "llama-vision",
-        "llama-3.2-11b",
-        "llama-3.2-90b",
-        "doubao-vision",
-        "seed-vl",
-        "seed-vision",
-        "hunyuan-vision",
-        "ernie-vl",
-        "minimax-vl",
-        "deepseek-v4",
-        "deepseek-vl",
-        "moonshot-v1-vision",
-        "kimi-k2.5",
-        "kimi-k2.6",
-        "kimi-k2.7",
-        "kimi-k3",
-        "minimax-m3",
-        "gemini",
-        "claude",
-        "gpt-4o",
-        "gpt-4.1",
-        "gpt-5",
-    )
-    if qwen37_max_has_vision or _model_has_image_input(item) or any(
-        hint in normalized for hint in vision_hints
-    ):
-        fast = "flash" in basename
-        plus = "plus" in basename
-        return {
-            "capability": "vision",
-            "capability_label": "支持图片",
-            "capability_priority": 110 if fast else 100 if plus else 120,
-            "likely_vision": True,
-        }
-
-    declared_modalities = item.get("input_modalities") or item.get("modalities")
-    text_only = (
-        (
-            isinstance(declared_modalities, list)
-            and bool(declared_modalities)
-            and not _model_has_image_input(item)
-        )
-        or (basename.startswith("qwen3.7-max") and not qwen37_max_has_vision)
-        or basename == "qwen3.6-max-preview"
-        or basename.startswith("qwen3-max")
-        or basename.startswith("qwen-long")
-        or basename in {"qwen-max", "qwen-plus", "qwen-turbo"}
-        or basename in {"kimi-k2-thinking", "moonshot-kimi-k2-instruct"}
-        or basename.startswith("kimi-k2-instruct")
-        or re.fullmatch(r"glm-(?:4\.[5-7]|5(?:\.[12])?)(?:-.+)?", basename)
-        or re.fullmatch(r"minimax-m2(?:\.[0-9]+)?(?:-.+)?", basename)
-        or basename.startswith("mimo-v2.5")
-    )
-    if text_only:
-        return {
-            "capability": "text",
-            "capability_label": "不支持图片",
-            "capability_priority": 900,
-            "likely_vision": False,
-        }
-
-    return {
-        "capability": "unknown",
-        "capability_label": "待确认 · 请测试",
-        "capability_priority": 500,
-        "likely_vision": False,
-    }
-
-def _likely_vision_model(model_id: str, item: Mapping[str, object]) -> bool:
-    return bool(_vision_model_capability(model_id, item)["likely_vision"])
-
-def _normalize_model_list(data: object) -> list[Dict[str, object]]:
     if isinstance(data, dict):
         candidates = data.get("data")
         if not isinstance(candidates, list):
@@ -324,24 +185,12 @@ def _normalize_model_list(data: object) -> list[Dict[str, object]]:
             continue
         seen.add(model_id)
         owned_by = str(item.get("owned_by") or item.get("provider") or "").strip()
-        capability = _vision_model_capability(model_id, item)
-        models.append(
-            {
-                "id": model_id,
-                "owned_by": owned_by[:160],
-                **capability,
-            }
-        )
+        models.append({"id": model_id, "owned_by": owned_by[:160]})
         if len(models) >= MAX_DISCOVERED_MODELS:
             break
     if not models:
         raise VisionAPIError("接口没有返回可选模型，请手动填写模型名称。")
-    models.sort(
-        key=lambda item: (
-            int(item.get("capability_priority") or 0),
-            str(item.get("id") or "").casefold(),
-        )
-    )
+    models.sort(key=lambda item: str(item.get("id") or "").casefold())
     return models
 
 def _message_text(data: Mapping[str, object]) -> str:

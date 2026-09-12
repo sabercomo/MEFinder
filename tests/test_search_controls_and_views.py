@@ -630,16 +630,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn(
             "manual_entry_allowed", PARSER_SETTINGS_CONTROLLER_SOURCE
         )
-        self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
-        self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
-        self.assertIn("{key: 'unknown', label: '待确认 · 请测试'}", HTML)
-        self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
-        self.assertNotIn("{key: 'omni', label: '全模态'}", HTML)
-        self.assertNotIn("{key: 'vision', label: '通用视觉'}", HTML)
-        self.assertIn("function visionModelPriority(item)", HTML)
-        self.assertIn("capability-unknown", HTML)
-        self.assertIn("capability-unsupported", HTML)
-        self.assertNotIn("可能支持图片", HTML)
+        # 模型列表不做能力分组/徽章：硬编码清单追不上模型换代，只会误导。
+        self.assertNotIn("visionModelCapability", HTML)
+        self.assertNotIn("visionModelPriority", HTML)
+        self.assertNotIn("visionModelBadgeHTML", HTML)
+        self.assertNotIn("capability_label", HTML)
+        self.assertNotIn("OCR 专用", HTML)
+        self.assertNotIn("支持图片", HTML)
+        self.assertNotIn("不支持图片", HTML)
+        self.assertNotIn("待确认 · 请测试", HTML)
 
         brand_start = HTML.index("var VISION_BRAND_RULES = [")
         brand_end = HTML.index("];", brand_start)
@@ -655,10 +654,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertIn("base: 'https://api.deepseek.com'}", brand_rules)
         self.assertNotIn("unsupported", brand_rules)
-        self.assertIn(
-            'vision-model-badge capability-unsupported">不支持图片',
-            HTML,
-        )
+        self.assertNotIn("vision-model-badge", HTML)
         self.assertNotIn("通义千问、DeepSeek 等视觉模型", HTML)
 
     def test_backup_export_import_is_wired(self) -> None:

@@ -453,10 +453,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 两跳中转对照修复：reader.js/reader.css 加「经基准中转」提示 + 一键生成直接对照（轮询后台任务）。
     # 0.5.3 按页导出文案：明示单页、连续范围与组合输入，原书/PDF 页码依据说明随选项切换。
     # 0.5.4 检索详情铺满面板；同步当前集成分支的装配指纹。
+    # 0.5.4 模型能力标记整体移除（后端硬编码清单追不上模型换代）：模型下拉平铺、
+    #   无分组徽章，.vision-model-badge 样式删除；装配指纹随之更新。
     BASELINE_SHA256 = (
-        "679be3c841060b1b8d2340f73288a4e8c49ef311f9c9c62625ab90b349e7da6c"
+        "9c0049bee36d7b509dfbff8a52fbcd834b68cc5621f6fd55d795469d4af3fdfc"
     )
-    BASELINE_BYTES = 1096780
+    BASELINE_BYTES = 1093915
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

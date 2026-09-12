@@ -605,97 +605,45 @@ class VisionAPIConfigTests(unittest.TestCase):
 
             self.assertFalse(path.exists())
             self.assertEqual(result["count"], 26)
+            # 模型能力不做硬编码分类（换代太快、清单必然过时），列表按字母序平铺。
             self.assertEqual(
                 [item["id"] for item in result["models"]],
                 [
-                    "qwen3.5-ocr",
-                    "qwen-vl-ocr-latest",
-                    "qwen-vl-ocr-2025-11-20",
-                    "vendor-document-ocr",
-                    "qwen3-vl-plus",
-                    "qwen3.7-plus",
                     "deepseek-v4-flash",
-                    "qwen3-omni-flash",
-                    "qwen3-vl-flash",
-                    "qwen3.6-flash",
-                    "qwen3.7-flash",
+                    "glm-5.2",
                     "kimi-k2.5",
                     "kimi-k2.6",
                     "kimi-k2.7-code",
                     "kimi/kimi-k3",
                     "MiniMax/MiniMax-M3",
+                    "qwen-long",
+                    "qwen-vl-ocr-2025-11-20",
+                    "qwen-vl-ocr-latest",
+                    "qwen3-omni-flash",
+                    "qwen3-vl-flash",
+                    "qwen3-vl-plus",
+                    "qwen3.5-ocr",
+                    "qwen3.6-flash",
+                    "qwen3.6-max-preview",
+                    "qwen3.7-flash",
+                    "qwen3.7-max",
                     "qwen3.7-max-2026-06-08",
                     "qwen3.7-max-2026-07-01",
+                    "qwen3.7-plus",
                     "qwen3.8-max",
-                    "vendor-multimodal-model",
                     "text-model",
-                    "glm-5.2",
-                    "qwen-long",
-                    "qwen3.6-max-preview",
-                    "qwen3.7-max",
+                    "vendor-document-ocr",
+                    "vendor-multimodal-model",
                     "xiaomi/mimo-v2.5-pro",
                 ],
             )
-            by_id = {item["id"]: item for item in result["models"]}
-            self.assertEqual(
-                by_id["qwen3.5-ocr"]["capability_label"],
-                "OCR专用 · 推荐",
-            )
-            self.assertEqual(
-                by_id["qwen-vl-ocr-2025-11-20"]["capability_label"],
-                "OCR专用 · 固定版本",
-            )
-            self.assertEqual(
-                by_id["qwen3-vl-flash"]["capability_label"],
-                "支持图片",
-            )
-            self.assertEqual(
-                by_id["qwen3.8-max"]["capability_label"],
-                "支持图片",
-            )
-            self.assertEqual(
-                by_id["qwen3-omni-flash"]["capability_label"],
-                "支持图片",
-            )
-            self.assertTrue(by_id["qwen3.7-plus"]["likely_vision"])
             self.assertTrue(
-                by_id["qwen3.7-max-2026-06-08"]["likely_vision"]
-            )
-            self.assertTrue(
-                by_id["qwen3.7-max-2026-07-01"]["likely_vision"]
-            )
-            self.assertFalse(by_id["qwen3.7-max"]["likely_vision"])
-            self.assertTrue(by_id["qwen3.6-flash"]["likely_vision"])
-            self.assertTrue(by_id["qwen3.7-flash"]["likely_vision"])
-            self.assertTrue(by_id["kimi-k2.5"]["likely_vision"])
-            self.assertTrue(by_id["kimi-k2.6"]["likely_vision"])
-            self.assertTrue(by_id["kimi-k2.7-code"]["likely_vision"])
-            self.assertTrue(by_id["kimi/kimi-k3"]["likely_vision"])
-            self.assertTrue(by_id["MiniMax/MiniMax-M3"]["likely_vision"])
-            self.assertFalse(
-                by_id["qwen3.6-max-preview"]["likely_vision"]
-            )
-            self.assertEqual(by_id["qwen-long"]["capability"], "text")
-            self.assertEqual(
-                by_id["qwen-long"]["capability_label"],
-                "不支持图片",
-            )
-            self.assertFalse(by_id["qwen-long"]["likely_vision"])
-            self.assertEqual(by_id["text-model"]["capability"], "unknown")
-            self.assertEqual(
-                by_id["text-model"]["capability_label"],
-                "待确认 · 请测试",
-            )
-            self.assertEqual(by_id["glm-5.2"]["capability"], "text")
-            self.assertEqual(
-                by_id["xiaomi/mimo-v2.5-pro"]["capability"],
-                "text",
+                all(set(item.keys()) == {"id", "owned_by"} for item in result["models"])
             )
             self.assertEqual(
-                by_id["deepseek-v4-flash"]["capability_label"],
-                "支持图片",
+                [item["id"] for item in result["models"]],
+                sorted((item["id"] for item in result["models"]), key=str.casefold),
             )
-            self.assertTrue(by_id["deepseek-v4-flash"]["likely_vision"])
             self.assertEqual(opener.request.get_method(), "GET")
             self.assertEqual(
                 opener.request.full_url,

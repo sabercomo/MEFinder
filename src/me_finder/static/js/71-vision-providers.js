@@ -123,7 +123,6 @@
             + '" data-base="' + esc(rule.base) + '">'
             + visionAvatarHtml({api_base: rule.base, name: rule.name}, 'vision-avatar-sm')
             + '<span class="vision-base-name">' + esc(rule.name) + '</span>'
-            + (rule.unsupported ? '<span class="vision-model-badge capability-unsupported">不支持图片</span>' : '')
             + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
             + '</div>';
         }).join('');
@@ -208,74 +207,28 @@
     if (exactMatch) return parserStore.visionModelOptions;
     return parserStore.visionModelOptions.filter(function(item) {
       return item.id.toLowerCase().indexOf(query) >= 0
-        || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0
-        || String(item.capability_label || '').toLowerCase().indexOf(query) >= 0;
+        || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
     });
-  }
-
-  function visionModelCapability(item) {
-    var capability = String((item || {}).capability || '');
-    if (capability === 'ocr') return 'ocr';
-    if (capability === 'vision' || capability === 'omni') return 'vision';
-    if (capability === 'text' || capability === 'unsupported') return 'text';
-    if (capability === 'unknown') return 'unknown';
-    return item && item.likely_vision ? 'vision' : 'unknown';
-  }
-
-  function visionModelPriority(item) {
-    var priority = Number((item || {}).capability_priority);
-    if (Number.isFinite(priority)) return priority;
-    var fallback = {ocr: 0, vision: 100, unknown: 500, text: 900};
-    return fallback[visionModelCapability(item)];
-  }
-
-  function visionModelBadgeHTML(item) {
-    var label = String((item || {}).capability_label || '');
-    var capability = visionModelCapability(item);
-    if (capability === 'vision') label = '支持图片';
-    else if (capability === 'text') label = '不支持图片';
-    else if (capability === 'unknown') label = '待确认 · 请测试';
-    else if (!label) label = 'OCR 专用';
-    return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
   }
 
   function renderVisionModelPop() {
     var pop = document.getElementById('vision-model-pop');
     var input = document.getElementById('vision-model');
     if (!pop) return;
+    // 模型列表保持纯平铺：不做能力分组、不打能力徽章。
+    // 模型名换代太快，任何硬编码清单都会过时误导；是否可用交给真实测连。
     var items = visionModelFiltered();
-    visionModelFlat = [];
+    visionModelFlat = items;
     if (!visionModelPopOpen || !items.length) {
       hideVisionPop(pop, input);
       return;
     }
-    var groups = [
-      {key: 'ocr', label: 'OCR 专用 · 优先'},
-      {key: 'vision', label: '支持图片'},
-      {key: 'unknown', label: '待确认 · 请测试'},
-      {key: 'text', label: '不支持图片'}
-    ];
-    var byCapability = {};
-    items.forEach(function(item) {
-      var capability = visionModelCapability(item);
-      if (!byCapability[capability]) byCapability[capability] = [];
-      byCapability[capability].push(item);
-    });
-    var html = groups.filter(function(group) {
-      return byCapability[group.key] && byCapability[group.key].length;
-    }).map(function(group) {
-      return '<div class="vision-model-group">' + esc(group.label) + '</div>'
-        + byCapability[group.key].map(function(item) {
-            var index = visionModelFlat.length;
-            visionModelFlat.push(item);
-            return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
-              + '" data-model="' + esc(item.id) + '">'
-              + '<span class="vision-model-id">' + esc(item.id) + '</span>'
-              + visionModelBadgeHTML(item)
-              + '</div>';
-          }).join('');
+    pop.innerHTML = items.map(function(item, index) {
+      return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
+        + '" data-model="' + esc(item.id) + '">'
+        + '<span class="vision-model-id">' + esc(item.id) + '</span>'
+        + '</div>';
     }).join('');
-    pop.innerHTML = html;
     revealVisionPop(pop, input);
   }
 
@@ -340,8 +293,7 @@
     parserStore.visionModelOptions = (models || []).filter(function(item) {
       return item && typeof item.id === 'string' && item.id.trim();
     }).slice().sort(function(a, b) {
-      return visionModelPriority(a) - visionModelPriority(b)
-        || a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
+      return a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
     });
     visionModelActiveIndex = -1;
     renderVisionModelPop();
@@ -398,7 +350,7 @@
       if (requestSerial !== parserStore.visionModelRequestSerial) return;
       renderVisionModelOptions(data.models || []);
       setVisionModelHint(
-        '已获取 ' + parserStore.visionModelOptions.length + ' 个模型。未确认型号可保存后发送测试图片验证',
+        '已获取 ' + parserStore.visionModelOptions.length + ' 个模型；不在列表里也可直接手动输入模型名称',
         'is-ready'
       );
       if (!silent) {
