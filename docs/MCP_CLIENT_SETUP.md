@@ -1,6 +1,6 @@
 # MEFinder MCP 配置教程
 
-MEFinder 提供本地 MCP 服务，可以连接到 Codex、Claude Code、WorkBuddy 等支持 MCP 的 AI 工具。配置完成后，AI 就可以直接调用 MEFinder 的文献列表、原句定位和上下文读取功能。
+MEFinder 提供本地 MCP 服务，可以连接到 Codex、Claude Code、WorkBuddy、ZCode 等支持 MCP 的 AI 工具。配置完成后，AI 就可以直接调用 MEFinder 的文献列表、原句定位和上下文读取功能。
 
 下面先完整介绍 Windows 配置，macOS 配置见文末。
 
@@ -32,7 +32,7 @@ D:\MEFinder\MEFinderMCP.exe
 
 需要选择的是 `MEFinderMCP.exe`，不是桌面主程序 `文献原句定位器.exe` 或 `MEFinder.exe`。
 
-MEFinder MCP 走 **STDIO** 协议，不用手动双击运行 `MEFinderMCP.exe`，Codex、Claude Code 或 WorkBuddy 会在需要时自动启动它。桌面版 MEFinder 可以保持关闭。
+MEFinder MCP 走 **STDIO** 协议，不用手动双击运行 `MEFinderMCP.exe`，Codex、Claude Code、WorkBuddy 或 ZCode 会在需要时自动启动它。桌面版 MEFinder 可以保持关闭。
 
 ## 二、Codex 配置
 
@@ -421,7 +421,58 @@ WorkBuddy 在调用工具时会根据 MCP 配置自动启动 `MEFinderMCP.exe`�
 
 如果刚刚新导入了文献但 WorkBuddy 搜不到，先回到 MEFinder 确认文献已经完成解析和索引。
 
-## 五、最常见的配置错误
+## 五、ZCode 配置
+
+ZCode 在「设置 → MCP」里管理 MCP 服务器。点击「新建 MCP 服务器」，作用域保持右上角的「用户」（对当前用户的所有工作区生效）。编辑界面右上角有「表单」和「JSON」两种填法，效果完全一样，任选其一。
+
+### 1. 表单填法
+
+| 项目 | 填写内容 |
+| --- | --- |
+| 名称 | `mefinder` |
+| 作用域 | 用户 |
+| 类型 | `stdio（本地命令）` |
+| 超时时间 MS | `60000`（默认 30000 也能用；打包版启动偏慢，放宽更稳） |
+| 协议版本 | 自动（推荐） |
+| 命令 | `MEFinderMCP.exe` 的完整路径 |
+| 参数（空格分隔） | 留空 |
+| 环境变量（可选） | 留空 |
+
+例如绿色版位于 `D:\MEFinder\MEFinderMCP.exe` 时，「命令」就填这个完整路径，参数与环境变量保持留空。
+
+### 2. JSON 填法
+
+把右上角切到「JSON」，将「完整配置」文本框整体替换为（路径换成自己的）：
+
+```json
+{
+  "mefinder": {
+    "type": "stdio",
+    "command": "D:\\MEFinder\\MEFinderMCP.exe",
+    "args": []
+  }
+}
+```
+
+Windows 路径中的反斜杠在 JSON 里必须写成两个。编辑器也接受 `{"mcpServers": {"mefinder": { ... }}}` 的包裹写法；如果粘贴后报错，先检查是不是把路径里的 `\\` 改成了单斜杠。
+
+### 3. 保存并新开会话验证
+
+点击「保存」后，ZCode 在**会话启动时**连接 MCP，所以要**新开一个会话**才生效。在新会话里输入：
+
+```text
+请查看 mefinder MCP 提供了哪些工具。
+```
+
+能列出十三个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
+
+```text
+请只使用 mefinder，列出当前已经导入的文献。
+```
+
+> 以后移动绿色版目录或升级换新版本文件夹后，`MEFinderMCP.exe` 的路径会变化，回到「设置 → MCP」把「命令」更新成新路径即可。
+
+## 六、最常见的配置错误
 
 1. **启动程序选错。** 必须指向 `MEFinderMCP.exe`，不要填写桌面主程序。
 2. **文件路径已经变化。** 移动绿色版、重新安装或更新后，需要重新确认 `MEFinderMCP.exe` 的位置。
@@ -430,15 +481,16 @@ WorkBuddy 在调用工具时会根据 MCP 配置自动启动 `MEFinderMCP.exe`�
 5. **手动双击 MCP 程序。** `MEFinderMCP.exe` 是供 AI 客户端启动的服务程序，一般不需要作为普通软件运行。
 6. **文献库还是空的。** 先在 MEFinder 中完成至少一篇文献的导入和索引，再测试搜索。
 
-## 六、Windows 快速配置表
+## 七、Windows 快速配置表
 
 | 软件 | 配置方式 |
 | --- | --- |
 | Codex | 设置 → 插件 → MCP → 添加 → 添加 MCP 服务器 |
 | Claude Code | `claude mcp add --transport stdio --scope user mefinder -- "MEFinderMCP.exe 的完整路径"` |
 | WorkBuddy | 首页“连应用” → “更多连接器” → “自定义连接器” → “配置 MCP” → 粘贴 STDIO JSON |
+| ZCode | 设置 → MCP → 新建 MCP 服务器（表单或 JSON，作用域选「用户」） |
 
-三种客户端的核心配置相同：
+四种客户端的核心配置相同：
 
 ```text
 名称：mefinder
@@ -448,7 +500,7 @@ WorkBuddy 在调用工具时会根据 MCP 配置自动启动 `MEFinderMCP.exe`�
 环境变量：无
 ```
 
-## 七、macOS 配置
+## 八、macOS 配置
 
 先把 `MEFinder.app` 从 DMG 拖进“应用程序”。MCP 程序位于：
 
@@ -631,7 +683,44 @@ read_document_window
 
 配置完成以后，不需要手动运行 `MEFinderMCP`，WorkBuddy 会在调用时自动启动它。
 
-## 八、配置成功后能做什么
+### ZCode
+
+入口与 Windows 完全一样：**设置 → MCP → 新建 MCP 服务器**，作用域保持右上角的「用户」。表单和 JSON 两种填法任选其一。
+
+#### 1. 表单填法
+
+| 项目 | 填写内容 |
+| --- | --- |
+| 名称 | `mefinder` |
+| 作用域 | 用户 |
+| 类型 | `stdio（本地命令）` |
+| 超时时间 MS | `60000`（默认 30000 也能用；打包版启动偏慢，放宽更稳） |
+| 协议版本 | 自动（推荐） |
+| 命令 | `/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP` |
+| 参数（空格分隔） | 留空 |
+| 环境变量（可选） | 留空 |
+
+#### 2. JSON 填法
+
+把右上角切到「JSON」，将「完整配置」文本框整体替换为：
+
+```json
+{
+  "mefinder": {
+    "type": "stdio",
+    "command": "/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP",
+    "args": []
+  }
+}
+```
+
+macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。
+
+#### 3. 保存并验证
+
+点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十三个工具就说明接入成功。
+
+## 九、配置成功后能做什么
 
 MEFinder MCP 提供十三个工具，分为两组。
 
@@ -688,7 +777,7 @@ MEFinder MCP 本身不访问网络，但客户端调用工具后，返回的命�
 
 Codex 的界面与 STDIO 配置说明见 [OpenAI 官方 MCP 文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。源码模式、数据位置和高级排错见 [Codex MCP 高级指南](https://github.com/sabercomo/MEFinder/blob/main/docs/CODEX_MCP.md)。
 
-## 九、以后想解除配置怎么办
+## 十、以后想解除配置怎么办
 
 上面的配置步骤不需要运行任何“移除”命令。下面这些只在以后不想用 mefinder 时才需要执行，日常使用请忽略。
 
@@ -707,3 +796,5 @@ claude mcp remove --scope user mefinder
 ```
 
 WorkBuddy 回到“连应用 → 更多连接器 → 自定义连接器 → 配置 MCP”，把之前加入的 `mefinder` 配置删掉即可。
+
+ZCode 打开「设置 → MCP」，在列表里删除 `mefinder` 条目即可，Windows 与 macOS 操作相同；对应配置文件是 `~/.zcode/cli/config.json` 的 `mcp.servers`。

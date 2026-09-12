@@ -188,6 +188,10 @@ def migrate_data_root(
             ):
                 if database_name in names:
                     ignored.add(database_name)
+        # Skip webview-data: locked by EdgeWebView2 at runtime, auto-recreated.
+        runtime_dir = current / "runtime"
+        if directory_path == runtime_dir and "webview-data" in names:
+            ignored.add("webview-data")
         return ignored
 
     try:
