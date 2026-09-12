@@ -111,6 +111,15 @@
       }
     }
   },
+  "corrections_2026_09_13": {
+    "batch16_experiment": "not run: minilm-l12-v2 model cache absent locally (network download would violate local-first); product default batch stays 64",
+    "per_round_tracemalloc": "may be mislabeled across rounds (old name-keyed sharing); do not cite per-round",
+    "rss_stats": "unaffected; recomputed from real-align-timeline.json, max deviation model_load +0.7MiB",
+    "see": "reports/memory-alignment-export-2026-09-12.md section 2026-09-13",
+    "tightened": "no-leak -> observation over tested rounds; no-speed-cost -> weak observation under drift; session-reuse-removes-floor -> unverified inference",
+    "tool_fixes_commit": "88cdb65",
+    "tracemalloc_enclosing_peaks": "under-reported by nested reset; export re-run gives render_epub_zip=epub_write=32.6MiB; alignment re-run blocked (no model cache)"
+  },
   "environment": {
     "cpu_model": "Apple M4",
     "embedding_thread_count": 3,
