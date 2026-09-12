@@ -455,10 +455,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 检索详情铺满面板；同步当前集成分支的装配指纹。
     # 0.5.4 模型能力标记整体移除（后端硬编码清单追不上模型换代）：模型下拉平铺、
     #   无分组徽章，.vision-model-badge 样式删除；装配指纹随之更新。
+    # 0.5.4 外观模式卡在 macOS(WKWebView) 塌成 0 高度：<button> 作 flex 容器时
+    #   子项不被 stretch，.mode-preview 的 aspect-ratio 解不出高度，补 width:100%。
     BASELINE_SHA256 = (
-        "9c0049bee36d7b509dfbff8a52fbcd834b68cc5621f6fd55d795469d4af3fdfc"
+        "c05086bc61a3a9deccc3b32ae2a9f45ef356de043bc8a24a3a61e0ded0e8ddad"
     )
-    BASELINE_BYTES = 1093915
+    BASELINE_BYTES = 1094127
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

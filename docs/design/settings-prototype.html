@@ -1,0 +1,1544 @@
+<title>MEFinder 设置讨论稿</title>
+<style>
+:root{
+  --app-bg:#f4f4f6;
+  --sidebar-bg:#f7f7f8;
+  --surface:#ffffff;
+  --surface-hover:#f0f1f3;
+  --surface-selected:#e7edfb;
+  --surface-sunken:#f7f8fa;
+  --text-primary:#1a1c20;
+  --text-secondary:#5b6068;
+  --text-tertiary:#8b9099;
+  --border-subtle:#e6e7ea;
+  --border-control:#d3d5da;
+  --accent:#2f5fd0;
+  --accent-hover:#2a55bd;
+  --accent-contrast:#ffffff;
+  --accent-soft:#eaf0fd;
+  --ok:#17794a;
+  --warn:#8a5a00;
+  --danger:#b3261e;
+  --danger-soft:#fdeceb;
+  --focus-ring:#2f5fd0;
+  --radius-sm:6px;
+  --radius-md:8px;
+  --radius-lg:12px;
+  --radius-pill:999px;
+  --shadow-control:0 1px 1px rgba(16,18,22,.05);
+  --shadow-pop:0 8px 28px rgba(16,18,22,.14);
+  --ease:cubic-bezier(.23,1,.32,1);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --app-bg:#161719;
+    --sidebar-bg:#1b1c1f;
+    --surface:#202225;
+    --surface-hover:#292b2f;
+    --surface-selected:#26324a;
+    --surface-sunken:#1b1d20;
+    --text-primary:#e9eaec;
+    --text-secondary:#a6abb3;
+    --text-tertiary:#7e838b;
+    --border-subtle:#2e3034;
+    --border-control:#3b3e44;
+    --accent:#6d9bf5;
+    --accent-hover:#83aaf7;
+    --accent-contrast:#12161d;
+    --accent-soft:#232e44;
+    --ok:#5fcf9b;
+    --warn:#e0b25c;
+    --danger:#f08c85;
+    --danger-soft:#3a2322;
+    --focus-ring:#6d9bf5;
+    --shadow-control:0 1px 1px rgba(0,0,0,.3);
+    --shadow-pop:0 10px 30px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --app-bg:#161719;
+  --sidebar-bg:#1b1c1f;
+  --surface:#202225;
+  --surface-hover:#292b2f;
+  --surface-selected:#26324a;
+  --surface-sunken:#1b1d20;
+  --text-primary:#e9eaec;
+  --text-secondary:#a6abb3;
+  --text-tertiary:#7e838b;
+  --border-subtle:#2e3034;
+  --border-control:#3b3e44;
+  --accent:#6d9bf5;
+  --accent-hover:#83aaf7;
+  --accent-contrast:#12161d;
+  --accent-soft:#232e44;
+  --ok:#5fcf9b;
+  --warn:#e0b25c;
+  --danger:#f08c85;
+  --danger-soft:#3a2322;
+  --focus-ring:#6d9bf5;
+  --shadow-control:0 1px 1px rgba(0,0,0,.3);
+  --shadow-pop:0 10px 30px rgba(0,0,0,.5);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--app-bg);color:var(--text-primary);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:var(--radius-sm)}
+
+/* ---------- 外壳 ---------- */
+.win{min-height:100vh;display:flex;flex-direction:column;background:var(--surface)}
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 22px;
+  border-bottom:1px solid var(--border-subtle);background:var(--surface);
+  position:sticky;top:0;z-index:5;
+}
+.back{
+  display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px 0 6px;
+  background:none;border:1px solid transparent;border-radius:var(--radius-md);
+  color:var(--text-primary);cursor:pointer;font-size:14px;
+  transition:background-color .12s var(--ease),transform .12s var(--ease);
+}
+.back:hover{background:var(--surface-hover)}
+.back:active{transform:scale(.97)}
+.crumb{font-size:14px;color:var(--text-tertiary)}
+.crumb b{color:var(--text-secondary);font-weight:500}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.demo-note{font-size:13px;color:var(--text-tertiary)}
+.theme-toggle{
+  height:28px;padding:0 10px;border:1px solid var(--border-control);border-radius:var(--radius-md);
+  background:var(--surface);color:var(--text-secondary);font-size:13px;cursor:pointer;
+  transition:background-color .12s var(--ease),transform .12s var(--ease);
+}
+.theme-toggle:hover{background:var(--surface-hover)}
+.theme-toggle:active{transform:scale(.97)}
+
+.body{flex:1;display:flex;align-items:stretch;min-height:0}
+
+/* ---------- 目录 ---------- */
+.nav{
+  width:196px;flex:0 0 196px;padding:22px 12px 32px;background:var(--sidebar-bg);
+  border-right:1px solid var(--border-subtle);
+}
+.nav h2{margin:0 10px 14px;font-size:20px;font-weight:600;letter-spacing:.01em}
+.nav-group{margin:16px 10px 6px;font-size:12px;color:var(--text-tertiary);letter-spacing:.06em}
+.nav-group:first-of-type{margin-top:4px}
+.nav-item{
+  display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;margin-bottom:1px;
+  background:none;border:0;border-radius:var(--radius-md);color:var(--text-primary);
+  font-size:14.5px;text-align:left;cursor:pointer;
+  transition:background-color .12s var(--ease),color .12s var(--ease);
+}
+.nav-item:hover{background:var(--surface-hover)}
+.nav-item[aria-selected="true"]{background:var(--surface-selected);color:var(--accent);font-weight:500}
+.nav-item svg{width:16px;height:16px;flex:0 0 16px;opacity:.72}
+.nav-item[aria-selected="true"] svg{opacity:1}
+
+/* ---------- 内容 ---------- */
+.content{flex:1;min-width:0;padding:34px clamp(24px,4vw,48px) 72px;background:var(--surface);overflow-x:auto}
+.panel{width:100%}
+.panel[hidden]{display:none}
+.panel-head{margin-bottom:26px}
+.panel-head h1{margin:0;font-size:23px;font-weight:600;letter-spacing:.01em;text-wrap:balance}
+.panel-head p{margin:6px 0 0;max-width:70ch;font-size:14px;color:var(--text-secondary)}
+.group-title{
+  margin:30px 0 2px;font-size:14px;font-weight:600;color:var(--text-primary);
+}
+.group-title:first-child{margin-top:0}
+.group-note{margin:2px 0 0;font-size:13px;color:var(--text-tertiary)}
+
+/* 设置行 */
+.row{
+  display:flex;align-items:center;gap:20px;padding:22px 0;
+  border-bottom:1px solid var(--border-subtle);
+}
+.row:last-child{border-bottom:0}
+.row-copy{flex:1;min-width:0}
+.row-copy strong{display:block;font-size:15px;font-weight:500}
+.row-copy small{display:block;max-width:70ch;margin-top:3px;font-size:13.5px;color:var(--text-secondary);line-height:1.5}
+.row-control{flex:0 0 auto;display:flex;align-items:center;gap:10px}
+.row-stack{display:block}
+.row-stack .row-control{margin-top:12px}
+
+.footnote{margin:26px 0 0;font-size:13px;color:var(--text-tertiary)}
+
+/* ---------- 控件 ---------- */
+.btn{
+  white-space:nowrap;height:34px;padding:0 13px;border:1px solid var(--border-control);border-radius:var(--radius-md);
+  background:var(--surface);color:var(--text-primary);font-size:13.5px;cursor:pointer;
+  box-shadow:var(--shadow-control);
+  transition:background-color .12s var(--ease),transform .12s var(--ease),border-color .12s var(--ease);
+}
+.btn:hover{background:var(--surface-hover)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);border-color:transparent;color:var(--accent-contrast);font-weight:500}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.quiet{border-color:transparent;box-shadow:none;background:none;color:var(--accent)}
+.btn.quiet:hover{background:var(--surface-hover)}
+.btn.danger{color:var(--danger);border-color:var(--border-control);background:var(--surface)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn[disabled]{opacity:.5;cursor:default;transform:none}
+
+.dd{position:relative;display:inline-block}
+.dd-btn{
+  display:inline-flex;align-items:center;gap:10px;height:36px;min-width:180px;padding:0 11px;
+  border:1px solid var(--border-control);border-radius:var(--radius-md);background:var(--surface);
+  box-shadow:var(--shadow-control);cursor:pointer;font-size:14px;text-align:left;
+  transition:background-color .12s var(--ease),border-color .12s var(--ease);
+}
+.dd-btn:hover{background:var(--surface-hover)}
+.dd-btn .dd-label{flex:1;white-space:nowrap}
+.dd-btn .dd-caret{flex:0 0 10px;width:10px;height:10px;color:var(--text-tertiary);transition:transform .12s var(--ease)}
+.dd[data-open="true"] .dd-btn{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.dd[data-open="true"] .dd-caret{transform:rotate(180deg)}
+.dd-menu{
+  position:absolute;z-index:20;top:calc(100% + 5px);left:0;min-width:100%;padding:4px;
+  border:1px solid var(--border-subtle);border-radius:var(--radius-md);background:var(--surface);
+  box-shadow:var(--shadow-pop);display:flex;flex-direction:column;gap:1px;
+  animation:ddIn .15s var(--ease);
+}
+@keyframes ddIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.dd-option{
+  display:flex;align-items:center;gap:8px;height:32px;padding:0 10px 0 8px;border:0;border-radius:var(--radius-sm);
+  background:none;color:var(--text-primary);font-size:14px;text-align:left;cursor:pointer;white-space:nowrap;
+  transition:background-color .1s var(--ease);
+}
+.dd-option:hover{background:var(--surface-hover)}
+.dd-option[aria-selected="true"]{color:var(--accent);font-weight:500}
+.dd-tick{flex:0 0 14px;width:14px;height:14px;opacity:0}
+.dd-option[aria-selected="true"] .dd-tick{opacity:1}
+input.ctl,textarea.ctl{
+  height:36px;padding:0 11px;border:1px solid var(--border-control);border-radius:var(--radius-md);
+  background:var(--surface);width:100%;font-size:14px;
+}
+input.ctl:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+
+/* 开关 */
+.sw{display:inline-flex;align-items:center;gap:9px;cursor:pointer}
+.sw input{position:absolute;opacity:0;width:36px;height:22px;margin:0;cursor:pointer}
+.sw-track{
+  width:36px;height:22px;border-radius:var(--radius-pill);background:var(--border-control);
+  position:relative;flex:0 0 36px;transition:background-color .16s var(--ease);
+}
+.sw-thumb{
+  position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .16s var(--ease);
+}
+.sw input:checked+.sw-track{background:var(--accent)}
+.sw input:checked+.sw-track .sw-thumb{transform:translateX(14px)}
+.sw input:focus-visible+.sw-track{outline:2px solid var(--focus-ring);outline-offset:2px}
+.sw-text{font-size:13.5px;color:var(--text-secondary);min-width:26px}
+
+/* 单选选项行 */
+.choice{
+  display:flex;align-items:flex-start;gap:14px;padding:18px 0;cursor:pointer;
+  border-bottom:1px solid var(--border-subtle);
+}
+.choice:last-of-type{border-bottom:0}
+.choice input{position:absolute;opacity:0;pointer-events:none}
+.dot{
+  flex:0 0 18px;width:18px;height:18px;margin-top:2px;border-radius:50%;
+  border:1.5px solid var(--border-control);background:var(--surface);position:relative;
+  transition:border-color .12s var(--ease);
+}
+.choice input:checked+.dot{border-color:var(--accent);border-width:5.5px}
+.choice input:focus-visible+.dot{outline:2px solid var(--focus-ring);outline-offset:2px}
+.choice-copy{flex:1;min-width:0}
+.choice-copy strong{display:block;font-size:15px;font-weight:500}
+.choice input:checked~.choice-copy strong{color:var(--accent)}
+.choice-copy small{display:block;margin-top:3px;font-size:13.5px;color:var(--text-secondary)}
+.choice-aside{flex:0 0 auto;font-size:13px;color:var(--text-tertiary);padding-top:2px}
+
+/* 多选（引文格式） */
+.check{
+  display:flex;align-items:center;gap:14px;padding:16px 0;cursor:pointer;
+  border-bottom:1px solid var(--border-subtle);
+}
+.check:last-of-type{border-bottom:0}
+.check input{position:absolute;opacity:0;pointer-events:none}
+.box{
+  flex:0 0 18px;width:18px;height:18px;border-radius:var(--radius-sm);
+  border:1.5px solid var(--border-control);background:var(--surface);position:relative;
+  transition:background-color .12s var(--ease),border-color .12s var(--ease);
+}
+.box::after{
+  content:"";position:absolute;left:5.5px;top:2px;width:4px;height:8.5px;
+  border:2px solid #fff;border-top:0;border-left:0;transform:rotate(42deg) scale(.6);opacity:0;
+  transition:opacity .12s var(--ease),transform .12s var(--ease);
+}
+.check input:checked+.box{background:var(--accent);border-color:var(--accent)}
+.check input:checked+.box::after{opacity:1;transform:rotate(42deg) scale(1)}
+.check input:focus-visible+.box{outline:2px solid var(--focus-ring);outline-offset:2px}
+.check-copy{flex:1;min-width:0}
+.check-copy strong{display:block;font-size:15px;font-weight:500}
+.check-copy small{display:block;margin-top:3px;font-size:13.5px;color:var(--text-secondary)}
+
+/* 状态文字 */
+.state{font-size:13px;color:var(--text-tertiary)}
+.state.ok{color:var(--ok)}
+.state.warn{color:var(--warn)}
+.state.bad{color:var(--danger)}
+.state.busy{color:var(--text-secondary)}
+
+/* 折叠 */
+details.disclose{margin-top:26px;border-top:1px solid var(--border-subtle);padding-top:18px}
+details.disclose>summary{
+  list-style:none;cursor:pointer;font-size:14px;color:var(--text-secondary);
+  display:flex;align-items:center;gap:7px;
+}
+details.disclose>summary::-webkit-details-marker{display:none}
+details.disclose>summary::before{
+  content:"";width:0;height:0;border-left:5px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;
+  transition:transform .12s var(--ease);
+}
+details.disclose[open]>summary::before{transform:rotate(90deg)}
+.disclose-body{padding:14px 0 2px;font-size:13.5px;color:var(--text-secondary)}
+.disclose-body p{margin:0 0 10px}
+
+/* 编辑面板 */
+.editor{
+  max-width:640px;margin:18px 0 4px;padding:18px;border:1px solid var(--border-subtle);border-radius:var(--radius-lg);
+  background:var(--surface-sunken);
+}
+.editor h3{margin:0 0 14px;font-size:15px;font-weight:600}
+.field{margin-bottom:14px}
+.field label{display:block;margin-bottom:6px;font-size:13.5px;color:var(--text-secondary)}
+.field .hint{margin-top:6px;font-size:12.5px;color:var(--text-tertiary)}
+.optional{color:var(--text-tertiary)}
+.editor-actions{display:flex;align-items:center;gap:10px;padding-top:4px}
+.editor-actions .grow{flex:1}
+
+/* 提示条 */
+.callout{
+  display:flex;gap:10px;margin-top:22px;max-width:860px;padding:12px 14px;border-radius:var(--radius-md);
+  background:var(--surface-sunken);border:1px solid var(--border-subtle);
+  font-size:13px;color:var(--text-secondary);line-height:1.5;
+}
+.callout svg{flex:0 0 16px;width:16px;height:16px;margin-top:2px;color:var(--text-tertiary)}
+
+/* 进度 */
+.progress{height:4px;border-radius:var(--radius-pill);background:var(--border-subtle);overflow:hidden;margin-top:10px;max-width:260px}
+.progress span{display:block;height:100%;width:0;background:var(--accent);border-radius:inherit;transition:width .3s linear}
+
+/* 路径卡 */
+.pathcard{
+  max-width:860px;display:flex;gap:12px;padding:16px;border:1px solid var(--border-subtle);border-radius:var(--radius-lg);
+  background:var(--surface-sunken);align-items:flex-start;
+}
+.pathcard svg{flex:0 0 18px;width:18px;height:18px;color:var(--text-tertiary);margin-top:2px}
+.pathcard code{
+  display:block;margin:4px 0 4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12.5px;color:var(--text-primary);word-break:break-all;
+}
+.pathcard small{font-size:12.5px;color:var(--text-tertiary)}
+
+/* 统计 */
+.metrics{display:flex;gap:0;margin:0 0 6px;padding:0;border-bottom:1px solid var(--border-subtle);padding-bottom:20px}
+.metrics div{flex:1;display:flex;flex-direction:column;gap:2px}
+.metrics dt{font-size:13px;color:var(--text-secondary)}
+.metrics dd{margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.metrics dd em{font-style:normal;font-size:13px;font-weight:400;color:var(--text-tertiary);margin-left:4px}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table th{
+  text-align:left;font-weight:400;font-size:12.5px;color:var(--text-tertiary);
+  padding:14px 8px 8px 0;border-bottom:1px solid var(--border-subtle);
+}
+.table td{padding:13px 8px 13px 0;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+.table th.num,.table td.num{text-align:right;padding-right:0;font-variant-numeric:tabular-nums}
+.table td small{display:block;color:var(--text-tertiary);font-size:12.5px;margin-top:2px}
+.bar{height:3px;border-radius:var(--radius-pill);background:var(--accent);opacity:.5;margin-top:8px}
+
+/* 滑杆 */
+.rangewrap{display:flex;flex-direction:column;gap:8px;margin-top:14px;max-width:520px}
+.rangehead{display:flex;align-items:baseline;justify-content:space-between}
+.rangehead b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:22px;background:none;cursor:pointer;margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:var(--radius-pill);background:var(--border-control)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;margin-top:-7px;
+  border:1px solid var(--border-control);box-shadow:0 1px 3px rgba(0,0,0,.22);
+}
+:root[data-theme="dark"] input[type=range]::-webkit-slider-thumb{background:#d8dade}
+.rangescale{display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-tertiary)}
+
+/* 分段控件 */
+.seg{display:inline-flex;padding:2px;background:var(--surface-sunken);border:1px solid var(--border-subtle);border-radius:var(--radius-md)}
+.seg button{
+  height:28px;padding:0 14px;border:0;border-radius:6px;background:none;color:var(--text-secondary);
+  font-size:13.5px;cursor:pointer;transition:background-color .12s var(--ease),color .12s var(--ease);
+}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text-primary);box-shadow:var(--shadow-control);font-weight:500}
+
+/* 外观：模式卡 + 白天/夜晚配对 + 主题画廊（与正式软件同构） */
+.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;max-width:760px}
+.mode{
+  padding:0;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;
+  border:1.5px solid var(--border-control);border-radius:var(--radius-lg);background:var(--surface-sunken);
+  transition:border-color .16s var(--ease),box-shadow .16s var(--ease),transform .14s var(--ease);
+}
+.mode:hover{border-color:var(--text-tertiary)}
+.mode:active{transform:scale(.988)}
+.mode[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+/* width:100% 是必须的：WebKit 里 button 作 flex 容器时子项不被 stretch，
+   只靠 aspect-ratio 会塌成 0 高度（macOS 上实测 0×0）。 */
+.mode-preview{display:block;position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border-bottom:1px solid var(--border-subtle)}
+.mode-half{position:absolute;inset:0}
+.mode-half.is-dark{clip-path:polygon(100% 0,0 0,100% 100%)}
+.mode-mock{position:absolute;inset:0;display:flex;gap:6px;padding:9px}
+.mock-side{flex:0 0 22%;border-radius:var(--radius-sm)}
+.mock-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:3px 2px}
+.mock-bar{height:8px;width:60%;border-radius:3px}
+.mock-line{height:4px;width:88%;border-radius:3px}
+.mock-line.is-short{width:58%}
+.mock-accent{margin-top:auto;width:38%;height:11px;border-radius:var(--radius-sm)}
+.mode-label{display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 8px;font-size:13px;font-weight:600;color:var(--text-secondary)}
+.mode[aria-checked="true"] .mode-label{color:var(--accent)}
+.mode-check{width:14px;height:14px;flex:0 0 auto;opacity:0;transform:scale(.7);transition:opacity .12s var(--ease),transform .2s cubic-bezier(.34,1.56,.64,1)}
+.mode[aria-checked="true"] .mode-check{opacity:1;transform:scale(1)}
+
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:16px;max-width:760px}
+.pair[hidden]{display:none}
+.pair-slot{
+  display:flex;align-items:center;gap:11px;padding:11px 13px;cursor:pointer;text-align:left;
+  border:1.5px solid var(--border-control);border-radius:var(--radius-lg);background:var(--surface-sunken);
+  color:var(--text-primary);transition:border-color .16s var(--ease),background-color .16s var(--ease),box-shadow .16s var(--ease);
+}
+.pair-slot:hover{background:var(--surface-hover)}
+.pair-slot[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.pair-slot svg{flex:0 0 17px;width:17px;height:17px;color:var(--text-tertiary)}
+.pair-slot[aria-checked="true"] svg{color:var(--accent)}
+.pair-copy{display:flex;flex-direction:column;gap:1px;min-width:0}
+.pair-when{font-size:12px;color:var(--text-tertiary)}
+.pair-theme{font-size:14px;font-weight:500}
+
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:14px;margin-top:12px}
+.theme{
+  padding:0;border:1.5px solid var(--border-control);border-radius:var(--radius-lg);background:var(--surface-sunken);
+  cursor:pointer;text-align:left;overflow:hidden;
+  transition:border-color .16s var(--ease),box-shadow .16s var(--ease),transform .14s var(--ease);
+}
+.theme:hover{border-color:var(--text-tertiary)}
+.theme:active{transform:scale(.988)}
+.theme[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.theme-preview{
+  display:flex;flex-direction:column;justify-content:space-between;gap:12px;
+  aspect-ratio:8/5;width:100%;padding:14px;overflow:hidden;
+}
+.tp-top{display:flex;align-items:center;justify-content:space-between}
+.tp-aa{font-size:26px;font-weight:680;line-height:1;letter-spacing:-.02em}
+.tp-colors{display:inline-flex;align-items:center;gap:6px}
+.tp-accent{width:36px;height:19px;border-radius:var(--radius-pill)}
+.tp-highlight{width:19px;height:19px;border-radius:var(--radius-pill)}
+.tp-card{display:flex;flex-direction:column;gap:7px;padding:10px 11px;border-radius:var(--radius-md)}
+.tp-line{height:5px;width:82%;border-radius:3px}
+.tp-line.is-short{width:54%;opacity:.55}
+.theme-meta{display:flex;align-items:center;gap:7px;padding:10px 12px 4px}
+.theme-name{font-size:14px;font-weight:500}
+.theme-tag{padding:2px 7px;border-radius:var(--radius-pill);background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:600}
+.theme-desc{display:block;padding:0 12px 12px;font-size:12px;line-height:1.45;color:var(--text-tertiary)}
+.colorgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:4px}
+.colorfield{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--text-secondary)}
+.colorfield input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--border-control);border-radius:var(--radius-sm);background:none;cursor:pointer}
+
+/* 演示状态选择器 */
+.demobar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 22px;padding:10px 12px;
+  border:1px dashed var(--border-control);border-radius:var(--radius-md);background:var(--surface-sunken);
+  font-size:12.5px;color:var(--text-tertiary);
+}
+.demobar strong{font-weight:500;color:var(--text-secondary)}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important}
+}
+@media (max-width:720px){
+  .body{flex-direction:column}
+  .nav{width:auto;flex:none;border-right:0;border-bottom:1px solid var(--border-subtle);display:flex;flex-wrap:wrap;gap:4px;padding:12px}
+  .nav h2,.nav-group{display:none}
+  .nav-item{width:auto}
+  .row{flex-direction:column;align-items:flex-start;gap:12px}
+  .row-control{width:100%}
+}
+</style>
+
+<div class="win">
+  <header class="topbar">
+    <button class="back" type="button" onclick="demoToast('返回应用：回到刚才的检索或阅读位置')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      返回应用
+    </button>
+    <span class="crumb"><b>MEFinder</b> / 设置</span>
+    <div class="topbar-right">
+      <span class="demo-note">设计讨论稿 · 所有状态均为演示</span>
+      <button class="theme-toggle" type="button" id="theme-toggle" onclick="toggleTheme()">深色</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav class="nav" role="tablist" aria-label="设置分类">
+      <h2>设置</h2>
+      <div class="nav-group">阅读</div>
+      <button class="nav-item" role="tab" aria-selected="true" data-panel="reading" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="align" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span>
+      </button>
+      <div class="nav-group">解析</div>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="mineru" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="ocr" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="vision" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="stats" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>解析统计</span>
+      </button>
+      <div class="nav-group">引用</div>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="citation" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="bib" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span>
+      </button>
+      <div class="nav-group">应用</div>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="appearance" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg><span>外观</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="data" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg><span>数据位置</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="transfer" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h16v12H4z"/><path d="M7 4.5h10v3H7zM9 12h6"/></svg><span>文档传输</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="backup" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg><span>数据备份</span>
+      </button>
+      <button class="nav-item" role="tab" aria-selected="false" data-panel="update" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span>
+      </button>
+    </nav>
+
+    <main class="content">
+
+      <!-- 阅读与检索 -->
+      <section class="panel" id="panel-reading" role="tabpanel" aria-label="阅读与检索">
+        <div class="panel-head">
+          <h1>阅读与检索</h1>
+          <p>设置打开文献的方式与正文显示。</p>
+        </div>
+
+        <div class="group-title">PDF 原文</div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>打开 PDF 原文</strong>
+            <small id="pdf-open-note">在内置阅读器中打开，可直接跳到命中页。</small>
+          </div>
+          <div class="row-control">
+            <div class="dd" data-handler="onPdfOpen" data-value="native">
+              <button class="dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="ddToggle(this)"><span class="dd-label">内置 PDF 阅读器</span><svg class="dd-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+              <div class="dd-menu" role="listbox" hidden>
+                <button class="dd-option" role="option" type="button" data-value="native" aria-selected="true" onclick="ddPick(this)"><svg class="dd-tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 7.5 3 3 6-6.5"/></svg>内置 PDF 阅读器</button>
+                <button class="dd-option" role="option" type="button" data-value="system" aria-selected="false" onclick="ddPick(this)"><svg class="dd-tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 7.5 3 3 6-6.5"/></svg>macOS 预览</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-title">阅读窗口</div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>在独立窗口中阅读</strong>
+            <small>可单独移动与缩放，下次打开文献时生效。</small>
+          </div>
+          <div class="row-control">
+            <label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label>
+          </div>
+        </div>
+
+        <div class="group-title">正文排版</div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>段落显示方式</strong>
+            <small id="layout-note">正文随窗口宽度排版，适合连续阅读。</small>
+          </div>
+          <div class="row-control">
+            <div class="dd" data-handler="onLayout" data-value="flow">
+              <button class="dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="ddToggle(this)"><span class="dd-label">流式排版</span><svg class="dd-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+              <div class="dd-menu" role="listbox" hidden>
+                <button class="dd-option" role="option" type="button" data-value="flow" aria-selected="true" onclick="ddPick(this)"><svg class="dd-tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 7.5 3 3 6-6.5"/></svg>流式排版</button>
+                <button class="dd-option" role="option" type="button" data-value="physical" aria-selected="false" onclick="ddPick(this)"><svg class="dd-tick" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 7.5 3 3 6-6.5"/></svg>保留原始换行</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group-title">文献检索</div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>繁简统一检索</strong>
+            <small>搜索时兼容繁简字，结果与引文保留原文。</small>
+          </div>
+          <div class="row-control">
+            <label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label>
+          </div>
+        </div>
+
+        <p class="footnote">设置变更自动保存</p>
+      </section>
+
+      <!-- 译本对齐 -->
+      <section class="panel" id="panel-align" role="tabpanel" aria-label="译本对齐" hidden>
+        <div class="panel-head">
+          <h1>译本对齐</h1>
+          <p>选择用于跨语言段落匹配的本地模型。</p>
+        </div>
+
+        <div class="group-title">对齐模型</div>
+        <label class="choice">
+          <input type="radio" name="align-model" value="minilm">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="choice-copy"><strong>MiniLM 多语言模型</strong><small>约 220 MB · 384 维</small></span>
+          <span class="choice-aside">已下载</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="align-model" value="e5" checked>
+          <span class="dot" aria-hidden="true"></span>
+          <span class="choice-copy"><strong>E5 Large 多语言模型</strong><small>约 2.24 GB · 1024 维</small></span>
+          <span class="choice-aside">已下载</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="align-model" value="bge" disabled>
+          <span class="dot" aria-hidden="true"></span>
+          <span class="choice-copy"><strong>BGE M3 多语言模型</strong><small>约 2.27 GB · 1024 维 · 尚未下载</small></span>
+          <span class="choice-aside"><button class="btn" type="button" onclick="fakeInstall(this,'bge-progress','已下载')">下载安装</button></span>
+        </label>
+        <div class="progress" id="bge-progress" hidden><span></span></div>
+
+        <p class="footnote">切换模型只影响之后运行的对齐，已有对照保持不变。</p>
+
+        <details class="disclose">
+          <summary>模型文件与管理</summary>
+          <div class="disclose-body">
+            <p>模型保存在 MEFinder 组件目录，可离线使用。首次下载需要联网。</p>
+            <div class="editor-actions">
+              <button class="btn" type="button" onclick="demoToast('演示：打开组件目录')">管理本地文件</button>
+              <button class="btn" type="button" onclick="demoToast('演示：重新校验模型文件')">重新校验</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- MinerU API -->
+      <section class="panel" id="panel-mineru" role="tabpanel" aria-label="MinerU API" hidden>
+        <div class="panel-head">
+          <h1>MinerU API</h1>
+          <p>管理用于解析 PDF 的服务与账号。</p>
+        </div>
+
+        <div class="row">
+          <div class="row-copy">
+            <strong>服务地址</strong>
+            <small id="mineru-address">https://mineru.net</small>
+            <div id="mineru-address-edit" hidden style="margin-top:10px;display:flex;gap:8px;max-width:420px">
+              <input class="ctl mono" id="mineru-address-input" type="url" value="https://mineru.net" spellcheck="false" aria-label="MinerU 服务地址">
+              <button class="btn primary" type="button" onclick="saveAddress()">保存</button>
+              <button class="btn" type="button" onclick="cancelAddress()">取消</button>
+            </div>
+          </div>
+          <div class="row-control"><button class="btn quiet" id="mineru-address-btn" type="button" onclick="editAddress()">修改</button></div>
+        </div>
+
+        <div class="row">
+          <div class="row-copy"><strong>账号</strong><small>可添加多个账号，分别启停与检测。</small></div>
+          <div class="row-control"><button class="btn primary" type="button" onclick="openAccountEditor('new')">添加账号</button></div>
+        </div>
+
+        <div class="row row-stack">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>个人账号</strong>
+              <small>密钥已保存 · <span class="state ok" id="acc1-state">连接正常（今天 09:42 检测）</span> · 到期日未设置</small>
+            </div>
+            <div class="row-control">
+              <label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <span class="state" style="flex:1">解析记录可在「解析统计」中查看</span>
+            <button class="btn quiet" type="button" onclick="testConn(this,'acc1-state')">检测连接</button>
+            <button class="btn" type="button" onclick="openAccountEditor('个人账号')">编辑</button>
+          </div>
+        </div>
+
+        <div class="row row-stack">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>备用账号</strong>
+              <small>密钥已保存 · <span class="state" id="acc2-state">尚未检测</span> · 到期日未设置</small>
+            </div>
+            <div class="row-control">
+              <label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <span class="state" style="flex:1">停用期间不分配新的解析任务</span>
+            <button class="btn quiet" type="button" onclick="testConn(this,'acc2-state')">检测连接</button>
+            <button class="btn" type="button" onclick="openAccountEditor('备用账号')">编辑</button>
+          </div>
+        </div>
+
+        <div class="editor" id="mineru-editor" hidden>
+          <h3 id="mineru-editor-title">编辑账号</h3>
+          <div class="field">
+            <label for="acc-name">账号名称</label>
+            <input class="ctl" id="acc-name" type="text" placeholder="例如：工作账号" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="acc-token">API Token</label>
+            <input class="ctl mono" id="acc-token" type="password" placeholder="粘贴 MinerU API Token" autocomplete="new-password">
+            <div class="hint" id="acc-token-hint">留空保留已保存的密钥；密钥不会回显。</div>
+          </div>
+          <div class="field">
+            <label for="acc-expire">到期日期 <span class="optional">（可选）</span></label>
+            <input class="ctl" id="acc-expire" type="date" style="max-width:190px">
+          </div>
+          <div class="editor-actions">
+            <span class="state grow" id="acc-hint"></span>
+            <button class="btn danger" type="button" id="acc-remove" onclick="demoToast('演示：移除账号前会先确认')">移除账号</button>
+            <button class="btn" type="button" onclick="closeAccountEditor()">取消</button>
+            <button class="btn primary" type="button" onclick="saveAccount()">保存账号</button>
+          </div>
+        </div>
+
+        <p class="footnote">密钥仅保存在本机，编辑时不会回显。保存成功不代表连接可用，需要单独检测。</p>
+      </section>
+
+      <!-- 本地 OCR -->
+      <section class="panel" id="panel-ocr" role="tabpanel" aria-label="本地 OCR" hidden>
+        <div class="panel-head">
+          <h1>本地 OCR</h1>
+          <p>按文献类型安装引擎，管理本机解析服务。</p>
+        </div>
+
+        <div class="demobar">
+          <strong>演示状态：</strong>
+          <div class="seg" role="group" aria-label="演示 OCR 状态">
+            <button type="button" aria-pressed="false" onclick="ocrState('unknown',this)">读取失败</button>
+            <button type="button" aria-pressed="true" onclick="ocrState('none',this)">未安装</button>
+            <button type="button" aria-pressed="false" onclick="ocrState('failed',this)">安装失败</button>
+            <button type="button" aria-pressed="false" onclick="ocrState('installed',this)">已安装未启用</button>
+            <button type="button" aria-pressed="false" onclick="ocrState('enabled',this)">已启用</button>
+          </div>
+          <span>仅用于讨论稿，正式界面由后端状态决定</span>
+        </div>
+
+        <div class="group-title">文字识别</div>
+        <div class="row row-stack" id="ocr-modern">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>日文 OCR</strong>
+              <small>现代日文图书与杂志 · NDLOCR-Lite 1.2.3</small>
+            </div>
+            <div class="row-control">
+              <span class="state warn" id="ocr-modern-state">未安装</span>
+              <span id="ocr-modern-switch" hidden><label class="sw"><input type="checkbox" onchange="swText(this,'已启用','未启用')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">未启用</span></label></span>
+              <button class="btn" id="ocr-modern-btn" type="button" onclick="fakeInstall(this,'ocr-modern-progress','已安装',()=>ocrState('installed'))">下载安装</button>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <span class="state" id="ocr-modern-hint" style="flex:1">安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络。</span>
+          </div>
+          <div class="progress" id="ocr-modern-progress" hidden><span></span></div>
+        </div>
+
+        <div class="row row-stack">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>古籍 OCR</strong>
+              <small>日文古籍与繁体竖排古籍 · NDL古典籍OCR-Lite 1.4.3</small>
+            </div>
+            <div class="row-control">
+              <span class="state warn" id="ocr-ancient-state">未安装</span>
+              <button class="btn" type="button" onclick="fakeInstall(this,'ocr-ancient-progress','已安装',()=>{document.getElementById('ocr-ancient-state').textContent='已安装，未启用';document.getElementById('ocr-ancient-state').className='state'})">下载安装</button>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <span class="state" style="flex:1">与日文 OCR 使用独立环境，可分别安装和启用。</span>
+          </div>
+          <div class="progress" id="ocr-ancient-progress" hidden><span></span></div>
+        </div>
+
+        <details class="disclose">
+          <summary>自动解析如何使用这些引擎</summary>
+          <div class="disclose-body">
+            <p>导入时先判断 PDF 是否含可用文本层；需要识别时按文献语言选择已启用的引擎。两个引擎都未启用时，导入按当前解析设置处理，可能调用 MinerU API（需要联网）。</p>
+          </div>
+        </details>
+
+        <div class="group-title" style="margin-top:26px">本地解析服务</div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>MinerU 本地部署</strong>
+            <small>Pipeline / VLM · 已配置，未启动</small>
+          </div>
+          <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：打开本地部署管理')">管理</button></div>
+        </div>
+        <div class="row">
+          <div class="row-copy">
+            <strong>通用本地模型</strong>
+            <small>连接 Ollama / vLLM 等兼容服务 · 未配置</small>
+          </div>
+          <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：配置本地模型服务')">配置</button></div>
+        </div>
+
+        <details class="disclose">
+          <summary>组件目录与手动配置</summary>
+          <div class="disclose-body">
+            <p>组件安装在 <code>~/Library/Application Support/MEFinder/components</code>。手动指定 Python 与 OCR 入口后可先测试再保存。</p>
+            <div class="field" style="max-width:460px">
+              <label for="ocr-python">Python</label>
+              <input class="ctl mono" id="ocr-python" type="text" placeholder="/opt/mefinder/ndlocr/bin/python3">
+            </div>
+            <div class="field" style="max-width:460px">
+              <label for="ocr-script">OCR 入口</label>
+              <input class="ctl mono" id="ocr-script" type="text" placeholder="/opt/mefinder/ndlocr/src/ocr.py">
+            </div>
+            <div class="editor-actions">
+              <button class="btn" type="button" onclick="demoToast('演示：测试手动入口')">测试手动入口</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- 其他解析 API -->
+      <section class="panel" id="panel-vision" role="tabpanel" aria-label="其他解析 API" hidden>
+        <div class="panel-head">
+          <h1>其他解析 API</h1>
+          <p>可选的视觉模型接口，兼容 OpenAI 协议，支持中转服务。</p>
+        </div>
+
+        <div class="row">
+          <div class="row-copy"><strong>已保存的接口</strong><small>导入时可以选择其中一个已启用的接口。</small></div>
+          <div class="row-control"><button class="btn primary" type="button" onclick="openVisionEditor('new')">添加接口</button></div>
+        </div>
+
+        <div class="row row-stack">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>硅基流动</strong>
+              <small>Qwen2.5-VL-72B-Instruct · 密钥已保存 · <span class="state ok" id="vp1-state">连接正常（昨天 21:08 检测）</span></small>
+            </div>
+            <div class="row-control">
+              <label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <code class="state" style="flex:1;font-family:ui-monospace,Menlo,Consolas,monospace">https://api.siliconflow.cn/v1</code>
+            <button class="btn quiet" type="button" onclick="testConn(this,'vp1-state')">检测连接</button>
+            <button class="btn" type="button" onclick="openVisionEditor('硅基流动')">编辑</button>
+          </div>
+        </div>
+
+        <div class="row row-stack">
+          <div style="display:flex;align-items:center;gap:20px">
+            <div class="row-copy">
+              <strong>本机中转</strong>
+              <small>gpt-4o-mini · 密钥已保存 · <span class="state" id="vp2-state">尚未检测</span></small>
+            </div>
+            <div class="row-control">
+              <label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label>
+            </div>
+          </div>
+          <div class="row-control" style="width:100%">
+            <code class="state" style="flex:1;font-family:ui-monospace,Menlo,Consolas,monospace">http://127.0.0.1:8000/v1</code>
+            <button class="btn quiet" type="button" onclick="testConn(this,'vp2-state')">检测连接</button>
+            <button class="btn" type="button" onclick="openVisionEditor('本机中转')">编辑</button>
+          </div>
+        </div>
+
+        <div class="editor" id="vision-editor" hidden>
+          <h3 id="vision-editor-title">添加接口</h3>
+          <div class="field"><label for="vp-base">API 地址</label><input class="ctl mono" id="vp-base" type="url" placeholder="https://api.example.com/v1"></div>
+          <div class="field"><label for="vp-key">API Key</label><input class="ctl mono" id="vp-key" type="password" placeholder="sk-..."><div class="hint">留空保留已保存的密钥。</div></div>
+          <div class="field"><label for="vp-name">显示名称 <span class="optional">（可选）</span></label><input class="ctl" id="vp-name" type="text" placeholder="例如：硅基流动"></div>
+          <div class="field">
+            <label for="vp-model">视觉模型</label>
+            <div style="display:flex;gap:8px">
+              <input class="ctl" id="vp-model" type="text" placeholder="选择或手动填写模型名">
+              <button class="btn" type="button" onclick="demoToast('演示：从服务读取模型列表')">获取模型</button>
+            </div>
+          </div>
+          <div class="editor-actions">
+            <span class="state grow"></span>
+            <button class="btn" type="button" onclick="demoToast('演示：测试连接')">测试连接</button>
+            <button class="btn" type="button" onclick="document.getElementById('vision-editor').hidden=true">取消</button>
+            <button class="btn primary" type="button" onclick="document.getElementById('vision-editor').hidden=true;demoToast('已保存接口（演示）')">保存接口</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="row-copy"><strong>导入前自动检测接口</strong><small>导入开始前检测已启用的接口，失败时改用其他解析方式。</small></div>
+          <div class="row-control"><label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label></div>
+        </div>
+
+        <div class="callout">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
+          <span>这些接口会把页面图像发送到对应服务，属于联网解析路径；只使用本机数据时请改用本地 OCR 或本地部署。</span>
+        </div>
+      </section>
+
+      <!-- 解析统计 -->
+      <section class="panel" id="panel-stats" role="tabpanel" aria-label="解析统计" hidden>
+        <div class="panel-head">
+          <h1>解析统计</h1>
+          <p>当前文献库的页级解析来源，全部来自本机记录。</p>
+        </div>
+
+        <dl class="metrics">
+          <div><dt>文献</dt><dd>128<em>本</em></dd></div>
+          <div><dt>解析页</dt><dd>41,376<em>页</em></dd></div>
+          <div><dt>解析服务</dt><dd>4<em>个</em></dd></div>
+        </dl>
+
+        <div style="overflow-x:auto">
+        <table class="table">
+          <thead><tr><th>解析服务</th><th class="num">文献</th><th class="num">页数</th><th class="num">占比</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>MinerU API<small>个人账号 · 备用账号</small><div class="bar" style="width:62%"></div></td>
+              <td class="num">76</td><td class="num">25,640</td><td class="num">62%</td>
+            </tr>
+            <tr>
+              <td>内置文本层<small>PDF 自带可用文本，未调用解析服务</small><div class="bar" style="width:24%"></div></td>
+              <td class="num">34</td><td class="num">9,931</td><td class="num">24%</td>
+            </tr>
+            <tr>
+              <td>日文 OCR<small>NDLOCR-Lite 1.2.3 · 本机</small><div class="bar" style="width:9%"></div></td>
+              <td class="num">12</td><td class="num">3,724</td><td class="num">9%</td>
+            </tr>
+            <tr>
+              <td>其他解析 API<small>硅基流动 · Qwen2.5-VL-72B</small><div class="bar" style="width:5%"></div></td>
+              <td class="num">6</td><td class="num">2,081</td><td class="num">5%</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+
+        <div class="editor-actions" style="margin-top:20px">
+          <span class="state grow">更新于今天 10:12</span>
+          <button class="btn" type="button" onclick="demoToast('演示：重新统计')">刷新</button>
+        </div>
+      </section>
+
+      <!-- 引文格式 -->
+      <section class="panel" id="panel-citation" role="tabpanel" aria-label="引文格式" hidden>
+        <div class="panel-head">
+          <h1>引文格式</h1>
+          <p>选择搜索结果「复制出处」下拉中显示的格式。</p>
+        </div>
+
+        <label class="check"><input type="checkbox" checked onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>中文脚注</strong><small>中文人文社科常用脚注体例</small></span></label>
+        <label class="check"><input type="checkbox" checked onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>GB/T 7714</strong><small>中文参考文献国家标准格式</small></span></label>
+        <label class="check"><input type="checkbox" onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>Chicago</strong><small>Notes-Bibliography 脚注体例</small></span></label>
+        <label class="check"><input type="checkbox" onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>APA</strong><small>第 7 版参考文献格式</small></span></label>
+        <label class="check"><input type="checkbox" onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>MLA</strong><small>第 9 版 Works Cited 格式</small></span></label>
+
+        <div class="callout" style="align-items:center">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h12M4 10h9M4 14.5h10"/></svg>
+          <span id="citation-count">已启用 2 种，按此顺序显示在「复制出处」中。</span>
+        </div>
+      </section>
+
+      <!-- 书目补全 -->
+      <section class="panel" id="panel-bib" role="tabpanel" aria-label="书目补全" hidden>
+        <div class="panel-head">
+          <h1>书目补全</h1>
+          <p>联网补全（知网 / Crossref / 图书目录）时，自动采用候选的匹配门槛。</p>
+        </div>
+
+        <div class="group-title">自动匹配阈值</div>
+        <p class="group-note">批量补全时，只有一个候选且匹配分达到此值就自动采用；低于此值会列出候选，由你核对后选择。</p>
+        <div class="rangewrap">
+          <div class="rangehead"><span class="state">当前阈值</span><b id="bib-value">90%</b></div>
+          <input type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="document.getElementById('bib-value').textContent=this.value+'%'">
+          <div class="rangescale"><span>80%（更宽松）</span><span>100%（最严格）</span></div>
+        </div>
+
+        <div class="group-title" style="margin-top:32px">文献默认语言</div>
+        <p class="group-note">只影响文献库语言筛选的排序，不改变联网补全的数据源——中文期刊始终查知网。</p>
+        <div style="margin-top:14px">
+          <div class="seg" role="group" aria-label="文献默认语言">
+            <button type="button" aria-pressed="true" onclick="segPick(this)">中文</button>
+            <button type="button" aria-pressed="false" onclick="segPick(this)">外文</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 外观 -->
+      <section class="panel" id="panel-appearance" role="tabpanel" aria-label="外观" hidden>
+        <div class="panel-head">
+          <h1>外观</h1>
+          <p>选择明暗模式与主题。</p>
+        </div>
+
+        <div class="group-title">外观模式</div>
+        <p class="group-note">浅色与深色卡片直接用你当前选中的那套主题渲染。</p>
+        <div class="modes" id="mode-cards" role="radiogroup" aria-label="外观模式"></div>
+
+        <div class="pair" id="theme-pair" role="radiogroup" aria-label="白天与夜晚各用哪套主题">
+          <button type="button" class="pair-slot" role="radio" aria-checked="true" data-slot="light" onclick="pickSlot('light')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+            <span class="pair-copy"><span class="pair-when">白天</span><span class="pair-theme" id="slot-light-name">晴蓝</span></span>
+          </button>
+          <button type="button" class="pair-slot" role="radio" aria-checked="false" data-slot="dark" onclick="pickSlot('dark')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"/></svg>
+            <span class="pair-copy"><span class="pair-when">夜晚</span><span class="pair-theme" id="slot-dark-name">午夜</span></span>
+          </button>
+        </div>
+
+        <div class="group-title" style="margin-top:30px">主题</div>
+        <p class="group-note" id="theme-gallery-note">正在为「白天」选择浅色主题。</p>
+        <div class="themes" id="theme-grid" role="radiogroup" aria-label="应用主题"></div>
+
+        <details class="disclose">
+          <summary>自定义配色</summary>
+          <div class="disclose-body">
+            <p>在选中主题上微调，改动会存为一份副本。</p>
+            <div class="colorgrid">
+              <label class="colorfield"><span>按钮色</span><input type="color" value="#2f5fd0"></label>
+              <label class="colorfield"><span>强调色</span><input type="color" value="#d97706"></label>
+              <label class="colorfield"><span>背景色</span><input type="color" value="#ffffff"></label>
+              <label class="colorfield"><span>前景色</span><input type="color" value="#1a1c20"></label>
+            </div>
+            <div class="rangewrap" style="max-width:320px">
+              <div class="rangehead"><span class="state">对比度</span><b id="contrast-value">55</b></div>
+              <input type="range" min="0" max="100" value="55" aria-label="对比度" oninput="document.getElementById('contrast-value').textContent=this.value">
+            </div>
+            <div class="editor-actions" style="margin-top:14px;flex-wrap:wrap">
+              <button class="btn" type="button" onclick="demoToast('演示：复制为自定义主题')">复制为自定义</button>
+              <button class="btn" type="button" onclick="demoToast('演示：导出主题 JSON')">导出</button>
+              <button class="btn" type="button" onclick="demoToast('演示：导入主题 JSON')">导入</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- 数据位置 -->
+      <section class="panel" id="panel-data" role="tabpanel" aria-label="数据位置" hidden>
+        <div class="panel-head">
+          <h1>数据位置</h1>
+          <p>打开另一份资料库，或搬迁当前资料库。</p>
+        </div>
+
+        <div class="pathcard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><path d="M7.5 15.5h9"/></svg>
+          <div>
+            <strong>当前数据位置</strong>
+            <code>~/Library/Application Support/MEFinder/Library</code>
+            <small>索引、原文和本机设置保存在此处 · 已用 18.4 GB</small>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:6px">
+          <div class="row-copy"><strong>打开已有资料库</strong><small>读取从另一台电脑同步来的 MEFinder 文件夹，不复制或覆盖资料。</small></div>
+          <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择已有库')">选择已有库</button></div>
+        </div>
+        <div class="row">
+          <div class="row-copy"><strong>迁移当前资料库</strong><small>将当前资料复制到新位置，原位置的数据保留。</small></div>
+          <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择新位置')">选择新位置</button></div>
+        </div>
+
+        <div class="callout">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
+          <span>不要让两台电脑同时打开同一份云盘或 NAS 数据库，同步中的 SQLite 文件可能冲突。跨设备使用时先退出另一端并等待同步完成。</span>
+        </div>
+      </section>
+
+      <!-- 文档传输 -->
+      <section class="panel" id="panel-transfer" role="tabpanel" aria-label="文档传输" hidden>
+        <div class="panel-head">
+          <h1>文档传输</h1>
+          <p>设置从文献库导出的 MEFinder 文档包内容。</p>
+        </div>
+
+        <label class="choice">
+          <input type="radio" name="pack" checked><span class="dot" aria-hidden="true"></span>
+          <span class="choice-copy"><strong>仅文档数据</strong><small>包含页级文本、书目和页码映射；文件较小，导入后没有原 PDF 可打开</small></span>
+          <span class="choice-aside">约 6 MB / 本</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="pack"><span class="dot" aria-hidden="true"></span>
+          <span class="choice-copy"><strong>文档数据＋原 PDF</strong><small>把原 PDF 一并装入文档包；导入后可直接搜索和打开原文，不重新 OCR</small></span>
+          <span class="choice-aside">接近原 PDF 大小</span>
+        </label>
+
+        <div class="callout">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
+          <span>此设置同时用于单本和批量导出。</span>
+        </div>
+      </section>
+
+      <!-- 数据备份 -->
+      <section class="panel" id="panel-backup" role="tabpanel" aria-label="数据备份" hidden>
+        <div class="panel-head">
+          <h1>数据备份</h1>
+          <p>导出页码校准与书目信息，换电脑时可导入恢复。</p>
+        </div>
+
+        <div class="row">
+          <div class="row-copy"><strong>导出备份</strong><small>仅备份页码映射、书目和偏好，不含 PDF 与解析产物。</small></div>
+          <div class="row-control"><button class="btn primary" type="button" onclick="demoToast('演示：导出备份文件')">导出备份</button></div>
+        </div>
+        <div class="row">
+          <div class="row-copy"><strong>从备份恢复</strong><small>会覆盖当前的页码映射与书目信息，原文件先备份为 .pre-restore，随后自动重建索引。</small></div>
+          <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择备份文件')">选择备份并恢复</button></div>
+        </div>
+
+        <p class="footnote">上次导出：2026-08-30 21:14 · mefinder-backup-20260830.zip</p>
+      </section>
+
+      <!-- 软件更新 -->
+      <section class="panel" id="panel-update" role="tabpanel" aria-label="软件更新" hidden>
+        <div class="panel-head">
+          <h1>软件更新</h1>
+          <p>检查 GitHub Releases 上的新版本。</p>
+        </div>
+
+        <div class="pathcard" style="align-items:center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>
+          <div style="flex:1">
+            <strong>当前版本 v0.5.4</strong>
+            <small id="update-msg">尚未检查更新。检查只读取版本信息，不会自动替换应用。</small>
+          </div>
+          <button class="btn" type="button" id="update-btn" onclick="checkUpdate(this)">检查更新</button>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <div class="row-copy"><strong>启动时自动检查并下载更新</strong><small>仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认。</small></div>
+          <div class="row-control"><label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);background:var(--text-primary);color:var(--surface);padding:9px 15px;border-radius:var(--radius-pill);font-size:13.5px;box-shadow:var(--shadow-pop);opacity:0;pointer-events:none;transition:opacity .16s var(--ease),transform .16s var(--ease)"></div>
+
+<script>
+/* ---------- 导航 ---------- */
+const navItems = Array.from(document.querySelectorAll('.nav-item'));
+navItems.forEach(item=>{
+  item.addEventListener('click',()=>showPanel(item.dataset.panel));
+  item.addEventListener('keydown',e=>{
+    const i = navItems.indexOf(item);
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      e.preventDefault();
+      const next = navItems[(i + (e.key==='ArrowDown'?1:navItems.length-1)) % navItems.length];
+      next.focus(); showPanel(next.dataset.panel);
+    }
+  });
+});
+function showPanel(name){
+  navItems.forEach(n=>n.setAttribute('aria-selected', String(n.dataset.panel===name)));
+  document.querySelectorAll('.panel').forEach(p=>{p.hidden = p.id !== 'panel-'+name;});
+  document.querySelector('.content').scrollTop = 0;
+}
+
+/* ---------- 主题 ---------- */
+function toggleTheme(){
+  const root = document.documentElement;
+  const dark = root.getAttribute('data-theme') === 'dark'
+    || (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  root.setAttribute('data-theme', dark ? 'light' : 'dark');
+  syncThemeLabel();
+}
+function syncThemeLabel(){
+  const root = document.documentElement;
+  const dark = root.getAttribute('data-theme') === 'dark'
+    || (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.getElementById('theme-toggle').textContent = dark ? '浅色' : '深色';
+}
+syncThemeLabel();
+
+/* ---------- 通用控件 ---------- */
+function swText(input, on, off){
+  const text = input.parentElement.querySelector('.sw-text');
+  if(text) text.textContent = input.checked ? on : off;
+}
+function segPick(btn){
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));
+  btn.setAttribute('aria-pressed','true');
+}
+let toastTimer;
+function demoToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(8px)';
+  }, 2000);
+}
+
+/* ---------- 自绘下拉菜单 ---------- */
+function ddToggle(btn){
+  const dd = btn.closest('.dd');
+  const open = dd.dataset.open === 'true';
+  ddCloseAll();
+  if(open) return;
+  dd.dataset.open = 'true';
+  btn.setAttribute('aria-expanded','true');
+  const menu = dd.querySelector('.dd-menu');
+  menu.hidden = false;
+  const current = menu.querySelector('[aria-selected="true"]') || menu.firstElementChild;
+  current.focus();
+}
+function ddCloseAll(focusBack){
+  document.querySelectorAll('.dd[data-open="true"]').forEach(dd=>{
+    dd.dataset.open = 'false';
+    dd.querySelector('.dd-menu').hidden = true;
+    const btn = dd.querySelector('.dd-btn');
+    btn.setAttribute('aria-expanded','false');
+    if(focusBack) btn.focus();
+  });
+}
+function ddPick(option){
+  const dd = option.closest('.dd');
+  dd.querySelectorAll('.dd-option').forEach(o=>o.setAttribute('aria-selected', String(o===option)));
+  dd.dataset.value = option.dataset.value;
+  dd.querySelector('.dd-label').textContent = option.textContent.trim();
+  ddCloseAll(true);
+  const handler = dd.dataset.handler;
+  if(handler && window[handler]) window[handler](option.dataset.value);
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('.dd')) ddCloseAll(); });
+document.addEventListener('keydown', e=>{
+  const menu = e.target.closest && e.target.closest('.dd-menu');
+  if(!menu) return;
+  const options = Array.from(menu.querySelectorAll('.dd-option'));
+  const i = options.indexOf(e.target);
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    options[(i + (e.key === 'ArrowDown' ? 1 : options.length-1)) % options.length].focus();
+  }else if(e.key === 'Escape'){
+    e.preventDefault(); e.stopPropagation(); ddCloseAll(true);
+  }else if(e.key === 'Tab'){
+    ddCloseAll();
+  }
+});
+
+/* ---------- 阅读与检索 ---------- */
+function onPdfOpen(v){
+  document.getElementById('pdf-open-note').textContent = v === 'native'
+    ? '在内置阅读器中打开，可直接跳到命中页。'
+    : '在“预览”中打开，需要手动翻到命中页。';
+}
+function onLayout(v){
+  document.getElementById('layout-note').textContent = v === 'flow'
+    ? '正文随窗口宽度排版，适合连续阅读。'
+    : '保留原书的换行位置，便于逐行核对。';
+}
+
+/* ---------- 下载安装（演示） ---------- */
+function fakeInstall(btn, progressId, doneLabel, onDone){
+  const bar = document.getElementById(progressId);
+  const fill = bar.querySelector('span');
+  btn.disabled = true;
+  btn.textContent = '安装中';
+  bar.hidden = false;
+  let pct = 0;
+  const timer = setInterval(()=>{
+    pct += 8 + Math.random()*10;
+    fill.style.width = Math.min(pct,100) + '%';
+    if(pct >= 100){
+      clearInterval(timer);
+      setTimeout(()=>{
+        bar.hidden = true;
+        fill.style.width = '0%';
+        btn.disabled = false;
+        btn.textContent = '重新验证';
+        if(onDone) onDone(); else demoToast(doneLabel + '（演示）');
+      }, 320);
+    }
+  }, 260);
+}
+
+/* ---------- MinerU ---------- */
+function editAddress(){
+  document.getElementById('mineru-address').hidden = true;
+  document.getElementById('mineru-address-edit').hidden = false;
+  document.getElementById('mineru-address-btn').hidden = true;
+  document.getElementById('mineru-address-input').focus();
+}
+function saveAddress(){
+  const value = document.getElementById('mineru-address-input').value.trim() || 'https://mineru.net';
+  document.getElementById('mineru-address').textContent = value;
+  cancelAddress();
+  demoToast('服务地址已保存，需要重新检测连接（演示）');
+  ['acc1-state','acc2-state'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.className = 'state';
+    el.textContent = '地址已更改，尚未检测';
+  });
+}
+function cancelAddress(){
+  document.getElementById('mineru-address').hidden = false;
+  document.getElementById('mineru-address-edit').hidden = true;
+  document.getElementById('mineru-address-btn').hidden = false;
+  document.getElementById('mineru-address-btn').focus();
+}
+let lastTrigger = null;
+function openAccountEditor(name){
+  const editor = document.getElementById('mineru-editor');
+  const isNew = name === 'new';
+  document.getElementById('mineru-editor-title').textContent = isNew ? '添加账号' : '编辑「' + name + '」';
+  document.getElementById('acc-name').value = isNew ? '' : name;
+  document.getElementById('acc-token').value = '';
+  document.getElementById('acc-token-hint').textContent = isNew
+    ? '粘贴 MinerU API Token；保存后不会回显。'
+    : '留空保留已保存的密钥；密钥不会回显。';
+  document.getElementById('acc-remove').hidden = isNew;
+  document.getElementById('acc-hint').textContent = '';
+  editor.hidden = false;
+  lastTrigger = document.activeElement;
+  document.getElementById('acc-name').focus();
+}
+function closeAccountEditor(){
+  document.getElementById('mineru-editor').hidden = true;
+  if(lastTrigger) lastTrigger.focus();
+}
+function saveAccount(){
+  const name = document.getElementById('acc-name').value.trim();
+  if(!name){
+    document.getElementById('acc-hint').textContent = '请填写账号名称';
+    document.getElementById('acc-hint').className = 'state bad grow';
+    document.getElementById('acc-name').focus();
+    return;
+  }
+  closeAccountEditor();
+  demoToast('已保存账号「' + name + '」，尚未检测连接（演示）');
+}
+function testConn(btn, stateId){
+  const el = document.getElementById(stateId);
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '检测中';
+  el.className = 'state busy';
+  el.textContent = '正在检测…';
+  setTimeout(()=>{
+    btn.disabled = false;
+    btn.textContent = original;
+    const ok = Math.random() > 0.3;
+    el.className = ok ? 'state ok' : 'state bad';
+    el.textContent = ok ? '连接正常（刚刚检测）' : '连接失败：服务返回 401，密钥可能已失效';
+  }, 1100);
+}
+function openVisionEditor(name){
+  const editor = document.getElementById('vision-editor');
+  const isNew = name === 'new';
+  document.getElementById('vision-editor-title').textContent = isNew ? '添加接口' : '编辑「' + name + '」';
+  editor.hidden = false;
+  document.getElementById('vp-base').focus();
+}
+
+/* ---------- 本地 OCR 状态演示 ---------- */
+function ocrState(state, btn){
+  if(btn){
+    btn.parentElement.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+  }
+  const label = document.getElementById('ocr-modern-state');
+  const action = document.getElementById('ocr-modern-btn');
+  const hint = document.getElementById('ocr-modern-hint');
+  const sw = document.getElementById('ocr-modern-switch');
+  sw.hidden = true;
+  action.hidden = false;
+  action.disabled = false;
+  const map = {
+    unknown:  ['状态未知', 'state bad', '重新读取', '读取组件状态失败：组件目录无法访问。未知状态下不会开始安装。'],
+    none:     ['未安装', 'state warn', '下载安装', '安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络。'],
+    failed:   ['安装失败', 'state bad', '重试安装', '下载模型时中断（第 3 步，共 4 步）：网络连接被重置。可重试或查看详情。'],
+    installed:['已安装，未启用', 'state', '', '已安装 NDLOCR-Lite 1.2.3。启用后才会在导入日文扫描件时使用。'],
+    enabled:  ['已启用', 'state ok', '', '导入日文扫描件、图像型 PDF 时自动使用；不联网。']
+  };
+  const [text, cls, actionLabel, hintText] = map[state];
+  label.textContent = text;
+  label.className = cls;
+  hint.textContent = hintText;
+  if(actionLabel){
+    action.textContent = actionLabel;
+  }else{
+    action.hidden = true;
+    sw.hidden = false;
+    const input = sw.querySelector('input');
+    input.checked = state === 'enabled';
+    swText(input, '已启用', '未启用');
+  }
+}
+
+/* ---------- 引文格式 ---------- */
+function countStyles(){
+  const n = document.querySelectorAll('#panel-citation input:checked').length;
+  document.getElementById('citation-count').textContent = n
+    ? '已启用 ' + n + ' 种，按此顺序显示在「复制出处」中。'
+    : '未启用任何格式，「复制出处」只提供纯文本引用。';
+}
+
+/* ---------- 外观 ---------- */
+/* 配色取自 05-theme-engine.js 的 THEME_PRESETS，预览用各主题自己的真实色值渲染 */
+const THEMES = [
+  {id:'frost-blue',label:'晴蓝',mode:'light',accent:'#0F62E6',highlight:'#D99000',bg:'#F5F8FC',fg:'#172033',desc:'清爽理性，适合日间使用'},
+  {id:'warm-paper',label:'雾灰',mode:'light',accent:'#5B6472',highlight:'#3A6EA5',bg:'#F5F6F8',fg:'#1F2328',desc:'中性灰，不偏色彩，专注阅读'},
+  {id:'sepia',label:'棕褐',mode:'light',accent:'#B0742A',highlight:'#2563B8',bg:'#F3E7CC',fg:'#43331C',desc:'经典书页棕，温润偏黄'},
+  {id:'sage-ivory',label:'抹茶',mode:'light',accent:'#4A5F39',highlight:'#7656B8',bg:'#F7F7F1',fg:'#25291F',desc:'低刺激、安静，适合长时间阅读'},
+  {id:'warm-sand',label:'暖沙',mode:'light',accent:'#9F4A1E',highlight:'#2563B8',bg:'#FBF7F1',fg:'#34251E',desc:'温暖柔和，带轻微纸张气质'},
+  {id:'rose-mist',label:'樱粉',mode:'light',accent:'#B0335A',highlight:'#1B8A99',bg:'#FDF6F8',fg:'#2C2528',desc:'清柔克制，带淡粉强调'},
+  {id:'lavender-purple',label:'薰衣草',mode:'light',accent:'#6544B0',highlight:'#B86C08',bg:'#F9F7FD',fg:'#282532',desc:'优雅现代，使用柔和薰衣草紫'},
+  {id:'solarized-light',label:'日光',mode:'light',accent:'#B58900',highlight:'#2563B8',bg:'#FDF6E3',fg:'#586E75',desc:'经典米黄纸底 + 琥珀金（Solarized Light）'},
+  {id:'rose-pine-dawn',label:'玫瑰',mode:'light',accent:'#D7827E',highlight:'#56949F',bg:'#FAF4ED',fg:'#575279',desc:'柔雾玫瑰调，温软文艺（Rosé Pine Dawn）'},
+  {id:'midnight',label:'午夜',mode:'dark',accent:'#1F6FEB',highlight:'#58A6FF',bg:'#0D1117',fg:'#E6EDF3',desc:'沉静蓝黑，克制专业（GitHub Dark）'},
+  {id:'oled-black',label:'纯黑',mode:'dark',accent:'#006EFE',highlight:'#3291FF',bg:'#000000',fg:'#EDEDED',desc:'纯黑背景 + 亮蓝，OLED 省电（Vercel）'},
+  {id:'midnight-blue',label:'暮紫',mode:'dark',accent:'#CBA6F7',highlight:'#89B4FA',bg:'#1E1E2E',fg:'#CDD6F4',desc:'柔紫沉静，人气配色（Catppuccin Mocha）'},
+  {id:'dracula',label:'暗夜',mode:'dark',accent:'#FF79C6',highlight:'#8BE9FD',bg:'#282A36',fg:'#F8F8F2',desc:'经典粉紫高饱和，活力十足（Dracula）'},
+  {id:'tokyo-night',label:'东京夜',mode:'dark',accent:'#7AA2F7',highlight:'#7DCFFF',bg:'#1A1B26',fg:'#A9B1D6',desc:'深靛蓝调，夜色霓虹（Tokyo Night）'},
+  {id:'gruvbox-dark',label:'森褐',mode:'dark',accent:'#FE8019',highlight:'#83A598',bg:'#282828',fg:'#EBDBB2',desc:'暖褐灰底 + 橙调，复古护眼（Gruvbox）'},
+  {id:'everforest',label:'森绿',mode:'dark',accent:'#A7C080',highlight:'#7FBBB3',bg:'#2D353B',fg:'#D3C6AA',desc:'柔和森林绿，低饱和自然（Everforest）'},
+  {id:'nord',label:'极夜',mode:'dark',accent:'#88C0D0',highlight:'#81A1C1',bg:'#2E3440',fg:'#ECEFF4',desc:'冷蓝灰调，清冷内敛（Nord）'},
+  {id:'absolutely',label:'陶褐',mode:'dark',accent:'#CC7D5E',highlight:'#8AB4C0',bg:'#2D2D2B',fg:'#F9F9F7',desc:'暖陶褐点缀，中性暖灰底（Absolutely）'}
+];
+const appearance = { mode:'system', slot:'light', light:'frost-blue', dark:'midnight' };
+
+function mix(a, b, t){
+  const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+  const [r1,g1,b1] = hex(a), [r2,g2,b2] = hex(b);
+  const c = (x,y) => Math.round(x + (y-x)*t).toString(16).padStart(2,'0');
+  return '#' + c(r1,r2) + c(g1,g2) + c(b1,b2);
+}
+function palette(theme){
+  const light = theme.mode === 'light';
+  return {
+    bg: theme.bg,
+    sidebar: mix(theme.bg, theme.fg, .06),
+    surface: light ? mix(theme.bg,'#ffffff',.75) : mix(theme.bg,'#ffffff',.07),
+    text: theme.fg,
+    line: mix(theme.fg, theme.bg, .45),
+    faint: mix(theme.fg, theme.bg, .68),
+    accent: theme.accent,
+    highlight: theme.highlight
+  };
+}
+const themeById = id => THEMES.find(t=>t.id===id);
+
+function mockHTML(theme){
+  const p = palette(theme);
+  return `<span class="mode-mock" style="background:${p.bg}">
+    <span class="mock-side" style="background:${p.sidebar}"></span>
+    <span class="mock-main">
+      <span class="mock-bar" style="background:${p.text};opacity:.8"></span>
+      <span class="mock-line" style="background:${p.line}"></span>
+      <span class="mock-line is-short" style="background:${p.faint}"></span>
+      <span class="mock-accent" style="background:${p.accent}"></span>
+    </span></span>`;
+}
+function renderModes(){
+  const light = themeById(appearance.light), dark = themeById(appearance.dark);
+  const check = '<svg class="mode-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+  const cards = [
+    ['system','跟随系统', `<span class="mode-half">${mockHTML(light)}</span><span class="mode-half is-dark">${mockHTML(dark)}</span>`],
+    ['light','浅色', mockHTML(light)],
+    ['dark','深色', mockHTML(dark)]
+  ];
+  document.getElementById('mode-cards').innerHTML = cards.map(([id,label,inner])=>`
+    <button type="button" class="mode" role="radio" aria-checked="${appearance.mode===id}" onclick="pickMode('${id}')">
+      <span class="mode-preview" aria-hidden="true">${inner}</span>
+      <span class="mode-label">${check}${label}</span>
+    </button>`).join('');
+  document.getElementById('theme-pair').hidden = appearance.mode !== 'system';
+  document.getElementById('slot-light-name').textContent = light.label;
+  document.getElementById('slot-dark-name').textContent = dark.label;
+  document.querySelectorAll('.pair-slot').forEach(sl=>sl.setAttribute('aria-checked', String(sl.dataset.slot === appearance.slot)));
+}
+function renderThemes(){
+  const wantDark = appearance.mode === 'dark' || (appearance.mode === 'system' && appearance.slot === 'dark');
+  const current = wantDark ? appearance.dark : appearance.light;
+  const note = appearance.mode === 'system'
+    ? `正在为「${appearance.slot === 'dark' ? '夜晚' : '白天'}」选择${wantDark ? '深色' : '浅色'}主题。`
+    : `正在选择${wantDark ? '深色' : '浅色'}主题。`;
+  document.getElementById('theme-gallery-note').textContent = note;
+  document.getElementById('theme-grid').innerHTML = THEMES
+    .filter(t => (t.mode === 'dark') === wantDark)
+    .map(t=>{
+      const p = palette(t);
+      const on = t.id === current;
+      return `<button type="button" class="theme" role="radio" aria-checked="${on}" onclick="pickTheme('${t.id}')">
+        <span class="theme-preview" style="background:${p.bg}" aria-hidden="true">
+          <span class="tp-top">
+            <span class="tp-aa" style="color:${p.text}">Aa</span>
+            <span class="tp-colors"><span class="tp-accent" style="background:${p.accent}"></span><span class="tp-highlight" style="background:${p.highlight}"></span></span>
+          </span>
+          <span class="tp-card" style="background:${p.surface}">
+            <span class="tp-line" style="background:${p.line}"></span>
+            <span class="tp-line is-short" style="background:${p.line}"></span>
+          </span>
+        </span>
+        <span class="theme-meta"><span class="theme-name">${t.label}</span>${on ? '<span class="theme-tag">使用中</span>' : ''}</span>
+        <small class="theme-desc">${t.desc}</small>
+      </button>`;
+    }).join('');
+}
+function pickMode(mode){
+  appearance.mode = mode;
+  if(mode !== 'system') appearance.slot = mode;
+  const root = document.documentElement;
+  if(mode === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+  syncThemeLabel();
+  renderModes(); renderThemes();
+}
+function pickSlot(slot){
+  appearance.slot = slot;
+  renderModes(); renderThemes();
+}
+function pickTheme(id){
+  const theme = themeById(id);
+  appearance[theme.mode] = id;
+  renderModes(); renderThemes();
+  demoToast('已切换到「' + theme.label + '」（讨论稿只更新预览）');
+}
+renderModes(); renderThemes();
+
+/* ---------- 软件更新 ---------- */
+function checkUpdate(btn){
+  const msg = document.getElementById('update-msg');
+  btn.disabled = true;
+  btn.textContent = '检查中';
+  msg.textContent = '正在读取 GitHub Releases…';
+  setTimeout(()=>{
+    btn.disabled = false;
+    btn.textContent = '查看发布页';
+    msg.textContent = '发现新版本 v0.5.5（2026-09-10）。下载后安装前仍会由你确认。';
+  }, 1200);
+}
+
+/* ---------- Escape 关闭编辑层 ---------- */
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'Escape') return;
+  const mineru = document.getElementById('mineru-editor');
+  const vision = document.getElementById('vision-editor');
+  if(!mineru.hidden){ closeAccountEditor(); return; }
+  if(!vision.hidden){ vision.hidden = true; return; }
+  if(!document.getElementById('mineru-address-edit').hidden) cancelAddress();
+});
+</script>

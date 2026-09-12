@@ -1560,7 +1560,12 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .appearance-mode-card:active { transform: scale(0.988); }
 .appearance-mode-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .appearance-mode-card.is-active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-card); }
-.mode-preview { display: block; position: relative; aspect-ratio: 16 / 10; overflow: hidden; border-bottom: 1px solid var(--border-subtle); }
+.mode-preview {
+  /* width:100% 不可省：WebKit 里 <button> 当 flex 容器时子项不会被 stretch，
+     宽度不确定则 aspect-ratio 解不出高度，预览会塌成 0（macOS 实测 0×0）。 */
+  display: block; position: relative; width: 100%; aspect-ratio: 16 / 10;
+  overflow: hidden; border-bottom: 1px solid var(--border-subtle);
+}
 .mode-preview-split { display: block; }
 .mode-preview-half { position: absolute; inset: 0; }
 /* 右上三角盖深色，左下留浅色，形成一条对角分界线。 */
