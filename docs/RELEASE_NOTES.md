@@ -1,6 +1,6 @@
 # 文献原句定位器 v0.5.4
 
-> **2026-09-11：保留 Windows 迁移修复版构建记录；新增 macOS 0.5.4 测试修订已完成验证，尚未正式发布本轮修订。**
+> **2026-09-13：macOS arm64 包已重建（2225 项测试通过），设置界面五主题与对齐期间搜索 503 修复均已入包；尚未正式发布本轮修订。**
 
 迁移逻辑跳过运行中的 `runtime/webview-data` 缓存，避免文件锁定或缓存变化导致复制失败。下方 Windows 构建记录来自远端 `adb810f`，不代表已包含其后的 Mac 与本轮新增功能。
 
@@ -15,12 +15,12 @@
 
 ## macOS arm64 本轮测试修订
 
-打开已有资料库与迁移分为两个入口，重启后生效；统一 PDF 阅读和数据位置设置。2111 项 unittest 通过（22 skip），Ruff、Node、严格签名、MCP 冒烟与 ZIP/DMG 校验通过。
+2026-09-13 重建：包含设置界面五主题（自绘下拉、行式布局、MinerU 账号状态与本地 OCR 六态如实呈现）、macOS 外观模式卡塌陷修复，以及对齐期间搜索保持可用（503 修复）。2225 项 unittest 通过（22 skip），Ruff、Node、严格签名、MCP 冒烟与 ZIP/DMG 校验通过。
 
 | 本地测试文件 | SHA-256 |
 |---|---|
-| `MEFinder-v0.5.4-macos-arm64.dmg` | `d5dcca9df8be256ccf10e6807141863989cefa737b0e8b35f81c8b746aea84e9` |
-| `MEFinder-v0.5.4-macos-arm64.zip` | `f29b2a337d73584fd56e4dbbd0b397fe2b76bc2217acea96bbda87ca5137e647` |
+| `MEFinder-v0.5.4-macos-arm64.dmg` | `50cd0813be7dd433fb6b8e50dfdb2c6bbdbd2f4b5167ab3ba2880722811fbbac` |
+| `MEFinder-v0.5.4-macos-arm64.zip` | `8f18f610de7f5b5e2a9f03c7691d613f9cd501263e2be02a697dfdf2862e22ad` |
 
 本节为本地候选，不表示已上传或发布；Windows 上方旧产物未包含这些新增功能。
 
