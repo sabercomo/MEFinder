@@ -460,7 +460,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('id="pdf-reader-body"', HTML)
         self.assertIn('data-pdf-open-choice="native"', HTML)
         self.assertIn('data-pdf-open-choice="system"', HTML)
-        self.assertIn("使用 macOS PDFKit", HTML)
+        self.assertIn("用 macOS PDFKit 在内置阅读器中打开", HTML)
         self.assertIn("macOS 预览", HTML)
         self.assertIn("function setPdfOpenMode(mode)", HTML)
         self.assertIn("preferencesLoadPromise: null", HTML)
@@ -487,7 +487,7 @@ class ThemeMarkupTests(unittest.TestCase):
             'id="software-update-settings"',
             'id="auto-update-enabled"',
             "Edge WebView2",
-            "系统默认 PDF 阅读器",
+            "Windows 默认阅读器",
             "async function checkForUpdates(automatic)",
             "auto_update:settingsStore.autoUpdateEnabled",
             "confirm_token:installToken",

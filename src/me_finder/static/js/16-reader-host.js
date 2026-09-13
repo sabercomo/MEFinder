@@ -9,6 +9,8 @@
     var input = document.getElementById('reader-window-enabled');
     input.checked = enabled;
     input.disabled = !loaded || saving;
+    var state = document.getElementById('reader-window-state');
+    if (state) state.textContent = !loaded ? '读取中' : enabled ? '开启' : '关闭';
   }
 
   function syncReaderWindowPreferences(data) {

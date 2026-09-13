@@ -508,22 +508,22 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
           <section class="settings-section desktop-pdf-settings active" id="pdf-reader-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">阅读与检索</span><span class="settings-section-note">设置打开文献的方式、正文显示与检索字形匹配</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">阅读与检索</span><span class="settings-section-note">设置打开文献的方式与正文显示。</span></span>
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
-            <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span><span class="settings-section-note">从搜索结果打开原始 PDF 的方式</span></div>
+            <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span></div>
             <div class="settings-choice-row">
               <span class="settings-choice-copy">
                 <strong>打开 PDF 原文</strong>
-                <small id="pdf-native-description" data-pdf-open-description="native">直接跳到搜索命中的 PDF 物理页码</small>
-                <small id="pdf-system-description" data-pdf-open-description="system" hidden>使用系统默认应用打开；命中页码可能需要手动翻到</small>
+                <small id="pdf-native-description" data-pdf-open-description="native">在内置阅读器中打开，可直接跳到命中页。</small>
+                <small id="pdf-system-description" data-pdf-open-description="system" hidden>用系统默认应用打开，命中页码需要手动翻到。</small>
               </span>
               <span class="app-select settings-choice-select pdf-open-options" id="pdf-open-select">
-                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">应用内阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">内置 PDF 阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
                 <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="PDF 打开方式">
                   <label class="app-select-option is-selected" data-pdf-open-choice="native">
                     <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
-                    <span id="pdf-native-title">应用内阅读器</span>
+                    <span id="pdf-native-title">内置 PDF 阅读器</span>
                   </label>
                   <label class="app-select-option" data-pdf-open-choice="system">
                     <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
@@ -532,39 +532,40 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </span>
               </span>
             </div>
-            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span><span class="settings-section-note">用于结构化阅读和译本对照</span></div>
+            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span></div>
             <label class="setting-switch-row reading-window-row">
-              <span class="setting-switch-copy"><strong>独立阅读窗口</strong><small>开启后可单独拖动、缩放阅读窗口；下次打开阅读时生效</small></span>
+              <span class="setting-switch-copy"><strong>在独立窗口中阅读</strong><small>可单独移动与缩放，下次打开文献时生效。</small></span>
               <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
-              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="reader-window-state" aria-hidden="true">关闭</span>
             </label>
-            <div class="settings-subhead"><span class="settings-section-title">正文排版</span><span class="settings-section-note">结构化阅读中的段落显示方式</span></div>
+            <div class="settings-subhead"><span class="settings-section-title">正文排版</span></div>
             <div class="settings-choice-row">
               <span class="settings-choice-copy">
                 <strong>段落显示方式</strong>
-                <small data-reader-line-description="flow">正文回流填满阅读列，不受 PDF 物理断行限制</small>
-                <small data-reader-line-description="physical" hidden>按原 PDF 每行字数断行，便于逐字比对原书版面</small>
+                <small data-reader-line-description="flow">正文随窗口宽度排版，适合连续阅读。</small>
+                <small data-reader-line-description="physical" hidden>保留原书的换行位置，便于逐行核对。</small>
               </span>
               <span class="app-select settings-choice-select reader-line-options" id="reader-line-select">
-                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式查看</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式排版</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
                 <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="正文排版">
                   <label class="app-select-option is-selected" data-reader-line-choice="flow">
                     <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
-                    <span>流式查看</span>
+                    <span>流式排版</span>
                   </label>
                   <label class="app-select-option" data-reader-line-choice="physical">
                     <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
-                    <span>复刻 PDF 物理断行</span>
+                    <span>保留原始换行</span>
                   </label>
                 </span>
               </span>
             </div>
-            <div class="settings-subhead"><span class="settings-section-title">文献检索</span><span class="settings-section-note">搜索时的字形匹配范围</span></div>
+            <div class="settings-subhead"><span class="settings-section-title">文献检索</span></div>
               <label class="setting-switch-row" id="script-folding-option">
                 <span class="setting-switch-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
                 <input type="checkbox" id="script-folding-enabled" class="setting-switch-input" role="switch" checked onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
-                <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+                <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="script-folding-state" aria-hidden="true">开启</span>
               </label>
+            <p class="settings-footnote">设置变更自动保存</p>
             </div>
           </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
@@ -573,10 +574,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span id="alignment-model-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="embedding-model-body">
-              <div class="mineru-local-notice embedding-model-rerun-notice">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg>
-                <span>切换模型不会覆盖旧结果；请对需要更新的配对重新运行对齐。</span>
-              </div>
               <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型">
                 <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">
                   <div class="local-ocr-component-head">
@@ -613,6 +610,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   </div>
                 </section>
               </div>
+            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐。</p>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">

@@ -472,10 +472,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   与设置页其余分类的行式布局统一。
     # 0.5.4「文献检索」并入「阅读与检索」(DESIGN.md §3)、滑杆自绘、阅读窗口行
     #   去掉装饰图标、译本对齐去重复强调；导航项与分类数随之变化。
+    # 0.5.4 阅读与检索按讨论稿定稿：组标题不再带重复说明，选项名称与说明改用
+    #   讨论稿口径，开关补「开启 / 关闭」文字，页尾补「设置变更自动保存」。
     BASELINE_SHA256 = (
-        "bd03f6ba91f877eb21fa530dbe0bcbaa7cff550f371aaa3a5f2796e5106d0e42"
+        "9fbf4c55cfc60f95fb934e16937f5563ecd8c5ff4dc8bea2663a309e3707b97a"
     )
-    BASELINE_BYTES = 1104046
+    BASELINE_BYTES = 1104635
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

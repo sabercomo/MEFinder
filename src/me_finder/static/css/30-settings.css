@@ -297,6 +297,26 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .document-export-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
 .document-export-option.selected { background: var(--surface-selected); }
 /* Single boolean preference rendered as a switch row (e.g. 繁简统一检索). */
+/* 开关右侧的「开启 / 关闭」：颜色与位置之外再给一个文字确认（DESIGN.md §5）。 */
+.setting-switch-state {
+  min-width: 26px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+#pdf-reader-body #script-folding-option {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 12px;
+}
+
+/* 页面末尾的说明：不是警告也不是操作，只陈述事实（讨论稿的做法，取代整条提示框）。 */
+.settings-footnote {
+  margin: 26px 0 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 /* 滑杆：系统原生 range 会带平台自己的轨道与滑块配色，与设置页控件不是一套外观
    （DESIGN.md §5 的自绘要求同样适用）。轨道 4px、滑块 18px，颜色全部走 token。 */
 .settings-content input[type="range"] {
@@ -1991,8 +2011,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #pdf-reader-body .settings-subhead .settings-section-title { font-size: 14px; font-weight: 600; }
 #pdf-reader-body .pdf-open-options { margin-top: 0; }
 #pdf-reader-body .reading-window-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px; margin-top: 0;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: 12px; margin-top: 0;
 }
 #pdf-reader-body .setting-switch-copy strong { font-size: 15px; font-weight: 500; }
 #pdf-reader-body .setting-switch-copy small { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
