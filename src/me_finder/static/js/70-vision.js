@@ -790,8 +790,10 @@
     document.getElementById('parser-stat-pages').textContent = Number(total.parsed_page_count || 0).toLocaleString();
     document.getElementById('parser-stat-providers').textContent = Number(total.provider_count || 0).toLocaleString();
     var list = document.getElementById('parser-provider-list');
+    var overview = document.getElementById('parser-share-overview');
     var providers = Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : [];
     if (!providers.length) {
+      overview.innerHTML = '';
       list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
       return;
     }
@@ -803,20 +805,42 @@
       var bLocal = b.provider_kind === 'local' ? 0 : 1;
       return aLocal - bLocal;
     });
-    list.innerHTML = orderedProviders.map(function(provider, index) {
+    // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
+    var shareOf = function(provider) {
+      var pageCount = Number(provider.parsed_page_count || 0);
+      var share = totalPages > 0 ? pageCount / totalPages : 0;
+      var percent = totalPages > 0 ? Math.round(share * 100) : null;
+      return {
+        pageCount: pageCount,
+        share: share,
+        label: percent === null ? '—' : (percent === 0 && pageCount > 0 ? '<1%' : percent + '%')
+      };
+    };
+    // 占比是部分-整体关系：顶部一根 100% 构成条 + 图例说明各段，
+    // 行内不再重复画条，避免被误读成加载进度。
+    if (totalPages > 0) {
+      var segments = orderedProviders.map(function(provider) {
+        return '<span class="parser-share-seg ' + (provider.provider_kind === 'local' ? 'local' : 'api') + '" style="width:' + (shareOf(provider).share * 100).toFixed(1) + '%"></span>';
+      }).join('');
+      var legendRows = orderedProviders.map(function(provider) {
+        var kind = provider.provider_kind === 'local' ? '本地' : 'API';
+        return '<div><i class="parser-share-dot ' + (provider.provider_kind === 'local' ? 'local' : 'api') + '" aria-hidden="true"></i><span class="parser-share-name">' + esc(provider.provider_name || provider.provider_id) + '</span><small>' + kind + '</small><b>' + shareOf(provider).label + '</b><small class="parser-share-pages">' + shareOf(provider).pageCount.toLocaleString() + ' 页</small></div>';
+      }).join('');
+      var breakdownLabel = orderedProviders.map(function(provider) {
+        return (provider.provider_name || provider.provider_id) + '占' + shareOf(provider).label;
+      }).join('，');
+      overview.innerHTML = '<div class="parser-share-stack"><div class="parser-share-bar" role="img" aria-label="按解析服务构成：' + esc(breakdownLabel) + '">' + segments + '</div><div class="parser-share-cap">全库已解析 ' + totalPages.toLocaleString() + ' 页，按解析服务构成</div></div><div class="parser-share-legend">' + legendRows + '</div>';
+    } else {
+      overview.innerHTML = '';
+    }
+    list.innerHTML = orderedProviders.map(function(provider) {
       var isMineru = provider.provider_id === 'mineru-cloud' || provider.provider_id === 'mineru-local';
       var isCloudMineru = provider.provider_id === 'mineru-cloud';
       var kind = provider.provider_kind === 'local' ? '本地' : 'API';
       var details = renderParserProviderBooks(provider);
       if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
       var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
-      // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
-      var pageCount = Number(provider.parsed_page_count || 0);
-      var share = totalPages > 0 ? pageCount / totalPages : 0;
-      var sharePercent = totalPages > 0 ? Math.round(share * 100) : null;
-      var shareLabel = sharePercent === null ? '—'
-        : (sharePercent === 0 && pageCount > 0 ? '<1%' : sharePercent + '%');
-      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small><span class="parser-provider-bar" aria-hidden="true"><span style="width:' + (share * 100).toFixed(1) + '%"></span></span></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + pageCount.toLocaleString() + '</b> 页</span><span class="parser-provider-number parser-provider-share"><b>' + shareLabel + '</b></span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
+      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
     }).join('');
   }
 
