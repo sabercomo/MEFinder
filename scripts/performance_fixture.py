@@ -6,6 +6,7 @@ import hashlib
 import json
 import random
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from src.me_finder.database import build_database
@@ -102,7 +103,7 @@ def create_fixture(root: Path, *, documents: int = 32, paragraphs: int = 2000,
     database = root / "data" / "index.sqlite3"
     build_database(index, database)
     pivot, target = f"bench-{documents:03d}", f"bench-{documents + 1:03d}"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection:
         connection.execute(
             "INSERT INTO document_groups VALUES (?, ?, ?, ?, ?)",
             ("bench-pair", "Synthetic bilingual pair", pivot, "t", "t"),
@@ -111,6 +112,7 @@ def create_fixture(root: Path, *, documents: int = 32, paragraphs: int = 2000,
             "INSERT INTO document_group_members VALUES (?, ?, ?, ?, ?)",
             [("bench-pair", pivot, "pivot", 0, "t"), ("bench-pair", target, "target", 1, "t")],
         )
+        connection.commit()
         schema = connection.execute("PRAGMA user_version").fetchone()[0]
     manifest = {
         "fixture_version": FIXTURE_VERSION, "seed": seed, "documents": documents + 2,
