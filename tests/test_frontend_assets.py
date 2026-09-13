@@ -481,10 +481,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   「只读文字 + 修改」，移除账号移进编辑区；文档传输与引文格式选择点移到
     #   左侧；本地 OCR 顶部提示框改为折叠区，下载按钮降为次要。
     # 0.5.4 解析统计补「占比」列与条形（按页数，与总览同口径）。
+    # 0.5.4 数据备份显示「上次导出」，记录由后端在导出成功后写入本机偏好。
     BASELINE_SHA256 = (
-        "80f885027837389d995a0c75e264ba9dd34272f19fc8467a0393e2b3eca0a441"
+        "bfe705066a15ec04b1f8d70b04eb9040be48ff89864081b2c9327a49711fb94c"
     )
-    BASELINE_BYTES = 1110187
+    BASELINE_BYTES = 1111344
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

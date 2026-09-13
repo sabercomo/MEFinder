@@ -132,6 +132,7 @@ from .persistence import SQLiteDocumentReadRepository
 from .preferences import (
     read_preferences,
     resolve_preferences_path,
+    record_backup_export,
     save_preferences,
 )
 from .preferences_controller import PreferencesController
@@ -363,6 +364,7 @@ def build_application_runtime(
             durable_operations=durable_operations,
             index_runtime=index_runtime,
         ).enrich,
+        record_backup_export=record_backup_export,  # 导出成功后记进本机偏好
     )
     deletion_coordinator = DocumentDeletionCoordinator(
         context.paths,

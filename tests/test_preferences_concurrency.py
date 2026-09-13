@@ -61,6 +61,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "online_auto_match_threshold": 0.9,
             "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
             "alignment_thresholds": default_alignment_threshold_settings(),
+            "last_backup_export": None,
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

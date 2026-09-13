@@ -979,6 +979,7 @@
       try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(Math.round(onlineMetadataAutoMatchThreshold * 100))); } catch (_) {}
       global.MEFinder.imports.syncOnlineAutoMatchControl();
     }
+    global.MEFinder.parserRuntime.renderLastBackupExport(data.last_backup_export);
     settingsStore.currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
     settingsStore.currentPdfParseMode = global.MEFinder.imports.normalizePdfParseMode(data.pdf_parse_mode);
     settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'

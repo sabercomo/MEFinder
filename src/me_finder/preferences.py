@@ -343,6 +343,9 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     export_page_cleanup = _normalized_export_page_cleanup(
         payload.get("export_page_cleanup") if isinstance(payload, dict) else None
     )
+    last_backup_export = _normalized_last_backup_export(
+        payload.get("last_backup_export") if isinstance(payload, dict) else None
+    )
     return {
         "theme": theme,
         "appearance": appearance,
@@ -363,7 +366,40 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "online_auto_match_threshold": online_auto_match,
         "alignment_embedding_model_id": alignment_embedding_model_id,
         "alignment_thresholds": alignment_thresholds,
+        "last_backup_export": last_backup_export,
     }
+
+
+def _normalized_last_backup_export(value: Any) -> dict[str, Any] | None:
+    """Keep only what the backend actually wrote: path, file name, timestamp.
+
+    Returns None when no export has been recorded, so the UI can say so instead
+    of inventing a date.
+    """
+
+    if not isinstance(value, Mapping):
+        return None
+    path = str(value.get("path") or "").strip()
+    if not path:
+        return None
+    exported_at = value.get("exported_at")
+    if not isinstance(exported_at, (int, float)) or exported_at <= 0:
+        return None
+    size_bytes = value.get("size_bytes")
+    if not isinstance(size_bytes, int) or size_bytes < 0:
+        size_bytes = None
+    return {
+        "path": path,
+        "file_name": Path(path).name,
+        "exported_at": int(exported_at),
+        "size_bytes": size_bytes,
+    }
+
+
+def record_backup_export(record: Mapping[str, Any], path: Path | None = None) -> dict[str, Any]:
+    """Persist the last successful backup export so the UI can state it later."""
+
+    return save_preferences({"last_backup_export": dict(record)}, path)
 
 
 def _normalized_export_page_cleanup(value: Any) -> dict[str, Any]:
@@ -463,6 +499,11 @@ def _save_preferences_locked(
         if document_export_mode not in VALID_DOCUMENT_EXPORT_MODES:
             raise ValueError("不支持的文档包导出方式")
         current["document_export_mode"] = str(document_export_mode)
+    if "last_backup_export" in updates:
+        record = _normalized_last_backup_export(updates["last_backup_export"])
+        if record is None and updates["last_backup_export"] is not None:
+            raise ValueError("备份导出记录缺少路径或时间")
+        current["last_backup_export"] = record
     if "script_folding" in updates:
         if not isinstance(updates["script_folding"], bool):
             raise ValueError("繁简统一检索开关必须为布尔值")

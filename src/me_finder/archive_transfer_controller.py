@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Protocol, Tuple
 
@@ -30,6 +31,11 @@ class BackupTransferPort(Protocol):
         ...
 
 
+class BackupExportRecorder(Protocol):
+    def __call__(self, record: Mapping[str, object]) -> object:
+        ...
+
+
 class ArchiveTransferController:
     """Validate archive commands while leaving file framing to HTTP."""
 
@@ -44,6 +50,7 @@ class ArchiveTransferController:
         export_document_markdown: DocumentExporter = export_indexed_pdf_markdown,
         export_document_epub: DocumentExporter = export_indexed_pdf_epub,
         prepare_document_export: DocumentExporter | None = None,
+        record_backup_export: BackupExportRecorder | None = None,
     ) -> None:
         self._backup = backup
         self._database_path = Path(database_path)
@@ -53,6 +60,7 @@ class ArchiveTransferController:
         self._export_document_markdown = export_document_markdown
         self._export_document_epub = export_document_epub
         self._prepare_document_export = prepare_document_export
+        self._record_backup_export = record_backup_export
 
     def export_backup(self, payload: object) -> ArchiveTransferResponse:
         try:
@@ -60,9 +68,26 @@ class ArchiveTransferController:
         except ValueError as exc:
             return 400, {"error": str(exc)}
         try:
-            return 200, self._backup.export(output_dir=output_dir)
+            result = self._backup.export(output_dir=output_dir)
         except (OSError, ValueError) as exc:
             return 500, {"error": f"导出备份失败：{exc}"}
+        # 记录「上次导出」——只在导出确实成功后写，失败不留痕迹。记录失败不能
+        # 让导出本身报错：文件已经写出去了。
+        exported_at = int(time.time())
+        result = dict(result)
+        result["exported_at"] = exported_at
+        if self._record_backup_export is not None:
+            try:
+                self._record_backup_export(
+                    {
+                        "path": str(result.get("path") or ""),
+                        "exported_at": exported_at,
+                        "size_bytes": result.get("size_bytes"),
+                    }
+                )
+            except (OSError, ValueError):
+                pass
+        return 200, result
 
     def export_document(self, payload: object) -> ArchiveTransferResponse:
         if not isinstance(payload, Mapping):
@@ -195,6 +220,7 @@ def build_archive_transfer_controller(
     runtime_root: Path,
     document_output_dir: Path,
     prepare_document_export=None,
+    record_backup_export: BackupExportRecorder | None = None,
 ) -> ArchiveTransferController:
     """Compose backup coordination and the read-only document exporters."""
 
@@ -207,6 +233,7 @@ def build_archive_transfer_controller(
         document_output_dir=document_output_dir,
         export_document=export_indexed_pdf,
         prepare_document_export=prepare_document_export,
+        record_backup_export=record_backup_export,
     )
 
 

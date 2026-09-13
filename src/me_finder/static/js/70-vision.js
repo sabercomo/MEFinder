@@ -850,6 +850,22 @@
     return loadParserStatistics();
   }
 
+  function renderLastBackupExport(record) {
+    var node = document.getElementById('backup-last-export');
+    if (!node) return;
+    if (!record || !record.exported_at) {
+      node.textContent = '还没有导出过备份';
+      return;
+    }
+    var when = new Date(Number(record.exported_at) * 1000);
+    var stamp = when.getFullYear() + '-' + String(when.getMonth() + 1).padStart(2, '0')
+      + '-' + String(when.getDate()).padStart(2, '0') + ' '
+      + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
+    var name = record.file_name || record.path || '';
+    node.textContent = '上次导出：' + stamp + (name ? ' · ' + name : '');
+    node.title = record.path || '';
+  }
+
   async function exportBackup() {
     var hint = document.getElementById('backup-export-hint');
     try {
@@ -866,6 +882,12 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
       if (hint) hint.textContent = '已导出到：' + data.path;
+      renderLastBackupExport({
+        path: data.path,
+        file_name: String(data.path || '').split(/[\\/]/).pop(),
+        exported_at: data.exported_at,
+        size_bytes: data.size_bytes
+      });
       showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
     } catch (e) {
       if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
@@ -1221,7 +1243,8 @@
   }
 
   var parserRuntimeAPI = {
-    // 走命名空间而不是再加两个全局：70-vision.js 的全局命令面有预算上限。
+    // 走命名空间而不是再加全局：70-vision.js 的全局命令面有预算上限。
+    renderLastBackupExport: renderLastBackupExport,
     startEditMineruService: startEditMineruService,
     cancelEditMineruService: cancelEditMineruService,
     loadGeneralModelConfig: loadGeneralModelConfig,
