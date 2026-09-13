@@ -372,7 +372,7 @@ class DataLocationTests(unittest.TestCase):
                     self.assertFalse(metadata_write_started.is_set())
                     self.assertEqual(metadata_response[0][0], 409)
                     self.assertIn(
-                        "正在迁移",
+                        "正在变更",
                         str(metadata_response[0][1].get("error")),
                     )
                     release_migration.set()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -47,6 +48,7 @@ def _make_extraction_dir(
             import fcntl
 
             fcntl.flock(handle, fcntl.LOCK_EX)
+        os.write(handle, b"claimed\n")
     if age_seconds:
         stale = time.time() - age_seconds
         os.utime(directory, (stale, stale))
@@ -55,15 +57,64 @@ def _make_extraction_dir(
 
 def _reset_claim_state() -> None:
     if onefile_cleanup._claimed_lock_handle is not None:
-        try:
-            os.close(onefile_cleanup._claimed_lock_handle)
-        except OSError:
-            pass
+        os.close(onefile_cleanup._claimed_lock_handle)
     onefile_cleanup._claimed_lock_path = None
     onefile_cleanup._claimed_lock_handle = None
 
 
 class CleanupLeakedExtractionsTests(unittest.TestCase):
+    def test_real_claim_protects_live_process_and_kill_releases_lock(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            live, _ = _make_extraction_dir(root, _MARKED_DIR)
+            payload = live / "payload.txt"
+            payload.write_text("still in use", encoding="ascii")
+            child = subprocess.Popen(
+                [sys.executable, "-c", """
+import sys
+from src.me_finder.onefile_cleanup import claim_current_extraction
+sys.frozen = True
+sys._MEIPASS = sys.argv[1]
+assert claim_current_extraction() is not None
+print('claimed', flush=True)
+sys.stdin.read()
+""", str(live)],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertEqual(child.stdout.readline().strip(), "claimed")
+                self.assertEqual(cleanup_leaked_extractions(root), 0)
+                self.assertEqual(payload.read_text(encoding="ascii"), "still in use")
+                child.kill()
+                child.communicate(timeout=10)
+                self.assertEqual(cleanup_leaked_extractions(root), 1)
+                self.assertFalse(live.exists())
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                child.communicate(timeout=10)
+
+    def test_keeps_empty_lock_while_owner_is_claiming(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            live, _ = _make_extraction_dir(root, _MARKED_DIR)
+            (live / LOCK_FILE_NAME).touch()
+            old = time.time() - 7200
+            os.utime(live, (old, old))
+            self.assertEqual(cleanup_leaked_extractions(root), 0)
+            self.assertTrue(live.exists())
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX lock probing")
+    def test_unreadable_lock_does_not_authorize_deletion(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            live, _ = _make_extraction_dir(root, _MARKED_DIR, with_lock=True)
+            with patch.object(onefile_cleanup.os, "open", side_effect=PermissionError("denied")), \
+                    self.assertLogs(onefile_cleanup.logger, level="WARNING"):
+                self.assertEqual(cleanup_leaked_extractions(root), 0)
+            self.assertTrue(live.exists())
+
     def test_deletes_old_marked_dir_with_unheld_lock(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -74,12 +125,12 @@ class CleanupLeakedExtractionsTests(unittest.TestCase):
             self.assertEqual(removed, 1)
             self.assertFalse(leaked.exists())
 
-    def test_deletes_old_marked_dir_without_lock(self) -> None:
+    def test_keeps_old_marked_dir_without_lock(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, age_seconds=7200.0)
-            self.assertEqual(cleanup_leaked_extractions(root), 1)
-            self.assertFalse(leaked.exists())
+            self.assertEqual(cleanup_leaked_extractions(root), 0)
+            self.assertTrue(leaked.exists())
 
     def test_keeps_marked_dir_with_held_lock(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -104,7 +155,7 @@ class CleanupLeakedExtractionsTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             foreign, _ = _make_extraction_dir(
-                root, _FOREIGN_DIR, with_marker=False, age_seconds=7200.0
+                root, _FOREIGN_DIR, with_marker=False, with_lock=True, age_seconds=7200.0
             )
             self.assertEqual(cleanup_leaked_extractions(root), 0)
             self.assertTrue(foreign.exists())
@@ -135,10 +186,9 @@ class ClaimCurrentExtractionTests(unittest.TestCase):
 
     def test_writes_lock_inside_extraction_and_keeps_it_open(self) -> None:
         with TemporaryDirectory() as temp_dir:
-            extraction = Path(temp_dir)
-            with patch.object(
-                onefile_cleanup.sys, "_MEIPASS", str(extraction), create=True
-            ):
+            extraction, _ = _make_extraction_dir(Path(temp_dir), _MARKED_DIR)
+            with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
+                    patch.object(onefile_cleanup.sys, "_MEIPASS", str(extraction), create=True):
                 self.assertEqual(claim_current_extraction(), extraction)
             self.assertTrue((extraction / LOCK_FILE_NAME).exists())
             # A second call must be idempotent and keep returning the same dir.
@@ -150,16 +200,40 @@ class ClaimCurrentExtractionTests(unittest.TestCase):
         with patch.object(onefile_cleanup.sys, "frozen", True, create=True):
             self.assertIsNone(claim_current_extraction())
 
-    def test_returns_none_when_lock_cannot_be_taken(self) -> None:
-        missing = Path(tempfile.gettempdir()) / "mefinder-cleanup-missing-extraction"
-        with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
-                patch.object(
-                    onefile_cleanup.sys, "_MEIPASS", str(missing), create=True
-                ):
-            self.assertIsNone(claim_current_extraction())
+    def test_failed_claim_closes_handle_and_stops_startup(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            extraction, _ = _make_extraction_dir(Path(temp_dir), _MARKED_DIR)
+            with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
+                    patch.object(onefile_cleanup.sys, "_MEIPASS", str(extraction), create=True), \
+                    patch.object(onefile_cleanup.os, "write", side_effect=OSError("disk full")), \
+                    patch.object(onefile_cleanup.os, "close", wraps=os.close) as close:
+                with self.assertRaisesRegex(OSError, "disk full"):
+                    start_background_cleanup()
+                close.assert_called_once()
+                self.assertIsNone(onefile_cleanup._claimed_lock_handle)
+                self.assertEqual(cleanup_leaked_extractions(Path(temp_dir)), 0)
 
 
 class StartBackgroundCleanupTests(unittest.TestCase):
+    def test_onedir_meipass_never_receives_lock_but_still_sweeps(self) -> None:
+        for relative in ("MEFinder/_internal", "MEFinder.app/Contents/Frameworks"):
+            with self.subTest(bundle=relative), TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                bundle = root / relative
+                bundle.mkdir(parents=True)
+                leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, with_lock=True)
+                with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
+                        patch.object(onefile_cleanup.sys, "_MEIPASS", str(bundle), create=True), \
+                        patch.object(onefile_cleanup.tempfile, "gettempdir", return_value=str(root)):
+                    self.assertFalse(onefile_cleanup.is_frozen_onefile())
+                    self.assertIsNone(claim_current_extraction())
+                    thread = start_background_cleanup()
+                    self.assertIsNotNone(thread)
+                    thread.join(timeout=10)
+                    self.assertFalse(thread.is_alive())
+                self.assertFalse((bundle / LOCK_FILE_NAME).exists())
+                self.assertFalse(leaked.exists())
+
     def setUp(self) -> None:
         _reset_claim_state()
 
@@ -172,7 +246,7 @@ class StartBackgroundCleanupTests(unittest.TestCase):
     def test_starts_daemon_sweep_for_onefile_runs(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, age_seconds=7200.0)
+            leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, with_lock=True, age_seconds=7200.0)
             extraction = root / _MARKED_DIR
             extraction.mkdir()
             (extraction / ONEFILE_MARKER_NAME).write_text("marker", encoding="ascii")
@@ -197,7 +271,7 @@ class StartBackgroundCleanupTests(unittest.TestCase):
     def test_starts_daemon_sweep_for_frozen_onedir_runs(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, age_seconds=7200.0)
+            leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, with_lock=True, age_seconds=7200.0)
             with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
                     patch.object(
                         onefile_cleanup.tempfile, "gettempdir", return_value=str(root)
@@ -209,24 +283,6 @@ class StartBackgroundCleanupTests(unittest.TestCase):
                 self.assertFalse(thread.is_alive())
             self.assertFalse(leaked.exists())
 
-    def test_skips_sweep_when_extraction_cannot_be_locked(self) -> None:
-        with TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            leaked, _ = _make_extraction_dir(root, _LEAKED_DIR, age_seconds=7200.0)
-            extraction = root / _MARKED_DIR
-            extraction.mkdir()
-            (extraction / ONEFILE_MARKER_NAME).write_text("marker", encoding="ascii")
-            with patch.object(onefile_cleanup.sys, "frozen", True, create=True), \
-                    patch.object(
-                        onefile_cleanup.sys, "_MEIPASS", str(extraction), create=True
-                    ), \
-                    patch.object(
-                        onefile_cleanup,
-                        "current_extraction_dir",
-                        return_value=None,
-                    ):
-                self.assertIsNone(start_background_cleanup())
-            self.assertTrue(leaked.exists())
 
 
 class SidecarPackagingMarkerTests(unittest.TestCase):

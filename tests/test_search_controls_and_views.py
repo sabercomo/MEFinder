@@ -38,6 +38,17 @@ SEARCH_SERVICE_SOURCE = Path(
 
 
 class SearchControlsAndViewsTests(unittest.TestCase):
+    def test_search_detail_is_flush_without_outer_card_frame(self):
+        for selector in ("results-detail-pane", "detail-card", "detail-scroll", "detail-actions"):
+            rules = re.findall(r"\." + selector + r"\s*\{([^}]*)\}", HTML)
+            self.assertTrue(rules, selector)
+            for rule in rules:
+                self.assertNotIn("border-radius:", rule, selector)
+                if selector == "results-detail-pane":
+                    self.assertNotIn("padding:", rule)
+                if selector == "detail-card":
+                    self.assertNotIn("border:", rule)
+
     def test_edition_alignment_model_download_shows_determinate_progress(self) -> None:
         self.assertIn("<span>译本对齐</span>", HTML)
         self.assertIn(">译本对齐模型</span>", HTML)
@@ -490,7 +501,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="mineru-account-list"', HTML)
         self.assertIn('id="mineru-account-name"', HTML)
         self.assertIn('id="mineru-editor-card"', HTML)
-        self.assertIn('class="mineru-account-table"', HTML)
+        # 账号列表 0.5.4 由表格改为行式布局（DESIGN.md §6 的行式状态呈现）
+        self.assertIn("mineru-account-row", HTML)
         self.assertIn("function showMineruEditor()", HTML)
         self.assertIn("function hideMineruEditor()", HTML)
         self.assertIn('id="mineru-add-account"', HTML)
@@ -520,7 +532,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/mineru-accounts/service'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
         self.assertIn("async function deleteMineruAccount(accountId)", HTML)
-        self.assertIn("onclick=\"deleteMineruAccount(this.dataset.accountId)\"", HTML)
+        # 移除入口在编辑区，不在账号行（DESIGN.md §5：危险操作置于维护区域）
+        self.assertIn(
+            "deleteMineruAccount(document.getElementById('mineru-account-id').value)",
+            HTML,
+        )
         self.assertIn('id="mineru-local-settings"', HTML)
         self.assertIn(
             '<section class="mineru-local-settings" id="mineru-local-settings">',
@@ -619,16 +635,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn(
             "manual_entry_allowed", PARSER_SETTINGS_CONTROLLER_SOURCE
         )
-        self.assertIn("{key: 'ocr', label: 'OCR 专用 · 优先'}", HTML)
-        self.assertIn("{key: 'vision', label: '支持图片'}", HTML)
-        self.assertIn("{key: 'unknown', label: '待确认 · 请测试'}", HTML)
-        self.assertIn("{key: 'text', label: '不支持图片'}", HTML)
-        self.assertNotIn("{key: 'omni', label: '全模态'}", HTML)
-        self.assertNotIn("{key: 'vision', label: '通用视觉'}", HTML)
-        self.assertIn("function visionModelPriority(item)", HTML)
-        self.assertIn("capability-unknown", HTML)
-        self.assertIn("capability-unsupported", HTML)
-        self.assertNotIn("可能支持图片", HTML)
+        # 模型列表不做能力分组/徽章：硬编码清单追不上模型换代，只会误导。
+        self.assertNotIn("visionModelCapability", HTML)
+        self.assertNotIn("visionModelPriority", HTML)
+        self.assertNotIn("visionModelBadgeHTML", HTML)
+        self.assertNotIn("capability_label", HTML)
+        self.assertNotIn("OCR 专用", HTML)
+        self.assertNotIn("支持图片", HTML)
+        self.assertNotIn("不支持图片", HTML)
+        self.assertNotIn("待确认 · 请测试", HTML)
 
         brand_start = HTML.index("var VISION_BRAND_RULES = [")
         brand_end = HTML.index("];", brand_start)
@@ -644,10 +659,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertIn("base: 'https://api.deepseek.com'}", brand_rules)
         self.assertNotIn("unsupported", brand_rules)
-        self.assertIn(
-            'vision-model-badge capability-unsupported">不支持图片',
-            HTML,
-        )
+        self.assertNotIn("vision-model-badge", HTML)
         self.assertNotIn("通义千问、DeepSeek 等视觉模型", HTML)
 
     def test_backup_export_import_is_wired(self) -> None:
@@ -703,7 +715,6 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "appearance-card",
             "pdf-reader-settings",
             "text-alignment-settings",
-            "script-search-settings",
             "software-update-settings",
             "macos-update-settings",
             "data-location-settings",

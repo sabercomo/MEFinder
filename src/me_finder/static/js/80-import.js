@@ -195,6 +195,8 @@
     var slider = document.getElementById('online-auto-match-range');
     var label = document.getElementById('online-auto-match-value');
     if (slider && String(slider.value) !== String(pct)) slider.value = String(pct);
+    // 程序性赋值不触发 input 事件，填充比例要自己补一次
+    if (slider) slider.dispatchEvent(new Event('input', {bubbles: true}));
     if (label) label.textContent = pct + '%';
   }
 

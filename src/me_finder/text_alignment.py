@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
-import numpy as np
 from .runtime_location import component_runtime_root
 from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
 from .calibration_library import _item_language_code
@@ -750,6 +749,7 @@ def align_segment_sequences(
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
 ) -> Tuple[List[SemanticLink], list]:
     """Return chapter-anchored semantic links and the anchors used."""
+    import numpy as np
 
     active_thresholds = thresholds or embedding_model_config(
         embedding_model_id
@@ -1349,6 +1349,7 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
             (group_id,),
         ).fetchall()
         targets: List[Dict[str, object]] = []
+        source_language = "und"
         for member in members:
             target_id = str(member["source_file_id"])
             if target_id == source_id:
@@ -1377,14 +1378,12 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
             payload = _json_object(member["payload_json"])
             payload.setdefault("source_file_id", target_id)
             payload.setdefault("file_name", member["file_name"])
-            language_code = str(payload.get("language_code") or "").strip()
-            if not language_code:
-                language_code = _item_language_code(
-                    "",
-                    payload.get("title"),
-                    payload.get("author"),
-                    member["file_name"],
-                )
+            source_language = _segment_set_language(
+                connection, _segment_set_id_for_source(route_runs[0], source_id)
+            )
+            language_code = _segment_set_language(
+                connection, _segment_set_id_for_source(final_run, target_id)
+            )
             targets.append(
                 {
                     "source_file_id": target_id,
@@ -1407,6 +1406,7 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
             )
         return {
             "source_file_id": source_id,
+            "source_language_code": source_language or "und",
             "document_group_id": group_id,
             "targets": targets,
         }

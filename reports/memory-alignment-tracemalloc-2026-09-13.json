@@ -1,0 +1,248 @@
+{
+  "embedding_thread_count": 3,
+  "environment": {
+    "cpu_model": "Apple M4",
+    "machine": "arm64",
+    "packages": {
+      "fastembed": "0.8.0",
+      "numpy": "2.5.2",
+      "onnxruntime": "1.29.0",
+      "psutil": "7.2.2"
+    },
+    "physical_memory_bytes": 17179869184,
+    "platform": "macOS-15.7.3-arm64-arm-64bit",
+    "python": "3.12.10",
+    "ru_maxrss_available": true,
+    "ru_maxrss_unit": "bytes"
+  },
+  "forced_batch_size": null,
+  "git": {
+    "revision": "17c3aca0ffc8791c61ad9ede53ba3dd49bf633a1",
+    "tracked_dirty": true
+  },
+  "growth": {
+    "slope_bytes_per_round_after_first": null,
+    "stable_rss_after_round": [
+      {
+        "round": 1,
+        "rss": 516390912
+      }
+    ]
+  },
+  "idle": {
+    "phase": {
+      "children_rss_max": 0,
+      "duration_s": 0.04337983415462077,
+      "events": 2,
+      "phase": "backend_idle",
+      "rss_end": 74448896,
+      "rss_max": 74448896,
+      "rss_min": 74399744,
+      "rss_start": 74448896,
+      "ru_maxrss_delta": 0,
+      "ru_maxrss_end": 86802432,
+      "samples": 1,
+      "t_end": 1424447.87338625,
+      "t_start": 1424447.830006416,
+      "traced_current_end": 557324,
+      "traced_peak": 609544
+    },
+    "settle": {
+      "rss_stable": 77414400,
+      "waited_s": 2.9992455830797553
+    }
+  },
+  "label": "alignment",
+  "mode": "natural-lifecycle",
+  "model_id": "minilm-l12-v2",
+  "provider": "real",
+  "rounds": [
+    {
+      "derived": {
+        "finalize": {
+          "children_rss_max": 0,
+          "duration_s": 0.19266083394177258,
+          "events": 2,
+          "rss_end": 516374528,
+          "rss_max": 583483392,
+          "rss_min": 516374528,
+          "rss_start": 579567616,
+          "ru_maxrss_delta": 0,
+          "ru_maxrss_end": 1091796992,
+          "samples": 5,
+          "t_end": 1424558.34482275,
+          "t_start": 1424558.152161916
+        },
+        "post_embed_prep": {
+          "children_rss_max": 0,
+          "duration_s": 1.7181585419457406,
+          "events": 1,
+          "rss_end": 555204608,
+          "rss_max": 562184192,
+          "rss_min": 555204608,
+          "rss_start": 555204608,
+          "ru_maxrss_delta": 0,
+          "ru_maxrss_end": 1091796992,
+          "samples": 31,
+          "t_end": 1424531.427143208,
+          "t_start": 1424529.708984666
+        },
+        "prep": {
+          "children_rss_max": 0,
+          "duration_s": 0.9071710419375449,
+          "events": 1,
+          "rss_end": 72122368,
+          "rss_max": 100941824,
+          "rss_min": 72122368,
+          "rss_start": 72122368,
+          "ru_maxrss_delta": 0,
+          "ru_maxrss_end": 86802432,
+          "samples": 22,
+          "t_end": 1424459.348037625,
+          "t_start": 1424458.440866583
+        }
+      },
+      "phases": {
+        "compute": {
+          "children_rss_max": 0,
+          "duration_s": 24.513415625086054,
+          "events": 2,
+          "phase": "compute",
+          "rss_end": 579207168,
+          "rss_max": 579207168,
+          "rss_min": 562200576,
+          "rss_start": 562200576,
+          "ru_maxrss_delta": 0,
+          "ru_maxrss_end": 1091796992,
+          "samples": 500,
+          "t_end": 1424555.940558833,
+          "t_start": 1424531.427143208,
+          "traced_current_end": 23782135,
+          "traced_peak": 59532256
+        },
+        "embed": {
+          "children_rss_max": 0,
+          "duration_s": 70.36094704107381,
+          "events": 6,
+          "phase": "embed",
+          "rss_end": 555204608,
+          "rss_max": 1088552960,
+          "rss_min": 100876288,
+          "rss_start": 100974592,
+          "ru_maxrss_delta": 990822400,
+          "ru_maxrss_end": 1091796992,
+          "samples": 1471,
+          "t_end": 1424529.708984666,
+          "t_start": 1424459.348037625,
+          "traced_current_end": 10251188,
+          "traced_peak": 61120435
+        },
+        "embed_compute": {
+          "children_rss_max": 0,
+          "duration_s": 70.31928637507372,
+          "events": 4,
+          "phase": "embed_compute",
+          "rss_end": 554221568,
+          "rss_max": 1088552960,
+          "rss_min": 100876288,
+          "rss_start": 100990976,
+          "ru_maxrss_delta": 990806016,
+          "ru_maxrss_end": 1091796992,
+          "samples": 1471,
+          "t_end": 1424529.684141875,
+          "t_start": 1424459.3648555,
+          "traced_current_end": 10113224,
+          "traced_peak": 61120435
+        },
+        "model_load": {
+          "children_rss_max": 0,
+          "duration_s": 0.7211812911555171,
+          "events": 2,
+          "phase": "model_load",
+          "rss_end": 439255040,
+          "rss_max": 439255040,
+          "rss_min": 100974592,
+          "rss_start": 100974592,
+          "ru_maxrss_delta": 368099328,
+          "ru_maxrss_end": 469434368,
+          "samples": 2,
+          "t_end": 1424460.107999416,
+          "t_start": 1424459.386818125,
+          "traced_current_end": 3270628,
+          "traced_peak": 3367470
+        },
+        "publish": {
+          "children_rss_max": 0,
+          "duration_s": 2.191794707905501,
+          "events": 2,
+          "phase": "publish",
+          "rss_end": 579567616,
+          "rss_max": 579567616,
+          "rss_min": 579272704,
+          "rss_start": 579272704,
+          "ru_maxrss_delta": 0,
+          "ru_maxrss_end": 1091796992,
+          "samples": 48,
+          "t_end": 1424558.152161916,
+          "t_start": 1424555.960367208,
+          "traced_current_end": 5812871,
+          "traced_peak": 6206459
+        },
+        "task_total": {
+          "children_rss_max": 0,
+          "duration_s": 99.90395616693422,
+          "events": 12,
+          "phase": "task_total",
+          "rss_end": 516374528,
+          "rss_max": 1088552960,
+          "rss_min": 72122368,
+          "rss_start": 72122368,
+          "ru_maxrss_delta": 1004994560,
+          "ru_maxrss_end": 1091796992,
+          "samples": 2078,
+          "t_end": 1424558.34482275,
+          "t_start": 1424458.440866583,
+          "traced_current_end": 2638816,
+          "traced_peak": 61120435
+        }
+      },
+      "round": 1,
+      "settle_after": {
+        "rss_stable": 516390912,
+        "waited_s": 2.0181746250018477
+      },
+      "settle_before": {
+        "rss_stable": 71892992,
+        "waited_s": 7.5586663340218365
+      },
+      "task": {
+        "counts": {
+          "accepted_link_count": 795,
+          "alignment_link_count": 967,
+          "folio_anchor_count": 30,
+          "heading_anchor_count": 92,
+          "pivot_segment_count": 2047,
+          "rejected_link_count": 94,
+          "reused": false,
+          "status": "completed",
+          "target_segment_count": 1901,
+          "unmatched_link_count": 78
+        },
+        "identity_sha256": "617135e499652ad28548fa5bf65ae532a8db1e6eea5ca6f4b71e3a948c1f2163"
+      }
+    }
+  ],
+  "tool": "mem_profile_alignment",
+  "tracemalloc": true,
+  "tracemalloc_sites": [
+    {
+      "group": "round1",
+      "phase": "publish",
+      "top": []
+    }
+  ],
+  "workload": {
+    "database_bytes": 3471327232,
+    "kind": "real-snapshot"
+  }
+}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -39,7 +41,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertNotIn("mef-reader-overflow", READER_JS)
 
     def test_comparison_default_target_remembers_last_choice_per_book(self) -> None:
-        # 对照默认目标要记住每本书上次的选择，避免每次都回退到成员顺序首个（常是英文版）。
+        # 对照记忆按书保存，默认候选筛选后再恢复选择。
         self.assertIn("mef-reader-comparison-target:", READER_JS)
         self.assertIn("function rememberComparisonTarget(sourceId, targetId)", READER_JS)
         self.assertIn("function recallComparisonTarget(sourceId)", READER_JS)
@@ -53,12 +55,41 @@ class StructuredReaderFrontendTests(unittest.TestCase):
             "rememberComparisonTarget(state.sourceId, targetSourceId)",
             READER_JS[show_start:show_end],
         )
-        # 渲染模式轴时按「记忆且仍有效」优先选默认目标。
+        # 在跨语言候选中恢复仍有效的记忆。
         render_start = READER_JS.index("function renderAlignmentActions()")
         render_end = READER_JS.index("function syncModeSegment()", render_start)
         render_body = READER_JS[render_start:render_end]
         self.assertIn("var remembered = recallComparisonTarget(state.sourceId)", render_body)
-        self.assertIn("rememberedValid || String(targets[0].source_file_id", render_body)
+        self.assertIn("rememberedValid || String(defaultTargets[0].source_file_id", render_body)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_comparison_defaults_to_other_language_despite_same_language_memory(self) -> None:
+        start = READER_JS.index("      var remembered = recallComparisonTarget(state.sourceId)")
+        end = READER_JS.index("      var readBtn =", start)
+        selection = READER_JS[start:end]
+        script = """
+const assert = require('assert');
+function choose(language, targets, remembered, active='') {
+  const state = {sourceId:'source', alignmentSourceLanguage:language,
+    comparison:{open:!!active,targetSourceId:active}};
+  const recallComparisonTarget = () => remembered;
+""" + selection + """
+  return defaultTarget;
+}
+const zh={source_file_id:'zh',language_code:'zh-Hans'};
+const traditional={source_file_id:'traditional',language_code:'zh-Hant'};
+const de={source_file_id:'de',language_code:'de'};
+const en={source_file_id:'en',language_code:'en'};
+assert.equal(choose('zh-Hans',[zh,de,en],'zh'),'de');
+assert.equal(choose('zh-Hans',[zh,de,en],'en'),'en');
+assert.equal(choose('zh-Hans',[traditional,de],'traditional'),'de');
+assert.equal(choose('de',[de,zh],'de'),'zh');
+assert.equal(choose('zh-Hans',[zh,de],'zh','zh'),'zh');
+assert.equal(choose('zh-Hans',[zh],'zh'),'zh');
+assert.equal(choose('und',[zh,de],'zh'),'zh');
+"""
+        result = subprocess.run([shutil.which("node"), "-e", script], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_two_hop_routed_comparison_offers_direct_alignment(self) -> None:
         # 两跳中转对照（via_source_file_id 非空）时提示并给「生成直接对照」一键入口。

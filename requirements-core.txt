@@ -1,0 +1,5 @@
+# 无对齐计算依赖的源代码后端；启动方式见 README。
+PyMuPDF==1.26.5
+certifi==2026.7.22
+mcp==2.0.0
+opencc-python-reimplemented==0.1.7

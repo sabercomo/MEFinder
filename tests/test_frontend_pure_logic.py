@@ -1984,7 +1984,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         """
         self.assertEqual(
             _vision_eval(tail),
-            "无法连接 PyPI，请检查网络或代理后重试。",
+            "无法连接 PyPI，请检查网络或代理后重试",
         )
 
     def test_huggingface_failure_is_presented_as_concise_chinese(self):
@@ -1995,7 +1995,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
         """
         self.assertEqual(
             _vision_eval(tail),
-            "模型下载网络中断，请检查网络或代理后重试。",
+            "模型下载网络中断，请检查网络或代理后重试",
         )
 
 

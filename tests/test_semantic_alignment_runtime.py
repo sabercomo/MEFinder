@@ -74,7 +74,10 @@ class EmbeddingCancellationTests(unittest.TestCase):
         embedding_runtime.begin_embedding_run()
         with mock.patch.dict(
             "sys.modules",
-            {"fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding)},
+            {
+                "fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding),
+                "onnxruntime": mock.Mock(),
+            },
         ), mock.patch.object(semantic_alignment, "_write_model_receipt"):
             with self.assertRaises(semantic_alignment.SemanticAlignmentCancelled):
                 provider(["one", "two", "three"], cache_dir=None)
@@ -97,7 +100,10 @@ class EmbeddingCancellationTests(unittest.TestCase):
 
         with mock.patch.dict(
             "sys.modules",
-            {"fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding)},
+            {
+                "fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding),
+                "onnxruntime": mock.Mock(),
+            },
         ), mock.patch.object(semantic_alignment, "_write_model_receipt"):
             with self.assertRaises(semantic_alignment.SemanticAlignmentCancelled):
                 semantic_alignment.embed_texts(
@@ -121,7 +127,10 @@ class EmbeddingCancellationTests(unittest.TestCase):
 
         with mock.patch.dict(
             "sys.modules",
-            {"fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding)},
+            {
+                "fastembed": mock.Mock(TextEmbedding=_FakeTextEmbedding),
+                "onnxruntime": mock.Mock(),
+            },
         ), mock.patch.object(semantic_alignment, "_write_model_receipt"):
             vectors = semantic_alignment.embed_texts(
                 ["a", "b"], None, model_id="minilm-l12-v2"

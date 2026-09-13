@@ -26,6 +26,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             {"document_export_mode": "with_pdf"},
             {"auto_update": True},
             {"script_folding": False},
+            {"reader_window_enabled": True},
             {"citation_styles": ["chinese", "gb", "apa"]},
         )
         expected = {
@@ -45,6 +46,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "pdf_parse_mode": "mineru",
             "document_export_mode": "with_pdf",
             "reader_line_mode": "flow",
+            "reader_window_enabled": True,
             "script_folding": False,
             "export_page_cleanup": {
                 "page_marker_mode": "printed",
@@ -59,6 +61,7 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "online_auto_match_threshold": 0.9,
             "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
             "alignment_thresholds": default_alignment_threshold_settings(),
+            "last_backup_export": None,
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

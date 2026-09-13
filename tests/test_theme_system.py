@@ -122,6 +122,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "pdf_parse_mode": DEFAULT_PDF_PARSE_MODE,
             "document_export_mode": DEFAULT_DOCUMENT_EXPORT_MODE,
             "reader_line_mode": DEFAULT_READER_LINE_MODE,
+            "reader_window_enabled": False,
             "script_folding": True,
             "export_page_cleanup": dict(DEFAULT_EXPORT_PAGE_CLEANUP),
             "auto_update": DEFAULT_AUTO_UPDATE,
@@ -131,6 +132,8 @@ class PreferencePersistenceTests(unittest.TestCase):
             "online_auto_match_threshold": DEFAULT_ONLINE_AUTO_MATCH,
             "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
             "alignment_thresholds": default_alignment_threshold_settings(),
+            # 没导出过备份时为 None——界面据此说「还没有导出过备份」，不编日期
+            "last_backup_export": None,
         }
 
     def test_alignment_embedding_model_and_thresholds_round_trip(self) -> None:
@@ -459,7 +462,7 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('id="pdf-reader-body"', HTML)
         self.assertIn('data-pdf-open-choice="native"', HTML)
         self.assertIn('data-pdf-open-choice="system"', HTML)
-        self.assertIn("使用 macOS PDFKit", HTML)
+        self.assertIn("用 macOS PDFKit 在内置阅读器中打开", HTML)
         self.assertIn("macOS 预览", HTML)
         self.assertIn("function setPdfOpenMode(mode)", HTML)
         self.assertIn("preferencesLoadPromise: null", HTML)
@@ -486,7 +489,7 @@ class ThemeMarkupTests(unittest.TestCase):
             'id="software-update-settings"',
             'id="auto-update-enabled"',
             "Edge WebView2",
-            "系统默认 PDF 阅读器",
+            "Windows 默认阅读器",
             "async function checkForUpdates(automatic)",
             "auto_update:settingsStore.autoUpdateEnabled",
             "confirm_token:installToken",
@@ -531,11 +534,12 @@ class ThemeMarkupTests(unittest.TestCase):
             "showSettingsCategory('data-location-settings')",
             HTML,
         )
-        self.assertIn("外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive", HTML)
-        self.assertIn("function chooseDataLocation()", HTML)
+        self.assertIn("打开已有资料库", HTML)
+        self.assertIn("迁移当前资料库", HTML)
+        self.assertIn("function chooseDataLocation(mode)", HTML)
         self.assertIn("function migrateDataLocation()", HTML)
         self.assertIn("fetch('/api/data-location/choose'", HTML)
-        self.assertIn("fetch('/api/data-location/migrate'", HTML)
+        self.assertIn("fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate'", HTML)
         self.assertIn("旧位置的数据会保留", HTML)
         self.assertIn("不要让两台电脑同时打开同一份云盘或 NAS 数据库", HTML)
         self.assertIn(
@@ -661,7 +665,6 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "text-alignment-settings": "embedding-model-body",
-            "script-search-settings": "script-search-body",
             "mineru-api-settings": "mineru-api-body",
             "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",

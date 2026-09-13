@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 
 
@@ -26,6 +27,7 @@ class EmbeddingModelConfig:
     display_name: str
     description: str
     thresholds: AlignmentThresholds
+    required_files: tuple[str, ...]
 
 
 DEFAULT_EMBEDDING_MODEL_ID = "minilm-l12-v2"
@@ -44,6 +46,8 @@ EMBEDDING_MODELS = {
         display_name="MiniLM 多语言模型",
         description="默认模型，速度更快",
         thresholds=AlignmentThresholds(low=0.56, note_block=0.64, margin=0.05),
+        required_files=("model_optimized.onnx", "config.json", "tokenizer.json",
+                        "tokenizer_config.json", "special_tokens_map.json"),
     ),
     "multilingual-e5-large": EmbeddingModelConfig(
         id="multilingual-e5-large",
@@ -59,6 +63,8 @@ EMBEDDING_MODELS = {
         # low：2026-09-05 单书 37 条原书复核后的实验值，须结合区域排除使用。
         # note_block / margin 待标定；不能把单书分层样本外推为全库准确率。
         thresholds=AlignmentThresholds(low=0.83, note_block=0.80, margin=0.05),
+        required_files=("model.onnx", "model.onnx_data", "config.json", "tokenizer.json",
+                        "tokenizer_config.json", "special_tokens_map.json"),
     ),
 }
 
@@ -68,6 +74,32 @@ def embedding_model_config(model_id: str) -> EmbeddingModelConfig:
         return EMBEDDING_MODELS[model_id]
     except KeyError as exc:
         raise ValueError(f"不支持的译本对齐模型：{model_id}") from exc
+
+
+def model_component_dir(cache_root, model_id: str) -> Path:
+    """Local cache directory of one managed model component."""
+
+    return Path(cache_root) / embedding_model_config(model_id).fastembed_cache_dirname
+
+
+def model_component_installed(cache_root, model_id: str) -> bool:
+    """Check required files in the active HF snapshot or supported archive cache.
+
+    File presence is a preflight, not proof of valid ONNX contents. The offline
+    provider performs the definitive load without attempting a repair download.
+    """
+    model = embedding_model_config(model_id)
+    directory = model_component_dir(cache_root, model_id)
+    candidates = []
+    reference = directory / "refs/main"
+    if reference.is_file():
+        revision = reference.read_text().strip()
+        if len(revision) == 40 and all(char in '0123456789abcdef' for char in revision):
+            candidates.append(directory / "snapshots" / revision)
+    if model.fastembed_archive_name:
+        candidates.append(Path(cache_root) / model.fastembed_archive_name.removesuffix('.tar.gz'))
+    return any(all((base / name).is_file() and (base / name).stat().st_size > 0
+                   for name in model.required_files) for base in candidates)
 
 
 def default_alignment_threshold_settings() -> dict[str, dict[str, float]]:

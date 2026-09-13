@@ -61,9 +61,21 @@ HTML = (
 )
 
 
-def render_html(theme: str) -> str:
+READER_WINDOW_HTML = (
+    _load_asset("templates/reader-window.html")
+    .replace("/*__APP_CSS__*/", _load_app_css(), 1)
+    .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
+    .replace("//__THEME_JS__", _load_asset("static/js/05-theme-engine.js"), 1)
+    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
+    .replace("//__WINDOW_JS__", _load_asset("static/reader-window.js"), 1)
+)
+
+
+def render_html(theme: str, *, reader_window: bool = False) -> str:
     """Inject the persisted theme before the browser paints the first frame."""
 
+    if reader_window:
+        return READER_WINDOW_HTML.replace('data-theme="frost-blue"', f'data-theme="{theme}"', 1)
     marker = '<html lang="zh-CN" data-theme="frost-blue">'
     desktop_shell = os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower()
     shell_attribute = (

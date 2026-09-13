@@ -1,0 +1,69 @@
+{
+  "link_diff": {
+    "count_a": 967,
+    "count_b": 967,
+    "flipped_count": 0,
+    "flipped_order_indices": [],
+    "identical_structure": true,
+    "max_confidence_delta": 8.678436279296875e-05,
+    "max_cost_delta": 0.0001020000000000465,
+    "only_in_a": 0,
+    "only_in_b": 0
+  },
+  "model_id": "minilm-l12-v2",
+  "provenance": {
+    "cache_state": "document-vectors cleared before each alignment; fresh inference per batch",
+    "code_revision": "ac51698b13e4e39992038201e298be3c9507a5c7",
+    "embedding_thread_count": 3,
+    "execution_order": [
+      "batch64",
+      "batch16"
+    ],
+    "input_identity_sha256": "e40e01329cb008e5f44c43f6c7113bf7d0490cbcb983722f62a574209b507180",
+    "model_file_count": 13,
+    "model_fileset_sha256": "8687c16f3faa24432510430614698c471321d0476a58c188f7356d80ffdd7297",
+    "segment_count": 3948,
+    "unique_text_count": 3837,
+    "vectors_source": "actual per-segment .npy each alignment wrote (production dedup+infer+backfill), not a separate raw re-embed"
+  },
+  "vector_diff": {
+    "bitwise_equal_fraction": 0.9680851063829787,
+    "bitwise_equal_rows": 3822,
+    "by_length_max_abs": {
+      "long(>=100)": 0.0003542564809322357,
+      "medium(20-99)": 0.0003224313259124756,
+      "short(<20)": 0.0
+    },
+    "by_length_rows": {
+      "long(>=100)": 1516,
+      "medium(20-99)": 2035,
+      "short(<20)": 397
+    },
+    "dim": 384,
+    "max_abs": 0.0003542564809322357,
+    "mean_abs": 1.7214493607305168e-06,
+    "min_cosine": 0.9999998193478737,
+    "rows": 3948,
+    "rows_above_noise": 126
+  },
+  "verdict": {
+    "adoption_requires": [
+      "representative multi-pair / boundary samples (this is one pair)",
+      "a quality gate on alignment/locate outcomes",
+      "an EMBEDDING_RUNTIME_VERSION cache-version decision if vectors differ"
+    ],
+    "current_default_batch": 64,
+    "do_not_change_product_default": true,
+    "max_confidence_delta": 8.678436279296875e-05,
+    "max_cost_delta": 0.0001020000000000465,
+    "observed_changes": [
+      "scores",
+      "vectors-not-bitwise-identical"
+    ],
+    "outputs_fully_identical": false,
+    "recommendation": "manual-review-required",
+    "scores_identical": false,
+    "structure_identical": true,
+    "vectors_bitwise_identical": false
+  }
+}

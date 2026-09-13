@@ -28,11 +28,11 @@ class DataRootAdmissionGate:
         with self._condition:
             if self._state == "migrating":
                 raise DataRootAdmissionError(
-                    "数据位置正在迁移，暂时不能修改文献数据。"
+                    "数据位置正在变更，暂时不能修改文献数据。"
                 )
             if self._state == "migrated":
                 raise DataRootAdmissionError(
-                    "数据位置已迁移，请重启应用后再修改文献数据。"
+                    "数据位置已变更，请重启应用后再修改文献数据。"
                 )
             self._active_operations += 1
         try:
@@ -48,10 +48,10 @@ class DataRootAdmissionGate:
 
         with self._condition:
             if self._state == "migrating":
-                raise DataRootAdmissionError("数据位置正在迁移。")
+                raise DataRootAdmissionError("数据位置正在变更。")
             if self._state == "migrated":
                 raise DataRootAdmissionError(
-                    "数据位置已迁移，请重启应用。"
+                    "数据位置已变更，请重启应用。"
                 )
             self._state = "migrating"
             while self._active_operations:

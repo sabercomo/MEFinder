@@ -281,7 +281,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div id="cal-section-body" style="display:none">
                 <div class="cal-detail-actions" id="cal-detail-actions"></div>
                 <div id="cal-editor" style="display:none">
-                  <div class="cal-intro">这本 PDF 的第 1 页往往不是书上印的页码。校准后，检索结果里的页码才能直接写进脚注。多数情况点「自动检测页码」看一眼预览即可；只有检测不准时才需要「手动调整」。</div>
+                  <div class="cal-intro">这本 PDF 的第 1 页往往不是书上印的页码。校准后，检索结果里的页码才能直接写进脚注。多数情况点「自动检测页码」看一眼预览即可；只有检测不准时才需要「手动调整」</div>
                   <div class="cal-section">
                     <div class="cal-section-head">
                       <span class="cal-section-title">自动检测</span>
@@ -457,7 +457,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="import-recovery-panel" id="import-recovery-panel" hidden>
             <div class="import-recovery-copy">
               <strong>PDF 解析失败处理</strong>
-              <span>可继续当前解析任务；如需切换，从已配置的视觉 API 中选择后在失败任务上重试。</span>
+              <span>可继续当前解析任务；如需切换，从已配置的视觉 API 中选择后在失败任务上重试</span>
             </div>
             <div class="import-recovery-provider">
               <span class="import-recovery-label">视觉解析 API</span>
@@ -486,14 +486,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       <div class="settings-page-content">
         <nav class="settings-nav" role="tablist" aria-label="设置分类">
           <div class="settings-nav-group plat-desktop" role="presentation">阅读</div>
-          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>PDF 阅读</span></button>
+          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" onclick="showSettingsCategory('text-alignment-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="script-search-settings" onclick="showSettingsCategory('script-search-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><span>文献检索</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" onclick="showSettingsCategory('local-ocr-settings');loadLocalOCRConfig()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>统计</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>解析统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" onclick="showSettingsCategory('citation-format-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" onclick="showSettingsCategory('bib-completion-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span></button>
@@ -509,48 +508,64 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
           <section class="settings-section desktop-pdf-settings active" id="pdf-reader-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">PDF 阅读</span><span class="settings-section-note">选择从搜索结果打开 PDF 的方式</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">阅读与检索</span><span class="settings-section-note">设置打开文献的方式与正文显示</span></span>
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
-            <div class="pdf-open-options" role="radiogroup" aria-label="PDF 打开方式">
-              <label class="pdf-open-option selected" data-pdf-open-choice="native">
-                <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12h7M8 15h7"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>应用内阅读器 <em>推荐</em></strong><small id="pdf-native-description">直接跳到搜索命中的 PDF 物理页码</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
-              <label class="pdf-open-option" data-pdf-open-choice="system">
-                <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="m8 14 2.2-2.2 2 2L16 10l2 2M8 8h.01"/></svg></span>
-                <span class="pdf-open-option-copy"><strong id="pdf-system-title">系统默认 PDF 阅读器</strong><small id="pdf-system-description">使用系统默认应用打开；命中页码可能需要手动翻到</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
+            <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span></div>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>打开 PDF 原文</strong>
+                <small id="pdf-native-description" data-pdf-open-description="native">在内置阅读器中打开，可直接跳到命中页</small>
+                <small id="pdf-system-description" data-pdf-open-description="system" hidden>用系统默认应用打开，命中页码需要手动翻到</small>
+              </span>
+              <span class="app-select settings-choice-select pdf-open-options" id="pdf-open-select">
+                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">内置 PDF 阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="PDF 打开方式">
+                  <label class="app-select-option is-selected" data-pdf-open-choice="native">
+                    <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
+                    <span id="pdf-native-title">内置 PDF 阅读器</span>
+                  </label>
+                  <label class="app-select-option" data-pdf-open-choice="system">
+                    <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
+                    <span id="pdf-system-title">系统默认 PDF 阅读器</span>
+                  </label>
+                </span>
+              </span>
             </div>
-            <div class="settings-subhead"><span class="settings-section-title">结构化文本排版</span><span class="settings-section-note">在应用内阅读器里，正文如何断行</span></div>
-            <div class="pdf-open-options" role="radiogroup" aria-label="结构化文本排版">
-              <label class="pdf-open-option selected" data-reader-line-choice="flow">
-                <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M5 11h14M5 15h14M5 19h9"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>流式查看 <em>推荐</em></strong><small>正文回流填满阅读列，不受 PDF 物理断行限制</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
-              <label class="pdf-open-option" data-reader-line-choice="physical">
-                <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
-                <span class="pdf-open-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h11M5 11h14M5 15h8M5 19h12"/></svg></span>
-                <span class="pdf-open-option-copy"><strong>复刻 PDF 物理断行</strong><small>按原 PDF 每行字数断行，便于逐字比对原书版面</small></span>
-                <span class="pdf-open-option-check" aria-hidden="true"></span>
-              </label>
+            <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span></div>
+            <label class="setting-switch-row reading-window-row">
+              <span class="setting-switch-copy"><strong>在独立窗口中阅读</strong><small>可单独移动与缩放，下次打开文献时生效</small></span>
+              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
+              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="reader-window-state" aria-hidden="true">关闭</span>
+            </label>
+            <div class="settings-subhead"><span class="settings-section-title">正文排版</span></div>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>段落显示方式</strong>
+                <small data-reader-line-description="flow">正文随窗口宽度排版，适合连续阅读</small>
+                <small data-reader-line-description="physical" hidden>保留原书的换行位置，便于逐行核对</small>
+              </span>
+              <span class="app-select settings-choice-select reader-line-options" id="reader-line-select">
+                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式排版</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="正文排版">
+                  <label class="app-select-option is-selected" data-reader-line-choice="flow">
+                    <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
+                    <span>流式排版</span>
+                  </label>
+                  <label class="app-select-option" data-reader-line-choice="physical">
+                    <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
+                    <span>保留原始换行</span>
+                  </label>
+                </span>
+              </span>
             </div>
-            </div>
-          </section>
-          <section class="settings-section" id="script-search-settings" role="tabpanel">
-            <div class="settings-section-head"><span class="settings-section-heading-copy"><span class="settings-section-title">文献检索</span></span></div>
-            <div class="settings-collapse-body" id="script-search-body">
+            <div class="settings-subhead"><span class="settings-section-title">文献检索</span></div>
               <label class="setting-switch-row" id="script-folding-option">
                 <span class="setting-switch-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
                 <input type="checkbox" id="script-folding-enabled" class="setting-switch-input" role="switch" checked onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
-                <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span>
+                <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="script-folding-state" aria-hidden="true">开启</span>
               </label>
+            <p class="settings-footnote">设置变更自动保存</p>
             </div>
           </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
@@ -559,10 +574,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span id="alignment-model-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="embedding-model-body">
-              <div class="mineru-local-notice embedding-model-rerun-notice">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg>
-                <span>切换模型不会覆盖旧结果；请对需要更新的配对重新运行对齐。</span>
-              </div>
               <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型">
                 <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">
                   <div class="local-ocr-component-head">
@@ -578,7 +589,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <span id="embedding-model-hint-minilm-l12-v2" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
                       <div id="embedding-model-progress-minilm-l12-v2" class="local-ocr-progress" role="progressbar" aria-label="MiniLM 模型下载进度" hidden><span></span></div>
                     </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn primary" id="embedding-model-download-minilm-l12-v2" type="button" onclick="downloadAlignmentModel('minilm-l12-v2', this)">下载安装</button></div>
+                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-minilm-l12-v2" type="button" onclick="downloadAlignmentModel('minilm-l12-v2', this)">下载安装</button></div>
                   </div>
                 </section>
                 <section class="embedding-model-option local-ocr-component" data-embedding-model-choice="multilingual-e5-large">
@@ -595,10 +606,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <span id="embedding-model-hint-multilingual-e5-large" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
                       <div id="embedding-model-progress-multilingual-e5-large" class="local-ocr-progress" role="progressbar" aria-label="E5 Large 模型下载进度" hidden><span></span></div>
                     </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn primary" id="embedding-model-download-multilingual-e5-large" type="button" onclick="downloadAlignmentModel('multilingual-e5-large', this)">下载安装</button></div>
+                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-multilingual-e5-large" type="button" onclick="downloadAlignmentModel('multilingual-e5-large', this)">下载安装</button></div>
                   </div>
                 </section>
               </div>
+            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">
@@ -609,15 +621,20 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
               <section class="mineru-service-settings" aria-labelledby="mineru-service-title">
-                <div class="mineru-service-copy"><strong id="mineru-service-title">服务地址</strong><small>所有 MinerU 账号共用该地址</small></div>
-                <div class="mineru-service-control">
+                <div class="mineru-service-copy">
+                  <strong id="mineru-service-title">服务地址</strong>
+                  <code id="mineru-service-address">https://mineru.net</code>
+                </div>
+                <button id="mineru-service-edit" class="action-btn quiet" type="button" onclick="MEFinder.parserRuntime.startEditMineruService()">修改</button>
+                <div class="mineru-service-control" id="mineru-service-control" hidden>
                   <label class="visually-hidden" for="mineru-api-base">MinerU API 地址</label>
                   <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
-                  <button id="mineru-service-save" class="action-btn" type="button" onclick="saveMineruServiceAddress()">保存地址</button>
+                  <button id="mineru-service-save" class="action-btn primary" type="button" onclick="saveMineruServiceAddress()">保存地址</button>
+                  <button class="action-btn" type="button" onclick="MEFinder.parserRuntime.cancelEditMineruService()">取消</button>
                 </div>
               </section>
               <section class="mineru-account-management">
-                <div class="mineru-table-heading"><div><strong>账号</strong><small>Token 不会显示或返回到界面</small></div><span id="mineru-account-count">0 个账号</span></div>
+                <div class="mineru-table-heading"><div><strong>账号</strong><small>可添加多个账号，分别启停与检测</small></div><span id="mineru-account-count">0 个账号</span></div>
                 <div id="mineru-account-list" class="mineru-account-list" aria-live="polite"></div>
                 <div class="settings-editor mineru-editor-card" id="mineru-editor-card" hidden>
                     <div class="settings-editor-head">
@@ -651,6 +668,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       </div>
                       <div class="settings-editor-actions">
                         <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
+                        <button id="mineru-account-remove" class="action-btn danger" type="button" hidden onclick="deleteMineruAccount(document.getElementById('mineru-account-id').value)">移除账号</button>
                         <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
                         <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
                         <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
@@ -664,22 +682,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
               <span id="local-ocr-status" class="settings-status">读取中…</span>
+              <button class="action-btn" id="local-ocr-reload" type="button" hidden onclick="loadLocalOCRConfig()">重新读取</button>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
-              <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</span></div>
+              
               <div class="local-ocr-component-list">
                 <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
                   <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装时会一并下载模型，首次耗时取决于网络</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装时会一并下载模型，首次耗时取决于网络</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
                   <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
                 <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
                   <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><div class="local-ocr-head-actions"><span id="local-ocr-ancient-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn primary" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
                   <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
               </div>
-              <div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              <details class="settings-disclose"><summary>自动解析如何使用这些引擎</summary><div class="settings-disclose-body">启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</div></details><div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
               <section class="mineru-local-settings" id="mineru-local-settings">
                 <div class="mineru-local-section-head">
                   <span class="mineru-local-summary-copy"><strong>MinerU 本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
@@ -726,7 +745,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <span id="general-model-status" class="settings-status">未配置</span>
                 </div>
                 <div class="mineru-local-body">
-                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>填服务地址和模型即可；API Key 可留空（本地部署通常无需）。启用后，导入页会多出「通用本地模型」选项，不会自动使用。</span></div>
+                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>填服务地址和模型即可；API Key 可留空（本地部署通常无需）。启用后，导入页会多出「通用本地模型」选项，不会自动使用</span></div>
                   <div class="settings-editor mineru-local-card">
                   <div class="settings-form settings-editor-form">
                     <div class="settings-field">
@@ -777,7 +796,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               </section>
               <section class="parser-provider-breakdown" aria-labelledby="parser-provider-title">
                 <div class="parser-stat-section-head"><div><strong id="parser-provider-title">按解析服务</strong><small>展开可查看每本书由哪个服务解析；MinerU 还会显示对应的账号</small></div></div>
-                <div class="parser-provider-columns" aria-hidden="true"><span>解析服务</span><span>文献</span><span>页数</span><span></span></div>
+                <div class="parser-provider-columns" aria-hidden="true"><span>解析服务</span><span>文献</span><span>页数</span><span>占比</span><span></span></div>
                 <div id="parser-provider-list" class="parser-provider-list" aria-live="polite"></div>
               </section>
             </div>
@@ -978,7 +997,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section macos-data-location-settings" id="data-location-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">数据位置</span><span class="settings-section-note">选择索引、语料与本机配置的保存位置</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">数据位置</span><span class="settings-section-note">打开另一份资料库，或搬迁当前资料库</span></span>
             <span id="data-location-status" class="settings-status">读取中…</span>
             </div>
             <div class="settings-collapse-body" id="data-location-body">
@@ -995,15 +1014,24 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div class="data-location-copy">
                 <strong>当前数据位置</strong>
                 <code id="data-location-current">正在读取…</code>
-                <small>可选择外接硬盘、移动固态硬盘、NAS、iCloud Drive 或 OneDrive；云盘文件需保持本地可用</small>
+                <small>索引、原文和本机设置保存在此处</small>
               </div>
-              <button class="action-btn" type="button" id="data-location-choose" onclick="chooseDataLocation()">选择位置</button>
+            </div>
+            <div class="data-location-actions">
+              <div class="data-location-action">
+                <div><strong>打开已有资料库</strong><small>读取从另一台电脑同步来的 MEFinder 文件夹，不复制或覆盖资料</small></div>
+                <button class="action-btn" type="button" id="data-location-open" onclick="chooseDataLocation('existing')">选择已有库</button>
+              </div>
+              <div class="data-location-action">
+                <div><strong>迁移当前资料库</strong><small>将当前资料复制到新位置，原位置的数据保留</small></div>
+                <button class="action-btn" type="button" id="data-location-choose" onclick="chooseDataLocation('migrate')">选择新位置</button>
+              </div>
             </div>
             <div class="data-location-pending" id="data-location-pending" style="display:none">
               <div>
-                <span>迁移到</span>
+                <span id="data-location-pending-label">迁移到</span>
                 <code id="data-location-target"></code>
-                <small>会复制索引、语料和本机设置。迁移完成后重启应用生效，旧位置的数据会保留</small>
+                <small id="data-location-pending-note" role="status" aria-live="polite">会复制索引、语料和本机设置。迁移完成后重启应用生效，旧位置的数据会保留</small>
               </div>
               <button class="action-btn primary" type="button" id="data-location-migrate" onclick="migrateDataLocation()">迁移并切换</button>
             </div>
@@ -1044,22 +1072,21 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="settings-section-heading-copy"><span class="settings-section-title">数据备份</span><span class="settings-section-note">导出页码校准与书目信息，换电脑时可导入恢复</span></span>
             </div>
             <div class="settings-collapse-body" id="backup-settings-body">
-            <div class="settings-grid">
-            <span class="settings-label">导出</span>
-            <div class="settings-control">
-              <div class="settings-actions">
-                <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
-              </div>
-              <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>导出备份</strong>
+                <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
+              </span>
+              <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
             </div>
-            <span class="settings-label">导入</span>
-            <div class="settings-control">
-              <div class="settings-actions">
-                <button class="action-btn settings-toggle" id="backup-import-choose" type="button" onclick="importBackup()">选择备份并恢复</button>
-              </div>
-              <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内</small>
+            <div class="settings-choice-row">
+              <span class="settings-choice-copy">
+                <strong>从备份恢复</strong>
+                <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内</small>
+              </span>
+              <button class="action-btn settings-toggle" id="backup-import-choose" type="button" onclick="importBackup()">选择备份并恢复</button>
             </div>
-            </div>
+            <p class="settings-footnote" id="backup-last-export">还没有导出过备份</p>
             </div>
           </section>
           <section class="settings-section windows-update-settings" id="software-update-settings" role="tabpanel">

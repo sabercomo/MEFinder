@@ -53,6 +53,7 @@ POST_API_ROUTES = frozenset(
         "/api/calibration",
         "/api/data-location/choose",
         "/api/data-location/migrate",
+        "/api/data-location/switch",
         "/api/document-groups/add-member",
         "/api/document-groups/combine",
         "/api/document-groups/create",

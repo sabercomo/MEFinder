@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
+from importlib.util import find_spec
 from contextlib import contextmanager
 
-from ..embedding_models import resolve_alignment_thresholds
+from ..embedding_models import (
+    model_component_installed,
+    resolve_alignment_thresholds,
+)
 from ..runtime_location import component_runtime_root
 from ..preferences import read_preferences, resolve_preferences_path
 from ..embedding_runtime import (
@@ -49,6 +53,19 @@ class TextAlignmentCoordinator:
         thresholds = resolve_alignment_thresholds(
             model_id, preferences["alignment_thresholds"]
         )
+        cache_dir = component_runtime_root(self._paths.runtime_root) / "components" / "text-alignment" / "models"
+        if not model_component_installed(cache_dir, model_id):
+            # The managed model component is a settings-UI download. Starting a
+            # generation job without it must fail clearly and locally — never
+            # trigger a hidden network download from inside the job.
+            raise TextAlignmentFailed(
+                "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
+            )
+        missing = [name for name in ("numpy", "fastembed", "onnxruntime") if find_spec(name) is None]
+        if missing:
+            raise TextAlignmentFailed(
+                "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。"
+            )
         begin_embedding_run()
         with self._index_runtime.mutation():
             try:
@@ -59,12 +76,7 @@ class TextAlignmentCoordinator:
                         pivot_source_file_id,
                         target_source_file_id,
                         force=force,
-                        model_cache_dir=(
-                            component_runtime_root(self._paths.runtime_root)
-                            / "components"
-                            / "text-alignment"
-                            / "models"
-                        ),
+                        model_cache_dir=cache_dir,
                         embedding_model_id=model_id,
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
@@ -83,14 +95,23 @@ class TextAlignmentCoordinator:
 
     @contextmanager
     def _write_window(self):
-        self._index_runtime.suspend()
-        try:
-            yield
-        except (OSError, sqlite3.Error, RuntimeError, ValueError) as write_error:
-            try:
-                self._index_runtime.reopen(attempts=5)
-            except (OSError, sqlite3.Error, RuntimeError, ValueError) as reopen_error:
-                write_error.add_note(f"runtime reopen also failed: {reopen_error}")
-                raise write_error.with_traceback(write_error.__traceback__)
-            raise
-        self._index_runtime.reopen(attempts=5)
+        # Alignment writes touch only alignment_runs/alignment_links(+members)
+        # and segment tables; search-visible data (paragraphs, pages, catalog)
+        # is unchanged, so the live engine keeps serving across the write
+        # transactions. SQLite locks the whole database file, not per table: a
+        # first-time large-book segmentation write overflows the page cache and
+        # escalates from RESERVED to a held EXCLUSIVE lock *before* commit, so an
+        # overlapping search read can be blocked for much of the write, not just
+        # the final commit. That block is a bounded wait, not an immediate
+        # failure: both sides run a 30s busy_timeout, so a reader waits the lock
+        # out and serves *as long as the writer clears the lock within that
+        # window* — it is not a guarantee, a write that stayed locked past 30s
+        # would still surface to the reader as a lock error (503). Keeping the
+        # engine open is therefore strictly better than closing it (which would
+        # 503 every overlapping search for the whole window with no consistency
+        # benefit), but it converts unavailability into a bounded wait rather
+        # than eliminating it. The spilling-write availability path is pinned by
+        # tests/test_alignment_write_window_availability.py (which forces the
+        # EXCLUSIVE escalation with a shrunk page cache); the real-default-cache
+        # big-book lock-wait duration is measured separately, not by that test.
+        yield
