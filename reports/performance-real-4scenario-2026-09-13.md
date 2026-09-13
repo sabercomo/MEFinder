@@ -1,6 +1,11 @@
 # 真实书库三轮四场景服务器基准(2026-09-13,机器安静)
 
-模型缓存就位、机器安静后执行 `bench_real_library.py --snapshot <冻结快照> --models <app 运行时模型目录> --rounds 3 --repeats 5`,四场景 `normal / export_markdown / export_epub / alignment`,同冻结快照(`content_sha256 5670b0d1…`,63,994 段)。数据:[JSON](performance-real-4scenario-2026-09-13.json)。原始逐轮 stdout 在未跟踪的 `.codex-tmp`/scratchpad。
+模型缓存就位、机器安静后执行 `bench_real_library.py --snapshot <冻结快照> --models <app 运行时模型目录> --rounds 3 --repeats 5`,四场景 `normal / export_markdown / export_epub / alignment`,同冻结快照(`content_sha256 5670b0d1…`,63,994 段)。
+
+> **更新(2026-09-13,审计后)**:
+> 1. **`--compare` 现已正式通过**(见"正式通过比较"节):用**修复后工具**建了一份**全新同-harness 基线**(`valid=true`,12 运行 8/8),再跑一次 `--compare` 该基线(`valid=true`)→ 比较成功写出。数据:基线 [JSON](performance-real-4scenario-baseline-2026-09-13.json)、对比 [JSON](performance-real-4scenario-compare-2026-09-13.json)。
+> 2. **基准工具修复**:`bench_real_library.py` 原先"先比较再落盘",比较失败会丢完整测量。已改为**先落盘完整结果(含 `valid`)再比较**,比较失败记 `comparison_error` 且仍以退出码 1 返回失败(提交 `109e089`)。
+> 3. 下面首次贴出的"12 运行 343 重叠搜索"是**审计前的一次运行**(其 `--compare` 因验证门中止,汇总数据经工具修复后已能完整落盘);"正式通过比较"节是审计后**修复工具 + 全新基线**的合格对比。
 
 ## 头条结果:全部 12 个(轮×场景)运行 0 错误、0 次 503、identity_mismatches=0
 
@@ -25,9 +30,15 @@
 - **用户完整"社会"联合请求**(繁简两变体)在各场景 p50 约 **0.5–3.1 s**(强机器漂移),**远非 18 ms**;18 ms 只是简体单路(见搜索验收报告)。繁体稀有变体全表扫描仍是联合瓶颈。
 - 快查询(精确长句/无命中)~几十 ms;normal 场景峰值 RSS ~80–88 MiB,export ~130–139 MiB,alignment ~1.3 GiB。
 
-## `--compare` 未完成的原因(如实,非数据错误)
+## 正式通过比较(审计后,修复工具 + 全新同-harness 基线)
 
-工具的 `--compare reports/performance-real-alignment503-fix-2026-09-12.json` **中止**于 `ValueError: Cannot compare an invalid run`。根因:harness 的有效性门要求**每条查询在每个 export/alignment 轮都与任务重叠**;而 export 任务很短(474 段书 ~0.15 s),重叠搜索仅 ~30 个,本次 **2 个 export 轮覆盖 7/8**(`no_hit` 未在该轮 export 窗口内被发出),`covered_query_ids != 全部 8` → `valid=false` → `--compare` 拒绝对比无效运行。其余 10 个运行 8/8。**这是重叠时序的门槛脆弱性,不是错误或 503**;全部逐轮逐查询数据与 0-503 结论已在上表与 JSON 保留。与基线的**关键对比**(对齐 503:28.2% → 0)是二值量,直接成立,不依赖该门。
+`bench_real_library.py` 修复"先落盘后比较"后,重跑两次:
+- **全新基线**(`performance-real-4scenario-baseline-2026-09-13.json`):`valid=true`,12 运行全 8/8 覆盖、0 错误、0 次 503。
+- **对比运行**(`performance-real-4scenario-compare-2026-09-13.json`):`valid=true`,`--compare` 上述基线**成功写出 `comparison`**(无 `comparison_error`)。四场景全 0 错误、**0 次 503**、idmis=0;对齐 256 重叠搜索全 200,峰值 RSS 1314 MiB。比较逐查询给出 before/after 比值(如 common_zh p50 2474→2388ms 比值 0.965),两次同-harness 运行 ~±10% 内(机器漂移),无 503 回归。
+
+**为何不能对旧基线跑 `--compare`(如实)**:`compare_results` 校验 `harness_sha256` 一致;修复落盘 bug 必然改动 `bench_real_library.py` → harness 指纹变化 → 协议**正确地**拒绝跨-harness 比较 `performance-real-alignment503-fix-2026-09-12.json`(旧基线)。故正式对比改用**修复后工具产出的全新基线**。对齐 503 的二值对比(旧基线 28.2% → 本轮 0)独立成立。
+
+(下方"头条"表是审计前的一次运行,其 `--compare` 因当时 2 个 export 轮偶发覆盖 7/8 + 未落盘而中止——重叠时序脆弱性,非错误/503;现工具已先落盘,且全新基线两轮均 8/8。)
 
 ## 复现
 
@@ -40,4 +51,4 @@ NO_PROXY=localhost,127.0.0.1 $PY scripts/bench_real_library.py \
   --compare reports/performance-real-alignment503-fix-2026-09-12.json
 ```
 
-如需 `--compare` 成功产出,需该协议下每轮 export 都恰好覆盖全部 8 查询(时序偶发);多次重跑或延长 export 源可提高命中,本轮未反复重跑以避免无谓的重负载。
+正式通过比较用**修复后工具**先建全新基线(不带 `--compare`)、再对该基线跑一次 `--compare`(见"正式通过比较"节两份 JSON)。`--compare` 需两次运行都 `valid=true`(每轮 export/alignment 覆盖全 8 查询,时序偶发但本轮两次均满足)。不能对 `performance-real-alignment503-fix-2026-09-12.json` 旧基线比较——修复改了 harness 指纹,协议正确拒绝跨-harness 比较。
