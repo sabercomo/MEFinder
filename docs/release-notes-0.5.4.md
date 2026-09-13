@@ -1,5 +1,7 @@
 # MEFinder 0.5.4
 
+2026-09-13：源码已修复 MCP sidecar 强杀后 `_MEI` 解压目录累积，并补齐 macOS 活实例锁保护与 onedir 判定；真实 sidecar 多实例/强杀回收及 onedir 不写包内锁验证通过。尚未进入下列桌面分发包；旧构建及占锁前中断的残留不自动清理。详见 `issues/onefile-mei-temp-leak.md` 与 `reports/onefile-cleanup-macos-2026-09-13.md`。
+
 2026-09-13：新增 Homebrew Cask tap 分发渠道（`brew tap sabercomo/mefinder` + `brew install --cask mefinder`），tap 当前提供已发布的 v0.5.3 双架构包；0.5.4 正式发布后由 `scripts/update_homebrew_tap.py` 同步 cask。纯分发工具与文档，未改产品代码，未创建 tag/Release。
 
 2026-09-13：再次重建 macOS arm64 桌面包（构建源码 `005ab65`，干净 worktree）：组件运行时位置修复进入安装包——macOS 切换 OneDrive/同步书库后，OCR 配置与安装、对齐模型管理与计算统一解析到本机稳定目录，复用已下载组件，不再误报未安装；全量 2229 项 unittest 通过（22 项条件跳过），构建门禁通过。下列新摘要取代同日早前构建（`50cd0813…`）；工作区另有未提交前端改动，未入包。未正式发布，等待安装验收。

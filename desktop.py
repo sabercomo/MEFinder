@@ -519,6 +519,11 @@ def main() -> None:
     from src.me_finder.app_context import AppContext
 
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+    # The frozen desktop build is onedir and leaks nothing itself, but it can
+    # sweep onefile extraction dirs that killed MCP sidecar runs left behind.
+    from src.me_finder.onefile_cleanup import start_background_cleanup
+
+    start_background_cleanup()
     bundle_root = app_root()
     portable = is_portable_bundle(bundle_root)
     root = prepare_runtime_root(bundle_root)

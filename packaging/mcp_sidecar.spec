@@ -42,6 +42,9 @@ a = Analysis(
             str(ROOT / "docs" / "contracts" / "v0.5.1-mcp-v1-tools.json"),
             "docs/contracts",
         ),
+        # Marker consumed by src/me_finder/onefile_cleanup.py to recognize our
+        # own leaked _MEI extraction directories in the system temp location.
+        (str(ROOT / "packaging" / "mefinder-onefile.marker"), "."),
     ],
     hiddenimports=[],
     hookspath=[],

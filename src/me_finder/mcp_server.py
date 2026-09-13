@@ -405,6 +405,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
     logging.basicConfig(level=logging.WARNING)
+    # MCP clients kill the sidecar on timeout/session end; recover the onefile
+    # extraction directories those kills leave in the system temp location.
+    from .onefile_cleanup import start_background_cleanup
+
+    start_background_cleanup()
     service = (
         LiteratureVerificationService(lambda: args.runtime_root)
         if args.runtime_root is not None
