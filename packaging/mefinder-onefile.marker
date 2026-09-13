@@ -1,0 +1,8 @@
+MEFinder MCP sidecar onefile extraction marker.
+
+This file ships inside every MEFinderMCP.exe PyInstaller bundle and is
+extracted into the program's _MEI temp directory at startup. The presence of
+this exact filename identifies a _MEI directory as belonging to MEFinder, so
+the self-cleanup in src/me_finder/onefile_cleanup.py only ever deletes MEFinder
+extraction directories, never another application's. Do not rename this file
+without updating ONEFILE_MARKER_NAME.

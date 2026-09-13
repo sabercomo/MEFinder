@@ -453,7 +453,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.3 两跳中转对照修复：reader.js/reader.css 加「经基准中转」提示 + 一键生成直接对照（轮询后台任务）。
     # 0.5.3 按页导出文案：明示单页、连续范围与组合输入，原书/PDF 页码依据说明随选项切换。
     BASELINE_SHA256 = (
-        "29db919322aee48bcf2c131bd7bbff4ac2269114b3be4a8f3acd0950d4152201"
+        "293c682af57edc9ccd35ea3b225381b77ee09f6c5ea68bf108ac080871abeb99"
     )
     BASELINE_BYTES = 1085745
 
