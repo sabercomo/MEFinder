@@ -1,8 +1,8 @@
 # MEFinder 0.5.4
 
-2026-09-14：第五次重建 macOS 桌面包（构建源码 `b1f0082`，**仅 arm64**）：解析统计构成条单色相色阶配色入包；2277 项 unittest 通过（22 项条件跳过），其余门禁（签名 / MCP STDIO 冒烟 / ZIP / DMG 校验）全部通过，包内已核实含新配色（`00-themes.css` / `30-settings.css` / `70-vision.js` 三处均命中 `--chart-step-*`）。**x86_64 未重建**，仍停在 `965a427` 那版，不含本次配色改动，两架构内容不一致。未创建 tag/Release。
+2026-09-14：第五次重建 macOS 桌面包（构建源码 `b1f0082`，arm64 与 x86_64 双架构）：解析统计构成条单色相色阶配色入包。arm64 2277 项 unittest 通过（22 skip），x86_64 经 Rosetta 构建、2277 项通过（27 skip，含架构相关条件跳过），反查主程序与 `MEFinderMCP` 均为纯 x86_64、`LSMinimumSystemVersion=12.0`；两架构包内均已核实含新配色。其余门禁（签名 / MCP STDIO 冒烟 / ZIP / DMG 校验）全部通过。**本轮四件套取代第四次重建（`965a427`）的 macOS 产物**，后者不再作为当前包。未创建 tag/Release，等待安装验收。
 
-2026-09-13：解析统计构成条改用单色相有序色阶配色。原来只按 local/API 二分上色（API 段直接用 `--text-primary` 墨色当数据色），多个本地服务挤成同一块 accent 色，本地部署 MinerU 与本地 OCR 分不出来。新版在 `00-themes.css` 增 `--chart-step-1..5` 与 `--chart-step-other`，由各主题自己的 `--accent` 与纸/墨 token 经 `color-mix(in oklab, …)` 推导，六套内置主题与自定义主题自动跟随；档位按数据外流程度排（本地文本提取 → 本地部署 → 本地 OCR → 在线 API → 其他 API），色跟服务走而不是跟 local/API 二分走，段序等于色阶序。六套主题实测色值均通过有序色阶校验（明度单调 / 相邻 ΔL ≥ 0.06 / 浅端对画布 ≥ 2:1 / 单一色相）。纯前端呈现改动（`00-themes.css` / `30-settings.css` / `70-vision.js`），装配指纹基线已同步；全量 2277 项 unittest 通过（22 项条件跳过）。尚未进入任何分发包。
+2026-09-13：解析统计构成条改用单色相有序色阶配色。原来只按 local/API 二分上色（API 段直接用 `--text-primary` 墨色当数据色），多个本地服务挤成同一块 accent 色，本地部署 MinerU 与本地 OCR 分不出来。新版在 `00-themes.css` 增 `--chart-step-1..5` 与 `--chart-step-other`，由各主题自己的 `--accent` 与纸/墨 token 经 `color-mix(in oklab, …)` 推导，六套内置主题与自定义主题自动跟随；档位按数据外流程度排（本地文本提取 → 本地部署 → 本地 OCR → 在线 API → 其他 API），色跟服务走而不是跟 local/API 二分走，段序等于色阶序。六套主题实测色值均通过有序色阶校验（明度单调 / 相邻 ΔL ≥ 0.06 / 浅端对画布 ≥ 2:1 / 单一色相）。纯前端呈现改动（`00-themes.css` / `30-settings.css` / `70-vision.js`），装配指纹基线已同步；全量 2277 项 unittest 通过（22 项条件跳过）。已随 2026-09-14 第五次重建入 macOS 双架构包；Windows 分发包仍不含本项。
 
 2026-09-13：第四次重建 macOS 桌面包（构建源码 `965a427`，干净 worktree，arm64 与 x86_64 双架构）：解析统计占比构成条改版、对齐模型状态判定修复与「校验中」阶段入包（即下条日期行所述两项改动入包）；各 2277 项 unittest 通过（22/27 项条件跳过），构建门禁通过，x86_64 反查纯 x86_64、最低系统 12.0。下列新摘要取代同日早前构建（`2288cc00…` 等四件套）。未正式发布，等待安装验收。
 
@@ -32,11 +32,13 @@
 
 2026-09-11：macOS arm64 测试包已加入打开已有资料库、阅读及数据位置设置修订，并同步 Windows 迁移缓存修复；全量测试及包校验通过，等待用户安装验收，未正式发布本轮修订。
 
-## 2026-09-14 — 第五次重建：构成条配色入包（仅 arm64）
+## 2026-09-14 — 第五次重建：构成条配色入包（双架构）
 
 - 构建源码 `b1f0082`：解析统计构成条改用 `--chart-step-*` 单色相有序色阶配色，由各主题 `--accent` 经 `color-mix(in oklab, …)` 推导，档位按数据外流程度排。
-- arm64：全量 2277 项 unittest（22 skip）通过；Ruff 零告警；签名、MCP STDIO 冒烟、ZIP 与 DMG 校验均通过。
-- **本轮未重建 x86_64**（按用户要求只出 arm64）。Intel 侧最新包仍是第四次重建的 `965a427`，不含本次配色改动；下次双架构重建时补齐。
+- arm64：全量 2277 项 unittest（22 skip）通过。
+- x86_64：在 Apple Silicon 上经 Rosetta（`arch -x86_64` + `.venv-macos12-x86_64` universal2 解释器）构建，2277 项（27 skip）通过；反查主程序与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion=12.0`。
+- 两架构包内均已核实含新配色（`00-themes.css` / `30-settings.css` / `70-vision.js` 三处均命中 `--chart-step-*`）；Ruff 零告警；签名、MCP STDIO 冒烟、ZIP 与 DMG 校验均通过。
+- **取代第四次重建（`965a427`）的四件套**，那一套的 macOS 产物不再作为当前包。
 - 构建时工作区非全净：`.hallmark/log.json` 有既有未提交改动，另有未跟踪的 `.codex-tmp/` 与 `docs/release-notes-0.5.4-draft.md`；三者均不参与打包输入。
 - 未创建 tag/Release；Homebrew tap 仍提供 v0.5.3。
 
@@ -44,8 +46,12 @@
 |---|---:|---|
 | `MEFinder-v0.5.4-macos-arm64.dmg` | 176372120 | `2a8574b451e516237f5e527797baa450fc39c0de5a6d183287768700778bbd3e` |
 | `MEFinder-v0.5.4-macos-arm64.zip` | 166229655 | `9d20bf801d4db54ee62f6c7b127592af5e7edab8a6e74d1f235473889a0278b4` |
+| `MEFinder-v0.5.4-macos-x86_64.dmg` | 180602404 | `c9518c3bae25fdf70458b25d5547f1bd74edf1b16b9fb502f3e319b9d4983b13` |
+| `MEFinder-v0.5.4-macos-x86_64.zip` | 171323096 | `4e66b74ea0d1309e3579af8a19476b7a3f76b19902d417719d57a6764af6f6b9` |
 
 ## 2026-09-13 — 第四次重建：构成条与模型状态判定入包（双架构）
+
+> 已被 2026-09-14 第五次重建取代，下列 macOS 产物不再是当前包。
 
 - 构建源码 `965a427`（合入 main 两个设置更新后的干净 worktree）：解析统计占比改 100% 构成条 + 图例（`ff9aca2`）；对齐模型以磁盘文件为准判状态、补「校验中」阶段与估计值校准（`d551a7d`，涉及 `embedding_models.py`/`managed_embedding_models.py`）。
 - arm64：全量 2277 项 unittest（22 skip）通过；x86_64：Rosetta 构建，2277 项（27 skip）通过，反查纯 x86_64、`LSMinimumSystemVersion=12.0`。其余门禁（Ruff/Node/签名/MCP 冒烟/ZIP/DMG）全部通过。
