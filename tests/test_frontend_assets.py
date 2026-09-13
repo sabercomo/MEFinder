@@ -480,10 +480,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 MinerU 账号与其他解析 API 由表格改为讨论稿的行式布局，服务地址改
     #   「只读文字 + 修改」，移除账号移进编辑区；文档传输与引文格式选择点移到
     #   左侧；本地 OCR 顶部提示框改为折叠区，下载按钮降为次要。
+    # 0.5.4 解析统计补「占比」列与条形（按页数，与总览同口径）。
     BASELINE_SHA256 = (
-        "d4fd38aeb5924281ff7d48b3617599f8c9a0943a46c34f77efce8e937bfb42c9"
+        "80f885027837389d995a0c75e264ba9dd34272f19fc8467a0393e2b3eca0a441"
     )
-    BASELINE_BYTES = 1108893
+    BASELINE_BYTES = 1110187
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

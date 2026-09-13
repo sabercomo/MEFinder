@@ -795,6 +795,9 @@
       list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
       return;
     }
+    var totalPages = providers.reduce(function(sum, item) {
+      return sum + Number(item.parsed_page_count || 0);
+    }, 0);
     var orderedProviders = providers.slice().sort(function(a, b) {
       var aLocal = a.provider_kind === 'local' ? 0 : 1;
       var bLocal = b.provider_kind === 'local' ? 0 : 1;
@@ -807,7 +810,13 @@
       var details = renderParserProviderBooks(provider);
       if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
       var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
-      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
+      // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
+      var pageCount = Number(provider.parsed_page_count || 0);
+      var share = totalPages > 0 ? pageCount / totalPages : 0;
+      var sharePercent = totalPages > 0 ? Math.round(share * 100) : null;
+      var shareLabel = sharePercent === null ? '—'
+        : (sharePercent === 0 && pageCount > 0 ? '<1%' : sharePercent + '%');
+      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small><span class="parser-provider-bar" aria-hidden="true"><span style="width:' + (share * 100).toFixed(1) + '%"></span></span></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + pageCount.toLocaleString() + '</b> 页</span><span class="parser-provider-number parser-provider-share"><b>' + shareLabel + '</b></span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
     }).join('');
   }
 
