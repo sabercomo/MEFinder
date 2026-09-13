@@ -475,10 +475,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 阅读与检索按讨论稿定稿：组标题不再带重复说明，选项名称与说明改用
     #   讨论稿口径，开关补「开启 / 关闭」文字，页尾补「设置变更自动保存」。
     # 0.5.4 界面文案句末不再加句号（DESIGN.md §5「界面文案」）。
+    # 0.5.4 滑杆已选区间用强调色填充（--range-fill 由 JS 写入），轨道 6px、
+    #   滑块 20px，否则一条灰轨道看不出当前值。
     BASELINE_SHA256 = (
-        "c7b0fe8a035f74fdcc29916137906839260387157014d0edee011626445adbec"
+        "ecd8fd765a3983162649d9102a54b0037cbe611daf88b54eed44039737590060"
     )
-    BASELINE_BYTES = 1104521
+    BASELINE_BYTES = 1106154
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

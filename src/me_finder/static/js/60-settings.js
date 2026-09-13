@@ -133,6 +133,7 @@
     if (background) background.value = normalizeHexForInput(def.background);
     if (foreground) foreground.value = normalizeHexForInput(def.foreground);
     if (contrast) contrast.value = String(typeof def.contrast === 'number' ? def.contrast : 55);
+    if (contrast) syncRangeFill(contrast);
     if (contrastValue) contrastValue.textContent = String(typeof def.contrast === 'number' ? def.contrast : 55);
     syncCustomDeleteButton();
   }
@@ -387,6 +388,29 @@
     }, 250);
   }
 
+  /* 滑杆的已选区间用强调色填充：CSS 拿不到 value，这里把百分比写进
+     --range-fill，输入时实时更新，切换分类/载入偏好后补一次。 */
+  function syncRangeFill(input) {
+    if (!input || input.type !== 'range' || !input.style) return;
+    var min = Number(input.min || 0);
+    var max = Number(input.max || 100);
+    var span = max - min;
+    var ratio = span > 0 ? (Number(input.value) - min) / span : 0;
+    input.style.setProperty('--range-fill', (Math.min(Math.max(ratio, 0), 1) * 100).toFixed(2) + '%');
+  }
+
+  function syncAllRangeFills() {
+    if (typeof document.querySelectorAll !== 'function') return;
+    document.querySelectorAll('.settings-content input[type="range"]').forEach(syncRangeFill);
+  }
+
+  // 纯逻辑测试在只有 getElementById 的 document 桩上运行这份脚本，这里要留退路。
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('input', function(event) {
+      if (event.target && event.target.type === 'range') syncRangeFill(event.target);
+    });
+  }
+
   function showSettingsCategory(sectionId) {
     var section = document.getElementById(sectionId);
     if (!section) return;
@@ -400,6 +424,7 @@
     });
     var content = document.querySelector('.settings-content');
     if (content) content.scrollTop = 0;
+    syncAllRangeFills();
     if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
       loadParserStatistics();
     }
