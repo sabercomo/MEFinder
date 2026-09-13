@@ -9,7 +9,7 @@
 
 ## 头条结果:全部 12 个(轮×场景)运行 0 错误、0 次 503、identity_mismatches=0
 
-- **对齐期间搜索无 503**:三轮 alignment 场景共 **343 个重叠搜索(103+152+88)全部 200**,零 503、零 identity 漂移;进程峰值 RSS **1279–1310 MiB**(与"1.3 GiB=嵌入瞬态峰值"一致)。对照修复前基线(`performance-real-alignment503-fix` 前身)对齐期间 61/216(28.2%)快速 503——**修复在真实四场景协议下依旧成立**。
+- **对齐期间搜索无 503(当前修复后代码)**:三轮 alignment 场景共 **343 个重叠搜索(103+152+88)全部 200**,零 503、零 identity 漂移;进程峰值 RSS **1279–1310 MiB**(与"1.3 GiB=嵌入瞬态峰值"一致)。**分别陈述**:旧记录(修复前产品代码)对齐期间 61/216=28.2% 快速 503;当前修复后代码本轮 0 次。二者是不同代码版本的两次测量,可分别陈述,但降幅未由本报告的同版本 `--compare` 证明(见下"同版本重复测量"节)。
 - 导出(markdown/epub)期间 26–31 个重叠搜索全部 200;normal 场景 0 重叠(基线搜索)全部 200。
 
 ## 失败/超时/异常退出样本口径(不只统计成功)
@@ -30,13 +30,19 @@
 - **用户完整"社会"联合请求**(繁简两变体)在各场景 p50 约 **0.5–3.1 s**(强机器漂移),**远非 18 ms**;18 ms 只是简体单路(见搜索验收报告)。繁体稀有变体全表扫描仍是联合瓶颈。
 - 快查询(精确长句/无命中)~几十 ms;normal 场景峰值 RSS ~80–88 MiB,export ~130–139 MiB,alignment ~1.3 GiB。
 
-## 正式通过比较(审计后,修复工具 + 全新同-harness 基线)
+## 同版本重复测量 + `--compare` 跑通(不是优化前后对照)
 
-`bench_real_library.py` 修复"先落盘后比较"后,重跑两次:
-- **全新基线**(`performance-real-4scenario-baseline-2026-09-13.json`):`valid=true`,12 运行全 8/8 覆盖、0 错误、0 次 503。
-- **对比运行**(`performance-real-4scenario-compare-2026-09-13.json`):`valid=true`,`--compare` 上述基线**成功写出 `comparison`**(无 `comparison_error`)。四场景全 0 错误、**0 次 503**、idmis=0;对齐 256 重叠搜索全 200,峰值 RSS 1314 MiB。比较逐查询给出 before/after 比值(如 common_zh p50 2474→2388ms 比值 0.965),两次同-harness 运行 ~±10% 内(机器漂移),无 503 回归。
+> **口径更正(审计后)**:这两份 JSON 的 `revision` 都是 `109e089`、`source_tree_sha256` 完全相同——**是同一版本的两次重复测量,不是旧/新版性能对照**。它证明的是:①`bench_real_library.py` 先落盘后比较的修复有效(比较跑通、无 `comparison_error`);②**当前版本能完成完整四场景测量**,可作为**后续优化的"当前版本基线"**。它**不能**替代旧版与新版的性能验收;要衡量优化收益,须用同一工具分别跑优化前/后的产品代码再比较。
 
-**为何不能对旧基线跑 `--compare`(如实)**:`compare_results` 校验 `harness_sha256` 一致;修复落盘 bug 必然改动 `bench_real_library.py` → harness 指纹变化 → 协议**正确地**拒绝跨-harness 比较 `performance-real-alignment503-fix-2026-09-12.json`(旧基线)。故正式对比改用**修复后工具产出的全新基线**。对齐 503 的二值对比(旧基线 28.2% → 本轮 0)独立成立。
+`bench_real_library.py` 修复"先落盘后比较"后,重跑两次(均 `revision 109e089`):
+- **基线**(`performance-real-4scenario-baseline-2026-09-13.json`):`valid=true`,12 运行全 8/8 覆盖、0 错误、0 次 503。
+- **对比运行**(`performance-real-4scenario-compare-2026-09-13.json`):`valid=true`,`--compare` 上述基线**成功写出 `comparison`**(无 `comparison_error`)。四场景全 0 错误、**0 次 503**、idmis=0;对齐 256 重叠搜索全 200,峰值 RSS 1314 MiB。
+
+**逐场景延迟波动(同版本两次测量,非回归)**:normal 与 export 场景逐查询 p50 约 ±10%(如 normal common_zh 2474→2388 ×0.97);但**对齐场景的重查询在两次测量间波动很大**——common_zh 1364→3225ms(**×2.36**)、带范围 scoped 1038→3103ms(**×2.99**)、繁体 script_variant 1181→3291ms(**×2.79**);快查询(common_en/no_hit/zh_exact/normalized)~×1.0–1.2。**这些波动原因尚未定位**:不能直接归因机器漂移,也不能据此认定代码回归(两次是同版本)。
+
+**503 分别陈述,不由本次同版本比较证明降幅**:旧记录(修复前产品代码)对齐期间 61/216 = 28.2% 快速 503;本轮两次运行对齐期间(336、256 次重叠)全 200、0 次 503。二者可分别陈述,但**同版本重复测量不能证明"28.2%→0"这一降幅**——那需要用同一工具跑旧/新版产品代码对照。
+
+**为何不能对旧基线跑 `--compare`(如实)**:`compare_results` 校验 `harness_sha256` 一致;修复落盘 bug 必然改动 `bench_real_library.py` → harness 指纹变化 → 协议**正确地**拒绝跨-harness 比较 `performance-real-alignment503-fix-2026-09-12.json`(旧基线)。
 
 (下方"头条"表是审计前的一次运行,其 `--compare` 因当时 2 个 export 轮偶发覆盖 7/8 + 未落盘而中止——重叠时序脆弱性,非错误/503;现工具已先落盘,且全新基线两轮均 8/8。)
 
@@ -45,10 +51,11 @@
 ```bash
 PY=.venv-macos312-arm64/bin/python
 MODELS="$HOME/Library/Application Support/MEFinder/runtime/components/text-alignment/models"
-NO_PROXY=localhost,127.0.0.1 $PY scripts/bench_real_library.py \
-  --snapshot .codex-tmp/real-library-20260911 --models "$MODELS" \
-  --rounds 3 --repeats 5 --output <new.json> \
-  --compare reports/performance-real-alignment503-fix-2026-09-12.json
+COMMON="--snapshot .codex-tmp/real-library-20260911 --models $MODELS --rounds 3 --repeats 5"
+# 1) 用当前工具建一份基线(不带 --compare)
+NO_PROXY=localhost,127.0.0.1 $PY scripts/bench_real_library.py $COMMON --output base.json
+# 2) 再跑一次并对上一步基线比较(两次须 valid=true)
+NO_PROXY=localhost,127.0.0.1 $PY scripts/bench_real_library.py $COMMON --output cmp.json --compare base.json
 ```
 
-正式通过比较用**修复后工具**先建全新基线(不带 `--compare`)、再对该基线跑一次 `--compare`(见"正式通过比较"节两份 JSON)。`--compare` 需两次运行都 `valid=true`(每轮 export/alignment 覆盖全 8 查询,时序偶发但本轮两次均满足)。不能对 `performance-real-alignment503-fix-2026-09-12.json` 旧基线比较——修复改了 harness 指纹,协议正确拒绝跨-harness 比较。
+注意:**不要** `--compare reports/performance-real-alignment503-fix-2026-09-12.json`(旧基线)——修复落盘 bug 改了 harness 指纹,协议会正确拒绝跨-harness 比较。要做**真正的优化前后对照**(而非同版本重复),须用**同一(当前)工具**分别 checkout 优化前/后的产品代码各建一份基线,再比较;本报告两份 JSON 都是当前版本 `109e089`,只是重复测量。`--compare` 需两次运行都 `valid=true`(每轮 export/alignment 覆盖全 8 查询,时序偶发但本轮两次均满足)。
