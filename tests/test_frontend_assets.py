@@ -485,10 +485,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 已下载的对齐模型给出「删除模型」入口（后端 delete 动作）。
     # 0.5.4 对齐模型字节齐但回执未落显示「校验中」（后端 verifying 状态），
     #   不再与「下载中 99%」混用；安装文件齐全即显示「已下载」。
+    # 0.5.4 解析统计占比改为「按解析服务」顶部一根 100% 构成条 + 图例（部分-整体
+    #   关系），行内细条与「占比」列移除，避免占比条被误读成加载进度。
     BASELINE_SHA256 = (
-        "675c5df224bcba488b4c6fcd074ca69b0941cf1f3c481ae089951227c55f1966"
+        "2016a9dde866e95b3442c18246f3c39fed28bdb0309cc10a868a7618b2497662"
     )
-    BASELINE_BYTES = 1114464
+    BASELINE_BYTES = 1117155
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
