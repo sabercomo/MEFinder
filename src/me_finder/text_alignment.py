@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
 
+from .runtime_location import component_runtime_root
 from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
 from .calibration_library import _item_language_code
 from .document_group_metadata import member_display_name
@@ -839,7 +840,7 @@ def _default_alignment_model_cache(db_path: Path) -> Path:
         if index_path.parent.name.casefold() == "data"
         else index_path.parent
     )
-    return runtime_root / "components" / "text-alignment" / "models"
+    return component_runtime_root(runtime_root) / "components" / "text-alignment" / "models"
 
 
 def _require_pair(

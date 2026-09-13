@@ -10,6 +10,7 @@ from ..embedding_models import (
     model_component_installed,
     resolve_alignment_thresholds,
 )
+from ..runtime_location import component_runtime_root
 from ..preferences import read_preferences, resolve_preferences_path
 from ..embedding_runtime import (
     SemanticAlignmentCancelled,
@@ -52,7 +53,7 @@ class TextAlignmentCoordinator:
         thresholds = resolve_alignment_thresholds(
             model_id, preferences["alignment_thresholds"]
         )
-        cache_dir = self._paths.runtime_root / "components" / "text-alignment" / "models"
+        cache_dir = component_runtime_root(self._paths.runtime_root) / "components" / "text-alignment" / "models"
         if not model_component_installed(cache_dir, model_id):
             # The managed model component is a settings-UI download. Starting a
             # generation job without it must fail clearly and locally — never
@@ -75,12 +76,7 @@ class TextAlignmentCoordinator:
                         pivot_source_file_id,
                         target_source_file_id,
                         force=force,
-                        model_cache_dir=(
-                            self._paths.runtime_root
-                            / "components"
-                            / "text-alignment"
-                            / "models"
-                        ),
+                        model_cache_dir=cache_dir,
                         embedding_model_id=model_id,
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,

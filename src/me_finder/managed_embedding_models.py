@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Mapping
 
+from .runtime_location import component_runtime_root
 from .embedding_models import (
     EMBEDDING_MODELS,
     embedding_model_config,
@@ -51,7 +52,7 @@ class ManagedEmbeddingModels:
         downloader: Callable[[str, Path], None] = download_embedding_model,
     ) -> None:
         self._cache_dir = (
-            Path(runtime_root) / "components" / "text-alignment" / "models"
+            component_runtime_root(runtime_root) / "components" / "text-alignment" / "models"
         )
         self._downloader = downloader
         self._lock = threading.RLock()
