@@ -1,6 +1,6 @@
 # MEFinder 0.5.4
 
-2026-09-13：设置 → 解析统计的「按解析服务」占比呈现改为顶部一根 100% 构成条 + 图例（部分-整体关系，local 段用 accent 色、API 段用墨色），行内半透明细条与「占比」列移除，不再形似加载进度；展开的解析文献明细与 MinerU 账号归属不变。纯前端呈现改动（70-vision.js / 30-settings.css / index.html），全量 2277 项 unittest 通过（10 项条件跳过）+ ruff 零告警。尚未进入任何分发包。
+2026-09-13：设置 → 解析统计的「按解析服务」占比呈现改为顶部一根 100% 构成条 + 图例（部分-整体关系，local 段用 accent 色、API 段用墨色），行内半透明细条与「占比」列移除，不再形似加载进度；展开的解析文献明细与 MinerU 账号归属不变。纯前端呈现改动（70-vision.js / 30-settings.css / index.html），全量 2277 项 unittest 通过（10 项条件跳过）+ ruff 零告警。同日 22:15 dist 开发包已重建（构建源码 ff9aca2，与 main 仅差 1 个 docs 文件；桌面 onedir + MCP sidecar 一并重建，`dist/MEFinderData` 未触碰，`data_root.txt` 核验正确，包内已确认含新 UI），桌面端可直接查看；正式安装/便携分发包仍不含本项。
 
 2026-09-13：源码已修复 MCP sidecar 强杀后 `_MEI` 解压目录累积，并补齐 macOS 活实例锁保护与 onedir 判定；真实 sidecar 多实例/强杀回收及 onedir 不写包内锁验证通过。尚未进入下列桌面分发包；旧构建及占锁前中断的残留不自动清理。详见 `issues/onefile-mei-temp-leak.md` 与 `reports/onefile-cleanup-macos-2026-09-13.md`。
 
