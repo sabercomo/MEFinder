@@ -335,6 +335,21 @@ html[data-theme="lavender-purple"], .theme-preview[data-preview-theme="lavender-
   --danger-border: #F4B9C0;
   --danger-icon: #D62C3A;
   --danger-contrast: #FFFFFF;
+
+  /* 图表色阶（解析统计构成条等部分-整体图形）。
+     这里是「有序」而非「分类」数据：档位按数据外流程度排（本地文本提取 →
+     本地部署 → 本地 OCR → 在线 API），所以用单色相明度阶，不用多色相。
+     全部由主题自己的 --accent 与纸/墨 token 混出，换主题或自定义主题时自动跟随；
+     混色用 oklab，避免与近中性色做极坐标插值时色相乱摆。
+     六套内置主题下均通过有序色阶校验（明度单调 / 相邻 ΔL ≥ 0.06 /
+     浅端对画布 ≥ 2:1 / 单一色相）。--chart-step-other 给「未标记解析器」，
+     它不在这条序列上，用中性色而不是占一个档位。 */
+  --chart-step-1: color-mix(in oklab, var(--accent) 55%, var(--text-primary));
+  --chart-step-2: var(--accent);
+  --chart-step-3: color-mix(in oklab, var(--accent) 80%, var(--surface-primary));
+  --chart-step-4: color-mix(in oklab, var(--accent) 64%, var(--surface-primary));
+  --chart-step-5: color-mix(in oklab, var(--accent) 48%, var(--surface-primary));
+  --chart-step-other: var(--neutral);
 }
 
 /* 午夜 = GitHub / Codex Dark：主流、克制、专业的深色标准（用户点名参照）。
@@ -413,5 +428,13 @@ html[data-theme="midnight"], .theme-preview[data-preview-theme="midnight"] {
   --match-inline-border: #4885CC;
   --match-inline-text: #9ECBFF;
   --match-focus-ring: rgba(88,166,255,0.24);
+  /* 深色画布把色阶低端压扁（相邻 ΔL < 0.06、浅端对画布 < 2:1），
+     所以午夜整条阶梯向亮侧移一档：前两档往墨色（此处是浅色）混，
+     accent 落在第三档，后两档才往深底混。 */
+  --chart-step-1: color-mix(in oklab, var(--accent) 58%, var(--text-primary));
+  --chart-step-2: color-mix(in oklab, var(--accent) 82%, var(--text-primary));
+  --chart-step-3: var(--accent);
+  --chart-step-4: color-mix(in oklab, var(--accent) 80%, var(--surface-primary));
+  --chart-step-5: color-mix(in oklab, var(--accent) 60%, var(--surface-primary));
   color-scheme: dark;
 }

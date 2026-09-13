@@ -1428,8 +1428,10 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .parser-provider-columns span:nth-child(3) { text-align: right; }
 /* 占比是部分-整体关系：列表顶部一根 100% 构成条 + 图例说明各段；
    数字只在图例出现一次，行内不再重复画条，避免被误读成加载进度。
-   local 段用 accent，其余（API 类）用 text-primary 当墨色，六个主题下
-   与背景及 accent 均可区分。 */
+   配色走 00-themes.css 的 --chart-step-* 单色相有序色阶：档位按数据外流程度
+   排（本地文本提取 → 本地部署 → 本地 OCR → 在线 API），越深越不出本机。
+   旧版按 local/api 二分上色（api 直接用 --text-primary 当数据色），既把多个
+   本地服务挤成同一块，又把墨色 token 当成了图表色，已废弃。 */
 .parser-share-stack { padding: 12px 12px 0; }
 .parser-share-bar {
   display: flex;
@@ -1439,15 +1441,23 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   overflow: hidden;
   background: var(--border-subtle);
 }
-.parser-share-seg { height: 100%; min-width: 2px; }
-.parser-share-seg.local { background: var(--accent); }
-.parser-share-seg.api { background: var(--text-primary); }
+.parser-share-seg { height: 100%; min-width: 2px; background: var(--chart-step-2); }
+.parser-share-seg.step-1 { background: var(--chart-step-1); }
+.parser-share-seg.step-2 { background: var(--chart-step-2); }
+.parser-share-seg.step-3 { background: var(--chart-step-3); }
+.parser-share-seg.step-4 { background: var(--chart-step-4); }
+.parser-share-seg.step-5 { background: var(--chart-step-5); }
+.parser-share-seg.step-other { background: var(--chart-step-other); }
 .parser-share-cap { margin-top: 5px; color: var(--text-tertiary); font-size: 11px; }
 .parser-share-legend { display: grid; gap: 6px; padding: 10px 12px 12px; }
 .parser-share-legend > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--text-secondary); font-size: 12.5px; }
-.parser-share-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: var(--radius-pill); }
-.parser-share-dot.local { background: var(--accent); }
-.parser-share-dot.api { background: var(--text-primary); }
+.parser-share-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: var(--radius-pill); background: var(--chart-step-2); }
+.parser-share-dot.step-1 { background: var(--chart-step-1); }
+.parser-share-dot.step-2 { background: var(--chart-step-2); }
+.parser-share-dot.step-3 { background: var(--chart-step-3); }
+.parser-share-dot.step-4 { background: var(--chart-step-4); }
+.parser-share-dot.step-5 { background: var(--chart-step-5); }
+.parser-share-dot.step-other { background: var(--chart-step-other); }
 .parser-share-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parser-share-legend small { color: var(--text-tertiary); font-size: 11px; }
 .parser-share-legend b { margin-left: auto; color: var(--text-primary); font-variant-numeric: tabular-nums; }

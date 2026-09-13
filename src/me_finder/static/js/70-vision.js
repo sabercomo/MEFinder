@@ -784,6 +784,32 @@
     }).join('') + '</div>';
   }
 
+  // 解析服务在构成条上的档位：按数据外流程度排，色跟服务走而不是跟 local/api
+  // 二分走——新增一个本地服务不会把已有颜色重排。未知解析器不占档位，走中性色。
+  var PARSER_CHART_STEPS = {
+    'pymupdf': 1,
+    'simple-pdf-text': 1,
+    'mineru-local': 2,
+    'ndlocr-lite': 3,
+    'ndlkotenocr-lite': 3,
+    'mineru-cloud': 4,
+    'openai-compatible': 5,
+    'qwen-ocr': 5
+  };
+
+  function parserChartStep(provider) {
+    var mapped = PARSER_CHART_STEPS[provider.provider_id];
+    if (mapped) return mapped;
+    if (!provider.provider_id || provider.provider_id === 'unknown-parser') return 6;
+    // 没登记过的解析器按本地/在线落到同类的末档，不新造颜色。
+    return provider.provider_kind === 'local' ? 3 : 5;
+  }
+
+  function parserChartStepClass(provider) {
+    var step = parserChartStep(provider);
+    return step > 5 ? 'step-other' : 'step-' + step;
+  }
+
   function renderParserStatistics() {
     var total = parserStore.parserStatistics.total || {};
     document.getElementById('parser-stat-books').textContent = Number(total.parsed_book_count || 0).toLocaleString();
@@ -800,10 +826,11 @@
     var totalPages = providers.reduce(function(sum, item) {
       return sum + Number(item.parsed_page_count || 0);
     }, 0);
+    // 段序必须等于色阶序，相邻色对才是校验过的那几对；同档位的服务按页数降序。
     var orderedProviders = providers.slice().sort(function(a, b) {
-      var aLocal = a.provider_kind === 'local' ? 0 : 1;
-      var bLocal = b.provider_kind === 'local' ? 0 : 1;
-      return aLocal - bLocal;
+      var stepDelta = parserChartStep(a) - parserChartStep(b);
+      if (stepDelta) return stepDelta;
+      return Number(b.parsed_page_count || 0) - Number(a.parsed_page_count || 0);
     });
     // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
     var shareOf = function(provider) {
@@ -820,11 +847,11 @@
     // 行内不再重复画条，避免被误读成加载进度。
     if (totalPages > 0) {
       var segments = orderedProviders.map(function(provider) {
-        return '<span class="parser-share-seg ' + (provider.provider_kind === 'local' ? 'local' : 'api') + '" style="width:' + (shareOf(provider).share * 100).toFixed(1) + '%"></span>';
+        return '<span class="parser-share-seg ' + parserChartStepClass(provider) + '" style="width:' + (shareOf(provider).share * 100).toFixed(1) + '%"></span>';
       }).join('');
       var legendRows = orderedProviders.map(function(provider) {
         var kind = provider.provider_kind === 'local' ? '本地' : 'API';
-        return '<div><i class="parser-share-dot ' + (provider.provider_kind === 'local' ? 'local' : 'api') + '" aria-hidden="true"></i><span class="parser-share-name">' + esc(provider.provider_name || provider.provider_id) + '</span><small>' + kind + '</small><b>' + shareOf(provider).label + '</b><small class="parser-share-pages">' + shareOf(provider).pageCount.toLocaleString() + ' 页</small></div>';
+        return '<div><i class="parser-share-dot ' + parserChartStepClass(provider) + '" aria-hidden="true"></i><span class="parser-share-name">' + esc(provider.provider_name || provider.provider_id) + '</span><small>' + kind + '</small><b>' + shareOf(provider).label + '</b><small class="parser-share-pages">' + shareOf(provider).pageCount.toLocaleString() + ' 页</small></div>';
       }).join('');
       var breakdownLabel = orderedProviders.map(function(provider) {
         return (provider.provider_name || provider.provider_id) + '占' + shareOf(provider).label;

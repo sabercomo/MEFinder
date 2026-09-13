@@ -487,10 +487,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   不再与「下载中 99%」混用；安装文件齐全即显示「已下载」。
     # 0.5.4 解析统计占比改为「按解析服务」顶部一根 100% 构成条 + 图例（部分-整体
     #   关系），行内细条与「占比」列移除，避免占比条被误读成加载进度。
+    # 0.5.4 构成条配色改为 --chart-step-* 单色相有序色阶（档位按数据外流程度排），
+    #   替换旧的 local/api 二分（api 段曾直接用 --text-primary 当数据色）。
     BASELINE_SHA256 = (
-        "2016a9dde866e95b3442c18246f3c39fed28bdb0309cc10a868a7618b2497662"
+        "464119799a2dd41a5bf5c5e31e274797f1c437cd28aac4e0d25d23c9198d082b"
     )
-    BASELINE_BYTES = 1117155
+    BASELINE_BYTES = 1120818
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
