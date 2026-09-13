@@ -1,5 +1,7 @@
 # MEFinder 0.5.4
 
+2026-09-13：第三次重建 macOS arm64 桌面包（构建源码 `c71d308`，干净 worktree）：设置页讨论稿定稿系列、对齐模型可删除、解析统计「占比」、数据备份「上次导出」与 MCP sidecar `_MEI` 临时目录清扫/活实例保护全部入包（即上条日期行所述源码修复入包）；全量 2275 项 unittest 通过（22 项条件跳过），构建门禁通过。下列新摘要取代同日早前构建（`bf371e27…`/`f372872e…`）。未正式发布，等待安装验收。
+
 2026-09-13：源码已修复 MCP sidecar 强杀后 `_MEI` 解压目录累积，并补齐 macOS 活实例锁保护与 onedir 判定；真实 sidecar 多实例/强杀回收及 onedir 不写包内锁验证通过。尚未进入下列桌面分发包；旧构建及占锁前中断的残留不自动清理。详见 `issues/onefile-mei-temp-leak.md` 与 `reports/onefile-cleanup-macos-2026-09-13.md`。
 
 2026-09-13：新增 Homebrew Cask tap 分发渠道（`brew tap sabercomo/mefinder` + `brew install --cask mefinder`），tap 当前提供已发布的 v0.5.3 双架构包；0.5.4 正式发布后由 `scripts/update_homebrew_tap.py` 同步 cask。纯分发工具与文档，未改产品代码，未创建 tag/Release。
@@ -17,6 +19,17 @@
 2026-09-12：架构边界复核修复已通过源码验收（2156 项 unittest，22 项条件跳过），隐藏原生原型及同书库三轮性能复测完成；本轮未重建或发布桌面包。
 
 2026-09-11：macOS arm64 测试包已加入打开已有资料库、阅读及数据位置设置修订，并同步 Windows 迁移缓存修复；全量测试及包校验通过，等待用户安装验收，未正式发布本轮修订。
+
+## 2026-09-13 — 第三次重建：设置定稿与 MCP 清扫入包
+
+- 构建源码 `c71d308`（干净 worktree）。相对上一包（源码 `005ab65`）新增：设置页讨论稿定稿系列——阅读与检索合并去重复、文案统一与开关状态（`608daa3`），滑杆自绘与已选区间填充（`ecc5e50`、`6da85aa`），MinerU 账号与其他解析 API 行式布局（`ce8d1a2`），解析统计「占比」列与条形（`ce152b5`），数据备份显示「上次导出」（`1904fa5`），界面文案句末去句号（`2ba5728`）；对齐模型可删除，替代无实际作用的「管理本地文件」（`c46354d`）；MCP sidecar `_MEI` 临时目录清扫移植与 macOS 活实例锁保护（`c71d308`）。
+- 官方 `build_macos.sh` 全门禁通过；全量 2275 项 unittest（22 skip）在构建源上独立复核通过。
+- 取代同日早前构建（`bf371e27…`/`f372872e…`）；未创建 tag/Release。Homebrew tap 仍提供 v0.5.3，待 0.5.4 正式发布后同步。
+
+| 产物 | 字节数 | SHA-256 |
+|---|---:|---|
+| `MEFinder-v0.5.4-macos-arm64.dmg` | 176369329 | `2288cc0077f6021269162ea3aea3561ceefe70949b2b25aa5258ac7ca6c2fd05` |
+| `MEFinder-v0.5.4-macos-arm64.zip` | 166226819 | `d023f5f8fbd1516467653268b38297c35849c5d35f1bf096c62ef45c8d6828ce` |
 
 ## 2026-09-13 — Homebrew Cask tap 分发
 
