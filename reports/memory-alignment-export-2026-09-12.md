@@ -14,7 +14,7 @@
 - 每轮任务后"稳定驻留"= 等待 RSS 自然平稳（阈值 1 MiB 持续 2 s）后读取；**不调用 gc.collect、不清缓存、不卸载模型**。
 - 真实库协议沿用冻结快照 `.codex-tmp/real-library-20260911/`（65 部文献；对齐对 2047/1901 segments、967 links，与 [503 修复复测](performance-real-alignment503-fix-2026-09-12.md) 完全一致）；DB 与模型缓存复制到临时目录，未触碰用户库。重复实验输出 counts 逐轮一致（967/795/94/78、92+30 锚）。
 - 合成数据：`scripts/performance_fixture.create_fixture`，seed 20260910，fixture_version 1（公开、可重复；段落近似 1 segment）。合成对齐梯度 400/1600 段（真实模型全管线）与 800/3200/12800 段（stub 向量，隔离 DP）；导出梯度 5k/20k/50k 段（Markdown 与 EPUB）。合成 fixture 在**子进程**中构建，避免建库内存进入被测进程的 OS 高水位。
-- 证据口径：当前 RSS（psutil，25 ms 采样）、OS 历史峰值（ru_maxrss）、Python 可追踪分配（tracemalloc，单独模式运行）、子进程树 RSS（全程为 0：对齐与导出均无子进程）。NumPy 分配计入 tracemalloc（numpy 自带 tracemalloc 域）；ONNX Runtime 原生分配不可见，用"RSS 增量 − Python 堆增量"差分作为原生证据。
+- 证据口径：当前 RSS（psutil，25 ms 采样）、OS 历史峰值（ru_maxrss）、Python 可追踪分配（tracemalloc，单独模式运行）、子进程树 RSS（全程为 0：对齐与导出均无子进程）。NumPy 分配计入 tracemalloc（numpy 自带 tracemalloc 域）；ONNX Runtime 原生分配对 tracemalloc 不可见。**"RSS 与 Python 堆的差额"只作"Python 层不足以解释、原生可能占大头"的迹象,不作分配归属证明**——RSS 还含进程基线/共享库/映射/分配器保留,两种峰值也未必同时。
 
 ## 已测量事实（对齐）
 
@@ -131,5 +131,5 @@ $PY scripts/mem_profile_alignment.py ... --rounds 2 --fresh-vectors-per-round --
   - 链接**结构完全一致**(967=967,无新增/消失/翻转),但 confidence/cost 有极小**非零**差(≤1.02e-4,不忽略)→ 非"输出完全一致";
   - 逐向量 min_cosine 0.99999982、max_abs 3.5e-4、**96.8% 逐位一致**,差异仅在中/长文本、短文本逐位一致;
   - **verdict=manual-review-required**(工具不凭自设阈值判 safe;分数任何非零差都计为变化)。采纳须①多对/边界样本泛化②质量门槛③`EMBEDDING_RUNTIME_VERSION` 缓存版本决策。**产品默认维持 batch 64,不据"差异很小"采纳。**
-- **对齐侧外层相位 tracemalloc 峰值精确重测——已用修复后工具补测**(2026-09-13,`--tracemalloc` 真实对 1 轮;数据 [JSON](memory-alignment-tracemalloc-2026-09-13.json)):修复嵌套 bug 后,**外层 `embed`(⊃`model_load`)traced_peak=58.3 MiB**、`task_total`=58.3 MiB、嵌套 `model_load`=3.2 MiB(旧代码下 `embed` 峰值会被 `model_load` 的 reset 清零而低报)。Python 堆峰值仅 ~58 MiB 而该轮 embed rss_max ~1038 MiB——**~980 MiB 差额是 ONNX 原生分配**(tracemalloc 不可见),坐实"1.3 GiB 主体为原生、Python 堆很小"。
+- **对齐侧外层相位 tracemalloc 峰值精确重测——已用修复后工具补测**(2026-09-13,`--tracemalloc` 真实对 1 轮;数据 [JSON](memory-alignment-tracemalloc-2026-09-13.json)):修复嵌套 bug 后,**外层 `embed`(⊃`model_load`)traced_peak=58.3 MiB**、`task_total`=58.3 MiB、嵌套 `model_load`=3.2 MiB(旧代码下 `embed` 峰值会被 `model_load` 的 reset 清零而低报)。**主要 RSS 峰值出现在嵌入阶段(该轮 embed rss_max ~1038 MiB),而 Python 可追踪分配(~58 MiB 峰值)不足以解释该峰值;原生分配(ONNX/分配器)可能贡献较大,但具体归属尚未验证。** ——注意:不能用 "RSS − tracemalloc" 的减法断定归属:RSS 还含进程基线、共享库、内存映射与分配器保留,且两种峰值未必同时发生;此处只作"Python 层解释不了、原生可能占大头、归属待验证"的口径。
 - **正式三轮四场景服务器基准——已跑**(2026-09-13,机器安静;见 [四场景报告](performance-real-4scenario-2026-09-13.md)):四场景全 12 运行 0 错误、**0 次 503**、identity_mismatches=0;对齐期间 343 个重叠搜索全 200,峰值 RSS 1279–1310 MiB。工具 `--compare` 因严格有效性门(export 轮偶发覆盖 7/8)中止,非数据错误;503 二值对比(28.2%→0)直接成立。

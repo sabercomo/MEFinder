@@ -173,12 +173,28 @@ def main() -> None:
               'measured_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'configuration': configuration,
               'environment': environment, 'model_files': model_files, 'fixture': public_fixture,
               'summary': summary, 'rounds': runs, 'valid': valid}
-    if args.compare:
-        result['comparison'] = harness.compare_results(json.loads(args.compare.read_text()), result)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+
+    def persist() -> None:
+        args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
+
+    # Persist the complete measurement (raw samples, configuration, validity)
+    # BEFORE comparing, so a comparison failure never discards the data.
+    persist()
     print(f'wrote {args.output}; valid={valid}', flush=True)
-    if not valid:
+    compare_failed = False
+    if args.compare:
+        try:
+            result['comparison'] = harness.compare_results(
+                json.loads(args.compare.read_text()), result)
+            persist()  # re-write with the comparison attached
+            print('comparison written', flush=True)
+        except Exception as exc:  # keep the saved run; report the failure
+            result['comparison_error'] = f'{type(exc).__name__}: {exc}'
+            persist()
+            compare_failed = True
+            print(f'comparison failed (full run still saved): {exc}', flush=True)
+    if not valid or compare_failed:
         raise SystemExit(1)
 
 

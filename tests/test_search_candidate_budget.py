@@ -167,8 +167,19 @@ class ShortQueryInstrPathTests(unittest.TestCase):
         temp, path = _build([f"社会{i:03d}。" for i in range(BUDGET + 6)])
         engine = SearchEngine(path)
         try:
-            result = engine.search("社会", mode="exact", limit=LIMIT)
-            wide = engine.search("社会", mode="exact", limit=BUDGET)
+            result = engine.search("社会", mode="exact", limit=LIMIT)  # budget=64
+            # Recall directly at a FIXED budget of BUDGET(=64) so the candidate
+            # truncation itself is tested — NOT limit=BUDGET, which would raise
+            # the budget to BUDGET*8=512 and never truncate 70 candidates at 64.
+            recall = CandidateRecall(
+                db_provider=lambda: engine.db, backend="sqlite", paragraphs=[],
+                ngram_index={}, ensure_fts=lambda: True,
+            )
+            candidates: dict = {}
+            truncated = recall._sql_exact_pass(
+                "社会", normalize_text("社会"), punctuationless_text("社会"),
+                candidates, "all", None, None, BUDGET,
+            )
         finally:
             engine.close()
             temp.cleanup()
@@ -176,8 +187,11 @@ class ShortQueryInstrPathTests(unittest.TestCase):
         self.assertFalse(result["total_is_exact"])
         self.assertTrue(result["has_more"])
         self.assertEqual(self._ids(result), [f"pdf-a-P{i:04d}" for i in range(LIMIT)])
-        # Truncation keeps exactly the BUDGET lowest-rowid ids, in order.
-        self.assertEqual(self._ids(wide), [f"pdf-a-P{i:04d}" for i in range(BUDGET)])
+        # Budget truncation keeps EXACTLY the BUDGET lowest-rowid candidates, in
+        # rowid order (candidates dict preserves ORDER BY p.rowid insertion order).
+        self.assertTrue(truncated)
+        self.assertEqual(len(candidates), BUDGET)
+        self.assertEqual(list(candidates), [f"pdf-a-P{i:04d}" for i in range(BUDGET)])
 
     def test_ineligible_paragraphs_are_never_recalled(self) -> None:
         temp, path = _build([f"社会{i:03d}。" for i in range(8)], ineligible_matches=5)
