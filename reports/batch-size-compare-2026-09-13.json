@@ -1,0 +1,41 @@
+{
+  "link_diff": {
+    "count_a": 967,
+    "count_b": 967,
+    "flipped_count": 0,
+    "flipped_order_indices": [],
+    "identical_structure": true,
+    "max_confidence_delta": 8.678436279296875e-05,
+    "max_cost_delta": 0.0001020000000000465,
+    "only_in_a": 0,
+    "only_in_b": 0
+  },
+  "model_id": "minilm-l12-v2",
+  "text_count": 3948,
+  "vector_diff": {
+    "bitwise_equal_fraction": 0.9650455927051672,
+    "bitwise_equal_rows": 3810,
+    "by_length_max_abs": {
+      "long(>=100)": 0.0003183037042617798,
+      "medium(20-99)": 0.0003257244825363159,
+      "short(<20)": 0.0
+    },
+    "by_length_rows": {
+      "long(>=100)": 1516,
+      "medium(20-99)": 2035,
+      "short(<20)": 397
+    },
+    "dim": 384,
+    "max_abs": 0.0003257244825363159,
+    "mean_abs": 1.8814256760939132e-06,
+    "min_cosine": 0.9999998193478737,
+    "rows": 3948,
+    "rows_above_noise": 138
+  },
+  "verdict": {
+    "current_default_batch": 64,
+    "do_not_change_product_default": true,
+    "note": "存在超噪声阈值的向量差异但链接身份仍一致:需人评估是否影响其它下游(定位/复用),不得仅凭'链接没变'采纳。",
+    "recommendation": "review-vectors-changed-links-stable"
+  }
+}

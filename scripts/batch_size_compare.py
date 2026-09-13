@@ -259,12 +259,23 @@ def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cach
         (root / "data").mkdir(parents=True)
         db = root / "data/index.sqlite3"
         shutil.copy2(arguments.db, db)
+        # Copy only this model's fastembed dir (not siblings like E5) into a
+        # private cache, so the user's real model store is never touched.
         cache_dir = root / "models"
-        shutil.copytree(arguments.models, cache_dir)
+        cache_dir.mkdir()
+        source_model = arguments.models / model.fastembed_cache_dirname
+        shutil.copytree(source_model, cache_dir / model.fastembed_cache_dirname)
 
         def align(batch: int) -> str:
             begin_embedding_run()
-            # Force a fresh recompute each time so the same texts are embedded.
+            # The .npy vector cache is keyed by (text, model_id), NOT by batch
+            # size, so it MUST be cleared between batches — otherwise batch 16
+            # would silently reuse batch 64's vectors and the comparison would
+            # be a tautology. force=True only bypasses run reuse, not the cache.
+            vectors_dir = cache_dir / "document-vectors"
+            if vectors_dir.is_dir():
+                for cached in vectors_dir.glob("*.npy"):
+                    cached.unlink()
             with mock.patch.object(
                 __import__("fastembed"), "TextEmbedding",
                 _forced_batch_text_embedding(batch),
@@ -295,7 +306,10 @@ def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cach
                 provider = semantic_alignment.FastEmbedEmbeddingProvider(
                     semantic_alignment.embedding_model_config(model.id)
                 )
-                return np.asarray(provider(texts, cache_dir=root / "vec-tmp-%d" % batch))
+                # cache_dir must be the model store (where the .onnx lives), the
+                # same one the alignments used; the provider returns vectors
+                # directly (no .npy caching at this layer).
+                return np.asarray(provider(texts, cache_dir=cache_dir))
 
         vec64 = embed(64)
         vec16 = embed(16)
@@ -320,10 +334,13 @@ def main() -> int:
                         help="fastembed cache root containing the model dir")
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
-    if not arguments.models.exists():
+    from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
+    model_dirname = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID].fastembed_cache_dirname
+    if not (arguments.models / model_dirname).is_dir():
         parser.error(
-            f"model cache not found: {arguments.models} — batch comparison needs a "
-            "local model; a network download would violate local-first."
+            f"model not found: {arguments.models / model_dirname} — batch comparison "
+            "needs a local model; a network download would violate local-first. Pass "
+            "--models pointing at the fastembed cache dir that contains it."
         )
     report = run_experiment(arguments)
     arguments.output.write_text(

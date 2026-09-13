@@ -1,6 +1,6 @@
 # 对齐与大书导出的分阶段内存测量基线
 
-> **更正在文末("2026-09-13 更正"节)——以该节为准。** 测量工具修复了若干统计缺陷(RSS 边界、嵌套 tracemalloc 峰值、多轮同名、导出摘要污染、Windows 导入);RSS 类结论经时间线重算基本不变,但 tracemalloc 外层峰值曾低报、部分结论(无泄漏/无速度代价/会话复用消除地板)已收紧为观察/推断/未验证。batch64-vs-16 前置实验因**本地无模型缓存**(需联网下载,违反本地优先)**未执行**,产品默认 batch 维持 64。
+> **更正在文末("2026-09-13 更正"节)——以该节为准。** 测量工具修复了若干统计缺陷(RSS 边界、嵌套 tracemalloc 峰值、多轮同名、导出摘要污染、Windows 导入);RSS 类结论经时间线重算基本不变,但 tracemalloc 外层峰值曾低报、部分结论(无泄漏/无速度代价/会话复用消除地板)已收紧为观察/推断/未验证。batch64-vs-16 前置实验**已执行**(模型在 app 运行时目录,先前误判缺失):对齐链接完全一致、向量余弦≈1、verdict=review(须多对泛化 + 缓存版本决策),产品默认 batch **维持 64**,见 [batch 报告](batch-size-compare-2026-09-13.md)。
 
 2026-09-12：建立可重复、可比较、可解释的对齐与导出分阶段内存测量基线。本轮为纯诊断，未修改任何产品代码。核心结论：此前观察到的对齐峰值 RSS ≈1.3 GiB 是**嵌入推理期的瞬态峰值**（模型加载 ~0.5 s 占 ~843 MiB，batch 64 推理再涨 ~430 MiB），任务完成后稳定驻留约 0.57–0.72 GiB；向量化缓存复用路径（产品常态）下重复执行**无持续增长**，而每轮重新加载模型的路径稳定驻留以 **~17 MiB/轮线性增长**（6 轮未达平台），属原生分配保留。导出在真实 474 段书上仅 ~60 MiB，50k 段合成大书任务峰值 ~134–162 MiB、多轮后收敛于 ~175 MiB，无泄漏。
 
@@ -124,8 +124,11 @@ $PY scripts/mem_profile_alignment.py ... --rounds 2 --fresh-vectors-per-round --
 - fresh 路径每轮增长的**原生归属**(ORT 环境/malloc zone/arena)维持**弱推断**标注,未做 allocator 级实验。
 - "1.3 GiB = 模型加载地板 + batch 激活/arena" 的**地板部分是观察**(batch 对照单调缩放 + 会话拆除整体消失),**"arena"机制命名是推断**(无 allocator 级证据)——维持原报告标注。
 
-### 四、未完成项(如实,未绕过)
+### 四、batch64 vs batch16 前置实验:已执行(更正:模型缓存存在)
 
-- **batch64 vs batch16 前置实验(逐向量 + 完整链接身份比较)本环境无法执行**:默认模型 `minilm-l12-v2`(`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`)的本地缓存在本机/仓库树中**不存在**(遍历 `.codex-tmp`/HF 缓存/`components` 均无 `model.onnx`)。真实 batch 数值对比必须用真实 ONNX 会话,缺缓存则需联网下载——违反本地优先红线,**不执行**。该实验(含固定模型文件/线程数/文本与顺序/缓存状态/交错运行,逐向量差异 + 完整 links/status/scores/anchors 比较)推迟到模型缓存就位且机器安静时进行;在此之前**不得**修改产品默认 batch(仍为 64),也不得据"差异很小"接受 batch16。
-- **对齐侧外层相位 tracemalloc 峰值的精确重测**同样阻塞于模型缓存缺失(对齐需真实模型);导出侧已用修复后工具重跑确认嵌套峰值正确。
-- 正式三轮四场景服务器基准(与搜索验收共用)因并发负载推迟。
+- **更正**:此前本节称"本地无模型缓存、实验无法执行"是**错误**——模型在**真实 app 运行时目录** `~/Library/Application Support/MEFinder/runtime/components/text-alignment/models`(我先前只搜了 `.codex-tmp`/HF/仓库 `components`,漏掉 app 运行时)。机器安静后已执行 `scripts/batch_size_compare.py`,结论见 [batch 对照报告](batch-size-compare-2026-09-13.md):
+  - 完整对齐链接**结构完全一致**(967=967,无新增/消失/翻转,confidence/cost 差 ≤1e-4);
+  - 逐向量余弦≈1(min 0.99999982)、max_abs 3.3e-4、96.5% 逐位一致,差异仅在中/长文本、短文本逐位一致;
+  - **verdict=review-vectors-changed-links-stable**:数值近乎等价,但向量非逐位相同(采纳须决定 bump `EMBEDDING_RUNTIME_VERSION`)、仅单对证据(须多对泛化)、须确认 ~3e-4 漂移不翻转下游定位/复用。**产品默认维持 batch 64,不据"差异很小"直接采纳。**
+- **对齐侧外层相位 tracemalloc 峰值的精确重测**:模型既在,现已解锁(可用修复后工具 `--tracemalloc` 重跑对齐);本轮聚焦 batch 实验,该重测留作后续(导出侧嵌套峰值已确认正确)。
+- **正式四场景服务器基准**:normal(搜索)场景已在机器安静后跑(见搜索验收报告);含 alignment/export 的完整四场景 `--compare` 现也解锁(模型在),留作后续。
