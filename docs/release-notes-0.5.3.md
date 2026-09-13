@@ -194,3 +194,26 @@ MiniLM／E5 在《谁在害怕性别》中英 EPUB 与 MinerU PDF 的三种配�
 - 便携包：`MEFinder-v0.5.3-windows-portable.zip`，164,118,826 bytes，SHA-256
   `04f414fb1339d092b3133b666457c34ae4cd4e6ed8082e2034f514b2f192dd55`。
 - 本地验收候选，未做代码签名，未合并 PR、打 tag 或发布 Release。
+
+## 2026-09-10：macOS Intel（x86_64）候选包与正式发布产物
+
+- 用 x86_64 Python 3.12.10 与 PyInstaller 6.21.0 运行官方 `build_macos.sh`
+  （`MEFINDER_TARGET_ARCH=x86_64`），补齐此前只有 arm64 的 Mac 产物。全量测试与
+  Ruff F、前端 `node --check`、严格签名、ZIP 解包、DMG 挂载与拖出、checksum 门禁通过。
+- 主应用与 `MEFinderMCP` 经 `lipo` 确认均为纯 `x86_64`，包内无任何 arm64 Mach-O；
+  OpenCC 词典（繁简统一检索）已随包收集。
+- x86_64 DMG：181,372,328 bytes，SHA-256
+  `de058f8ffb4c8bb5dd79653b4b1e7d690fcb941c553746a3dae986cd89ba9a3b`。
+- x86_64 ZIP：171,256,949 bytes，SHA-256
+  `806a12517d8cc5a2c0d0e4f8027d89845e1b1441cf24ef0fc32ea6571700426f`。
+- ad-hoc 签名，未做 Developer ID 公证；Intel 发布包最低支持 macOS 12。
+- **正式发布产物（Release v0.5.3 实际上传）汇总**：
+  - macOS arm64 DMG `b9773adcd3683176b6ac9205e3c1a24629809665a6156238d2638ed748782fdc`、
+    ZIP `b293b191f5c512976c13a0be9e272c1abafb137461e62fa1e9acdeaa8218c68e`（对应
+    01:46 页码说明修订包）。
+  - macOS x86_64 DMG / ZIP 见上。
+  - Windows 安装版 `MEFinder-v0.5.3-windows-setup.exe` SHA-256
+    `32810fc82534c2f7a6ce439beec0726113b483bc310bb7d8426f17ac62f094f7`、便携版
+    `MEFinder-v0.5.3-windows-portable.zip` SHA-256
+    `04f414fb1339d092b3133b666457c34ae4cd4e6ed8082e2034f514b2f192dd55`（即上文 13:03
+    基于 `d142fef` 的重建，以本条为实际发布值）。

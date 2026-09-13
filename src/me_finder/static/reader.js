@@ -29,7 +29,9 @@
     radiusBatches: DEFAULTS.radiusBatches,
     estimatedItemHeight: DEFAULTS.estimatedItemHeight,
     fetch: null,
-    notify: null
+    notify: null,
+    openExternal: null,
+    onClose: null
   };
 
   var state = {
@@ -67,6 +69,7 @@
     citationLoading: false,
     citationRequestSerial: 0,
     alignmentTargets: [],
+    alignmentSourceLanguage: '',
     alignmentGroupId: '',
     alignmentLoading: false,
     alignmentRequestSerial: 0,
@@ -260,7 +263,7 @@
     var panel = document.createElement('section');
     panel.className = 'mef-reader-panel';
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-modal', document.documentElement.dataset.readerWindow === 'true' ? 'false' : 'true');
     panel.setAttribute('aria-labelledby', 'mef-reader-title');
 
     var header = document.createElement('header');
@@ -764,7 +767,7 @@
 
   // 低置信对齐的「校正」入口：先说明成因，并把当前源栏可见范围重新定位一次（多为最有效的自助校正）。
   function reportMisalignment() {
-    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正。');
+    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正');
     if (state.comparison.open && state.comparison.targetSourceId) {
       locateInAlignedVersion(state.comparison.targetSourceId, sourceCenterRange());
     }
@@ -814,7 +817,7 @@
     return language + (format ? ' · ' + format : '') + ' · ' + displayName;
   }
 
-  // 记住每本书上次选择的对照目标，避免每次打开都回退到成员顺序里的首个（常是英文版）。
+  // 记住每本书上次选择的对照目标；重新打开时只在跨语言候选中恢复记忆。
   // 按源文献 id 存入 localStorage；不可用或读写失败时静默回退，不影响阅读。
   var COMPARISON_TARGET_STORE_PREFIX = 'mef-reader-comparison-target:';
 
@@ -851,16 +854,22 @@
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
     });
-    // 模式轴：[阅读 | 译本对照]。默认目标优先级：正在对照的版本 > 本书上次选择的版本 >
-    // 成员顺序首个。避免每次打开都被重置回英文版而需手动切换。
+    // 模式轴：[阅读 | 译本对照]。新开对照先选不同语言；正在阅读时保留手动选择。
     if (targets.length) {
       var remembered = recallComparisonTarget(state.sourceId);
-      var rememberedValid = remembered && targets.some(function (t) {
+      var sourceLanguage = state.alignmentSourceLanguage.toLowerCase().split('-')[0];
+      var otherLanguageTargets = targets.filter(function (target) {
+        var language = String(target.language_code || '').toLowerCase().split('-')[0];
+        return sourceLanguage && sourceLanguage !== 'und' && language &&
+          language !== 'und' && language !== sourceLanguage;
+      });
+      var defaultTargets = otherLanguageTargets.length ? otherLanguageTargets : targets;
+      var rememberedValid = remembered && defaultTargets.some(function (t) {
         return String(t.source_file_id || '') === remembered;
       }) ? remembered : '';
       var defaultTarget = state.comparison.open && state.comparison.targetSourceId
         ? state.comparison.targetSourceId
-        : (rememberedValid || String(targets[0].source_file_id || ''));
+        : (rememberedValid || String(defaultTargets[0].source_file_id || ''));
       var defaultTargetObj = targets.filter(function (t) {
         return String(t.source_file_id || '') === defaultTarget;
       })[0] || targets[0];
@@ -908,11 +917,13 @@
         return;
       }
       state.alignmentTargets = Array.isArray(payload.targets) ? payload.targets : [];
+      state.alignmentSourceLanguage = String(payload.source_language_code || '');
       state.alignmentGroupId = String(payload.document_group_id || '');
       renderAlignmentActions();
     } catch (error) {
       if (serial !== state.alignmentRequestSerial) return;
       state.alignmentTargets = [];
+      state.alignmentSourceLanguage = '';
       renderAlignmentActions();
       setAlert(
         error && error.message ? error.message : '对齐版本读取失败',
@@ -944,7 +955,7 @@
     state.elements.comparisonRouteText.textContent = state.directAlignmentPending
       ? '正在生成直接对照…'
       : ('当前对照经' + (viaName ? '「' + viaName + '」' : '第三个版本')
-        + '中转，可能漏配；建议生成两版本的直接对照。');
+        + '中转，可能漏配；建议生成两版本的直接对照');
     state.elements.comparisonRouteButton.hidden = state.directAlignmentPending;
     notice.hidden = false;
   }
@@ -953,7 +964,7 @@
     var comparison = state.comparison;
     if (state.directAlignmentPending) return;
     if (!state.alignmentGroupId || !state.sourceId || !comparison.targetSourceId) {
-      setAlert('缺少作品组信息，无法生成直接对照。', 'warning');
+      setAlert('缺少作品组信息，无法生成直接对照', 'warning');
       return;
     }
     var targetId = comparison.targetSourceId;
@@ -1008,10 +1019,10 @@
       if (state.comparison.open && state.comparison.targetSourceId === targetId) {
         locateInAlignedVersion(targetId, sourceCenterRange());
       }
-      notify('已生成直接对照，完整度已提升。');
+      notify('已生成直接对照，完整度已提升');
       return;
     }
-    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试。');
+    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试');
   }
 
   function nearestTextOffset(text, requestedOffset) {
@@ -1759,7 +1770,7 @@
     var locationObject = locationValue || global.location;
     if (!locationObject) return null;
     var pathname = String(locationObject.pathname || '');
-    if (pathname !== '/reader' && pathname !== '/reader/') return null;
+    if (pathname !== '/reader' && pathname !== '/reader/' && pathname !== '/reader-window') return null;
     var search = String(locationObject.search || '');
     if (search.length > 1024) return null;
     var params = new URLSearchParams(search);
@@ -1868,7 +1879,8 @@
     }
     if (/^[0-9a-f]{16}$/i.test(pageTextHash)) params.set('h', pageTextHash);
     if (quote) params.set('q', quote);
-    var url = '/reader?' + params.toString();
+    var readerPath = document.documentElement.dataset.readerWindow === 'true' ? '/reader-window' : '/reader';
+    var url = readerPath + '?' + params.toString();
     if (url.length > 1024) return;
     global.history.replaceState(
       {meFinderReader: true, sourceId: state.sourceId, anchorId: anchorId},
@@ -2740,6 +2752,8 @@
     if (options.alignmentLocateEndpoint) {
       config.alignmentLocateEndpoint = String(options.alignmentLocateEndpoint);
     }
+    if (typeof options.openExternal === 'function') config.openExternal = options.openExternal;
+    if (typeof options.onClose === 'function') config.onClose = options.onClose;
     if (typeof options.fetch === 'function') config.fetch = options.fetch;
     if (typeof options.notify === 'function') config.notify = options.notify;
     if (options.notify === null) config.notify = null;
@@ -2765,6 +2779,7 @@
     options = options || parseReaderDeepLink(global.location) || state.lastSession || {};
     var sourceId = String(options.sourceId || options.source_id || '');
     if (!sourceId) throw new Error('缺少文献标识，无法打开结构化文本');
+    if (config.openExternal && await config.openExternal(options)) return true;
     ensureDom();
     if (state.comparison.open) closeComparison();
 
@@ -2815,6 +2830,7 @@
     state.citationMenuOpen = false;
     state.citationLoading = false;
     state.alignmentTargets = [];
+    state.alignmentSourceLanguage = '';
     state.alignmentLoading = false;
     state.currentIndex = resolveTargetIndex(options);
     prepareHighlights(options);
@@ -2927,6 +2943,7 @@
     state.resolvedHighlights.clear();
     state.citationRange = null;
     state.alignmentTargets = [];
+    state.alignmentSourceLanguage = '';
     state.alignmentLoading = false;
     state.selectionDragging = false;
     state.citationMenuOpen = false;
@@ -2953,6 +2970,7 @@
       state.restoreFocus.focus();
     }
     state.restoreFocus = null;
+    if (config.onClose) config.onClose();
   }
 
   function destroy() {
@@ -3020,6 +3038,7 @@
   });
 
   function restoreInitialDeepLink() {
+    if (document.documentElement.dataset.readerWindow === 'true') return;
     if (!state.open && parseReaderDeepLink(global.location)) {
       restoreReaderLocation();
     }

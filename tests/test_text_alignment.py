@@ -780,6 +780,8 @@ class TextAlignmentTests(unittest.TestCase):
         self.assertEqual(forward["targets"][0]["source_file_id"], "pdf-zh")
         self.assertEqual(reverse["targets"][0]["source_file_id"], "pdf-de")
         # 阅读器需要作品组 id 才能一键在两版本间生成直接对照（两跳中转修复）。
+        self.assertEqual(forward["source_language_code"], "de")
+        self.assertEqual(reverse["source_language_code"], "zh-Hans")
         self.assertEqual(forward["document_group_id"], "work-one")
         self.assertEqual(reverse["document_group_id"], "work-one")
 
@@ -1517,7 +1519,10 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
             "sys.modules",
-            {"fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding)},
+            {
+                "fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding),
+                "onnxruntime": SimpleNamespace(disable_telemetry_events=lambda: None),
+            },
         ):
             vectors = embed_texts(
                 ["source text", "target text"],
@@ -1530,6 +1535,33 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
             [("query_embed", ["query: source text", "query: target text"])],
         )
         self.assertEqual(vectors.shape, (2, 2))
+
+    def test_onnxruntime_telemetry_is_disabled_before_session_creation(self) -> None:
+        # ORT's built-in telemetry worker aborts the process at interpreter
+        # exit (native recursive_mutex race) and its HTTP upload path violates
+        # the local-first boundary; the provider must disable it first.
+        calls: list[str] = []
+
+        class StubTextEmbedding:
+            def __init__(self, **kwargs):
+                calls.append("session")
+
+            def embed(self, texts, *, batch_size):
+                return [np.asarray([1.0, 0.0], dtype=np.float32) for _ in texts]
+
+        stub_ort = SimpleNamespace(
+            disable_telemetry_events=lambda: calls.append("disable")
+        )
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            "sys.modules",
+            {
+                "fastembed": SimpleNamespace(TextEmbedding=StubTextEmbedding),
+                "onnxruntime": stub_ort,
+            },
+        ):
+            embed_texts(["source text"], Path(temp_dir))
+
+        self.assertEqual(calls, ["disable", "session"])
 
     def test_model_ids_produce_distinct_document_vector_cache_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

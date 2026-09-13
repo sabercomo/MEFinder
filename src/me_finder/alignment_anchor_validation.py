@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Sequence
 
-import numpy as np
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 def _leave_one_out_displacement(
@@ -57,6 +60,7 @@ def _source_prefers_other_target(anchor, source_prefix: np.ndarray, target_unit:
     its own source's best target — this spares correct anchors whose displacement is
     merely inflated by a hard neighbourhood.
     """
+    import numpy as np
     vector = source_prefix[anchor.source_index + 1] - source_prefix[anchor.source_index]
     norm = float(np.linalg.norm(vector))
     if norm == 0.0:
@@ -81,6 +85,7 @@ def drop_false_friend_anchors(
     first, then re-validate, so a correct anchor confounded by a bad neighbour heals
     instead of being dropped.
     """
+    import numpy as np
     if len(anchors) < 2:
         return anchors
     rows = target_prefix[1:] - target_prefix[:-1]

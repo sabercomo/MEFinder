@@ -104,3 +104,58 @@ MEFINDER_PYTHON=.venv-macos/bin/python \
 
 自动化冒烟测试如需隔离真实用户数据，可以在启动应用前设置
 `ME_FINDER_APP_DATA_ROOT`，将运行时数据临时指向其他目录。
+
+## Homebrew Cask tap 分发
+
+macOS 产物同时通过自建 Homebrew tap 分发，让会使用命令行的用户用
+`brew install --cask mefinder` 安装、`brew upgrade --cask mefinder` 升级。
+tap 只指向 GitHub Releases 的公开资产；更新通道在应用之外，应用本身继续保持零联网，
+不改变「本地优先」原则。
+
+### 用户侧使用
+
+```bash
+brew trust sabercomo/mefinder   # 新版 Homebrew 要求先信任第三方 tap
+brew tap sabercomo/mefinder
+brew install --cask mefinder
+brew update && brew upgrade --cask mefinder
+```
+
+Homebrew 渠道要求 macOS 14 及以上（cask 的 `depends_on macos` 取两架构产物中较严的
+`LSMinimumSystemVersion`：arm64=Sonoma、x86_64=Monterey）；Intel 机若是 macOS 12–13，
+请直接从 Releases 下载 DMG 安装。
+
+未公证包的首次启动仍需在「系统设置 → 隐私与安全性 → 仍要打开」批准一次；之后的
+`brew upgrade` 会延续已批准状态（Homebrew 升级时会把旧版本已批准的 Gatekeeper
+状态带到新版本）。应用数据在 `~/Library/Application Support/MEFinder/`，
+升级与卸载都不受影响（cask 刻意不带 `zap`）。
+
+### 维护流程（发版后）
+
+1. 按既有流程正式发布 vX.Y.Z（含 macOS 双架构 DMG 资产，tag/Release 仍须单独授权）。
+2. 在仓库根目录运行：
+
+   ```bash
+   .venv-macos312-arm64/bin/python scripts/update_homebrew_tap.py --version X.Y.Z
+   ```
+
+   脚本从 `release/` 读取该版本 DMG、与 `.sha256.txt` sidecar 交叉校验摘要，渲染
+   `homebrew-tap/Casks/mefinder.rb`。省略 `--version` 时取 `release/` 里最新构建。
+3. 同步更新 `tests/test_homebrew_tap_cask.py` 里的 `PUBLISHED_DMG_SHA256` 金样基线
+   （该测试要求 cask、脚本渲染输出与已发布 digest 三方一致），并提交主仓库。
+4. 首次接入：创建独立 GitHub 仓库 `sabercomo/homebrew-mefinder`（空仓库即可，tap 名
+   即 `sabercomo/mefinder`），克隆到本地后运行：
+
+   ```bash
+   .venv-macos312-arm64/bin/python scripts/update_homebrew_tap.py \
+       --tap-repo <本地克隆路径> --push
+   ```
+
+   脚本会把 `Casks/mefinder.rb` 与 `README.md` 复制进 tap 仓库并提交推送。
+5. 若某版本只构建了单一架构，脚本会自动切换为单架构 cask 并加 `depends_on arch`
+   门禁，防止 Intel 用户装到不可运行的包。
+
+注意：cask 已在本机 Homebrew 7.0.0 通过 `brew style` 与
+`brew audit --cask mefinder --online`（实测下载并校验产物）。审计要求 cask 的
+`depends_on macos` 不得低于产物内声明的 `LSMinimumSystemVersion`；发新版后若产物
+系统要求变化，需同步调整渲染脚本中的门槛常量。

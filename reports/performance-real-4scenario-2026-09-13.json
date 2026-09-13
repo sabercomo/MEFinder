@@ -1,0 +1,481 @@
+{
+ "tool": "bench_real_library",
+ "scenario_set": [
+  "normal",
+  "export_markdown",
+  "export_epub",
+  "alignment"
+ ],
+ "rounds": 3,
+ "repeats": 5,
+ "snapshot_content_sha256": "5670b0d102d5c230987451b479ef919a4cce2c4bfdc24b031a2998b1dd5ab960",
+ "note": "完整四场景已跑;工具 --compare 因严格有效性门(要求每查询每轮都与 export/alignment 任务重叠)在 2 个快 export 轮覆盖 7/8 而中止,非数据错误;此处保留全部逐轮逐查询数据与失败样本口径。",
+ "total_503_all_scenarios": 0,
+ "alignment_overlapping_searches_total": 343,
+ "runs": [
+  {
+   "round_scenario": "round 1/3: normal",
+   "scenario": "normal",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 40
+   },
+   "overlapping_requests": 0,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 87.53125,
+   "os_peak_rss_mib": 87.96875,
+   "search_ms": {
+    "n": 40,
+    "p50": 31.80262492969632,
+    "p95": 537.1028329245746,
+    "p99": 653.2049588859081,
+    "max": 653.2049588859081
+   },
+   "per_query_ms": {
+    "common_en": 164.6700829733163,
+    "common_zh": 529.5041669160128,
+    "en_exact": 20.407082978636026,
+    "no_hit": 15.445791883394122,
+    "normalized": 26.635666843503714,
+    "scoped": 511.8041669484228,
+    "script_variant": 530.2285829093307,
+    "zh_exact": 21.0570830386132
+   }
+  },
+  {
+   "round_scenario": "round 1/3: export_markdown",
+   "scenario": "export_markdown",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 28
+   },
+   "overlapping_requests": 28,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 136.640625,
+   "os_peak_rss_mib": 137.0625,
+   "search_ms": {
+    "n": 28,
+    "p50": 568.3320418465883,
+    "p95": 1468.2562910020351,
+    "p99": 1635.0149998907,
+    "max": 1635.0149998907
+   },
+   "per_query_ms": {
+    "common_en": 183.05300013162196,
+    "common_zh": 772.8127918671817,
+    "en_exact": 83.65029213018715,
+    "no_hit": 68.74033296480775,
+    "scoped": 862.27654106915,
+    "script_variant": 1441.619792021811,
+    "zh_exact": 26.060708099976182
+   }
+  },
+  {
+   "round_scenario": "round 1/3: export_epub",
+   "scenario": "export_epub",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 31
+   },
+   "overlapping_requests": 31,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 138.90625,
+   "os_peak_rss_mib": 139.3125,
+   "search_ms": {
+    "n": 31,
+    "p50": 211.63133392110467,
+    "p95": 1709.1537080705166,
+    "p99": 2478.547625010833,
+    "max": 2478.547625010833
+   },
+   "per_query_ms": {
+    "common_en": 208.79254210740328,
+    "common_zh": 602.6291658636183,
+    "en_exact": 19.966708030551672,
+    "no_hit": 31.642667017877102,
+    "normalized": 123.26508318074048,
+    "scoped": 690.9519161563367,
+    "script_variant": 654.5089171268046,
+    "zh_exact": 23.771541891619563
+   }
+  },
+  {
+   "round_scenario": "round 1/3: alignment",
+   "scenario": "alignment",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 103
+   },
+   "overlapping_requests": 103,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 1279.171875,
+   "os_peak_rss_mib": 1279.203125,
+   "search_ms": {
+    "n": 103,
+    "p50": 311.0470410902053,
+    "p95": 3119.577958015725,
+    "p99": 4109.236832940951,
+    "max": 4371.103249955922
+   },
+   "per_query_ms": {
+    "common_en": 388.2772501092404,
+    "common_zh": 1973.4598328359425,
+    "en_exact": 59.111875016242266,
+    "no_hit": 49.43479201756418,
+    "normalized": 77.1547919139266,
+    "scoped": 2009.7197501454502,
+    "script_variant": 2021.4347909204662,
+    "zh_exact": 61.03204214014113
+   }
+  },
+  {
+   "round_scenario": "round 2/3: export_markdown",
+   "scenario": "export_markdown",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 26
+   },
+   "overlapping_requests": 26,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 130.015625,
+   "os_peak_rss_mib": 130.015625,
+   "search_ms": {
+    "n": 26,
+    "p50": 2337.76570786722,
+    "p95": 2753.1611670274287,
+    "p99": 2822.1541249658912,
+    "max": 2822.1541249658912
+   },
+   "per_query_ms": {
+    "common_en": 271.7104160692543,
+    "common_zh": 2489.341957960278,
+    "en_exact": 78.51224998012185,
+    "no_hit": 45.993708074092865,
+    "normalized": 95.20391700789332,
+    "scoped": 2357.6017911545932,
+    "script_variant": 2551.962665980682,
+    "zh_exact": 91.05883399024606
+   }
+  },
+  {
+   "round_scenario": "round 2/3: export_epub",
+   "scenario": "export_epub",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 30
+   },
+   "overlapping_requests": 30,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 138.546875,
+   "os_peak_rss_mib": 138.96875,
+   "search_ms": {
+    "n": 30,
+    "p50": 354.49270880781114,
+    "p95": 2997.164542088285,
+    "p99": 3029.1732500772923,
+    "max": 3029.1732500772923
+   },
+   "per_query_ms": {
+    "common_en": 262.55287509411573,
+    "common_zh": 2526.415916858241,
+    "en_exact": 37.83475002273917,
+    "no_hit": 38.10329199768603,
+    "normalized": 101.57900000922382,
+    "scoped": 2387.081166030839,
+    "script_variant": 2736.439999891445,
+    "zh_exact": 101.93366720341146
+   }
+  },
+  {
+   "round_scenario": "round 2/3: alignment",
+   "scenario": "alignment",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 152
+   },
+   "overlapping_requests": 152,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 1309.671875,
+   "os_peak_rss_mib": 1315.296875,
+   "search_ms": {
+    "n": 152,
+    "p50": 267.0022500678897,
+    "p95": 2897.2827079705894,
+    "p99": 3207.616833038628,
+    "max": 3359.8431248683482
+   },
+   "per_query_ms": {
+    "common_en": 344.8705000337213,
+    "common_zh": 998.922917060554,
+    "en_exact": 45.0186668895185,
+    "no_hit": 38.154332898557186,
+    "normalized": 56.234957883134484,
+    "scoped": 984.0867910534143,
+    "script_variant": 1027.4150830227882,
+    "zh_exact": 53.593083983287215
+   }
+  },
+  {
+   "round_scenario": "round 2/3: normal",
+   "scenario": "normal",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 40
+   },
+   "overlapping_requests": 0,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 80.046875,
+   "os_peak_rss_mib": 79.34375,
+   "search_ms": {
+    "n": 40,
+    "p50": 45.91141710989177,
+    "p95": 2428.546749986708,
+    "p99": 2509.7266659140587,
+    "max": 2509.7266659140587
+   },
+   "per_query_ms": {
+    "common_en": 195.21812512539327,
+    "common_zh": 2339.8031659889966,
+    "en_exact": 31.092166900634766,
+    "no_hit": 23.10237498022616,
+    "normalized": 43.74970798380673,
+    "scoped": 2213.650083169341,
+    "script_variant": 2361.5046250633895,
+    "zh_exact": 39.80420809239149
+   }
+  },
+  {
+   "round_scenario": "round 3/3: export_epub",
+   "scenario": "export_epub",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 29
+   },
+   "overlapping_requests": 29,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 139.171875,
+   "os_peak_rss_mib": 139.609375,
+   "search_ms": {
+    "n": 29,
+    "p50": 2181.730750016868,
+    "p95": 2819.08724992536,
+    "p99": 2840.9272918943316,
+    "max": 2840.9272918943316
+   },
+   "per_query_ms": {
+    "common_en": 216.39158320613205,
+    "common_zh": 2376.614000182599,
+    "en_exact": 32.36091695725918,
+    "normalized": 75.02066600136459,
+    "scoped": 2245.516500202939,
+    "script_variant": 2442.3758750781417,
+    "zh_exact": 81.43029222264886
+   }
+  },
+  {
+   "round_scenario": "round 3/3: alignment",
+   "scenario": "alignment",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 88
+   },
+   "overlapping_requests": 88,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 1297.09375,
+   "os_peak_rss_mib": 1302.703125,
+   "search_ms": {
+    "n": 88,
+    "p50": 100.30366689898074,
+    "p95": 3372.3755420651287,
+    "p99": 4950.464374851435,
+    "max": 4950.464374851435
+   },
+   "per_query_ms": {
+    "common_en": 373.73870820738375,
+    "common_zh": 3074.1392499767244,
+    "en_exact": 59.637959115207195,
+    "no_hit": 42.31974994763732,
+    "normalized": 80.85691696032882,
+    "scoped": 2939.689500024542,
+    "script_variant": 2621.527959126979,
+    "zh_exact": 72.07908295094967
+   }
+  },
+  {
+   "round_scenario": "round 3/3: normal",
+   "scenario": "normal",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 40
+   },
+   "overlapping_requests": 0,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 88.265625,
+   "os_peak_rss_mib": 88.703125,
+   "search_ms": {
+    "n": 40,
+    "p50": 45.332334004342556,
+    "p95": 2235.368208028376,
+    "p99": 2538.156708003953,
+    "max": 2538.156708003953
+   },
+   "per_query_ms": {
+    "common_en": 191.77708285860717,
+    "common_zh": 1868.4956249780953,
+    "en_exact": 31.16208384744823,
+    "no_hit": 20.149667048826814,
+    "normalized": 39.84529199078679,
+    "scoped": 555.522584123537,
+    "script_variant": 691.7909579351544,
+    "zh_exact": 22.182875080034137
+   }
+  },
+  {
+   "round_scenario": "round 3/3: export_markdown",
+   "scenario": "export_markdown",
+   "errors": 0,
+   "http_status_counts": {
+    "200": 26
+   },
+   "overlapping_requests": 26,
+   "identity_mismatches": 0,
+   "covered_query_ids": [
+    "common_en",
+    "common_zh",
+    "en_exact",
+    "no_hit",
+    "normalized",
+    "scoped",
+    "script_variant",
+    "zh_exact"
+   ],
+   "peak_rss_mib": 131.140625,
+   "os_peak_rss_mib": 131.609375,
+   "search_ms": {
+    "n": 26,
+    "p50": 2250.1668338663876,
+    "p95": 3176.050500012934,
+    "p99": 3250.668124994263,
+    "max": 3250.668124994263
+   },
+   "per_query_ms": {
+    "common_en": 289.66449992731214,
+    "common_zh": 2439.3269999418408,
+    "en_exact": 35.61479086056352,
+    "no_hit": 34.676624927669764,
+    "normalized": 96.66904085315764,
+    "scoped": 2405.776625033468,
+    "script_variant": 2457.2013749275357,
+    "zh_exact": 84.5441659912467
+   }
+  }
+ ]
+}

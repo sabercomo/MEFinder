@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,8 +14,8 @@ from .embedding_models import (
     EMBEDDING_MODELS,
     embedding_model_config,
     embedding_model_summaries,
+    model_component_installed,
 )
-from .semantic_alignment import embed_texts
 
 
 class ManagedEmbeddingModelsError(RuntimeError):
@@ -30,7 +31,16 @@ class _ModelState:
 
 
 def download_embedding_model(model_id: str, cache_dir: Path) -> None:
-    embed_texts(["MEFinder semantic alignment model probe"], cache_dir, model_id=model_id)
+    """Install one model component and verify it with a local probe embed.
+
+    The algorithm module (and its numeric stack) is imported lazily: managing,
+    summarising or uninstalling components must not require the compute stack.
+    """
+
+    from .semantic_alignment import embed_texts
+
+    embed_texts(["MEFinder semantic alignment model probe"], cache_dir,
+                model_id=model_id, local_files_only=False)
 
 
 class ManagedEmbeddingModels:
@@ -90,16 +100,46 @@ class ManagedEmbeddingModels:
                 pass
         return max(blob_bytes, archive_bytes)
 
+    def _delete_model_files(self, model_id: str) -> int:
+        """Remove one model's cache directory, archive and receipt.
+
+        Returns the bytes actually freed, so the UI can state the real number
+        instead of the catalog estimate.
+        """
+
+        model = embedding_model_config(model_id)
+        freed = 0
+        targets = [self._cache_dir / model.fastembed_cache_dirname]
+        if model.fastembed_archive_name:
+            targets.append(self._cache_dir / model.fastembed_archive_name)
+        for target in targets:
+            if target.is_dir():
+                for path in target.rglob("*"):
+                    try:
+                        if path.is_file() and not path.is_symlink():
+                            freed += path.stat().st_size
+                    except FileNotFoundError:
+                        continue
+                shutil.rmtree(target, ignore_errors=True)
+            elif target.is_file():
+                try:
+                    freed += target.stat().st_size
+                except FileNotFoundError:
+                    pass
+                target.unlink(missing_ok=True)
+        self._receipt_path(model_id).unlink(missing_ok=True)
+        return freed
+
     def summary(self) -> Dict[str, object]:
         with self._lock:
             models = []
             for model in embedding_model_summaries():
                 model_id = str(model["id"])
                 state = self._states[model_id]
-                installed = self._receipt_path(model_id).is_file()
+                installed = model_component_installed(self._cache_dir, model_id)
                 current_state = state.state
-                if installed and current_state == "not_installed":
-                    current_state = "installed"
+                if current_state in {"installed", "not_installed"}:
+                    current_state = "installed" if installed else "not_installed"
                 total_bytes = int(model["size_bytes"])
                 downloaded_bytes = (
                     total_bytes if installed else self._downloaded_bytes(model_id)
@@ -132,13 +172,25 @@ class ManagedEmbeddingModels:
         model_id = str(payload.get("model_id") or "")
         embedding_model_config(model_id)
         action = str(payload.get("action") or "")
-        if action != "download":
+        if action not in {"download", "delete"}:
             raise ManagedEmbeddingModelsError("不支持的译本对齐模型操作。")
+        if action == "delete":
+            with self._lock:
+                state = self._states[model_id]
+                if state.thread is not None and state.thread.is_alive():
+                    raise ManagedEmbeddingModelsError("该译本对齐模型正在下载，先取消或等待完成。")
+                freed = self._delete_model_files(model_id)
+                state.state = "not_installed"
+                state.message = "模型文件已删除"
+                state.error = ""
+                result = self.summary()
+            result["freed_bytes"] = freed
+            return result
         with self._lock:
             state = self._states[model_id]
             if state.thread is not None and state.thread.is_alive():
                 raise ManagedEmbeddingModelsError("该译本对齐模型正在下载。")
-            if self._receipt_path(model_id).is_file():
+            if model_component_installed(self._cache_dir, model_id):
                 state.state = "installed"
                 state.message = "模型已下载"
                 state.error = ""

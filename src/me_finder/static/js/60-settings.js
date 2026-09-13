@@ -133,6 +133,7 @@
     if (background) background.value = normalizeHexForInput(def.background);
     if (foreground) foreground.value = normalizeHexForInput(def.foreground);
     if (contrast) contrast.value = String(typeof def.contrast === 'number' ? def.contrast : 55);
+    if (contrast) syncRangeFill(contrast);
     if (contrastValue) contrastValue.textContent = String(typeof def.contrast === 'number' ? def.contrast : 55);
     syncCustomDeleteButton();
   }
@@ -281,7 +282,7 @@
     var def = custom[id];
     if (!def) return;
     var confirmed = await showAppConfirm(
-      '将删除自定义主题「' + (def.name || '自定义主题') + '」。此操作无法撤销。',
+      '将删除自定义主题「' + (def.name || '自定义主题') + '」。此操作无法撤销',
       { title: '删除自定义主题？', confirmText: '删除', tone: 'danger' }
     );
     if (!confirmed) return;
@@ -387,6 +388,29 @@
     }, 250);
   }
 
+  /* 滑杆的已选区间用强调色填充：CSS 拿不到 value，这里把百分比写进
+     --range-fill，输入时实时更新，切换分类/载入偏好后补一次。 */
+  function syncRangeFill(input) {
+    if (!input || input.type !== 'range' || !input.style) return;
+    var min = Number(input.min || 0);
+    var max = Number(input.max || 100);
+    var span = max - min;
+    var ratio = span > 0 ? (Number(input.value) - min) / span : 0;
+    input.style.setProperty('--range-fill', (Math.min(Math.max(ratio, 0), 1) * 100).toFixed(2) + '%');
+  }
+
+  function syncAllRangeFills() {
+    if (typeof document.querySelectorAll !== 'function') return;
+    document.querySelectorAll('.settings-content input[type="range"]').forEach(syncRangeFill);
+  }
+
+  // 纯逻辑测试在只有 getElementById 的 document 桩上运行这份脚本，这里要留退路。
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('input', function(event) {
+      if (event.target && event.target.type === 'range') syncRangeFill(event.target);
+    });
+  }
+
   function showSettingsCategory(sectionId) {
     var section = document.getElementById(sectionId);
     if (!section) return;
@@ -400,6 +424,7 @@
     });
     var content = document.querySelector('.settings-content');
     if (content) content.scrollTop = 0;
+    syncAllRangeFills();
     if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
       loadParserStatistics();
     }
@@ -549,11 +574,20 @@
   }
 
   function renderPdfOpenMode() {
-    document.querySelectorAll('.pdf-open-option').forEach(function(option) {
+    document.querySelectorAll('[data-pdf-open-choice]').forEach(function(option) {
       var selected = option.dataset.pdfOpenChoice === settingsStore.currentPdfOpenMode;
       option.classList.toggle('selected', selected);
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
       var input = option.querySelector('input[name="pdf-open-mode"]');
       if (input) input.checked = selected;
+      // 触发器显示当前选项的标题，行内说明只留当前这条（另一条 hidden）。
+      var title = option.querySelector('span');
+      var label = document.getElementById('pdf-open-select-label');
+      if (selected && title && label) label.textContent = title.textContent;
+    });
+    document.querySelectorAll('[data-pdf-open-description]').forEach(function(copy) {
+      copy.hidden = copy.dataset.pdfOpenDescription !== settingsStore.currentPdfOpenMode;
     });
     var current = document.getElementById('pdf-reader-current');
     if (current) {
@@ -654,8 +688,18 @@
     if (!badge || !current) return;
     current.textContent = data.current_path || '未知位置';
     current.title = data.current_path || '';
-    badge.className = 'settings-status' + (data.is_custom ? ' ready' : '');
-    badge.textContent = data.is_custom ? '自定义位置' : '默认位置';
+    settingsStore.dataLocationRestartRequired = Boolean(data.restart_required);
+    badge.className = 'settings-status' + (data.restart_required ? ' warning' : data.is_custom ? ' ready' : '');
+    badge.textContent = data.restart_required ? '重启后生效' : data.is_custom ? '自定义位置' : '默认位置';
+    ['data-location-choose', 'data-location-open'].forEach(function(id) {
+      document.getElementById(id).disabled = settingsStore.dataLocationRestartRequired;
+    });
+    if (data.restart_required) {
+      renderPendingDataLocation(data.pending_path, 'existing');
+      document.getElementById('data-location-pending-label').textContent = '下次启动使用';
+      document.getElementById('data-location-pending-note').textContent = '已保存选择，请退出并重新打开应用';
+      document.getElementById('data-location-migrate').hidden = true;
+    }
   }
 
   async function loadDataLocation() {
@@ -688,86 +732,77 @@
     }
   }
 
-  function renderPendingDataLocation(targetPath) {
+  function renderPendingDataLocation(targetPath, mode, library) {
     settingsStore.pendingDataLocation = targetPath || '';
+    settingsStore.pendingDataLocationMode = mode || 'migrate';
+    var existing = settingsStore.pendingDataLocationMode === 'existing';
     var pending = document.getElementById('data-location-pending');
     var target = document.getElementById('data-location-target');
-    if (pending) pending.style.display = settingsStore.pendingDataLocation ? 'flex' : 'none';
-    if (target) {
-      target.textContent = settingsStore.pendingDataLocation;
-      target.title = settingsStore.pendingDataLocation;
-    }
+    pending.style.display = settingsStore.pendingDataLocation ? 'flex' : 'none';
+    target.textContent = settingsStore.pendingDataLocation;
+    target.title = settingsStore.pendingDataLocation;
+    document.getElementById('data-location-pending-label').textContent = existing ? '已有资料库' : '迁移到';
+    document.getElementById('data-location-pending-note').textContent = existing
+      ? (library ? library.document_count + ' 部文献 · ' + library.paragraph_count + ' 个段落。' : '') + '重启后读取此资料库，不复制或覆盖资料'
+      : '复制当前资料到新位置，重启后使用；原位置的数据保留';
+    var button = document.getElementById('data-location-migrate');
+    button.hidden = false;
+    button.textContent = existing ? '使用此资料库' : '迁移并切换';
   }
 
-  async function chooseDataLocation() {
-    var button = document.getElementById('data-location-choose');
-    if (button && button.disabled) return;
-    if (button) {
-      button.disabled = true;
-      button.textContent = '正在选择…';
-    }
+  async function chooseDataLocation(mode) {
+    mode = mode || 'migrate';
+    if (settingsStore.dataLocationRestartRequired) return;
+    var button = document.getElementById(mode === 'existing' ? 'data-location-open' : 'data-location-choose');
+    if (button.disabled) return;
+    var buttons = ['data-location-choose', 'data-location-open', 'data-location-migrate'].map(function(id) { return document.getElementById(id); });
+    buttons.forEach(function(item) { item.disabled = true; });
+    button.textContent = '选择并检查…';
     try {
       var resp = await fetch('/api/data-location/choose', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: '{}'
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: mode})
       });
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '选择位置失败');
-      if (!data.cancelled) {
-        renderPendingDataLocation(data.target_path);
-        showToast('已选择新位置，确认后开始迁移');
-      }
+      if (!data.cancelled) renderPendingDataLocation(data.target_path, mode, data);
     } catch (e) {
       showToast('选择数据位置失败：' + e.message);
     } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = '选择位置';
-      }
+      buttons.forEach(function(item) { item.disabled = false; });
+      button.textContent = mode === 'existing' ? '选择已有库' : '选择新位置';
     }
   }
 
   async function migrateDataLocation() {
-    if (!settingsStore.pendingDataLocation) return;
+    if (!settingsStore.pendingDataLocation || settingsStore.dataLocationRestartRequired) return;
+    var existing = settingsStore.pendingDataLocationMode === 'existing';
+    var action = existing ? '使用此资料库' : '迁移并切换';
     if (!await showAppConfirm(
-      '将把索引、语料和本机设置复制到：\n\n'
+      (existing ? '重启后将读取：\n\n' : '将把当前索引、原文与设置复制到：\n\n')
       + settingsStore.pendingDataLocation
-      + '\n\n迁移期间请不要关闭应用。完成后需要重启，旧位置的数据会保留',
-      {title:'迁移数据位置？', confirmText:'开始迁移', tone:'warning'}
+      + (existing ? '\n\n不会复制或覆盖两处资料。请先退出另一台电脑上的 MEFinder 并等待同步完成'
+        : '\n\n迁移期间请不要关闭应用。完成后需重启，原位置的数据保留'),
+      {title: existing ? '切换已有资料库？' : '迁移当前资料库？', confirmText: action}
     )) return;
     var button = document.getElementById('data-location-migrate');
-    var choose = document.getElementById('data-location-choose');
-    if (button) {
-      button.disabled = true;
-      button.textContent = '正在迁移…';
-    }
-    if (choose) choose.disabled = true;
+    if (button.disabled) return;
+    var buttons = ['data-location-choose', 'data-location-open', 'data-location-migrate'].map(function(id) { return document.getElementById(id); });
+    buttons.forEach(function(item) { item.disabled = true; });
+    button.textContent = existing ? '正在切换…' : '正在迁移…';
     try {
-      var resp = await fetch('/api/data-location/migrate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+      var resp = await fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({target_path: settingsStore.pendingDataLocation})
       });
       var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '迁移失败');
-      var badge = document.getElementById('data-location-status');
-      if (badge) {
-        badge.className = 'settings-status warning';
-        badge.textContent = '重启后生效';
-      }
-      var pending = document.getElementById('data-location-pending');
-      var hint = pending ? pending.querySelector('small') : null;
-      if (hint) hint.textContent = '迁移完成。退出并重新打开应用后将使用此位置；旧位置的数据仍保留';
-      if (button) button.style.display = 'none';
-      showToast('数据迁移完成，请重启应用');
+      if (!resp.ok || data.error) throw new Error(data.error || action + '失败');
+      renderDataLocation({current_path: data.current_path, pending_path: data.target_path, restart_required: true});
+      showToast('数据位置已保存，请重启应用');
     } catch (e) {
-      showToast('迁移数据失败：' + e.message);
-      if (button) {
-        button.disabled = false;
-        button.textContent = '迁移并切换';
-      }
-      if (choose) choose.disabled = false;
+      showToast(action + '失败：' + e.message);
+      buttons.forEach(function(item) { item.disabled = false; });
+      button.textContent = action;
     }
   }
 
@@ -855,9 +890,13 @@
         progress.hidden = true;
         progress.classList.remove('indeterminate');
         if (progressFill) progressFill.style.width = '100%';
-        button.hidden = true;
+        button.hidden = false;
+        button.disabled = false;
+        button.textContent = '删除模型';
+        button.classList.add('danger');
+        button.onclick = function() { deleteAlignmentModel(model.id, button); };
       } else {
-        state.className = 'settings-status warning';
+        state.className = 'settings-status' + (model.state === 'failed' ? ' warning' : '');
         state.textContent = model.state === 'failed' ? '下载失败' : '未下载';
         hint.textContent = model.error ? '上次下载失败：' + model.error : '首次使用前需下载，文件只保存在本机';
         progress.hidden = true;
@@ -866,6 +905,8 @@
         button.hidden = false;
         button.disabled = false;
         button.textContent = model.state === 'failed' ? '重试下载' : '下载安装';
+        button.classList.remove('danger');
+        button.onclick = function() { downloadAlignmentModel(model.id, button); };
       }
     });
     var selected = component.models.find(function(model) {
@@ -873,11 +914,16 @@
     });
     var status = document.getElementById('alignment-model-status');
     if (status && selected) {
+      // 当前用哪个模型由选中的单选行表达，标题右侧不再重复模型名
+      // （DESIGN.md §5：避免徽章、选中底色、单选圆点多重重复强调）。
       var selectedTransfer = alignmentModelDownloadProgress(selected);
+      var installedCount = component.models.filter(function(model) { return model.installed; }).length;
       status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
       status.textContent = selected.state === 'downloading'
         ? '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '')
-        : '当前 · ' + selected.display_name;
+        : selected.installed
+          ? '当前模型已下载'
+          : '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
     }
     if (settingsStore.alignmentModelPollTimer) {
       clearTimeout(settingsStore.alignmentModelPollTimer);
@@ -923,6 +969,38 @@
     }
   }
 
+  async function deleteAlignmentModel(modelId, button) {
+    var component = settingsStore.alignmentModelComponent || {};
+    var model = (component.models || []).find(function(item) { return item.id === modelId; });
+    var name = (model && model.display_name) || '该模型';
+    var isCurrent = modelId === settingsStore.currentAlignmentEmbeddingModel;
+    var consequence = isCurrent
+      ? '这是当前使用的对齐模型，删除后需要重新下载才能继续运行对齐。已有对照不受影响。'
+      : '删除后需要重新下载才能用它运行对齐。已有对照不受影响。';
+    if (!await showAppConfirm('将删除「' + name + '」的本地模型文件。' + consequence, {
+      title: '删除模型文件',
+      confirmText: '删除',
+      tone: 'danger'
+    })) return;
+    if (button) { button.disabled = true; button.textContent = '删除中…'; }
+    try {
+      var resp = await fetch('/api/text-alignment/models', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_id: modelId, action: 'delete'})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
+      renderAlignmentModelComponent(data);
+      // 后端回报实际释放的字节数，不用目录里的估算值冒充
+      showToast('已删除「' + name + '」的模型文件' + (data.freed_bytes
+        ? '，释放 ' + formatFileSize(data.freed_bytes) : ''));
+    } catch (e) {
+      showToast('删除模型文件失败：' + e.message, 'danger');
+      loadAlignmentModelComponent();
+    }
+  }
+
   function applyPreferencesData(data, requestedThemeRevision) {
     // 从后端 appearance 恢复外观引擎状态，并即时解析生效（覆盖服务端首帧回退）。
     loadAppearanceFromPreferences(data.appearance);
@@ -939,12 +1017,14 @@
       try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(Math.round(onlineMetadataAutoMatchThreshold * 100))); } catch (_) {}
       global.MEFinder.imports.syncOnlineAutoMatchControl();
     }
+    global.MEFinder.parserRuntime.renderLastBackupExport(data.last_backup_export);
     settingsStore.currentPdfOpenMode = data.pdf_open_mode === 'system' ? 'system' : 'native';
     settingsStore.currentPdfParseMode = global.MEFinder.imports.normalizePdfParseMode(data.pdf_parse_mode);
     settingsStore.currentDocumentExportMode = data.document_export_mode === 'with_pdf'
       ? 'with_pdf'
       : 'data_only';
     settingsStore.currentReaderLineMode = data.reader_line_mode === 'physical' ? 'physical' : 'flow';
+    global.MEFinder.readerHost.syncPreferences(data);
     settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id === 'multilingual-e5-large'
       ? 'multilingual-e5-large'
       : 'minilm-l12-v2';
@@ -977,18 +1057,28 @@
     var systemTitle = document.getElementById('pdf-system-title');
     var systemDescription = document.getElementById('pdf-system-description');
     if (desktopShell === 'win32') {
-      if (nativeDescription) nativeDescription.textContent = '使用 Microsoft Edge WebView2，在应用内直接跳到搜索命中的物理页码';
-      if (systemTitle) systemTitle.textContent = 'Windows 默认 PDF 阅读器';
+      if (nativeDescription) nativeDescription.textContent = '用 Microsoft Edge WebView2 在内置阅读器中打开，可直接跳到命中页';
+      if (systemTitle) systemTitle.textContent = 'Windows 默认阅读器';
       if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开';
     } else if (desktopShell === 'macos') {
-      if (nativeDescription) nativeDescription.textContent = '使用 macOS PDFKit，直接跳到搜索命中的物理页码';
+      if (nativeDescription) nativeDescription.textContent = '用 macOS PDFKit 在内置阅读器中打开，可直接跳到命中页';
       if (systemTitle) systemTitle.textContent = 'macOS 预览';
-      if (systemDescription) systemDescription.textContent = '在预览.app 中打开；命中页码需要手动翻到';
+      if (systemDescription) systemDescription.textContent = '在「预览」中打开，需要手动翻到命中页';
     }
+    renderPdfOpenMode();
+  }
+
+  function closeChoiceSelect(selectId) {
+    var select = document.getElementById(selectId);
+    if (!select || !select.classList.contains('is-open')) return;
+    select.classList.remove('is-open');
+    var trigger = select.querySelector('.app-select-trigger');
+    if (trigger) { trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
   }
 
   async function setPdfOpenMode(mode) {
     if (mode !== 'native' && mode !== 'system') return;
+    closeChoiceSelect('pdf-open-select');
     if (settingsStore.pdfOpenModeSaving || settingsStore.preferencesLoadPromise) {
       renderPdfOpenMode();
       return;
@@ -1022,11 +1112,19 @@
 
   function renderReaderLineMode() {
     var mode = settingsStore.currentReaderLineMode === 'physical' ? 'physical' : 'flow';
-    document.querySelectorAll('.pdf-open-option[data-reader-line-choice]').forEach(function(option) {
+    document.querySelectorAll('[data-reader-line-choice]').forEach(function(option) {
       var selected = option.dataset.readerLineChoice === mode;
       option.classList.toggle('selected', selected);
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', selected ? 'true' : 'false');
       var input = option.querySelector('input[name="reader-line-mode"]');
       if (input) input.checked = selected;
+      var title = option.querySelector('span');
+      var label = document.getElementById('reader-line-select-label');
+      if (selected && title && label) label.textContent = title.textContent;
+    });
+    document.querySelectorAll('[data-reader-line-description]').forEach(function(copy) {
+      copy.hidden = copy.dataset.readerLineDescription !== mode;
     });
     // 结构化阅读器据此切换 white-space：flow=回流，physical=保留 PDF 断行。
     if (global.document && global.document.documentElement) {
@@ -1046,8 +1144,13 @@
     }
     var status = document.getElementById('script-folding-status');
     if (status) status.textContent = settingsStore.scriptFoldingAvailable
-      ? '用简体或繁体关键词检索，结果、页码和导出保留原文。'
-      : '当前版本未能加载繁简转换组件，仍可按原文检索。';
+      ? '搜索时兼容繁简字，结果与引文保留原文'
+      : '当前版本未能加载繁简转换组件，仍可按原文检索';
+    var state = document.getElementById('script-folding-state');
+    if (state) {
+      state.textContent = !settingsStore.scriptFoldingAvailable ? '不可用'
+        : settingsStore.scriptFoldingEnabled ? '开启' : '关闭';
+    }
   }
 
   async function setScriptFolding(enabled) {
@@ -1077,6 +1180,7 @@
   }
 
   async function setReaderLineMode(mode) {
+    closeChoiceSelect('reader-line-select');
     if (mode !== 'flow' && mode !== 'physical') return;
     if (settingsStore.readerLineModeSaving || settingsStore.preferencesLoadPromise) {
       renderReaderLineMode();
@@ -1561,6 +1665,7 @@
   global.setAlignmentEmbeddingModel = setAlignmentEmbeddingModel;
   global.loadAlignmentModelComponent = loadAlignmentModelComponent;
   global.downloadAlignmentModel = downloadAlignmentModel;
+  global.deleteAlignmentModel = deleteAlignmentModel;
   global.setDocumentExportMode = setDocumentExportMode;
   global.loadPreferences = loadPreferences;
   global.setScriptFolding = setScriptFolding;

@@ -64,6 +64,7 @@
 | **题录补全 / 五种出处格式** | 识别并补全图书、译著、期刊和学位论文题录；支持中文脚注、GB/T 7714、APA、MLA、Chicago。 |
 | **文档包传输** | 把已入库 PDF 连同页级文本、书目和页码映射导出为 `.mefinder.zip`，换设备后重新导入就能恢复，不用重新 OCR。 |
 | **按页导出 Markdown** | 文献库菜单可按原书页码或 PDF 物理页码导出指定页；PDF 已配对脚注随正文带出。EPUB 依赖出版方页码，页外脚注暂不保证。 |
+| **独立阅读窗口（0.5.4 开发版）** | 在设置 → PDF 阅读中开启；结构化阅读和译本对照可在独立窗口中打开、拖动和缩放，默认保留主窗口内阅读。 |
 | **引文核对 / 主题检索 / 对齐修正（MCP）** | 让支持 MCP 的 AI 助手访问文献库：批量核对引文是否逐字命中、逐字比对错引差异、按主题召回相关段落、读取版权页与题录缺口；还可辅助标注并修正自动译本对齐。 |
 
 <a id="适合什么场景"></a>
@@ -128,6 +129,18 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 - 根据 Mac 芯片选择 Apple Silicon（`arm64`）或 Intel（`x86_64`）DMG；
 - 打开 DMG 后将 `MEFinder.app` 拖入 `Applications`；
 - 应用数据保存在 `~/Library/Application Support/MEFinder/`。
+
+**Homebrew（可选）**：已安装 [Homebrew](https://brew.sh) 的用户可以用 Cask 安装并跟进更新：
+
+```bash
+brew trust sabercomo/mefinder   # 新版 Homebrew 要求先信任第三方 tap
+brew tap sabercomo/mefinder
+brew install --cask mefinder
+```
+
+之后用 `brew update && brew upgrade --cask mefinder` 升级。Homebrew 渠道要求 macOS 14 及以上（两架构取较严门槛；Intel 机若是 macOS 12–13，请直接下载 DMG 安装）。应用未经 Apple 公证：首次启动若被拦截，在「系统设置 → 隐私与安全性 → 仍要打开」批准一次即可，之后的升级会延续已批准状态。`brew uninstall --cask mefinder` 不影响文献数据。
+
+桌面应用可在「设置 → 数据位置」打开已有 MEFinder 资料库（例如从另一台电脑同步的文件夹），或迁移当前资料到新位置。两种操作均在重启后生效；打开已有库不复制或覆盖资料。跨设备使用云盘库时，先退出另一端并等待同步完成。
 
 <a id="快速开始"></a>
 
@@ -299,10 +312,10 @@ Roadmap 只是当前的改进方向，不代表固定发布日期；实际进度
 
 ## 🛠️ 开发与构建
 
-源码模式需要 Python 3；PDF 原生文本解析推荐安装 PyMuPDF。
+源码模式需要 Python 3.12。`requirements-core.txt` 提供不含对齐计算栈的后端依赖；需要离线生成对照时再安装 `requirements-alignment.txt`，并在设置中下载模型。缺少计算组件仍可搜索、结构化阅读和查看已有对照。当前桌面完整构建继续包含计算运行时，尚未提供精简桌面包或运行时下载器。
 
 ```bash
-python3 -m pip install PyMuPDF
+python3 -m pip install -r requirements-core.txt
 python3 -m src.me_finder build-index --include-pdf
 python3 -m src.me_finder serve --host 127.0.0.1 --port 8765
 ```

@@ -123,7 +123,6 @@
             + '" data-base="' + esc(rule.base) + '">'
             + visionAvatarHtml({api_base: rule.base, name: rule.name}, 'vision-avatar-sm')
             + '<span class="vision-base-name">' + esc(rule.name) + '</span>'
-            + (rule.unsupported ? '<span class="vision-model-badge capability-unsupported">不支持图片</span>' : '')
             + '<span class="vision-base-url">' + esc(rule.base.replace(/^https?:\/\//, '')) + '</span>'
             + '</div>';
         }).join('');
@@ -208,74 +207,28 @@
     if (exactMatch) return parserStore.visionModelOptions;
     return parserStore.visionModelOptions.filter(function(item) {
       return item.id.toLowerCase().indexOf(query) >= 0
-        || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0
-        || String(item.capability_label || '').toLowerCase().indexOf(query) >= 0;
+        || String(item.owned_by || '').toLowerCase().indexOf(query) >= 0;
     });
-  }
-
-  function visionModelCapability(item) {
-    var capability = String((item || {}).capability || '');
-    if (capability === 'ocr') return 'ocr';
-    if (capability === 'vision' || capability === 'omni') return 'vision';
-    if (capability === 'text' || capability === 'unsupported') return 'text';
-    if (capability === 'unknown') return 'unknown';
-    return item && item.likely_vision ? 'vision' : 'unknown';
-  }
-
-  function visionModelPriority(item) {
-    var priority = Number((item || {}).capability_priority);
-    if (Number.isFinite(priority)) return priority;
-    var fallback = {ocr: 0, vision: 100, unknown: 500, text: 900};
-    return fallback[visionModelCapability(item)];
-  }
-
-  function visionModelBadgeHTML(item) {
-    var label = String((item || {}).capability_label || '');
-    var capability = visionModelCapability(item);
-    if (capability === 'vision') label = '支持图片';
-    else if (capability === 'text') label = '不支持图片';
-    else if (capability === 'unknown') label = '待确认 · 请测试';
-    else if (!label) label = 'OCR 专用';
-    return '<span class="vision-model-badge capability-' + capability + '">' + esc(label) + '</span>';
   }
 
   function renderVisionModelPop() {
     var pop = document.getElementById('vision-model-pop');
     var input = document.getElementById('vision-model');
     if (!pop) return;
+    // 模型列表保持纯平铺：不做能力分组、不打能力徽章。
+    // 模型名换代太快，任何硬编码清单都会过时误导；是否可用交给真实测连。
     var items = visionModelFiltered();
-    visionModelFlat = [];
+    visionModelFlat = items;
     if (!visionModelPopOpen || !items.length) {
       hideVisionPop(pop, input);
       return;
     }
-    var groups = [
-      {key: 'ocr', label: 'OCR 专用 · 优先'},
-      {key: 'vision', label: '支持图片'},
-      {key: 'unknown', label: '待确认 · 请测试'},
-      {key: 'text', label: '不支持图片'}
-    ];
-    var byCapability = {};
-    items.forEach(function(item) {
-      var capability = visionModelCapability(item);
-      if (!byCapability[capability]) byCapability[capability] = [];
-      byCapability[capability].push(item);
-    });
-    var html = groups.filter(function(group) {
-      return byCapability[group.key] && byCapability[group.key].length;
-    }).map(function(group) {
-      return '<div class="vision-model-group">' + esc(group.label) + '</div>'
-        + byCapability[group.key].map(function(item) {
-            var index = visionModelFlat.length;
-            visionModelFlat.push(item);
-            return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
-              + '" data-model="' + esc(item.id) + '">'
-              + '<span class="vision-model-id">' + esc(item.id) + '</span>'
-              + visionModelBadgeHTML(item)
-              + '</div>';
-          }).join('');
+    pop.innerHTML = items.map(function(item, index) {
+      return '<div class="vision-model-item' + (index === visionModelActiveIndex ? ' active' : '')
+        + '" data-model="' + esc(item.id) + '">'
+        + '<span class="vision-model-id">' + esc(item.id) + '</span>'
+        + '</div>';
     }).join('');
-    pop.innerHTML = html;
     revealVisionPop(pop, input);
   }
 
@@ -340,8 +293,7 @@
     parserStore.visionModelOptions = (models || []).filter(function(item) {
       return item && typeof item.id === 'string' && item.id.trim();
     }).slice().sort(function(a, b) {
-      return visionModelPriority(a) - visionModelPriority(b)
-        || a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
+      return a.id.localeCompare(b.id, undefined, {sensitivity: 'base'});
     });
     visionModelActiveIndex = -1;
     renderVisionModelPop();
@@ -398,7 +350,7 @@
       if (requestSerial !== parserStore.visionModelRequestSerial) return;
       renderVisionModelOptions(data.models || []);
       setVisionModelHint(
-        '已获取 ' + parserStore.visionModelOptions.length + ' 个模型。未确认型号可保存后发送测试图片验证',
+        '已获取 ' + parserStore.visionModelOptions.length + ' 个模型；不在列表里也可直接手动输入模型名称',
         'is-ready'
       );
       if (!silent) {
@@ -760,25 +712,28 @@
           + '<span>MinerU 会继续作为默认的免费解析服务；点右上角「添加接口」可接入通义千问等视觉模型</span>'
           + '</div>';
       } else {
-        var usageByProvider = {};
-        (Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : []).forEach(function(item) {
-          usageByProvider[item.provider_id] = item;
-        });
         var rows = providers.map(function(provider) {
+          // 与 MinerU 账号同一套行式布局：名称 + 事实行 + 开关，第二行是地址与动作。
           var badge = visionProviderBadge(provider);
-          var usage = usageByProvider[provider.id] || {};
-          var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
-          return '<tr><td data-label="接口"><span class="mineru-account-identity vision-table-identity">'
-            + visionAvatarHtml(provider)
-            + '<span class="mineru-account-copy"><strong>' + esc(provider.name) + '</strong><small title="' + esc(provider.api_base) + '">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</small></span></span></td>'
-            + '<td data-label="状态"><span class="mineru-account-status-cell"><span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span>'
+          return '<div class="mineru-account-row">'
+            + '<div class="mineru-account-main">'
+            + '<div class="mineru-account-copy"><strong>' + esc(provider.name) + '</strong>'
+            + '<small>' + esc(provider.model || '未选择模型')
+            + ' · ' + (provider.has_api_key ? '密钥已保存' : '未填写密钥')
+            + ' · <span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span></small></div>'
             + '<label class="ui-switch mineru-row-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
             + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
-            + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label></span></td>'
-            + '<td data-label="已解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>'
-            + '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">测试</button><button class="mineru-text-action" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button><button class="mineru-text-action danger" type="button" onclick="deleteVisionProvider(\'' + provider.id + '\')">删除</button></span></td></tr>';
+            + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">'
+            + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label>'
+            + '<span class="mineru-account-switch-text">' + (provider.enabled ? '开启' : '关闭') + '</span>'
+            + '</div>'
+            + '<div class="mineru-account-actions">'
+            + '<code class="mineru-account-aside">' + esc(provider.api_base) + '</code>'
+            + '<button class="action-btn quiet" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">检测连接</button>'
+            + '<button class="action-btn" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button>'
+            + '</div></div>';
         }).join('');
-        list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table vision-provider-table"><thead><tr><th>接口</th><th>状态</th><th>已解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        list.innerHTML = rows;
       }
     }
     if (autoFallback) {

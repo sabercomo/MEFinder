@@ -65,7 +65,11 @@
       };
       if (fields.managedState) {
         fields.managedState.className = 'settings-status ' + (installed ? 'ready' : 'warning');
-        fields.managedState.textContent = labels[managed.state] || (managed.update_available ? '可更新 · tag ' + managed.tag : installed ? '已安装 · tag ' + managed.tag : '未安装');
+        // 上次操作失败的组件既不是「已安装」也不该只写「未安装」——失败本身要说出来。
+        fields.managedState.textContent = labels[managed.state]
+          || (managed.update_available ? '可更新 · tag ' + managed.tag
+            : installed ? '已安装 · tag ' + managed.tag
+            : managed.error ? '安装失败' : '未安装');
       }
       if (fields.installHint) {
         var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
@@ -85,7 +89,8 @@
       if (fields.install) {
         fields.install.hidden = (installed && !managed.update_available) || busy;
         fields.install.disabled = !installer.supported;
-        fields.install.textContent = managed.update_available ? '更新组件' : '下载安装';
+        fields.install.textContent = managed.update_available ? '更新组件'
+          : (!installed && managed.error) ? '重试安装' : '下载安装';
         fields.install.onclick = function() {
           manageLocalOCRComponent(engine.provider_id, managed.update_available ? 'update' : 'install', fields.install);
         };
@@ -94,6 +99,14 @@
       if (fields.uninstall) fields.uninstall.hidden = !installed || busy;
       if (fields.cancel) fields.cancel.hidden = !busy;
       if (fields.enabled) fields.enabled.disabled = busy;
+      // DESIGN.md §6：未安装时先完成安装，不摆一个看起来可用的启用开关。
+      var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
+      if (enabledLabel) enabledLabel.hidden = !installed;
+      if (fields.installHint && installed && !busy && !managed.error) {
+        fields.installHint.textContent = fields.enabled && fields.enabled.checked
+          ? '导入图像型 PDF 时按文献语言自动使用，全程在本机运行'
+          : '已安装但尚未启用：导入时不会用到它，启用后才参与识别';
+      }
       if (fields.python) fields.python.disabled = busy;
       if (fields.script) fields.script.disabled = busy;
     });
@@ -112,7 +125,38 @@
     parserStore.localOCRPollTimer = active ? setTimeout(loadLocalOCRConfig, 700) : null;
   }
 
+  function renderLocalOCRUnknown(reason) {
+    parserStore.localOCRConfig = null;
+    if (parserStore.localOCRPollTimer) {
+      clearTimeout(parserStore.localOCRPollTimer);
+      parserStore.localOCRPollTimer = null;
+    }
+    var status = document.getElementById('local-ocr-status');
+    if (status) { status.className = 'settings-status warning'; status.textContent = '状态未知'; }
+    var reload = document.getElementById('local-ocr-reload');
+    if (reload) reload.hidden = false;
+    ['ndlocr-lite', 'ndlkotenocr-lite'].forEach(function(providerId) {
+      var fields = localOCREngineFields(providerId);
+      if (fields.managedState) {
+        fields.managedState.className = 'settings-status warning';
+        fields.managedState.textContent = '状态未知';
+      }
+      if (fields.installHint) {
+        fields.installHint.textContent = '读不到组件状态：' + reason + '。未确认状态前不会开始安装';
+      }
+      if (fields.progress) fields.progress.hidden = true;
+      [fields.install, fields.validate, fields.uninstall, fields.cancel].forEach(function(button) {
+        if (button) button.hidden = true;
+      });
+      var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
+      if (enabledLabel) enabledLabel.hidden = true;
+    });
+    showToast('读取本地 OCR 设置失败：' + reason, 'danger');
+  }
+
   function renderLocalOCRConfig(config) {
+    var reload = document.getElementById('local-ocr-reload');
+    if (reload) reload.hidden = true;
     parserStore.localOCRConfig = config;
     (config.engines || []).forEach(function(engine) {
       var fields = localOCREngineFields(engine.provider_id);
@@ -141,8 +185,9 @@
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
     } catch (error) {
-      if (status) { status.className = 'settings-status warning'; status.textContent = '读取失败'; }
-      showToast('读取本地 OCR 设置失败：' + error.message, 'danger');
+      // DESIGN.md §2/§6：读取失败意味着状态未知，不是未安装；此时不得据错误状态
+      // 触发安装或启用，只给「重新读取」。
+      renderLocalOCRUnknown(error.message);
     }
     loadGeneralModelConfig();
   }
@@ -204,7 +249,7 @@
 
   async function manageLocalOCRComponent(providerId, action, button) {
     if (action === 'uninstall' && !await showAppConfirm(
-      '将删除该组件的模型、独立 Python 环境和自动填入的路径。',
+      '将删除该组件的模型、独立 Python 环境和自动填入的路径',
       {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
     )) return;
     if (button) button.disabled = true;
@@ -266,6 +311,8 @@
       });
       parserStore.mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
+      var serviceAddress = document.getElementById('mineru-service-address');
+      if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
       renderMineruLocalSettings(data.local_deployment || {});
       renderMineruAccountList();
       var addButton = document.getElementById('mineru-add-account');
@@ -337,10 +384,10 @@
   function managedMineruErrorText(value) {
     var message = String(value || '').replace(/\s+/g, ' ').trim();
     if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
-      return '无法连接 PyPI，请检查网络或代理后重试。';
+      return '无法连接 PyPI，请检查网络或代理后重试';
     }
     if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror|i\/o error|decoding response body)/i.test(message)) {
-      return '模型下载网络中断，请检查网络或代理后重试。';
+      return '模型下载网络中断，请检查网络或代理后重试';
     }
     return message.length > 180 ? message.slice(0, 177) + '…' : message;
   }
@@ -447,11 +494,11 @@
 
   async function manageMineruComponent(profile, action, button) {
     if ((action === 'install' || action === 'update') && !await showAppConfirm(
-      '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘。',
+      '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘',
       {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
     )) return;
     if (action === 'uninstall' && !await showAppConfirm(
-      '将删除该配置的 MinerU 运行时、依赖和本地模型。',
+      '将删除该配置的 MinerU 运行时、依赖和本地模型',
       {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
     )) return;
     if (button) button.disabled = true;
@@ -557,33 +604,64 @@
   }
 
   function renderMineruAccountList() {
-    // Original table: 账号 / 状态 / 到期日期 / 本地解析 / 操作. Edit opens the inline
-    // editor panel below (no modal).
+    // 讨论稿的行式布局：一行一个账号，第一行是名称与事实（密钥 / 检测结论 /
+    // 到期），第二行是该账号的动作。解析量进「解析统计」，不挤在行里。
     var list = document.getElementById('mineru-account-list');
     if (!list) return;
     var count = document.getElementById('mineru-account-count');
     if (count) count.textContent = parserStore.mineruAccounts.length.toLocaleString() + ' 个账号';
     if (!parserStore.mineruAccounts.length) { list.innerHTML = ''; return; }
-    var usageByAccount = {};
-    (Array.isArray(parserStore.mineruStatistics.credentials) ? parserStore.mineruStatistics.credentials : []).forEach(function(item) {
-      usageByAccount[item.account_id] = item;
-    });
-    var rows = parserStore.mineruAccounts.map(function(item) {
-      var usage = usageByAccount[item.account_id] || {};
+    list.innerHTML = parserStore.mineruAccounts.map(function(item) {
       var healthy = item.health_status === 'healthy' || !item.health_status;
-      var state = !item.configured ? '缺少 Token' : !item.enabled ? '已停用'
+      var probe = parserStore.mineruProbeResults[item.account_id];
+      var state = !item.configured ? '缺少 Token'
         : item.health_status === 'unauthorized' ? '认证失效'
-        : item.health_status === 'cooldown' ? '冷却中' : '可用';
-      var stateClass = item.enabled && item.configured && healthy ? 'ready' : 'warning';
-      var expires = item.expires_at ? esc(item.expires_at.replace(/-/g, '/')) : '—';
-      var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
-      return '<tr><td data-label="账号"><span class="mineru-account-identity"><span class="mineru-account-avatar" aria-hidden="true"><span class="mineru-brand-glyph"></span></span><span class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + (item.configured ? 'Token 已保存' : '需要 Token') + '</small></span></span></td>' +
-        '<td data-label="状态"><span class="mineru-account-status-cell"><span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span><label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '"><input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '') + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label></span></td>' +
-        '<td data-label="到期日期"><span class="mineru-table-date">' + expires + '</span></td>' +
-        '<td data-label="本地解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>' +
-        '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">测试</button><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button><button class="mineru-text-action danger" type="button" data-account-id="' + esc(item.account_id) + '" onclick="deleteMineruAccount(this.dataset.accountId)">删除</button></span></td></tr>';
+        : item.health_status === 'cooldown' ? '冷却中'
+        : probe === 'ok' ? '刚刚检测：连接正常'
+        : probe === 'failed' ? '刚刚检测：连接失败'
+        : '尚未检测';
+      var stateClass = probe === 'ok' ? 'ready'
+        : (probe === 'failed' || !item.configured || !healthy) ? 'warning' : '';
+      var facts = (item.configured ? '密钥已保存' : '未填写 Token')
+        + ' · <span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span>'
+        + ' · ' + (item.expires_at ? '到期 ' + esc(item.expires_at.replace(/-/g, '/')) : '到期日未设置');
+      var aside = item.enabled ? '解析记录可在「解析统计」中查看' : '停用期间不分配新的解析任务';
+      return '<div class="mineru-account-row">'
+        + '<div class="mineru-account-main">'
+        + '<div class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + facts + '</small></div>'
+        + '<label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '">'
+        + '<input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '')
+        + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span>'
+        + '<span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label>'
+        + '<span class="mineru-account-switch-text">' + (item.enabled ? '开启' : '关闭') + '</span>'
+        + '</div>'
+        + '<div class="mineru-account-actions">'
+        + '<span class="mineru-account-aside">' + aside + '</span>'
+        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">检测连接</button>'
+        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button>'
+        + '</div></div>';
     }).join('');
-    list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table"><thead><tr><th>账号</th><th>状态</th><th>到期日期</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function startEditMineruService() {
+    var copy = document.getElementById('mineru-service-copy-address');
+    var control = document.getElementById('mineru-service-control');
+    var edit = document.getElementById('mineru-service-edit');
+    var address = document.getElementById('mineru-service-address');
+    if (control) control.hidden = false;
+    if (edit) edit.hidden = true;
+    if (address) address.hidden = true;
+    var input = document.getElementById('mineru-api-base');
+    if (input) { input.value = (address && address.textContent) || input.value; input.focus(); }
+  }
+
+  function cancelEditMineruService() {
+    var control = document.getElementById('mineru-service-control');
+    var edit = document.getElementById('mineru-service-edit');
+    var address = document.getElementById('mineru-service-address');
+    if (control) control.hidden = true;
+    if (edit) { edit.hidden = false; edit.focus(); }
+    if (address) address.hidden = false;
   }
 
   // The inline editor panel expands below the table on 添加账号 / 编辑, and folds
@@ -613,6 +691,7 @@
     }
     var editing = !!document.getElementById('mineru-account-id').value.trim();
     var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
+    var remove = document.getElementById('mineru-account-remove'); if (remove) remove.hidden = !editing;
   }
 
   async function openMineruTokenPage() {
@@ -716,6 +795,9 @@
       list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
       return;
     }
+    var totalPages = providers.reduce(function(sum, item) {
+      return sum + Number(item.parsed_page_count || 0);
+    }, 0);
     var orderedProviders = providers.slice().sort(function(a, b) {
       var aLocal = a.provider_kind === 'local' ? 0 : 1;
       var bLocal = b.provider_kind === 'local' ? 0 : 1;
@@ -728,7 +810,13 @@
       var details = renderParserProviderBooks(provider);
       if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
       var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
-      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
+      // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
+      var pageCount = Number(provider.parsed_page_count || 0);
+      var share = totalPages > 0 ? pageCount / totalPages : 0;
+      var sharePercent = totalPages > 0 ? Math.round(share * 100) : null;
+      var shareLabel = sharePercent === null ? '—'
+        : (sharePercent === 0 && pageCount > 0 ? '<1%' : sharePercent + '%');
+      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small><span class="parser-provider-bar" aria-hidden="true"><span style="width:' + (share * 100).toFixed(1) + '%"></span></span></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + pageCount.toLocaleString() + '</b> 页</span><span class="parser-provider-number parser-provider-share"><b>' + shareLabel + '</b></span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
     }).join('');
   }
 
@@ -762,6 +850,22 @@
     return loadParserStatistics();
   }
 
+  function renderLastBackupExport(record) {
+    var node = document.getElementById('backup-last-export');
+    if (!node) return;
+    if (!record || !record.exported_at) {
+      node.textContent = '还没有导出过备份';
+      return;
+    }
+    var when = new Date(Number(record.exported_at) * 1000);
+    var stamp = when.getFullYear() + '-' + String(when.getMonth() + 1).padStart(2, '0')
+      + '-' + String(when.getDate()).padStart(2, '0') + ' '
+      + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
+    var name = record.file_name || record.path || '';
+    node.textContent = '上次导出：' + stamp + (name ? ' · ' + name : '');
+    node.title = record.path || '';
+  }
+
   async function exportBackup() {
     var hint = document.getElementById('backup-export-hint');
     try {
@@ -778,6 +882,12 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
       if (hint) hint.textContent = '已导出到：' + data.path;
+      renderLastBackupExport({
+        path: data.path,
+        file_name: String(data.path || '').split(/[\\/]/).pop(),
+        exported_at: data.exported_at,
+        size_bytes: data.size_bytes
+      });
       showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
     } catch (e) {
       if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
@@ -795,7 +905,7 @@
       if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
       if (chosen.cancelled) return;
       if (!await showAppConfirm(
-        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息。',
+        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息',
         {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
       )) return;
       if (button) button.textContent = '正在导入…';
@@ -856,8 +966,8 @@
       expires_at: document.getElementById('mineru-expires-at').value,
       enabled: document.getElementById('mineru-account-enabled').checked
     };
-    if (!payload.display_name) { mineruDialogError('请填写账号名称。'); return; }
-    if (!accountId && !payload.token) { mineruDialogError('新账号必须填写 API Token。'); return; }
+    if (!payload.display_name) { mineruDialogError('请填写账号名称'); return; }
+    if (!accountId && !payload.token) { mineruDialogError('新账号必须填写 API Token'); return; }
     var idleLabel = accountId ? '保存更改' : (parserStore.mineruAccounts.length ? '添加账号' : '保存配置');
     saveButton.disabled = true;
     saveButton.textContent = '保存中…';
@@ -870,6 +980,7 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       parserStore.mineruSelectedAccountId = data.saved_account_id || accountId;
+      if (payload.token) delete parserStore.mineruProbeResults[parserStore.mineruSelectedAccountId];
       parserStore.mineruConfigLoaded = false;
       await loadMineruConfig();
       hideMineruEditor();
@@ -885,6 +996,8 @@
     var button = document.getElementById('mineru-service-save');
     var status = document.getElementById('mineru-config-status');
     var apiBase = document.getElementById('mineru-api-base').value.trim();
+    // 地址是所有账号共用的连接前提，改了就让旧检测结论全部失效。
+    parserStore.mineruProbeResults = {};
     button.disabled = true;
     button.textContent = '保存中…';
     try {
@@ -896,7 +1009,11 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       document.getElementById('mineru-api-base').value = data.api_base || apiBase;
-      if (status) { status.className = 'settings-status ready'; status.textContent = '地址已保存'; }
+      var address = document.getElementById('mineru-service-address');
+      if (address) address.textContent = data.api_base || apiBase;
+      cancelEditMineruService();
+      renderMineruAccountList();
+      if (status) { status.className = 'settings-status'; status.textContent = '地址已保存，需重新检测'; }
     } catch (e) {
       showToast('MinerU 服务地址未保存：' + e.message, 'danger');
     } finally {
@@ -939,7 +1056,7 @@
   async function deleteMineruAccount(accountId) {
     var item = parserStore.mineruAccounts.find(function(account) { return account.account_id === accountId; });
     if (!item || !await showAppConfirm(
-      '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留。',
+      '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留',
       {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
     )) return;
     try {
@@ -975,8 +1092,12 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '测试失败');
       if (status) { status.className = 'settings-status ready'; status.textContent = '连接正常 · ' + data.latency_ms + ' ms'; }
+      parserStore.mineruProbeResults[accountId] = 'ok';
+      renderMineruAccountList();
     } catch (e) {
       if (status) { status.className = 'settings-status warning'; status.textContent = '连接失败'; }
+      parserStore.mineruProbeResults[accountId] = 'failed';
+      renderMineruAccountList();
       showToast('MinerU 连接失败：' + e.message, 'danger');
     } finally {
       if (button) { button.disabled = false; if (buttonHTML !== null) button.innerHTML = buttonHTML; }
@@ -1122,6 +1243,10 @@
   }
 
   var parserRuntimeAPI = {
+    // 走命名空间而不是再加全局：70-vision.js 的全局命令面有预算上限。
+    renderLastBackupExport: renderLastBackupExport,
+    startEditMineruService: startEditMineruService,
+    cancelEditMineruService: cancelEditMineruService,
     loadGeneralModelConfig: loadGeneralModelConfig,
     loadMineruConfig: loadMineruConfig,
     bindMineruAccountDialogDismissal: bindMineruAccountDialogDismissal

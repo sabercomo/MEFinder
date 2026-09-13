@@ -200,6 +200,25 @@ class StructuredReaderWebTests(unittest.TestCase):
                 json.loads(exc.read().decode("utf-8")),
             )
 
+    def test_reader_window_page_and_setting_share_the_existing_backend(self) -> None:
+        with self._server() as (base_url, _handler):
+            opener = build_opener(ProxyHandler({}))
+            with opener.open(base_url + "/reader-window") as response:
+                body = response.read()
+                self.assertEqual(response.status, 200)
+            with opener.open(Request(base_url + "/reader-window", method="HEAD")) as response:
+                self.assertEqual(int(response.headers["Content-Length"]), len(body))
+                self.assertEqual(response.read(), b"")
+            self.assertIn(b'data-reader-window="true"', body)
+            self.assertNotIn(b'id="page-search"', body)
+            status, saved = self._post_json(base_url, "/api/preferences", {"reader_window_enabled": True})
+            self.assertEqual(status, 200)
+            self.assertTrue(saved["reader_window_enabled"])
+            status, preferences = self._get_json(base_url, "/api/preferences")
+            self.assertTrue(preferences["reader_window_enabled"])
+            status, _ = self._post_json(base_url, "/api/preferences", {"reader_window_enabled": "false"})
+            self.assertEqual(status, 400)
+
     def test_pdf_and_word_windows_are_served_over_real_http(self) -> None:
         with self._server() as (base_url, _handler):
             pdf_status, pdf = self._get_json(

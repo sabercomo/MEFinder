@@ -47,9 +47,7 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
                 self.assertEqual(runtime_location.component_runtime_root(library / 'runtime'),
                                  library / 'runtime')
 
-    def test_generation_inference_uses_the_local_machine_cache(self):
-        # This line has no generation preflight (integration-line feature);
-        # the inference call itself must receive the machine-stable cache.
+    def test_generation_preflight_and_inference_use_the_same_local_cache(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
             library = home / "OneDrive/MEFinder"
@@ -59,9 +57,9 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
             with patch.object(runtime_location.sys, "platform", "darwin"), \
                  patch.object(runtime_location.Path, "home", return_value=home), \
                  patch.object(runtime_location, "local_app_data_root", return_value=library), \
-                 patch.object(coordinator, "read_preferences", return_value={"alignment_embedding_model_id": "minilm", "alignment_thresholds": {}}), \
-                 patch.object(coordinator, "resolve_alignment_thresholds", return_value={}), \
-                 patch.object(coordinator, "begin_embedding_run"), \
+                 patch.object(coordinator, "model_component_installed", return_value=True) as preflight, \
+                 patch.object(coordinator, "find_spec", return_value=object()), \
                  patch.object(coordinator, "generate_alignment") as generate:
                 coordinator.TextAlignmentCoordinator(paths, MagicMock(), MagicMock()).generate("group", "a", "b")
+                self.assertEqual(preflight.call_args.args[0], expected)
                 self.assertEqual(generate.call_args.kwargs["model_cache_dir"], expected)

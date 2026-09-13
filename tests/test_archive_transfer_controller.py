@@ -82,10 +82,11 @@ class ArchiveTransferControllerTests(unittest.TestCase):
         )
 
     def test_success_responses_preserve_archive_arguments(self) -> None:
-        self.assertEqual(
-            self.controller.export_backup(None),
-            (200, self.backup.export_result),
-        )
+        status, payload = self.controller.export_backup(None)
+        self.assertEqual(status, 200)
+        # 0.5.4：导出响应附带 exported_at，界面据此显示「上次导出」
+        self.assertIsInstance(payload.pop("exported_at"), int)
+        self.assertEqual(payload, self.backup.export_result)
         self.assertEqual(
             self.controller.export_document({"source_id": " pdf-one "}),
             (
@@ -125,8 +126,14 @@ class ArchiveTransferControllerTests(unittest.TestCase):
             output_dir = Path(directory)
 
             self.assertEqual(
-                self.controller.export_backup({"output_dir": str(output_dir)}),
-                (200, self.backup.export_result),
+                {
+                    key: value
+                    for key, value in self.controller.export_backup(
+                        {"output_dir": str(output_dir)}
+                    )[1].items()
+                    if key != "exported_at"
+                },
+                self.backup.export_result,
             )
             self.controller.export_document(
                 {"source_id": "pdf-one", "output_dir": str(output_dir)}
