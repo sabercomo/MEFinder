@@ -254,6 +254,11 @@ def main(argv: list[str] | None = None) -> int:
         if not versions:
             parser.error(f"no built DMG artifacts found in {args.release_dir}")
         version = versions[-1]
+        print(
+            f"warning: defaulting to newest built version {version}; "
+            "confirm it is actually published on GitHub Releases "
+            "(local builds of unreleased versions also live in release/)"
+        )
     if version not in versions:
         raise SystemExit(
             f"version {version!r} has no built DMG in {args.release_dir}; found: {versions}"

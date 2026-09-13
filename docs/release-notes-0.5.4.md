@@ -1,5 +1,7 @@
 # MEFinder 0.5.4
 
+2026-09-13：新增 Homebrew Cask tap 分发渠道（`brew tap sabercomo/mefinder` + `brew install --cask mefinder`），tap 当前提供已发布的 v0.5.3 双架构包；0.5.4 正式发布后由 `scripts/update_homebrew_tap.py` 同步 cask。纯分发工具与文档，未改产品代码，未创建 tag/Release。
+
 2026-09-13：再次重建 macOS arm64 桌面包（构建源码 `005ab65`，干净 worktree）：组件运行时位置修复进入安装包——macOS 切换 OneDrive/同步书库后，OCR 配置与安装、对齐模型管理与计算统一解析到本机稳定目录，复用已下载组件，不再误报未安装；全量 2229 项 unittest 通过（22 项条件跳过），构建门禁通过。下列新摘要取代同日早前构建（`50cd0813…`）；工作区另有未提交前端改动，未入包。未正式发布，等待安装验收。
 
 2026-09-13：源码修复 macOS 切换 OneDrive 书库后 OCR 与对齐模型误报未安装：两类组件统一使用本机稳定目录，复用原有下载；真实离线推理与 OCR 启动通过。本项尚未进入下列桌面包。详见 `issues/note-synced-library-components.md`。
@@ -13,6 +15,12 @@
 2026-09-12：架构边界复核修复已通过源码验收（2156 项 unittest，22 项条件跳过），隐藏原生原型及同书库三轮性能复测完成；本轮未重建或发布桌面包。
 
 2026-09-11：macOS arm64 测试包已加入打开已有资料库、阅读及数据位置设置修订，并同步 Windows 迁移缓存修复；全量测试及包校验通过，等待用户安装验收，未正式发布本轮修订。
+
+## 2026-09-13 — Homebrew Cask tap 分发
+
+- 新增自建 tap `sabercomo/homebrew-mefinder`：`Casks/mefinder.rb` 指向 GitHub Releases 公开资产，双架构自动选择，`livecheck` 跟踪新版本，刻意不带 `zap`（卸载保留文献数据）；应用未经公证，首次启动需在系统设置批准一次，之后的 `brew upgrade` 会延续已批准状态。
+- `scripts/update_homebrew_tap.py` 从 `release/` 渲染 cask、交叉校验 `.sha256.txt` sidecar、支持 `--tap-repo` 同步 tap 仓库；`tests/test_homebrew_tap_cask.py` 18 项守卫钉死「入库 cask == 脚本渲染输出 == 已发布 digest」三方一致（`7422c88`）。
+- tap 当前提供 v0.5.3；0.5.4 正式发布（创建 tag/Release）后运行脚本同步 cask 与金样基线。
 
 ## 2026-09-13 — 组件运行时位置修复入包(第二次重建)
 
