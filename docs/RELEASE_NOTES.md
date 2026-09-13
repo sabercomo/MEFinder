@@ -1,6 +1,6 @@
 # 文献原句定位器 v0.5.4
 
-> **2026-09-13：macOS 双架构包第三次重建（源码 `c71d308`，各 2275 项测试通过），设置页讨论稿定稿、对齐模型可删除与 MCP sidecar 清扫保护均已入包；尚未正式发布本轮修订。**
+> **2026-09-13：macOS 双架构包第四次重建（源码 `965a427`，各 2277 项测试通过），解析统计占比构成条与对齐模型状态判定修复入包；尚未正式发布本轮修订。**
 
 迁移逻辑跳过运行中的 `runtime/webview-data` 缓存，避免文件锁定或缓存变化导致复制失败。下方 Windows 构建记录来自远端 `adb810f`，不代表已包含其后的 Mac 与本轮新增功能。
 
@@ -15,19 +15,16 @@
 
 ## macOS arm64 本轮测试修订
 
+2026-09-13 第四次重建（源码 `965a427`，合入 main 两个设置更新）：解析统计占比改 100% 构成条 + 图例（`ff9aca2`）、对齐模型以磁盘文件为准判状态并补「校验中」阶段（`d551a7d`）。arm64 2277 项 unittest 通过（22 skip）；x86_64 同源 Rosetta 构建，2277 项（27 skip）通过，反查纯 x86_64、最低系统 12.0。取代同日第三次重建四件套（`2288cc00…`/`d023f5f8…`/`372f4f6f…`/`cf7a99fa…`）。
+
+| 本地测试文件 | SHA-256 |
+|---|---|
+| `MEFinder-v0.5.4-macos-arm64.dmg` | `e6012a0fface38cca4bfdc25487856d17cd3d8bb32b18fb5ef239c1debb2122b` |
+| `MEFinder-v0.5.4-macos-arm64.zip` | `0012beb995a2f9da29bf20ebc2929e749405e2a8a534acef509126466aca60af` |
+| `MEFinder-v0.5.4-macos-x86_64.dmg` | `f697671f9164dc552b018ceb797a800335183503ac498b0a7c639ba13343878e` |
+| `MEFinder-v0.5.4-macos-x86_64.zip` | `e9a176265fe607b852de2e23c69d965f59a6d657b8dbca8867cb2f10df3c882d` |
+
 2026-09-13 第三次重建（源码 `c71d308`）：新增设置页讨论稿定稿系列（阅读与检索去重复与文案统一、滑杆自绘与已选区间填充、MinerU 账号与其他解析 API 行式布局、解析统计「占比」列与条形、数据备份「上次导出」、界面文案句末去句号）、对齐模型可删除（替代「管理本地文件」）、MCP sidecar `_MEI` 临时目录清扫移植与 macOS 活实例锁保护。2275 项 unittest 通过（22 skip），Ruff、Node、严格签名、MCP 冒烟与 ZIP/DMG 校验通过；取代同日第二次重建（`bf371e27…`/`f372872e…`）。
-
-| 本地测试文件 | SHA-256 |
-|---|---|
-| `MEFinder-v0.5.4-macos-arm64.dmg` | `2288cc0077f6021269162ea3aea3561ceefe70949b2b25aa5258ac7ca6c2fd05` |
-| `MEFinder-v0.5.4-macos-arm64.zip` | `d023f5f8fbd1516467653268b38297c35849c5d35f1bf096c62ef45c8d6828ce` |
-
-macOS Intel（x86_64）本轮测试修订（同源 `c71d308`，Apple Silicon 上经 Rosetta 构建）：反查主程序与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion=12.0`；全量 2275 项 unittest 通过（27 skip，含架构相关条件跳过），ZIP/DMG 校验通过。
-
-| 本地测试文件 | SHA-256 |
-|---|---|
-| `MEFinder-v0.5.4-macos-x86_64.dmg` | `372f4f6f7475b17c8c225dce655c0e53c6330594e3a2585e5682302853f7d8ac` |
-| `MEFinder-v0.5.4-macos-x86_64.zip` | `cf7a99fa8451f9a40d7b3a8a88171ab90d53146271b64e37ff785570753c35ef` |
 
 2026-09-13 第二次重建（源码 `005ab65`）：新增组件运行时位置修复——切换 OneDrive/同步书库后，本地 OCR 与对齐模型统一使用本机稳定目录，复用已下载组件，不再误报未安装；并包含设置界面五主题（自绘下拉、行式布局、MinerU 账号状态与本地 OCR 六态如实呈现）、macOS 外观模式卡塌陷修复、对齐期间搜索保持可用（503 修复）。2229 项 unittest 通过（22 skip），Ruff、Node、严格签名、MCP 冒烟与 ZIP/DMG 校验通过。
 
