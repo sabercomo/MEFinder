@@ -142,25 +142,58 @@ def link_set_diff(links_a: list[dict], links_b: list[dict]) -> dict:
 
 
 def verdict(vector_stats: dict, link_diff: dict) -> dict:
-    """Adoption recommendation for batch16 — never auto-applies a default."""
+    """Report observed facts, differences and review items — never auto-adopt.
 
-    if link_diff.get("identical_structure") and link_diff.get("flipped_count", 0) == 0:
-        if vector_stats.get("bitwise_equal_fraction") == 1.0:
-            level = "safe-bitwise-identical"
-            note = "逐向量完全一致、链接身份完全一致:batch16 数值等价,可采纳(仍需人评估峰值收益是否值得)。"
-        elif vector_stats.get("rows_above_noise", 1) == 0:
-            level = "safe-within-noise-but-cache-version"
-            note = ("向量仅有浮点末位差异、链接身份一致:数值可接受,但缓存向量非逐位相同,"
-                    "采纳前须决定是否 bump EMBEDDING_RUNTIME_VERSION(否则新旧 batch 的缓存向量混用)。")
-        else:
-            level = "review-vectors-changed-links-stable"
-            note = "存在超噪声阈值的向量差异但链接身份仍一致:需人评估是否影响其它下游(定位/复用),不得仅凭'链接没变'采纳。"
+    This intentionally does NOT declare "safe" from any self-chosen numeric
+    threshold. It records exactly what changed between batch 64 and 16 and always
+    hands the adoption decision to a human, which additionally requires
+    representative multi-pair samples, a quality gate, and a cache-version
+    (EMBEDDING_RUNTIME_VERSION) decision. Score differences (confidence/cost) are
+    never ignored: any non-zero score delta is a change, even if link structure
+    and vectors are otherwise identical.
+    """
+
+    structure_identical = bool(
+        link_diff.get("identical_structure") and link_diff.get("flipped_count", 0) == 0
+    )
+    conf_delta = float(link_diff.get("max_confidence_delta") or 0.0)
+    cost_delta = float(link_diff.get("max_cost_delta") or 0.0)
+    scores_identical = conf_delta == 0.0 and cost_delta == 0.0
+    vectors_bitwise_identical = vector_stats.get("bitwise_equal_fraction") == 1.0
+
+    changes: list[str] = []
+    if not structure_identical:
+        changes.append("alignment-structure")  # links added/removed/flipped
+    if not scores_identical:
+        changes.append("scores")  # confidence/cost differ (never ignored)
+    if not vectors_bitwise_identical:
+        changes.append("vectors-not-bitwise-identical")
+
+    outputs_fully_identical = structure_identical and scores_identical and vectors_bitwise_identical
+    if "alignment-structure" in changes:
+        recommendation = "reject-alignment-output-changed"
+    elif changes:
+        recommendation = "manual-review-required"
     else:
-        level = "not-safe-links-changed"
-        note = ("链接身份发生变化(新增/消失/翻转):batch16 改变了对齐结果,"
-                "**不得**据'差异很小'采纳,须逐条核对代表样本与质量门槛。")
-    return {"recommendation": level, "note": note,
-            "do_not_change_product_default": True, "current_default_batch": 64}
+        recommendation = "no-observed-change-on-this-pair"
+    return {
+        "recommendation": recommendation,
+        "observed_changes": changes,
+        "outputs_fully_identical": outputs_fully_identical,
+        "structure_identical": structure_identical,
+        "scores_identical": scores_identical,
+        "max_confidence_delta": conf_delta,
+        "max_cost_delta": cost_delta,
+        "vectors_bitwise_identical": vectors_bitwise_identical,
+        # Adoption is never granted by this tool; these are the human gates.
+        "do_not_change_product_default": True,
+        "current_default_batch": 64,
+        "adoption_requires": [
+            "representative multi-pair / boundary samples (this is one pair)",
+            "a quality gate on alignment/locate outcomes",
+            "an EMBEDDING_RUNTIME_VERSION cache-version decision if vectors differ",
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -225,32 +258,28 @@ def _forced_batch_text_embedding(forced_batch: int):
     return _Pinned
 
 
-def _segment_texts(connection: sqlite3.Connection, run_id: str) -> list[str]:
-    """Pivot then target segment texts, in embedding order, for a run."""
+def _segment_set_texts(connection: sqlite3.Connection, set_id: str) -> list[str]:
+    """Segment texts of one set, in the exact order the model embeds them."""
 
-    run = connection.execute(
-        "SELECT pivot_segment_set_id, target_segment_set_id FROM alignment_runs "
-        "WHERE alignment_run_id = ?", (run_id,),
-    ).fetchone()
-    texts: list[str] = []
-    for set_id in run:
-        texts.extend(
-            str(row[0]) for row in connection.execute(
-                "SELECT text_raw FROM text_segments WHERE segment_set_id = ? ORDER BY order_index",
-                (set_id,),
-            )
+    return [
+        str(row[0]) for row in connection.execute(
+            "SELECT text_raw FROM text_segments WHERE segment_set_id = ? ORDER BY order_index",
+            (set_id,),
         )
-    return texts
+    ]
 
 
 def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cache
+    import hashlib
+    import subprocess
+
     import numpy as np
     from unittest import mock
 
     from src.me_finder import semantic_alignment
     from src.me_finder import text_alignment as text_alignment_module
     from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
-    from src.me_finder.embedding_runtime import begin_embedding_run
+    from src.me_finder.embedding_runtime import begin_embedding_run, embedding_thread_count
 
     model = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID]
 
@@ -266,16 +295,28 @@ def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cach
         source_model = arguments.models / model.fastembed_cache_dirname
         shutil.copytree(source_model, cache_dir / model.fastembed_cache_dirname)
 
-        def align(batch: int) -> str:
+        # Identity of the model files actually used (one digest over the fileset).
+        model_fileset = hashlib.sha256()
+        model_file_count = 0
+        for path in sorted(source_model.rglob("*")):
+            if path.is_file():
+                model_fileset.update(str(path.relative_to(source_model)).encode())
+                model_fileset.update(path.read_bytes())
+                model_file_count += 1
+
+        def run_alignment(batch: int) -> dict:
             begin_embedding_run()
-            # The .npy vector cache is keyed by (text, model_id), NOT by batch
-            # size, so it MUST be cleared between batches — otherwise batch 16
-            # would silently reuse batch 64's vectors and the comparison would
-            # be a tautology. force=True only bypasses run reuse, not the cache.
+            # Clear the .npy cache before EACH alignment: it is keyed by
+            # (text, model_id, runtime_version), NOT by batch size, so without
+            # clearing, batch 16 would reuse batch 64's vectors and the whole
+            # comparison would be a tautology. Cleared -> fresh inference at this
+            # batch. (force=True only bypasses run reuse, not the vector cache.)
             vectors_dir = cache_dir / "document-vectors"
             if vectors_dir.is_dir():
                 for cached in vectors_dir.glob("*.npy"):
                     cached.unlink()
+            assert not (vectors_dir.is_dir() and list(vectors_dir.glob("*.npy"))), \
+                "vector cache not empty before alignment — reuse would falsify the comparison"
             with mock.patch.object(
                 __import__("fastembed"), "TextEmbedding",
                 _forced_batch_text_embedding(batch),
@@ -285,39 +326,56 @@ def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cach
                     force=True, model_cache_dir=cache_dir, embedding_model_id=model.id,
                 )
             with sqlite3.connect(db) as connection:
-                return _latest_run_id(connection)
+                run_id = _latest_run_id(connection)
+                links = read_links(connection, run_id)
+                pivot_set, target_set = connection.execute(
+                    "SELECT pivot_segment_set_id, target_segment_set_id "
+                    "FROM alignment_runs WHERE alignment_run_id = ?", (run_id,),
+                ).fetchone()
+                pivot_texts = _segment_set_texts(connection, pivot_set)
+                target_texts = _segment_set_texts(connection, target_set)
+            # The ACTUAL per-segment vectors this alignment used: the production
+            # embed path dedups texts across pivot+target, infers once, then
+            # backfills per segment into these .npy files. Reading them (not a
+            # separate raw re-embed) reflects the real inference/backfill and the
+            # real batch grouping.
+            seg_texts = list(pivot_texts) + list(target_texts)
+            seg_vectors = np.concatenate([
+                np.load(semantic_alignment._sequence_cache_path(pivot_texts, cache_dir, model_id=model.id)),
+                np.load(semantic_alignment._sequence_cache_path(target_texts, cache_dir, model_id=model.id)),
+            ], axis=0)
+            return {"run_id": run_id, "links": links, "seg_texts": seg_texts, "seg_vectors": seg_vectors}
 
-        # 1) full alignment with each batch, then full link comparison.
-        run64 = align(64)
-        with sqlite3.connect(db) as connection:
-            links64 = read_links(connection, run64)
-            texts = _segment_texts(connection, run64)
-        run16 = align(16)
-        with sqlite3.connect(db) as connection:
-            links16 = read_links(connection, run16)
-
-        # 2) per-vector comparison of the identical text list at both batches.
-        def embed(batch: int):
-            begin_embedding_run()
-            with mock.patch.object(
-                __import__("fastembed"), "TextEmbedding",
-                _forced_batch_text_embedding(batch),
-            ):
-                provider = semantic_alignment.FastEmbedEmbeddingProvider(
-                    semantic_alignment.embedding_model_config(model.id)
-                )
-                # cache_dir must be the model store (where the .onnx lives), the
-                # same one the alignments used; the provider returns vectors
-                # directly (no .npy caching at this layer).
-                return np.asarray(provider(texts, cache_dir=cache_dir))
-
-        vec64 = embed(64)
-        vec16 = embed(16)
-        vstats = vector_diff_stats(vec64, vec16, lengths=[len(t) for t in texts])
-        ldiff = link_set_diff(links64, links16)
+        r64 = run_alignment(64)
+        r16 = run_alignment(16)
+        assert r64["seg_texts"] == r16["seg_texts"], "segmentation differed between runs"
+        seg_texts = r64["seg_texts"]
+        vstats = vector_diff_stats(
+            r64["seg_vectors"], r16["seg_vectors"], lengths=[len(t) for t in seg_texts]
+        )
+        ldiff = link_set_diff(r64["links"], r16["links"])
+        try:
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=REPO, text=True
+            ).strip()
+        except Exception:
+            revision = None
         return {
             "model_id": model.id,
-            "text_count": len(texts),
+            "provenance": {
+                "code_revision": revision,
+                "model_fileset_sha256": model_fileset.hexdigest(),
+                "model_file_count": model_file_count,
+                "embedding_thread_count": embedding_thread_count(),
+                "segment_count": len(seg_texts),
+                "unique_text_count": len(dict.fromkeys(seg_texts)),
+                "input_identity_sha256": hashlib.sha256(
+                    "\0".join(seg_texts).encode("utf-8")
+                ).hexdigest(),
+                "vectors_source": "actual per-segment .npy each alignment wrote (production dedup+infer+backfill), not a separate raw re-embed",
+                "cache_state": "document-vectors cleared before each alignment; fresh inference per batch",
+                "execution_order": ["batch64", "batch16"],
+            },
             "vector_diff": vstats,
             "link_diff": ldiff,
             "verdict": verdict(vstats, ldiff),

@@ -90,21 +90,48 @@ class LinkSetDiffTests(unittest.TestCase):
 
 
 class VerdictTests(unittest.TestCase):
-    def _vec(self, frac, above):
-        return {"bitwise_equal_fraction": frac, "rows_above_noise": above}
+    def _vec(self, frac):
+        return {"bitwise_equal_fraction": frac}
 
-    def test_bitwise_identical_is_safe(self) -> None:
-        v = verdict(self._vec(1.0, 0), {"identical_structure": True, "flipped_count": 0})
-        self.assertEqual(v["recommendation"], "safe-bitwise-identical")
+    def _links(self, structure=True, flipped=0, conf=0.0, cost=0.0):
+        return {"identical_structure": structure, "flipped_count": flipped,
+                "max_confidence_delta": conf, "max_cost_delta": cost}
+
+    def test_never_auto_declares_safe_even_when_fully_identical(self) -> None:
+        # Bitwise-identical vectors + identical structure + identical scores:
+        # the tool reports "no observed change on THIS pair" but still refuses to
+        # grant adoption (that needs multi-pair samples + quality gate + cache
+        # decision) — it never says "safe/adopt".
+        v = verdict(self._vec(1.0), self._links())
+        self.assertEqual(v["recommendation"], "no-observed-change-on-this-pair")
+        self.assertTrue(v["outputs_fully_identical"])
         self.assertTrue(v["do_not_change_product_default"])
+        self.assertNotIn("safe", v["recommendation"])
+        self.assertTrue(v["adoption_requires"])
 
-    def test_within_noise_flags_cache_version(self) -> None:
-        v = verdict(self._vec(0.0, 0), {"identical_structure": True, "flipped_count": 0})
-        self.assertEqual(v["recommendation"], "safe-within-noise-but-cache-version")
+    def test_significant_score_change_is_not_safe_even_if_vectors_and_links_match(self) -> None:
+        # The key regression the audit demanded: identical vectors AND identical
+        # link structure, but confidence moved 0.05 -> must NOT read as safe.
+        v = verdict(self._vec(1.0), self._links(conf=0.05))
+        self.assertEqual(v["recommendation"], "manual-review-required")
+        self.assertFalse(v["outputs_fully_identical"])
+        self.assertFalse(v["scores_identical"])
+        self.assertIn("scores", v["observed_changes"])
 
-    def test_changed_links_is_not_safe(self) -> None:
-        v = verdict(self._vec(1.0, 0), {"identical_structure": False, "flipped_count": 3})
-        self.assertEqual(v["recommendation"], "not-safe-links-changed")
+    def test_cost_change_alone_is_flagged(self) -> None:
+        v = verdict(self._vec(1.0), self._links(cost=0.02))
+        self.assertEqual(v["recommendation"], "manual-review-required")
+        self.assertIn("scores", v["observed_changes"])
+
+    def test_non_bitwise_vectors_require_review(self) -> None:
+        v = verdict(self._vec(0.96), self._links())
+        self.assertEqual(v["recommendation"], "manual-review-required")
+        self.assertIn("vectors-not-bitwise-identical", v["observed_changes"])
+
+    def test_changed_link_structure_is_rejected(self) -> None:
+        v = verdict(self._vec(1.0), self._links(structure=False, flipped=3))
+        self.assertEqual(v["recommendation"], "reject-alignment-output-changed")
+        self.assertIn("alignment-structure", v["observed_changes"])
 
 
 class ReadLinksTests(unittest.TestCase):

@@ -1,28 +1,31 @@
 # 嵌入 batch 64 vs 16 前置实验结论(逐向量 + 完整对齐链接身份)
 
-2026-09-13。工具修复后,在机器安静、**本地模型缓存就位**(`~/Library/Application Support/MEFinder/runtime/components/text-alignment/models`)时执行 `scripts/batch_size_compare.py`(真实 MiniLM,同模型文件/同文本与顺序/私有拷贝缓存,batch 之间清空 `document-vectors/*.npy` 强制各自重算)。真实对 group `document-group-c7e0…`,pivot/target = manifest `alignment_request`,3948 段文本(2047+1901)。数据:[JSON](batch-size-compare-2026-09-13.json)。
+2026-09-13。机器安静、本地模型缓存就位(`~/Library/Application Support/MEFinder/runtime/components/text-alignment/models`)时执行 `scripts/batch_size_compare.py`。真实对 group `document-group-c7e0…`、pivot/target = manifest `alignment_request`。数据:[JSON](batch-size-compare-2026-09-13.json)。
 
-> **更正**:此前报告称"本地无模型缓存、实验未执行"——错误。模型在**真实 app 运行时目录**(`runtime/components/text-alignment/models`)而非我先前搜索的 `.codex-tmp`/HF/仓库 `components`。实验现已执行,以本报告为准。
+> **两处更正(以本版为准)**:
+> 1. 此前称"本地无模型缓存、实验未执行"——**错误**。模型在真实 app 运行时目录,非我先前搜索的 `.codex-tmp`/HF/仓库 `components`。
+> 2. 此前逐向量比较**另行把 3948 段原文直接交给 provider**,但生产 `embed_text_sequences` 会先**去重**(本对 3948 段→**3837 唯一**)再推理、按段回填;重复项改变 batch 分组,故旧的"96.5%逐位一致"不代表生产对齐所用向量。**现改为直接读取两次真实对齐各自写入的 `document-vectors/*.npy`**(即生产 去重→推理→回填 后的**实际逐段向量**),按稳定段序比较。
 
-## 结论:batch16 数值上与 batch64 近乎等价,对齐结果完全一致;但**不建议凭此单对证据直接改默认**
+## 结论:verdict = **manual-review-required**(工具不自动判定"可采纳")
 
-### 完整对齐链接身份(非只比 967 计数)
-- 链接数 967 = 967;**结构完全一致**(`identical_structure=true`):每条链接的 order、pivot/target 成员段、review_status、anchor 全部相同;新增/消失/翻转均为 **0**。
-- 分数逐条差异:`max_confidence_delta=8.7e-5`、`max_cost_delta=1.0e-4`——可忽略。
+区分"结构一致"与"输出完全一致":本对**链接结构完全一致,但 confidence/cost 有极小非零差异、向量非逐位相同**,因此不是"完全一致",工具不给"safe"。
 
-### 逐向量(3948 段,dim 384)
-- 逐位相同比例 **96.5%**(3810/3948);其余 3.5% 有微小差异。
-- 最大单元素绝对差 **3.26e-4**,平均 1.9e-6,**最小逐行余弦 0.99999982**(方向几乎不变)。
-- 按文本长度分桶:**短文本(<20 字,397 段)逐位完全一致(max_abs=0)**;差异只出现在中/长文本(medium 3.26e-4 / long 3.18e-4)——与 batch 边界的分块/padding 数值路径一致。
-- 超过 1e-4 保守噪声阈值的行:138 / 3948。
+### 完整对齐链接(结构 + 成员 + 状态 + 锚 + 分数,非只比 967 计数)
+- 967 = 967;`identical_structure=true`:每条链接 order、pivot/target 成员段、review_status、anchor_key 全一致;新增/消失/翻转 = 0。
+- **分数不忽略**:`max_confidence_delta=8.68e-5`、`max_cost_delta=1.02e-4`——极小但**非零**,故 `scores_identical=false`、`outputs_fully_identical=false`。
 
-### 采纳判断(是否值得 batch16)
-- **值得作为候选**:对齐输出在本对上**完全一致**,向量余弦≈1,叠加此前 batch 对照的**峰值 −~258 MiB(−21%)**内存收益(见 [内存报告](memory-alignment-export-2026-09-12.md))。
-- **但不得凭本单对"差异很小"直接改默认**,须先满足(与本报告工具已支持):
-  1. **多对/多样本泛化**:本轮仅一对真实文献。需对更多代表性对(不同语言、长短分布、边界样本)重跑 `batch_size_compare.py`,确认"链接身份一致"稳定成立——单对一致不等于全库一致。
-  2. **缓存版本语义**:向量**非逐位相同**(3.5% 行有 ~3e-4 差异)。若把默认改到 16,新算向量与已缓存的 batch-64 `.npy` 会有微差;必须决定是否 bump `EMBEDDING_RUNTIME_VERSION`(否则同一 model_id 下新旧 batch 向量在 `document-vectors` 缓存里混用)。
-  3. **下游可翻转性**:~3e-4 的向量漂移在本对未改变任何链接,但需确认它不会在其它对的**定位(locate)/复用(reuse)**边界处翻转结果——这正是 verdict 标为 `review-vectors-changed-links-stable`(而非 `safe-bitwise-identical`)的原因。
-- **产品默认维持 batch 64,本报告不改任何代码。** 采纳与否是后续独立决策,须补 1–3 的证据后再定。
+### 逐向量(实际逐段向量,3948 段/3837 唯一,dim 384)
+- 逐位相同比例 **96.8%**(3822/3948);`min_cosine 0.99999982`;`max_abs 3.5e-4`;`mean_abs 1.7e-6`。
+- 按长度分桶:**短文本(<20 字,397 段)逐位完全一致**;差异只在中/长文本(medium 3.22e-4 / long 3.54e-4)——与 batch 边界分块/padding 数值路径一致。
+
+### verdict 口径(修正后)
+- 工具**只报告观察事实、差异与待审查项,绝不凭自设阈值自动判"可采纳"**;confidence/cost 任何非零差异都计为变化(即使向量与结构否则一致)。
+- 本对:`observed_changes = [scores, vectors-not-bitwise-identical]` → `recommendation = manual-review-required`;`do_not_change_product_default = true`。
+- **是否采纳 batch16 需人决策**,且须满足:①代表性多对/边界样本(本轮仅一对);②对齐/定位结果的质量门槛;③向量非逐位相同→是否 bump `EMBEDDING_RUNTIME_VERSION` 的缓存版本决策(否则同一 model_id 下新旧 batch 向量在 `document-vectors` 混用)。
+- **产品默认维持 batch 64,本轮不改任何产品代码,不据"差异很小"采纳。** 内存收益(此前 batch 对照峰值 −~21%)是候选动机,但不构成采纳依据。
+
+## 记录的执行身份(provenance,写入 JSON)
+- code_revision `ac51698`;model_fileset_sha256(13 个模型文件的合并摘要);embedding_thread_count **3**;segment_count **3948**、unique_text_count **3837**;input_identity_sha256(段文本拼接);cache_state="每次对齐前清空 document-vectors,各 batch 独立新鲜推理"(脚本断言清空后为空,杜绝 .npy 复用);execution_order=[batch64, batch16];vectors_source="各对齐实际写入的逐段 .npy(生产去重+推理+回填),非另行原文重嵌入"。用户原始库/模型/缓存未改(私有拷贝到临时目录)。
 
 ## 复现
 
@@ -36,4 +39,4 @@ NO_PROXY=localhost,127.0.0.1 $PY scripts/batch_size_compare.py \
   --models "$MODELS" --output reports/batch-size-compare-2026-09-13.json
 ```
 
-纯比较逻辑(逐向量/完整链接/verdict)由 `tests/test_batch_size_compare.py` 覆盖;模型运行环境:fastembed 对该模型给出"mean pooling 而非 CLS"的 UserWarning(两 batch 同环境,不影响对比)。
+纯比较逻辑(逐向量/完整链接/verdict,含"向量与结构一致但分数变化仍不 safe"的复现用例)由 `tests/test_batch_size_compare.py` 覆盖。fastembed 对该模型给"mean pooling 而非 CLS"的 UserWarning(两 batch 同环境,不影响对比)。**本轮只跑当前文献对,未扩展全库。**
