@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,6 +100,36 @@ class ManagedEmbeddingModels:
                 pass
         return max(blob_bytes, archive_bytes)
 
+    def _delete_model_files(self, model_id: str) -> int:
+        """Remove one model's cache directory, archive and receipt.
+
+        Returns the bytes actually freed, so the UI can state the real number
+        instead of the catalog estimate.
+        """
+
+        model = embedding_model_config(model_id)
+        freed = 0
+        targets = [self._cache_dir / model.fastembed_cache_dirname]
+        if model.fastembed_archive_name:
+            targets.append(self._cache_dir / model.fastembed_archive_name)
+        for target in targets:
+            if target.is_dir():
+                for path in target.rglob("*"):
+                    try:
+                        if path.is_file() and not path.is_symlink():
+                            freed += path.stat().st_size
+                    except FileNotFoundError:
+                        continue
+                shutil.rmtree(target, ignore_errors=True)
+            elif target.is_file():
+                try:
+                    freed += target.stat().st_size
+                except FileNotFoundError:
+                    pass
+                target.unlink(missing_ok=True)
+        self._receipt_path(model_id).unlink(missing_ok=True)
+        return freed
+
     def summary(self) -> Dict[str, object]:
         with self._lock:
             models = []
@@ -141,8 +172,20 @@ class ManagedEmbeddingModels:
         model_id = str(payload.get("model_id") or "")
         embedding_model_config(model_id)
         action = str(payload.get("action") or "")
-        if action != "download":
+        if action not in {"download", "delete"}:
             raise ManagedEmbeddingModelsError("不支持的译本对齐模型操作。")
+        if action == "delete":
+            with self._lock:
+                state = self._states[model_id]
+                if state.thread is not None and state.thread.is_alive():
+                    raise ManagedEmbeddingModelsError("该译本对齐模型正在下载，先取消或等待完成。")
+                freed = self._delete_model_files(model_id)
+                state.state = "not_installed"
+                state.message = "模型文件已删除"
+                state.error = ""
+                result = self.summary()
+            result["freed_bytes"] = freed
+            return result
         with self._lock:
             state = self._states[model_id]
             if state.thread is not None and state.thread.is_alive():

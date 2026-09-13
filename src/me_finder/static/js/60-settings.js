@@ -890,7 +890,11 @@
         progress.hidden = true;
         progress.classList.remove('indeterminate');
         if (progressFill) progressFill.style.width = '100%';
-        button.hidden = true;
+        button.hidden = false;
+        button.disabled = false;
+        button.textContent = '删除模型';
+        button.classList.add('danger');
+        button.onclick = function() { deleteAlignmentModel(model.id, button); };
       } else {
         state.className = 'settings-status' + (model.state === 'failed' ? ' warning' : '');
         state.textContent = model.state === 'failed' ? '下载失败' : '未下载';
@@ -901,6 +905,8 @@
         button.hidden = false;
         button.disabled = false;
         button.textContent = model.state === 'failed' ? '重试下载' : '下载安装';
+        button.classList.remove('danger');
+        button.onclick = function() { downloadAlignmentModel(model.id, button); };
       }
     });
     var selected = component.models.find(function(model) {
@@ -959,6 +965,38 @@
       renderAlignmentModelComponent(data);
     } catch (e) {
       showToast('译本对齐模型下载失败：' + e.message, 'danger');
+      loadAlignmentModelComponent();
+    }
+  }
+
+  async function deleteAlignmentModel(modelId, button) {
+    var component = settingsStore.alignmentModelComponent || {};
+    var model = (component.models || []).find(function(item) { return item.id === modelId; });
+    var name = (model && model.display_name) || '该模型';
+    var isCurrent = modelId === settingsStore.currentAlignmentEmbeddingModel;
+    var consequence = isCurrent
+      ? '这是当前使用的对齐模型，删除后需要重新下载才能继续运行对齐。已有对照不受影响。'
+      : '删除后需要重新下载才能用它运行对齐。已有对照不受影响。';
+    if (!await showAppConfirm('将删除「' + name + '」的本地模型文件。' + consequence, {
+      title: '删除模型文件',
+      confirmText: '删除',
+      tone: 'danger'
+    })) return;
+    if (button) { button.disabled = true; button.textContent = '删除中…'; }
+    try {
+      var resp = await fetch('/api/text-alignment/models', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model_id: modelId, action: 'delete'})
+      });
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
+      renderAlignmentModelComponent(data);
+      // 后端回报实际释放的字节数，不用目录里的估算值冒充
+      showToast('已删除「' + name + '」的模型文件' + (data.freed_bytes
+        ? '，释放 ' + formatFileSize(data.freed_bytes) : ''));
+    } catch (e) {
+      showToast('删除模型文件失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
   }
@@ -1627,6 +1665,7 @@
   global.setAlignmentEmbeddingModel = setAlignmentEmbeddingModel;
   global.loadAlignmentModelComponent = loadAlignmentModelComponent;
   global.downloadAlignmentModel = downloadAlignmentModel;
+  global.deleteAlignmentModel = deleteAlignmentModel;
   global.setDocumentExportMode = setDocumentExportMode;
   global.loadPreferences = loadPreferences;
   global.setScriptFolding = setScriptFolding;

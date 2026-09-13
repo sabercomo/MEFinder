@@ -482,10 +482,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   左侧；本地 OCR 顶部提示框改为折叠区，下载按钮降为次要。
     # 0.5.4 解析统计补「占比」列与条形（按页数，与总览同口径）。
     # 0.5.4 数据备份显示「上次导出」，记录由后端在导出成功后写入本机偏好。
+    # 0.5.4 已下载的对齐模型给出「删除模型」入口（后端 delete 动作）。
     BASELINE_SHA256 = (
-        "bfe705066a15ec04b1f8d70b04eb9040be48ff89864081b2c9327a49711fb94c"
+        "d58fd7220f01355b6aa2097b727757eb49fa9f60a03c5ee80e12723f5f99a14b"
     )
-    BASELINE_BYTES = 1111344
+    BASELINE_BYTES = 1113369
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
