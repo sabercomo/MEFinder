@@ -53,6 +53,9 @@ class ReaderWindowTests(unittest.TestCase):
             panel.index('aria-label="正文排版"'),
         )
 
+    @unittest.skipUnless(
+        importlib.util.find_spec("webview"), "pywebview unavailable"
+    )
     def test_close_notification_uses_real_bridge_without_reply_to_destroyed_window(self):
         from webview.state import State
         from webview.util import js_bridge_call

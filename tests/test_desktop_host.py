@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from src.me_finder.desktop_host import PywebviewDesktopHost
@@ -46,13 +48,20 @@ class PywebviewDesktopHostTests(unittest.TestCase):
         return host, window
 
     def test_scan_picker_uses_documents_and_multiple_selection(self) -> None:
-        host, window = self.build_host()
-        window.result = ["/tmp/文献", "/tmp/books"]
-        folders = host.choose_scan_directories()
+        # The default scan start is ~/Documents; the picker opens there when it
+        # exists (else the product falls back to home). Point at a real
+        # Documents dir so the assertion holds on CI hosts without ~/Documents.
+        with tempfile.TemporaryDirectory() as home:
+            documents = Path(home) / "Documents"
+            documents.mkdir()
+            host, window = self.build_host(scan_start_directory=documents)
+            window.result = ["/tmp/文献", "/tmp/books"]
+            folders = host.choose_scan_directories()
         self.assertEqual(folders, ["/tmp/文献", "/tmp/books"])
         kind, options = window.calls[0]
         self.assertEqual(kind, FakeFileDialog.FOLDER)
         self.assertTrue(options["allow_multiple"])
+        self.assertEqual(options["directory"], str(documents))
         self.assertIn("Documents", options["directory"])
 
     def test_data_directory_picker_requires_installed_app_root(self) -> None:
