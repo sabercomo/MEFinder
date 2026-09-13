@@ -5,6 +5,7 @@
 ## 安装
 
 ```bash
+brew trust sabercomo/mefinder   # 新版 Homebrew 要求先信任第三方 tap
 brew tap sabercomo/mefinder
 brew install --cask mefinder
 ```
@@ -18,6 +19,8 @@ brew update && brew upgrade --cask mefinder
 ## 说明
 
 - 同时提供 arm64（Apple Silicon）与 x86_64（Intel）两个架构的 DMG，安装时自动选择。
+- Homebrew 渠道要求 macOS 14 及以上（cask 取两架构较严门槛）；Intel 机若是 macOS 12–13，请到
+  [Releases](https://github.com/sabercomo/MEFinder/releases/latest) 直接下载 DMG 安装。
 - **首次启动**：当前安装包为 ad-hoc 签名、未经 Apple 公证。首次打开若被拦截，请在
   「系统设置 → 隐私与安全性 → 仍要打开」批准一次；之后的 `brew upgrade` 会延续已批准
   状态，无需重复操作。

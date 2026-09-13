@@ -172,10 +172,15 @@ def render_cask(version: str, arch_sha256: dict[str, str], repo_slug: str) -> st
     lines.append("  end")
     lines.append("")
 
+    # Homebrew refuses taps whose casks lack a platform gate: without it the
+    # Linux sha256 would be nil. The floor must cover every artifact's
+    # LSMinimumSystemVersion (arm64 build = Sonoma, Intel = Monterey), so the
+    # strictest one wins; Intel 12-13 users install the DMG manually.
+    lines.append("  depends_on macos: :sonoma")
     if len(ordered) == 1:
         arch = next(iter(ordered))
         lines.append(f"  depends_on arch: {BREW_DEPENDS_ARCH[arch]}")
-        lines.append("")
+    lines.append("")
 
     lines.append(f'  app "{CASK_APP_NAME}.app"')
     lines.append("end")

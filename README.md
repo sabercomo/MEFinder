@@ -133,11 +133,12 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 **Homebrew（可选）**：已安装 [Homebrew](https://brew.sh) 的用户可以用 Cask 安装并跟进更新：
 
 ```bash
+brew trust sabercomo/mefinder   # 新版 Homebrew 要求先信任第三方 tap
 brew tap sabercomo/mefinder
 brew install --cask mefinder
 ```
 
-之后用 `brew update && brew upgrade --cask mefinder` 升级。应用未经 Apple 公证：首次启动若被拦截，在「系统设置 → 隐私与安全性 → 仍要打开」批准一次即可，之后的升级会延续已批准状态。`brew uninstall --cask mefinder` 不影响文献数据。
+之后用 `brew update && brew upgrade --cask mefinder` 升级。Homebrew 渠道要求 macOS 14 及以上（两架构取较严门槛；Intel 机若是 macOS 12–13，请直接下载 DMG 安装）。应用未经 Apple 公证：首次启动若被拦截，在「系统设置 → 隐私与安全性 → 仍要打开」批准一次即可，之后的升级会延续已批准状态。`brew uninstall --cask mefinder` 不影响文献数据。
 
 桌面应用可在「设置 → 数据位置」打开已有 MEFinder 资料库（例如从另一台电脑同步的文件夹），或迁移当前资料到新位置。两种操作均在重启后生效；打开已有库不复制或覆盖资料。跨设备使用云盘库时，先退出另一端并等待同步完成。
 

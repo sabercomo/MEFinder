@@ -93,6 +93,9 @@ class HomebrewCaskDefinitionTests(unittest.TestCase):
     def test_cask_installs_app_bundle(self):
         self.assertIn('  app "MEFinder.app"', self.cask)
 
+    def test_cask_declares_macos_dependency(self):
+        self.assertIn('  depends_on macos: :sonoma', self.cask)
+
     def test_cask_has_no_zap_so_user_data_is_preserved(self):
         self.assertNotIn("zap", self.cask)
 
@@ -160,6 +163,7 @@ class UpdateHomebrewTapScriptTests(unittest.TestCase):
         self.assertIn('  sha256 "' + "a" * 64 + '"', rendered)
         self.assertIn("MEFinder-v#{version}-macos-arm64.dmg", rendered)
         self.assertIn("depends_on arch: :arm64", rendered)
+        self.assertIn('depends_on macos: :sonoma', rendered)
         self.assertNotIn('arch arm: "arm64", intel: "x86_64"', rendered)
 
     def test_render_cask_dual_arch_uses_interpolation(self):
@@ -172,6 +176,7 @@ class UpdateHomebrewTapScriptTests(unittest.TestCase):
         self.assertIn('sha256 arm:   "' + "a" * 64 + '",', rendered)
         self.assertIn('intel: "' + "b" * 64 + '"', rendered)
         self.assertIn("-macos-#{arch}.dmg", rendered)
+        self.assertIn('depends_on macos: :sonoma', rendered)
         self.assertNotIn("depends_on arch", rendered)
 
     def test_render_cask_rejects_bad_input(self):

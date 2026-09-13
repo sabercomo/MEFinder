@@ -18,8 +18,9 @@
 
 ## 2026-09-13 — Homebrew Cask tap 分发
 
-- 新增自建 tap `sabercomo/homebrew-mefinder`：`Casks/mefinder.rb` 指向 GitHub Releases 公开资产，双架构自动选择，`livecheck` 跟踪新版本，刻意不带 `zap`（卸载保留文献数据）；应用未经公证，首次启动需在系统设置批准一次，之后的 `brew upgrade` 会延续已批准状态。
+- 新增自建 tap `sabercomo/homebrew-mefinder`：`Casks/mefinder.rb` 指向 GitHub Releases 公开资产，双架构自动选择，`livecheck` 跟踪新版本，刻意不带 `zap`（卸载保留文献数据）；应用未经公证，首次启动需在系统设置批准一次，之后的 `brew upgrade` 会延续已批准状态。新版 Homebrew 需先 `brew trust sabercomo/mefinder`；Homebrew 渠道要求 macOS 14+（Intel 12–13 请手动下载 DMG）。
 - `scripts/update_homebrew_tap.py` 从 `release/` 渲染 cask、交叉校验 `.sha256.txt` sidecar、支持 `--tap-repo` 同步 tap 仓库；`tests/test_homebrew_tap_cask.py` 18 项守卫钉死「入库 cask == 脚本渲染输出 == 已发布 digest」三方一致（`7422c88`）。
+- cask 已在本机 Homebrew 7.0.0 通过 `brew style` 与 `brew audit --cask mefinder --online`（exit 0）：审计实测下载并校验产物，期间按产物真实 `LSMinimumSystemVersion`（arm64=Sonoma、x86_64=Monterey，取严）补 `depends_on macos: :sonoma`。
 - tap 当前提供 v0.5.3；0.5.4 正式发布（创建 tag/Release）后运行脚本同步 cask 与金样基线。
 
 ## 2026-09-13 — 组件运行时位置修复入包(第二次重建)

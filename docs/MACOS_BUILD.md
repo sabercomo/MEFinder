@@ -115,10 +115,15 @@ tap 只指向 GitHub Releases 的公开资产；更新通道在应用之外，�
 ### 用户侧使用
 
 ```bash
+brew trust sabercomo/mefinder   # 新版 Homebrew 要求先信任第三方 tap
 brew tap sabercomo/mefinder
 brew install --cask mefinder
 brew update && brew upgrade --cask mefinder
 ```
+
+Homebrew 渠道要求 macOS 14 及以上（cask 的 `depends_on macos` 取两架构产物中较严的
+`LSMinimumSystemVersion`：arm64=Sonoma、x86_64=Monterey）；Intel 机若是 macOS 12–13，
+请直接从 Releases 下载 DMG 安装。
 
 未公证包的首次启动仍需在「系统设置 → 隐私与安全性 → 仍要打开」批准一次；之后的
 `brew upgrade` 会延续已批准状态（Homebrew 升级时会把旧版本已批准的 Gatekeeper
@@ -150,6 +155,7 @@ brew update && brew upgrade --cask mefinder
 5. 若某版本只构建了单一架构，脚本会自动切换为单架构 cask 并加 `depends_on arch`
    门禁，防止 Intel 用户装到不可运行的包。
 
-注意：本机未安装 Homebrew，tap 尚未经过 `brew audit --cask` 或实际 `brew install`
-验证；首次接入时建议在装有 Homebrew 的机器上、于 tap 仓库目录内跑一次
-`brew audit --cask mefinder --online` 再发布。
+注意：cask 已在本机 Homebrew 7.0.0 通过 `brew style` 与
+`brew audit --cask mefinder --online`（实测下载并校验产物）。审计要求 cask 的
+`depends_on macos` 不得低于产物内声明的 `LSMinimumSystemVersion`；发新版后若产物
+系统要求变化，需同步调整渲染脚本中的门槛常量。
