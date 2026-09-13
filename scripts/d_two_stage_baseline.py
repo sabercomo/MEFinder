@@ -1,21 +1,29 @@
 """Round-2 baseline for issue #18: regenerate every snapshot pair with the
 *current* formal algorithm on a writable copy of the 2026-09-11 real-library
-snapshot, verify the raw-DP reproduction path, and re-locate the 11 fixtures
-and the 61 control samples (60 correct + n74) on that fresh baseline.
+snapshot, reproduce the raw-DP layer through the exact production call path,
+and re-locate the 11 fixtures and the 61 control samples (60 correct + n74).
 
 Why regenerate everything: the snapshot's stored v22 runs were produced around
 2026-09-09 by the then-installed build with *detected* body ranges; commit
 ``12ac741`` later folded author introductions into the body region, so several
 stored runs no longer match current formal output.  The round-2 baseline is
 the current formal algorithm on the same segment sets and the same frozen
-vectors — no re-embedding, no production write.  Stored runs are kept as the
-historical reference and diffed per pair.
+vectors — no re-embedding, no production write.
+
+Reproduction path: the raw DP layer is re-created by calling production's
+``_align_monotonic_sequences`` with exactly the inputs production feeds it
+(raw cached vectors sliced to the stored body range, structural anchors from
+the full texts shifted into body coordinates, stored verified folios, stored
+languages, default E5 thresholds).  This also returns the *validated* anchor
+list — the true partition knots, which cannot be recovered from stored links
+alone because note-channel overrides replace DP links (and can consume a
+validated anchor's row) after the DP.
 
 Usage:
     python -m scripts.d_two_stage_baseline \
         --db .codex-tmp/d-round2/index-baseline.sqlite3 \
         --cache .codex-tmp/d-round2/cache \
-        --out .codex-tmp/d-round2/baseline-2026-09-14.json
+        --out .codex-tmp/d-round2/baseline-2026-09-14.json [--skip-regen]
 """
 from __future__ import annotations
 
@@ -29,15 +37,19 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.me_finder.semantic_alignment import (  # noqa: E402
     EMBEDDING_RUNTIME_VERSION,
     SEMANTIC_ALIGNMENT_VERSION,
-    _align_partition,
+    _align_monotonic_sequences,
     _group_rows,
+    _normalized_rows,
     _sequence_cache_path,
-    cached_text_sequence_vectors,
+    embedding_model_config,
 )
+from src.me_finder.alignment_anchors import HeadingAnchor  # noqa: E402
 from src.me_finder.text_alignment import (  # noqa: E402
     ALIGNMENT_ALGORITHM_VERSION,
     SEGMENTER_VERSION,
@@ -74,25 +86,9 @@ def _frozen_links(con, run_id):
     return out
 
 
-def _anchor_boundaries(frozen):
-    return sorted((f[0], f[2]) for f in frozen
-                  if f[5] is not None and f[0] is not None and f[2] is not None)
-
-
-def _partitions(body, anchors):
-    (bs0, bs1), (bt0, bt1) = body["pivot"], body["target"]
-    knots = [(bs0, bt0, False)] + [(s, t, True) for s, t in anchors] + [(bs1, bt1, False)]
-    parts = []
-    for (as_, at_, consumed), (bs_, bt_, _c) in zip(knots, knots[1:]):
-        s0 = as_ + (1 if consumed else 0)
-        t0 = at_ + (1 if consumed else 0)
-        if s0 < bs_ or t0 < bt_:
-            parts.append((s0, bs_, t0, bt_))
-    return parts
-
-
 class PairView:
-    """Read-only view of one pair's freshest completed v22 run."""
+    """Read-only view of one pair's freshest completed v22 run + exact raw-DP
+    reproduction through the production call path."""
 
     def __init__(self, con: sqlite3.Connection, cache: Path, pair: tuple[str, str]):
         self.con = con
@@ -110,53 +106,97 @@ class PairView:
         self.target_set = row["target_segment_set_id"]
         self.created_at = row["created_at"]
         params = json.loads(row["parameters_json"])
+        self.params = params
         self.body = params["body_ranges"]
         self.body_source = params.get("body_range_source")
+        self.pivot_language = params.get("pivot_language", "und")
+        self.target_language = params.get("target_language", "und")
         self.frozen = _frozen_links(con, self.run_id)
-        self.anchors = _anchor_boundaries(self.frozen)
-        self.parts = _partitions(self.body, self.anchors)
-        self._vectors: dict[str, tuple] = {}
+        self._raw: dict | None = None
 
-    def vectors(self, set_id: str):
-        if set_id not in self._vectors:
-            import numpy as np
-            texts = _texts(self.con, set_id)
-            vectors = cached_text_sequence_vectors(texts, self.cache, model_id=MODEL_ID)
-            if vectors is None:
-                raise SystemExit(f"vector cache miss for {set_id}")
-            prefix = np.vstack([np.zeros((1, vectors.shape[1]), dtype=np.float32),
-                                np.cumsum(vectors, axis=0)])
-            lengths = [max(1, sum(not ch.isspace() for ch in t)) for t in texts]
-            self._vectors[set_id] = (prefix, _group_rows(prefix), lengths)
-        return self._vectors[set_id]
+    # ---- inputs ----
+    def _raw_vectors(self, set_id: str) -> np.ndarray:
+        texts = _texts(self.con, set_id)
+        path = _sequence_cache_path(texts, self.cache, model_id=MODEL_ID)
+        if not path.is_file():
+            raise SystemExit(f"vector cache miss for {set_id}")
+        return np.load(path, allow_pickle=False, mmap_mode="r")
 
-    def fidelity(self) -> dict:
-        """Reproduce in-body frozen links with the production DP (raw layer)."""
-        sp, sg, sl = self.vectors(self.pivot_set)
-        tp, tg, tl = self.vectors(self.target_set)
-        (bs0, bs1), (bt0, bt1) = self.body["pivot"], self.body["target"]
-        rebuilt = set()
-        for s0, s1, t0, t1 in self.parts:
-            for link in _align_partition(sp, tp, sl, tl, s0, s1, t0, t1, sg, tg,
-                                         LOW_THRESHOLD):
-                rebuilt.add((link.source_start, link.source_end,
-                             link.target_start, link.target_end))
-        for s, t in self.anchors:
-            rebuilt.add((s, s + 1, t, t + 1))
-        frozen_spans = {(f[0], f[1], f[2], f[3]) for f in self.frozen
-                        if f[0] is not None and f[2] is not None
-                        and bs0 <= f[0] and f[1] <= bs1 and bt0 <= f[2] and f[3] <= bt1}
-        return {
-            "reproduced": len(frozen_spans & rebuilt),
-            "frozen_in_body": len(frozen_spans),
-            "raw_dp_links": len(rebuilt),
-        }
+    def _lengths(self, set_id: str) -> list[int]:
+        return [max(1, sum(not ch.isspace() for ch in t)) for t in _texts(self.con, set_id)]
 
     def status_counts(self) -> dict:
         counts: dict[str, int] = {}
         for f in self.frozen:
             counts[f[4]] = counts.get(f[4], 0) + 1
         return counts
+
+    # ---- exact raw-DP reproduction (body-local coordinates) ----
+    def raw_reproduction(self) -> dict:
+        if self._raw is None:
+            from src.me_finder.semantic_alignment import find_heading_anchors
+            ps, pe = self.body["pivot"]
+            ts, te = self.body["target"]
+            source_texts = _texts(self.con, self.pivot_set)
+            target_texts = _texts(self.con, self.target_set)
+            source_raw = np.asarray(self._raw_vectors(self.pivot_set), dtype=np.float32)
+            target_raw = np.asarray(self._raw_vectors(self.target_set), dtype=np.float32)
+            embeddings = np.vstack([
+                source_raw[ps:pe], target_raw[ts:te]])
+            normalized = _normalized_rows(embeddings)
+            source_vectors = normalized[: pe - ps]
+            target_vectors = normalized[pe - ps:]
+            structural = [
+                HeadingAnchor(a.source_index - ps, a.target_index - ts, a.key)
+                for a in find_heading_anchors(source_texts, target_texts)
+                if ps <= a.source_index < pe and ts <= a.target_index < te
+            ]
+            folios = [
+                HeadingAnchor(f["pivot_order_index"] - ps,
+                              f["target_order_index"] - ts,
+                              f["key"])
+                for f in self.params.get("edition_folio_anchors", [])
+                if ps <= f["pivot_order_index"] < pe
+                and ts <= f["target_order_index"] < te
+            ]
+            thresholds = embedding_model_config(MODEL_ID).thresholds
+            links, anchors = _align_monotonic_sequences(
+                source_texts[ps:pe], target_texts[ts:te],
+                source_vectors, target_vectors,
+                folios,
+                source_language=self.pivot_language,
+                target_language=self.target_language,
+                thresholds=thresholds,
+                structural_anchors=structural,
+            )
+            self._raw = {
+                "links": [  # back to absolute coordinates
+                    (l.source_start + ps, l.source_end + ps,
+                     l.target_start + ts, l.target_end + ts,
+                     l.review_status, l.anchor_key)
+                    for l in links
+                ],
+                "anchors_absolute": [
+                    (a.source_index + ps, a.target_index + ts, a.key) for a in anchors
+                ],
+            }
+        return self._raw
+
+    def fidelity(self) -> dict:
+        raw = self.raw_reproduction()
+        raw_spans = {(l[0], l[1], l[2], l[3]) for l in raw["links"]
+                     if l[0] is not None and l[2] is not None}
+        frozen_spans = {(f[0], f[1], f[2], f[3]) for f in self.frozen
+                        if f[0] is not None and f[2] is not None}
+        one_sided_frozen = sum(1 for f in self.frozen
+                               if f[0] is None or f[2] is None)
+        return {
+            "raw_dp_links": len(raw_spans),
+            "frozen_final_links": len(self.frozen),
+            "frozen_one_sided": one_sided_frozen,
+            "raw_span_in_frozen": len(raw_spans & frozen_spans),
+            "frozen_span_in_raw": len(frozen_spans & raw_spans),
+        }
 
     def link_at(self, pivot_order: int):
         for f in self.frozen:
@@ -193,23 +233,6 @@ def regenerate_all(db: Path, cache: Path) -> list[dict]:
     return out
 
 
-def diff_runs(old: PairView, new: PairView) -> dict:
-    old_spans = {(f[0], f[1], f[2], f[3], f[4]) for f in old.frozen}
-    new_spans = {(f[0], f[1], f[2], f[3], f[4]) for f in new.frozen}
-    old_body = {b for b in old.body["pivot"]}
-    return {
-        "historical_run": old.run_id,
-        "historical_created_at": old.created_at,
-        "historical_body_source": old.body_source,
-        "historical_body": old.body,
-        "fresh_body": new.body,
-        "fresh_body_source": new.body_source,
-        "identical": old_spans == new_spans,
-        "only_historical": len(old_spans - new_spans),
-        "only_fresh": len(new_spans - old_spans),
-    }
-
-
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -225,6 +248,7 @@ def main() -> None:
     parser.add_argument("--fixtures", default="reports/d-fixture-reverify-2026-09-07.json")
     parser.add_argument("--golds", default="reports/d-gap-penalty-experiment-2026-09-07.json")
     parser.add_argument("--out", required=True)
+    parser.add_argument("--skip-regen", action="store_true")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -232,7 +256,8 @@ def main() -> None:
     cache = Path(args.cache).resolve()
     out: dict = {"generated_by": "scripts/d_two_stage_baseline.py"}
 
-    out["regeneration"] = regenerate_all(db, cache)
+    if not args.skip_regen:
+        out["regeneration"] = regenerate_all(db, cache)
 
     con = sqlite3.connect(db.as_uri() + "?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
@@ -241,23 +266,10 @@ def main() -> None:
             "SELECT DISTINCT pivot_source_file_id, target_source_file_id FROM alignment_runs "
             "WHERE algorithm_version='22' AND status='completed'"))
     views: dict[str, PairView] = {}
-    historical: dict[str, PairView] = {}
     for pair in pairs:
         views[f"{pair[0]} -> {pair[1]}"] = PairView(con, cache, pair)
-    # Historical reference = the newest run that is NOT the fresh one.
-    for key, view in views.items():
-        pivot, target = key.split(" -> ")
-        rows = con.execute(
-            "SELECT alignment_run_id, created_at FROM alignment_runs WHERE "
-            "pivot_source_file_id=? AND target_source_file_id=? AND "
-            "algorithm_version='22' AND status='completed' "
-            "ORDER BY created_at DESC LIMIT 2", (pivot, target)).fetchall()
-        if len(rows) > 1:
-            historical[key] = {"run_id": rows[1]["alignment_run_id"],
-                               "created_at": rows[1]["created_at"]}
 
     # ---- fingerprints ----
-    import numpy
     import fastembed
     vector_hashes = {}
     for view in views.values():
@@ -282,39 +294,22 @@ def main() -> None:
         "alignment_algorithm_version": ALIGNMENT_ALGORITHM_VERSION,
         "low_confidence_threshold": LOW_THRESHOLD,
         "python": sys.version.split()[0],
-        "numpy": numpy.__version__,
+        "numpy": np.__version__,
         "fastembed": fastembed.__version__,
         "vector_cache": vector_hashes,
     }
 
-    # ---- fidelity + drift ----
-    fidelity, drift = {}, {}
+    # ---- fidelity ----
+    fidelity = {}
     for key, view in views.items():
         fid = view.fidelity()
         counts = view.status_counts()
         fidelity[key] = {"final_status_counts": counts, **fid}
-        line = (f"fidelity {key[:44]}: {fid['reproduced']}/{fid['frozen_in_body']} "
-                f"raw={fid['raw_dp_links']} final={sum(counts.values())}")
-        if key in historical:
-            old_view = PairView(con, cache, tuple(key.split(" -> ")))
-            # temporarily pin the historical run
-            old_view.run_id = historical[key]["run_id"]
-            old_view.frozen = _frozen_links(con, historical[key]["run_id"])
-            old_params = json.loads(con.execute(
-                "SELECT parameters_json FROM alignment_runs WHERE alignment_run_id=?",
-                (historical[key]["run_id"],)).fetchone()["parameters_json"])
-            old_view.body = old_params["body_ranges"]
-            old_view.body_source = old_params.get("body_range_source")
-            old_view.anchors = _anchor_boundaries(old_view.frozen)
-            old_view.parts = _partitions(old_view.body, old_view.anchors)
-            d = diff_runs(old_view, view)
-            drift[key] = d
-            line += (f" | drift only_old={d['only_historical']} only_new={d['only_fresh']}"
-                     f" body {d['historical_body_source']}{d['historical_body']['pivot']}"
-                     f"→{d['fresh_body_source']}{d['fresh_body']['pivot']}")
-        print(line, flush=True)
+        print(f"fidelity {key[:44]}: raw={fid['raw_dp_links']} "
+              f"raw∩frozen={fid['raw_span_in_frozen']} frozen={fid['frozen_final_links']} "
+              f"one_sided={fid['frozen_one_sided']} "
+              f"final_counts={ {k: v for k, v in counts.items()} }", flush=True)
     out["fidelity"] = fidelity
-    out["drift_vs_historical"] = drift
 
     # ---- relocate fixtures ----
     fixtures = json.loads(Path(args.fixtures).read_text(encoding="utf-8"))["fixtures"]
