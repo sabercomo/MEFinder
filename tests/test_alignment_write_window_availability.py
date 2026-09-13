@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 import threading
 import time
 import unittest
@@ -165,7 +166,7 @@ class _AlignmentWriteWindowHarness:
         return worker, outcome
 
     def _assert_no_partial_publish(self) -> None:
-        with sqlite3.connect(self.paths.index_path) as connection:
+        with closing(sqlite3.connect(self.paths.index_path)) as connection:
             runs = connection.execute(
                 "SELECT COUNT(*) FROM alignment_runs WHERE status = 'completed'"
             ).fetchone()[0]
@@ -283,7 +284,7 @@ class AlignmentWriteWindowAvailabilityTests(
                 f"search during {record['phase']} returned None (HTTP 503)",
             )
             self.assertEqual(record["payload"], warmup)
-        with sqlite3.connect(self.paths.index_path) as connection:
+        with closing(sqlite3.connect(self.paths.index_path)) as connection:
             runs = connection.execute(
                 "SELECT COUNT(*) FROM alignment_runs WHERE status = 'completed'"
             ).fetchone()[0]
@@ -347,7 +348,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
         def attempt_change() -> None:
             with lock:
-                timeline["change-attempt"] = time.monotonic()
+                timeline["change-attempt"] = time.perf_counter()
             # Blocks on index_runtime.mutation() until the alignment run ends.
             self.index_runtime.replace_source(
                 {
@@ -383,14 +384,14 @@ class AlignmentWriteWindowAvailabilityTests(
                 "bench-003",
             )
             with lock:
-                timeline["change-done"] = time.monotonic()
+                timeline["change-done"] = time.perf_counter()
 
         real_publish = text_alignment_module._generate_alignment_on_connection
 
         def gated_publish(*args, **kwargs):
             result = real_publish(*args, **kwargs)
             with lock:
-                timeline["publish-done"] = time.monotonic()
+                timeline["publish-done"] = time.perf_counter()
             return result
 
         with mock.patch.object(
@@ -418,7 +419,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
         # The deferred replacement cascades the derived alignment data away,
         # and the reopened engine serves the changed library.
-        with sqlite3.connect(self.paths.index_path) as connection:
+        with closing(sqlite3.connect(self.paths.index_path)) as connection:
             runs = connection.execute(
                 "SELECT COUNT(*) FROM alignment_runs"
             ).fetchone()[0]
@@ -563,7 +564,7 @@ class AlignmentSpillingWriteAvailabilityTests(
         )
         self.assertNotIn("error", outcome)
         self.assertEqual(outcome["result"]["status"], "completed")
-        with sqlite3.connect(self.paths.index_path) as connection:
+        with closing(sqlite3.connect(self.paths.index_path)) as connection:
             runs = connection.execute(
                 "SELECT COUNT(*) FROM alignment_runs WHERE status = 'completed'"
             ).fetchone()[0]

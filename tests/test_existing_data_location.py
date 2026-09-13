@@ -5,6 +5,7 @@ import os
 from unittest.mock import patch
 from pathlib import Path
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 
@@ -48,12 +49,12 @@ class ExistingDataLocationTests(unittest.TestCase):
                 switch_data_root(current, base / "missing", current)
             database = base / "foreign/runtime/data/index.sqlite3"
             database.parent.mkdir(parents=True)
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection:
                 connection.execute("CREATE TABLE sample(value TEXT)")
             with self.assertRaises(DataLocationError):
                 switch_data_root(current, base / "foreign", current)
             build_database({"metadata": {}}, database)
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection:
                 connection.execute(f"PRAGMA user_version={DATABASE_SCHEMA_VERSION + 1}")
             with self.assertRaisesRegex(DataLocationError, "更新版本"):
                 switch_data_root(current, base / "foreign", current)

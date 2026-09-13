@@ -883,6 +883,23 @@
         button.hidden = false;
         button.disabled = true;
         button.textContent = '正在下载…';
+      } else if (model.state === 'verifying') {
+        // 字节已齐、安装回执未落：校验/落盘阶段。此时若仍显示"正在下载 99%"，
+        // 用户无法区分"快好了"与"卡死"（2026-09-13 E5 卡 99% 反馈）。
+        downloading = true;
+        state.className = 'settings-status';
+        state.textContent = '校验中';
+        hint.textContent = '模型文件已就绪，正在校验并写入安装记录…';
+        progress.hidden = false;
+        progress.classList.remove('indeterminate');
+        if (progressFill) progressFill.style.width = '99%';
+        progress.setAttribute('aria-valuemin', '0');
+        progress.setAttribute('aria-valuemax', '100');
+        progress.setAttribute('aria-valuenow', '99');
+        progress.setAttribute('aria-valuetext', '校验中');
+        button.hidden = false;
+        button.disabled = true;
+        button.textContent = '校验中…';
       } else if (model.installed) {
         state.className = 'settings-status ready';
         state.textContent = '已下载';
@@ -919,11 +936,15 @@
       var selectedTransfer = alignmentModelDownloadProgress(selected);
       var installedCount = component.models.filter(function(model) { return model.installed; }).length;
       status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
-      status.textContent = selected.state === 'downloading'
-        ? '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '')
-        : selected.installed
-          ? '当前模型已下载'
-          : '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
+      if (selected.state === 'downloading') {
+        status.textContent = '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '');
+      } else if (selected.state === 'verifying') {
+        status.textContent = '校验中';
+      } else if (selected.installed) {
+        status.textContent = '当前模型已下载';
+      } else {
+        status.textContent = '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
+      }
     }
     if (settingsStore.alignmentModelPollTimer) {
       clearTimeout(settingsStore.alignmentModelPollTimer);

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+from contextlib import closing
 import tempfile
 import subprocess
 import sys
@@ -129,11 +130,11 @@ finally:
                 "src.me_finder.text_alignment.align_segment_sequences",
                 return_value=([], []),
             ):
-                engine = SearchEngine(self.db)
-                result = engine.search("社会", mode="auto")
-            self.assertGreaterEqual(result["total"], 1)
+                with closing(SearchEngine(self.db)) as engine:
+                    result = engine.search("社会", mode="auto")
+                self.assertGreaterEqual(result["total"], 1)
 
-            with sqlite3.connect(self.db) as connection:
+            with closing(sqlite3.connect(self.db)) as connection:
                 stored = connection.execute(
                     "SELECT COUNT(*) FROM alignment_links"
                 ).fetchone()[0]
@@ -180,7 +181,7 @@ finally:
         (components / "models--fake").write_text("model bytes")
         shutil.rmtree(self.root / "components")
 
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection:
             stored = connection.execute(
                 "SELECT COUNT(*) FROM alignment_links"
             ).fetchone()[0]
@@ -196,8 +197,8 @@ finally:
             targets = list_alignment_targets(self.db, self.pivot)
         self.assertTrue(targets["targets"])
 
-        engine = SearchEngine(self.db)
-        self.assertGreaterEqual(engine.search("社会", mode="auto")["total"], 1)
+        with closing(SearchEngine(self.db)) as engine:
+            self.assertGreaterEqual(engine.search("社会", mode="auto")["total"], 1)
 
     def test_component_management_never_imports_the_compute_stack(self) -> None:
         managed = ManagedEmbeddingModels(self.root)

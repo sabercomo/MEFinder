@@ -21,6 +21,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from contextlib import closing
 from unittest import mock
 import zipfile
 
@@ -97,7 +98,7 @@ def _snapshot_fixture(root: Path) -> tuple[Path, str]:
 def _source_payload(database: Path, source_id: str) -> dict:
     import sqlite3
 
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection:
         row = connection.execute(
             "SELECT payload_json FROM source_files WHERE source_file_id = ?",
             (source_id,),
@@ -108,7 +109,7 @@ def _source_payload(database: Path, source_id: str) -> dict:
 def _page_payloads(database: Path, source_id: str) -> list[dict]:
     import sqlite3
 
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection:
         rows = connection.execute(
             "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? "
             "ORDER BY pdf_page_index",
@@ -127,7 +128,7 @@ def _concurrent_rewriter(database: Path, source_id: str):
         source["bibliographic_metadata"]["title"] = "并发修改后的标题"
         pages = _page_payloads(database, source_id)
         # A logical document version must be published in one transaction.
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection:
             connection.execute(
                 "UPDATE source_files SET payload_json=? WHERE source_file_id=?",
                 (json.dumps(source, ensure_ascii=False), source_id),
@@ -140,6 +141,7 @@ def _concurrent_rewriter(database: Path, source_id: str):
                     "WHERE source_file_id = ? AND pdf_page_index = ?",
                     (json.dumps(page, ensure_ascii=False), source_id, int(page["pdf_page_index"])),
                 )
+            connection.commit()
 
     return rewrite
 
@@ -274,13 +276,14 @@ class ExportSnapshotConsistencyTests(unittest.TestCase):
 
                 if not page_read_started.wait(5):
                     return
-                with sqlite3.connect(database) as connection:
+                with closing(sqlite3.connect(database)) as connection:
                     connection.execute(
                         "DELETE FROM pdf_pages WHERE source_file_id = ?", (source_id,)
                     )
                     connection.execute(
                         "DELETE FROM source_files WHERE source_file_id = ?", (source_id,)
                     )
+                    connection.commit()
 
             def hooked(connection, source_id_arg, runtime_root):
                 page_read_started.set()
@@ -387,10 +390,11 @@ class CoordinatedEnrichmentOperationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             database, source_id = _snapshot_fixture(root)
-            with sqlite3.connect(database) as db:
+            with closing(sqlite3.connect(database)) as db:
                 source = json.loads(db.execute('SELECT payload_json FROM source_files').fetchone()[0])
                 source['document_heading_profile'] = {'version': DOCUMENT_HEADING_VERSION, 'status': 'complete'}
                 db.execute('UPDATE source_files SET payload_json=?', (json.dumps(source),))
+                db.commit()
             port = mock.Mock()
             port.mutation.side_effect = AssertionError('unnecessary wait on alignment mutation')
             operation = DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port)

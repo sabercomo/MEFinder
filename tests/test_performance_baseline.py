@@ -2,6 +2,7 @@
 
 import copy
 import json
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -100,7 +101,7 @@ class PerformanceFixtureTests(unittest.TestCase):
                                 self.assertIn("pdf_page_id", row["page_match_spans"][0])
             finally:
                 engine.close()
-            with sqlite3.connect(db) as connection:
+            with closing(sqlite3.connect(db)) as connection:
                 self.assertEqual(connection.execute("PRAGMA quick_check").fetchone()[0], "ok")
                 self.assertEqual(connection.execute("SELECT count(*) FROM document_group_members").fetchone()[0], 2)
                 source = json.loads(connection.execute(

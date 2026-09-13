@@ -1419,31 +1419,39 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .parser-provider-columns,
 .parser-provider-group > summary {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) 92px 104px 72px 24px;
+  grid-template-columns: minmax(240px, 1fr) 92px 104px 24px;
   align-items: center;
   gap: 12px;
 }
 .parser-provider-columns { margin-top: 12px; padding: 8px 12px; border-bottom: 1px solid var(--divider); color: var(--text-tertiary); font-size: 12px; }
 .parser-provider-columns span:nth-child(2),
-.parser-provider-columns span:nth-child(3),
-.parser-provider-columns span:nth-child(4) { text-align: right; }
-/* 占比条画在服务名下方：数字给精确值，条形给一眼看出的相对量。 */
-.parser-provider-bar {
-  display: block;
-  width: min(100%, 340px);
-  height: 3px;
-  margin-top: 7px;
+.parser-provider-columns span:nth-child(3) { text-align: right; }
+/* 占比是部分-整体关系：列表顶部一根 100% 构成条 + 图例说明各段；
+   数字只在图例出现一次，行内不再重复画条，避免被误读成加载进度。
+   local 段用 accent，其余（API 类）用 text-primary 当墨色，六个主题下
+   与背景及 accent 均可区分。 */
+.parser-share-stack { padding: 12px 12px 0; }
+.parser-share-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
   border-radius: var(--radius-pill);
+  overflow: hidden;
   background: var(--border-subtle);
 }
-.parser-provider-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  opacity: .55;
-}
-.parser-provider-share b { font-variant-numeric: tabular-nums; }
+.parser-share-seg { height: 100%; min-width: 2px; }
+.parser-share-seg.local { background: var(--accent); }
+.parser-share-seg.api { background: var(--text-primary); }
+.parser-share-cap { margin-top: 5px; color: var(--text-tertiary); font-size: 11px; }
+.parser-share-legend { display: grid; gap: 6px; padding: 10px 12px 12px; }
+.parser-share-legend > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; color: var(--text-secondary); font-size: 12.5px; }
+.parser-share-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: var(--radius-pill); }
+.parser-share-dot.local { background: var(--accent); }
+.parser-share-dot.api { background: var(--text-primary); }
+.parser-share-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parser-share-legend small { color: var(--text-tertiary); font-size: 11px; }
+.parser-share-legend b { margin-left: auto; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.parser-share-legend .parser-share-pages { margin-left: 2px; }
 .parser-provider-group { border-bottom: 1px solid var(--divider); }
 .parser-provider-group > summary { min-height: 72px; padding: 8px 12px; cursor: pointer; list-style: none; }
 .parser-provider-group > summary::-webkit-details-marker { display: none; }
