@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Tuple
 
+from .runtime_location import component_runtime_root
 from .import_resume import atomic_write_json, load_json_object
 from .local_ocr_runtime import local_ocr_engine_lock
 
@@ -67,7 +68,7 @@ _ENGINE_SPECS = {
 
 
 def resolve_local_ocr_config_path(root: Path) -> Path:
-    return Path(root) / LOCAL_OCR_CONFIG_FILE
+    return component_runtime_root(root) / LOCAL_OCR_CONFIG_FILE
 
 
 def load_local_ocr_config(

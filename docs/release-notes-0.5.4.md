@@ -2,6 +2,8 @@
 
 **2026-09-10: 修复版本，解决数据迁移功能 bug，可正常使用。**
 
+2026-09-13：源码修复 macOS 切换 OneDrive/同步书库后 OCR 与对齐模型误报未安装：两类组件统一解析到本机稳定目录，复用原有下载；Windows 与显式开发运行时路径行为不变。本项尚未进入已发布的 0.5.4 Windows 安装/便携包，随下次 Windows 构建生效。详见 `issues/note-synced-library-components.md`。
+
 ---
 
 ## 修复内容

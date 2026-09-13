@@ -23,6 +23,7 @@ from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .runtime_location import component_runtime_root
 from .import_resume import ResumeManifestError, atomic_write_json
 from .local_ocr_runtime import local_ocr_engine_lock
 from .local_ocr_settings import (
@@ -219,7 +220,7 @@ class LocalOCRInstaller:
         catalog_summary: Optional[Callable[[], Dict[str, object]]] = None,
         process_launcher: Callable = subprocess.Popen,
     ) -> None:
-        self.runtime_root = Path(runtime_root).resolve()
+        self.runtime_root = component_runtime_root(runtime_root).resolve()
         self.config_path = Path(config_path).resolve()
         self.component_root = self.runtime_root / LOCAL_OCR_COMPONENT_DIR
         self._manifest_path = manifest_path
