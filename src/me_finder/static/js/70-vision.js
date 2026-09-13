@@ -311,6 +311,8 @@
       });
       parserStore.mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
+      var serviceAddress = document.getElementById('mineru-service-address');
+      if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
       renderMineruLocalSettings(data.local_deployment || {});
       renderMineruAccountList();
       var addButton = document.getElementById('mineru-add-account');
@@ -602,41 +604,64 @@
   }
 
   function renderMineruAccountList() {
-    // Original table: 账号 / 状态 / 到期日期 / 本地解析 / 操作. Edit opens the inline
-    // editor panel below (no modal).
+    // 讨论稿的行式布局：一行一个账号，第一行是名称与事实（密钥 / 检测结论 /
+    // 到期），第二行是该账号的动作。解析量进「解析统计」，不挤在行里。
     var list = document.getElementById('mineru-account-list');
     if (!list) return;
     var count = document.getElementById('mineru-account-count');
     if (count) count.textContent = parserStore.mineruAccounts.length.toLocaleString() + ' 个账号';
     if (!parserStore.mineruAccounts.length) { list.innerHTML = ''; return; }
-    var usageByAccount = {};
-    (Array.isArray(parserStore.mineruStatistics.credentials) ? parserStore.mineruStatistics.credentials : []).forEach(function(item) {
-      usageByAccount[item.account_id] = item;
-    });
-    var rows = parserStore.mineruAccounts.map(function(item) {
-      var usage = usageByAccount[item.account_id] || {};
+    list.innerHTML = parserStore.mineruAccounts.map(function(item) {
       var healthy = item.health_status === 'healthy' || !item.health_status;
-      // 本会话内点过「测试」的结果；后端账号摘要没有 last_checked_at，
-      // 因此未测过的账号只陈述能确认的事实（密钥已保存），不写成"可用"。
       var probe = parserStore.mineruProbeResults[item.account_id];
-      var state = !item.configured ? '缺少 Token' : !item.enabled ? '已停用'
+      var state = !item.configured ? '缺少 Token'
         : item.health_status === 'unauthorized' ? '认证失效'
         : item.health_status === 'cooldown' ? '冷却中'
         : probe === 'ok' ? '刚刚检测：连接正常'
         : probe === 'failed' ? '刚刚检测：连接失败'
-        : '密钥已保存 · 尚未检测';
+        : '尚未检测';
       var stateClass = probe === 'ok' ? 'ready'
-        : probe === 'failed' ? 'warning'
-        : item.enabled && item.configured && healthy ? 'neutral' : 'warning';
-      var expires = item.expires_at ? esc(item.expires_at.replace(/-/g, '/')) : '—';
-      var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
-      return '<tr><td data-label="账号"><span class="mineru-account-identity"><span class="mineru-account-avatar" aria-hidden="true"><span class="mineru-brand-glyph"></span></span><span class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + (item.configured ? 'Token 已保存' : '需要 Token') + '</small></span></span></td>' +
-        '<td data-label="状态"><span class="mineru-account-status-cell"><span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span><label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '"><input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '') + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label></span></td>' +
-        '<td data-label="到期日期"><span class="mineru-table-date">' + expires + '</span></td>' +
-        '<td data-label="本地解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>' +
-        '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">测试</button><button class="mineru-text-action" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button><button class="mineru-text-action danger" type="button" data-account-id="' + esc(item.account_id) + '" onclick="deleteMineruAccount(this.dataset.accountId)">删除</button></span></td></tr>';
+        : (probe === 'failed' || !item.configured || !healthy) ? 'warning' : '';
+      var facts = (item.configured ? '密钥已保存' : '未填写 Token')
+        + ' · <span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span>'
+        + ' · ' + (item.expires_at ? '到期 ' + esc(item.expires_at.replace(/-/g, '/')) : '到期日未设置');
+      var aside = item.enabled ? '解析记录可在「解析统计」中查看' : '停用期间不分配新的解析任务';
+      return '<div class="mineru-account-row">'
+        + '<div class="mineru-account-main">'
+        + '<div class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + facts + '</small></div>'
+        + '<label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '">'
+        + '<input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '')
+        + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span>'
+        + '<span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label>'
+        + '<span class="mineru-account-switch-text">' + (item.enabled ? '开启' : '关闭') + '</span>'
+        + '</div>'
+        + '<div class="mineru-account-actions">'
+        + '<span class="mineru-account-aside">' + aside + '</span>'
+        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">检测连接</button>'
+        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button>'
+        + '</div></div>';
     }).join('');
-    list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table"><thead><tr><th>账号</th><th>状态</th><th>到期日期</th><th>本地解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function startEditMineruService() {
+    var copy = document.getElementById('mineru-service-copy-address');
+    var control = document.getElementById('mineru-service-control');
+    var edit = document.getElementById('mineru-service-edit');
+    var address = document.getElementById('mineru-service-address');
+    if (control) control.hidden = false;
+    if (edit) edit.hidden = true;
+    if (address) address.hidden = true;
+    var input = document.getElementById('mineru-api-base');
+    if (input) { input.value = (address && address.textContent) || input.value; input.focus(); }
+  }
+
+  function cancelEditMineruService() {
+    var control = document.getElementById('mineru-service-control');
+    var edit = document.getElementById('mineru-service-edit');
+    var address = document.getElementById('mineru-service-address');
+    if (control) control.hidden = true;
+    if (edit) { edit.hidden = false; edit.focus(); }
+    if (address) address.hidden = false;
   }
 
   // The inline editor panel expands below the table on 添加账号 / 编辑, and folds
@@ -666,6 +691,7 @@
     }
     var editing = !!document.getElementById('mineru-account-id').value.trim();
     var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
+    var remove = document.getElementById('mineru-account-remove'); if (remove) remove.hidden = !editing;
   }
 
   async function openMineruTokenPage() {
@@ -952,7 +978,11 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       document.getElementById('mineru-api-base').value = data.api_base || apiBase;
-      if (status) { status.className = 'settings-status ready'; status.textContent = '地址已保存'; }
+      var address = document.getElementById('mineru-service-address');
+      if (address) address.textContent = data.api_base || apiBase;
+      cancelEditMineruService();
+      renderMineruAccountList();
+      if (status) { status.className = 'settings-status'; status.textContent = '地址已保存，需重新检测'; }
     } catch (e) {
       showToast('MinerU 服务地址未保存：' + e.message, 'danger');
     } finally {
@@ -1182,6 +1212,9 @@
   }
 
   var parserRuntimeAPI = {
+    // 走命名空间而不是再加两个全局：70-vision.js 的全局命令面有预算上限。
+    startEditMineruService: startEditMineruService,
+    cancelEditMineruService: cancelEditMineruService,
     loadGeneralModelConfig: loadGeneralModelConfig,
     loadMineruConfig: loadMineruConfig,
     bindMineruAccountDialogDismissal: bindMineruAccountDialogDismissal

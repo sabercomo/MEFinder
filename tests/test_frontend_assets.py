@@ -477,10 +477,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 界面文案句末不再加句号（DESIGN.md §5「界面文案」）。
     # 0.5.4 滑杆已选区间用强调色填充（--range-fill 由 JS 写入），轨道 6px、
     #   滑块 20px，否则一条灰轨道看不出当前值。
+    # 0.5.4 MinerU 账号与其他解析 API 由表格改为讨论稿的行式布局，服务地址改
+    #   「只读文字 + 修改」，移除账号移进编辑区；文档传输与引文格式选择点移到
+    #   左侧；本地 OCR 顶部提示框改为折叠区，下载按钮降为次要。
     BASELINE_SHA256 = (
-        "ecd8fd765a3983162649d9102a54b0037cbe611daf88b54eed44039737590060"
+        "d4fd38aeb5924281ff7d48b3617599f8c9a0943a46c34f77efce8e937bfb42c9"
     )
-    BASELINE_BYTES = 1106154
+    BASELINE_BYTES = 1108893
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

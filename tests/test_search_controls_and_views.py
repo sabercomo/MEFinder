@@ -501,7 +501,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="mineru-account-list"', HTML)
         self.assertIn('id="mineru-account-name"', HTML)
         self.assertIn('id="mineru-editor-card"', HTML)
-        self.assertIn('class="mineru-account-table"', HTML)
+        # 账号列表 0.5.4 由表格改为行式布局（DESIGN.md §6 的行式状态呈现）
+        self.assertIn("mineru-account-row", HTML)
         self.assertIn("function showMineruEditor()", HTML)
         self.assertIn("function hideMineruEditor()", HTML)
         self.assertIn('id="mineru-add-account"', HTML)
@@ -531,7 +532,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/mineru-accounts/service'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
         self.assertIn("async function deleteMineruAccount(accountId)", HTML)
-        self.assertIn("onclick=\"deleteMineruAccount(this.dataset.accountId)\"", HTML)
+        # 移除入口在编辑区，不在账号行（DESIGN.md §5：危险操作置于维护区域）
+        self.assertIn(
+            "deleteMineruAccount(document.getElementById('mineru-account-id').value)",
+            HTML,
+        )
         self.assertIn('id="mineru-local-settings"', HTML)
         self.assertIn(
             '<section class="mineru-local-settings" id="mineru-local-settings">',

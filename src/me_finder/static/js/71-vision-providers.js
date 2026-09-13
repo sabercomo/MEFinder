@@ -712,25 +712,28 @@
           + '<span>MinerU 会继续作为默认的免费解析服务；点右上角「添加接口」可接入通义千问等视觉模型</span>'
           + '</div>';
       } else {
-        var usageByProvider = {};
-        (Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : []).forEach(function(item) {
-          usageByProvider[item.provider_id] = item;
-        });
         var rows = providers.map(function(provider) {
+          // 与 MinerU 账号同一套行式布局：名称 + 事实行 + 开关，第二行是地址与动作。
           var badge = visionProviderBadge(provider);
-          var usage = usageByProvider[provider.id] || {};
-          var usageLabel = Number(usage.parsed_book_count || 0).toLocaleString() + ' 本 · ' + Number(usage.parsed_page_count || 0).toLocaleString() + ' 页';
-          return '<tr><td data-label="接口"><span class="mineru-account-identity vision-table-identity">'
-            + visionAvatarHtml(provider)
-            + '<span class="mineru-account-copy"><strong>' + esc(provider.name) + '</strong><small title="' + esc(provider.api_base) + '">' + esc(provider.model || '未选择模型') + ' · ' + esc(visionHostLabel(provider.api_base)) + '</small></span></span></td>'
-            + '<td data-label="状态"><span class="mineru-account-status-cell"><span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span>'
+          return '<div class="mineru-account-row">'
+            + '<div class="mineru-account-main">'
+            + '<div class="mineru-account-copy"><strong>' + esc(provider.name) + '</strong>'
+            + '<small>' + esc(provider.model || '未选择模型')
+            + ' · ' + (provider.has_api_key ? '密钥已保存' : '未填写密钥')
+            + ' · <span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span></small></div>'
             + '<label class="ui-switch mineru-row-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
             + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
-            + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">' + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label></span></td>'
-            + '<td data-label="已解析"><span class="mineru-table-usage">' + usageLabel + '</span></td>'
-            + '<td data-label="操作"><span class="mineru-row-actions"><button class="mineru-text-action" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">测试</button><button class="mineru-text-action" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button><button class="mineru-text-action danger" type="button" onclick="deleteVisionProvider(\'' + provider.id + '\')">删除</button></span></td></tr>';
+            + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">'
+            + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label>'
+            + '<span class="mineru-account-switch-text">' + (provider.enabled ? '开启' : '关闭') + '</span>'
+            + '</div>'
+            + '<div class="mineru-account-actions">'
+            + '<code class="mineru-account-aside">' + esc(provider.api_base) + '</code>'
+            + '<button class="action-btn quiet" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">检测连接</button>'
+            + '<button class="action-btn" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button>'
+            + '</div></div>';
         }).join('');
-        list.innerHTML = '<div class="mineru-account-table-scroll"><table class="mineru-account-table vision-provider-table"><thead><tr><th>接口</th><th>状态</th><th>已解析</th><th><span class="visually-hidden">操作</span></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        list.innerHTML = rows;
       }
     }
     if (autoFallback) {
