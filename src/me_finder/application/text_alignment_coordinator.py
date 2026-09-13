@@ -6,6 +6,7 @@ import sqlite3
 from contextlib import contextmanager
 
 from ..embedding_models import resolve_alignment_thresholds
+from ..runtime_location import component_runtime_root
 from ..preferences import read_preferences, resolve_preferences_path
 from ..embedding_runtime import (
     SemanticAlignmentCancelled,
@@ -59,7 +60,7 @@ class TextAlignmentCoordinator:
                         target_source_file_id,
                         force=force,
                         model_cache_dir=(
-                            self._paths.runtime_root
+                            component_runtime_root(self._paths.runtime_root)
                             / "components"
                             / "text-alignment"
                             / "models"

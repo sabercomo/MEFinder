@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from .data_location import (
+    default_macos_data_root,
     default_windows_data_root,
     read_data_root,
     read_macos_data_root,
@@ -123,3 +124,17 @@ def runtime_root(
         else local_app_data_root(bundle_root=root)
     )
     return data_root / "runtime"
+
+
+def component_runtime_root(root: Path) -> Path:
+    """Keep macOS OCR and model installations outside the selected library.
+
+    Explicit development/test runtimes retain their isolated directories.
+    The stable machine directory deliberately ignores data_root.txt.
+    """
+    root = Path(root)
+    if root.resolve() != (local_app_data_root() / "runtime").resolve():
+        return root
+    if sys.platform == "darwin":
+        return default_macos_data_root() / "runtime"
+    return root
