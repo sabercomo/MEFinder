@@ -131,5 +131,5 @@ $PY scripts/mem_profile_alignment.py ... --rounds 2 --fresh-vectors-per-round --
   - 链接**结构完全一致**(967=967,无新增/消失/翻转),但 confidence/cost 有极小**非零**差(≤1.02e-4,不忽略)→ 非"输出完全一致";
   - 逐向量 min_cosine 0.99999982、max_abs 3.5e-4、**96.8% 逐位一致**,差异仅在中/长文本、短文本逐位一致;
   - **verdict=manual-review-required**(工具不凭自设阈值判 safe;分数任何非零差都计为变化)。采纳须①多对/边界样本泛化②质量门槛③`EMBEDDING_RUNTIME_VERSION` 缓存版本决策。**产品默认维持 batch 64,不据"差异很小"采纳。**
-- **对齐侧外层相位 tracemalloc 峰值的精确重测**:模型既在,现已解锁(可用修复后工具 `--tracemalloc` 重跑对齐);本轮聚焦 batch 实验,该重测留作后续(导出侧嵌套峰值已确认正确)。
-- **正式四场景服务器基准**:normal(搜索)场景已在机器安静后跑(见搜索验收报告);含 alignment/export 的完整四场景 `--compare` 现也解锁(模型在),留作后续。
+- **对齐侧外层相位 tracemalloc 峰值精确重测——已用修复后工具补测**(2026-09-13,`--tracemalloc` 真实对 1 轮;数据 [JSON](memory-alignment-tracemalloc-2026-09-13.json)):修复嵌套 bug 后,**外层 `embed`(⊃`model_load`)traced_peak=58.3 MiB**、`task_total`=58.3 MiB、嵌套 `model_load`=3.2 MiB(旧代码下 `embed` 峰值会被 `model_load` 的 reset 清零而低报)。Python 堆峰值仅 ~58 MiB 而该轮 embed rss_max ~1038 MiB——**~980 MiB 差额是 ONNX 原生分配**(tracemalloc 不可见),坐实"1.3 GiB 主体为原生、Python 堆很小"。
+- **正式三轮四场景服务器基准——已跑**(2026-09-13,机器安静;见 [四场景报告](performance-real-4scenario-2026-09-13.md)):四场景全 12 运行 0 错误、**0 次 503**、identity_mismatches=0;对齐期间 343 个重叠搜索全 200,峰值 RSS 1279–1310 MiB。工具 `--compare` 因严格有效性门(export 轮偶发覆盖 7/8)中止,非数据错误;503 二值对比(28.2%→0)直接成立。
