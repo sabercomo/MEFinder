@@ -1,6 +1,6 @@
 # 文献原句定位器 v0.5.4
 
-> **2026-09-13：macOS arm64 包第三次重建（2275 项测试通过），设置页讨论稿定稿、对齐模型可删除与 MCP sidecar 清扫保护均已入包；尚未正式发布本轮修订。**
+> **2026-09-13：macOS 双架构包第三次重建（源码 `c71d308`，各 2275 项测试通过），设置页讨论稿定稿、对齐模型可删除与 MCP sidecar 清扫保护均已入包；尚未正式发布本轮修订。**
 
 迁移逻辑跳过运行中的 `runtime/webview-data` 缓存，避免文件锁定或缓存变化导致复制失败。下方 Windows 构建记录来自远端 `adb810f`，不代表已包含其后的 Mac 与本轮新增功能。
 
@@ -21,6 +21,13 @@
 |---|---|
 | `MEFinder-v0.5.4-macos-arm64.dmg` | `2288cc0077f6021269162ea3aea3561ceefe70949b2b25aa5258ac7ca6c2fd05` |
 | `MEFinder-v0.5.4-macos-arm64.zip` | `d023f5f8fbd1516467653268b38297c35849c5d35f1bf096c62ef45c8d6828ce` |
+
+macOS Intel（x86_64）本轮测试修订（同源 `c71d308`，Apple Silicon 上经 Rosetta 构建）：反查主程序与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion=12.0`；全量 2275 项 unittest 通过（27 skip，含架构相关条件跳过），ZIP/DMG 校验通过。
+
+| 本地测试文件 | SHA-256 |
+|---|---|
+| `MEFinder-v0.5.4-macos-x86_64.dmg` | `372f4f6f7475b17c8c225dce655c0e53c6330594e3a2585e5682302853f7d8ac` |
+| `MEFinder-v0.5.4-macos-x86_64.zip` | `cf7a99fa8451f9a40d7b3a8a88171ab90d53146271b64e37ff785570753c35ef` |
 
 2026-09-13 第二次重建（源码 `005ab65`）：新增组件运行时位置修复——切换 OneDrive/同步书库后，本地 OCR 与对齐模型统一使用本机稳定目录，复用已下载组件，不再误报未安装；并包含设置界面五主题（自绘下拉、行式布局、MinerU 账号状态与本地 OCR 六态如实呈现）、macOS 外观模式卡塌陷修复、对齐期间搜索保持可用（503 修复）。2229 项 unittest 通过（22 skip），Ruff、Node、严格签名、MCP 冒烟与 ZIP/DMG 校验通过。
 

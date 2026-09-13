@@ -20,16 +20,19 @@
 
 2026-09-11：macOS arm64 测试包已加入打开已有资料库、阅读及数据位置设置修订，并同步 Windows 迁移缓存修复；全量测试及包校验通过，等待用户安装验收，未正式发布本轮修订。
 
-## 2026-09-13 — 第三次重建：设置定稿与 MCP 清扫入包
+## 2026-09-13 — 第三次重建：设置定稿与 MCP 清扫入包（双架构）
 
 - 构建源码 `c71d308`（干净 worktree）。相对上一包（源码 `005ab65`）新增：设置页讨论稿定稿系列——阅读与检索合并去重复、文案统一与开关状态（`608daa3`），滑杆自绘与已选区间填充（`ecc5e50`、`6da85aa`），MinerU 账号与其他解析 API 行式布局（`ce8d1a2`），解析统计「占比」列与条形（`ce152b5`），数据备份显示「上次导出」（`1904fa5`），界面文案句末去句号（`2ba5728`）；对齐模型可删除，替代无实际作用的「管理本地文件」（`c46354d`）；MCP sidecar `_MEI` 临时目录清扫移植与 macOS 活实例锁保护（`c71d308`）。
-- 官方 `build_macos.sh` 全门禁通过；全量 2275 项 unittest（22 skip）在构建源上独立复核通过。
+- arm64：官方 `build_macos.sh` 全门禁通过，全量 2275 项 unittest（22 skip）在构建源上独立复核通过。
+- x86_64：同源在 Apple Silicon 上经 Rosetta（`arch -x86_64` + `.venv-macos12-x86_64` universal2 解释器）构建，全量 2275 项 unittest 通过（27 skip，含架构相关条件跳过）；反查主程序与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion=12.0`。
 - 取代同日早前构建（`bf371e27…`/`f372872e…`）；未创建 tag/Release。Homebrew tap 仍提供 v0.5.3，待 0.5.4 正式发布后同步。
 
 | 产物 | 字节数 | SHA-256 |
 |---|---:|---|
 | `MEFinder-v0.5.4-macos-arm64.dmg` | 176369329 | `2288cc0077f6021269162ea3aea3561ceefe70949b2b25aa5258ac7ca6c2fd05` |
 | `MEFinder-v0.5.4-macos-arm64.zip` | 166226819 | `d023f5f8fbd1516467653268b38297c35849c5d35f1bf096c62ef45c8d6828ce` |
+| `MEFinder-v0.5.4-macos-x86_64.dmg` | 180726055 | `372f4f6f7475b17c8c225dce655c0e53c6330594e3a2585e5682302853f7d8ac` |
+| `MEFinder-v0.5.4-macos-x86_64.zip` | 171318901 | `cf7a99fa8451f9a40d7b3a8a88171ab90d53146271b64e37ff785570753c35ef` |
 
 ## 2026-09-13 — Homebrew Cask tap 分发
 
