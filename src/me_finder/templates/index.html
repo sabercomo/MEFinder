@@ -281,7 +281,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div id="cal-section-body" style="display:none">
                 <div class="cal-detail-actions" id="cal-detail-actions"></div>
                 <div id="cal-editor" style="display:none">
-                  <div class="cal-intro">这本 PDF 的第 1 页往往不是书上印的页码。校准后，检索结果里的页码才能直接写进脚注。多数情况点「自动检测页码」看一眼预览即可；只有检测不准时才需要「手动调整」。</div>
+                  <div class="cal-intro">这本 PDF 的第 1 页往往不是书上印的页码。校准后，检索结果里的页码才能直接写进脚注。多数情况点「自动检测页码」看一眼预览即可；只有检测不准时才需要「手动调整」</div>
                   <div class="cal-section">
                     <div class="cal-section-head">
                       <span class="cal-section-title">自动检测</span>
@@ -457,7 +457,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="import-recovery-panel" id="import-recovery-panel" hidden>
             <div class="import-recovery-copy">
               <strong>PDF 解析失败处理</strong>
-              <span>可继续当前解析任务；如需切换，从已配置的视觉 API 中选择后在失败任务上重试。</span>
+              <span>可继续当前解析任务；如需切换，从已配置的视觉 API 中选择后在失败任务上重试</span>
             </div>
             <div class="import-recovery-provider">
               <span class="import-recovery-label">视觉解析 API</span>
@@ -508,15 +508,15 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
           <section class="settings-section desktop-pdf-settings active" id="pdf-reader-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">阅读与检索</span><span class="settings-section-note">设置打开文献的方式与正文显示。</span></span>
+            <span class="settings-section-heading-copy"><span class="settings-section-title">阅读与检索</span><span class="settings-section-note">设置打开文献的方式与正文显示</span></span>
             </div>
             <div class="settings-collapse-body" id="pdf-reader-body">
             <div class="settings-subhead"><span class="settings-section-title">PDF 原文</span></div>
             <div class="settings-choice-row">
               <span class="settings-choice-copy">
                 <strong>打开 PDF 原文</strong>
-                <small id="pdf-native-description" data-pdf-open-description="native">在内置阅读器中打开，可直接跳到命中页。</small>
-                <small id="pdf-system-description" data-pdf-open-description="system" hidden>用系统默认应用打开，命中页码需要手动翻到。</small>
+                <small id="pdf-native-description" data-pdf-open-description="native">在内置阅读器中打开，可直接跳到命中页</small>
+                <small id="pdf-system-description" data-pdf-open-description="system" hidden>用系统默认应用打开，命中页码需要手动翻到</small>
               </span>
               <span class="app-select settings-choice-select pdf-open-options" id="pdf-open-select">
                 <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">内置 PDF 阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
@@ -534,7 +534,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
             <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span></div>
             <label class="setting-switch-row reading-window-row">
-              <span class="setting-switch-copy"><strong>在独立窗口中阅读</strong><small>可单独移动与缩放，下次打开文献时生效。</small></span>
+              <span class="setting-switch-copy"><strong>在独立窗口中阅读</strong><small>可单独移动与缩放，下次打开文献时生效</small></span>
               <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
               <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="reader-window-state" aria-hidden="true">关闭</span>
             </label>
@@ -542,8 +542,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-choice-row">
               <span class="settings-choice-copy">
                 <strong>段落显示方式</strong>
-                <small data-reader-line-description="flow">正文随窗口宽度排版，适合连续阅读。</small>
-                <small data-reader-line-description="physical" hidden>保留原书的换行位置，便于逐行核对。</small>
+                <small data-reader-line-description="flow">正文随窗口宽度排版，适合连续阅读</small>
+                <small data-reader-line-description="physical" hidden>保留原书的换行位置，便于逐行核对</small>
               </span>
               <span class="app-select settings-choice-select reader-line-options" id="reader-line-select">
                 <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式排版</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
@@ -610,7 +610,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   </div>
                 </section>
               </div>
-            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐。</p>
+            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">
@@ -739,7 +739,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <span id="general-model-status" class="settings-status">未配置</span>
                 </div>
                 <div class="mineru-local-body">
-                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>填服务地址和模型即可；API Key 可留空（本地部署通常无需）。启用后，导入页会多出「通用本地模型」选项，不会自动使用。</span></div>
+                  <div class="mineru-local-notice"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 8v5M10 5.5h.01"/></svg><span>填服务地址和模型即可；API Key 可留空（本地部署通常无需）。启用后，导入页会多出「通用本地模型」选项，不会自动使用</span></div>
                   <div class="settings-editor mineru-local-card">
                   <div class="settings-form settings-editor-form">
                     <div class="settings-field">

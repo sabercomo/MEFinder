@@ -142,7 +142,7 @@
         fields.managedState.textContent = '状态未知';
       }
       if (fields.installHint) {
-        fields.installHint.textContent = '读不到组件状态：' + reason + '。未确认状态前不会开始安装。';
+        fields.installHint.textContent = '读不到组件状态：' + reason + '。未确认状态前不会开始安装';
       }
       if (fields.progress) fields.progress.hidden = true;
       [fields.install, fields.validate, fields.uninstall, fields.cancel].forEach(function(button) {
@@ -249,7 +249,7 @@
 
   async function manageLocalOCRComponent(providerId, action, button) {
     if (action === 'uninstall' && !await showAppConfirm(
-      '将删除该组件的模型、独立 Python 环境和自动填入的路径。',
+      '将删除该组件的模型、独立 Python 环境和自动填入的路径',
       {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
     )) return;
     if (button) button.disabled = true;
@@ -382,10 +382,10 @@
   function managedMineruErrorText(value) {
     var message = String(value || '').replace(/\s+/g, ' ').trim();
     if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
-      return '无法连接 PyPI，请检查网络或代理后重试。';
+      return '无法连接 PyPI，请检查网络或代理后重试';
     }
     if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror|i\/o error|decoding response body)/i.test(message)) {
-      return '模型下载网络中断，请检查网络或代理后重试。';
+      return '模型下载网络中断，请检查网络或代理后重试';
     }
     return message.length > 180 ? message.slice(0, 177) + '…' : message;
   }
@@ -492,11 +492,11 @@
 
   async function manageMineruComponent(profile, action, button) {
     if ((action === 'install' || action === 'update') && !await showAppConfirm(
-      '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘。',
+      '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘',
       {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
     )) return;
     if (action === 'uninstall' && !await showAppConfirm(
-      '将删除该配置的 MinerU 运行时、依赖和本地模型。',
+      '将删除该配置的 MinerU 运行时、依赖和本地模型',
       {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
     )) return;
     if (button) button.disabled = true;
@@ -848,7 +848,7 @@
       if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
       if (chosen.cancelled) return;
       if (!await showAppConfirm(
-        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息。',
+        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息',
         {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
       )) return;
       if (button) button.textContent = '正在导入…';
@@ -909,8 +909,8 @@
       expires_at: document.getElementById('mineru-expires-at').value,
       enabled: document.getElementById('mineru-account-enabled').checked
     };
-    if (!payload.display_name) { mineruDialogError('请填写账号名称。'); return; }
-    if (!accountId && !payload.token) { mineruDialogError('新账号必须填写 API Token。'); return; }
+    if (!payload.display_name) { mineruDialogError('请填写账号名称'); return; }
+    if (!accountId && !payload.token) { mineruDialogError('新账号必须填写 API Token'); return; }
     var idleLabel = accountId ? '保存更改' : (parserStore.mineruAccounts.length ? '添加账号' : '保存配置');
     saveButton.disabled = true;
     saveButton.textContent = '保存中…';
@@ -995,7 +995,7 @@
   async function deleteMineruAccount(accountId) {
     var item = parserStore.mineruAccounts.find(function(account) { return account.account_id === accountId; });
     if (!item || !await showAppConfirm(
-      '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留。',
+      '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留',
       {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
     )) return;
     try {

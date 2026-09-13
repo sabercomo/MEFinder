@@ -535,14 +535,14 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-reading" role="tabpanel" aria-label="阅读与检索">
         <div class="panel-head">
           <h1>阅读与检索</h1>
-          <p>设置打开文献的方式与正文显示。</p>
+          <p>设置打开文献的方式与正文显示</p>
         </div>
 
         <div class="group-title">PDF 原文</div>
         <div class="row">
           <div class="row-copy">
             <strong>打开 PDF 原文</strong>
-            <small id="pdf-open-note">在内置阅读器中打开，可直接跳到命中页。</small>
+            <small id="pdf-open-note">在内置阅读器中打开，可直接跳到命中页</small>
           </div>
           <div class="row-control">
             <div class="dd" data-handler="onPdfOpen" data-value="native">
@@ -559,7 +559,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="row">
           <div class="row-copy">
             <strong>在独立窗口中阅读</strong>
-            <small>可单独移动与缩放，下次打开文献时生效。</small>
+            <small>可单独移动与缩放，下次打开文献时生效</small>
           </div>
           <div class="row-control">
             <label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label>
@@ -570,7 +570,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="row">
           <div class="row-copy">
             <strong>段落显示方式</strong>
-            <small id="layout-note">正文随窗口宽度排版，适合连续阅读。</small>
+            <small id="layout-note">正文随窗口宽度排版，适合连续阅读</small>
           </div>
           <div class="row-control">
             <div class="dd" data-handler="onLayout" data-value="flow">
@@ -587,7 +587,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="row">
           <div class="row-copy">
             <strong>繁简统一检索</strong>
-            <small>搜索时兼容繁简字，结果与引文保留原文。</small>
+            <small>搜索时兼容繁简字，结果与引文保留原文</small>
           </div>
           <div class="row-control">
             <label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label>
@@ -601,7 +601,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-align" role="tabpanel" aria-label="译本对齐" hidden>
         <div class="panel-head">
           <h1>译本对齐</h1>
-          <p>选择用于跨语言段落匹配的本地模型。</p>
+          <p>选择用于跨语言段落匹配的本地模型</p>
         </div>
 
         <div class="group-title">对齐模型</div>
@@ -625,12 +625,12 @@ input[type=range]::-webkit-slider-thumb{
         </label>
         <div class="progress" id="bge-progress" hidden><span></span></div>
 
-        <p class="footnote">切换模型只影响之后运行的对齐，已有对照保持不变。</p>
+        <p class="footnote">切换模型只影响之后运行的对齐，已有对照保持不变</p>
 
         <details class="disclose">
           <summary>模型文件与管理</summary>
           <div class="disclose-body">
-            <p>模型保存在 MEFinder 组件目录，可离线使用。首次下载需要联网。</p>
+            <p>模型保存在 MEFinder 组件目录，可离线使用。首次下载需要联网</p>
             <div class="editor-actions">
               <button class="btn" type="button" onclick="demoToast('演示：打开组件目录')">管理本地文件</button>
               <button class="btn" type="button" onclick="demoToast('演示：重新校验模型文件')">重新校验</button>
@@ -643,7 +643,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-mineru" role="tabpanel" aria-label="MinerU API" hidden>
         <div class="panel-head">
           <h1>MinerU API</h1>
-          <p>管理用于解析 PDF 的服务与账号。</p>
+          <p>管理用于解析 PDF 的服务与账号</p>
         </div>
 
         <div class="row">
@@ -660,7 +660,7 @@ input[type=range]::-webkit-slider-thumb{
         </div>
 
         <div class="row">
-          <div class="row-copy"><strong>账号</strong><small>可添加多个账号，分别启停与检测。</small></div>
+          <div class="row-copy"><strong>账号</strong><small>可添加多个账号，分别启停与检测</small></div>
           <div class="row-control"><button class="btn primary" type="button" onclick="openAccountEditor('new')">添加账号</button></div>
         </div>
 
@@ -707,7 +707,7 @@ input[type=range]::-webkit-slider-thumb{
           <div class="field">
             <label for="acc-token">API Token</label>
             <input class="ctl mono" id="acc-token" type="password" placeholder="粘贴 MinerU API Token" autocomplete="new-password">
-            <div class="hint" id="acc-token-hint">留空保留已保存的密钥；密钥不会回显。</div>
+            <div class="hint" id="acc-token-hint">留空保留已保存的密钥；密钥不会回显</div>
           </div>
           <div class="field">
             <label for="acc-expire">到期日期 <span class="optional">（可选）</span></label>
@@ -721,14 +721,14 @@ input[type=range]::-webkit-slider-thumb{
           </div>
         </div>
 
-        <p class="footnote">密钥仅保存在本机，编辑时不会回显。保存成功不代表连接可用，需要单独检测。</p>
+        <p class="footnote">密钥仅保存在本机，编辑时不会回显。保存成功不代表连接可用，需要单独检测</p>
       </section>
 
       <!-- 本地 OCR -->
       <section class="panel" id="panel-ocr" role="tabpanel" aria-label="本地 OCR" hidden>
         <div class="panel-head">
           <h1>本地 OCR</h1>
-          <p>按文献类型安装引擎，管理本机解析服务。</p>
+          <p>按文献类型安装引擎，管理本机解析服务</p>
         </div>
 
         <div class="demobar">
@@ -757,7 +757,7 @@ input[type=range]::-webkit-slider-thumb{
             </div>
           </div>
           <div class="row-control" style="width:100%">
-            <span class="state" id="ocr-modern-hint" style="flex:1">安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络。</span>
+            <span class="state" id="ocr-modern-hint" style="flex:1">安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络</span>
           </div>
           <div class="progress" id="ocr-modern-progress" hidden><span></span></div>
         </div>
@@ -774,7 +774,7 @@ input[type=range]::-webkit-slider-thumb{
             </div>
           </div>
           <div class="row-control" style="width:100%">
-            <span class="state" style="flex:1">与日文 OCR 使用独立环境，可分别安装和启用。</span>
+            <span class="state" style="flex:1">与日文 OCR 使用独立环境，可分别安装和启用</span>
           </div>
           <div class="progress" id="ocr-ancient-progress" hidden><span></span></div>
         </div>
@@ -782,7 +782,7 @@ input[type=range]::-webkit-slider-thumb{
         <details class="disclose">
           <summary>自动解析如何使用这些引擎</summary>
           <div class="disclose-body">
-            <p>导入时先判断 PDF 是否含可用文本层；需要识别时按文献语言选择已启用的引擎。两个引擎都未启用时，导入按当前解析设置处理，可能调用 MinerU API（需要联网）。</p>
+            <p>导入时先判断 PDF 是否含可用文本层；需要识别时按文献语言选择已启用的引擎。两个引擎都未启用时，导入按当前解析设置处理，可能调用 MinerU API（需要联网）</p>
           </div>
         </details>
 
@@ -805,7 +805,7 @@ input[type=range]::-webkit-slider-thumb{
         <details class="disclose">
           <summary>组件目录与手动配置</summary>
           <div class="disclose-body">
-            <p>组件安装在 <code>~/Library/Application Support/MEFinder/components</code>。手动指定 Python 与 OCR 入口后可先测试再保存。</p>
+            <p>组件安装在 <code>~/Library/Application Support/MEFinder/components</code>。手动指定 Python 与 OCR 入口后可先测试再保存</p>
             <div class="field" style="max-width:460px">
               <label for="ocr-python">Python</label>
               <input class="ctl mono" id="ocr-python" type="text" placeholder="/opt/mefinder/ndlocr/bin/python3">
@@ -825,11 +825,11 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-vision" role="tabpanel" aria-label="其他解析 API" hidden>
         <div class="panel-head">
           <h1>其他解析 API</h1>
-          <p>可选的视觉模型接口，兼容 OpenAI 协议，支持中转服务。</p>
+          <p>可选的视觉模型接口，兼容 OpenAI 协议，支持中转服务</p>
         </div>
 
         <div class="row">
-          <div class="row-copy"><strong>已保存的接口</strong><small>导入时可以选择其中一个已启用的接口。</small></div>
+          <div class="row-copy"><strong>已保存的接口</strong><small>导入时可以选择其中一个已启用的接口</small></div>
           <div class="row-control"><button class="btn primary" type="button" onclick="openVisionEditor('new')">添加接口</button></div>
         </div>
 
@@ -870,7 +870,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="editor" id="vision-editor" hidden>
           <h3 id="vision-editor-title">添加接口</h3>
           <div class="field"><label for="vp-base">API 地址</label><input class="ctl mono" id="vp-base" type="url" placeholder="https://api.example.com/v1"></div>
-          <div class="field"><label for="vp-key">API Key</label><input class="ctl mono" id="vp-key" type="password" placeholder="sk-..."><div class="hint">留空保留已保存的密钥。</div></div>
+          <div class="field"><label for="vp-key">API Key</label><input class="ctl mono" id="vp-key" type="password" placeholder="sk-..."><div class="hint">留空保留已保存的密钥</div></div>
           <div class="field"><label for="vp-name">显示名称 <span class="optional">（可选）</span></label><input class="ctl" id="vp-name" type="text" placeholder="例如：硅基流动"></div>
           <div class="field">
             <label for="vp-model">视觉模型</label>
@@ -888,13 +888,13 @@ input[type=range]::-webkit-slider-thumb{
         </div>
 
         <div class="row">
-          <div class="row-copy"><strong>导入前自动检测接口</strong><small>导入开始前检测已启用的接口，失败时改用其他解析方式。</small></div>
+          <div class="row-copy"><strong>导入前自动检测接口</strong><small>导入开始前检测已启用的接口，失败时改用其他解析方式</small></div>
           <div class="row-control"><label class="sw"><input type="checkbox" checked onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">开启</span></label></div>
         </div>
 
         <div class="callout">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
-          <span>这些接口会把页面图像发送到对应服务，属于联网解析路径；只使用本机数据时请改用本地 OCR 或本地部署。</span>
+          <span>这些接口会把页面图像发送到对应服务，属于联网解析路径；只使用本机数据时请改用本地 OCR 或本地部署</span>
         </div>
       </section>
 
@@ -902,7 +902,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-stats" role="tabpanel" aria-label="解析统计" hidden>
         <div class="panel-head">
           <h1>解析统计</h1>
-          <p>当前文献库的页级解析来源，全部来自本机记录。</p>
+          <p>当前文献库的页级解析来源，全部来自本机记录</p>
         </div>
 
         <dl class="metrics">
@@ -945,7 +945,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-citation" role="tabpanel" aria-label="引文格式" hidden>
         <div class="panel-head">
           <h1>引文格式</h1>
-          <p>选择搜索结果「复制出处」下拉中显示的格式。</p>
+          <p>选择搜索结果「复制出处」下拉中显示的格式</p>
         </div>
 
         <label class="check"><input type="checkbox" checked onchange="countStyles()"><span class="box" aria-hidden="true"></span><span class="check-copy"><strong>中文脚注</strong><small>中文人文社科常用脚注体例</small></span></label>
@@ -956,7 +956,7 @@ input[type=range]::-webkit-slider-thumb{
 
         <div class="callout" style="align-items:center">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h12M4 10h9M4 14.5h10"/></svg>
-          <span id="citation-count">已启用 2 种，按此顺序显示在「复制出处」中。</span>
+          <span id="citation-count">已启用 2 种，按此顺序显示在「复制出处」中</span>
         </div>
       </section>
 
@@ -964,11 +964,11 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-bib" role="tabpanel" aria-label="书目补全" hidden>
         <div class="panel-head">
           <h1>书目补全</h1>
-          <p>联网补全（知网 / Crossref / 图书目录）时，自动采用候选的匹配门槛。</p>
+          <p>联网补全（知网 / Crossref / 图书目录）时，自动采用候选的匹配门槛</p>
         </div>
 
         <div class="group-title">自动匹配阈值</div>
-        <p class="group-note">批量补全时，只有一个候选且匹配分达到此值就自动采用；低于此值会列出候选，由你核对后选择。</p>
+        <p class="group-note">批量补全时，只有一个候选且匹配分达到此值就自动采用；低于此值会列出候选，由你核对后选择</p>
         <div class="rangewrap">
           <div class="rangehead"><span class="state">当前阈值</span><b id="bib-value">90%</b></div>
           <input type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="document.getElementById('bib-value').textContent=this.value+'%'">
@@ -976,7 +976,7 @@ input[type=range]::-webkit-slider-thumb{
         </div>
 
         <div class="group-title" style="margin-top:32px">文献默认语言</div>
-        <p class="group-note">只影响文献库语言筛选的排序，不改变联网补全的数据源——中文期刊始终查知网。</p>
+        <p class="group-note">只影响文献库语言筛选的排序，不改变联网补全的数据源——中文期刊始终查知网</p>
         <div style="margin-top:14px">
           <div class="seg" role="group" aria-label="文献默认语言">
             <button type="button" aria-pressed="true" onclick="segPick(this)">中文</button>
@@ -989,11 +989,11 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-appearance" role="tabpanel" aria-label="外观" hidden>
         <div class="panel-head">
           <h1>外观</h1>
-          <p>选择明暗模式与主题。</p>
+          <p>选择明暗模式与主题</p>
         </div>
 
         <div class="group-title">外观模式</div>
-        <p class="group-note">浅色与深色卡片直接用你当前选中的那套主题渲染。</p>
+        <p class="group-note">浅色与深色卡片直接用你当前选中的那套主题渲染</p>
         <div class="modes" id="mode-cards" role="radiogroup" aria-label="外观模式"></div>
 
         <div class="pair" id="theme-pair" role="radiogroup" aria-label="白天与夜晚各用哪套主题">
@@ -1008,13 +1008,13 @@ input[type=range]::-webkit-slider-thumb{
         </div>
 
         <div class="group-title" style="margin-top:30px">主题</div>
-        <p class="group-note" id="theme-gallery-note">正在为「白天」选择浅色主题。</p>
+        <p class="group-note" id="theme-gallery-note">正在为「白天」选择浅色主题</p>
         <div class="themes" id="theme-grid" role="radiogroup" aria-label="应用主题"></div>
 
         <details class="disclose">
           <summary>自定义配色</summary>
           <div class="disclose-body">
-            <p>在选中主题上微调，改动会存为一份副本。</p>
+            <p>在选中主题上微调，改动会存为一份副本</p>
             <div class="colorgrid">
               <label class="colorfield"><span>按钮色</span><input type="color" value="#2f5fd0"></label>
               <label class="colorfield"><span>强调色</span><input type="color" value="#d97706"></label>
@@ -1038,7 +1038,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-data" role="tabpanel" aria-label="数据位置" hidden>
         <div class="panel-head">
           <h1>数据位置</h1>
-          <p>打开另一份资料库，或搬迁当前资料库。</p>
+          <p>打开另一份资料库，或搬迁当前资料库</p>
         </div>
 
         <div class="pathcard">
@@ -1051,17 +1051,17 @@ input[type=range]::-webkit-slider-thumb{
         </div>
 
         <div class="row" style="margin-top:6px">
-          <div class="row-copy"><strong>打开已有资料库</strong><small>读取从另一台电脑同步来的 MEFinder 文件夹，不复制或覆盖资料。</small></div>
+          <div class="row-copy"><strong>打开已有资料库</strong><small>读取从另一台电脑同步来的 MEFinder 文件夹，不复制或覆盖资料</small></div>
           <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择已有库')">选择已有库</button></div>
         </div>
         <div class="row">
-          <div class="row-copy"><strong>迁移当前资料库</strong><small>将当前资料复制到新位置，原位置的数据保留。</small></div>
+          <div class="row-copy"><strong>迁移当前资料库</strong><small>将当前资料复制到新位置，原位置的数据保留</small></div>
           <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择新位置')">选择新位置</button></div>
         </div>
 
         <div class="callout">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
-          <span>不要让两台电脑同时打开同一份云盘或 NAS 数据库，同步中的 SQLite 文件可能冲突。跨设备使用时先退出另一端并等待同步完成。</span>
+          <span>不要让两台电脑同时打开同一份云盘或 NAS 数据库，同步中的 SQLite 文件可能冲突。跨设备使用时先退出另一端并等待同步完成</span>
         </div>
       </section>
 
@@ -1069,7 +1069,7 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-transfer" role="tabpanel" aria-label="文档传输" hidden>
         <div class="panel-head">
           <h1>文档传输</h1>
-          <p>设置从文献库导出的 MEFinder 文档包内容。</p>
+          <p>设置从文献库导出的 MEFinder 文档包内容</p>
         </div>
 
         <label class="choice">
@@ -1085,7 +1085,7 @@ input[type=range]::-webkit-slider-thumb{
 
         <div class="callout">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
-          <span>此设置同时用于单本和批量导出。</span>
+          <span>此设置同时用于单本和批量导出</span>
         </div>
       </section>
 
@@ -1093,15 +1093,15 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-backup" role="tabpanel" aria-label="数据备份" hidden>
         <div class="panel-head">
           <h1>数据备份</h1>
-          <p>导出页码校准与书目信息，换电脑时可导入恢复。</p>
+          <p>导出页码校准与书目信息，换电脑时可导入恢复</p>
         </div>
 
         <div class="row">
-          <div class="row-copy"><strong>导出备份</strong><small>仅备份页码映射、书目和偏好，不含 PDF 与解析产物。</small></div>
+          <div class="row-copy"><strong>导出备份</strong><small>仅备份页码映射、书目和偏好，不含 PDF 与解析产物</small></div>
           <div class="row-control"><button class="btn primary" type="button" onclick="demoToast('演示：导出备份文件')">导出备份</button></div>
         </div>
         <div class="row">
-          <div class="row-copy"><strong>从备份恢复</strong><small>会覆盖当前的页码映射与书目信息，原文件先备份为 .pre-restore，随后自动重建索引。</small></div>
+          <div class="row-copy"><strong>从备份恢复</strong><small>会覆盖当前的页码映射与书目信息，原文件先备份为 .pre-restore，随后自动重建索引</small></div>
           <div class="row-control"><button class="btn" type="button" onclick="demoToast('演示：选择备份文件')">选择备份并恢复</button></div>
         </div>
 
@@ -1112,20 +1112,20 @@ input[type=range]::-webkit-slider-thumb{
       <section class="panel" id="panel-update" role="tabpanel" aria-label="软件更新" hidden>
         <div class="panel-head">
           <h1>软件更新</h1>
-          <p>检查 GitHub Releases 上的新版本。</p>
+          <p>检查 GitHub Releases 上的新版本</p>
         </div>
 
         <div class="pathcard" style="align-items:center">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>
           <div style="flex:1">
             <strong>当前版本 v0.5.4</strong>
-            <small id="update-msg">尚未检查更新。检查只读取版本信息，不会自动替换应用。</small>
+            <small id="update-msg">尚未检查更新。检查只读取版本信息，不会自动替换应用</small>
           </div>
           <button class="btn" type="button" id="update-btn" onclick="checkUpdate(this)">检查更新</button>
         </div>
 
         <div class="row" style="margin-top:8px">
-          <div class="row-copy"><strong>启动时自动检查并下载更新</strong><small>仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认。</small></div>
+          <div class="row-copy"><strong>启动时自动检查并下载更新</strong><small>仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认</small></div>
           <div class="row-control"><label class="sw"><input type="checkbox" onchange="swText(this,'开启','关闭')"><span class="sw-track"><span class="sw-thumb"></span></span><span class="sw-text">关闭</span></label></div>
         </div>
       </section>
@@ -1244,13 +1244,13 @@ document.addEventListener('keydown', e=>{
 /* ---------- 阅读与检索 ---------- */
 function onPdfOpen(v){
   document.getElementById('pdf-open-note').textContent = v === 'native'
-    ? '在内置阅读器中打开，可直接跳到命中页。'
-    : '在“预览”中打开，需要手动翻到命中页。';
+    ? '在内置阅读器中打开，可直接跳到命中页'
+    : '在“预览”中打开，需要手动翻到命中页';
 }
 function onLayout(v){
   document.getElementById('layout-note').textContent = v === 'flow'
-    ? '正文随窗口宽度排版，适合连续阅读。'
-    : '保留原书的换行位置，便于逐行核对。';
+    ? '正文随窗口宽度排版，适合连续阅读'
+    : '保留原书的换行位置，便于逐行核对';
 }
 
 /* ---------- 下载安装（演示） ---------- */
@@ -1309,8 +1309,8 @@ function openAccountEditor(name){
   document.getElementById('acc-name').value = isNew ? '' : name;
   document.getElementById('acc-token').value = '';
   document.getElementById('acc-token-hint').textContent = isNew
-    ? '粘贴 MinerU API Token；保存后不会回显。'
-    : '留空保留已保存的密钥；密钥不会回显。';
+    ? '粘贴 MinerU API Token；保存后不会回显'
+    : '留空保留已保存的密钥；密钥不会回显';
   document.getElementById('acc-remove').hidden = isNew;
   document.getElementById('acc-hint').textContent = '';
   editor.hidden = false;
@@ -1369,11 +1369,11 @@ function ocrState(state, btn){
   action.hidden = false;
   action.disabled = false;
   const map = {
-    unknown:  ['状态未知', 'state bad', '重新读取', '读取组件状态失败：组件目录无法访问。未知状态下不会开始安装。'],
-    none:     ['未安装', 'state warn', '下载安装', '安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络。'],
-    failed:   ['安装失败', 'state bad', '重试安装', '下载模型时中断（第 3 步，共 4 步）：网络连接被重置。可重试或查看详情。'],
-    installed:['已安装，未启用', 'state', '', '已安装 NDLOCR-Lite 1.2.3。启用后才会在导入日文扫描件时使用。'],
-    enabled:  ['已启用', 'state ok', '', '导入日文扫描件、图像型 PDF 时自动使用；不联网。']
+    unknown:  ['状态未知', 'state bad', '重新读取', '读取组件状态失败：组件目录无法访问。未知状态下不会开始安装'],
+    none:     ['未安装', 'state warn', '下载安装', '安装时会一并下载模型，约 1.4 GB，首次耗时取决于网络'],
+    failed:   ['安装失败', 'state bad', '重试安装', '下载模型时中断（第 3 步，共 4 步）：网络连接被重置。可重试或查看详情'],
+    installed:['已安装，未启用', 'state', '', '已安装 NDLOCR-Lite 1.2.3。启用后才会在导入日文扫描件时使用'],
+    enabled:  ['已启用', 'state ok', '', '导入日文扫描件、图像型 PDF 时自动使用；不联网']
   };
   const [text, cls, actionLabel, hintText] = map[state];
   label.textContent = text;
@@ -1394,8 +1394,8 @@ function ocrState(state, btn){
 function countStyles(){
   const n = document.querySelectorAll('#panel-citation input:checked').length;
   document.getElementById('citation-count').textContent = n
-    ? '已启用 ' + n + ' 种，按此顺序显示在「复制出处」中。'
-    : '未启用任何格式，「复制出处」只提供纯文本引用。';
+    ? '已启用 ' + n + ' 种，按此顺序显示在「复制出处」中'
+    : '未启用任何格式，「复制出处」只提供纯文本引用';
 }
 
 /* ---------- 外观 ---------- */
@@ -1529,7 +1529,7 @@ function checkUpdate(btn){
   setTimeout(()=>{
     btn.disabled = false;
     btn.textContent = '查看发布页';
-    msg.textContent = '发现新版本 v0.5.5（2026-09-10）。下载后安装前仍会由你确认。';
+    msg.textContent = '发现新版本 v0.5.5（2026-09-10）。下载后安装前仍会由你确认';
   }, 1200);
 }
 

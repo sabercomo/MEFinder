@@ -599,7 +599,7 @@
     button.disabled = true;
     button.textContent = '等待确认…';
     try {
-      if (!await showAppConfirm('删除作品组「' + name + '」只解除版本归组关系，不会删除任何文献。', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
+      if (!await showAppConfirm('删除作品组「' + name + '」只解除版本归组关系，不会删除任何文献', {title: '删除作品组？', tone: 'warning', confirmText: '删除作品组'})) return;
       button.textContent = '删除中…';
       await postGroupOp('/api/document-groups/delete', {document_group_id: groupId}, '作品组已删除（文献仍保留）', deps);
     }
@@ -1310,7 +1310,7 @@
       return;
     }
     if (!await showAppConfirm(
-      '将依次重新计算 ' + pairs.length + ' 组已有译本对照，耗时取决于书籍数量与长度。',
+      '将依次重新计算 ' + pairs.length + ' 组已有译本对照，耗时取决于书籍数量与长度',
       {title: '重新对齐已有译本？', confirmText: '开始重新对齐'}
     )) return;
     button.disabled = true;
@@ -1875,8 +1875,8 @@
     document.getElementById('md-page-input').value = '';
     document.getElementById('md-page-error').textContent = '';
     document.getElementById('md-page-note').textContent = epub
-      ? '仅采用出版方页码。EPUB 入库文本未保留脚注链接，选页不能保证带出页外脚注。'
-      : '原书页码依赖已有页码映射；PDF 物理页码从 1 开始。已配对的脚注随正文导出，原文保持不变。';
+      ? '仅采用出版方页码。EPUB 入库文本未保留脚注链接，选页不能保证带出页外脚注'
+      : '原书页码依赖已有页码映射；PDF 物理页码从 1 开始。已配对的脚注随正文导出，原文保持不变';
     document.getElementById('markdown-page-dialog').showModal();
     document.getElementById('md-page-input').focus();
   }
@@ -1893,7 +1893,7 @@
     if (markdownPageBusy || !markdownPageSource) return;
     var pages = document.getElementById('md-page-input').value.trim();
     var errorNode = document.getElementById('md-page-error');
-    if (!pages) { errorNode.textContent = '请填写要导出的页码。'; return; }
+    if (!pages) { errorNode.textContent = '请填写要导出的页码'; return; }
     var selection = {mode: markdownPageMode(), pages: pages};
     markdownPageBusy = true;
     var controls = document.getElementById('md-page-fields');

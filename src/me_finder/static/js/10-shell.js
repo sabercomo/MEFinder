@@ -39,7 +39,7 @@
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error || '选择导出文件夹失败');
     if (data.cancelled) return null;
-    if (!data.path) throw new Error('没有收到所选导出文件夹。');
+    if (!data.path) throw new Error('没有收到所选导出文件夹');
     return data.path;
   }
 

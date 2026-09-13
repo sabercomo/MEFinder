@@ -767,7 +767,7 @@
 
   // 低置信对齐的「校正」入口：先说明成因，并把当前源栏可见范围重新定位一次（多为最有效的自助校正）。
   function reportMisalignment() {
-    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正。');
+    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正');
     if (state.comparison.open && state.comparison.targetSourceId) {
       locateInAlignedVersion(state.comparison.targetSourceId, sourceCenterRange());
     }
@@ -955,7 +955,7 @@
     state.elements.comparisonRouteText.textContent = state.directAlignmentPending
       ? '正在生成直接对照…'
       : ('当前对照经' + (viaName ? '「' + viaName + '」' : '第三个版本')
-        + '中转，可能漏配；建议生成两版本的直接对照。');
+        + '中转，可能漏配；建议生成两版本的直接对照');
     state.elements.comparisonRouteButton.hidden = state.directAlignmentPending;
     notice.hidden = false;
   }
@@ -964,7 +964,7 @@
     var comparison = state.comparison;
     if (state.directAlignmentPending) return;
     if (!state.alignmentGroupId || !state.sourceId || !comparison.targetSourceId) {
-      setAlert('缺少作品组信息，无法生成直接对照。', 'warning');
+      setAlert('缺少作品组信息，无法生成直接对照', 'warning');
       return;
     }
     var targetId = comparison.targetSourceId;
@@ -1019,10 +1019,10 @@
       if (state.comparison.open && state.comparison.targetSourceId === targetId) {
         locateInAlignedVersion(targetId, sourceCenterRange());
       }
-      notify('已生成直接对照，完整度已提升。');
+      notify('已生成直接对照，完整度已提升');
       return;
     }
-    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试。');
+    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试');
   }
 
   function nearestTextOffset(text, requestedOffset) {

@@ -474,10 +474,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   去掉装饰图标、译本对齐去重复强调；导航项与分类数随之变化。
     # 0.5.4 阅读与检索按讨论稿定稿：组标题不再带重复说明，选项名称与说明改用
     #   讨论稿口径，开关补「开启 / 关闭」文字，页尾补「设置变更自动保存」。
+    # 0.5.4 界面文案句末不再加句号（DESIGN.md §5「界面文案」）。
     BASELINE_SHA256 = (
-        "9fbf4c55cfc60f95fb934e16937f5563ecd8c5ff4dc8bea2663a309e3707b97a"
+        "c7b0fe8a035f74fdcc29916137906839260387157014d0edee011626445adbec"
     )
-    BASELINE_BYTES = 1104635
+    BASELINE_BYTES = 1104521
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

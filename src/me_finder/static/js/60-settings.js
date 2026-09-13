@@ -281,7 +281,7 @@
     var def = custom[id];
     if (!def) return;
     var confirmed = await showAppConfirm(
-      '将删除自定义主题「' + (def.name || '自定义主题') + '」。此操作无法撤销。',
+      '将删除自定义主题「' + (def.name || '自定义主题') + '」。此操作无法撤销',
       { title: '删除自定义主题？', confirmText: '删除', tone: 'danger' }
     );
     if (!confirmed) return;
@@ -993,13 +993,13 @@
     var systemTitle = document.getElementById('pdf-system-title');
     var systemDescription = document.getElementById('pdf-system-description');
     if (desktopShell === 'win32') {
-      if (nativeDescription) nativeDescription.textContent = '用 Microsoft Edge WebView2 在内置阅读器中打开，可直接跳到命中页。';
+      if (nativeDescription) nativeDescription.textContent = '用 Microsoft Edge WebView2 在内置阅读器中打开，可直接跳到命中页';
       if (systemTitle) systemTitle.textContent = 'Windows 默认阅读器';
-      if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开。';
+      if (systemDescription) systemDescription.textContent = '默认阅读器为 Adobe Acrobat 或 Reader 时直接跳到命中页；WPS 等其他阅读器按 Windows 设置打开';
     } else if (desktopShell === 'macos') {
-      if (nativeDescription) nativeDescription.textContent = '用 macOS PDFKit 在内置阅读器中打开，可直接跳到命中页。';
+      if (nativeDescription) nativeDescription.textContent = '用 macOS PDFKit 在内置阅读器中打开，可直接跳到命中页';
       if (systemTitle) systemTitle.textContent = 'macOS 预览';
-      if (systemDescription) systemDescription.textContent = '在「预览」中打开，需要手动翻到命中页。';
+      if (systemDescription) systemDescription.textContent = '在「预览」中打开，需要手动翻到命中页';
     }
     renderPdfOpenMode();
   }
@@ -1080,8 +1080,8 @@
     }
     var status = document.getElementById('script-folding-status');
     if (status) status.textContent = settingsStore.scriptFoldingAvailable
-      ? '搜索时兼容繁简字，结果与引文保留原文。'
-      : '当前版本未能加载繁简转换组件，仍可按原文检索。';
+      ? '搜索时兼容繁简字，结果与引文保留原文'
+      : '当前版本未能加载繁简转换组件，仍可按原文检索';
     var state = document.getElementById('script-folding-state');
     if (state) {
       state.textContent = !settingsStore.scriptFoldingAvailable ? '不可用'
