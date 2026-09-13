@@ -137,13 +137,21 @@ class ManagedEmbeddingModels:
                 model_id = str(model["id"])
                 state = self._states[model_id]
                 installed = model_component_installed(self._cache_dir, model_id)
-                current_state = state.state
-                if current_state in {"installed", "not_installed"}:
-                    current_state = "installed" if installed else "not_installed"
                 total_bytes = int(model["size_bytes"])
                 downloaded_bytes = (
                     total_bytes if installed else self._downloaded_bytes(model_id)
                 )
+                current_state = state.state
+                if installed:
+                    # 磁盘上的必需文件是唯一事实来源：卡死的下载作业
+                    # 不能让已装模型在界面上停留在外标"下载中"。
+                    current_state = "installed"
+                elif current_state in {"installed", "not_installed"}:
+                    current_state = "not_installed"
+                elif current_state == "downloading" and downloaded_bytes >= total_bytes:
+                    # 字节已齐、安装回执未落：处于校验/落盘阶段，与"下载中"区分，
+                    # 否则已下载字节超过估计值仍显示 99% 下载中，无法判断死活。
+                    current_state = "verifying"
                 progress = (
                     1.0
                     if installed
