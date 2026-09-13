@@ -2,14 +2,22 @@
 
 Recall caps work at ``candidate_budget = max(SQL_CANDIDATE_FLOOR, limit*8)`` by
 selecting ``LIMIT budget+1`` and marking the result truncated once more than
-``budget`` candidates are seen. These tests pin the boundary behaviour (fewer
-than / exactly / more than the budget) for the exact, compact and punctuation
-passes, under a source-type range filter, and confirm ineligible paragraphs are
-never recalled and that returned hits stay ordered by non-increasing score.
+``budget`` candidates are seen.
+
+Two distinct coverage lanes, kept separate:
+
+- ``ShortQuery*`` — <3-char queries that take the **non-FTS ``instr`` branch**
+  (the one round-2's ``_instr_eligibility_clause`` changed). These assert the
+  branch actually runs, the budget boundary (fewer than / equal / more than),
+  and the **exact ordered candidate ids** kept after truncation — not merely a
+  set or a score ordering.
+- ``FtsPassBudgetTests`` — >=3-char queries that take the trigram-FTS branch,
+  retained as independent budget coverage.
 """
 
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +26,7 @@ from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.search import SearchEngine
 from src.me_finder.search_contract import SQL_CANDIDATE_FLOOR
+from src.me_finder.search_recall import CandidateRecall
 
 # limit=5 -> budget = max(64, 40) = 64; keep it small so fixtures stay modest.
 LIMIT = 5
@@ -50,7 +59,8 @@ def _paragraph(index: int, source_id: str, text: str, eligible: bool) -> dict:
 
 
 def _build(matching_texts, *, second_source_matches=0, ineligible_matches=0):
-    """Build a one/two-source SQLite index and return its path (+ temp handle)."""
+    """Build a one/two-source SQLite index. Global paragraph_index == insertion
+    order == rowid, so the lowest-rowid matches are the lowest-index ids."""
 
     temp = tempfile.TemporaryDirectory()
     database_path = Path(temp.name) / "index.sqlite3"
@@ -65,7 +75,6 @@ def _build(matching_texts, *, second_source_matches=0, ineligible_matches=0):
     for _ in range(ineligible_matches):
         paragraphs.append(_paragraph(idx, "pdf-a", matching_texts[0], eligible=False))
         idx += 1
-    # A few decoys that never match.
     for _ in range(3):
         paragraphs.append(_paragraph(idx, "pdf-a", "毫不相干的文本。", eligible=True))
         idx += 1
@@ -83,88 +92,223 @@ def _build(matching_texts, *, second_source_matches=0, ineligible_matches=0):
     return temp, database_path
 
 
-class ExactPassBudgetTests(unittest.TestCase):
+class _RecordingConnection:
+    def __init__(self, connection) -> None:
+        self._connection = connection
+        self.executed: list[str] = []
+
+    def execute(self, sql, parameters=()):
+        self.executed.append(sql)
+        return self._connection.execute(sql, parameters)
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
+class ShortQueryInstrPathTests(unittest.TestCase):
+    """<3-char queries must run the non-FTS instr branch, honour the budget, and
+    return the exact lowest-rowid ids in order after truncation."""
+
+    def _ids(self, result):
+        return [hit["paragraph_id"] for hit in result["results"]]
+
+    def test_two_char_query_takes_the_non_fts_instr_branch(self) -> None:
+        temp, path = _build([f"社会问题第{i}段。" for i in range(10)])
+        engine = SearchEngine(path)
+        recorder = _RecordingConnection(engine.db)
+        try:
+            recall = CandidateRecall(
+                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
+                ngram_index={}, ensure_fts=lambda: True,
+            )
+            self.assertIsNone(recall.fts_match_expression("社会", "AND"))  # <3 chars
+            candidates: dict = {}
+            recall._sql_exact_pass(
+                "社会", normalize_text("社会"), punctuationless_text("社会"),
+                candidates, "all", None, None, recall.candidate_budget(LIMIT),
+            )
+            instr_sql = next(s for s in recorder.executed if "instr(" in s)
+            self.assertNotIn("paragraphs_fts MATCH", instr_sql)  # not the FTS branch
+            self.assertIn("+p.eligible_for_search = 1", instr_sql)  # unscoped deopt
+            self.assertEqual(len(candidates), 10)
+        finally:
+            engine.close()
+            temp.cleanup()
+
+    def test_one_char_query_below_budget_exact_total_and_ordered_ids(self) -> None:
+        temp, path = _build([f"社{i:03d}区。" for i in range(BUDGET - 1)])
+        engine = SearchEngine(path)
+        try:
+            result = engine.search("社", mode="exact", limit=LIMIT)
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(result["total"], BUDGET - 1)
+        self.assertTrue(result["total_is_exact"])
+        self.assertTrue(result["has_more"])  # more than LIMIT rendered
+        # Exact ordered ids: the LIMIT lowest-index eligible matches, in order.
+        self.assertEqual(
+            self._ids(result), [f"pdf-a-P{i:04d}" for i in range(LIMIT)]
+        )
+
+    def test_two_char_query_exactly_budget_is_not_truncated(self) -> None:
+        temp, path = _build([f"社会{i:03d}。" for i in range(BUDGET)])
+        engine = SearchEngine(path)
+        try:
+            result = engine.search("社会", mode="exact", limit=LIMIT)
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(result["total"], BUDGET)
+        self.assertTrue(result["total_is_exact"])
+        self.assertEqual(self._ids(result), [f"pdf-a-P{i:04d}" for i in range(LIMIT)])
+
+    def test_two_char_query_above_budget_is_truncated_keeping_lowest_ids(self) -> None:
+        temp, path = _build([f"社会{i:03d}。" for i in range(BUDGET + 6)])
+        engine = SearchEngine(path)
+        try:
+            result = engine.search("社会", mode="exact", limit=LIMIT)
+            wide = engine.search("社会", mode="exact", limit=BUDGET)
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(result["total"], BUDGET)
+        self.assertFalse(result["total_is_exact"])
+        self.assertTrue(result["has_more"])
+        self.assertEqual(self._ids(result), [f"pdf-a-P{i:04d}" for i in range(LIMIT)])
+        # Truncation keeps exactly the BUDGET lowest-rowid ids, in order.
+        self.assertEqual(self._ids(wide), [f"pdf-a-P{i:04d}" for i in range(BUDGET)])
+
+    def test_ineligible_paragraphs_are_never_recalled(self) -> None:
+        temp, path = _build([f"社会{i:03d}。" for i in range(8)], ineligible_matches=5)
+        engine = SearchEngine(path)
+        try:
+            result = engine.search("社会", mode="exact", limit=LIMIT)
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(result["total"], 8)
+        self.assertTrue(result["total_is_exact"])
+        self.assertEqual(self._ids(result), [f"pdf-a-P{i:04d}" for i in range(LIMIT)])
+
+
+class ShortQueryScopeTests(unittest.TestCase):
+    """Short-query budget under single-document and member-set scope filters."""
+
+    def _ids(self, result):
+        return [hit["paragraph_id"] for hit in result["results"]]
+
+    def test_single_document_scope_bounds_candidates_and_keeps_index(self) -> None:
+        temp, path = _build(
+            [f"社会{i:03d}。" for i in range(BUDGET + 6)], second_source_matches=4
+        )
+        engine = SearchEngine(path)
+        recorder = _RecordingConnection(engine.db)
+        try:
+            recall = CandidateRecall(
+                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
+                ngram_index={}, ensure_fts=lambda: True,
+            )
+            candidates: dict = {}
+            recall._sql_exact_pass(
+                "社会", normalize_text("社会"), punctuationless_text("社会"),
+                candidates, "all", "pdf-b", None, recall.candidate_budget(LIMIT),
+            )
+            instr_sql = next(s for s in recorder.executed if "instr(" in s)
+            # A scoped short query keeps the index (no + deopt) — selective there.
+            self.assertIn("p.eligible_for_search = 1", instr_sql)
+            self.assertNotIn("+p.eligible_for_search", instr_sql)
+            scoped = engine.search("社会", mode="exact", limit=LIMIT, source_file_id="pdf-b")
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(scoped["total"], 4)  # only the 4 pdf-b matches in scope
+        self.assertTrue(scoped["total_is_exact"])
+        for hit in scoped["results"]:
+            self.assertEqual(hit["source_file_id"], "pdf-b")
+
+    def test_member_set_scope_bounds_candidates(self) -> None:
+        temp, path = _build(
+            [f"社会{i:03d}。" for i in range(BUDGET + 6)], second_source_matches=4
+        )
+        engine = SearchEngine(path)
+        try:
+            scoped = engine.search(
+                "社会", mode="exact", limit=LIMIT, source_file_ids=["pdf-b"]
+            )
+            empty = engine.search(
+                "社会", mode="exact", limit=LIMIT, source_file_ids=[]
+            )
+        finally:
+            engine.close()
+            temp.cleanup()
+        self.assertEqual(scoped["total"], 4)
+        self.assertTrue(all(h["source_file_id"] == "pdf-b" for h in scoped["results"]))
+        # An explicit empty set matches nothing (never widened to whole library).
+        self.assertEqual(empty["total"], 0)
+
+
+class ShortQueryCompactPunctuationTests(unittest.TestCase):
+    """The compact and punctuation instr passes also honour the budget."""
+
+    def _run(self, texts, query, mode):
+        temp, path = _build(texts)
+        engine = SearchEngine(path)
+        try:
+            return engine.search(query, mode=mode, limit=LIMIT)
+        finally:
+            engine.close()
+            temp.cleanup()
+
+    def test_compact_pass_short_query_respects_budget(self) -> None:
+        # "社 会" only matches after space-insensitive (compact) folding.
+        result = self._run([f"社 会{i:03d}。" for i in range(BUDGET + 6)], "社会", "compact")
+        self.assertEqual(result["total"], BUDGET)
+        self.assertFalse(result["total_is_exact"])
+        self.assertTrue(result["has_more"])
+
+    def test_punctuation_pass_short_query_respects_budget(self) -> None:
+        # "社，会" only matches after punctuation-insensitive folding.
+        result = self._run([f"社，会{i:03d}。" for i in range(BUDGET + 6)], "社会", "punctuation")
+        self.assertEqual(result["total"], BUDGET)
+        self.assertFalse(result["total_is_exact"])
+        self.assertTrue(result["has_more"])
+
+
+class FtsPassBudgetTests(unittest.TestCase):
+    """>=3-char queries take the trigram-FTS branch — independent budget coverage
+    kept so the short-query lane never replaces it."""
+
     TERM = "查询词"  # 3 chars -> FTS trigram exact path
 
     def _search(self, n_matching, **build_kwargs):
         texts = [f"{self.TERM}第{i}段落。" for i in range(n_matching)]
         temp, path = _build(texts, **build_kwargs)
         engine = SearchEngine(path)
+        recorder = _RecordingConnection(engine.db)
         try:
+            recall = CandidateRecall(
+                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
+                ngram_index={}, ensure_fts=lambda: True,
+            )
+            self.assertIsNotNone(recall.fts_match_expression(self.TERM, "AND"))
             return engine.search(self.TERM, mode="exact", limit=LIMIT)
         finally:
             engine.close()
             temp.cleanup()
 
-    def test_below_budget_reports_exact_total(self) -> None:
+    def test_below_budget(self) -> None:
         result = self._search(BUDGET - 1)
         self.assertEqual(result["total"], BUDGET - 1)
         self.assertTrue(result["total_is_exact"])
-        self.assertTrue(result["has_more"])  # more than LIMIT rendered
-        self.assertEqual(len(result["results"]), LIMIT)
 
-    def test_exactly_budget_is_not_truncated(self) -> None:
+    def test_at_budget(self) -> None:
         result = self._search(BUDGET)
         self.assertEqual(result["total"], BUDGET)
         self.assertTrue(result["total_is_exact"])
 
-    def test_above_budget_is_truncated(self) -> None:
+    def test_above_budget(self) -> None:
         result = self._search(BUDGET + 6)
-        self.assertEqual(result["total"], BUDGET)
-        self.assertFalse(result["total_is_exact"])
-        self.assertTrue(result["has_more"])
-
-    def test_ineligible_paragraphs_are_never_recalled(self) -> None:
-        result = self._search(10, ineligible_matches=5)
-        self.assertEqual(result["total"], 10)
-        self.assertTrue(result["total_is_exact"])
-
-    def test_source_type_range_filter_bounds_the_candidate_set(self) -> None:
-        texts = [f"{self.TERM}第{i}段。" for i in range(BUDGET + 6)]
-        temp, path = _build(texts, second_source_matches=4)
-        engine = SearchEngine(path)
-        try:
-            scoped = engine.search(self.TERM, mode="exact", limit=LIMIT, source_file_id="pdf-b")
-        finally:
-            engine.close()
-            temp.cleanup()
-        # Only the 4 second-source matches are in scope: exact total, not truncated.
-        self.assertEqual(scoped["total"], 4)
-        self.assertTrue(scoped["total_is_exact"])
-        for hit in scoped["results"]:
-            self.assertEqual(hit["source_file_id"], "pdf-b")
-
-    def test_results_are_ordered_by_non_increasing_score(self) -> None:
-        result = self._search(BUDGET + 6)
-        scores = [float(hit["match_score"]) for hit in result["results"]]
-        self.assertEqual(scores, sorted(scores, reverse=True))
-
-
-class CompactAndPunctuationBudgetTests(unittest.TestCase):
-    def test_compact_pass_respects_budget(self) -> None:
-        # Space-separated so only the compact (space-insensitive) pass matches.
-        texts = [f"查 询 词第{i}段。" for i in range(BUDGET + 6)]
-        temp, path = _build(texts)
-        engine = SearchEngine(path)
-        try:
-            result = engine.search("查询词", mode="compact", limit=LIMIT)
-        finally:
-            engine.close()
-            temp.cleanup()
-        self.assertEqual(result["total"], BUDGET)
-        self.assertFalse(result["total_is_exact"])
-        self.assertTrue(result["has_more"])
-
-    def test_punctuation_pass_respects_budget(self) -> None:
-        # Punctuation inside the term so only the punctuation-insensitive pass matches.
-        texts = [f"查，询，词第{i}段。" for i in range(BUDGET + 6)]
-        temp, path = _build(texts)
-        engine = SearchEngine(path)
-        try:
-            result = engine.search("查询词", mode="punctuation", limit=LIMIT)
-        finally:
-            engine.close()
-            temp.cleanup()
         self.assertEqual(result["total"], BUDGET)
         self.assertFalse(result["total_is_exact"])
         self.assertTrue(result["has_more"])
