@@ -867,7 +867,7 @@
         if (progressFill) progressFill.style.width = '100%';
         button.hidden = true;
       } else {
-        state.className = 'settings-status warning';
+        state.className = 'settings-status' + (model.state === 'failed' ? ' warning' : '');
         state.textContent = model.state === 'failed' ? '下载失败' : '未下载';
         hint.textContent = model.error ? '上次下载失败：' + model.error : '首次使用前需下载，文件只保存在本机';
         progress.hidden = true;
@@ -883,11 +883,16 @@
     });
     var status = document.getElementById('alignment-model-status');
     if (status && selected) {
+      // 当前用哪个模型由选中的单选行表达，标题右侧不再重复模型名
+      // （DESIGN.md §5：避免徽章、选中底色、单选圆点多重重复强调）。
       var selectedTransfer = alignmentModelDownloadProgress(selected);
+      var installedCount = component.models.filter(function(model) { return model.installed; }).length;
       status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
       status.textContent = selected.state === 'downloading'
         ? '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '')
-        : '当前 · ' + selected.display_name;
+        : selected.installed
+          ? '当前模型已下载'
+          : '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
     }
     if (settingsStore.alignmentModelPollTimer) {
       clearTimeout(settingsStore.alignmentModelPollTimer);

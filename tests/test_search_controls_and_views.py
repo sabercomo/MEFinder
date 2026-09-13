@@ -710,7 +710,6 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "appearance-card",
             "pdf-reader-settings",
             "text-alignment-settings",
-            "script-search-settings",
             "software-update-settings",
             "macos-update-settings",
             "data-location-settings",

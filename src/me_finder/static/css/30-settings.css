@@ -297,6 +297,49 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .document-export-option:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
 .document-export-option.selected { background: var(--surface-selected); }
 /* Single boolean preference rendered as a switch row (e.g. 繁简统一检索). */
+/* 滑杆：系统原生 range 会带平台自己的轨道与滑块配色，与设置页控件不是一套外观
+   （DESIGN.md §5 的自绘要求同样适用）。轨道 4px、滑块 18px，颜色全部走 token。 */
+.settings-content input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: none;
+  cursor: pointer;
+}
+.settings-content input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-control);
+}
+.settings-content input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--border-control);
+}
+.settings-content input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 1px solid var(--border-control);
+  border-radius: 50%;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-card);
+}
+.settings-content input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-control);
+  border-radius: 50%;
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-card);
+}
+.settings-content input[type="range"]:focus-visible { outline: none; }
+.settings-content input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+.settings-content input[type="range"]:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
+
 /* 设置行内的选择：短而熟悉的显示选项走自绘下拉，说明随选择更新（DESIGN.md §5）。 */
 .settings-choice-row {
   display: grid;
@@ -1754,7 +1797,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 }
 .appearance-color input[type="color"]::-webkit-color-swatch-wrapper { padding: 4px; }
 .appearance-color input[type="color"]::-webkit-color-swatch { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
-.appearance-range input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.appearance-range input[type="range"] { width: 100%; cursor: pointer; }
 .appearance-custom-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .appearance-btn {
   appearance: none; cursor: pointer; padding: 7px 13px; border-radius: var(--radius-md);
@@ -1948,14 +1991,13 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #pdf-reader-body .settings-subhead .settings-section-title { font-size: 14px; font-weight: 600; }
 #pdf-reader-body .pdf-open-options { margin-top: 0; }
 #pdf-reader-body .reading-window-row {
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 12px; margin-top: 0; padding: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px; margin-top: 0;
 }
-#pdf-reader-body .pdf-open-option { padding: 14px 16px; gap: 12px; }
 #pdf-reader-body .setting-switch-copy strong { font-size: 15px; font-weight: 500; }
 #pdf-reader-body .setting-switch-copy small { font-size: 13.5px; line-height: 1.5; color: var(--text-secondary); }
 #pdf-reader-body .reading-window-row:has(input:disabled) { cursor: wait; opacity: .6; }
-#pdf-reader-body .reading-window-row:active { background: var(--surface-selected); }
+#pdf-reader-body .reading-window-row:active { background: none; }
 #data-location-body .data-location-card { padding: 18px 0; border: 0; background: transparent; }
 #data-location-current { overflow-wrap: anywhere; white-space: normal; font-size: 13px; }
 .data-location-actions { margin: 12px 0 20px; border-top: 1px solid var(--divider); }
@@ -1970,8 +2012,6 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #data-location-body .data-location-pending code { overflow-wrap: anywhere; white-space: normal; }
 @media (max-width: 760px) {
   .data-location-action { align-items: flex-start; flex-direction: column; gap: 12px; }
-  #pdf-reader-body .reading-window-row { grid-template-columns: minmax(0, 1fr) auto; }
-  #pdf-reader-body .reading-window-row > .pdf-open-option-icon { display: none; }
 }
 
 #pdf-reader-settings .settings-section-note,

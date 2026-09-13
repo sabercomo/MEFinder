@@ -663,7 +663,6 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "text-alignment-settings": "embedding-model-body",
-            "script-search-settings": "script-search-body",
             "mineru-api-settings": "mineru-api-body",
             "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",

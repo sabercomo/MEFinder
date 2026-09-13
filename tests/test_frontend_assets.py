@@ -470,10 +470,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   不允许触发安装，提供重新读取)，未安装不摆启用开关，失败态显示失败与重试。
     # 0.5.4 引文格式改为分隔线行、数据备份改为「名称+说明 / 动作」行，
     #   与设置页其余分类的行式布局统一。
+    # 0.5.4「文献检索」并入「阅读与检索」(DESIGN.md §3)、滑杆自绘、阅读窗口行
+    #   去掉装饰图标、译本对齐去重复强调；导航项与分类数随之变化。
     BASELINE_SHA256 = (
-        "416bae54cdb4caa130ec7cb3d9594c4ff1671096f93cc25e8ce591c202705103"
+        "bd03f6ba91f877eb21fa530dbe0bcbaa7cff550f371aaa3a5f2796e5106d0e42"
     )
-    BASELINE_BYTES = 1103213
+    BASELINE_BYTES = 1104046
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
