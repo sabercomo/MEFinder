@@ -42,8 +42,10 @@ from src.me_finder.application.script_search import (  # noqa: E402
 from src.me_finder.application.search_service import SearchRequest  # noqa: E402
 from src.me_finder.search import SearchEngine  # noqa: E402
 
-# Fields that legitimately vary run-to-run and are excluded from the digest.
-_NON_DETERMINISTIC_TOP = ("index_metadata",)
+# Genuinely per-request non-deterministic top-level keys to exclude from the
+# digest. Empty: verified that the whole response (index_metadata included) is
+# byte-identical across runs on a fixed snapshot. Add here only with a reason.
+_NON_DETERMINISTIC_TOP: tuple[str, ...] = ()
 
 # Fixed query set: the eight baseline queries plus short/variant coverage.
 _QUERIES = [
@@ -64,31 +66,25 @@ _QUERIES = [
 ]
 
 
-def _canonical_hit(hit: dict) -> dict:
-    # Every contract field a user relies on for citing a passage.
-    return {
-        "id": hit.get("paragraph_id") or hit.get("id"),
-        "source_file_id": hit.get("source_file_id"),
-        "match_type": hit.get("match_type"),
-        "score": round(float(hit.get("match_score") or hit.get("score") or 0), 6),
-        "match_start": hit.get("match_start"),
-        "match_end": hit.get("match_end"),
-        "page": hit.get("page") or hit.get("page_display"),
-        "page_match_spans": hit.get("page_match_spans"),
-        "citation": hit.get("citation"),
-        "context_before": hit.get("context_before"),
-        "context_after": hit.get("context_after"),
-    }
-
-
 def canonical_response(response: dict) -> dict:
-    out = {
-        key: value
-        for key, value in response.items()
-        if key not in _NON_DETERMINISTIC_TOP and key != "results"
-    }
-    out["results"] = [_canonical_hit(hit) for hit in response.get("results", [])]
-    return out
+    """The COMPLETE response, minus only the documented non-deterministic keys.
+
+    No field whitelist, no renaming, no default-filling, no extra rounding: every
+    key of every ``results`` object (all 57 hit fields — citation_formats,
+    copy_text, pdf_page_start/end_index, matched_text, match_quote,
+    highlighted_html, context_before/after, char offsets, page anchors, …) and
+    every top-level key is compared exactly as the product emits it. So any
+    change to any of them is caught, never masked.
+
+    ``_NON_DETERMINISTIC_TOP`` is intentionally empty: the response is
+    byte-for-byte identical across repeated runs on a fixed snapshot — including
+    ``index_metadata`` (its ``built_at`` is fixed at library-build time, not per
+    request) — so nothing needs excluding. If a genuinely per-request field is
+    ever added, list it here with justification rather than dropping it silently.
+    """
+
+    return {key: value for key, value in response.items()
+            if key not in _NON_DETERMINISTIC_TOP}
 
 
 def _median_ms(fn, repeats: int) -> tuple[float, object]:

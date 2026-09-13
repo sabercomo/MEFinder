@@ -28,7 +28,9 @@
 
 ## 二、结果等价(与耗时无关,负载无关)
 
-`ab_search_compare.py --compare` 比较 round-2 前后 10 条查询的完整联合响应摘要:**全部逐字段一致**(`OK: 10 query digests identical to baseline`)。round-2 只改访问路径,未改任何契约字段;繁简变体一个不少(禁止跳过繁简提速这条守住)。
+> **更正(2026-09-13,审计后)**:早前本节的比较用的是 `_canonical_hit` **字段白名单**(~10 字段),会漏掉 citation_formats / copy_text / pdf_page_*_index / matched_text / match_quote / highlighted_html 等——不足以证明"完整响应一致"。已改为**比较完整响应**:每个 hit 的全部 57 字段 + 全部顶层键(含 index_metadata),不做白名单、改名、默认填充或额外舍入;经验证同一冻结快照上整份响应逐位确定(index_metadata 的 built_at 是建库时刻、非每请求),故无需排除任何字段。字段敏感性由 `tests/test_ab_search_compare.py`(13 项)钉死:分别改动 citation_formats/copy_text/pdf 页索引/matched_text/字符区间/上下文/highlighted_html/页锚/结果顺序/total/total_is_exact/index_metadata,比较必失败。
+
+**重跑的隔离 A/B**:旧版 = 短词优化前代码 `ab325fb`(`search_recall.py` 无 `_instr_eligibility_clause`,全表扫描),新版 = `bef86f7`;两版都跑**真实繁简联合路径**(`execute_with_script_folding`,繁体变体一个不少)。用 **`git worktree` 独立检出**旧版运行(不临时替换共享工作区的 `search_recall.py`),同一冻结快照(`content_sha256 5670b0d1…`,63,994 段)。结果:**10 条查询的完整响应逐字段一致**(`OK: 10 query digests identical to baseline`)。故 round-2 的 rowid 早停只改访问路径,未改任何响应字段。
 
 ## 三、候选预算边界(`tests/test_search_candidate_budget.py`,8 项)
 
