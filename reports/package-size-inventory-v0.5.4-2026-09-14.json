@@ -1,0 +1,70 @@
+{
+  "report": "package-size-inventory",
+  "date": "2026-09-14",
+  "phase": "阶段1 验收基线",
+  "measured_by": "Claude Opus 4.8",
+  "method": "ditto -x -k 解包 → du -sk(磁盘占用) + stat -f%z 求和(逻辑大小);sidecar 用 PyInstaller.archive.readers.CArchiveReader 只读枚举条目(不执行二进制)",
+  "tested_artifact": {
+    "name": "MEFinder-v0.5.4-macos-arm64.zip",
+    "bytes": 166229655,
+    "sha256": "9d20bf801d4db54ee62f6c7b127592af5e7edab8a6e74d1f235473889a0278b4",
+    "build_source_commit": "b1f0082",
+    "sha_source": "docs/release-notes-0.5.4.md 当前权威条目"
+  },
+  "size_notions": {
+    "compressed": "分发下载体积(ZIP/DMG 字节)",
+    "logical": "各文件内容字节之和(stat -f%z 求和)",
+    "disk": "文件系统分配的块(du -sk，含块对齐/目录开销)"
+  },
+  "distribution_bytes": {
+    "macos_arm64_zip": 166229655,
+    "macos_arm64_dmg": 176372120,
+    "macos_x86_64_zip": 171323096,
+    "macos_x86_64_dmg": 180602404
+  },
+  "installed_app_arm64": {
+    "logical_bytes": 298037416,
+    "logical_mib": 284.2,
+    "disk_kib": 291944,
+    "disk_mib": 285.1,
+    "components": {
+      "Contents/MacOS/MEFinder": {"logical_bytes": 15179216, "disk_kib": 14824, "mib": 14.5},
+      "Contents/MacOS/MEFinderMCP_sidecar_onefile": {"logical_bytes": 81694112, "disk_kib": 79780, "mib": 77.9},
+      "Contents/Frameworks": {"logical_bytes": 194936585, "disk_kib": 190644, "mib": 186.2},
+      "Contents/Resources": {"logical_bytes": 6112117, "disk_kib": 6580, "mib": 6.4}
+    }
+  },
+  "frameworks_top_items_disk_mib": {
+    "onnxruntime": 70.8, "pymupdf": 44.0, "cryptography": 11.0, "python3.12": 8.4,
+    "tokenizers": 8.1, "PIL": 8.0, "Python.framework": 7.6, "hf_xet": 7.5,
+    "numpy": 7.0, "pydantic_core": 4.0, "libcrypto.3.dylib": 3.4, "py_rust_stemmers": 0.6
+  },
+  "sidecar_carchive": {
+    "method": "CArchiveReader 只读，未执行 sidecar",
+    "entry_count": 249,
+    "total_uncompressed_mib": 198.2,
+    "total_compressed_mib": 77.2,
+    "disk_file_mib": 77.9,
+    "top_entries_mib": {
+      "onnxruntime": {"compressed": 19.5, "uncompressed": 70.8, "class": "compute"},
+      "pymupdf": {"compressed": 20.3, "uncompressed": 43.9, "class": "pdf-keep"},
+      "PYZ.pyz": {"compressed": 12.6, "uncompressed": 12.6, "class": "mixed-python-archive-not-separable"},
+      "cryptography": {"compressed": 3.6, "uncompressed": 11.3, "class": "shared"},
+      "python3.12": {"compressed": 2.6, "uncompressed": 8.3, "class": "shared-runtime"},
+      "tokenizers": {"compressed": 2.7, "uncompressed": 8.1, "class": "compute"},
+      "PIL": {"compressed": 3.1, "uncompressed": 8.0, "class": "shared"},
+      "Python.framework": {"compressed": 2.2, "uncompressed": 7.6, "class": "shared-runtime"},
+      "hf_xet": {"compressed": 3.5, "uncompressed": 7.5, "class": "model-download"},
+      "numpy": {"compressed": 2.0, "uncompressed": 6.9, "class": "compute"},
+      "py_rust_stemmers": {"compressed": 0.2, "uncompressed": 0.6, "class": "compute"}
+    },
+    "note": "sidecar 总大小不能当作对齐依赖可移除大小;PYZ.pyz 混合纯 Python 模块不可按依赖切分;共享运行时(python/Python.framework/libcrypto/libssl/base_library.zip)非单一依赖独占"
+  },
+  "phase2_candidate_compute_only_in_main_app_frameworks_mib": {
+    "onnxruntime": 70.8, "tokenizers": 8.1, "hf_xet": 7.5, "numpy": 7.0, "py_rust_stemmers": 0.6,
+    "subtotal": 94.0,
+    "caveat": "候选测算，非承诺；numpy 全部 lazy import 于对齐相关模块，test_core_without_alignment 佐证核心路径不依赖；pymupdf 44MiB 为 PDF 解析核心，不可移除"
+  },
+  "tested": ["macos-arm64 zip 解包安装体积", "主应用 Frameworks 依赖分布", "sidecar CArchive 只读条目"],
+  "not_tested_no_extrapolation": ["macos-x86_64 安装体积与依赖分布", "Windows 全部", "DMG 内部", "sidecar onefile 运行时自解压落盘体积"]
+}
