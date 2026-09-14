@@ -68,12 +68,21 @@ try:
     # generation must still fail clearly. The capability check comes from probing
     # that external runtime (not a main-process find_spec), and there is no
     # silent fallback to in-process compute.
+    from contextlib import contextmanager
     from src.me_finder.alignment_compute import AlignmentComputeError, COMPONENT_MISSING
     class _MissingComputeRuntime:
         def __init__(self,**kwargs): pass
         def probe(self): raise AlignmentComputeError(COMPONENT_MISSING,'compute runtime missing')
+    class _RT:
+        @contextmanager
+        def mutation(self): yield
+    class _DO:
+        @contextmanager
+        def operation(self): yield
     with patch('src.me_finder.application.text_alignment_coordinator.model_component_installed',return_value=True):
-        coordinator=TextAlignmentCoordinator(app.paths,None,None,compute_runner_factory=lambda **kw:_MissingComputeRuntime())
+        # The probe now runs inside the lifecycle (so a close during probe drains
+        # it), hence real index-runtime / durable stubs.
+        coordinator=TextAlignmentCoordinator(app.paths,_RT(),_DO(),compute_runner_factory=lambda **kw:_MissingComputeRuntime())
         try:
             coordinator.generate('bench-pair','bench-002','bench-003',force=True)
         except TextAlignmentFailed as exc:

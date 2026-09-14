@@ -16,6 +16,15 @@
 | P2 缺"无 NumPy 主进程 + 真实外部运行时成功生成发布"闭环 | 新增该真实闭环测试(子解释器禁 import numpy/fastembed/onnx,经真实子进程生成并发布,断言主进程从未 import 计算栈) |
 | P2 对照用用户缓存、共享缓存削弱验证 | 测试与脚本改用**隔离缓存**(模型只读 symlink + 全新 document-vectors);验证冷缓存生成与暖缓存复用;实测用户向量缓存文件数不变 |
 
+## 0b. 针对复审的修复(第二轮)
+
+| 复审项 | 修复 |
+|---|---|
+| P1 探测未纳入生命周期,关闭时 worker 可成孤儿 | `probe()` 移入 `durable_operations.operation()` + `index_runtime.mutation()`;close 的 drain 会等待、`request_embedding_cancel` 会取消它。新增回归:probe 期间 gate.active==1、取消后 drain 返回、结果为 Cancelled |
+| P2 启动失败遗留含正文的临时文件 | `__call__`/`probe` 的 try/finally **从建临时目录起**覆盖清理(写入/启动失败也清)。新增回归:不存在的 worker 路径 → `worker_start_failed` 后无残留临时目录 |
+| P3 隔离缓存经符号链接改写用户 installed 回执 | 只 symlink `models--*` 只读模型;`installed/` 与 `document-vectors/` 为**全新可写本地目录**。测试/脚本/闭环三处同步。新增回归:真实推理后用户 `installed/` 回执 mtime/大小不变 |
+| P4 组件错误与探测取消在界面显示为解析失败 | 新增 `TextAlignmentComponentUnavailable`;coordinator 用统一映射:CANCELLED→取消、component_missing/protocol/worker_start_failed→组件不可用(可展示消息)、其余→失败;controller 对组件不可用返回 **503 + 具体原因**(非"检查解析文本")。新增 coordinator/controller 回归 |
+
 ## 1. 对照结论:进程内 vs 独立进程完全一致(无容差)
 
 | 对照 | 样本/缓存 | 结果 |
@@ -35,6 +44,7 @@
 - 冻结产物：本轮由 `build_macos.sh` 从含**修复后**代码的工作区重建的 `MEFinder.app`(arm64,onedir,ad-hoc 签名)。**本地冒烟用构建,非发布**;已公开 v0.5.4 权威 SHA 不变;`release/` 被 gitignore。
 - 冻结 worker 探测:`MEFinder.app/Contents/MacOS/MEFinder alignment-compute-worker --probe <control>` → hello,capabilities 全 true。
 - 冻结 worker 计算:经 runner 以 `[<app-exe>, alignment-compute-worker]` 驱动,**隔离冷缓存**,输出逐链接、逐锚点与 in-process 完全一致。
+- **范围说明**:冻结冒烟验证的是**冻结 worker 传输 + 计算路径**(`c61b627` 构建)。第二轮复审的四项修复是**主进程侧**逻辑(coordinator 生命周期、runner 临时清理、缓存隔离、错误映射),不改变冻结 worker 的传输/计算行为(worker 仅新增测试用 `noisy` 分支),由单元/集成测试验证,未再单独重打冻结包。
 
 ## 3. 错误、生命周期与失效保护(自动化测试)
 
@@ -51,6 +61,10 @@
 | **worker 大量诊断输出** | 探测不阻塞(DEVNULL,无管道背压)✓ |
 | **windowed 无继承 std 流(sys.stdout/stderr=None)** | worker 仍经控制文件正常应答 ✓ |
 | 端到端崩溃/失配 → 无半成品 | DB 无新 completed run ✓ |
+| **worker 启动失败** | `worker_start_failed`,**含正文的临时文件不残留** ✓ |
+| **探测在生命周期内且可取消** | probe 期间 gate.active==1,取消后 drain,结果为取消(不留孤儿)✓ |
+| **组件不可用 / 探测取消的界面映射** | 组件不可用→503 具体原因、探测取消→取消(非"检查解析文本")✓ |
+| **隔离缓存不改用户缓存** | 真实推理后用户 `installed/` 与 `document-vectors/` 不变 ✓ |
 | 自定义 embedding_provider 跨进程 | 明确拒绝 ✓ |
 | 无计算依赖冷启后端 | 搜索/读取已存对齐/优雅退出可用(`test_core_without_alignment`)✓ |
 | 协调门禁(mutation/durable/write_window,不 suspend/reopen,不放松锁) | ✓（`test_text_alignment_coordinator`、`test_alignment_write_window_availability`) |
@@ -59,7 +73,7 @@
 
 | 门禁 | 状态 |
 |---|---|
-| 全量 unittest（PYTHONUTF8=1） | **2299 通过 / 23 skip / 0 失败** |
+| 全量 unittest（PYTHONUTF8=1） | **2306 通过 / 23 skip / 0 失败** |
 | ruff（pyflakes F） | **通过** |
 | macOS arm64 `build_macos.sh`（含门禁 + PyInstaller + 签名 + DMG verify） | **通过**(本地冒烟构建,含修复代码) |
 | CI(远端) | 需重跑核验;probe 依赖已按 `_DEPS_PRESENT` 分流,缺栈时运行"正确拒绝"分支 |

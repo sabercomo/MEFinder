@@ -13,6 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 from .application.text_alignment_coordinator import (
     TextAlignmentCancelled,
+    TextAlignmentComponentUnavailable,
     TextAlignmentCoordinator,
     TextAlignmentFailed,
     TextAlignmentRejected,
@@ -130,6 +131,13 @@ class TextAlignmentController:
             # cause is diagnosable from the log, not only shown once in a toast.
             LOGGER.warning("text alignment rejected: %s", exc)
             return 400, {"error": str(exc)}
+        except TextAlignmentComponentUnavailable as exc:
+            # A missing / incompatible / unstartable compute runtime is a
+            # distinct, user-actionable condition — surface its specific reason
+            # instead of the misleading "检查解析文本". Must precede the generic
+            # TextAlignmentFailed handler (this is a subclass).
+            LOGGER.warning("alignment compute component unavailable: %s", exc)
+            return 503, {"error": str(exc), "component_unavailable": True}
         except TextAlignmentFailed:
             self._log_exception("automatic text alignment failed")
             return 500, {"error": "自动对齐失败，请检查两本文献的解析文本。"}

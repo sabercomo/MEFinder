@@ -49,16 +49,28 @@ EXCLUDED_PERSISTED_FIELDS = {
 
 
 def isolated_cache(tmp: Path, *, name: str = "cache") -> Path:
-    """A compute cache whose model files are symlinked read-only from the real
-    cache but whose document-vectors folder is fresh (cold inference)."""
+    """A compute cache that reuses the real model blobs read-only but keeps every
+    *writable* location fresh, so the user's cache is never modified.
+
+    Only the ``models--*`` snapshot dirs are symlinked (read-only reads). The
+    ``installed`` receipt dir and ``document-vectors`` are fresh, writable local
+    dirs — a symlink there would let ``_write_model_receipt`` / vector caching
+    write through into the user's cache. Fresh ``installed`` is fine:
+    ``model_component_installed`` checks the snapshot files, not the receipt.
+    """
+
+    import shutil
 
     cache = tmp / name
     cache.mkdir(parents=True)
     for child in MODEL_CACHE.iterdir():
-        if child.name == "document-vectors":
-            continue
-        (cache / child.name).symlink_to(child)
+        if child.name.startswith("models--"):
+            (cache / child.name).symlink_to(child)
+    (cache / "installed").mkdir()
     (cache / "document-vectors").mkdir()
+    tag = MODEL_CACHE / "CACHEDIR.TAG"
+    if tag.exists():
+        shutil.copy2(tag, cache / "CACHEDIR.TAG")
     return cache
 
 
@@ -103,6 +115,33 @@ class ComputeParityTests(unittest.TestCase):
             sub_links, sub_anchors = runner(self.SRC, self.TGT, **self._kwargs(cache_b))
             self.assertEqual(in_links, sub_links)
             self.assertEqual(in_anchors, sub_anchors)
+
+    def test_isolated_cache_does_not_modify_user_installed_receipts(self) -> None:
+        # Real inference writes an install receipt; the isolated cache must
+        # capture that write locally, leaving the user's installed/ untouched.
+        installed = MODEL_CACHE / "installed"
+
+        def snapshot():
+            if not installed.exists():
+                return None
+            return {
+                p.name: (p.stat().st_mtime_ns, p.stat().st_size)
+                for p in installed.iterdir()
+            }
+
+        before = snapshot()
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = isolated_cache(Path(tmp), name="iso")
+            # The symlinked-only-models design means installed/ is a fresh local
+            # dir, not a link back to the user cache.
+            self.assertFalse((cache / "installed").is_symlink())
+            runner = SubprocessAlignmentComputeRunner(task_id="noiso")
+            runner(self.SRC, self.TGT, **self._kwargs(cache))
+            self.assertTrue(
+                list((cache / "installed").glob("*.json")),
+                "receipt should be written into the isolated cache",
+            )
+        self.assertEqual(snapshot(), before, "user installed/ receipts must be untouched")
 
     def test_warm_cache_reuse_matches_cold(self) -> None:
         # First subprocess run is cold (writes vectors); the second reuses them.
@@ -200,11 +239,13 @@ from scripts.performance_fixture import create_fixture
 from src.me_finder.text_alignment import generate_alignment
 from src.me_finder.alignment_compute import SubprocessAlignmentComputeRunner
 import sqlite3
-# isolated compute cache: symlink models, fresh vectors
+# isolated compute cache: symlink only read-only model blobs; fresh writable
+# installed/ and document-vectors/ so nothing writes back into the user cache.
 cache = root/'cache'; cache.mkdir()
 for child in model_cache.iterdir():
-    if child.name!='document-vectors':
+    if child.name.startswith('models--'):
         (cache/child.name).symlink_to(child)
+(cache/'installed').mkdir()
 (cache/'document-vectors').mkdir()
 create_fixture(root, documents=2, paragraphs=20, alignment_paragraphs=8)
 db = root/'data/index.sqlite3'

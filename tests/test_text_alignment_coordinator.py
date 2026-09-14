@@ -1,16 +1,27 @@
 from __future__ import annotations
 
+import threading
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from src.me_finder import embedding_runtime
+from src.me_finder.alignment_compute import (
+    AlignmentComputeError,
+    CANCELLED,
+    COMPONENT_MISSING,
+    WORKER_CRASHED,
+)
 from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentCancelled,
+    TextAlignmentComponentUnavailable,
     TextAlignmentCoordinator,
+    TextAlignmentFailed,
 )
-from src.me_finder.lifecycle import DurableOperationClosedError
+from src.me_finder.lifecycle import DurableOperationClosedError, DurableOperationGate
 
 
 class _IndexRuntime:
@@ -172,6 +183,103 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
         generate.assert_not_called()
         # The mutation window must still close cleanly on the cancel path.
         self.assertEqual(index_runtime.events[-1], "mutation-exit")
+
+
+class _RaisingProbeRunner:
+    def __init__(self, exc: AlignmentComputeError, **_kwargs) -> None:
+        self._exc = exc
+
+    def probe(self):
+        raise self._exc
+
+
+class _SlowProbeRunner:
+    """Probe blocks until the cancel signal fires, then reports cancellation —
+    mimicking a real probe that honours cancellation while a process is live."""
+
+    def __init__(self, started: threading.Event, **kwargs) -> None:
+        self._started = started
+        self._cancel = kwargs.get("cancel_check")
+
+    def probe(self):
+        self._started.set()
+        while not (self._cancel and self._cancel()):
+            time.sleep(0.01)
+        raise AlignmentComputeError(CANCELLED, "cancelled during probe")
+
+
+class TextAlignmentCoordinatorProbeTests(unittest.TestCase):
+    """The probe spawns a process, so it must be inside the lifecycle (drained
+    on close, cancellable) and its failures mapped like compute failures."""
+
+    def setUp(self) -> None:
+        patch = mock.patch(
+            "src.me_finder.application.text_alignment_coordinator."
+            "model_component_installed",
+            return_value=True,
+        )
+        patch.start()
+        self.addCleanup(patch.stop)
+        # Leave the module-global cancel flag clean for other tests.
+        self.addCleanup(embedding_runtime.begin_embedding_run)
+        self.paths = SimpleNamespace(
+            index_path=Path("D:/runtime/data/index.sqlite3"),
+            runtime_root=Path("D:/runtime"),
+        )
+
+    def test_probe_component_missing_maps_to_component_unavailable(self) -> None:
+        coordinator = TextAlignmentCoordinator(
+            self.paths, _IndexRuntime(), _DurableOperations(),
+            compute_runner_factory=lambda **kw: _RaisingProbeRunner(
+                AlignmentComputeError(COMPONENT_MISSING, "missing")
+            ),
+        )
+        with self.assertRaises(TextAlignmentComponentUnavailable):
+            coordinator.generate("group", "a", "b")
+
+    def test_probe_crash_maps_to_plain_failure(self) -> None:
+        coordinator = TextAlignmentCoordinator(
+            self.paths, _IndexRuntime(), _DurableOperations(),
+            compute_runner_factory=lambda **kw: _RaisingProbeRunner(
+                AlignmentComputeError(WORKER_CRASHED, "boom")
+            ),
+        )
+        with self.assertRaises(TextAlignmentFailed) as ctx:
+            coordinator.generate("group", "a", "b")
+        self.assertNotIsInstance(ctx.exception, TextAlignmentComponentUnavailable)
+
+    def test_probe_is_inside_durable_operation_and_cancellable(self) -> None:
+        # A real gate: while the probe runs it must count as an active durable
+        # operation (so a close waits for it), and firing the cancel signal must
+        # let that operation drain — proving a close during probe reclaims it
+        # instead of leaving an orphan.
+        gate = DurableOperationGate()
+        started = threading.Event()
+        embedding_runtime.begin_embedding_run()  # clear cancel flag
+        coordinator = TextAlignmentCoordinator(
+            self.paths, _IndexRuntime(), gate,
+            compute_runner_factory=lambda **kw: _SlowProbeRunner(started, **kw),
+        )
+        outcome: dict = {}
+
+        def run() -> None:
+            try:
+                coordinator.generate("group", "a", "b")
+            except BaseException as exc:  # noqa: BLE001
+                outcome["exc"] = exc
+
+        worker = threading.Thread(target=run)
+        worker.start()
+        try:
+            self.assertTrue(started.wait(5), "probe did not start")
+            self.assertEqual(gate.active, 1, "probe must run inside the durable operation")
+            self.assertFalse(gate.wait(timeout=0.2), "gate should still be active during probe")
+            embedding_runtime.request_embedding_cancel()  # simulate shutdown/cancel
+            self.assertTrue(gate.wait(timeout=5), "operation must drain after cancel")
+        finally:
+            worker.join(5)
+        self.assertEqual(gate.active, 0)
+        self.assertIsInstance(outcome.get("exc"), TextAlignmentCancelled)
 
 
 if __name__ == "__main__":

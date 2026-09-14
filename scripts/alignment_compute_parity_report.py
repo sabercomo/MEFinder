@@ -73,17 +73,24 @@ def _digest(rows) -> str:
 
 
 def _isolated_cache(tmp: Path, models: Path, name: str) -> Path:
-    """Compute cache with model files symlinked read-only and a fresh vector
-    cache, so the user's real cache is never written and each run does cold
-    inference."""
+    """Compute cache that reuses the model blobs read-only but keeps every
+    writable location fresh, so the user's real cache is never written (not the
+    vector cache and not the ``installed`` receipt) and each run is cold.
+
+    Only ``models--*`` snapshot dirs are symlinked; ``installed`` and
+    ``document-vectors`` are fresh writable dirs (a symlink there would let the
+    receipt writer / vector cache write through into the user's cache)."""
 
     cache = tmp / name
     cache.mkdir(parents=True)
     for child in models.iterdir():
-        if child.name == "document-vectors":
-            continue
-        (cache / child.name).symlink_to(child)
+        if child.name.startswith("models--"):
+            (cache / child.name).symlink_to(child)
+    (cache / "installed").mkdir()
     (cache / "document-vectors").mkdir()
+    tag = models / "CACHEDIR.TAG"
+    if tag.exists():
+        shutil.copy2(tag, cache / "CACHEDIR.TAG")
     return cache
 
 

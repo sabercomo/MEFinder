@@ -282,6 +282,34 @@ class RunnerFailureTests(unittest.TestCase):
         with self.assertRaises(ac.AlignmentComputeError):
             runner(["a"], ["b"], embedding_provider=lambda *a, **k: None, **TINY_INPUTS)
 
+    def test_worker_start_failure_leaves_no_request_temp_files(self) -> None:
+        # The request file holds document text; a launch failure must not leave
+        # it (or its temp dir) behind.
+        import glob
+
+        pattern = os.path.join(tempfile.gettempdir(), "mefinder-align-compute-*")
+        before = set(glob.glob(pattern))
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="nostart", launch_command=["/nonexistent/mefinder-worker-xyz-404"]
+        )
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner(["机密正文文本"], ["secret body"], **TINY_INPUTS)
+        self.assertEqual(ctx.exception.code, ac.WORKER_START_FAILED)
+        self.assertEqual(set(glob.glob(pattern)), before, "temp dir with document text leaked")
+
+    def test_probe_start_failure_leaves_no_temp_files(self) -> None:
+        import glob
+
+        pattern = os.path.join(tempfile.gettempdir(), "mefinder-align-probe-*")
+        before = set(glob.glob(pattern))
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="nostart", launch_command=["/nonexistent/mefinder-worker-xyz-404"]
+        )
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner.probe()
+        self.assertEqual(ctx.exception.code, ac.WORKER_START_FAILED)
+        self.assertEqual(set(glob.glob(pattern)), before, "probe temp dir leaked")
+
 
 class NoPublishOnFailureTests(unittest.TestCase):
     """generate_alignment must not publish when the compute fails or is stale.

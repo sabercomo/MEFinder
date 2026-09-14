@@ -39,7 +39,10 @@
 
 ## 4. 生命周期与失效保护
 
-- **取消/退出(跨平台)**:POSIX 用独立会话/进程组(`start_new_session=True`)+ `killpg`;Windows 无 `killpg`,用 `CREATE_NEW_PROCESS_GROUP` + `terminate()`(worker 无自建子进程)。runner 轮询 `cancel_check`(= `embedding_cancel_requested()`,用户取消与应用关闭都置位),命中即结束 worker,报 `cancelled`。计算期主进程**不持** DB 锁(准备相位已提交关闭),硬杀 worker 不影响库,也不影响其他任务/进程。
+- **探测与计算都在生命周期内**:`probe()` 与 `generate_alignment` 都在 `index_runtime.mutation()` + `durable_operations.operation()` 内运行。关闭走 `begin_shutdown`(置 `request_embedding_cancel`)→ 等 `durable_operations.wait()` 排空。因两者都是活跃 durable operation 且都轮询取消信号,**关闭期间发起的探测/计算会被取消并等待回收**,不留孤儿进程。
+- **取消/退出(跨平台)**:POSIX 用独立会话/进程组(`start_new_session=True`)+ `killpg`;Windows 无 `killpg`,用 `CREATE_NEW_PROCESS_GROUP` + `terminate()`(worker 无自建子进程)。runner 轮询 `cancel_check`(= `embedding_cancel_requested()`),命中即结束 worker,报 `cancelled`。计算期主进程**不持** DB 锁(准备相位已提交关闭),硬杀 worker 不影响库,也不影响其他任务/进程。
+- **临时文件清理**:`probe`/`__call__` 的清理从**建临时目录**起用 try/finally 覆盖;写入或启动失败也清(请求文件含正文,不得残留)。
+- **错误分类到界面**:coordinator 统一映射 —— `cancelled`→取消;`component_missing`/`protocol_incompatible`/`worker_start_failed`→`TextAlignmentComponentUnavailable`(可展示原因,HTTP 503);其余→`TextAlignmentFailed`(HTTP 500)。不再把组件问题显示成"检查解析文本"。
 - **不发布半成品**:发布在计算成功返回**之后**才发生;崩溃、协议不兼容、启动失败、取消都在发布前中止,DB 无新 completed run。
 - **不发布过期结果**:runner 校验结果 `input_identity` 与请求一致,否则 `result_mismatch` 拒绝发布。既有写入协调(串行阻止修改)**保留不放松**。
 - **自定义 embedding_provider** 无法跨进程序列化:子进程 runner 显式拒绝,不静默退回进程内。
@@ -52,6 +55,6 @@
 
 ## 6. 已验证 / 未验证(平台与门禁见验收报告)
 
-- 已验证(macOS arm64,2026-09-14):进程内 vs 子进程**逐链接、分数、分类、锚点、字符区间完全一致**(无容差,含冷缓存直接对照、暖缓存复用、真实书对 967 链接 sha256 相同、无 NumPy 主进程真实闭环);协议/版本不符/崩溃/取消/组件缺失/结果 protocol·task·input 失配错误明确且不发布;windowed 无继承 std 流与大量诊断不阻塞已测;全量 unittest 2299 通过(23 skip)、ruff 通过;冻结产物(文件传输)worker 探测+计算与进程内一致。
+- 已验证(macOS arm64,2026-09-14):进程内 vs 子进程**逐链接、分数、分类、锚点、字符区间完全一致**(无容差,含冷缓存直接对照、暖缓存复用、真实书对 967 链接 sha256 相同、无 NumPy 主进程真实闭环);协议/版本不符/崩溃/取消/组件缺失/结果 protocol·task·input 失配错误明确且不发布;windowed 无继承 std 流与大量诊断不阻塞已测;全量 unittest 2306 通过(23 skip)、ruff 通过;冻结产物(文件传输)worker 探测+计算与进程内一致。
 - 未在目标主机验证:Windows(代码已分平台实现,未在 Windows 构建/冒烟)、macOS x86_64。
 - 见 [`reports/alignment-compute-2a-acceptance-2026-09-14.md`](../../reports/alignment-compute-2a-acceptance-2026-09-14.md):完整对照、冻结冒烟、已测/未测平台与针对审计的修复清单。

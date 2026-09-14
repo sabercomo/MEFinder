@@ -7,6 +7,7 @@ from pathlib import Path
 
 from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentCancelled,
+    TextAlignmentComponentUnavailable,
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
@@ -169,6 +170,19 @@ class TextAlignmentControllerTests(unittest.TestCase):
         self.ready = False
         self.assertEqual(self.controller.targets({"source_id": ["pdf-de"]})[0], 503)
         self.assertEqual(self.controller.locate(self._locate_payload())[0], 503)
+
+    def test_component_unavailable_surfaces_specific_reason_not_parse_message(self) -> None:
+        # A missing / incompatible / unstartable compute runtime must reach the
+        # user with its own actionable reason and a distinct status — not the
+        # misleading "请检查两本文献的解析文本" 500.
+        self.coordinator.error = TextAlignmentComponentUnavailable(
+            "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。"
+        )
+        status, body = self.controller.generate(self._generate_payload())
+        self.assertEqual(status, 503)
+        self.assertTrue(body.get("component_unavailable"))
+        self.assertIn("对齐计算运行时未安装", body["error"])
+        self.assertNotIn("解析文本", body["error"])
 
     def test_cancelled_alignment_is_reported_not_failed(self) -> None:
         self.coordinator.error = TextAlignmentCancelled("stopped")

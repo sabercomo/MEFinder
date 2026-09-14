@@ -23,6 +23,7 @@ from ..alignment_compute import (
     CANCELLED,
     COMPONENT_MISSING,
     PROTOCOL_INCOMPATIBLE,
+    WORKER_START_FAILED,
     SubprocessAlignmentComputeRunner,
 )
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
@@ -33,21 +34,43 @@ class TextAlignmentRejected(ValueError):
 
 
 class TextAlignmentFailed(RuntimeError):
-    """Alignment computation or index publication failed."""
+    """Alignment computation or index publication failed on the data."""
+
+
+class TextAlignmentComponentUnavailable(TextAlignmentFailed):
+    """The external compute runtime/component is missing, incompatible or could
+    not start — a distinct, user-actionable condition (not a parse failure).
+
+    Subclasses TextAlignmentFailed so existing handlers still catch it, while a
+    caller that wants the specific, showable reason can catch this first.
+    """
 
 
 class TextAlignmentCancelled(Exception):
     """The in-flight alignment was cancelled by the user."""
 
 
-_PROBE_MESSAGES = {
+# Compute failures that mean "the external runtime is unavailable" (as opposed
+# to a computation that ran but failed on the data). These carry a showable,
+# user-actionable message to the HTTP/task layer.
+_COMPONENT_CODES = {COMPONENT_MISSING, PROTOCOL_INCOMPATIBLE, WORKER_START_FAILED}
+
+_COMPONENT_MESSAGES = {
     COMPONENT_MISSING: "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。",
     PROTOCOL_INCOMPATIBLE: "对齐计算进程版本不兼容，请更新应用后再生成。",
+    WORKER_START_FAILED: "对齐计算进程无法启动：请检查应用安装是否完整。",
 }
 
 
-def _probe_message(exc: AlignmentComputeError) -> str:
-    return _PROBE_MESSAGES.get(exc.code, str(exc))
+def _map_compute_error(exc: AlignmentComputeError) -> Exception:
+    """Translate a compute-seam error into the coordinator's exception, keeping
+    cancellation as cancellation and component problems distinct and showable."""
+
+    if exc.code == CANCELLED:
+        return TextAlignmentCancelled(str(exc))
+    if exc.code in _COMPONENT_CODES:
+        return TextAlignmentComponentUnavailable(_COMPONENT_MESSAGES.get(exc.code, str(exc)))
+    return TextAlignmentFailed(str(exc))
 
 
 def build_compute_runner(*, task_id, cancel_check):
@@ -100,20 +123,21 @@ class TextAlignmentCoordinator:
                 "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
             )
         begin_embedding_run()
-        # The compute runs out of process. Capability is checked by probing that
-        # external runtime — NOT by a main-process find_spec — and a failed probe
-        # is a clear, local error: the coordinator never silently falls back to
-        # in-process computation.
         runner = self._compute_runner_factory(
             task_id=uuid.uuid4().hex, cancel_check=embedding_cancel_requested
         )
-        try:
-            runner.probe()
-        except AlignmentComputeError as exc:
-            raise TextAlignmentFailed(_probe_message(exc)) from exc
         with self._index_runtime.mutation():
             try:
                 with self._durable_operations.operation():
+                    # Probe the external runtime *inside* the durable operation
+                    # and the write window: it spawns a process, so it must be
+                    # covered by the shutdown drain (close waits for the active
+                    # operation) and be cancellable (the probe polls the same
+                    # cancel signal), or a close during probe would leave an
+                    # orphan. Capability is checked by probing that runtime —
+                    # NOT by a main-process find_spec — and there is no silent
+                    # fall back to in-process computation.
+                    runner.probe()
                     result = generate_alignment(
                         self._paths.index_path,
                         document_group_id,
@@ -135,13 +159,11 @@ class TextAlignmentCoordinator:
             except InvalidAlignmentRequest as exc:
                 raise TextAlignmentRejected(str(exc)) from exc
             except AlignmentComputeError as exc:
-                # A cancelled compute (user cancel or app shutdown killed the
-                # worker) is a cancellation; every other compute failure —
-                # crash, protocol mismatch, missing component surfacing late —
-                # is a clear failure. Neither publishes a half-built result.
-                if exc.code == CANCELLED:
-                    raise TextAlignmentCancelled(str(exc)) from exc
-                raise TextAlignmentFailed(str(exc)) from exc
+                # Cancellation (user or shutdown) stays a cancellation; a missing
+                # or incompatible or unstartable runtime is a distinct, showable
+                # component error; every other compute failure is a plain
+                # failure. None of these publish a half-built result.
+                raise _map_compute_error(exc) from exc
             except (OSError, sqlite3.Error, RuntimeError) as exc:
                 raise TextAlignmentFailed(str(exc)) from exc
         return result

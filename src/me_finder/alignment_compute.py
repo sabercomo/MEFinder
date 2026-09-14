@@ -447,9 +447,10 @@ class SubprocessAlignmentComputeRunner:
         main-process find_spec check)."""
 
         work_dir = Path(tempfile.mkdtemp(prefix="mefinder-align-probe-"))
-        control_path = work_dir / "control.ndjson"
-        process = self._spawn(["--probe", str(control_path)])
+        process = None
         try:
+            control_path = work_dir / "control.ndjson"
+            process = self._spawn(["--probe", str(control_path)])
             for message in self._pump(process, control_path):
                 kind = message.get("type")
                 if kind == "hello":
@@ -474,10 +475,12 @@ class SubprocessAlignmentComputeRunner:
                         str(message.get("message") or "对齐计算进程无法启动。"),
                     )
             raise AlignmentComputeError(
-                WORKER_CRASHED, f"对齐计算进程未返回能力应答(exit={process.poll()})。"
+                WORKER_CRASHED,
+                f"对齐计算进程未返回能力应答(exit={process.poll() if process else None})。",
             )
         finally:
-            _terminate(process)
+            if process is not None:
+                _terminate(process)
             _rmtree(work_dir)
 
     def __call__(
@@ -517,13 +520,16 @@ class SubprocessAlignmentComputeRunner:
             target_language=target_language,
             reviewed_body_ranges=reviewed_body_ranges,
         )
+        # The request file holds document text; the try/finally must cover it
+        # from creation, so a write or spawn failure never leaves it on disk.
         work_dir = Path(tempfile.mkdtemp(prefix="mefinder-align-compute-"))
-        request_path = work_dir / "request.json"
-        result_path = work_dir / "result.json"
-        control_path = work_dir / "control.ndjson"
-        request_path.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
-        process = self._spawn([str(request_path), str(result_path), str(control_path)])
+        process = None
         try:
+            request_path = work_dir / "request.json"
+            result_path = work_dir / "result.json"
+            control_path = work_dir / "control.ndjson"
+            request_path.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+            process = self._spawn([str(request_path), str(result_path), str(control_path)])
             saw_hello = False
             for message in self._pump(process, control_path):
                 kind = message.get("type")
@@ -548,7 +554,8 @@ class SubprocessAlignmentComputeRunner:
                 code, f"对齐计算进程未返回结果(exit={returncode})。"
             )
         finally:
-            _terminate(process)
+            if process is not None:
+                _terminate(process)
             _rmtree(work_dir)
 
     def _consume_result(self, message, request, result_path: Path) -> ComputeResult:
