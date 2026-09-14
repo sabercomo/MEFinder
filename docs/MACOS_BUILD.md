@@ -157,11 +157,20 @@ Homebrew 渠道要求 macOS 14 及以上（cask 的 `depends_on macos` 取两架
 
 ### 发版后自动化（GitHub Actions）
 
-`.github/workflows/homebrew-tap.yml` 在 GitHub Release **published** 时触发（也可
-`workflow_dispatch` 手动传 `version` 重跑），自动完成上面第 4 步的**推送独立 tap
-仓库**部分：从该 Release 下载 `MEFinder-v*-macos-*.dmg` 资产、运行
+`.github/workflows/homebrew-tap.yml` 自动完成上面第 4 步的**推送独立 tap 仓库**部分：
+从该 Release 下载 `MEFinder-v*-macos-*.dmg` 资产、运行
 `update_homebrew_tap.py --tap-repo … --push`，把新版 `Casks/mefinder.rb` 推到独立
 tap 仓库。这样正式发版后 `brew upgrade --cask mefinder` 即可跟到新版，无需本地再动手。
+
+三种触发方式：
+
+- **Release published**：网页点「Publish release」最可靠；用 `gh`/API 把草稿改为发布常
+  **不触发** `release` 事件（实测 v0.5.4 即如此）。
+- **push tag `v*`**：命令行/API 发布的兜底——草稿发布时才创建的 tag 会触发它。
+- **workflow_dispatch**：手动补跑，在 Actions 页填 `version`（如 `0.5.4`）。
+
+三者可能对同一版本各触发一次，但 `update_homebrew_tap.py` 幂等：cask 内容无变化时跳过
+提交，重复运行安全。
 
 首次接入需在**主仓库** Settings → Secrets and variables → Actions 配置两项：
 

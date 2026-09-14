@@ -5,10 +5,17 @@ name: Update Homebrew tap
 #   - 变量 vars.HOMEBREW_TAP_REPO：独立 tap 仓库 owner/repo(如 sabercomo/homebrew-mefinder)
 #   - 密钥 secrets.HOMEBREW_TAP_TOKEN：对该 tap 仓库有 contents:write 权限的 PAT
 # 缺任一项时任务如实失败,不会静默跳过。
+#
+# 三种触发:release published(网页发布最可靠)、push tag v*(命令行/API 发布的兜底,
+# 发布草稿时才创建的 tag 会触发它)、workflow_dispatch(手动补跑)。三者可能对同一版本
+# 各触发一次,但 update_homebrew_tap.py 幂等——内容无变化时跳过提交,重复运行安全。
 
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -40,14 +47,17 @@ jobs:
         id: ver
         run: |
           set -euo pipefail
+          # 优先级:手动输入 > release 事件的 tag > push tag 的 ref_name。
           if [ -n "${{ github.event.inputs.version }}" ]; then
-            version="${{ github.event.inputs.version }}"
-          else
+            tag="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
             tag="${{ github.event.release.tag_name }}"
-            version="${tag#v}"
+          else
+            tag="${{ github.ref_name }}"
           fi
+          version="${tag#v}"
           if [ -z "$version" ]; then
-            echo "无法确定版本号(release.tag_name 为空,且未手动传入 version)。" >&2
+            echo "无法确定版本号(release/push/dispatch 三个来源都为空)。" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
