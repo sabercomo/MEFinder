@@ -62,6 +62,26 @@ _RUNTIME_DIR = "runtime"
 _MODELS_DIR = "models"
 
 
+def _builtin_stack_present() -> bool:
+    """Whether the app's *own* interpreter already has the compute stack.
+
+    Used only for the settings availability indicator, so an app that bundles
+    the numeric stack (today's build) reports alignment compute as available
+    without an independent runtime. A module-level function so tests can
+    simulate a stack-less (slim) main process.
+    """
+
+    from importlib.util import find_spec
+
+    try:
+        return all(
+            find_spec(name) is not None
+            for name in ("numpy", "fastembed", "onnxruntime")
+        )
+    except (ImportError, ValueError):
+        return False
+
+
 class ManagedAlignmentRuntimeError(RuntimeError):
     pass
 
@@ -331,6 +351,25 @@ class ManagedAlignmentRuntime:
             return None
         return self._venv_python(self.runtime_dir)
 
+    def compute_status(self) -> Dict[str, object]:
+        """Whether alignment compute is available now, and via which runtime.
+
+        ``provider`` is what a generation would actually use: the independent
+        runtime when installed (validated at install), otherwise the app's
+        bundled stack (2A behaviour) when its numeric stack is importable. This
+        is a preflight indicator for the settings status line — the authoritative
+        capability check remains the compute-time probe. Crucially it means an
+        existing user whose app bundles the stack sees "可用", not "未安装":
+        the independent runtime is optional until the main package is slimmed
+        (2C).
+        """
+
+        if self._installed():
+            return {"available": True, "provider": "independent"}
+        if _builtin_stack_present():
+            return {"available": True, "provider": "builtin"}
+        return {"available": False, "provider": "none"}
+
     def _has_models(self) -> bool:
         models = self.models_dir
         if not models.is_dir():
@@ -351,6 +390,7 @@ class ManagedAlignmentRuntime:
                 "installed_version": str(receipt.get("runtime_version") or ""),
                 "update_available": self._update_available(),
                 "has_models": self._has_models(),
+                "compute": self.compute_status(),
                 "runtime_dir": str(self.runtime_dir),
                 "state": state.state,
                 "operation": state.operation,

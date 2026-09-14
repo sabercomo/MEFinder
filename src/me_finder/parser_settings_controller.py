@@ -167,9 +167,19 @@ class ParserSettingsController:
         if component is None:
             return 400, {"error": "当前运行方式不支持下载译本对齐模型。"}
         try:
-            return 200, component.summary()
+            summary = component.summary()
         except (ManagedEmbeddingModelsError, OSError, ValueError) as exc:
             return 400, {"error": str(exc)}
+        # Fold in whether alignment compute is available now (independent runtime
+        # or the app's bundled stack), so the 译本对齐 settings section can show
+        # one honest status line without a second request.
+        runtime = self._managed_components.get("text-alignment-runtime")
+        if runtime is not None and hasattr(runtime, "compute_status"):
+            try:
+                summary = {**summary, "compute": runtime.compute_status()}
+            except (OSError, ValueError):
+                pass
+        return 200, summary
 
     def manage_text_alignment_models_component(
         self, payload: object

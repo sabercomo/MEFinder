@@ -31,7 +31,7 @@
 
 ## 3. 门禁
 
-- 全量 unittest：**2322 通过，23 跳过，0 失败**（`.venv-macos312-arm64`，`PYTHONUTF8=1`，`NO_PROXY` 含 localhost）。
+- 全量 unittest：**2326 通过，23 跳过，0 失败**（`.venv-macos312-arm64`，`PYTHONUTF8=1`，`NO_PROXY` 含 localhost；含设置页状态行后 +4）。
 - Ruff（pyflakes F）：`ruff check src tests` **All checks passed**。
 - 架构边界：`test_architecture_boundaries` 绿（web_runtime 690 行）。
 - HTTP 契约：`test_http_api_contract` 绿。
@@ -46,7 +46,7 @@
 
 - **真机 uv 安装（网络）**：未做——`alignment.packages` pin 组合可解析性、离线加载、与主应用嵌入逐位一致性均**待核实**。
 - **冻结态 worker 源交付**：独立 venv 需 me_finder 纯 Python 计算源随组件交付，属 **2C** 打包接线，本轮仅定义解析路径。
-- **设置页 UI**：安装/升级/卸载入口尚未接前端（`/api/text-alignment/runtime` 端点已就位）。
+- **设置页 UI**：本轮与用户确认后**只加诚实的「对齐计算：可用」状态行**（自带栈老包显示「可用 · 随应用提供」，不误报未安装）；安装/升级/卸载入口按“独立运行时 2B 可选、2C 才刚需”的判断**留到 2C**。端点 `/api/text-alignment/runtime` 已就位。状态行由 `/api/text-alignment/models` 响应折入的 `compute` 字段驱动。
 
 ## 5. 是否具备进入 2C 的条件
 

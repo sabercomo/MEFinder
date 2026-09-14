@@ -850,9 +850,26 @@
     }
   }
 
+  function renderAlignmentComputeStatus(compute) {
+    // Honest availability line: an app that bundles the compute stack shows
+    // "可用（随应用提供）", not "未安装" — the independent runtime is optional
+    // until the main package is slimmed. Missing deps是唯一需要用户处理的状态。
+    var status = document.getElementById('alignment-compute-status');
+    if (!status) return;
+    var provider = compute && compute.provider;
+    if (compute && compute.available) {
+      status.className = 'settings-status ready';
+      status.textContent = provider === 'independent' ? '可用 · 独立运行时' : '可用 · 随应用提供';
+    } else {
+      status.className = 'settings-status warning';
+      status.textContent = '不可用 · 缺少计算依赖，请更新应用';
+    }
+  }
+
   function renderAlignmentModelComponent(component) {
     if (!component || !Array.isArray(component.models)) return;
     settingsStore.alignmentModelComponent = component;
+    if (component.compute) renderAlignmentComputeStatus(component.compute);
     var downloading = false;
     component.models.forEach(function(model) {
       var button = document.getElementById('embedding-model-download-' + model.id);

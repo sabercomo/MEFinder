@@ -51,6 +51,15 @@
 - `build_compute_runner`（`text_alignment_coordinator.py`）：装了独立运行时就用**它**启动 worker（主进程无需数值栈）；否则回退 2A 行为（主运行时自带解释器）。组件失败仍**绝不静默退回进程内计算**（由 runner 与 coordinator 的错误分类保证，非此处）。
 - **worker 源交付**：开发态 `-m src.me_finder.alignment_compute_worker`（venv 有数值栈、`PYTHONPATH=repo`）已通；**冻结态**独立 venv 需要 me_finder 纯 Python 计算源随组件交付——该打包接线属 **2C**，本轮定义解析路径并使其可测，未做冻结真机验证。
 
+## 5b. 设置页(本轮只做诚实状态行,安装/卸载 UI 留 2C)
+
+与用户确认后定的产品判断:2B 的独立运行时是**可选**的——当前发布包**自带**数值栈,不装独立运行时也能算(装了优先用),**老用户升级不受影响、无需安装任何东西**。因此设置页本轮**不加安装/卸载大按钮**(那在 2C 主包精简、独立运行时成为刚需时才做),只加一条**诚实的可用状态行**。
+
+- 位置:`译本对齐模型` 分类(`text-alignment-settings`)顶部,`计算组件` subhead + `#alignment-compute-status` 状态行;其下 `对齐模型` subhead + 原有模型列表。
+- 后端:`ManagedAlignmentRuntime.compute_status()` → `{available, provider}`;`provider` = `independent`(已装独立运行时,装时已验证)/ `builtin`(自带栈可导入,`_builtin_stack_present` find_spec numpy/fastembed/onnxruntime)/ `none`。**只作 settings 预检指示,权威能力检查仍是计算时 probe。** 关键:自带栈的老包显示`可用 · 随应用提供`,**不是**`未安装`。
+- 接线:`parser_settings_controller.text_alignment_models_component()` 把 `compute` 折进 `/api/text-alignment/models` 响应(免第二次请求);前端 `renderAlignmentComputeStatus` 渲染(`可用 · 随应用提供` / `可用 · 独立运行时` / `不可用 · 缺少计算依赖,请更新应用`)。
+- 未加新全局符号(渲染在既有 IIFE 内);装配指纹基线已更新(`test_frontend_assets`)。
+
 ## 6. 验收与未完成项
 
 见 `reports/alignment-compute-runtime-2b-2026-09-14.md`。要点：源码层 11 项新测 + 全量 2322（23 跳过）绿、Ruff 零告警；**未做**：真机 uv 安装（网络）、Windows / macOS Intel / macOS ARM 冻结产物冒烟、设置页安装/升级/卸载 UI。不声称跨平台或端到端交付完成。

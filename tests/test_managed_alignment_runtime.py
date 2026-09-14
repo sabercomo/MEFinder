@@ -20,6 +20,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from src.me_finder.alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
@@ -277,6 +278,37 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         summary = self._wait(manager)
         self.assertFalse(summary["installed"])
         self.assertFalse(manager.runtime_dir.exists())
+
+    def test_compute_status_reports_builtin_when_stack_present(self) -> None:
+        import src.me_finder.managed_alignment_runtime as mod
+
+        manager = self._manager()
+        # Not-installed independent runtime, but the app's own stack is present:
+        # available via the bundled runtime (an existing user is not told to
+        # install anything).
+        with mock.patch.object(mod, "_builtin_stack_present", lambda: True):
+            status = manager.compute_status()
+        self.assertEqual(status, {"available": True, "provider": "builtin"})
+
+    def test_compute_status_unavailable_when_no_runtime_and_no_stack(self) -> None:
+        import src.me_finder.managed_alignment_runtime as mod
+
+        manager = self._manager()
+        with mock.patch.object(mod, "_builtin_stack_present", lambda: False):
+            status = manager.compute_status()
+        self.assertEqual(status, {"available": False, "provider": "none"})
+
+    def test_compute_status_prefers_installed_independent_runtime(self) -> None:
+        import src.me_finder.managed_alignment_runtime as mod
+
+        manager = self._manager()
+        manager.perform({"action": "install"})
+        self.assertTrue(self._wait(manager)["installed"])
+        # Even with no bundled stack, an installed independent runtime is the
+        # provider.
+        with mock.patch.object(mod, "_builtin_stack_present", lambda: False):
+            status = manager.compute_status()
+        self.assertEqual(status, {"available": True, "provider": "independent"})
 
     def test_unsupported_platform_rejects_install(self) -> None:
         manager = ManagedAlignmentRuntime(

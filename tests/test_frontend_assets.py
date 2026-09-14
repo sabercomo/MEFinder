@@ -489,10 +489,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   关系），行内细条与「占比」列移除，避免占比条被误读成加载进度。
     # 0.5.4 构成条配色改为 --chart-step-* 单色相有序色阶（档位按数据外流程度排），
     #   替换旧的 local/api 二分（api 段曾直接用 --text-primary 当数据色）。
+    # 0.5.4 阶段2B：译本对齐区加「计算组件」诚实可用状态行（可用/随应用提供/
+    #   独立运行时/缺依赖），不加安装卸载按钮（留 2C）。
     BASELINE_SHA256 = (
-        "464119799a2dd41a5bf5c5e31e274797f1c437cd28aac4e0d25d23c9198d082b"
+        "e35c53fd1b5891b6d350061f4bb2e0516f80b51ebc7eee5e6e9375d31a5f2228"
     )
-    BASELINE_BYTES = 1120818
+    BASELINE_BYTES = 1122197
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

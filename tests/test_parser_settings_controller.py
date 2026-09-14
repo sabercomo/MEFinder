@@ -318,6 +318,28 @@ class ParserSettingsControllerTests(unittest.TestCase):
         )
         component.perform.assert_called_once_with(request)
 
+    def test_alignment_models_summary_folds_in_compute_availability(self) -> None:
+        models = Mock()
+        models.summary.return_value = {
+            "component_id": "text-alignment-models",
+            "models": [],
+        }
+        runtime = Mock()
+        runtime.compute_status.return_value = {
+            "available": True,
+            "provider": "builtin",
+        }
+        controller = self._controller(
+            managed_components={
+                "text-alignment-models": models,
+                "text-alignment-runtime": runtime,
+            }
+        )
+        status, body = controller.text_alignment_models_component()
+        self.assertEqual(status, 200)
+        self.assertEqual(body["models"], [])
+        self.assertEqual(body["compute"], {"available": True, "provider": "builtin"})
+
     def test_managed_mineru_status_and_actions_share_local_deployment_payload(self) -> None:
         runtime_summary = Mock(
             return_value={"supported": True, "profiles": [], "service": {}}
