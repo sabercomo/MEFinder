@@ -1,0 +1,53 @@
+{
+  "report": "alignment-compute-parity-real",
+  "code_revision": "509d20b",
+  "pair_hash": "ac773fed55a48824",
+  "worker_capabilities": {
+    "numpy": true,
+    "fastembed": true,
+    "onnxruntime": true
+  },
+  "excluded_nondeterministic_fields": [
+    "alignment_run_id",
+    "alignment_link_id",
+    "created_at",
+    "completed_at"
+  ],
+  "link_count": 967,
+  "return_summary_identical": true,
+  "rows_identical": true,
+  "in_process_digest": "1f4ea08d95557291eb4384a77edcfdd5f8e3565f4eeb16b2fa9f50ff5ea61939",
+  "subprocess_digest": "1f4ea08d95557291eb4384a77edcfdd5f8e3565f4eeb16b2fa9f50ff5ea61939",
+  "return_summary_in_process": {
+    "pivot_segment_count": 2047,
+    "target_segment_count": 1901,
+    "alignment_link_count": 967,
+    "accepted_link_count": 795,
+    "rejected_link_count": 94,
+    "unmatched_link_count": 78,
+    "numbered_note_link_count": 0,
+    "heading_anchor_count": 92,
+    "folio_anchor_count": 30,
+    "algorithm": "chapter-anchored-semantic-dp",
+    "algorithm_version": "22",
+    "embedding_model_id": "minilm-l12-v2",
+    "status": "completed",
+    "reused": false
+  },
+  "return_summary_subprocess": {
+    "pivot_segment_count": 2047,
+    "target_segment_count": 1901,
+    "alignment_link_count": 967,
+    "accepted_link_count": 795,
+    "rejected_link_count": 94,
+    "unmatched_link_count": 78,
+    "numbered_note_link_count": 0,
+    "heading_anchor_count": 92,
+    "folio_anchor_count": 30,
+    "algorithm": "chapter-anchored-semantic-dp",
+    "algorithm_version": "22",
+    "embedding_model_id": "minilm-l12-v2",
+    "status": "completed",
+    "reused": false
+  }
+}

@@ -8,7 +8,7 @@ import re
 import sqlite3
 import uuid
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Sequence, Tuple
@@ -20,7 +20,6 @@ from .document_group_metadata import member_display_name
 from .edition_folio_anchors import (
     FolioBoundaryCandidate,
     detect_folio_boundary_candidates,
-    verify_folio_boundary_candidates,
 )
 from .embedding_models import (
     AlignmentThresholds,
@@ -31,6 +30,7 @@ from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .alignment_regions import alignment_body_bounds
+from .alignment_kernel import align_segment_sequences
 from .semantic_alignment import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
@@ -38,11 +38,8 @@ from .semantic_alignment import (
     SEMANTIC_ALIGNMENT_VERSION,
     EmbeddingProvider,
     SemanticLink,
-    align_semantic_sequences,
     alignment_transitions,
     cached_text_sequence_vectors,
-    embed_text_sequences,
-    find_heading_anchors,
     mutual_nearest_target_index,
 )
 
@@ -734,105 +731,6 @@ def _segment_set_language(
     return str(row["language_code"] or "und")
 
 
-def align_segment_sequences(
-    source_texts: Sequence[str],
-    target_texts: Sequence[str],
-    *,
-    cache_dir: Path,
-    embedding_provider: EmbeddingProvider | None = None,
-    embedding_model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
-    thresholds: AlignmentThresholds | None = None,
-    reusable_sequences: Sequence[Sequence[str]] = (),
-    folio_candidates: Sequence[FolioBoundaryCandidate] = (),
-    source_language: str = "und",
-    target_language: str = "und",
-    reviewed_body_ranges: Dict[str, List[int]] | None = None,
-) -> Tuple[List[SemanticLink], list]:
-    """Return chapter-anchored semantic links and the anchors used."""
-    import numpy as np
-
-    active_thresholds = thresholds or embedding_model_config(
-        embedding_model_id
-    ).thresholds
-    if embedding_provider is None:
-        source_vectors, target_vectors = embed_text_sequences(
-            [source_texts, target_texts],
-            cache_dir,
-            reusable_sequences=reusable_sequences,
-            model_id=embedding_model_id,
-        )
-        embeddings = np.vstack([source_vectors, target_vectors])
-    else:
-        embeddings = embedding_provider([*source_texts, *target_texts], cache_dir)
-        source_vectors = embeddings[: len(source_texts)]
-        target_vectors = embeddings[len(source_texts) :]
-    verified_folios = verify_folio_boundary_candidates(
-        folio_candidates, source_vectors, target_vectors
-    )
-    source_start, source_end = (reviewed_body_ranges["pivot"] if reviewed_body_ranges is not None
-                                else alignment_body_bounds(source_texts))
-    target_start, target_end = (reviewed_body_ranges["target"] if reviewed_body_ranges is not None
-                                else alignment_body_bounds(target_texts))
-    structural_anchors = [
-        replace(anchor, source_index=anchor.source_index - source_start,
-                target_index=anchor.target_index - target_start)
-        for anchor in find_heading_anchors(source_texts, target_texts)
-        if source_start <= anchor.source_index < source_end
-        and target_start <= anchor.target_index < target_end
-    ]
-    aligned, anchors = align_semantic_sequences(
-        source_texts[source_start:source_end],
-        target_texts[target_start:target_end],
-        np.vstack([
-            source_vectors[source_start:source_end],
-            target_vectors[target_start:target_end],
-        ]),
-        [
-            HeadingAnchor(
-                candidate.pivot_segment_index - source_start,
-                candidate.target_segment_index - target_start,
-                candidate.key,
-            )
-            for candidate in verified_folios
-            if source_start <= candidate.pivot_segment_index < source_end
-            and target_start <= candidate.target_segment_index < target_end
-        ],
-        source_language=source_language,
-        target_language=target_language,
-        thresholds=active_thresholds,
-        structural_anchors=structural_anchors,
-    )
-    aligned = [
-        replace(link,
-                source_start=link.source_start + source_start,
-                source_end=link.source_end + source_start,
-                target_start=link.target_start + target_start,
-                target_end=link.target_end + target_start)
-        for link in aligned
-    ]
-    # Excluded segments remain inspectable as one-sided rejected rows. No
-    # cross-book similarity exists for those rows, so confidence is zero.
-    prefix = [
-        SemanticLink(i, i + 1, 0, 0, 0.0, 0.0, "rejected")
-        for i in range(source_start)
-    ] + [
-        SemanticLink(source_start, source_start, j, j + 1, 0.0, 0.0, "rejected")
-        for j in range(target_start)
-    ]
-    suffix = [
-        SemanticLink(i, i + 1, target_end, target_end, 0.0, 0.0, "rejected")
-        for i in range(source_end, len(source_texts))
-    ] + [
-        SemanticLink(len(source_texts), len(source_texts), j, j + 1, 0.0, 0.0, "rejected")
-        for j in range(target_end, len(target_texts))
-    ]
-    return prefix + aligned + suffix, [
-        replace(anchor, source_index=anchor.source_index + source_start,
-                target_index=anchor.target_index + target_start)
-        for anchor in anchors
-    ]
-
-
 def _default_alignment_model_cache(db_path: Path) -> Path:
     index_path = Path(db_path).resolve()
     runtime_root = (
@@ -1089,6 +987,7 @@ def generate_alignment(
     alignment_thresholds: AlignmentThresholds | None = None,
     write_window: WriteWindow | None = None,
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
+    compute_runner: Callable[..., Tuple[List[SemanticLink], list]] | None = None,
 ) -> Dict[str, object]:
     group_id = str(document_group_id or "").strip()
     if not group_id:
@@ -1240,7 +1139,12 @@ def generate_alignment(
         finally:
             connection.close()
 
-    computed = align_segment_sequences(
+    # Compute seam: the default runs in this process (imports NumPy); an
+    # out-of-process runner may be injected so the main process never needs the
+    # compute stack. Prepare (above) and publish (below) stay in the main
+    # process with its identity checks and write coordination either way.
+    compute = compute_runner if compute_runner is not None else align_segment_sequences
+    computed = compute(
         [text for _segment_id, text in preparation.pivot_segments],
         [text for _segment_id, text in preparation.target_segments],
         cache_dir=cache_dir,

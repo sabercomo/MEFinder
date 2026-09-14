@@ -64,7 +64,16 @@ try:
         assert '未安装' in str(exc)
     else:
         raise AssertionError('Generation must reject a missing component')
-    with patch('src.me_finder.application.text_alignment_coordinator.model_component_installed',return_value=True), patch('src.me_finder.application.text_alignment_coordinator.find_spec',return_value=None):
+    # With the model present but the external compute runtime lacking the stack,
+    # generation must still fail clearly. The capability check comes from probing
+    # that external runtime (not a main-process find_spec), and there is no
+    # silent fallback to in-process compute.
+    from src.me_finder.alignment_compute import AlignmentComputeError, COMPONENT_MISSING
+    class _MissingComputeRuntime:
+        def __init__(self,**kwargs): pass
+        def probe(self): raise AlignmentComputeError(COMPONENT_MISSING,'compute runtime missing')
+    with patch('src.me_finder.application.text_alignment_coordinator.model_component_installed',return_value=True):
+        coordinator=TextAlignmentCoordinator(app.paths,None,None,compute_runner_factory=lambda **kw:_MissingComputeRuntime())
         try:
             coordinator.generate('bench-pair','bench-002','bench-003',force=True)
         except TextAlignmentFailed as exc:

@@ -78,7 +78,7 @@ def _fake_embedding_sequences(sequences, cache_dir, **_kwargs):
 class TextAlignmentTests(unittest.TestCase):
     def setUp(self) -> None:
         self.embedding_patch = mock.patch(
-            "src.me_finder.text_alignment.embed_text_sequences",
+            "src.me_finder.alignment_kernel.embed_text_sequences",
             side_effect=_fake_embedding_sequences,
         )
         self.embedding_patch.start()

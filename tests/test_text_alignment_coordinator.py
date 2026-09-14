@@ -42,22 +42,32 @@ class _DurableOperations:
         yield
 
 
+class _StubComputeRunner:
+    """A compute runner whose external probe succeeds; compute is never called
+    here because these tests mock ``generate_alignment``."""
+
+    def __init__(self, **_kwargs) -> None:
+        self.probed = False
+
+    def probe(self):
+        self.probed = True
+        return {"numpy": True, "fastembed": True, "onnxruntime": True}
+
+
 class TextAlignmentCoordinatorTests(unittest.TestCase):
     def setUp(self) -> None:
         # These tests cover write windows and shutdown semantics; the managed
-        # model component is assumed installed.
+        # model component is assumed installed and the external compute runtime
+        # is assumed capable (its probe is stubbed — the compute itself is
+        # covered by tests.test_alignment_compute_*).
         self.component_patch = mock.patch(
             "src.me_finder.application.text_alignment_coordinator."
             "model_component_installed",
             return_value=True,
         )
-        runtime_patch = mock.patch(
-            "src.me_finder.application.text_alignment_coordinator.find_spec", return_value=object()
-        )
-        runtime_patch.start()
-        self.addCleanup(runtime_patch.stop)
         self.component_patch.start()
         self.addCleanup(self.component_patch.stop)
+        self.compute_runner_factory = lambda **kwargs: _StubComputeRunner(**kwargs)
 
     def test_generation_keeps_the_runtime_available_across_write_windows(
         self,
@@ -73,7 +83,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             runtime_root=Path("D:/runtime"),
         )
         coordinator = TextAlignmentCoordinator(
-            paths, index_runtime, _DurableOperations()
+            paths, index_runtime, _DurableOperations(),
+            compute_runner_factory=self.compute_runner_factory,
         )
         expected = {"status": "completed"}
 
@@ -124,7 +135,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             runtime_root=Path("D:/runtime"),
         )
         coordinator = TextAlignmentCoordinator(
-            paths, index_runtime, _DurableOperations()
+            paths, index_runtime, _DurableOperations(),
+            compute_runner_factory=self.compute_runner_factory,
         )
         with mock.patch(
             "src.me_finder.application.text_alignment_coordinator.generate_alignment",
@@ -149,7 +161,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             runtime_root=Path("D:/runtime"),
         )
         coordinator = TextAlignmentCoordinator(
-            paths, index_runtime, _ClosedDurableOperations()
+            paths, index_runtime, _ClosedDurableOperations(),
+            compute_runner_factory=self.compute_runner_factory,
         )
         with mock.patch(
             "src.me_finder.application.text_alignment_coordinator.generate_alignment",

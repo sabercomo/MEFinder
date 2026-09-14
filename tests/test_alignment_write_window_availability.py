@@ -48,6 +48,19 @@ def _fake_embeddings(texts, _cache_dir):
     return np.ones((len(texts), 4), dtype=np.float32)
 
 
+class _CapableProbe:
+    """Stub compute runner: its external probe reports the runtime capable so
+    the coordinator proceeds. These tests force the in-process compute path with
+    a fake embedding provider (see ``_generate_with``), so the runner's compute
+    is never invoked."""
+
+    def __init__(self, **_kwargs) -> None:
+        pass
+
+    def probe(self):
+        return {"numpy": True, "fastembed": True, "onnxruntime": True}
+
+
 class _DurableOperations:
     @contextmanager
     def operation(self):
@@ -102,19 +115,19 @@ class _AlignmentWriteWindowHarness:
             ),
         )
         self.coordinator = TextAlignmentCoordinator(
-            self.paths, self.index_runtime, _DurableOperations()
+            self.paths,
+            self.index_runtime,
+            _DurableOperations(),
+            compute_runner_factory=lambda **kwargs: _CapableProbe(),
         )
         # The coordinator's model gate is a settings-UI concern covered
-        # elsewhere; these tests drive real generation with stub vectors.
+        # elsewhere; these tests drive real generation with stub vectors and a
+        # stubbed capability probe (compute is forced in-process below).
         self._gate_patches = [
             mock.patch(
                 "src.me_finder.application.text_alignment_coordinator."
                 "model_component_installed",
                 return_value=True,
-            ),
-            mock.patch(
-                "src.me_finder.application.text_alignment_coordinator.find_spec",
-                return_value=object(),
             ),
         ]
         for patcher in self._gate_patches:
@@ -141,6 +154,10 @@ class _AlignmentWriteWindowHarness:
         real_generate = text_alignment_module.generate_alignment
 
         def forwarded(db_path, group, pivot, target, **kwargs):
+            # Force in-process compute with the fake provider: drop the
+            # coordinator's subprocess runner so these write-window tests stay
+            # deterministic and model-free.
+            kwargs.pop("compute_runner", None)
             kwargs["embedding_provider"] = provider
             return real_generate(db_path, group, pivot, target, **kwargs)
 

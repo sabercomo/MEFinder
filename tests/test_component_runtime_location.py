@@ -58,8 +58,13 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
                  patch.object(runtime_location.Path, "home", return_value=home), \
                  patch.object(runtime_location, "local_app_data_root", return_value=library), \
                  patch.object(coordinator, "model_component_installed", return_value=True) as preflight, \
-                 patch.object(coordinator, "find_spec", return_value=object()), \
                  patch.object(coordinator, "generate_alignment") as generate:
-                coordinator.TextAlignmentCoordinator(paths, MagicMock(), MagicMock()).generate("group", "a", "b")
+                capable = SimpleNamespace(
+                    probe=lambda: {"numpy": True, "fastembed": True, "onnxruntime": True}
+                )
+                coordinator.TextAlignmentCoordinator(
+                    paths, MagicMock(), MagicMock(),
+                    compute_runner_factory=lambda **kwargs: capable,
+                ).generate("group", "a", "b")
                 self.assertEqual(preflight.call_args.args[0], expected)
                 self.assertEqual(generate.call_args.kwargs["model_cache_dir"], expected)

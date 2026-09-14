@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from importlib.util import find_spec
+import uuid
 from contextlib import contextmanager
 
 from ..embedding_models import (
@@ -15,8 +15,16 @@ from ..preferences import read_preferences, resolve_preferences_path
 from ..embedding_runtime import (
     SemanticAlignmentCancelled,
     begin_embedding_run,
+    embedding_cancel_requested,
 )
 from ..lifecycle import DurableOperationClosedError
+from ..alignment_compute import (
+    AlignmentComputeError,
+    CANCELLED,
+    COMPONENT_MISSING,
+    PROTOCOL_INCOMPATIBLE,
+    SubprocessAlignmentComputeRunner,
+)
 from ..text_alignment import InvalidAlignmentRequest, generate_alignment
 
 
@@ -32,11 +40,41 @@ class TextAlignmentCancelled(Exception):
     """The in-flight alignment was cancelled by the user."""
 
 
+_PROBE_MESSAGES = {
+    COMPONENT_MISSING: "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。",
+    PROTOCOL_INCOMPATIBLE: "对齐计算进程版本不兼容，请更新应用后再生成。",
+}
+
+
+def _probe_message(exc: AlignmentComputeError) -> str:
+    return _PROBE_MESSAGES.get(exc.code, str(exc))
+
+
+def build_compute_runner(*, task_id, cancel_check):
+    """Default factory: an out-of-process compute runner for this runtime.
+
+    Injectable so tests can substitute a stub or a runner with a custom launch
+    command. The runner owns the NumPy/ONNX/fastembed stack in a separate
+    process; the coordinator (main process) keeps identity checks, write
+    coordination and result publication.
+    """
+
+    return SubprocessAlignmentComputeRunner(task_id=task_id, cancel_check=cancel_check)
+
+
 class TextAlignmentCoordinator:
-    def __init__(self, paths, index_runtime, durable_operations) -> None:
+    def __init__(
+        self,
+        paths,
+        index_runtime,
+        durable_operations,
+        *,
+        compute_runner_factory=build_compute_runner,
+    ) -> None:
         self._paths = paths
         self._index_runtime = index_runtime
         self._durable_operations = durable_operations
+        self._compute_runner_factory = compute_runner_factory
 
     def generate(
         self,
@@ -61,12 +99,18 @@ class TextAlignmentCoordinator:
             raise TextAlignmentFailed(
                 "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
             )
-        missing = [name for name in ("numpy", "fastembed", "onnxruntime") if find_spec(name) is None]
-        if missing:
-            raise TextAlignmentFailed(
-                "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。"
-            )
         begin_embedding_run()
+        # The compute runs out of process. Capability is checked by probing that
+        # external runtime — NOT by a main-process find_spec — and a failed probe
+        # is a clear, local error: the coordinator never silently falls back to
+        # in-process computation.
+        runner = self._compute_runner_factory(
+            task_id=uuid.uuid4().hex, cancel_check=embedding_cancel_requested
+        )
+        try:
+            runner.probe()
+        except AlignmentComputeError as exc:
+            raise TextAlignmentFailed(_probe_message(exc)) from exc
         with self._index_runtime.mutation():
             try:
                 with self._durable_operations.operation():
@@ -80,6 +124,7 @@ class TextAlignmentCoordinator:
                         embedding_model_id=model_id,
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
+                        compute_runner=runner,
                     )
             except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:
                 # Both mean "the run stopped because the app is shutting down or
@@ -89,6 +134,14 @@ class TextAlignmentCoordinator:
                 raise TextAlignmentCancelled(str(exc)) from exc
             except InvalidAlignmentRequest as exc:
                 raise TextAlignmentRejected(str(exc)) from exc
+            except AlignmentComputeError as exc:
+                # A cancelled compute (user cancel or app shutdown killed the
+                # worker) is a cancellation; every other compute failure —
+                # crash, protocol mismatch, missing component surfacing late —
+                # is a clear failure. Neither publishes a half-built result.
+                if exc.code == CANCELLED:
+                    raise TextAlignmentCancelled(str(exc)) from exc
+                raise TextAlignmentFailed(str(exc)) from exc
             except (OSError, sqlite3.Error, RuntimeError) as exc:
                 raise TextAlignmentFailed(str(exc)) from exc
         return result

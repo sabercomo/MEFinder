@@ -13,6 +13,20 @@ SQLite 索引约数百 MB，首次加载需等待一段时间，因此先显示�
 
 from __future__ import annotations
 
+# Fast-path dispatch for the out-of-process alignment compute worker. The frozen
+# app bundle carries the compute stack (NumPy/ONNX/fastembed), so it reuses this
+# same executable as the worker, launched as
+# ``MEFinder alignment-compute-worker <request.json> <result.json>``. Do this
+# before importing the desktop shell (pywebview, etc.) so the worker stays lean
+# and never opens a window. Harmless in development, where the worker is launched
+# as ``python -m src.me_finder.alignment_compute_worker`` instead.
+import sys as _sys
+
+if len(_sys.argv) > 1 and _sys.argv[1] == "alignment-compute-worker":
+    from src.me_finder.alignment_compute_worker import main as _worker_main
+
+    raise SystemExit(_worker_main(_sys.argv[2:]))
+
 import html
 import logging
 import os

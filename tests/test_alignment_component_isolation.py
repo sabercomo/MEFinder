@@ -65,7 +65,7 @@ def store_alignment_links(database: Path) -> None:
         SemanticLink(1, 2, 1, 2, 0.17, 0.83, "automatic", "chapter:1"),
     ]
     with mock.patch(
-        "src.me_finder.text_alignment.embed_text_sequences",
+        "src.me_finder.alignment_kernel.embed_text_sequences",
         side_effect=fake_sequence_embeddings,
     ), mock.patch(
         "src.me_finder.text_alignment.align_segment_sequences",
@@ -114,7 +114,7 @@ finally:
     def test_search_and_result_reads_run_without_compute_stack(self) -> None:
         with mock.patch.dict("sys.modules", BLOCKED_MODULES):
             with mock.patch(
-                "src.me_finder.text_alignment.embed_text_sequences",
+                "src.me_finder.alignment_kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
                 "src.me_finder.text_alignment.align_segment_sequences",
@@ -124,7 +124,7 @@ finally:
             self.assertTrue(targets["targets"])
 
             with mock.patch(
-                "src.me_finder.text_alignment.embed_text_sequences",
+                "src.me_finder.alignment_kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
                 "src.me_finder.text_alignment.align_segment_sequences",
@@ -188,7 +188,7 @@ finally:
         self.assertEqual(stored, 2)
 
         with mock.patch.dict("sys.modules", BLOCKED_MODULES), mock.patch(
-            "src.me_finder.text_alignment.embed_text_sequences",
+            "src.me_finder.alignment_kernel.embed_text_sequences",
             side_effect=fake_sequence_embeddings,
         ), mock.patch(
             "src.me_finder.text_alignment.align_segment_sequences",
