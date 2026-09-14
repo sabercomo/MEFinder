@@ -1,5 +1,11 @@
 # MEFinder 0.5.4
 
+2026-09-14：Windows 正式双件套（安装版 + 便携版）重建并入本轮解析统计构成条配色，构建源码 `db15f7f`（`main` HEAD，与 tag `v0.5.4`→`b1f0082` 仅差两条 release-notes 文档提交，产品代码含配色改动）。两件套打包前各跑全量 2277 项 unittest（`PYTHONUTF8=1` 复刻 CI 的 UTF-8 门禁）全过，PyInstaller onedir + MCP sidecar + 空索引 + MCP STDIO 冒烟 + payload 隐私校验通过；安装包经 Inno Setup 7 编译（Inno 6 缺 `ChineseSimplified.isl`）。产物 SHA-256：
+- `MEFinder-v0.5.4-windows-setup.exe`（140,391,166 字节）：`dc0d5c0d10d8b47b11e88db22412347cc3d80519693f30242a65ed436c959452`
+- `MEFinder-v0.5.4-windows-portable.zip`（164,182,639 字节）：`6240c91b6a503bfa707005b801a018c48c8d6a6d1b19b7461766432dace20dd7`
+
+已上传至 v0.5.4 GitHub 草稿 Release（`isDraft=true`，未公开，等待安装验收）；此前「Windows 正式安装/便携分发包仍不含本项」的结论就此更新为**已含配色**。
+
 2026-09-14：第五次重建 macOS 桌面包（构建源码 `b1f0082`，arm64 与 x86_64 双架构）：解析统计构成条单色相色阶配色入包。arm64 2277 项 unittest 通过（22 skip），x86_64 经 Rosetta 构建、2277 项通过（27 skip，含架构相关条件跳过），反查主程序与 `MEFinderMCP` 均为纯 x86_64、`LSMinimumSystemVersion=12.0`；两架构包内均已核实含新配色。其余门禁（签名 / MCP STDIO 冒烟 / ZIP / DMG 校验）全部通过。**本轮四件套取代第四次重建（`965a427`）的 macOS 产物**，后者不再作为当前包。未创建 tag/Release，等待安装验收。
 
 2026-09-13：解析统计构成条改用单色相有序色阶配色。原来只按 local/API 二分上色（API 段直接用 `--text-primary` 墨色当数据色），多个本地服务挤成同一块 accent 色，本地部署 MinerU 与本地 OCR 分不出来。新版在 `00-themes.css` 增 `--chart-step-1..5` 与 `--chart-step-other`，由各主题自己的 `--accent` 与纸/墨 token 经 `color-mix(in oklab, …)` 推导，六套内置主题与自定义主题自动跟随；档位按数据外流程度排（本地文本提取 → 本地部署 → 本地 OCR → 在线 API → 其他 API），色跟服务走而不是跟 local/API 二分走，段序等于色阶序。六套主题实测色值均通过有序色阶校验（明度单调 / 相邻 ΔL ≥ 0.06 / 浅端对画布 ≥ 2:1 / 单一色相）。纯前端呈现改动（`00-themes.css` / `30-settings.css` / `70-vision.js`），装配指纹基线已同步；全量 2277 项 unittest 通过（22 项条件跳过）。已随 2026-09-14 第五次重建入 macOS 双架构包；Windows 分发包仍不含本项。

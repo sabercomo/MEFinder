@@ -160,6 +160,18 @@ $env:PYTHONPATH="D:\ME_Finder\src"; & D:\ME_Finder\.venv-windows\Scripts\python.
 PYTHONPATH=src .venv-windows/Scripts/python.exe -c "import tests.test_frontend_assets as t,hashlib;p=t.HTML.encode('utf-8');print(len(p),hashlib.sha256(p).hexdigest())"
 ```
 
+**Windows 打包(本机环境实录):**
+
+> **本机打包反复失败的三个固定原因(按构建阶段先后),照下面预处理即可一次过:**
+
+- **① 门禁测试(最先跑)—— GBK locale 坑**:两脚本打包前都跑全量 unittest。本机默认 GBK(cp936),部分用例用 `Path.read_text()` 无编码读 UTF-8 golden 文件会 `UnicodeDecodeError`(CI 在 UTF-8 下不复现,故 release notes 里"2277 全过")。**打包/跑门禁前设 `$env:PYTHONUTF8="1"`** 复刻 CI 行为即全绿。
+- **② PyInstaller `--clean`(测试后)—— sidecar 文件锁坑**:桌面开发版 onedir 的 MCP sidecar(MCP 客户端连着的 `dist\MEFinder\MEFinderMCP.exe` 活实例,常有 1~2 个)会锁住文件,`--clean` 删不掉报 `PermissionError: [WinError 5] 拒绝访问`。**打包前先 `Get-Process | ? { $_.Path -like 'D:\ME_Finder\dist\MEFinder\*' }` 查出并 `Stop-Process -Force`**(会中断活动 MCP 会话,下次调用自动重起)。
+- **③ Inno 编译(最后一步)—— 必须用 Inno 7 而非 6**:`installer\MEFinder.iss` 引用 `compiler:Languages\ChineseSimplified.isl`,而 **Inno Setup 6 不带简体中文语言文件,只有 Inno 7 带**(`ChineseSimplified.isl` / `ChineseTraditional.isl`)。用 6 会报 `Couldn't open include file ... ChineseSimplified.isl`。**务必 `-ISCCPath "C:\Users\xfx\AppData\Local\Programs\Inno Setup 7\ISCC.exe"`。**
+- **Inno Setup 位置(本机 per-user 安装,不在 `Program Files`)**:6.7.3 在 `C:\Users\xfx\AppData\Local\Programs\Inno Setup 6\ISCC.exe`,7.0.2 在 `C:\Users\xfx\AppData\Local\Programs\Inno Setup 7\ISCC.exe`。`Find-InnoCompiler` 自动定位时 **7 优先于 6**,不显式传 `-ISCCPath` 也会选 7;手动排查别只看 `Program Files (x86)`。
+- **解释器**:两脚本默认 `py -3`(本机是 3.8,不可用)。**必须**传 `-PythonExe`/`-PackagerPythonExe` 指向 venv:`D:\ME_Finder\.venv-windows\Scripts\python.exe`(3.12 x64,已装 PyInstaller 6.21)。
+- **正式安装包**:`$env:PYTHONUTF8="1"; powershell -ExecutionPolicy Bypass -File .\build_windows_installer.ps1 -PythonExe <venv> -PackagerPythonExe <venv> -ISCCPath "…\Inno Setup 7\ISCC.exe"` → 产 `release\MEFinder-v<ver>-windows-setup.exe` + `.sha256.txt`。若测试与 payload 已在本轮构建校验通过、只差 Inno 一步,可直接 `& "…\Inno Setup 7\ISCC.exe" "/DAppVersion=<ver>" "installer\MEFinder.iss"` 复用现成 payload 出包(输出名/输出目录由 .iss 的 `OutputBaseFilename`/`OutputDir` 决定),再手写 sha256 sidecar。
+- **便携版 ZIP**:`build_portable_release.ps1`(同样传 `-PythonExe`/`-PackagerPythonExe`,不需 Inno Setup)→ 产 `release\MEFinder-v<ver>-windows-portable.zip` + `.sha256.txt`;两脚本都会 `--clean` 重建 `dist\MEFinder`,便携脚本结尾会把 `dist\MEFinder\data_root.txt` 还原指向 `dist\MEFinderData` 开发库。
+
 ---
 
 ## 4. 迭代收尾流程(已授权的仓库实施迭代强制执行)
