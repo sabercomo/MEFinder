@@ -232,6 +232,28 @@ class ManagedEmbeddingModels:
             state.message = "模型已下载"
             state.error = ""
 
+    def delete_all_models(self) -> int:
+        """Delete every managed model's files and receipts; return freed bytes.
+
+        Used when the whole alignment compute component is uninstalled: per the
+        confirmed product rule, uninstalling the component removes the models it
+        owns. Documents, notes and existing alignment results are untouched —
+        those live in the library database, not here.
+        """
+
+        freed = 0
+        with self._lock:
+            for model_id, state in self._states.items():
+                if state.thread is not None and state.thread.is_alive():
+                    raise ManagedEmbeddingModelsError(
+                        "有译本对齐模型正在下载，先取消或等待完成再卸载组件。"
+                    )
+                freed += self._delete_model_files(model_id)
+                state.state = "not_installed"
+                state.message = "模型文件已删除"
+                state.error = ""
+        return freed
+
     def wait_for_idle(self, model_id: str, timeout: float = 10.0) -> None:
         embedding_model_config(model_id)
         with self._lock:

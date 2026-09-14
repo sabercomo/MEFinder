@@ -2,6 +2,15 @@
   "schema_version": 1,
   "catalog_version": 1,
   "uv_version": "0.12.1",
+  "alignment": {
+    "version": "1",
+    "python": "3.11",
+    "packages": [
+      "numpy==2.5.2",
+      "onnxruntime==1.29.0",
+      "fastembed==0.8.0"
+    ]
+  },
   "mineru": {
     "version": "3.4.5",
     "python": "3.12",

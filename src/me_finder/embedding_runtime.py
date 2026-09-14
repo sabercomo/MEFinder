@@ -41,6 +41,36 @@ def embedding_cancel_requested() -> bool:
     return _EMBEDDING_CANCEL.is_set()
 
 
+_ACTIVE_LOCK = threading.Lock()
+_ACTIVE_RUNS = 0
+
+
+def enter_embedding_run() -> None:
+    """Mark that a compute task is in flight (paired with ``exit_embedding_run``)."""
+
+    global _ACTIVE_RUNS
+    with _ACTIVE_LOCK:
+        _ACTIVE_RUNS += 1
+
+
+def exit_embedding_run() -> None:
+    global _ACTIVE_RUNS
+    with _ACTIVE_LOCK:
+        _ACTIVE_RUNS = max(0, _ACTIVE_RUNS - 1)
+
+
+def embedding_run_active() -> bool:
+    """True while any compute task is running.
+
+    The managed alignment runtime reads this so an uninstall requested while a
+    task is being computed defers until the task finishes, rather than tearing
+    the runtime out from under an in-flight computation.
+    """
+
+    with _ACTIVE_LOCK:
+        return _ACTIVE_RUNS > 0
+
+
 def _macos_performance_core_count() -> int | None:
     """Best-effort Apple-Silicon performance-core count, else ``None``."""
 

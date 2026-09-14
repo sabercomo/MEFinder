@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from contextlib import contextmanager
+from pathlib import Path
 
 from ..embedding_models import (
     model_component_installed,
@@ -16,7 +17,10 @@ from ..embedding_runtime import (
     SemanticAlignmentCancelled,
     begin_embedding_run,
     embedding_cancel_requested,
+    enter_embedding_run,
+    exit_embedding_run,
 )
+from ..managed_alignment_runtime import resolve_installed_runtime_launch
 from ..lifecycle import DurableOperationClosedError
 from ..alignment_compute import (
     AlignmentComputeError,
@@ -73,15 +77,35 @@ def _map_compute_error(exc: AlignmentComputeError) -> Exception:
     return TextAlignmentFailed(str(exc))
 
 
-def build_compute_runner(*, task_id, cancel_check):
+def build_compute_runner(*, task_id, cancel_check, runtime_root=None):
     """Default factory: an out-of-process compute runner for this runtime.
 
     Injectable so tests can substitute a stub or a runner with a custom launch
     command. The runner owns the NumPy/ONNX/fastembed stack in a separate
     process; the coordinator (main process) keeps identity checks, write
     coordination and result publication.
+
+    When an independent alignment compute runtime is installed under the runtime
+    root, the runner launches *that* isolated interpreter — so the compute phase
+    needs no numeric stack in the main process. Otherwise it falls back to the
+    2A behaviour (the main runtime's own interpreter). A component failure never
+    silently falls back to in-process computation; that is enforced by the
+    runner and the coordinator's error mapping, not here.
     """
 
+    launch = (
+        resolve_installed_runtime_launch(runtime_root)
+        if runtime_root is not None
+        else None
+    )
+    if launch is not None:
+        return SubprocessAlignmentComputeRunner(
+            task_id=task_id,
+            cancel_check=cancel_check,
+            launch_command=launch.command,
+            env=launch.env,
+            cwd=Path(launch.cwd),
+        )
     return SubprocessAlignmentComputeRunner(task_id=task_id, cancel_check=cancel_check)
 
 
@@ -127,11 +151,16 @@ class TextAlignmentCoordinator:
             # this lock. Reset before admission so shutdown after admission
             # cannot have its cancellation signal erased.
             begin_embedding_run()
+            # Mark the compute task active so an uninstall of the alignment
+            # runtime requested mid-computation defers until it finishes,
+            # instead of removing the runtime out from under it.
+            enter_embedding_run()
             try:
                 with self._durable_operations.operation():
                     runner = self._compute_runner_factory(
                         task_id=uuid.uuid4().hex,
                         cancel_check=embedding_cancel_requested,
+                        runtime_root=self._paths.runtime_root,
                     )
                     # Probe the external runtime *inside* the durable operation
                     # and mutation lock: it spawns a process, so it must be
@@ -170,6 +199,8 @@ class TextAlignmentCoordinator:
                 raise _map_compute_error(exc) from exc
             except (OSError, sqlite3.Error, RuntimeError) as exc:
                 raise TextAlignmentFailed(str(exc)) from exc
+            finally:
+                exit_embedding_run()
         return result
 
     @contextmanager

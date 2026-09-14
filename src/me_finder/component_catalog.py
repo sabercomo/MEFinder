@@ -126,6 +126,27 @@ def validate_component_catalog(payload: object) -> None:
         ):
             raise ComponentCatalogError("uv 下载地址不受信任。")
         _validate_size_and_digest(uv, "uv")
+    alignment = payload.get("alignment")
+    if alignment is not None:
+        if not isinstance(alignment, Mapping):
+            raise ComponentCatalogError("组件清单中的对齐计算运行时定义无效。")
+        packages = alignment.get("packages")
+        if (
+            re.fullmatch(r"\d+", str(alignment.get("version") or "")) is None
+            or str(alignment.get("python") or "") not in {"3.11", "3.12"}
+            or not isinstance(packages, list)
+            or not all(
+                isinstance(item, str)
+                and _PINNED_REQUIREMENT.fullmatch(item) is not None
+                for item in packages
+            )
+        ):
+            raise ComponentCatalogError("对齐计算运行时依赖必须固定版本。")
+        names = {str(item).split("==", 1)[0].lower() for item in packages}
+        if not {"numpy", "onnxruntime", "fastembed"}.issubset(names):
+            raise ComponentCatalogError(
+                "对齐计算运行时必须固定 numpy、onnxruntime、fastembed。"
+            )
     mineru = payload.get("mineru")
     if mineru is not None and not isinstance(mineru, Mapping):
         raise ComponentCatalogError("组件清单中的 MinerU 定义无效。")

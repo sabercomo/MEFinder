@@ -84,6 +84,9 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
         "/api/text-alignment/models": (
             lambda _params: parser_settings_controller.text_alignment_models_component()
         ),
+        "/api/text-alignment/runtime": (
+            lambda _params: parser_settings_controller.text_alignment_runtime_component()
+        ),
         "/api/mineru-config": (
             lambda _params: parser_settings_controller.mineru_config()
         ),
@@ -118,6 +121,9 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
         "/api/local-ocr/component": parser_settings_controller.manage_local_ocr_component,
         "/api/text-alignment/models": (
             parser_settings_controller.manage_text_alignment_models_component
+        ),
+        "/api/text-alignment/runtime": (
+            parser_settings_controller.manage_text_alignment_runtime_component
         ),
         "/api/vision-providers": parser_settings_controller.update_vision_providers,
         "/api/vision-providers/models": parser_settings_controller.vision_models,

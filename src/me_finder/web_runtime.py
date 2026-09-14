@@ -51,7 +51,6 @@ from .bibliographic_metadata import (
 from .bibliographic_metadata_controller import BibliographicMetadataController
 from .book_metadata_lookup import lookup_book
 from .cnki_citation import parse_cnki_journal_citation
-from .component_catalog import ComponentCatalog
 from .crossref_lookup import lookup_crossref
 from .data_location import migrate_data_root
 from .database import replace_source_in_database
@@ -87,14 +86,8 @@ from .large_document.mineru_accounts import (
 )
 from .library_query_controller import LibraryQueryController
 from .lifecycle import DurableOperationGate
-from .local_ocr_installer import (
-    LOCAL_OCR_MANIFEST_FILE,
-    LocalOCRInstaller,
-)
-from .local_ocr_settings import resolve_local_ocr_config_path
 from .macos_update import check_macos_update
-from .managed_embedding_models import ManagedEmbeddingModels
-from .managed_mineru import ManagedMinerU
+from .managed_component_assembly import assemble_managed_components
 from .mineru_api import (
     MinerUError,
     load_mineru_config,
@@ -474,32 +467,9 @@ def build_application_runtime(
             )
         ),
     )
-    component_catalog = ComponentCatalog(root, LOCAL_OCR_MANIFEST_FILE)
-    managed_embedding_models = ManagedEmbeddingModels(root)
-    managed_mineru = ManagedMinerU(
-        root,
-        resolve_mineru_config_path(root),
-        manifest_path=component_catalog.manifest_path,
-        catalog_summary=component_catalog.summary,
-    )
-    local_ocr_installer = LocalOCRInstaller(
-        root,
-        resolve_local_ocr_config_path(root),
-        manifest_path=component_catalog.manifest_path,
-        catalog_summary=component_catalog.summary,
-    )
-    if os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower() in {
-        "macos",
-        "win32",
-        "linux",
-    }:
-        component_catalog.start_background_check(
-            on_updated=lambda: (
-                local_ocr_installer.refresh_manifest(),
-                managed_mineru.refresh_manifest(),
-            )
-        )
-    managed_mineru.start_installed_if_managed()
+    managed = assemble_managed_components(root)
+    component_catalog = managed.catalog
+    managed_mineru = managed.mineru
     parser_settings_controller = ParserSettingsController(
         context.paths,
         mineru_account_service,
@@ -549,11 +519,7 @@ def build_application_runtime(
         save_vision_fallback=(
             lambda payload, path: save_vision_policy(payload, path)
         ),
-        managed_components={
-            local_ocr_installer.component_id: local_ocr_installer,
-            managed_mineru.component_id: managed_mineru,
-            managed_embedding_models.component_id: managed_embedding_models,
-        },
+        managed_components=managed.registry,
     )
     parser_settings_controller.migrate_legacy_mineru_account()
     library_get_routes, library_post_routes = assemble_library_routes(

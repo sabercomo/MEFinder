@@ -30,6 +30,7 @@ from .mineru_local_settings import (
 )
 from .managed_mineru import ManagedMinerUError
 from .managed_embedding_models import ManagedEmbeddingModelsError
+from .managed_alignment_runtime import ManagedAlignmentRuntimeError
 from .import_resume import ResumeManifestError
 from .local_ocr_installer import LocalOCRInstallerError
 from .local_ocr_settings import (
@@ -185,6 +186,32 @@ class ParserSettingsController:
         except OSError:
             logging.exception("Embedding model component operation failed")
             return 500, {"error": "译本对齐模型操作失败。"}
+        return 200, {"ok": True, **result}
+
+    def text_alignment_runtime_component(self) -> ParserSettingsResponse:
+        component = self._managed_components.get("text-alignment-runtime")
+        if component is None:
+            return 400, {"error": "当前运行方式不支持安装对齐计算组件。"}
+        try:
+            return 200, component.summary()
+        except (ManagedAlignmentRuntimeError, OSError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+
+    def manage_text_alignment_runtime_component(
+        self, payload: object
+    ) -> ParserSettingsResponse:
+        if not isinstance(payload, Mapping):
+            return 400, {"error": "对齐计算组件操作必须是 JSON 对象。"}
+        component = self._managed_components.get("text-alignment-runtime")
+        if component is None:
+            return 400, {"error": "当前运行方式不支持安装对齐计算组件。"}
+        try:
+            result = component.perform(payload)
+        except (ManagedAlignmentRuntimeError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+        except OSError:
+            logging.exception("Alignment runtime component operation failed")
+            return 500, {"error": "对齐计算组件操作失败。"}
         return 200, {"ok": True, **result}
 
     def mineru_accounts(self) -> ParserSettingsResponse:
