@@ -1,0 +1,111 @@
+name: Update Homebrew tap
+
+# 发布 GitHub Release 后自动把 Homebrew cask 更新到新版本并推到独立 tap 仓库。
+# 依赖两项在仓库设置里预先配置的凭据(见 docs/MACOS_BUILD.md 的 Homebrew 小节):
+#   - 变量 vars.HOMEBREW_TAP_REPO：独立 tap 仓库 owner/repo(如 sabercomo/homebrew-mefinder)
+#   - 密钥 secrets.HOMEBREW_TAP_TOKEN：对该 tap 仓库有 contents:write 权限的 PAT
+# 缺任一项时任务如实失败,不会静默跳过。
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号(如 0.5.4,不带前缀 v)。手动重跑时用。"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap-update
+  cancel-in-progress: false
+
+jobs:
+  update-tap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out main repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve release version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            tag="${{ github.event.release.tag_name }}"
+            version="${tag#v}"
+          fi
+          if [ -z "$version" ]; then
+            echo "无法确定版本号(release.tag_name 为空,且未手动传入 version)。" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "解析到版本:$version"
+
+      - name: Validate required tap credentials
+        env:
+          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${TAP_REPO}" ]; then
+            echo "缺少仓库变量 HOMEBREW_TAP_REPO(独立 tap 仓库 owner/repo)。" >&2
+            missing=1
+          fi
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "缺少密钥 HOMEBREW_TAP_TOKEN(对 tap 仓库有写权限的 PAT)。" >&2
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "请在仓库 Settings → Secrets and variables → Actions 配置后重跑。" >&2
+            exit 1
+          fi
+
+      - name: Download macOS DMG assets from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh release download "v${VERSION}" \
+            --repo "${{ github.repository }}" \
+            --pattern "MEFinder-v*-macos-*.dmg" \
+            --pattern "MEFinder-v*-macos-*.dmg.sha256.txt" \
+            --dir release
+          echo "已下载:"
+          ls -1 release
+
+      - name: Clone standalone tap repo
+        env:
+          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 \
+            "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" \
+            tap-repo
+          git -C tap-repo config user.name "github-actions[bot]"
+          git -C tap-repo config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Render cask and push to tap repo
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          python scripts/update_homebrew_tap.py \
+            --version "${VERSION}" \
+            --tap-repo tap-repo \
+            --push

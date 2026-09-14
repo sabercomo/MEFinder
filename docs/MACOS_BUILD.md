@@ -155,6 +155,27 @@ Homebrew 渠道要求 macOS 14 及以上（cask 的 `depends_on macos` 取两架
 5. 若某版本只构建了单一架构，脚本会自动切换为单架构 cask 并加 `depends_on arch`
    门禁，防止 Intel 用户装到不可运行的包。
 
+### 发版后自动化（GitHub Actions）
+
+`.github/workflows/homebrew-tap.yml` 在 GitHub Release **published** 时触发（也可
+`workflow_dispatch` 手动传 `version` 重跑），自动完成上面第 4 步的**推送独立 tap
+仓库**部分：从该 Release 下载 `MEFinder-v*-macos-*.dmg` 资产、运行
+`update_homebrew_tap.py --tap-repo … --push`，把新版 `Casks/mefinder.rb` 推到独立
+tap 仓库。这样正式发版后 `brew upgrade --cask mefinder` 即可跟到新版，无需本地再动手。
+
+首次接入需在**主仓库** Settings → Secrets and variables → Actions 配置两项：
+
+- 变量 `HOMEBREW_TAP_REPO`：独立 tap 仓库的 `owner/repo`（如 `sabercomo/homebrew-mefinder`）。
+- 密钥 `HOMEBREW_TAP_TOKEN`：对该 tap 仓库有 `contents:write` 权限的 PAT
+  （细粒度 PAT 建议只授权该单仓库）。默认的 `GITHUB_TOKEN` 只能访问主仓库，跨仓库推送必须用它。
+
+缺任一项时任务如实失败，不会静默跳过。
+
+> 该 workflow 只推送**独立 tap 仓库**（用户侧安装源）。主仓库内的镜像
+> `homebrew-tap/Casks/mefinder.rb` 与测试金样 `tests/test_homebrew_tap_cask.py`
+> 的 `PUBLISHED_DMG_SHA256` **不由它更新**（避免向 `main` 回写），仍按上面第 2–3 步
+> 在本地更新并随迭代提交。二者只是主仓库内的一致性镜像，不影响用户 `brew upgrade`。
+
 注意：cask 已在本机 Homebrew 7.0.0 通过 `brew style` 与
 `brew audit --cask mefinder --online`（实测下载并校验产物）。审计要求 cask 的
 `depends_on macos` 不得低于产物内声明的 `LSMinimumSystemVersion`；发新版后若产物
