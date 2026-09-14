@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from importlib.util import find_spec
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -25,6 +26,11 @@ from src.me_finder.alignment_anchors import HeadingAnchor
 from src.me_finder.edition_folio_anchors import FolioBoundaryCandidate
 from src.me_finder.embedding_models import AlignmentThresholds
 from src.me_finder.semantic_alignment import SemanticLink
+
+# The compute stack is optional at runtime: a core-only CI env has none of it.
+# Only capability-present assertions are gated on it; the "reports missing"
+# behaviour is exercised regardless via fault injection.
+_DEPS_PRESENT = all(find_spec(name) is not None for name in ("numpy", "fastembed", "onnxruntime"))
 
 
 def _simulate_env(code: str) -> dict:
@@ -98,11 +104,35 @@ class SerializationTests(unittest.TestCase):
 
 
 class ProbeTests(unittest.TestCase):
-    def test_probe_reports_capabilities_in_dev_runtime(self) -> None:
+    @unittest.skipUnless(_DEPS_PRESENT, "requires numpy/fastembed/onnxruntime installed")
+    def test_probe_reports_capabilities_when_present(self) -> None:
         runner = ac.SubprocessAlignmentComputeRunner(task_id="probe")
         caps = runner.probe()
         for name in ("numpy", "fastembed", "onnxruntime"):
-            self.assertTrue(caps.get(name), f"{name} should be importable in dev venv")
+            self.assertTrue(caps.get(name))
+
+    def test_probe_not_blocked_by_large_worker_diagnostics(self) -> None:
+        # A worker that floods its std fds before answering must not dead-lock
+        # the probe (the transport uses DEVNULL std streams + a control file,
+        # never a pipe that could back-pressure).
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="noisy", env=_simulate_env("noisy"), poll_interval=0.02
+        )
+        if _DEPS_PRESENT:
+            caps = runner.probe()
+            self.assertTrue(caps.get("numpy"))
+        else:
+            with self.assertRaises(ac.AlignmentComputeError):
+                runner.probe()
+
+    @unittest.skipIf(_DEPS_PRESENT, "only meaningful when a dep is genuinely missing")
+    def test_probe_rejects_when_a_dep_is_missing(self) -> None:
+        # In a core-only environment (e.g. CI without the compute stack) the
+        # probe must fail clearly rather than assume availability.
+        runner = ac.SubprocessAlignmentComputeRunner(task_id="probe")
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner.probe()
+        self.assertEqual(ctx.exception.code, ac.COMPONENT_MISSING)
 
     def test_probe_component_missing_is_a_clear_error(self) -> None:
         runner = ac.SubprocessAlignmentComputeRunner(
@@ -126,23 +156,81 @@ class WorkerProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             request = Path(tmp) / "request.json"
             result = Path(tmp) / "result.json"
+            control = Path(tmp) / "control.ndjson"
             request.write_text(
                 json.dumps({"protocol": 999, "task_id": "t", "inputs": {}}),
                 encoding="utf-8",
             )
-            proc = subprocess.run(
+            # Control goes to a file (not stdout/stderr), so this also verifies
+            # the worker never depends on inherited std streams.
+            subprocess.run(
                 [sys.executable, "-m", "src.me_finder.alignment_compute_worker",
-                 str(request), str(result)],
+                 str(request), str(result), str(control)],
                 cwd=str(REPO),
-                capture_output=True,
-                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 env={**os.environ, "PYTHONPATH": str(REPO)},
             )
-            messages = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+            messages = [
+                json.loads(line)
+                for line in control.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
             errors = [m for m in messages if m.get("type") == "error"]
-            self.assertTrue(errors, proc.stdout + proc.stderr)
+            self.assertTrue(errors, control.read_text(encoding="utf-8"))
             self.assertEqual(errors[0]["code"], ac.PROTOCOL_INCOMPATIBLE)
             self.assertFalse(result.exists())
+
+    @unittest.skipUnless(_DEPS_PRESENT, "reaches the version check after capability check")
+    def test_worker_rejects_wrong_algorithm_version(self) -> None:
+        # A request declaring a version this worker does not implement must be
+        # refused — the worker checks its own algorithm/model versions, so a
+        # mismatched independent-component upgrade cannot pass off wrong-version
+        # results as current.
+        with tempfile.TemporaryDirectory() as tmp:
+            request = Path(tmp) / "request.json"
+            result = Path(tmp) / "result.json"
+            control = Path(tmp) / "control.ndjson"
+            good = ac.build_request(
+                task_id="t", cache_dir=Path("/models"), embedding_model_id="minilm-l12-v2",
+                source_texts=["a"], target_texts=["b"],
+                thresholds=AlignmentThresholds(0.56, 0.5, 0.05),
+                reusable_sequences=[[], []], folio_candidates=[],
+                source_language="zh", target_language="en", reviewed_body_ranges=None,
+            )
+            good["model_identity"]["alignment_algorithm_version"] = "999"
+            request.write_text(json.dumps(good), encoding="utf-8")
+            subprocess.run(
+                [sys.executable, "-m", "src.me_finder.alignment_compute_worker",
+                 str(request), str(result), str(control)],
+                cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env={**os.environ, "PYTHONPATH": str(REPO)},
+            )
+            messages = [json.loads(x) for x in control.read_text(encoding="utf-8").splitlines() if x.strip()]
+            errors = [m for m in messages if m.get("type") == "error"]
+            self.assertTrue(errors, control.read_text(encoding="utf-8"))
+            self.assertEqual(errors[0]["code"], ac.PROTOCOL_INCOMPATIBLE)
+            self.assertFalse(result.exists())
+
+    def test_worker_does_not_depend_on_inherited_std_streams(self) -> None:
+        # Simulate a windowed frozen app where sys.stdout/sys.stderr are None
+        # (PyInstaller console=False on Windows). The worker must still emit its
+        # protocol to the control file without an AttributeError.
+        with tempfile.TemporaryDirectory() as tmp:
+            control = Path(tmp) / "control.ndjson"
+            script = (
+                "import sys; sys.stdout=None; sys.stderr=None; "
+                "from src.me_finder.alignment_compute_worker import main; "
+                f"raise SystemExit(main(['--probe', {str(control)!r}]))"
+            )
+            proc = subprocess.run(
+                [sys.executable, "-c", script],
+                cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env={**os.environ, "PYTHONPATH": str(REPO)},
+            )
+            self.assertEqual(proc.returncode, 0)
+            messages = [json.loads(x) for x in control.read_text(encoding="utf-8").splitlines() if x.strip()]
+            self.assertTrue(any(m.get("type") == "hello" for m in messages))
 
 
 class RunnerFailureTests(unittest.TestCase):
@@ -168,6 +256,22 @@ class RunnerFailureTests(unittest.TestCase):
     def test_result_identity_mismatch_is_refused(self) -> None:
         runner = ac.SubprocessAlignmentComputeRunner(
             task_id="tamper", env=_simulate_env("tamper_identity")
+        )
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner(["a"], ["b"], **TINY_INPUTS)
+        self.assertEqual(ctx.exception.code, ac.RESULT_MISMATCH)
+
+    def test_result_protocol_mismatch_is_refused(self) -> None:
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="tamper", env=_simulate_env("tamper_protocol")
+        )
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner(["a"], ["b"], **TINY_INPUTS)
+        self.assertEqual(ctx.exception.code, ac.PROTOCOL_INCOMPATIBLE)
+
+    def test_result_task_mismatch_is_refused(self) -> None:
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="tamper", env=_simulate_env("tamper_task")
         )
         with self.assertRaises(ac.AlignmentComputeError) as ctx:
             runner(["a"], ["b"], **TINY_INPUTS)

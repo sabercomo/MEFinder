@@ -33,11 +33,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import queue
 import subprocess
 import sys
 import tempfile
-import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Sequence, Tuple
@@ -296,13 +295,89 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _terminate(process: subprocess.Popen) -> None:
+    """Terminate the worker cross-platform.
+
+    POSIX: the worker runs in its own session/process group, so signal the whole
+    group. Windows has no ``killpg``; ``terminate()`` (TerminateProcess) ends the
+    single worker process. The worker spawns no children of its own.
+    """
+
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            process.terminate()
+        except OSError:
+            pass
+    else:
+        import signal
+
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                process.terminate()
+            except OSError:
+                return
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        if os.name != "nt":
+            import signal
+
+            try:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                return
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+
+class _ControlTail:
+    """Incrementally parse line-delimited JSON appended to a control file."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._offset = 0
+        self._buffer = ""
+
+    def read_messages(self):
+        try:
+            data = self._path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+        if len(data) <= self._offset:
+            return
+        chunk = data[self._offset:]
+        self._offset = len(data)
+        self._buffer += chunk
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+
 class SubprocessAlignmentComputeRunner:
     """Run the compute phase in a separate process.
 
-    The instance is callable with the same signature as
-    ``align_segment_sequences`` so ``generate_alignment`` can use it as
-    ``compute_runner``. It never touches the database; the main process keeps
-    identity checks, write coordination and publication.
+    Callable with the same signature as ``align_segment_sequences`` so
+    ``generate_alignment`` can use it as ``compute_runner``. It never touches the
+    database; the main process keeps identity checks, write coordination and
+    publication.
+
+    The transport is file-based (request / result / control files) and the
+    worker's inherited stdio is left at the null device, so it works identically
+    in a windowed frozen app (where stdout/stderr are ``None``) and never
+    dead-locks on a full pipe.
     """
 
     def __init__(
@@ -322,132 +397,60 @@ class SubprocessAlignmentComputeRunner:
         self._env = dict(env) if env is not None else None
         self._cwd = cwd
 
-    # -- process plumbing --------------------------------------------------- #
     def _spawn(self, extra_args: Sequence[str]) -> subprocess.Popen:
         env = dict(os.environ if self._env is None else self._env)
         cwd = self._cwd
         if not getattr(sys, "frozen", False) and self._cwd is None:
-            # Dev: run from the repo root so ``src.me_finder`` is importable and
-            # ensure it is on PYTHONPATH for the child.
             root = _repo_root()
             cwd = root
             existing = env.get("PYTHONPATH", "")
             env["PYTHONPATH"] = os.pathsep.join(p for p in (str(root), existing) if p)
+        kwargs: dict = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        else:
+            kwargs["start_new_session"] = True
         try:
             return subprocess.Popen(
                 [*self._launch_command, *extra_args],
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 cwd=str(cwd) if cwd is not None else None,
                 env=env,
-                start_new_session=True,  # own process group → clean group kill
+                **kwargs,
             )
         except OSError as exc:  # pragma: no cover - launch failure is rare
             raise AlignmentComputeError(
                 WORKER_START_FAILED, f"无法启动对齐计算进程：{exc}"
             ) from exc
 
-    @staticmethod
-    def _close_streams(process: subprocess.Popen) -> None:
-        for stream in (process.stdout, process.stderr, process.stdin):
-            try:
-                if stream is not None:
-                    stream.close()
-            except OSError:
-                pass
+    def _pump(self, process: subprocess.Popen, control_path: Path):
+        """Yield control messages as the worker appends them; poll cancellation."""
 
-    @classmethod
-    def _kill(cls, process: subprocess.Popen) -> None:
-        if process.poll() is not None:
-            cls._close_streams(process)
-            return
-        try:
-            os.killpg(process.pid, __import__("signal").SIGTERM)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                process.terminate()
-            except OSError:
-                cls._close_streams(process)
-                return
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, __import__("signal").SIGKILL)
-            except (ProcessLookupError, PermissionError, OSError):
-                process.kill()
-        finally:
-            cls._close_streams(process)
-
-    def _read_control_lines(self, process: subprocess.Popen):
-        """Yield parsed stdout control messages; skip non-JSON diagnostics.
-
-        Cancellation is polled while waiting; a cancel kills the process group
-        and raises. The reader runs on a thread so the poll loop stays live.
-        """
-
-        line_queue: "queue.Queue[str | None]" = queue.Queue()
-
-        def pump() -> None:
-            try:
-                assert process.stdout is not None
-                for raw in process.stdout:
-                    line_queue.put(raw)
-            finally:
-                line_queue.put(None)
-
-        reader = threading.Thread(target=pump, daemon=True)
-        reader.start()
+        tail = _ControlTail(control_path)
         while True:
             if self._cancel_check is not None and self._cancel_check():
-                self._kill(process)
+                _terminate(process)
                 raise AlignmentComputeError(CANCELLED, "对齐计算已取消。")
-            try:
-                raw = line_queue.get(timeout=self._poll_interval)
-            except queue.Empty:
-                if process.poll() is not None:
-                    # Process ended; drain whatever the reader captured.
-                    try:
-                        raw = line_queue.get(timeout=1.0)
-                    except queue.Empty:
-                        return
-                else:
-                    continue
-            if raw is None:
+            for message in tail.read_messages():
+                yield message
+            if process.poll() is not None:
+                # Drain any final lines the worker wrote just before exiting.
+                for message in tail.read_messages():
+                    yield message
                 return
-            text = raw.strip()
-            if not text:
-                continue
-            try:
-                yield json.loads(text)
-            except json.JSONDecodeError:
-                # Stray stdout output is treated as a diagnostic, not control.
-                continue
+            time.sleep(self._poll_interval)
 
-    def _stderr_tail(self, process: subprocess.Popen, limit: int = 2000) -> str:
-        try:
-            assert process.stderr is not None
-            data = process.stderr.read() or ""
-        except (OSError, ValueError):
-            return ""
-        return data[-limit:]
-
-    # -- public API --------------------------------------------------------- #
     def probe(self) -> Dict[str, object]:
-        """Ask the external worker to report its capabilities.
+        """Ask the external worker to report its capabilities (replaces a
+        main-process find_spec check)."""
 
-        This replaces a main-process ``find_spec`` check: the answer comes from
-        the process that would actually run the compute. Raises
-        :class:`AlignmentComputeError` when the worker cannot run or speaks an
-        incompatible protocol.
-        """
-
-        process = self._spawn(["--probe"])
+        work_dir = Path(tempfile.mkdtemp(prefix="mefinder-align-probe-"))
+        control_path = work_dir / "control.ndjson"
+        process = self._spawn(["--probe", str(control_path)])
         try:
-            for message in self._read_control_lines(process):
+            for message in self._pump(process, control_path):
                 kind = message.get("type")
                 if kind == "hello":
                     protocol = message.get("protocol")
@@ -458,11 +461,7 @@ class SubprocessAlignmentComputeRunner:
                             f"expected={ALIGNMENT_COMPUTE_PROTOCOL}）。",
                         )
                     caps = dict(message.get("capabilities") or {})
-                    missing = [
-                        name
-                        for name in ("numpy", "fastembed", "onnxruntime")
-                        if not caps.get(name)
-                    ]
+                    missing = [n for n in ("numpy", "fastembed", "onnxruntime") if not caps.get(n)]
                     if missing:
                         raise AlignmentComputeError(
                             COMPONENT_MISSING,
@@ -475,11 +474,11 @@ class SubprocessAlignmentComputeRunner:
                         str(message.get("message") or "对齐计算进程无法启动。"),
                     )
             raise AlignmentComputeError(
-                WORKER_CRASHED,
-                "对齐计算进程未返回能力应答。" + self._stderr_tail(process),
+                WORKER_CRASHED, f"对齐计算进程未返回能力应答(exit={process.poll()})。"
             )
         finally:
-            self._kill(process)
+            _terminate(process)
+            _rmtree(work_dir)
 
     def __call__(
         self,
@@ -497,9 +496,6 @@ class SubprocessAlignmentComputeRunner:
         reviewed_body_ranges: Dict[str, List[int]] | None = None,
     ) -> ComputeResult:
         if embedding_provider is not None:
-            # A callable provider cannot cross a process boundary. Production
-            # never passes one; tests that inject a provider use the in-process
-            # path. Fail loudly rather than silently running in-process.
             raise AlignmentComputeError(
                 COMPUTE_FAILED,
                 "子进程计算不支持自定义 embedding_provider。",
@@ -524,20 +520,18 @@ class SubprocessAlignmentComputeRunner:
         work_dir = Path(tempfile.mkdtemp(prefix="mefinder-align-compute-"))
         request_path = work_dir / "request.json"
         result_path = work_dir / "result.json"
-        request_path.write_text(
-            json.dumps(request, ensure_ascii=False), encoding="utf-8"
-        )
-        process = self._spawn([str(request_path), str(result_path)])
+        control_path = work_dir / "control.ndjson"
+        request_path.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
+        process = self._spawn([str(request_path), str(result_path), str(control_path)])
         try:
             saw_hello = False
-            for message in self._read_control_lines(process):
+            for message in self._pump(process, control_path):
                 kind = message.get("type")
                 if kind == "hello":
                     saw_hello = True
                     if message.get("protocol") != ALIGNMENT_COMPUTE_PROTOCOL:
                         raise AlignmentComputeError(
-                            PROTOCOL_INCOMPATIBLE,
-                            "对齐计算进程协议不兼容。",
+                            PROTOCOL_INCOMPATIBLE, "对齐计算进程协议不兼容。"
                         )
                 elif kind == "progress":
                     continue
@@ -547,38 +541,49 @@ class SubprocessAlignmentComputeRunner:
                         str(message.get("message") or "对齐计算失败。"),
                     )
                 elif kind == "result":
-                    if message.get("input_identity") != request["input_identity"]:
-                        raise AlignmentComputeError(
-                            RESULT_MISMATCH,
-                            "对齐计算结果与请求输入不匹配，拒绝发布。",
-                        )
-                    payload = json.loads(result_path.read_text(encoding="utf-8"))
-                    if payload.get("input_identity") != request["input_identity"]:
-                        raise AlignmentComputeError(
-                            RESULT_MISMATCH,
-                            "对齐计算结果文件与请求输入不匹配，拒绝发布。",
-                        )
-                    return deserialize_result(payload)
-            # No result message. Classify by how the worker exited: a non-zero
-            # exit (or one that never announced itself) is a crash; a clean exit
-            # with no result is a compute failure. Neither publishes anything.
-            try:
-                returncode = process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                returncode = None
-            if not saw_hello or (returncode is not None and returncode != 0):
-                code = WORKER_CRASHED
-            else:
-                code = COMPUTE_FAILED
+                    return self._consume_result(message, request, result_path)
+            returncode = process.poll()
+            code = WORKER_CRASHED if (not saw_hello or (returncode not in (0, None))) else COMPUTE_FAILED
             raise AlignmentComputeError(
-                code,
-                f"对齐计算进程未返回结果(exit={returncode})。" + self._stderr_tail(process),
+                code, f"对齐计算进程未返回结果(exit={returncode})。"
             )
         finally:
-            self._kill(process)
-            try:
-                request_path.unlink(missing_ok=True)
-                result_path.unlink(missing_ok=True)
-                work_dir.rmdir()
-            except OSError:
-                pass
+            _terminate(process)
+            _rmtree(work_dir)
+
+    def _consume_result(self, message, request, result_path: Path) -> ComputeResult:
+        # Validate the control message and the result file against the request:
+        # protocol, task id and input identity must all match, so a stale or
+        # wrong-version result is never published.
+        if message.get("input_identity") != request["input_identity"]:
+            raise AlignmentComputeError(
+                RESULT_MISMATCH, "对齐计算结果与请求输入不匹配，拒绝发布。"
+            )
+        try:
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise AlignmentComputeError(
+                COMPUTE_FAILED, f"无法读取对齐计算结果：{exc}"
+            ) from exc
+        if payload.get("protocol") != ALIGNMENT_COMPUTE_PROTOCOL:
+            raise AlignmentComputeError(
+                PROTOCOL_INCOMPATIBLE, "对齐计算结果协议不兼容，拒绝发布。"
+            )
+        if str(payload.get("task_id")) != str(request["task_id"]):
+            raise AlignmentComputeError(
+                RESULT_MISMATCH, "对齐计算结果任务标识不匹配，拒绝发布。"
+            )
+        if payload.get("input_identity") != request["input_identity"]:
+            raise AlignmentComputeError(
+                RESULT_MISMATCH, "对齐计算结果文件与请求输入不匹配，拒绝发布。"
+            )
+        return deserialize_result(payload)
+
+
+def _rmtree(work_dir: Path) -> None:
+    import shutil
+
+    try:
+        shutil.rmtree(work_dir, ignore_errors=True)
+    except OSError:
+        pass

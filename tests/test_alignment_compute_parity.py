@@ -1,12 +1,11 @@
 """Parity between the in-process compute and the out-of-process runner.
 
-Requires the local MiniLM model cache (like the performance protocol). Without
-it the whole case is skipped. It asserts that moving the compute to a separate
-process changes nothing observable: identical links, scores, classification,
-page/heading anchors and character intervals — compared exactly, with no added
-tolerance. The only excluded fields are non-deterministic identifiers and
-timestamps (alignment_run_id / alignment_link_id / created_at / completed_at),
-listed explicitly below.
+Requires the local MiniLM model cache. Each run uses an **isolated** compute
+cache: the model files are symlinked read-only into a temp directory with a
+fresh ``document-vectors`` folder, so the user's real cache is never written and
+cold-start inference is genuinely exercised (not served from a shared warm
+vector cache). Parity is asserted exactly, with no added tolerance; the only
+excluded fields are non-deterministic identifiers/timestamps.
 """
 
 from __future__ import annotations
@@ -41,15 +40,26 @@ def _model_cache() -> Path:
 MODEL_CACHE = _model_cache()
 MODEL_PRESENT = model_component_installed(MODEL_CACHE, DEFAULT_EMBEDDING_MODEL_ID)
 
-# Fields excluded from the persisted comparison, with rationale:
-#   alignment_run_id / alignment_link_id : fresh UUIDs per run/link
-#   created_at / completed_at            : wall-clock timestamps
 EXCLUDED_PERSISTED_FIELDS = {
-    "alignment_run_id",
-    "alignment_link_id",
-    "created_at",
-    "completed_at",
+    "alignment_run_id",  # fresh UUID per run
+    "alignment_link_id",  # fresh UUID per link
+    "created_at",  # wall-clock
+    "completed_at",  # wall-clock
 }
+
+
+def isolated_cache(tmp: Path, *, name: str = "cache") -> Path:
+    """A compute cache whose model files are symlinked read-only from the real
+    cache but whose document-vectors folder is fresh (cold inference)."""
+
+    cache = tmp / name
+    cache.mkdir(parents=True)
+    for child in MODEL_CACHE.iterdir():
+        if child.name == "document-vectors":
+            continue
+        (cache / child.name).symlink_to(child)
+    (cache / "document-vectors").mkdir()
+    return cache
 
 
 @unittest.skipUnless(MODEL_PRESENT, "requires local MiniLM model cache")
@@ -69,9 +79,9 @@ class ComputeParityTests(unittest.TestCase):
         "Conclusion.",
     ]
 
-    def _kwargs(self) -> dict:
+    def _kwargs(self, cache: Path) -> dict:
         return dict(
-            cache_dir=MODEL_CACHE,
+            cache_dir=cache,
             embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
             thresholds=embedding_model_config(DEFAULT_EMBEDDING_MODEL_ID).thresholds,
             reusable_sequences=([], []),
@@ -81,16 +91,30 @@ class ComputeParityTests(unittest.TestCase):
             reviewed_body_ranges=None,
         )
 
-    def test_direct_compute_is_identical(self) -> None:
-        kwargs = self._kwargs()
-        in_links, in_anchors = run_in_process(self.SRC, self.TGT, **kwargs)
-        runner = SubprocessAlignmentComputeRunner(task_id="parity")
-        runner.probe()
-        sub_links, sub_anchors = runner(self.SRC, self.TGT, **kwargs)
-        # Exact equality of every SemanticLink (char intervals, cost,
-        # confidence, review_status, anchor_key) and every HeadingAnchor.
-        self.assertEqual(in_links, sub_links)
-        self.assertEqual(in_anchors, sub_anchors)
+    def test_cold_direct_compute_is_identical(self) -> None:
+        # Separate cold caches for each path: both compute embeddings fresh, so
+        # this proves cold subprocess inference equals cold in-process inference.
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_a = isolated_cache(Path(tmp), name="in")
+            cache_b = isolated_cache(Path(tmp), name="sub")
+            in_links, in_anchors = run_in_process(self.SRC, self.TGT, **self._kwargs(cache_a))
+            runner = SubprocessAlignmentComputeRunner(task_id="parity")
+            runner.probe()
+            sub_links, sub_anchors = runner(self.SRC, self.TGT, **self._kwargs(cache_b))
+            self.assertEqual(in_links, sub_links)
+            self.assertEqual(in_anchors, sub_anchors)
+
+    def test_warm_cache_reuse_matches_cold(self) -> None:
+        # First subprocess run is cold (writes vectors); the second reuses them.
+        # Results must be identical, and the vector cache must be populated.
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = isolated_cache(Path(tmp), name="warm")
+            runner = SubprocessAlignmentComputeRunner(task_id="warm")
+            cold = runner(self.SRC, self.TGT, **self._kwargs(cache))
+            vectors = list((cache / "document-vectors").glob("*.npy"))
+            self.assertTrue(vectors, "cold run should populate the vector cache")
+            warm = runner(self.SRC, self.TGT, **self._kwargs(cache))
+            self.assertEqual(cold, warm)
 
 
 def _fixture(root: Path) -> Path:
@@ -101,9 +125,6 @@ def _fixture(root: Path) -> Path:
 
 
 def _run_rows(db: Path, run_id: str):
-    """Ordered links for a run, with member segment identities, minus excluded
-    non-deterministic fields."""
-
     with sqlite3.connect(db) as connection:
         connection.row_factory = sqlite3.Row
         links = connection.execute(
@@ -142,25 +163,15 @@ class EndToEndParityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
             db_a = _fixture(Path(tmp_a))
             db_b = _fixture(Path(tmp_b))
-            common = dict(
-                document_group_id="bench-pair",
-                pivot_source_file_id="bench-002",
-                target_source_file_id="bench-003",
-                force=True,
-                model_cache_dir=MODEL_CACHE,
-            )
-            res_a = generate_alignment(db_a, common["document_group_id"],
-                                       common["pivot_source_file_id"],
-                                       common["target_source_file_id"],
-                                       force=True, model_cache_dir=MODEL_CACHE)
+            cache_a = isolated_cache(Path(tmp_a))
+            cache_b = isolated_cache(Path(tmp_b))
+            res_a = generate_alignment(db_a, "bench-pair", "bench-002", "bench-003",
+                                       force=True, model_cache_dir=cache_a)
             runner = SubprocessAlignmentComputeRunner(task_id="e2e")
-            res_b = generate_alignment(db_b, common["document_group_id"],
-                                       common["pivot_source_file_id"],
-                                       common["target_source_file_id"],
-                                       force=True, model_cache_dir=MODEL_CACHE,
+            res_b = generate_alignment(db_b, "bench-pair", "bench-002", "bench-003",
+                                       force=True, model_cache_dir=cache_b,
                                        compute_runner=runner)
 
-            # Return dicts equal except the run id.
             a = {k: v for k, v in res_a.items() if k not in EXCLUDED_PERSISTED_FIELDS}
             b = {k: v for k, v in res_b.items() if k not in EXCLUDED_PERSISTED_FIELDS}
             self.assertEqual(a, b)
@@ -168,9 +179,66 @@ class EndToEndParityTests(unittest.TestCase):
             rows_a = _run_rows(db_a, str(res_a["alignment_run_id"]))
             rows_b = _run_rows(db_b, str(res_b["alignment_run_id"]))
             self.assertTrue(rows_a, "fixture produced no links")
-            # Persisted scores, classification, ordering, anchors and member
-            # segment identities (character-interval basis) match exactly.
             self.assertEqual(rows_a, rows_b)
+
+
+# The core acceptance combination Astra called out: a main process that CANNOT
+# import numpy/fastembed/onnxruntime still generates AND publishes by delegating
+# to a real external compute process. Run in a child interpreter that installs an
+# import block on the compute stack, then drives generate_alignment through the
+# real subprocess runner.
+_CLOSURE_SCRIPT = r'''
+import importlib.abc, sys
+from pathlib import Path
+class NoCompute(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'numpy','fastembed','onnxruntime'}:
+            raise ModuleNotFoundError(fullname, name=fullname)
+sys.meta_path.insert(0, NoCompute())
+root = Path(sys.argv[1]); model_cache = Path(sys.argv[2])
+from scripts.performance_fixture import create_fixture
+from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment_compute import SubprocessAlignmentComputeRunner
+import sqlite3
+# isolated compute cache: symlink models, fresh vectors
+cache = root/'cache'; cache.mkdir()
+for child in model_cache.iterdir():
+    if child.name!='document-vectors':
+        (cache/child.name).symlink_to(child)
+(cache/'document-vectors').mkdir()
+create_fixture(root, documents=2, paragraphs=20, alignment_paragraphs=8)
+db = root/'data/index.sqlite3'
+runner = SubprocessAlignmentComputeRunner(task_id='closure')
+caps = runner.probe()
+assert all(caps.values()), caps
+result = generate_alignment(db,'bench-pair','bench-002','bench-003',force=True,
+                            model_cache_dir=cache, compute_runner=runner)
+assert result['status']=='completed', result
+assert not result.get('reused'), 'force must recompute'
+with sqlite3.connect(db) as c:
+    n = c.execute("SELECT COUNT(*) FROM alignment_runs WHERE status='completed'").fetchone()[0]
+    links = c.execute("SELECT COUNT(*) FROM alignment_links WHERE alignment_run_id=?",(result['alignment_run_id'],)).fetchone()[0]
+assert n>=1 and links>0, (n,links)
+# The main process must never have imported the compute stack itself.
+assert not any(m in sys.modules for m in ('numpy','fastembed','onnxruntime')), \
+    [m for m in ('numpy','fastembed','onnxruntime') if m in sys.modules]
+print('CLOSURE_OK', result['alignment_link_count'])
+'''
+
+
+@unittest.skipUnless(MODEL_PRESENT, "requires local MiniLM model cache")
+class NumpyFreeMainSuccessClosureTests(unittest.TestCase):
+    def test_numpy_free_main_generates_via_external_runtime(self) -> None:
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = subprocess.run(
+                [sys.executable, "-c", _CLOSURE_SCRIPT, tmp, str(MODEL_CACHE)],
+                cwd=str(REPO), capture_output=True, text=True, timeout=180,
+                env={**__import__("os").environ, "PYTHONPATH": str(REPO),
+                     "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"},
+            )
+            self.assertIn("CLOSURE_OK", proc.stdout, proc.stdout + proc.stderr)
 
 
 if __name__ == "__main__":

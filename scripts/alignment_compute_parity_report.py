@@ -72,14 +72,29 @@ def _digest(rows) -> str:
     ).hexdigest()
 
 
-def _generate(db: Path, args, *, runner) -> dict:
+def _isolated_cache(tmp: Path, models: Path, name: str) -> Path:
+    """Compute cache with model files symlinked read-only and a fresh vector
+    cache, so the user's real cache is never written and each run does cold
+    inference."""
+
+    cache = tmp / name
+    cache.mkdir(parents=True)
+    for child in models.iterdir():
+        if child.name == "document-vectors":
+            continue
+        (cache / child.name).symlink_to(child)
+    (cache / "document-vectors").mkdir()
+    return cache
+
+
+def _generate(db: Path, args, *, cache: Path, runner) -> dict:
     return generate_alignment(
         db,
         args.group,
         args.pivot,
         args.target,
         force=True,
-        model_cache_dir=Path(args.models),
+        model_cache_dir=cache,
         compute_runner=runner,
     )
 
@@ -104,11 +119,15 @@ def main(argv=None) -> int:
         db_b = Path(tmp) / "subprocess.sqlite3"
         shutil.copy2(args.db, db_a)
         shutil.copy2(args.db, db_b)
+        # Isolated cold caches per path: models symlinked read-only, fresh
+        # vectors. The user's model/vector cache is never modified.
+        cache_a = _isolated_cache(Path(tmp), Path(args.models), "cache_in")
+        cache_b = _isolated_cache(Path(tmp), Path(args.models), "cache_sub")
 
-        res_a = _generate(db_a, args, runner=None)
+        res_a = _generate(db_a, args, cache=cache_a, runner=None)
         runner = SubprocessAlignmentComputeRunner(task_id="parity-report")
         caps = runner.probe()
-        res_b = _generate(db_b, args, runner=runner)
+        res_b = _generate(db_b, args, cache=cache_b, runner=runner)
 
         rows_a = _run_rows(db_a, str(res_a["alignment_run_id"]))
         rows_b = _run_rows(db_b, str(res_b["alignment_run_id"]))

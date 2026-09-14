@@ -1,6 +1,6 @@
 {
   "report": "alignment-compute-parity-real",
-  "code_revision": "509d20b",
+  "code_revision": "e922709",
   "pair_hash": "ac773fed55a48824",
   "worker_capabilities": {
     "numpy": true,

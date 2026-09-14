@@ -25,22 +25,21 @@
 
 ## 3. 最小、版本化的进程协议
 
-不造通用 IPC 框架。控制通道与诊断分离:**stdout 只走行分隔 JSON 控制消息,stderr 走日志与库告警**(worker 启动即把 `sys.stdout` 指向 stderr,只保留原始 stdout 作控制通道)。
+不造通用 IPC 框架。**传输全部走文件,不用继承的 stdin/stdout/stderr 作协议通道**——这样在 windowed 冻结应用(Windows `console=False` 时 `sys.stdout/stderr` 为 `None`)可用,且不会因 stderr 管道写满而死锁。worker 启动即把自身 `sys.stdout/stderr` 指向空设备(库输出既不阻塞也不污染协议);主进程以 `stdout=DEVNULL, stderr=DEVNULL` 启动 worker,**不建任何管道**。
 
-**请求**(临时文件 `request.json`,大数据走文件而非管道):
-`protocol`、`task_id`、`cache_dir`、`model_identity`(embedding_model_id + embedding_runtime / semantic_alignment / algorithm / region 版本)、`input_identity`(输入+版本的 sha256)、`inputs`(source/target texts、thresholds、reusable_sequences、folio_candidates、languages、reviewed_body_ranges)。
-
-**结果**(临时文件 `result.json`):`protocol`、`task_id`、`input_identity`(worker 就其实际收到并计算的输入重算)、`links`、`anchors`。
-
-**stdout 控制消息**:`hello`(协议版本 + 能力 + pid,probe 只发这一条)、`progress`、`result`、`error`(`code` + `message`)。
+- **请求**(临时 `request.json`):`protocol`、`task_id`、`cache_dir`、`model_identity`(embedding_model_id + embedding_runtime / semantic_alignment / algorithm / region 版本)、`input_identity`(输入+版本 sha256)、`inputs`。
+- **结果**(临时 `result.json`):`protocol`、`task_id`、`input_identity`(worker 就其实际收到、**用自身版本**计算的输入重算)、`links`、`anchors`。
+- **控制文件**(临时 `control.ndjson`,worker 追加行分隔 JSON,主进程增量 tail):`hello`(协议版本 + 能力 + pid;probe 只发这一条)、`progress`、`result`、`error`(`code` + `message`,诊断 traceback 折进 message)。
 
 **错误码**:`component_missing` / `protocol_incompatible` / `worker_start_failed` / `worker_crashed` / `compute_failed` / `cancelled` / `result_mismatch`。
 
-**启动**:开发态 `python -m src.me_finder.alignment_compute_worker`;冻结态复用应用可执行文件的 `alignment-compute-worker` 子命令(`desktop.py` 顶部在导入桌面壳之前分派,worker 保持精简、不开窗)。
+**版本身份强校验(双向)**:worker 计算前核对请求 `model_identity` 四个版本字段与**自身实际实现版本**一致,否则 `protocol_incompatible` 拒绝(独立组件升级后错误版本结果不会被当成当前成果);主进程收到结果后核对结果文件的 `protocol`、`task_id`、`input_identity` 三者与请求一致,任一不符即拒绝发布。
+
+**启动**:开发态 `python -m src.me_finder.alignment_compute_worker <req> <res> <control>`;冻结态复用应用可执行文件的 `alignment-compute-worker` 子命令(`desktop.py` 顶部在导入桌面壳之前分派,worker 精简不开窗)。
 
 ## 4. 生命周期与失效保护
 
-- **取消/退出**:worker 独立进程组(`start_new_session=True`);runner 轮询 `cancel_check`(= `embedding_cancel_requested()`,用户取消与应用关闭都会置位),命中即 `killpg` 整组,报 `cancelled`。计算期主进程**不持** DB 锁(准备相位已提交关闭),硬杀 worker 不影响库,也不影响其他任务/进程。
+- **取消/退出(跨平台)**:POSIX 用独立会话/进程组(`start_new_session=True`)+ `killpg`;Windows 无 `killpg`,用 `CREATE_NEW_PROCESS_GROUP` + `terminate()`(worker 无自建子进程)。runner 轮询 `cancel_check`(= `embedding_cancel_requested()`,用户取消与应用关闭都置位),命中即结束 worker,报 `cancelled`。计算期主进程**不持** DB 锁(准备相位已提交关闭),硬杀 worker 不影响库,也不影响其他任务/进程。
 - **不发布半成品**:发布在计算成功返回**之后**才发生;崩溃、协议不兼容、启动失败、取消都在发布前中止,DB 无新 completed run。
 - **不发布过期结果**:runner 校验结果 `input_identity` 与请求一致,否则 `result_mismatch` 拒绝发布。既有写入协调(串行阻止修改)**保留不放松**。
 - **自定义 embedding_provider** 无法跨进程序列化:子进程 runner 显式拒绝,不静默退回进程内。
@@ -53,5 +52,6 @@
 
 ## 6. 已验证 / 未验证(平台与门禁见验收报告)
 
-- 已验证(开发 venv,2026-09-14):进程内 vs 子进程**逐链接、分数、分类、锚点、字符区间完全一致**(无容差);协议/崩溃/取消/组件缺失/结果失配错误明确且不发布;全量 unittest 2291 通过(22 skip)、ruff 通过。
-- 见 [`reports/alignment-compute-2a-acceptance-2026-09-14.md`](../../reports/alignment-compute-2a-acceptance-2026-09-14.md):真实冻结产物冒烟与真实样本对照结果、已测/未测平台清单。
+- 已验证(macOS arm64,2026-09-14):进程内 vs 子进程**逐链接、分数、分类、锚点、字符区间完全一致**(无容差,含冷缓存直接对照、暖缓存复用、真实书对 967 链接 sha256 相同、无 NumPy 主进程真实闭环);协议/版本不符/崩溃/取消/组件缺失/结果 protocol·task·input 失配错误明确且不发布;windowed 无继承 std 流与大量诊断不阻塞已测;全量 unittest 2299 通过(23 skip)、ruff 通过;冻结产物(文件传输)worker 探测+计算与进程内一致。
+- 未在目标主机验证:Windows(代码已分平台实现,未在 Windows 构建/冒烟)、macOS x86_64。
+- 见 [`reports/alignment-compute-2a-acceptance-2026-09-14.md`](../../reports/alignment-compute-2a-acceptance-2026-09-14.md):完整对照、冻结冒烟、已测/未测平台与针对审计的修复清单。
