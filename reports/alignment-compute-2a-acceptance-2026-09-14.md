@@ -1,5 +1,7 @@
 # 阶段2A 验收报告 —— 本地独立对齐计算闭环
 
+2026-09-14：后续第三轮复审及直接修复见 [最新复审报告](alignment-compute-2a-final-review-2026-09-14.md)。以下保留前两轮测试和冻结构建的历史验证范围。
+
 - 日期：2026-09-14（含针对 Astra 审计的修复复核）
 - 范围：`generate_alignment` 的**计算相位**移入独立本地进程;主程序准备输入 → 计算进程执行 → 主程序发布结果。协议与职责见 [`docs/issues/note-alignment-compute-process-2a.md`](../docs/issues/note-alignment-compute-process-2a.md)。
 - 工具链(固定)：Python 3.12.10 arm64 / numpy 2.5.2 / onnxruntime 1.29.0 / fastembed 0.8.0 / tokenizers 0.23.1。模型：`minilm-l12-v2`。

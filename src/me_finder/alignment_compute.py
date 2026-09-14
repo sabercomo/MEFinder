@@ -33,6 +33,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -306,35 +308,25 @@ def _terminate(process: subprocess.Popen) -> None:
     if process.poll() is not None:
         return
     if os.name == "nt":
-        try:
-            process.terminate()
-        except OSError:
-            pass
+        process.terminate()
     else:
-        import signal
-
         try:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                process.terminate()
-            except OSError:
-                return
+        except (ProcessLookupError, PermissionError):
+            process.terminate()
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         if os.name != "nt":
-            import signal
-
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                return
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
-        try:
+            except (ProcessLookupError, PermissionError):
+                process.kill()
+        else:
             process.kill()
-        except OSError:
-            pass
+        # Sending SIGKILL/TerminateProcess is not the same as reaping the child.
+        # Keep the lifecycle gate held until it exits and releases its files.
+        process.wait()
 
 
 class _ControlTail:
@@ -588,9 +580,4 @@ class SubprocessAlignmentComputeRunner:
 
 
 def _rmtree(work_dir: Path) -> None:
-    import shutil
-
-    try:
-        shutil.rmtree(work_dir, ignore_errors=True)
-    except OSError:
-        pass
+    shutil.rmtree(work_dir)

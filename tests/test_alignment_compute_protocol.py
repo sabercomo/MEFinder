@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from importlib.util import find_spec
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
@@ -234,6 +235,42 @@ class WorkerProtocolTests(unittest.TestCase):
 
 
 class RunnerFailureTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX worker can ignore SIGTERM")
+    def test_forced_termination_reaps_running_worker(self) -> None:
+        import signal
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ready = Path(tmp) / "ready"
+            script = (
+                "import signal,sys,time; from pathlib import Path; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "Path(sys.argv[1]).touch(); time.sleep(60)"
+            )
+            process = subprocess.Popen(
+                [sys.executable, "-c", script, str(ready)],
+                start_new_session=True,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            try:
+                deadline = time.monotonic() + 5
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "worker never became ready")
+                ac._terminate(process)
+                self.assertEqual(process.returncode, -signal.SIGKILL)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                process.wait(timeout=5)
+
+    def test_failed_temp_cleanup_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch("shutil.rmtree", side_effect=PermissionError("request still locked")):
+                with self.assertRaisesRegex(PermissionError, "request still locked"):
+                    ac._rmtree(Path(tmp))
+
     def test_worker_crash_surfaces_as_clear_error(self) -> None:
         runner = ac.SubprocessAlignmentComputeRunner(
             task_id="crash", env=_simulate_env("crash")

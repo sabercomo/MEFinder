@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentCancelled,
     TextAlignmentComponentUnavailable,
+    TextAlignmentCoordinator,
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
@@ -182,6 +185,19 @@ class TextAlignmentControllerTests(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertTrue(body.get("component_unavailable"))
         self.assertIn("对齐计算运行时未安装", body["error"])
+        self.assertNotIn("解析文本", body["error"])
+
+    def test_uninstalled_model_surfaces_install_hint_from_real_coordinator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.controller._coordinator = TextAlignmentCoordinator(
+                SimpleNamespace(runtime_root=root, index_path=root / "index.sqlite3"),
+                None, None,
+            )
+            status, body = self.controller.generate(self._generate_payload())
+        self.assertEqual(status, 503)
+        self.assertTrue(body.get("component_unavailable"))
+        self.assertIn("下载模型", body["error"])
         self.assertNotIn("解析文本", body["error"])
 
     def test_cancelled_alignment_is_reported_not_failed(self) -> None:

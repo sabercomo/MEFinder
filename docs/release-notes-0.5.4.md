@@ -1,5 +1,7 @@
 # MEFinder 0.5.4
 
+2026-09-14：阶段 2A 开发源码补齐排队取消、未安装模型提示、强制终止等待与临时文件清理错误传播；新增真实 worker 关闭回归。尚未进入正式安装包，不改变下列已发布产物摘要。验收范围及门禁见 [第三轮复审报告](../reports/alignment-compute-2a-final-review-2026-09-14.md)。
+
 2026-09-14：Windows 正式双件套（安装版 + 便携版）重建并入本轮解析统计构成条配色，构建源码 `db15f7f`（`main` HEAD，与 tag `v0.5.4`→`b1f0082` 仅差两条 release-notes 文档提交，产品代码含配色改动）。两件套打包前各跑全量 2277 项 unittest（`PYTHONUTF8=1` 复刻 CI 的 UTF-8 门禁）全过，PyInstaller onedir + MCP sidecar + 空索引 + MCP STDIO 冒烟 + payload 隐私校验通过；安装包经 Inno Setup 7 编译（Inno 6 缺 `ChineseSimplified.isl`）。产物 SHA-256：
 - `MEFinder-v0.5.4-windows-setup.exe`（140,391,166 字节）：`dc0d5c0d10d8b47b11e88db22412347cc3d80519693f30242a65ed436c959452`
 - `MEFinder-v0.5.4-windows-portable.zip`（164,182,639 字节）：`6240c91b6a503bfa707005b801a018c48c8d6a6d1b19b7461766432dace20dd7`

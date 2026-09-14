@@ -237,6 +237,47 @@ class TextAlignmentCoordinatorProbeTests(unittest.TestCase):
         with self.assertRaises(TextAlignmentComponentUnavailable):
             coordinator.generate("group", "a", "b")
 
+    def test_queued_request_does_not_clear_active_shutdown_cancel(self) -> None:
+        lock = threading.RLock()
+        queued = threading.Event()
+
+        @contextmanager
+        def mutation():
+            queued.set()
+            with lock:
+                yield
+
+        gate = DurableOperationGate()
+        factory = mock.Mock(side_effect=_StubComputeRunner)
+        coordinator = TextAlignmentCoordinator(
+            self.paths, SimpleNamespace(mutation=mutation), gate,
+            compute_runner_factory=factory,
+        )
+        outcome = []
+
+        def run():
+            try:
+                coordinator.generate("group", "a", "b")
+            except Exception as exc:
+                outcome.append(exc)
+
+        worker = threading.Thread(target=run)
+        # An active alignment owns this same mutation lock while shutdown asks
+        # it to cancel. A late synchronous request must not erase that signal.
+        with gate.operation(), lock:
+            embedding_runtime.request_embedding_cancel()
+            gate.begin_shutdown()
+            worker.start()
+            reached_lock = queued.wait(5)
+            cancel_preserved = embedding_runtime.embedding_cancel_requested()
+        worker.join(5)
+        self.assertTrue(reached_lock)
+        self.assertFalse(worker.is_alive())
+        self.assertTrue(cancel_preserved, "queued request cleared active cancellation")
+        self.assertEqual(len(outcome), 1)
+        self.assertIsInstance(outcome[0], TextAlignmentCancelled)
+        factory.assert_not_called()
+
     def test_probe_crash_maps_to_plain_failure(self) -> None:
         coordinator = TextAlignmentCoordinator(
             self.paths, _IndexRuntime(), _DurableOperations(),

@@ -119,18 +119,22 @@ class TextAlignmentCoordinator:
             # The managed model component is a settings-UI download. Starting a
             # generation job without it must fail clearly and locally — never
             # trigger a hidden network download from inside the job.
-            raise TextAlignmentFailed(
+            raise TextAlignmentComponentUnavailable(
                 "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
             )
-        begin_embedding_run()
-        runner = self._compute_runner_factory(
-            task_id=uuid.uuid4().hex, cancel_check=embedding_cancel_requested
-        )
         with self._index_runtime.mutation():
+            # A queued request must not clear cancellation of the run that owns
+            # this lock. Reset before admission so shutdown after admission
+            # cannot have its cancellation signal erased.
+            begin_embedding_run()
             try:
                 with self._durable_operations.operation():
+                    runner = self._compute_runner_factory(
+                        task_id=uuid.uuid4().hex,
+                        cancel_check=embedding_cancel_requested,
+                    )
                     # Probe the external runtime *inside* the durable operation
-                    # and the write window: it spawns a process, so it must be
+                    # and mutation lock: it spawns a process, so it must be
                     # covered by the shutdown drain (close waits for the active
                     # operation) and be cancellable (the probe polls the same
                     # cancel signal), or a close during probe would leave an
