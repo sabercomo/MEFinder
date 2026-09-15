@@ -98,7 +98,7 @@
 
 **约束与佐证**
 
-- `numpy` 由 5 个模块 import,全部对齐相关且均为函数内 lazy import:`text_alignment`(仅 `align_segment_sequences` 内) / `semantic_alignment` / `alignment_corridor_refine` / `alignment_anchor_validation` / `edition_folio_anchors`。`tests/test_core_without_alignment.py` 用 `MetaPathFinder` 禁 import `numpy`/`fastembed`/`onnxruntime`,冷启 HTTP 后端仍能搜索 + 读取已存对齐 + 优雅退出(2026-09-14 实跑通过)——佐证核心路径不依赖计算栈。
+- `numpy` 被若干对齐相关模块 import。**更正(2026-09-15,阶段2C AST 复核)**:上文"全部函数内 lazy"的表述不准确——`alignment_anchor_validation` / `edition_folio_anchors` / `semantic_alignment` 三处在 `if TYPE_CHECKING:` 守卫内(运行时不执行、PyInstaller 也不跟随),而 `alignment_corridor_refine.py:23` 是**真·模块级 `import numpy`**;但该模块在 `src/me_finder` 内**零引用**(D 实验遗留,仅 `scripts/`/实验测试用),不在主图也不在核心路径。结论不变:核心路径不依赖计算栈。`tests/test_core_without_alignment.py` 用 `MetaPathFinder` 禁 import `numpy`/`fastembed`/`onnxruntime`,冷启 HTTP 后端仍能搜索 + 读取已存对齐 + 优雅退出——佐证之。**又:PyInstaller 静态跟随 import,惰性与否不影响打包,唯 spec `excludes` 有效(阶段2C 已落,见 `reports/alignment-compute-runtime-2c-2026-09-15.md`)。**
 - `pymupdf`(44 MiB)是导入期 PDF 解析核心依赖(下游只读不重解析,红线2),**不是**可移除候选,须留主包。
 - 候选测算不等于承诺;阶段2 须在干净环境分别构建主程序 / sidecar / 计算组件,实测计算依赖是否被间接打回主包。
 

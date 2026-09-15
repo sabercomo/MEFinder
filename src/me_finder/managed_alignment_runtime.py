@@ -1300,6 +1300,15 @@ def make_model_downloader(
             worker_context=worker_context,
         )
         if launch is None:
+            # No independent runtime: fall back to an in-process download only
+            # when the app actually bundles the numeric stack (development, or a
+            # pre-2C build). A slim main package has no stack in-process, so the
+            # download MUST go through the independent runtime — surface that as
+            # a clear, actionable reason instead of a raw ImportError.
+            if not _builtin_stack_present():
+                raise ManagedAlignmentRuntimeError(
+                    "对齐计算运行时未安装：请先安装对齐计算组件后再下载模型。"
+                )
             from .managed_embedding_models import download_embedding_model
 
             download_embedding_model(model_id, cache_dir)
@@ -1350,12 +1359,19 @@ def default_worker_context() -> tuple[str, Path]:
     compute code.
 
     * Development: the repository root exposes ``src.me_finder`` as a package.
-    * Frozen: the bundled application source root ships the ``me_finder``
-      package next to the runtime (packaging wiring is completed in phase 2C;
-      the resolution is defined here so the launch path is testable now).
+    * Frozen: the packaging specs ship the pure-Python ``me_finder`` source as
+      data under ``sys._MEIPASS`` (the bundle's data root — where PyInstaller
+      places ``datas`` on every platform). The external interpreter cannot read
+      the app's PYZ, so the worker imports that shipped source instead. See
+      ``tools.slim_main_package.worker_source_datas``.
     """
 
     if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass is not None:
+            return "me_finder.alignment_compute_worker", Path(meipass)
+        # Defensive fallback for a frozen build without _MEIPASS (unexpected):
+        # the bundle resources directory, next to which datas are placed.
         from .runtime_location import app_root
 
         return "me_finder.alignment_compute_worker", app_root()

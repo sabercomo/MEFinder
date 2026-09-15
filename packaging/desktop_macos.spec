@@ -6,6 +6,10 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 from src.me_finder import __version__
+from tools.slim_main_package import (
+    ALIGNMENT_COMPUTE_STACK,
+    worker_source_datas,
+)
 
 
 project_root = Path.cwd()
@@ -61,6 +65,12 @@ a = Analysis(
             str(stage_root / "Python-runtime-LICENSE.txt"),
             "THIRD_PARTY_LICENSES",
         ),
+        # Phase 2C: ship the pure-Python me_finder source so the independent
+        # alignment runtime's interpreter can run the compute worker
+        # (``python -m me_finder.alignment_compute_worker``) without the main
+        # package carrying the numeric stack. Shipped as data — never analysed —
+        # so it does not pull the excluded stack back into the main graph.
+        *worker_source_datas(project_root),
     ],
     hiddenimports=[
         "opencc",
@@ -107,6 +117,13 @@ a = Analysis(
         "webview.platforms.mshtml",
         "webview.platforms.qt",
         "webview.platforms.gtk",
+        # Phase 2C: the alignment compute stack lives only in the independent
+        # runtime's venv (or the dev interpreter). Every main-process import of
+        # it is lazy/TYPE_CHECKING-guarded, but PyInstaller follows those
+        # statically, so it must be excluded explicitly to keep it out of the
+        # bundle. The worker source is shipped as data (above) for the external
+        # interpreter that actually owns the stack.
+        *ALIGNMENT_COMPUTE_STACK,
     ],
     noarchive=False,
 )

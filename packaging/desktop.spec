@@ -15,6 +15,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.windows_version_info import write_windows_version_info
+from tools.slim_main_package import (
+    ALIGNMENT_COMPUTE_STACK,
+    worker_source_datas,
+)
 
 
 version_info_path = write_windows_version_info(ROOT / 'build' / 'windows_version_info.txt')
@@ -28,6 +32,11 @@ a = Analysis(
         (str(ROOT / 'src' / 'me_finder' / 'templates'), 'src/me_finder/templates'),
         (str(ROOT / 'src' / 'me_finder' / 'static'), 'src/me_finder/static'),
         (str(ROOT / 'src' / 'me_finder' / 'local_ocr_manifest.json'), 'src/me_finder'),
+        # Phase 2C: ship the pure-Python me_finder source so the independent
+        # alignment runtime's interpreter can run the compute worker without the
+        # main package carrying the numeric stack. Shipped as data (never
+        # analysed), so it never pulls the excluded stack back into the graph.
+        *worker_source_datas(ROOT),
     ],
     hiddenimports=[
         "opencc",
@@ -61,6 +70,11 @@ a = Analysis(
     excludes=[
         'tkinter', 'unittest', 'pydoc', 'doctest',
         'xmlrpc', 'pdb', 'profile', 'pstats', 'test',
+        # Phase 2C: keep the alignment compute stack out of the main package;
+        # every main-process import of it is lazy/TYPE_CHECKING-guarded, and the
+        # worker source is shipped as data (above) for the external interpreter
+        # that owns the stack (the independent runtime's venv).
+        *ALIGNMENT_COMPUTE_STACK,
     ],
     noarchive=False,
 )
