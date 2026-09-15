@@ -420,6 +420,25 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertTrue(recovered.summary()["installed"])
         self.assertFalse(previous.exists())
 
+    def test_recovers_previous_runtime_when_manifest_is_unreadable(self) -> None:
+        """Recovery must not strand a valid previous runtime behind a bad catalog."""
+        manager = self._manager()
+        manager.perform({"action": "install"})
+        self.assertTrue(self._wait(manager)["installed"])
+        previous = manager.component_root / ".previous-corrupt-manifest"
+        manager.runtime_dir.replace(previous)
+        broken_manifest = self.root / "broken-manifest.json"
+        broken_manifest.write_text("{", encoding="utf-8")
+        recovered = ManagedAlignmentRuntime(
+            self.runtime,
+            manifest_path=broken_manifest,
+            platform_key="test-platform",
+            process_launcher=_process_launcher,
+            worker_context=self._worker_context,
+        )
+        self.assertTrue(recovered.runtime_dir.exists())
+        self.assertFalse(previous.exists())
+
     def test_compute_status_matches_launch_on_incompatible_receipt(self) -> None:
         # [P2] An installed receipt with an incompatible protocol must not read
         # as "可用 · 独立运行时": status must track the real launch condition.

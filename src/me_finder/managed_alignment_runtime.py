@@ -464,7 +464,18 @@ class ManagedAlignmentRuntime:
         ):
             return False
         python = self._venv_python(root)
-        return python is not None and python.exists()
+        if python is not None and python.exists():
+            return True
+        # Recovery must still recognize a complete previous install when the
+        # catalog is unavailable at startup. The two supported venv layouts are
+        # stable and are also recorded by the platform matrix when it is usable.
+        return any(
+            candidate.exists()
+            for candidate in (
+                root / "venv" / "bin" / "python",
+                root / "venv" / "Scripts" / "python.exe",
+            )
+        )
 
     def _recover_interrupted_state(self) -> None:
         """Restore a runtime left mid-swap by a crash (hard exit / power loss).
@@ -478,7 +489,7 @@ class ManagedAlignmentRuntime:
         """
 
         root = self.component_root
-        if not root.is_dir() or self._venv_python(self.runtime_dir) is None:
+        if not root.is_dir():
             return
         lock = _CrossProcessOperationLock(root / ".operation.lock")
         try:
