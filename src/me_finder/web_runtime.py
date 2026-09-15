@@ -655,6 +655,9 @@ def build_application_runtime(
             )
             return False
         managed_mineru.close()
+        # Cancel and reap any in-flight alignment-runtime install/verify process
+        # before reporting shutdown complete, so nothing is left behind.
+        managed.alignment_runtime.close()
         index_runtime.close()
         return True
 

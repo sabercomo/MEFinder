@@ -20,7 +20,11 @@ from ..embedding_runtime import (
     enter_embedding_run,
     exit_embedding_run,
 )
-from ..managed_alignment_runtime import resolve_installed_runtime_launch
+from ..managed_alignment_runtime import (
+    ComputeUnavailable,
+    compute_admission,
+    resolve_installed_runtime_launch,
+)
 from ..lifecycle import DurableOperationClosedError
 from ..alignment_compute import (
     AlignmentComputeError,
@@ -156,7 +160,13 @@ class TextAlignmentCoordinator:
             # instead of removing the runtime out from under it.
             enter_embedding_run()
             try:
-                with self._durable_operations.operation():
+                # Admit this task through the runtime's shared compute lease: it
+                # refuses (component-unavailable) if an install/upgrade/uninstall
+                # is under way, and holds the lease so such an operation waits for
+                # this task to finish rather than swapping/deleting the runtime
+                # mid-compute — across application instances, not just this one.
+                with compute_admission(self._paths.runtime_root), \
+                        self._durable_operations.operation():
                     runner = self._compute_runner_factory(
                         task_id=uuid.uuid4().hex,
                         cancel_check=embedding_cancel_requested,
@@ -191,6 +201,10 @@ class TextAlignmentCoordinator:
                 raise TextAlignmentCancelled(str(exc)) from exc
             except InvalidAlignmentRequest as exc:
                 raise TextAlignmentRejected(str(exc)) from exc
+            except ComputeUnavailable as exc:
+                # The runtime is being installed / upgraded / uninstalled: a
+                # showable, retryable component condition — not a data failure.
+                raise TextAlignmentComponentUnavailable(str(exc)) from exc
             except AlignmentComputeError as exc:
                 # Cancellation (user or shutdown) stays a cancellation; a missing
                 # or incompatible or unstartable runtime is a distinct, showable

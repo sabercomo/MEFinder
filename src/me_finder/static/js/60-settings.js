@@ -857,12 +857,16 @@
     var status = document.getElementById('alignment-compute-status');
     if (!status) return;
     var provider = compute && compute.provider;
+    var detail = (compute && compute.detail) || '';
     if (compute && compute.available) {
-      status.className = 'settings-status ready';
-      status.textContent = provider === 'independent' ? '可用 · 独立运行时' : '可用 · 随应用提供';
+      // A mismatched-but-installed runtime carries a detail even while available
+      // via the bundled stack; show it so the line matches the real launch path.
+      status.className = 'settings-status' + (detail ? ' warning' : ' ready');
+      var base = provider === 'independent' ? '可用 · 独立运行时' : '可用 · 随应用提供';
+      status.textContent = detail ? (base + ' · ' + detail) : base;
     } else {
       status.className = 'settings-status warning';
-      status.textContent = '不可用 · 缺少计算依赖，请更新应用';
+      status.textContent = '不可用 · ' + (detail || '缺少计算依赖，请更新应用');
     }
   }
 

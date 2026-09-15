@@ -151,6 +151,45 @@ def main(argv: list[str] | None = None) -> int:
         return 2  # no control file to report to
     simulate = os.environ.get(SIMULATE_ENV)
 
+    if "--download-model" in argv:
+        # Download and load one embedding model *in this isolated runtime*, so a
+        # main process without the numeric stack can still complete the model
+        # download + probe closure. positional: [model_id, cache_dir, control].
+        control = _open_control(positional[2])
+        model_id, cache_dir = positional[0], positional[1]
+        try:
+            from .managed_embedding_models import download_embedding_model
+
+            download_embedding_model(model_id, Path(cache_dir))
+        except BaseException as exc:  # noqa: BLE001 - report any download/load failure
+            import traceback
+
+            _emit(control, type="error", code=COMPUTE_FAILED,
+                  message=str(exc) + "\n" + traceback.format_exc()[-1500:])
+            return 1
+        _emit(control, type="result", model_id=model_id)
+        return 0
+
+    if "--verify" in argv:
+        # Install-time validation: actually LOAD the numeric stack in this
+        # isolated interpreter, not merely resolve it. ``find_spec`` can succeed
+        # for a package whose import raises (broken wheel, ABI mismatch); only a
+        # real import + a trivial op proves the runtime can compute.
+        control = _open_control(positional[0])
+        try:
+            import numpy  # noqa: F401
+            import onnxruntime  # noqa: F401
+            import fastembed  # noqa: F401
+
+            numpy.zeros(1) + 0  # force real initialization, not lazy resolution
+        except BaseException as exc:  # noqa: BLE001 - any load failure fails validation
+            _emit(control, type="error", code=COMPONENT_MISSING,
+                  message=f"独立运行时无法加载计算依赖：{exc}")
+            return 4
+        _emit(control, type="hello", protocol=ALIGNMENT_COMPUTE_PROTOCOL,
+              capabilities={name: True for name in _REQUIRED}, pid=os.getpid())
+        return 0
+
     if "--probe" in argv:
         control = _open_control(positional[0])
         if simulate == "noisy":

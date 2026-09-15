@@ -30,10 +30,12 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import uuid
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -60,6 +62,83 @@ ALIGNMENT_RUNTIME_RECEIPT_SCHEMA = 1
 # Directory names under components/text-alignment/.
 _RUNTIME_DIR = "runtime"
 _MODELS_DIR = "models"
+_COMPUTE_LOCK = ".compute.lock"
+_MAINTENANCE_MARKER = ".maintenance"
+# How long an install/upgrade/uninstall waits for an in-flight compute task
+# before giving up (so a stuck task cannot wedge the operation forever).
+_MAINTENANCE_WAIT_TIMEOUT = 30 * 60
+
+
+class ComputeUnavailable(RuntimeError):
+    """A compute task cannot be admitted: the runtime is under maintenance.
+
+    Raised by :func:`compute_admission` so the coordinator refuses a new task
+    (mapping it to a user-actionable 503) instead of racing an in-progress
+    install / upgrade / uninstall.
+    """
+
+
+def _text_alignment_component_root(runtime_root: Path) -> Path:
+    return (
+        component_runtime_root(Path(runtime_root))
+        / "components"
+        / "text-alignment"
+    )
+
+
+@contextmanager
+def compute_admission(runtime_root: Path):
+    """Hold a shared 'compute in progress' lease for one compute task.
+
+    Refuses admission (``ComputeUnavailable``) while the runtime is under
+    maintenance — an install / upgrade / uninstall raised the maintenance marker
+    or holds the exclusive compute lock (any application instance). While a task
+    holds this shared lease, such an operation waits for it to finish before
+    touching the runtime, so the runtime is never swapped or deleted out from
+    under a running computation, and once maintenance begins no new task starts.
+
+    On POSIX this is an ``fcntl`` shared/exclusive file lock, so it coordinates
+    across processes. On other platforms it degrades to the marker check (the
+    same-instance wait is covered by the in-process activity signal); real
+    cross-instance coverage there is pending platform verification.
+    """
+
+    root = _text_alignment_component_root(runtime_root)
+    if not root.exists():
+        # No component directory ⇒ no install/op could be under way, so there is
+        # nothing to coordinate with. Never create directories from the admission
+        # path (it must be a cheap, side-effect-free gate).
+        yield
+        return
+    marker = root / _MAINTENANCE_MARKER
+    if marker.exists():
+        raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
+    if os.name != "posix":
+        yield
+        return
+    import fcntl
+
+    handle = os.open(root / _COMPUTE_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。") from exc
+        # Close the race where maintenance began between the marker check and
+        # the lease: if the marker now exists, back out.
+        if marker.exists():
+            try:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
+        yield
+    finally:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        os.close(handle)
 
 
 def _builtin_stack_present() -> bool:
@@ -96,6 +175,7 @@ class AlignmentRuntimeManifest:
     python: str
     packages: tuple[str, ...]
     platform: Optional[PlatformManifest]
+    configured: bool = True
 
     def identity(self) -> str:
         """Stable identity of what an install of this manifest should contain.
@@ -153,7 +233,25 @@ def load_alignment_runtime_manifest(
         raise ManagedAlignmentRuntimeError("对齐计算组件清单无法读取。") from exc
     raw = payload.get("alignment") if isinstance(payload, Mapping) else None
     if not isinstance(raw, Mapping):
-        raise ManagedAlignmentRuntimeError("组件清单缺少对齐计算运行时定义。")
+        # An older or remote-cached catalog may legitimately predate the
+        # ``alignment`` block. That is NOT an error: the component reports itself
+        # unconfigured (install disabled), and the app still starts and computes
+        # via the bundled stack. Only a *present but malformed* block is a real
+        # manifest error worth surfacing.
+        selected_key = platform_key or current_platform_key()
+        try:
+            _engines, selected_platform = load_local_ocr_installer_manifest(
+                Path(path), platform_key=selected_key
+            )
+        except Exception:  # noqa: BLE001 - platform info is optional here
+            selected_platform = None
+        return AlignmentRuntimeManifest(
+            runtime_version="",
+            python="",
+            packages=(),
+            platform=selected_platform,
+            configured=False,
+        )
     packages = raw.get("packages")
     if not isinstance(packages, list) or not all(
         isinstance(item, str) and "==" in item for item in packages
@@ -282,14 +380,28 @@ class ManagedAlignmentRuntime:
         self._models_component = models_component
         self._is_compute_active = is_compute_active or (lambda: False)
         self._worker_context = worker_context or default_worker_context
-        self.manifest = load_alignment_runtime_manifest(
-            self._current_manifest_path(), platform_key=self.platform_key
-        )
+        self.manifest = self._load_manifest_safely()
         self._lock = threading.RLock()
         self._operation_lock = threading.Lock()
+        # Recover from a crash that interrupted an atomic swap before setting the
+        # initial state, so a valid previous runtime is not left stranded.
+        self._recover_interrupted_state()
         self._state = _RuntimeState(
             state="installed" if self._installed() else "not_installed"
         )
+
+    def _load_manifest_safely(self) -> AlignmentRuntimeManifest:
+        """Never let a corrupt/missing manifest abort application startup."""
+
+        try:
+            return load_alignment_runtime_manifest(
+                self._current_manifest_path(), platform_key=self.platform_key
+            )
+        except (ManagedAlignmentRuntimeError, OSError, ValueError):
+            return AlignmentRuntimeManifest(
+                runtime_version="", python="", packages=(), platform=None,
+                configured=False,
+            )
 
     # --- manifest -------------------------------------------------------- #
     def _current_manifest_path(self) -> Path:
@@ -297,9 +409,7 @@ class ManagedAlignmentRuntime:
         return manifest_path() if callable(manifest_path) else manifest_path
 
     def refresh_manifest(self) -> None:
-        manifest = load_alignment_runtime_manifest(
-            self._current_manifest_path(), platform_key=self.platform_key
-        )
+        manifest = self._load_manifest_safely()
         with self._lock:
             if self._state.operation:
                 return
@@ -340,6 +450,61 @@ class ManagedAlignmentRuntime:
             return False
         return self._receipt().get("identity") != self.manifest.identity()
 
+    def _is_valid_runtime(self, root: Path) -> bool:
+        """A directory holds a complete install (receipt + interpreter)."""
+
+        try:
+            receipt = json.loads((root / "installed.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if (
+            not isinstance(receipt, Mapping)
+            or receipt.get("schema_version") != ALIGNMENT_RUNTIME_RECEIPT_SCHEMA
+            or not receipt.get("identity")
+        ):
+            return False
+        python = self._venv_python(root)
+        return python is not None and python.exists()
+
+    def _recover_interrupted_state(self) -> None:
+        """Restore a runtime left mid-swap by a crash (hard exit / power loss).
+
+        The atomic install does ``final→.previous`` then ``staging→final``; a
+        crash between them leaves no ``runtime/`` but an intact ``.previous-*``
+        holding the working old version. Clearing ``.staging-*`` is not enough —
+        the previous runtime must be moved back. Runs under the cross-process
+        operation lock so it never races another instance mid-install; if the
+        lock is held, another instance owns the swap and this instance skips.
+        """
+
+        root = self.component_root
+        if not root.is_dir() or self._venv_python(self.runtime_dir) is None:
+            return
+        lock = _CrossProcessOperationLock(root / ".operation.lock")
+        try:
+            lock.acquire()
+        except ManagedAlignmentRuntimeError:
+            return
+        try:
+            for stale in list(root.glob(".staging-*")) + list(root.glob(".uv-*")):
+                self._remove_tree(stale)
+            previous = sorted(root.glob(".previous-*"))
+            if self._is_valid_runtime(self.runtime_dir):
+                for candidate in previous:
+                    self._remove_tree(candidate)
+                return
+            for candidate in previous:
+                if self._is_valid_runtime(candidate):
+                    self._remove_tree(self.runtime_dir)
+                    candidate.replace(self.runtime_dir)
+                    for other in root.glob(".previous-*"):
+                        self._remove_tree(other)
+                    return
+            for candidate in previous:
+                self._remove_tree(candidate)
+        finally:
+            lock.release()
+
     def installed_venv_python(self) -> Optional[Path]:
         """The interpreter of a validly installed runtime, else None.
 
@@ -354,21 +519,43 @@ class ManagedAlignmentRuntime:
     def compute_status(self) -> Dict[str, object]:
         """Whether alignment compute is available now, and via which runtime.
 
-        ``provider`` is what a generation would actually use: the independent
-        runtime when installed (validated at install), otherwise the app's
-        bundled stack (2A behaviour) when its numeric stack is importable. This
-        is a preflight indicator for the settings status line — the authoritative
-        capability check remains the compute-time probe. Crucially it means an
-        existing user whose app bundles the stack sees "可用", not "未安装":
-        the independent runtime is optional until the main package is slimmed
-        (2C).
+        ``provider`` is exactly what a generation would actually use, so the
+        settings line never disagrees with the launch path: the independent
+        runtime only when it would truly launch (``resolve_installed_runtime_launch``
+        — same receipt/protocol/interpreter checks), otherwise the app's bundled
+        stack when importable. An installed-but-unlaunchable runtime (e.g. an
+        incompatible protocol after a main-app upgrade) is surfaced in ``detail``
+        rather than shown as "可用 · 独立运行时". An existing user whose app
+        bundles the stack sees "可用", never "未安装" (the independent runtime is
+        optional until the main package is slimmed, 2C).
         """
 
-        if self._installed():
-            return {"available": True, "provider": "independent"}
+        try:
+            launch = resolve_installed_runtime_launch(
+                self.runtime_root,
+                platform_key=self.platform_key,
+                manifest_path=self._manifest_path,
+                worker_context=self._worker_context,
+            )
+        except Exception:  # noqa: BLE001 - status must never raise
+            launch = None
+        if launch is not None:
+            return {"available": True, "provider": "independent", "detail": ""}
+        # Installed (receipt+interpreter) but not launchable ⇒ incompatible.
+        incompatible = self._installed()
         if _builtin_stack_present():
-            return {"available": True, "provider": "builtin"}
-        return {"available": False, "provider": "none"}
+            detail = (
+                "已安装的独立运行时不兼容，当前使用随应用提供的运行时"
+                if incompatible else ""
+            )
+            return {"available": True, "provider": "builtin", "detail": detail}
+        if incompatible:
+            return {
+                "available": False,
+                "provider": "none",
+                "detail": "已安装的独立运行时不兼容，请重新安装",
+            }
+        return {"available": False, "provider": "none", "detail": ""}
 
     def _has_models(self) -> bool:
         models = self.models_dir
@@ -383,7 +570,7 @@ class ManagedAlignmentRuntime:
             receipt = self._receipt()
             result: Dict[str, object] = {
                 "component_id": self.component_id,
-                "supported": self.manifest.platform is not None,
+                "supported": self.manifest.configured and self.manifest.platform is not None,
                 "platform": self.platform_key,
                 "version": self.manifest.runtime_version,
                 "installed": self._installed(),
@@ -409,7 +596,7 @@ class ManagedAlignmentRuntime:
         with self._lock:
             return {
                 "component_id": self.component_id,
-                "supported": self.manifest.platform is not None,
+                "supported": self.manifest.configured and self.manifest.platform is not None,
                 "platform": self.platform_key,
                 "installed": self._installed(),
                 "update_available": self._update_available(),
@@ -435,6 +622,10 @@ class ManagedAlignmentRuntime:
             raise ManagedAlignmentRuntimeError("对齐计算组件没有可安装的更新。")
         if action in {"uninstall", "validate"} and not installed:
             raise ManagedAlignmentRuntimeError("对齐计算组件尚未安装。")
+        if action in {"install", "update"} and not self.manifest.configured:
+            raise ManagedAlignmentRuntimeError(
+                "当前组件清单未定义对齐计算运行时，请更新应用后再安装。"
+            )
         if action in {"install", "update"} and self.manifest.platform is None:
             raise ManagedAlignmentRuntimeError("当前平台不在对齐计算安装矩阵中。")
         if not self._operation_lock.acquire(blocking=False):
@@ -479,23 +670,34 @@ class ManagedAlignmentRuntime:
             self._operation_lock.release()
             return
         try:
-            if action in {"install", "update"}:
+            if action == "install":
                 self._install()
                 message = "对齐计算组件安装完成"
+                final_state = "installed"
+            elif action == "update":
+                # Upgrade replaces the in-use runtime, so first stop new tasks
+                # and wait for any running one — never swap files mid-compute.
+                maintenance = self._enter_maintenance(
+                    "upgrade_pending", "任务结束后升级", deferred=False
+                )
+                try:
+                    self._install()
+                finally:
+                    self._exit_maintenance(maintenance)
+                message = "对齐计算组件升级完成"
                 final_state = "installed"
             elif action == "validate":
                 self._validate(self.runtime_dir)
                 message = "对齐计算组件验证通过"
                 final_state = "installed"
             else:
-                deferred = self._uninstall_with_wait()
-                if deferred == "cancelled":
-                    self._set_state(
-                        "installed",
-                        operation=None,
-                        message="卸载已取消",
-                    )
-                    return
+                maintenance = self._enter_maintenance(
+                    "uninstall_pending", "任务结束后卸载", deferred=True
+                )
+                try:
+                    self._perform_uninstall()
+                finally:
+                    self._exit_maintenance(maintenance)
                 message = "对齐计算组件已卸载"
                 final_state = "not_installed"
             self._set_state(final_state, operation=None, message=message)
@@ -614,12 +816,13 @@ class ManagedAlignmentRuntime:
             self._remove_tree(staging)
 
     def _validate(self, root: Path) -> None:
-        """Run the compute worker's ``--probe`` with the runtime's interpreter.
+        """Run the compute worker's ``--verify`` with the runtime's interpreter.
 
-        This is a real runtime-load check: the probe imports numpy / fastembed /
-        onnxruntime *in the isolated interpreter* and completes the versioned
-        protocol handshake. File existence or ``find_spec`` in the main process
-        would prove nothing about the isolated environment.
+        This is a real runtime-load check: ``--verify`` actually *imports* numpy
+        / fastembed / onnxruntime in the isolated interpreter and runs a trivial
+        op, then completes the versioned protocol handshake. File existence or
+        ``find_spec`` (in this or the main process) would pass for a broken wheel
+        that fails on real import, so it is not sufficient.
         """
 
         python = self._venv_python(root)
@@ -633,13 +836,19 @@ class ManagedAlignmentRuntime:
         environment["PYTHONPATH"] = os.pathsep.join(
             p for p in (str(source_root), existing) if p
         )
-        self._run_command(
-            [str(python), "-m", module, "--probe", str(control)],
-            cwd=source_root,
-            environment=environment,
-            log_path=root / "validation.log",
-            timeout=300,
-        )
+        try:
+            self._run_command(
+                [str(python), "-m", module, "--verify", str(control)],
+                cwd=source_root,
+                environment=environment,
+                log_path=root / "validation.log",
+                timeout=300,
+            )
+        except ManagedAlignmentRuntimeError as exc:
+            # --verify exits non-zero when the stack fails to load; prefer the
+            # worker's specific reason over the generic "process exited N".
+            detail = self._read_control_error(control)
+            raise ManagedAlignmentRuntimeError(detail or str(exc)) from exc
         messages = [
             json.loads(line)
             for line in control.read_text(encoding="utf-8").splitlines()
@@ -659,26 +868,91 @@ class ManagedAlignmentRuntime:
                 "独立运行时缺少计算依赖：" + "、".join(missing)
             )
 
-    def _uninstall_with_wait(self) -> str:
-        """Uninstall, deferring until any in-flight compute task finishes.
+    @staticmethod
+    def _read_control_error(control: Path) -> str:
+        try:
+            lines = control.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return ""
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if message.get("type") == "error":
+                return str(message.get("message") or "")
+        return ""
 
-        Product rule (2B): while the component is processing a task, uninstall
-        waits — shown as "任务结束后卸载" — and stops accepting new tasks; it
-        completes only after the current task publishes or fails.
+    def _enter_maintenance(self, state_name: str, message: str, *, deferred: bool):
+        """Stop new tasks and wait for the running one, then hold the runtime.
+
+        Raises the maintenance marker (new tasks are refused across instances),
+        shows the pending state, then acquires the exclusive compute lock — which
+        blocks until every in-flight compute task (this and other instances,
+        POSIX) releases its shared lease. Cancellable and time-bounded so a stuck
+        task cannot wedge the operation. Returns a handle for ``_exit_maintenance``.
         """
 
-        state = self._state
-        if self._is_compute_active():
+        self.component_root.mkdir(parents=True, exist_ok=True)
+        marker = self.component_root / _MAINTENANCE_MARKER
+        marker.write_text(f"pid={os.getpid()}", encoding="utf-8")
+        with self._lock:
+            self._state.state = state_name
+            self._state.message = message
+            if deferred:
+                self._state.uninstall_deferred = True
+        handle: Optional[int] = None
+        deadline = time.monotonic() + _MAINTENANCE_WAIT_TIMEOUT
+        try:
+            if os.name == "posix":
+                import fcntl
+
+                handle = os.open(
+                    self.component_root / _COMPUTE_LOCK, os.O_CREAT | os.O_RDWR, 0o600
+                )
+                while True:
+                    self._raise_if_cancelled()
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except OSError:
+                        pass
+                    if time.monotonic() >= deadline:
+                        raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
+                    if self._state.cancel_event.wait(0.2):
+                        raise _Cancelled("操作已取消。")
+            else:
+                while self._is_compute_active():
+                    if self._state.cancel_event.wait(0.2):
+                        raise _Cancelled("操作已取消。")
+                    if time.monotonic() >= deadline:
+                        raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
+        except BaseException:
+            if handle is not None:
+                os.close(handle)
+            marker.unlink(missing_ok=True)
             with self._lock:
-                state.state = "uninstall_pending"
-                state.uninstall_deferred = True
-                state.message = "任务结束后卸载"
-            while self._is_compute_active():
-                if state.cancel_event.wait(0.2):
-                    return "cancelled"
-        self._set_state("cleaning", message="正在卸载对齐计算组件")
-        self._perform_uninstall()
-        return "done"
+                self._state.uninstall_deferred = False
+            raise
+        self._set_state("cleaning" if deferred else "provisioning")
+        return (handle, marker)
+
+    def _exit_maintenance(self, handle_marker) -> None:
+        handle, marker = handle_marker
+        if handle is not None:
+            try:
+                import fcntl
+
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            os.close(handle)
+        marker.unlink(missing_ok=True)
+        with self._lock:
+            self._state.uninstall_deferred = False
 
     def _perform_uninstall(self) -> None:
         # Remove the runtime, the shared uv tool cache and the managed Python,
@@ -873,8 +1147,17 @@ class ManagedAlignmentRuntime:
             state.error = error
 
     def close(self) -> None:
+        """Cancel any in-flight operation and wait for its subprocess to be reaped.
+
+        Called on application shutdown: it must not report done while an install
+        / verify subprocess is still alive. It signals cancellation, stops the
+        process, then joins the operation thread (whose ``finally`` reaps the
+        child and releases the locks), so shutdown genuinely leaves nothing behind.
+        """
+
         with self._lock:
             state = self._state
+            thread = state.thread if state.operation is not None else None
             if state.operation is not None:
                 state.cancel_event.set()
                 process = state.process
@@ -882,6 +1165,8 @@ class ManagedAlignmentRuntime:
                 process = None
         if process is not None:
             self._stop_process(process)
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=30)
 
     # --- helpers --------------------------------------------------------- #
     @staticmethod
@@ -977,6 +1262,72 @@ def resolve_installed_runtime_launch(
         env=env,
         cwd=str(source_root),
     )
+
+
+def make_model_downloader(
+    runtime_root: Path,
+    *,
+    platform_key: Optional[str] = None,
+    manifest_path: Path | Callable[[], Path] = LOCAL_OCR_MANIFEST_FILE,
+    worker_context: Optional[Callable[[], tuple[str, Path]]] = None,
+    process_launcher: Callable = subprocess.Popen,
+) -> Callable[[str, Path], None]:
+    """A model downloader that runs in the independent runtime when installed.
+
+    Phase 2B: model download and its load-probe must not require the main
+    process's numeric stack. When an independent runtime is installed, this runs
+    ``download_embedding_model`` in *that* interpreter (a subprocess), so the
+    fastembed download + real model load happen off the main process. Otherwise
+    it falls back to the in-process download (the app's bundled stack, 2A).
+    """
+
+    def _download(model_id: str, cache_dir: Path) -> None:
+        launch = resolve_installed_runtime_launch(
+            runtime_root,
+            platform_key=platform_key,
+            manifest_path=manifest_path,
+            worker_context=worker_context,
+        )
+        if launch is None:
+            from .managed_embedding_models import download_embedding_model
+
+            download_embedding_model(model_id, cache_dir)
+            return
+        work = Path(tempfile.mkdtemp(prefix="mefinder-model-download-"))
+        control = work / "control.ndjson"
+        control.write_text("", encoding="utf-8")
+        try:
+            kwargs: dict = {}
+            if os.name == "nt":
+                kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            process = process_launcher(
+                [*launch.command, "--download-model", str(model_id), str(cache_dir), str(control)],
+                cwd=launch.cwd,
+                env=dict(launch.env),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **kwargs,
+            )
+            process.wait()
+            messages = [
+                json.loads(line)
+                for line in control.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            error = next((m for m in messages if m.get("type") == "error"), None)
+            if error is not None:
+                raise ManagedAlignmentRuntimeError(
+                    f"独立运行时下载模型失败：{error.get('message')}"
+                )
+            if not any(m.get("type") == "result" for m in messages):
+                raise ManagedAlignmentRuntimeError(
+                    f"独立运行时未完成模型下载(exit={process.returncode})。"
+                )
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+    return _download
 
 
 def default_worker_context() -> tuple[str, Path]:

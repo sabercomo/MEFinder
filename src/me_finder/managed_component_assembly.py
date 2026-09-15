@@ -18,7 +18,10 @@ from .component_catalog import ComponentCatalog
 from .embedding_runtime import embedding_run_active
 from .local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
 from .local_ocr_settings import resolve_local_ocr_config_path
-from .managed_alignment_runtime import ManagedAlignmentRuntime
+from .managed_alignment_runtime import (
+    ManagedAlignmentRuntime,
+    make_model_downloader,
+)
 from .managed_embedding_models import ManagedEmbeddingModels
 from .managed_mineru import ManagedMinerU
 from .mineru_api import resolve_mineru_config_path
@@ -30,6 +33,7 @@ _DESKTOP_SHELLS = {"macos", "win32", "linux"}
 class ManagedComponents:
     catalog: ComponentCatalog
     mineru: ManagedMinerU
+    alignment_runtime: ManagedAlignmentRuntime
     registry: Dict[str, object]
 
 
@@ -37,7 +41,12 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
     """Build every managed component and wire the shared catalog refresh."""
 
     catalog = ComponentCatalog(root, LOCAL_OCR_MANIFEST_FILE)
-    embedding_models = ManagedEmbeddingModels(root)
+    # Model download + load-probe run in the independent runtime when installed,
+    # so a main process without the numeric stack can still complete them.
+    embedding_models = ManagedEmbeddingModels(
+        root,
+        downloader=make_model_downloader(root, manifest_path=catalog.manifest_path),
+    )
     alignment_runtime = ManagedAlignmentRuntime(
         root,
         manifest_path=catalog.manifest_path,
@@ -69,6 +78,7 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
     return ManagedComponents(
         catalog=catalog,
         mineru=mineru,
+        alignment_runtime=alignment_runtime,
         registry={
             local_ocr.component_id: local_ocr,
             mineru.component_id: mineru,

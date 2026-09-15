@@ -60,6 +60,18 @@
 - 接线:`parser_settings_controller.text_alignment_models_component()` 把 `compute` 折进 `/api/text-alignment/models` 响应(免第二次请求);前端 `renderAlignmentComputeStatus` 渲染(`可用 · 随应用提供` / `可用 · 独立运行时` / `不可用 · 缺少计算依赖,请更新应用`)。
 - 未加新全局符号(渲染在既有 IIFE 内);装配指纹基线已更新(`test_frontend_assets`)。
 
+## 5c. Astra 复审修复（2026-09-15，7 项）
+
+`6dfbfb1`/`4a319ac` 经 Astra 复审发现 7 项，均已复现后修复：
+
+1. **[P1] 旧清单致启动失败**：旧/远程缓存清单无 `alignment` 字段时，`ManagedAlignmentRuntime` 构造抛异常中断应用。修复：`load_alignment_runtime_manifest` 缺 `alignment` → 返回 `configured=False`（不报错）；`__init__`/`refresh_manifest` 经 `_load_manifest_safely` 兜底任何清单错误；`supported`/install 依赖 `configured`。可选组件缺定义不再阻断启动。
+2. **[P1] 升级/卸载与计算任务无统一协调**：改用**共享/排他锁 + 维护标记**（`compute_admission` 持 POSIX `fcntl` 共享租约；install/uninstall 前 `_enter_maintenance` 写 `.maintenance` 标记 + 取排他锁，等当前任务释放共享租约后才动运行时）。升级现在也等待并阻止新任务（不再只有卸载等待）；`.maintenance` 标记跨实例拒绝新任务；coordinator 计算全程持共享租约，`ComputeUnavailable`→503。
+3. **[P1] 验证未真实加载依赖**：`--probe` 用 `find_spec` 可被“导入即抛错的坏 wheel”骗过。新增 worker `--verify`：在独立解释器**真实 import** numpy/onnxruntime/fastembed + 触发一次运算；`_validate` 改用 `--verify` 并回读 control 具体原因。失败不发布、保留旧版。
+4. **[P1] 关闭不收尾安装进程**：`close_runtime()` 现调 `managed_alignment_runtime.close()`——取消并 `join` 操作线程（其 finally 回收子进程），确认子进程回收后才报告关闭成功。
+5. **[P2] 模型下载/探针仍走主进程**：`make_model_downloader` 在独立运行时已装时经 worker `--download-model` 在**独立解释器**下载+加载模型；未装回退进程内（自带栈）。装配用它构造 `ManagedEmbeddingModels`。
+6. **[P2] 换装崩溃不恢复旧版**：`_recover_interrupted_state()`（在 `__init__`，持操作锁）在启动时识别 `final→.previous→staging→final` 被中断的状态并把有效 `.previous-*` 还原为 `runtime/`；清 `.staging`/`.uv` 陈留。
+7. **[P2] 状态行与启动条件不一致**：`compute_status` 改为复用 `resolve_installed_runtime_launch`（同样校验 protocol/receipt/解释器）——协议不兼容的已装运行时不再显示“可用·独立运行时”，而是 `provider=builtin` 或不可用并在 `detail` 明示“独立运行时不兼容”，前端一并显示。
+
 ## 6. 验收与未完成项
 
 见 `reports/alignment-compute-runtime-2b-2026-09-14.md`。要点：源码层 11 项新测 + 全量 2322（23 跳过）绿、Ruff 零告警；**未做**：真机 uv 安装（网络）、Windows / macOS Intel / macOS ARM 冻结产物冒烟、设置页安装/升级/卸载 UI。不声称跨平台或端到端交付完成。

@@ -490,11 +490,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.4 构成条配色改为 --chart-step-* 单色相有序色阶（档位按数据外流程度排），
     #   替换旧的 local/api 二分（api 段曾直接用 --text-primary 当数据色）。
     # 0.5.4 阶段2B：译本对齐区加「计算组件」诚实可用状态行（可用/随应用提供/
-    #   独立运行时/缺依赖），不加安装卸载按钮（留 2C）。
+    #   独立运行时/缺依赖），不加安装卸载按钮（留 2C）。Astra 复审后状态行补
+    #   incompatible detail（不兼容原因），与实际启动条件一致。
     BASELINE_SHA256 = (
-        "e35c53fd1b5891b6d350061f4bb2e0516f80b51ebc7eee5e6e9375d31a5f2228"
+        "55624b859149a857880abc12e7c925718a8cf758461177c76415fe3ff434e6cb"
     )
-    BASELINE_BYTES = 1122197
+    BASELINE_BYTES = 1122518
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

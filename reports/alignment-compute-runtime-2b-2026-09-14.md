@@ -29,9 +29,21 @@
 | 9 | 主程序/组件版本兼容与不兼容：分别复用与明确拒绝 | 源码层已测（identity/protocol） | `resolve_installed_runtime_launch` 拒绝协议/schema/identity 不符；2A worker 版本校验 |
 | 10 | 操作对齐组件时其他已装组件仍可用 | 组件相互独立（各自目录/锁/回执） | 装配隔离，未新增耦合 |
 
+## 2b. Astra 复审修复（2026-09-15）—— 更正此前验收结论
+
+Astra 对 `6dfbfb1`/`4a319ac` 复审，指出此前“崩溃恢复、新任务不进、关闭无遗留进程”等结论**测试遗漏关键场景**。7 项已复现后修复，并补齐真实复现测试（`test_managed_alignment_runtime.py`：`test_recovers_previous_runtime_after_interrupted_swap`、`test_uninstall_defers_until_compute_task_finishes`〔改用真实共享租约〕、`test_compute_admission_refused_under_maintenance`、`test_compute_status_matches_launch_on_incompatible_receipt`、`test_model_downloader_routes_through_installed_runtime`、`test_model_downloader_falls_back_in_process_without_runtime`、`test_close_reaps_in_flight_install_subprocess`、`test_manifest_without_alignment_block_does_not_break_construction`；`AlignmentWorkerVerifyTests.test_verify_rejects_dependency_that_imports_but_fails`）。修复要点见 `docs/issues/note-alignment-compute-runtime-2b.md` §5c。
+
+**结论更正**：
+- 场景 3「崩溃恢复」：此前仅测半写目录不报已装；现补启动时**还原被中断换装的旧版**（`.previous` → `runtime`）。
+- 场景 4「升级失败旧版仍可用」：此前只靠异常处理，无法覆盖硬退/断电；现由启动恢复覆盖。
+- 场景 5「计算中卸载/升级、新任务不进」：此前用进程内计数，卸载能拦但升级不拦、且新任务仍可进；现由共享/排他锁 + 维护标记统一协调，升级/卸载都等待且都拦新任务，跨实例（POSIX）覆盖。
+- 场景 2「安装验证」：此前 `find_spec` 可被坏 wheel 骗过；现 `--verify` 真实加载。
+- 场景 8「关闭无遗留进程」：此前未接对齐运行时；现关闭收尾并等子进程回收。
+- 场景 9「状态与启动一致」：新增——状态行复用启动条件，协议不兼容明示原因。
+
 ## 3. 门禁
 
-- 全量 unittest：**2326 通过，23 跳过，0 失败**（`.venv-macos312-arm64`，`PYTHONUTF8=1`，`NO_PROXY` 含 localhost；含设置页状态行后 +4）。
+- 全量 unittest：**2334 通过，23 跳过，0 失败**（`.venv-macos312-arm64`，`PYTHONUTF8=1`，`NO_PROXY` 含 localhost；含 Astra 复审修复的 +8 复现测试）。
 - Ruff（pyflakes F）：`ruff check src tests` **All checks passed**。
 - 架构边界：`test_architecture_boundaries` 绿（web_runtime 690 行）。
 - HTTP 契约：`test_http_api_contract` 绿。
