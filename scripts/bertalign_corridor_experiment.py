@@ -200,8 +200,6 @@ def two_pass_corridors(
     transitions = transitions or EXTENDED_TRANSITIONS
     source_count, target_count = len(vectors), len(other_vectors)
     kept = _validated_anchors(anchors, source_count, target_count, body_ranges)
-    sp = prefix_sums(np.asarray(vectors, dtype=np.float32))
-    tp = prefix_sums(np.asarray(other_vectors, dtype=np.float32))
     sl = list(source_lengths) if source_lengths is not None else [1] * source_count
     tl = list(target_lengths) if target_lengths is not None else [1] * target_count
     links: List[Tuple[int, int, int, int, float]] = []
@@ -211,7 +209,6 @@ def two_pass_corridors(
             continue  # zero-width or asymmetric remainder is not a corridor
         if s0 == bs_ and t0 == bt:
             continue
-        ratio = sum(tl[t0:bt]) / max(sum(sl[s0:bs_]), 1)
         window = align_pass(
             vectors[s0:bs_], other_vectors[t0:bt], max_align, threshold,
             transitions,

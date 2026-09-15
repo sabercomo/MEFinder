@@ -1,0 +1,1550 @@
+{
+  "generated_by": "scripts/d_two_stage_baseline.py",
+  "environment": {
+    "source_commit": "e560517b15ad25cdb603eb0e5fbe445750a29179",
+    "db_sha256": "adc34d4f9d0cfff50948dcb6ad2a2644e81dbce70f283436bba03ce254806b52",
+    "model_id": "multilingual-e5-large",
+    "embedding_runtime_version": "fastembed-0.8.0-mean-pooling",
+    "segmenter_version": "13",
+    "semantic_alignment_version": "20",
+    "alignment_algorithm_version": "22",
+    "low_confidence_threshold": 0.83,
+    "python": "3.12.10",
+    "numpy": "2.5.2",
+    "fastembed": "0.8.0",
+    "vector_cache": {
+      "segment-set-76693b5a13f18ae5d198b279": {
+        "segments": 3951,
+        "sha256": "b73bec2fb5fed59e682cab18913c8e97f64a2d192d2faba568e0dc523782ecb2"
+      },
+      "segment-set-bb46d020d83c5eb0041932fd": {
+        "segments": 5532,
+        "sha256": "48f32a89a32cb29d1f5f7461f799a6e5daf027e127d43c0cd67e232af7397164"
+      },
+      "segment-set-1901c6eded2535b943b0f286": {
+        "segments": 1743,
+        "sha256": "7372d7294cea910e9d16bbde9be552e42f9839fc76032d7ec54fe73da94ab093"
+      },
+      "segment-set-3dbd87a50d131e45fce377ff": {
+        "segments": 1499,
+        "sha256": "05052b003bcd3fd3f8a0ec6d5b8e9a8e05a4de534da8e1e02ca3e7a983e2f6b8"
+      },
+      "segment-set-ca5e8e50c8c088c638e6c867": {
+        "segments": 3739,
+        "sha256": "e13cb41bd2bf590c34b58fc2b996dbf237f02ddbd543fab05422dc0e3da49e22"
+      },
+      "segment-set-e73cfebb831ce0bcc7938a8a": {
+        "segments": 4268,
+        "sha256": "768048aaffc47360dfbaf4428e42081cb3c7b142d8bdbabf4d3d7b71c21da4e1"
+      },
+      "segment-set-d6127dcbb0b0d9b9985d78b6": {
+        "segments": 6170,
+        "sha256": "ff0a207351839a1424565c2c6ba53c842eb8d75e29484686db06494e463d1f4c"
+      },
+      "segment-set-3f8dad65d7c6f8b16e4e2e66": {
+        "segments": 11785,
+        "sha256": "52681bbef613b97c6d97da7174b4b67bbdc0737026181b1c1f32f58f4a4e8197"
+      },
+      "segment-set-ad93eff82444da18589261b6": {
+        "segments": 10226,
+        "sha256": "55c0d4d530266abe5660c0e15736c35becfb4c870986abb5138e965f9e4e7211"
+      },
+      "segment-set-05a9cae7aefea046c47a5e4f": {
+        "segments": 6087,
+        "sha256": "5310d0e548cd5ace44736437d6dcd1e016ccb181d32e919d97d5cc3c4496e5fb"
+      },
+      "segment-set-a4dbe4598a4f94152da1371d": {
+        "segments": 4000,
+        "sha256": "c6d658836d13eaa85c4449ce04f038cb9abb13d60265fddcdd4a818f561db0eb"
+      },
+      "segment-set-9096f3371b5c9a2044df2d7b": {
+        "segments": 3404,
+        "sha256": "b590d307f055ec774c079174314dcd6f084695a096335ee6384fb8f29e8dfe07"
+      },
+      "segment-set-aec4820358a43ff9f803d3b2": {
+        "segments": 5855,
+        "sha256": "15a5b391367d08c673495e6cf3731cd9cd873c17178ec2cfe593c339acaeb9b0"
+      },
+      "segment-set-274cb5886245a13308c7bb41": {
+        "segments": 7379,
+        "sha256": "bc23066ca0a0aabcf388f1c6a147a5071866c8b012a0e0faabcdd3a6ae0ef4e5"
+      },
+      "segment-set-293d950d56ee0867db5e526b": {
+        "segments": 3676,
+        "sha256": "eb60a98904f445450d2b212b8a8f65dc2d5919940a9141b82ade962d02d3cc21"
+      },
+      "segment-set-70a6dcce7d3ab4b47e800d9f": {
+        "segments": 3601,
+        "sha256": "595490d5ab36c0a983ba01d7034e836497ae9a7d42e9082fe23f3c1967a935f9"
+      },
+      "segment-set-90ed0b2070a47e51542219c2": {
+        "segments": 1901,
+        "sha256": "33cff38edeee3734e612773571e030be055e85d483575981a0d43b56042a3568"
+      },
+      "segment-set-7c5c8ba66432e7b33a864d99": {
+        "segments": 2047,
+        "sha256": "f028546cbb8703ca2aadf65c32b1d57151db9de11d75d51f4949c74d52b391c5"
+      },
+      "segment-set-e96ad71bf60a035098614cb0": {
+        "segments": 3018,
+        "sha256": "98f248a72720184574b0d3a391c0a5b0b2a757c76194f27a7ce70c13db5adcc7"
+      },
+      "segment-set-393497f25376aae82ac38f92": {
+        "segments": 3131,
+        "sha256": "79b459099c3e220c4ec5bacf0fedffbcaaaf18c7b1b75e7a5fc0cabd137b71ec"
+      }
+    }
+  },
+  "fidelity": {
+    "epub-238424f6926e518201c245cd359d0668 -> epub-6ab83756d871862581ac8b8cb2a14c91": {
+      "final_status_counts": {
+        "rejected": 1421,
+        "automatic": 1625,
+        "unmatched": 853
+      },
+      "raw_dp_links": 2540,
+      "frozen_final_links": 3899,
+      "frozen_one_sided": 2212,
+      "raw_span_in_frozen": 1687,
+      "frozen_span_in_raw": 1687
+    },
+    "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c": {
+      "final_status_counts": {
+        "rejected": 362,
+        "automatic": 853,
+        "unmatched": 170
+      },
+      "raw_dp_links": 1025,
+      "frozen_final_links": 1385,
+      "frozen_one_sided": 530,
+      "raw_span_in_frozen": 855,
+      "frozen_span_in_raw": 855
+    },
+    "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0": {
+      "final_status_counts": {
+        "rejected": 4643,
+        "unmatched": 1704,
+        "automatic": 34
+      },
+      "raw_dp_links": 2246,
+      "frozen_final_links": 6381,
+      "frozen_one_sided": 5839,
+      "raw_span_in_frozen": 542,
+      "frozen_span_in_raw": 542
+    },
+    "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7": {
+      "final_status_counts": {
+        "rejected": 1750,
+        "automatic": 2399,
+        "unmatched": 5275
+      },
+      "raw_dp_links": 7799,
+      "frozen_final_links": 9424,
+      "frozen_one_sided": 6900,
+      "raw_span_in_frozen": 2524,
+      "frozen_span_in_raw": 2524
+    },
+    "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98": {
+      "final_status_counts": {
+        "rejected": 1805,
+        "unmatched": 3643,
+        "automatic": 2232
+      },
+      "raw_dp_links": 5950,
+      "frozen_final_links": 7680,
+      "frozen_one_sided": 5373,
+      "raw_span_in_frozen": 2307,
+      "frozen_span_in_raw": 2307
+    },
+    "pdf-hegel-philosophy-right -> pdf-import-6a0325052e779b9e": {
+      "final_status_counts": {
+        "rejected": 1052,
+        "unmatched": 2831,
+        "automatic": 2018
+      },
+      "raw_dp_links": 4948,
+      "frozen_final_links": 5901,
+      "frozen_one_sided": 3784,
+      "raw_span_in_frozen": 2117,
+      "frozen_span_in_raw": 2117
+    },
+    "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91": {
+      "final_status_counts": {
+        "rejected": 1394,
+        "automatic": 2098,
+        "unmatched": 18
+      },
+      "raw_dp_links": 2117,
+      "frozen_final_links": 3510,
+      "frozen_one_sided": 1411,
+      "raw_span_in_frozen": 2099,
+      "frozen_span_in_raw": 2099
+    },
+    "pdf-import-49635cecdd201dd9 -> pdf-consumer-society": {
+      "final_status_counts": {
+        "rejected": 667,
+        "automatic": 1338,
+        "unmatched": 1
+      },
+      "raw_dp_links": 1383,
+      "frozen_final_links": 2006,
+      "frozen_one_sided": 624,
+      "raw_span_in_frozen": 1382,
+      "frozen_span_in_raw": 1382
+    },
+    "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0": {
+      "final_status_counts": {
+        "rejected": 4268,
+        "unmatched": 1564,
+        "automatic": 214
+      },
+      "raw_dp_links": 2106,
+      "frozen_final_links": 6046,
+      "frozen_one_sided": 5504,
+      "raw_span_in_frozen": 542,
+      "frozen_span_in_raw": 542
+    },
+    "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a": {
+      "final_status_counts": {
+        "rejected": 1855,
+        "automatic": 2432,
+        "unmatched": 890
+      },
+      "raw_dp_links": 3921,
+      "frozen_final_links": 5177,
+      "frozen_one_sided": 2146,
+      "raw_span_in_frozen": 3031,
+      "frozen_span_in_raw": 3031
+    },
+    "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7": {
+      "final_status_counts": {
+        "rejected": 1797,
+        "unmatched": 879,
+        "automatic": 3422,
+        "note_automatic": 1
+      },
+      "raw_dp_links": 4774,
+      "frozen_final_links": 6099,
+      "frozen_one_sided": 2203,
+      "raw_span_in_frozen": 3895,
+      "frozen_span_in_raw": 3895
+    },
+    "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right": {
+      "final_status_counts": {
+        "rejected": 1057,
+        "unmatched": 2831,
+        "automatic": 2013
+      },
+      "raw_dp_links": 4948,
+      "frozen_final_links": 5901,
+      "frozen_one_sided": 3784,
+      "raw_span_in_frozen": 2117,
+      "frozen_span_in_raw": 2117
+    },
+    "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98": {
+      "final_status_counts": {
+        "rejected": 1676,
+        "automatic": 2984,
+        "unmatched": 334,
+        "note_automatic": 1
+      },
+      "raw_dp_links": 3565,
+      "frozen_final_links": 4995,
+      "frozen_one_sided": 1763,
+      "raw_span_in_frozen": 3231,
+      "frozen_span_in_raw": 3231
+    },
+    "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba": {
+      "final_status_counts": {
+        "rejected": 334,
+        "automatic": 1824
+      },
+      "raw_dp_links": 1830,
+      "frozen_final_links": 2158,
+      "frozen_one_sided": 328,
+      "raw_span_in_frozen": 1830,
+      "frozen_span_in_raw": 1830
+    },
+    "pdf-import-d574027d045ce657 -> pdf-import-e63bdea39567e3ac": {
+      "final_status_counts": {
+        "rejected": 101,
+        "unmatched": 3318,
+        "automatic": 88
+      },
+      "raw_dp_links": 3460,
+      "frozen_final_links": 3507,
+      "frozen_one_sided": 3365,
+      "raw_span_in_frozen": 142,
+      "frozen_span_in_raw": 142
+    },
+    "pdf-import-e63bdea39567e3ac -> pdf-import-d574027d045ce657": {
+      "final_status_counts": {
+        "rejected": 71,
+        "unmatched": 86,
+        "automatic": 870
+      },
+      "raw_dp_links": 980,
+      "frozen_final_links": 1027,
+      "frozen_one_sided": 133,
+      "raw_span_in_frozen": 894,
+      "frozen_span_in_raw": 894
+    },
+    "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd": {
+      "final_status_counts": {
+        "rejected": 1405,
+        "automatic": 1082,
+        "unmatched": 3
+      },
+      "raw_dp_links": 1087,
+      "frozen_final_links": 2490,
+      "frozen_one_sided": 1406,
+      "raw_span_in_frozen": 1084,
+      "frozen_span_in_raw": 1084
+    }
+  },
+  "fixtures": [
+    {
+      "n": 11,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "pivot_v13": 3328,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          3328,
+          3331
+        ],
+        "target": [
+          3163,
+          3165
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        3162,
+        3163,
+        3164,
+        3165
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 24,
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2962,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          2962,
+          2964
+        ],
+        "target": [
+          3560,
+          3563
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        3542,
+        3543
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 28,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 371,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          371,
+          372
+        ],
+        "target": [
+          1198,
+          1201
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        1193
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 41,
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 4655,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          4655,
+          4658
+        ],
+        "target": [
+          5119,
+          5121
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        6503,
+        6504,
+        6505,
+        6506,
+        6507,
+        6508
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 53,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "pivot_v13": 547,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          545,
+          548
+        ],
+        "target": [
+          559,
+          561
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        562,
+        563,
+        564
+      ],
+      "historical_v21_status": "unmatched"
+    },
+    {
+      "n": 60,
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "pivot_v13": 1468,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          1468,
+          1469
+        ],
+        "target": [
+          3082,
+          3085
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        3075
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 80,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 742,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          741,
+          743
+        ],
+        "target": [
+          1868,
+          1871
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        1883,
+        1884
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 82,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2266,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          2266,
+          2267
+        ],
+        "target": [
+          4516,
+          4519
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        4521
+      ],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 88,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 1854,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          1854,
+          1856
+        ],
+        "target": [
+          3763,
+          3766
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [],
+      "historical_v21_status": "automatic"
+    },
+    {
+      "n": 93,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "pivot_v13": 2314,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          2313,
+          2315
+        ],
+        "target": [
+          4609,
+          4612
+        ],
+        "status": "rejected"
+      },
+      "correct_target_v13": [
+        4605,
+        4606,
+        4607,
+        4608,
+        4609,
+        4610,
+        4611,
+        4612,
+        4613,
+        4614,
+        4615,
+        4616,
+        4617,
+        4618,
+        4619,
+        4620,
+        4621,
+        4622,
+        4623,
+        4624,
+        4625,
+        4626,
+        4627,
+        4628,
+        4629,
+        4630,
+        4631,
+        4632,
+        4633,
+        4634,
+        4635,
+        4636,
+        4637,
+        4638,
+        4639,
+        4640
+      ],
+      "historical_v21_status": "rejected"
+    },
+    {
+      "n": 98,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "pivot_v13": 1813,
+      "pivot_text_verbatim_match": true,
+      "baseline_link": {
+        "source": [
+          1811,
+          1814
+        ],
+        "target": [
+          3133,
+          3136
+        ],
+        "status": "automatic"
+      },
+      "correct_target_v13": [
+        3115,
+        3116
+      ],
+      "historical_v21_status": "automatic"
+    }
+  ],
+  "controls": {
+    "total": 61,
+    "correct_accepted": 50,
+    "changed_or_wrong": 11,
+    "rows": [
+      {
+        "n": 0,
+        "label": "正确",
+        "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 2276,
+        "gold_target_v13": [
+          2940,
+          2941
+        ],
+        "baseline_target": [
+          421,
+          422
+        ],
+        "baseline_status": "rejected",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 3,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 560,
+        "gold_target_v13": [
+          552,
+          553
+        ],
+        "baseline_target": [
+          552,
+          554
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 4,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 1440,
+        "gold_target_v13": [
+          3109
+        ],
+        "baseline_target": [
+          3109,
+          3110
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 6,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 778,
+        "gold_target_v13": [
+          769,
+          770
+        ],
+        "baseline_target": [
+          769,
+          771
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 7,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 3001,
+        "gold_target_v13": [
+          2417,
+          2418
+        ],
+        "baseline_target": [
+          2417,
+          2419
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 8,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 4493,
+        "gold_target_v13": [
+          5162
+        ],
+        "baseline_target": [
+          5162,
+          5163
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 9,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 1642,
+        "gold_target_v13": [
+          1639
+        ],
+        "baseline_target": [
+          1639,
+          1640
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 10,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 926,
+        "gold_target_v13": [
+          913,
+          914
+        ],
+        "baseline_target": [
+          913,
+          915
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 14,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 5598,
+        "gold_target_v13": [
+          5977
+        ],
+        "baseline_target": [
+          5977,
+          5978
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 15,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 4696,
+        "gold_target_v13": [
+          5362
+        ],
+        "baseline_target": [
+          5362,
+          5363
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 18,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 2344,
+        "gold_target_v13": [
+          2784,
+          2785
+        ],
+        "baseline_target": [
+          2784,
+          2786
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 21,
+        "label": "正确",
+        "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+        "pivot_v13": 878,
+        "gold_target_v13": [
+          462,
+          463
+        ],
+        "baseline_target": [
+          462,
+          464
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 23,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 2221,
+        "gold_target_v13": [
+          2649,
+          2650,
+          2651
+        ],
+        "baseline_target": [
+          2649,
+          2652
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 25,
+        "label": "正确",
+        "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 1973,
+        "gold_target_v13": [
+          2107,
+          2108
+        ],
+        "baseline_target": null,
+        "baseline_status": "unmatched",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 26,
+        "label": "正确",
+        "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 2409,
+        "gold_target_v13": [
+          3086
+        ],
+        "baseline_target": null,
+        "baseline_status": "unmatched",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 27,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 3342,
+        "gold_target_v13": [
+          3798,
+          3799
+        ],
+        "baseline_target": [
+          3798,
+          3800
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 30,
+        "label": "正确",
+        "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+        "pivot_v13": 265,
+        "gold_target_v13": [
+          364
+        ],
+        "baseline_target": [
+          364,
+          365
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 33,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 2191,
+        "gold_target_v13": [
+          1706,
+          1707
+        ],
+        "baseline_target": [
+          1708,
+          1709
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 34,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 4936,
+        "gold_target_v13": [
+          5608,
+          5609,
+          5610
+        ],
+        "baseline_target": [
+          5608,
+          5611
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 35,
+        "label": "正确",
+        "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+        "pivot_v13": 1013,
+        "gold_target_v13": [
+          1019
+        ],
+        "baseline_target": [
+          1019,
+          1020
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 36,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 3339,
+        "gold_target_v13": [
+          3316,
+          3317
+        ],
+        "baseline_target": [
+          3316,
+          3318
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 37,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 2479,
+        "gold_target_v13": [
+          4715,
+          4716
+        ],
+        "baseline_target": [
+          4715,
+          4717
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 38,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 4575,
+        "gold_target_v13": [
+          3921,
+          3922
+        ],
+        "baseline_target": [
+          3921,
+          3922
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 39,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 2402,
+        "gold_target_v13": [
+          1820,
+          1821
+        ],
+        "baseline_target": [
+          1820,
+          1822
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 42,
+        "label": "正确",
+        "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 737,
+        "gold_target_v13": [
+          1373,
+          1374
+        ],
+        "baseline_target": null,
+        "baseline_status": "unmatched",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 45,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 4361,
+        "gold_target_v13": [
+          4837
+        ],
+        "baseline_target": [
+          4837,
+          4838
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 46,
+        "label": "正确",
+        "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+        "pivot_v13": 2795,
+        "gold_target_v13": [
+          2252,
+          2253,
+          2254
+        ],
+        "baseline_target": [
+          2252,
+          2255
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 48,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 5976,
+        "gold_target_v13": [
+          6311
+        ],
+        "baseline_target": [
+          6311,
+          6312
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 50,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 1550,
+        "gold_target_v13": [
+          3235,
+          3236,
+          3237
+        ],
+        "baseline_target": [
+          3235,
+          3238
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 52,
+        "label": "正确",
+        "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+        "pivot_v13": 892,
+        "gold_target_v13": [
+          914
+        ],
+        "baseline_target": [
+          914,
+          915
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 55,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 5477,
+        "gold_target_v13": [
+          4603
+        ],
+        "baseline_target": [
+          5801,
+          5804
+        ],
+        "baseline_status": "rejected",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 56,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+        "pivot_v13": 3179,
+        "gold_target_v13": [
+          5315
+        ],
+        "baseline_target": [
+          5315,
+          5316
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 57,
+        "label": "正确",
+        "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 2644,
+        "gold_target_v13": [
+          3329
+        ],
+        "baseline_target": [
+          486,
+          487
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 58,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 679,
+        "gold_target_v13": [
+          663,
+          664
+        ],
+        "baseline_target": [
+          663,
+          665
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 59,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 2977,
+        "gold_target_v13": [
+          2395,
+          2396
+        ],
+        "baseline_target": [
+          2395,
+          2397
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 62,
+        "label": "正确",
+        "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 1666,
+        "gold_target_v13": [
+          1817,
+          1818,
+          1819
+        ],
+        "baseline_target": null,
+        "baseline_status": "unmatched",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 63,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-6a0325052e779b9e",
+        "pivot_v13": 3921,
+        "gold_target_v13": [
+          2282
+        ],
+        "baseline_target": [
+          2282,
+          2283
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 64,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 3741,
+        "gold_target_v13": [
+          4246,
+          4247
+        ],
+        "baseline_target": [
+          4246,
+          4248
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 65,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 5061,
+        "gold_target_v13": [
+          5466,
+          5467
+        ],
+        "baseline_target": [
+          5466,
+          5468
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 66,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 2482,
+        "gold_target_v13": [
+          4722
+        ],
+        "baseline_target": [
+          4722,
+          4723
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 67,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 1773,
+        "gold_target_v13": [
+          2136,
+          2137,
+          2138
+        ],
+        "baseline_target": [
+          2136,
+          2139
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 68,
+        "label": "正确",
+        "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+        "pivot_v13": 2361,
+        "gold_target_v13": [
+          1844,
+          1845
+        ],
+        "baseline_target": [
+          1844,
+          1846
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 70,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 4450,
+        "gold_target_v13": [
+          3782,
+          3783
+        ],
+        "baseline_target": [
+          3782,
+          3784
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 71,
+        "label": "正确",
+        "pair": "pdf-import-e63bdea39567e3ac -> pdf-import-d574027d045ce657",
+        "pivot_v13": 518,
+        "gold_target_v13": [
+          476,
+          477,
+          478
+        ],
+        "baseline_target": [
+          476,
+          479
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 72,
+        "label": "正确",
+        "pair": "epub-238424f6926e518201c245cd359d0668 -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 2565,
+        "gold_target_v13": [
+          2174,
+          2175,
+          2176
+        ],
+        "baseline_target": [
+          2174,
+          2177
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 73,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-6a0325052e779b9e",
+        "pivot_v13": 2534,
+        "gold_target_v13": [
+          1420,
+          1421,
+          1422
+        ],
+        "baseline_target": [
+          1420,
+          1423
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 75,
+        "label": "正确",
+        "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+        "pivot_v13": 2905,
+        "gold_target_v13": [
+          3128,
+          3129
+        ],
+        "baseline_target": [
+          435,
+          436
+        ],
+        "baseline_status": "rejected",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 76,
+        "label": "正确",
+        "pair": "pdf-import-e63bdea39567e3ac -> pdf-import-d574027d045ce657",
+        "pivot_v13": 1607,
+        "gold_target_v13": [
+          1488,
+          1489,
+          1490
+        ],
+        "baseline_target": [
+          1488,
+          1491
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 78,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 3717,
+        "gold_target_v13": [
+          6726
+        ],
+        "baseline_target": [
+          6726,
+          6727
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 79,
+        "label": "正确",
+        "pair": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c",
+        "pivot_v13": 932,
+        "gold_target_v13": [
+          945,
+          946
+        ],
+        "baseline_target": [
+          945,
+          947
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 81,
+        "label": "正确",
+        "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+        "pivot_v13": 1293,
+        "gold_target_v13": [
+          843,
+          844
+        ],
+        "baseline_target": [
+          843,
+          845
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 83,
+        "label": "正确",
+        "pair": "pdf-import-f98e6ed83b837958 -> pdf-import-7a70c26b6b8a8bdd",
+        "pivot_v13": 2366,
+        "gold_target_v13": [
+          1849,
+          1850,
+          1851
+        ],
+        "baseline_target": [
+          1849,
+          1852
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 85,
+        "label": "正确",
+        "pair": "pdf-import-49635cecdd201dd9 -> pdf-consumer-society",
+        "pivot_v13": 1764,
+        "gold_target_v13": [
+          2258,
+          2259,
+          2260
+        ],
+        "baseline_target": [
+          2258,
+          2261
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 87,
+        "label": "正确",
+        "pair": "pdf-import-3c211c5a7ad5bc3c -> epub-6ab83756d871862581ac8b8cb2a14c91",
+        "pivot_v13": 3179,
+        "gold_target_v13": [
+          3149,
+          3150
+        ],
+        "baseline_target": [
+          3149,
+          3151
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 90,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 3163,
+        "gold_target_v13": [
+          2585
+        ],
+        "baseline_target": [
+          2585,
+          2586
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 91,
+        "label": "正确",
+        "pair": "pdf-import-49ca07456db6f580 -> pdf-import-18222098e2fe451a",
+        "pivot_v13": 3164,
+        "gold_target_v13": [
+          2586
+        ],
+        "baseline_target": [
+          2586,
+          2588
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": false
+      },
+      {
+        "n": 92,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+        "pivot_v13": 5077,
+        "gold_target_v13": [
+          5749,
+          5750,
+          5751
+        ],
+        "baseline_target": [
+          5749,
+          5752
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 94,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 5084,
+        "gold_target_v13": [
+          5487,
+          5488
+        ],
+        "baseline_target": [
+          5487,
+          5489
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 96,
+        "label": "正确",
+        "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 3322,
+        "gold_target_v13": [
+          3781,
+          3782,
+          3783
+        ],
+        "baseline_target": [
+          3781,
+          3784
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 97,
+        "label": "正确",
+        "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+        "pivot_v13": 951,
+        "gold_target_v13": [
+          2300
+        ],
+        "baseline_target": [
+          2300,
+          2301
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      },
+      {
+        "n": 74,
+        "label": "部分对应",
+        "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+        "pivot_v13": 701,
+        "gold_target_v13": [
+          1484,
+          1485,
+          1486
+        ],
+        "baseline_target": [
+          1484,
+          1487
+        ],
+        "baseline_status": "automatic",
+        "baseline_correct_accepted": true
+      }
+    ]
+  }
+}

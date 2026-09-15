@@ -1,0 +1,1883 @@
+{
+  "fixtures": [
+    {
+      "n": 11,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "gold": [
+        3162,
+        3163,
+        3164,
+        3165
+      ],
+      "corridor": 28,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            3163,
+            3165
+          ],
+          "confidence": 0.9424,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "B": {
+          "target": [
+            3163,
+            3165
+          ],
+          "confidence": 0.9424,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "C": {
+          "target": [
+            3163,
+            3164
+          ],
+          "confidence": 0.9302,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "D4": {
+          "target": [
+            3163,
+            3164
+          ],
+          "confidence": 0.9302,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        }
+      }
+    },
+    {
+      "n": 24,
+      "pair": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98",
+      "gold": [
+        3542,
+        3543
+      ],
+      "corridor": 70,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            3560,
+            3563
+          ],
+          "confidence": 0.8653,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            3558,
+            3561
+          ],
+          "confidence": 0.8619,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            3558,
+            3561
+          ],
+          "confidence": 0.7823,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            3556,
+            3559
+          ],
+          "confidence": 0.8204,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 28,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "gold": [
+        1193
+      ],
+      "corridor": 1,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            1198,
+            1201
+          ],
+          "confidence": 0.8376,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            1202,
+            1206
+          ],
+          "confidence": 0.842,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            1202,
+            1206
+          ],
+          "confidence": 0.8201,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            1198,
+            1201
+          ],
+          "confidence": 0.8115,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 41,
+      "pair": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7",
+      "gold": [
+        6503,
+        6504,
+        6505,
+        6506,
+        6507,
+        6508
+      ],
+      "corridor": 261,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            5119,
+            5121
+          ],
+          "confidence": 0.864,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            5114,
+            5115
+          ],
+          "confidence": 0.796,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            5114,
+            5115
+          ],
+          "confidence": 0.7575,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            5116,
+            5117
+          ],
+          "confidence": 0.7899,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 53,
+      "pair": "pdf-import-a47c115e247c8194 -> pdf-import-1d4016f99fc5dbba",
+      "gold": [
+        562,
+        563,
+        564
+      ],
+      "corridor": 18,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            559,
+            561
+          ],
+          "confidence": 0.9275,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            561,
+            563
+          ],
+          "confidence": 0.9338,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            561,
+            563
+          ],
+          "confidence": 0.9099,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            560,
+            562
+          ],
+          "confidence": 0.9157,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 60,
+      "pair": "pdf-import-6a0325052e779b9e -> epub-520f768a77b06bb633d00237f2a440b7",
+      "gold": [
+        3075
+      ],
+      "corridor": 133,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            3082,
+            3085
+          ],
+          "confidence": 0.8358,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            3081,
+            3084
+          ],
+          "confidence": 0.8222,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            3081,
+            3084
+          ],
+          "confidence": 0.796,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            3082,
+            3085
+          ],
+          "confidence": 0.8157,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 80,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "gold": [
+        1883,
+        1884
+      ],
+      "corridor": 23,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            1868,
+            1871
+          ],
+          "confidence": 0.8713,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            1880,
+            1884
+          ],
+          "confidence": 0.8734,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            1883,
+            1886
+          ],
+          "confidence": 0.8633,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            1882,
+            1885
+          ],
+          "confidence": 0.8887,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 82,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "gold": [
+        4521
+      ],
+      "corridor": 107,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            4516,
+            4519
+          ],
+          "confidence": 0.8371,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            4516,
+            4520
+          ],
+          "confidence": 0.8641,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            4518,
+            4521
+          ],
+          "confidence": 0.7985,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            4517,
+            4520
+          ],
+          "confidence": 0.8047,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 88,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "gold": [],
+      "corridor": 82,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            3763,
+            3766
+          ],
+          "confidence": 0.9176,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            3762,
+            3765
+          ],
+          "confidence": 0.9411,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            3761,
+            3763
+          ],
+          "confidence": 0.9159,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            3763,
+            3766
+          ],
+          "confidence": 0.9058,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    },
+    {
+      "n": 93,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-import-0cdfc70dc7574b98",
+      "gold": [
+        4605,
+        4606,
+        4607,
+        4608,
+        4609,
+        4610,
+        4611,
+        4612,
+        4613,
+        4614,
+        4615,
+        4616,
+        4617,
+        4618,
+        4619,
+        4620,
+        4621,
+        4622,
+        4623,
+        4624,
+        4625,
+        4626,
+        4627,
+        4628,
+        4629,
+        4630,
+        4631,
+        4632,
+        4633,
+        4634,
+        4635,
+        4636,
+        4637,
+        4638,
+        4639,
+        4640
+      ],
+      "corridor": 112,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            4609,
+            4612
+          ],
+          "confidence": 0.83,
+          "frozen_status": "rejected",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "B": {
+          "target": [
+            4609,
+            4612
+          ],
+          "confidence": 0.893,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "C": {
+          "target": [
+            4609,
+            4612
+          ],
+          "confidence": 0.8504,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": true
+        },
+        "D4": {
+          "target": [
+            4609,
+            4612
+          ],
+          "confidence": 0.7578,
+          "frozen_status": null,
+          "accepted": false,
+          "strict_correct": false,
+          "inside_gold": true
+        }
+      }
+    },
+    {
+      "n": 98,
+      "pair": "pdf-import-6a0325052e779b9e -> pdf-hegel-philosophy-right",
+      "gold": [
+        3115,
+        3116
+      ],
+      "corridor": 144,
+      "skipped": null,
+      "arms": {
+        "A": {
+          "target": [
+            3133,
+            3136
+          ],
+          "confidence": 0.8991,
+          "frozen_status": "automatic",
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "B": {
+          "target": [
+            3131,
+            3134
+          ],
+          "confidence": 0.9052,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "C": {
+          "target": [
+            3114,
+            3117
+          ],
+          "confidence": 0.8931,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        },
+        "D4": {
+          "target": [
+            3116,
+            3119
+          ],
+          "confidence": 0.8645,
+          "frozen_status": null,
+          "accepted": true,
+          "strict_correct": false,
+          "inside_gold": false
+        }
+      }
+    }
+  ],
+  "fixtures_strict_fixed": {
+    "A": 0,
+    "B": 0,
+    "C": 0,
+    "D4": 0
+  },
+  "fixtures_inside_gold": {
+    "A": 2,
+    "B": 2,
+    "C": 2,
+    "D4": 2
+  },
+  "controls_baseline_correct": 50,
+  "controls_total": 61,
+  "arm_stats": {
+    "B": {
+      "changed": 9,
+      "regressions": [
+        23,
+        36,
+        37,
+        74,
+        92
+      ],
+      "new_fixes": [
+        33
+      ]
+    },
+    "C": {
+      "changed": 20,
+      "regressions": [
+        7,
+        10,
+        23,
+        36,
+        46,
+        64,
+        65,
+        70,
+        72,
+        74,
+        79,
+        81,
+        85,
+        87,
+        92,
+        94
+      ],
+      "new_fixes": [
+        33,
+        38,
+        91
+      ]
+    },
+    "D4": {
+      "changed": 19,
+      "regressions": [
+        7,
+        10,
+        23,
+        36,
+        46,
+        64,
+        65,
+        70,
+        72,
+        74,
+        79,
+        81,
+        85,
+        87,
+        94
+      ],
+      "new_fixes": [
+        38,
+        91
+      ]
+    }
+  },
+  "controls_detail": [
+    {
+      "n": 0,
+      "A": [
+        421,
+        422
+      ],
+      "B": [
+        421,
+        422
+      ],
+      "C": [
+        436,
+        437
+      ],
+      "D4": [
+        407,
+        408
+      ]
+    },
+    {
+      "n": 3,
+      "A": [
+        552,
+        554
+      ],
+      "B": [
+        552,
+        554
+      ],
+      "C": [
+        552,
+        554
+      ],
+      "D4": [
+        552,
+        554
+      ]
+    },
+    {
+      "n": 6,
+      "A": [
+        769,
+        771
+      ],
+      "B": [
+        769,
+        771
+      ],
+      "C": [
+        769,
+        771
+      ],
+      "D4": [
+        769,
+        771
+      ]
+    },
+    {
+      "n": 7,
+      "A": [
+        2417,
+        2419
+      ],
+      "B": [
+        2417,
+        2419
+      ],
+      "C": [
+        2416,
+        2418
+      ],
+      "D4": [
+        2416,
+        2418
+      ]
+    },
+    {
+      "n": 8,
+      "A": [
+        5162,
+        5163
+      ],
+      "B": [
+        5162,
+        5163
+      ],
+      "C": [
+        5162,
+        5163
+      ],
+      "D4": [
+        5162,
+        5163
+      ]
+    },
+    {
+      "n": 10,
+      "A": [
+        913,
+        915
+      ],
+      "B": [
+        913,
+        915
+      ],
+      "C": [
+        913,
+        916
+      ],
+      "D4": [
+        913,
+        916
+      ]
+    },
+    {
+      "n": 15,
+      "A": [
+        5362,
+        5363
+      ],
+      "B": [
+        5362,
+        5363
+      ],
+      "C": [
+        5362,
+        5363
+      ],
+      "D4": [
+        5362,
+        5363
+      ]
+    },
+    {
+      "n": 18,
+      "A": [
+        2784,
+        2786
+      ],
+      "B": [
+        2784,
+        2786
+      ],
+      "C": [
+        2784,
+        2786
+      ],
+      "D4": [
+        2784,
+        2786
+      ]
+    },
+    {
+      "n": 21,
+      "A": [
+        462,
+        464
+      ],
+      "B": [
+        462,
+        464
+      ],
+      "C": [
+        462,
+        464
+      ],
+      "D4": [
+        462,
+        464
+      ]
+    },
+    {
+      "n": 23,
+      "A": [
+        2649,
+        2652
+      ],
+      "B": [
+        2650,
+        2653
+      ],
+      "C": [
+        2650,
+        2653
+      ],
+      "D4": [
+        2650,
+        2653
+      ]
+    },
+    {
+      "n": 25,
+      "A": null,
+      "B": [
+        262,
+        263
+      ],
+      "C": [
+        269,
+        270
+      ],
+      "D4": [
+        237,
+        238
+      ]
+    },
+    {
+      "n": 26,
+      "A": null,
+      "B": [
+        446,
+        447
+      ],
+      "C": null,
+      "D4": null
+    },
+    {
+      "n": 27,
+      "A": [
+        3798,
+        3800
+      ],
+      "B": [
+        3798,
+        3800
+      ],
+      "C": [
+        3798,
+        3800
+      ],
+      "D4": [
+        3798,
+        3800
+      ]
+    },
+    {
+      "n": 33,
+      "A": [
+        1708,
+        1709
+      ],
+      "B": [
+        1706,
+        1708
+      ],
+      "C": [
+        1706,
+        1708
+      ],
+      "D4": [
+        1708,
+        1709
+      ]
+    },
+    {
+      "n": 34,
+      "A": [
+        5608,
+        5611
+      ],
+      "B": [
+        5608,
+        5611
+      ],
+      "C": [
+        5608,
+        5611
+      ],
+      "D4": [
+        5608,
+        5611
+      ]
+    },
+    {
+      "n": 35,
+      "A": [
+        1019,
+        1020
+      ],
+      "B": [
+        1019,
+        1020
+      ],
+      "C": [
+        1019,
+        1020
+      ],
+      "D4": [
+        1019,
+        1020
+      ]
+    },
+    {
+      "n": 36,
+      "A": [
+        3316,
+        3318
+      ],
+      "B": [
+        3314,
+        3317
+      ],
+      "C": [
+        3315,
+        3317
+      ],
+      "D4": [
+        3315,
+        3318
+      ]
+    },
+    {
+      "n": 37,
+      "A": [
+        4715,
+        4717
+      ],
+      "B": [
+        4715,
+        4716
+      ],
+      "C": [
+        4715,
+        4717
+      ],
+      "D4": [
+        4715,
+        4717
+      ]
+    },
+    {
+      "n": 38,
+      "A": [
+        3921,
+        3922
+      ],
+      "B": [
+        3921,
+        3922
+      ],
+      "C": [
+        3921,
+        3923
+      ],
+      "D4": [
+        3921,
+        3923
+      ]
+    },
+    {
+      "n": 39,
+      "A": [
+        1820,
+        1822
+      ],
+      "B": [
+        1820,
+        1822
+      ],
+      "C": [
+        1820,
+        1822
+      ],
+      "D4": [
+        1820,
+        1822
+      ]
+    },
+    {
+      "n": 42,
+      "A": null,
+      "B": null,
+      "C": null,
+      "D4": null
+    },
+    {
+      "n": 46,
+      "A": [
+        2252,
+        2255
+      ],
+      "B": [
+        2252,
+        2255
+      ],
+      "C": [
+        2250,
+        2253
+      ],
+      "D4": [
+        2250,
+        2253
+      ]
+    },
+    {
+      "n": 48,
+      "A": [
+        6311,
+        6312
+      ],
+      "B": [
+        6311,
+        6312
+      ],
+      "C": [
+        6311,
+        6312
+      ],
+      "D4": [
+        6311,
+        6312
+      ]
+    },
+    {
+      "n": 50,
+      "A": [
+        3235,
+        3238
+      ],
+      "B": [
+        3235,
+        3238
+      ],
+      "C": [
+        3235,
+        3238
+      ],
+      "D4": [
+        3235,
+        3238
+      ]
+    },
+    {
+      "n": 52,
+      "A": [
+        914,
+        915
+      ],
+      "B": [
+        914,
+        915
+      ],
+      "C": [
+        914,
+        915
+      ],
+      "D4": [
+        914,
+        915
+      ]
+    },
+    {
+      "n": 55,
+      "A": [
+        5801,
+        5804
+      ],
+      "B": [
+        5796,
+        5800
+      ],
+      "C": [
+        5799,
+        5803
+      ],
+      "D4": [
+        5801,
+        5804
+      ]
+    },
+    {
+      "n": 57,
+      "A": [
+        486,
+        487
+      ],
+      "B": [
+        487,
+        488
+      ],
+      "C": null,
+      "D4": [
+        474,
+        475
+      ]
+    },
+    {
+      "n": 58,
+      "A": [
+        663,
+        665
+      ],
+      "B": [
+        663,
+        665
+      ],
+      "C": [
+        663,
+        665
+      ],
+      "D4": [
+        663,
+        665
+      ]
+    },
+    {
+      "n": 59,
+      "A": [
+        2395,
+        2397
+      ],
+      "B": [
+        2395,
+        2397
+      ],
+      "C": [
+        2395,
+        2397
+      ],
+      "D4": [
+        2395,
+        2397
+      ]
+    },
+    {
+      "n": 62,
+      "A": null,
+      "B": [
+        216,
+        217
+      ],
+      "C": [
+        220,
+        221
+      ],
+      "D4": [
+        199,
+        200
+      ]
+    },
+    {
+      "n": 64,
+      "A": [
+        4246,
+        4248
+      ],
+      "B": [
+        4246,
+        4248
+      ],
+      "C": [
+        4246,
+        4247
+      ],
+      "D4": [
+        4246,
+        4247
+      ]
+    },
+    {
+      "n": 65,
+      "A": [
+        5466,
+        5468
+      ],
+      "B": [
+        5466,
+        5468
+      ],
+      "C": [
+        5465,
+        5467
+      ],
+      "D4": [
+        5465,
+        5467
+      ]
+    },
+    {
+      "n": 67,
+      "A": [
+        2136,
+        2139
+      ],
+      "B": [
+        2136,
+        2139
+      ],
+      "C": [
+        2136,
+        2139
+      ],
+      "D4": [
+        2136,
+        2139
+      ]
+    },
+    {
+      "n": 68,
+      "A": [
+        1844,
+        1846
+      ],
+      "B": [
+        1844,
+        1846
+      ],
+      "C": [
+        1844,
+        1846
+      ],
+      "D4": [
+        1844,
+        1846
+      ]
+    },
+    {
+      "n": 70,
+      "A": [
+        3782,
+        3784
+      ],
+      "B": [
+        3782,
+        3784
+      ],
+      "C": [
+        3781,
+        3783
+      ],
+      "D4": [
+        3781,
+        3783
+      ]
+    },
+    {
+      "n": 71,
+      "A": [
+        476,
+        479
+      ],
+      "B": [
+        476,
+        479
+      ],
+      "C": [
+        476,
+        479
+      ],
+      "D4": [
+        476,
+        479
+      ]
+    },
+    {
+      "n": 72,
+      "A": [
+        2174,
+        2177
+      ],
+      "B": [
+        2174,
+        2177
+      ],
+      "C": [
+        2173,
+        2176
+      ],
+      "D4": [
+        2173,
+        2176
+      ]
+    },
+    {
+      "n": 73,
+      "A": [
+        1420,
+        1423
+      ],
+      "B": [
+        1420,
+        1423
+      ],
+      "C": [
+        1420,
+        1423
+      ],
+      "D4": [
+        1420,
+        1423
+      ]
+    },
+    {
+      "n": 74,
+      "A": [
+        1484,
+        1487
+      ],
+      "B": [
+        1486,
+        1490
+      ],
+      "C": [
+        1490,
+        1493
+      ],
+      "D4": [
+        1484,
+        1487
+      ]
+    },
+    {
+      "n": 75,
+      "A": [
+        435,
+        436
+      ],
+      "B": [
+        445,
+        446
+      ],
+      "C": [
+        445,
+        446
+      ],
+      "D4": [
+        425,
+        426
+      ]
+    },
+    {
+      "n": 76,
+      "A": [
+        1488,
+        1491
+      ],
+      "B": [
+        1488,
+        1491
+      ],
+      "C": [
+        1488,
+        1491
+      ],
+      "D4": [
+        1488,
+        1491
+      ]
+    },
+    {
+      "n": 79,
+      "A": [
+        945,
+        947
+      ],
+      "B": [
+        945,
+        947
+      ],
+      "C": [
+        945,
+        946
+      ],
+      "D4": [
+        945,
+        946
+      ]
+    },
+    {
+      "n": 81,
+      "A": [
+        843,
+        845
+      ],
+      "B": [
+        843,
+        845
+      ],
+      "C": [
+        842,
+        844
+      ],
+      "D4": [
+        842,
+        844
+      ]
+    },
+    {
+      "n": 83,
+      "A": [
+        1849,
+        1852
+      ],
+      "B": [
+        1849,
+        1852
+      ],
+      "C": [
+        1849,
+        1852
+      ],
+      "D4": [
+        1849,
+        1852
+      ]
+    },
+    {
+      "n": 85,
+      "A": [
+        2258,
+        2261
+      ],
+      "B": [
+        2258,
+        2261
+      ],
+      "C": [
+        2256,
+        2259
+      ],
+      "D4": [
+        2256,
+        2259
+      ]
+    },
+    {
+      "n": 87,
+      "A": [
+        3149,
+        3151
+      ],
+      "B": [
+        3149,
+        3151
+      ],
+      "C": [
+        3149,
+        3150
+      ],
+      "D4": [
+        3149,
+        3150
+      ]
+    },
+    {
+      "n": 90,
+      "A": [
+        2585,
+        2586
+      ],
+      "B": [
+        2585,
+        2586
+      ],
+      "C": [
+        2585,
+        2586
+      ],
+      "D4": [
+        2585,
+        2586
+      ]
+    },
+    {
+      "n": 91,
+      "A": [
+        2586,
+        2588
+      ],
+      "B": [
+        2586,
+        2588
+      ],
+      "C": [
+        2586,
+        2587
+      ],
+      "D4": [
+        2586,
+        2587
+      ]
+    },
+    {
+      "n": 92,
+      "A": [
+        5749,
+        5752
+      ],
+      "B": [
+        5748,
+        5752
+      ],
+      "C": [
+        5748,
+        5752
+      ],
+      "D4": [
+        5749,
+        5752
+      ]
+    },
+    {
+      "n": 94,
+      "A": [
+        5487,
+        5489
+      ],
+      "B": [
+        5487,
+        5489
+      ],
+      "C": [
+        5486,
+        5488
+      ],
+      "D4": [
+        5486,
+        5488
+      ]
+    },
+    {
+      "n": 96,
+      "A": [
+        3781,
+        3784
+      ],
+      "B": [
+        3781,
+        3784
+      ],
+      "C": [
+        3781,
+        3784
+      ],
+      "D4": [
+        3781,
+        3784
+      ]
+    }
+  ],
+  "n74": {
+    "A": {
+      "target": [
+        1484,
+        1487
+      ],
+      "members_equal_gold": true
+    },
+    "B": {
+      "target": [
+        1486,
+        1490
+      ],
+      "members_equal_gold": false
+    },
+    "C": {
+      "target": [
+        1490,
+        1493
+      ],
+      "members_equal_gold": false
+    },
+    "D4": {
+      "target": [
+        1484,
+        1487
+      ],
+      "members_equal_gold": false
+    }
+  },
+  "violations": {
+    "counts": {
+      "B": 231,
+      "C": 196,
+      "D4": 182
+    },
+    "samples": {
+      "B": [
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#152",
+          "link": [
+            3365,
+            3368,
+            3816,
+            3819
+          ],
+          "confidence": 0.9104
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#261",
+          "link": [
+            4666,
+            4669,
+            5119,
+            5122
+          ],
+          "confidence": 0.8964
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#275",
+          "link": [
+            5077,
+            5078,
+            5477,
+            5481
+          ],
+          "confidence": 0.8742
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98#37",
+          "link": [
+            2220,
+            2221,
+            2646,
+            2650
+          ],
+          "confidence": 0.8896
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98#37",
+          "link": [
+            2224,
+            2226,
+            2653,
+            2656
+          ],
+          "confidence": 0.8953
+        }
+      ],
+      "C": [
+        {
+          "corridor": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c#74",
+          "link": [
+            888,
+            891,
+            910,
+            912
+          ],
+          "confidence": 0.9411
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#152",
+          "link": [
+            3365,
+            3368,
+            3816,
+            3819
+          ],
+          "confidence": 0.8634
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#185",
+          "link": [
+            3743,
+            3745,
+            4247,
+            4249
+          ],
+          "confidence": 0.9002
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#275",
+          "link": [
+            5077,
+            5078,
+            5477,
+            5481
+          ],
+          "confidence": 0.8758
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98#37",
+          "link": [
+            2220,
+            2221,
+            2646,
+            2650
+          ],
+          "confidence": 0.8974
+        }
+      ],
+      "D4": [
+        {
+          "corridor": "epub-c3fce4b8db255943379ff83408d48b8a -> pdf-import-de1cf03d323b0c6c#74",
+          "link": [
+            888,
+            891,
+            910,
+            912
+          ],
+          "confidence": 0.9411
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#152",
+          "link": [
+            3365,
+            3368,
+            3816,
+            3819
+          ],
+          "confidence": 0.8634
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#185",
+          "link": [
+            3743,
+            3745,
+            4247,
+            4249
+          ],
+          "confidence": 0.9002
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> epub-520f768a77b06bb633d00237f2a440b7#275",
+          "link": [
+            5075,
+            5077,
+            5475,
+            5478
+          ],
+          "confidence": 0.8741
+        },
+        {
+          "corridor": "pdf-hegel-philosophy-right -> pdf-import-0cdfc70dc7574b98#37",
+          "link": [
+            2209,
+            2211,
+            2626,
+            2629
+          ],
+          "confidence": 0.8766
+        }
+      ]
+    }
+  },
+  "selfcheck": {
+    "exact": 53,
+    "total": 53
+  },
+  "embedder": {
+    "embedded_texts": 98089,
+    "embed_seconds": 7993.5,
+    "token_truncated_over_512": 0,
+    "token_counted": 98089,
+    "token_max": 512
+  },
+  "wall_seconds": 8441.2,
+  "peak_rss_mib": 3305232.0
+}

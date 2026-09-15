@@ -44,7 +44,6 @@ from src.me_finder.semantic_alignment import (  # noqa: E402
     EMBEDDING_RUNTIME_VERSION,
     SEMANTIC_ALIGNMENT_VERSION,
     _align_monotonic_sequences,
-    _group_rows,
     _normalized_rows,
     _sequence_cache_path,
     embedding_model_config,
