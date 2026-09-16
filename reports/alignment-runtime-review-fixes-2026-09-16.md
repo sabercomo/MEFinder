@@ -51,3 +51,34 @@
 - 首次 push CI `35091953613`：Linux / lint 通过，Windows 为 1 failure / 29 errors。逐项核对发现 29 项失败来自 cp1252 读写中文，另 1 项来自路径测试全局修改 `sys.platform`，导致真实 Windows 锁误走 `fcntl`。
 - Windows job 设置仓库规范要求的 `PYTHONUTF8=1`；新增清单测试显式用 UTF-8 读取。路径测试只替换 `runtime_location` 内的 `sys` 引用，保留真实操作系统锁，不跳过租约验证。
 - 修正后的远端结果以随后 CI 为准；上述失败不计为跨平台验收通过。
+
+## Windows 实机门禁结论(2026-09-16,本机 Windows 10.0.19045)
+
+在真实 Windows(`.venv-windows` Python 3.12,`PYTHONUTF8=1`)上逐用例流式跑全量门禁,推翻此前"卡满 20 分钟被取消"的假设,并把问题收敛为 4 个确定性的测试夹具句柄泄漏。
+
+### 卡死假设被推翻:跑完了,不是挂起
+
+- 全量 **2357 用例 / 150.9s**,逐用例(verbosity=2)全程无停顿;外部卡死探测(同一用例 >200s 不动)未触发。
+- 此前重点怀疑的 `test_alignment_compute_protocol`、`test_alignment_compute_lifecycle`、`test_managed_alignment_runtime`、`test_native_host_acceptance`(会真起子进程,Windows 冷启动慢)**全部正常跑完**。
+- 结论:CI run `35093899543` 跑满 20 分钟被取消,在本 commit(3561f37)上**未复现**。为便于后续在 CI 上定位任何再次出现的停顿,已在 Windows job 接入流式+`faulthandler.dump_traceback_later` 诊断运行器(`scripts/run_tests_with_faulthandler.py`,只观测、不跳过、不改锁语义),CI 绿后可还原为原始 `python -m unittest`。
+
+### 4 个 `WinError 32`:全为测试夹具句柄未释放,产品无泄漏
+
+四者同源:测试体断言均已在错误前通过,异常只发生在 `tempfile.TemporaryDirectory` 退出清理时——Windows 删不掉 `data\index.sqlite3`(句柄未释放)。POSIX 可删打开中的文件,故 mac/Linux 全绿、仅 Windows 暴露。运行后无残留 worker 进程,确认是**进程内**句柄而非残留子进程占用。
+
+| 用例 | 触发场景 | 根因 | 修法 |
+|---|---|---|---|
+| `test_alignment_compute_lifecycle::test_runtime_close_reaps_probe_and_compute_before_reporting_success`(probe/compute) | `close_runtime` 收割 worker 后读 DB | `with sqlite3.connect() as conn` 只提交不关闭,`conn` 与 `TemporaryDirectory` 同帧,清理时仍开 | `contextlib.closing` |
+| `test_alignment_compute_protocol::NoPublishOnFailureTests::test_crash_publishes_nothing`(WORKER_CRASHED) | worker 崩溃路径 | `assertRaises` 把 `ctx.exception.__traceback__` 及其钉住的栈帧留到方法结束,越过 `TemporaryDirectory` 清理 | 改 `try/except as exc`(块末自动 `del`);`_completed_run_count` 加 `contextlib.closing` |
+| `test_alignment_compute_protocol::NoPublishOnFailureTests::test_stale_result_publishes_nothing`(RESULT_MISMATCH) | 结果失效路径 | 同上 | 同上 |
+
+- **产品侧已排除**:`generate_alignment`(`text_alignment.py`)第一个连接在准备阶段结束即 `finally: connection.close()`(约 1140 行),`compute()` 在两连接之间调用(约 1147 行),崩溃/失效时第二个连接尚未打开;传给 worker 的参数不含 `db_path`,worker 不碰 `index.sqlite3`。`close_runtime()` 收割 worker 的断言在错误前通过。故 4 个 error 均为测试写法,非产品缺陷,冒烟担心的"卸载残留锁"不属此列。
+- **复现限制**:该锁只在 Windows 文件语义下暴露(POSIX 允许删打开中的文件),无法写跨平台复现测试;修复使连接关闭确定化,由本机 Windows 重跑门禁验证 `WinError 32` 消除。
+
+### 版本落库(打包产物命名)
+
+- 本分支 `src/me_finder/__init__.py` 的 `__version__` 仍为 `0.5.4`;`build_windows_installer.ps1`/`build_portable_release.ps1` 读该值并要求 `-Version` 与之一致、据此命名产物,不修会把 v0.5.5 产物错打成 `v0.5.4`。已改为 `0.5.5`,同步 `test_mcp_v1_baseline` 断言、`test_frontend_assets` 装配指纹(`web_assets` 注入 `__version__`)、`windows-release-smoke.yml` 新构建产物名(升级基线 v0.4.9 不动)与 `test_mcp_packaging` 断言。http-api 契约按 API 变更冻结(0.5.5 未改 HTTP 面)不动。
+
+### 待办(打包在用户本地 Windows 执行)
+
+- 本 Claude 会话运行于云端 Linux,无法执行 `.venv-windows` / PyInstaller / Inno Setup 7 打包;实机打包与"安装组件→生成对齐→卸载(链接 8→8、无残留锁)"冒烟由用户在本地 Windows 按 AGENTS.md §3.6 执行,产物名与 SHA-256 回填本报告与 release notes。
