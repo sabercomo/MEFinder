@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import sys
 import tempfile
@@ -82,7 +83,10 @@ class ComputeLifecycleTests(unittest.TestCase):
                         controller._job_thread.join(5)
                         self.assertEqual(controller.status({"job_id": [job["job_id"]]}),
                                          (200, {"ok": False, "cancelled": True}))
-                        with sqlite3.connect(database) as connection:
+                        # sqlite3's context manager commits but does not close;
+                        # on Windows an open handle blocks the TemporaryDirectory
+                        # cleanup (WinError 32). closing() releases it here.
+                        with contextlib.closing(sqlite3.connect(database)) as connection:
                             count = connection.execute(
                                 "SELECT COUNT(*) FROM alignment_runs WHERE status='completed'"
                             ).fetchone()[0]

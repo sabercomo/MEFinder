@@ -362,9 +362,12 @@ class NoPublishOnFailureTests(unittest.TestCase):
         return root / "data" / "index.sqlite3"
 
     def _completed_run_count(self, db: Path) -> int:
+        import contextlib
         import sqlite3
 
-        with sqlite3.connect(db) as connection:
+        # sqlite3's context manager commits but never closes; close explicitly so
+        # no handle survives into a later TemporaryDirectory cleanup on Windows.
+        with contextlib.closing(sqlite3.connect(db)) as connection:
             return connection.execute(
                 "SELECT COUNT(*) FROM alignment_runs WHERE status='completed'"
             ).fetchone()[0]
@@ -379,7 +382,12 @@ class NoPublishOnFailureTests(unittest.TestCase):
             runner = ac.SubprocessAlignmentComputeRunner(
                 task_id="np", env=_simulate_env(simulate_code)
             )
-            with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            # Use try/except (not assertRaises): the `except ... as exc` name is
+            # auto-deleted at block end, dropping the exception's traceback and
+            # every frame it pins *before* the TemporaryDirectory is cleaned up.
+            # assertRaises keeps ctx.exception alive to method end, which on
+            # Windows can hold index.sqlite3 open and fail cleanup (WinError 32).
+            try:
                 generate_alignment(
                     db,
                     "bench-pair",
@@ -389,7 +397,10 @@ class NoPublishOnFailureTests(unittest.TestCase):
                     model_cache_dir=root / "models",
                     compute_runner=runner,
                 )
-            self.assertEqual(ctx.exception.code, expected_code)
+            except ac.AlignmentComputeError as exc:
+                self.assertEqual(exc.code, expected_code)
+            else:
+                self.fail(f"expected AlignmentComputeError({expected_code})")
             after = self._completed_run_count(db)
             self.assertEqual(before, after, "no new completed run may be published")
 
