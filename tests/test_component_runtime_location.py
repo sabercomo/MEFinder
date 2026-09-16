@@ -20,7 +20,7 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
             home = Path(directory)
             library = home / 'OneDrive' / 'MEFinder'
             local = home / 'Library/Application Support/MEFinder/runtime'
-            with patch.object(runtime_location.sys, 'platform', 'darwin'), \
+            with patch.object(runtime_location, 'sys', SimpleNamespace(platform='darwin')), \
                  patch.object(runtime_location.Path, 'home', return_value=home), \
                  patch.object(runtime_location, 'local_app_data_root', return_value=library):
                 root = library / 'runtime'
@@ -41,7 +41,7 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             library = base / 'OneDrive/MEFinder'
-            with patch.object(runtime_location.sys, 'platform', 'win32'), \
+            with patch.object(runtime_location, 'sys', SimpleNamespace(platform='win32')), \
                  patch.dict(runtime_location.os.environ, {'LOCALAPPDATA': str(base / 'Local')}), \
                  patch.object(runtime_location, 'local_app_data_root', return_value=library):
                 self.assertEqual(runtime_location.component_runtime_root(library / 'runtime'),
@@ -54,7 +54,7 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
             root = library / "runtime"
             expected = home / "Library/Application Support/MEFinder/runtime/components/text-alignment/models"
             paths = SimpleNamespace(runtime_root=root, index_path=root / "data/index.sqlite3")
-            with patch.object(runtime_location.sys, "platform", "darwin"), \
+            with patch.object(runtime_location, "sys", SimpleNamespace(platform="darwin")), \
                  patch.object(runtime_location.Path, "home", return_value=home), \
                  patch.object(runtime_location, "local_app_data_root", return_value=library), \
                  patch.object(coordinator, "model_component_installed", return_value=True) as preflight, \

@@ -49,7 +49,7 @@ class RuntimeReviewTests(unittest.TestCase):
         root = self.fixture.root / 'app'
         cache = root / 'components/catalog/manifest.json'
         cache.parent.mkdir(parents=True)
-        old = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text())
+        old = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding='utf-8'))
         del old['alignment']
         cache.write_text(json.dumps(old))
         components = assemble_managed_components(root)
@@ -157,7 +157,7 @@ with compute_admission(Path(sys.argv[1])):
 
     def test_catalog_rejects_unpinned_platform_override(self):
         from src.me_finder.component_catalog import validate_component_catalog, ComponentCatalogError
-        payload = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text())
+        payload = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding='utf-8'))
         payload['alignment']['onnxruntime_by_platform'] = {'darwin-x86_64': 'onnxruntime>=1.23.2'}
         with self.assertRaises(ComponentCatalogError):
             validate_component_catalog(payload)
@@ -168,6 +168,6 @@ with compute_admission(Path(sys.argv[1])):
                 self.assertTrue(True)
 
     def test_bundled_numpy_pin_supports_selected_python(self):
-        alignment = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text())['alignment']
+        alignment = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding='utf-8'))['alignment']
         # numpy 2.5.2 published Requires-Python >=3.12 (PyPI metadata).
         self.assertGreaterEqual(tuple(map(int, alignment['python'].split('.'))), (3, 12))

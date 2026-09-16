@@ -45,6 +45,9 @@ jobs:
     # Exercise both platforms on pushes; release smoke still owns packaging.
     runs-on: windows-2022
     timeout-minutes: 20
+    env:
+      # Match the documented Windows gate; fixtures contain Chinese text.
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

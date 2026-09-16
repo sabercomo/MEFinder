@@ -45,3 +45,9 @@
 
 - 真实安装后通过生产组件装配执行卸载：运行时和所属模型目录均删除，临时正式书库的既有对齐链接 **8→8**，未删除成果。
 - 协调器旧测试的 `D:/runtime` 改为 TemporaryDirectory，避免真实锁在假路径创建文件。没有恢复“目录不存在便跳过租约”的旧漏洞。
+
+### Windows 门禁环境修正
+
+- 首次 push CI `35091953613`：Linux / lint 通过，Windows 为 1 failure / 29 errors。逐项核对发现 29 项失败来自 cp1252 读写中文，另 1 项来自路径测试全局修改 `sys.platform`，导致真实 Windows 锁误走 `fcntl`。
+- Windows job 设置仓库规范要求的 `PYTHONUTF8=1`；新增清单测试显式用 UTF-8 读取。路径测试只替换 `runtime_location` 内的 `sys` 引用，保留真实操作系统锁，不跳过租约验证。
+- 修正后的远端结果以随后 CI 为准；上述失败不计为跨平台验收通过。
