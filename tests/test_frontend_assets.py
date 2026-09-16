@@ -493,7 +493,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   独立运行时/缺依赖），不加安装卸载按钮（留 2C）。Astra 复审后状态行补
     #   incompatible detail（不兼容原因），与实际启动条件一致。
     BASELINE_SHA256 = (
-        "55624b859149a857880abc12e7c925718a8cf758461177c76415fe3ff434e6cb"
+        "770dae311ea517327fb2715f9d2a5b35a8a63a473a542c310ff998fda9805319"
     )
     BASELINE_BYTES = 1122518
 
