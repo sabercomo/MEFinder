@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.windows_version_info import write_windows_version_info
+from tools.slim_main_package import ALIGNMENT_COMPUTE_STACK
 
 
 project_root = ROOT
@@ -50,7 +51,21 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "unittest", "pydoc", "doctest", "test"],
+    excludes=[
+        "tkinter",
+        "unittest",
+        "pydoc",
+        "doctest",
+        "test",
+        # Phase 2E: the MCP sidecar only *reads* stored alignments (recall +
+        # locate over the index DB); it never runs the embedding/alignment
+        # compute path, so it must not carry the numeric stack. The read chain
+        # (mcp_server -> parallel_passage_service -> text_alignment read
+        # symbols) is proven stack-free at runtime by
+        # tests/test_mcp_sidecar_without_alignment.py; excluding the stack keeps
+        # PyInstaller from statically pulling it in through the shared source.
+        *ALIGNMENT_COMPUTE_STACK,
+    ],
     noarchive=False,
 )
 

@@ -79,3 +79,18 @@
 ## 2026-09-16 — Astra 实施审计修复
 
 此前“维护恢复、关闭无残留、所有平台安装就绪”的结论不完整。本轮补齐遗留维护标记恢复、下载及回执发布的共享租约、Windows LockFileEx、关闭取消与等待、旧清单的组件级内置定义补全。清单解释器改为 Python 3.12，Intel 对齐组件单独固定 ONNX Runtime 1.23.2。详细复现、真实安装和离线发布证据见 [修复报告](../../reports/alignment-runtime-review-fixes-2026-09-16.md)。普通用户安装入口和正式冻结验收仍待完成。
+
+## 2026-09-16 — 阶段2E:MCP sidecar 精简
+
+sidecar 只读已有对齐、不做对齐计算,此前与桌面主包各自重复携带整套数值栈。本轮确认读链(`mcp_server` → `parallel_passage_service` → `text_alignment` 读取符号)运行时不触发计算栈,把 `ALIGNMENT_COMPUTE_STACK` 从 `packaging/mcp_sidecar.spec` 排除(复用 `tools/slim_main_package.py` 同一 single source of truth)。**事实(macOS ARM 定向构建)**:sidecar 由 77.9 MiB → 45.9 MiB,净减 32.0 MiB(−41%),slim 产物无计算栈目录、`--help` 正常;读链禁栈与 spec 钉死由 `tests/test_mcp_sidecar_without_alignment.py` 覆盖。此收益**独立于** 2C 桌面主包收益——分发包里 sidecar 是第二份数值栈,主包缩小数字不代表整分发收益。详见 [2E 报告](../../reports/mcp-sidecar-slim-2e-2026-09-16.md)。**未测(不外推)**:Windows / macOS Intel 冻结 sidecar 体积与冒烟、发布级签名。
+
+## 2026-09-17 — 阶段2D:设置页对齐计算组件安装管理界面
+
+2B 只在设置页放了只读的可用状态行,安装/升级/卸载按钮后移。本轮补齐前端管理界面(后端 `perform` 与 `/api/text-alignment/runtime` GET/POST 端点在 2B/2C 已就绪,本轮纯前端接线):
+
+- `译本对齐` 设置页「计算组件」下新增「独立计算运行时」卡片(`renderAlignmentRuntimeComponent` / `loadAlignmentRuntime` / `manageAlignmentRuntime`,均在既有 IIFE 内、按钮 JS 绑定,不新增全局符号)。状态覆盖:未安装(安装)、安装失败(重试安装)、安装/升级中(进度 + 取消)、验证中、已安装(卸载 + 有更新时升级)、卸载中、`uninstall_pending`/`upgrade_pending` 任务占用(等待 + 取消)。
+- **显示门控**:自带栈老用户(`compute.provider==='builtin'` 且未装独立运行时)卡片隐藏、不打扰,维持 2B 产品判断;精简包缺栈(`provider==='none'`)或已装独立运行时时才呈现管理入口。footnote 按 provider 如实切换:none 明说「搜索、阅读和已有对齐成果不受影响」。
+- **卸载确认如实呈现规则**(`note-...-2b.md:39` 已确认):文案为「将删除独立计算运行时及其所属的对齐模型文件。文献、已有对齐成果与人工修正都会保留…」,不再笼统写「模型保留」。
+- **真机验证(macOS ARM,无头 serve + 浏览器)**:6 个状态分支逐一渲染核对(builtin 隐藏 / none 安装 / provisioning 30%+取消 / installed+升级+卸载 / uninstall_pending 等待 / failed 重试),卸载确认对话措辞逐字核对。过程中发现并修复一处前端 bug:`loadAlignmentRuntime`/`manageAlignmentRuntime` 把成功响应里 summary 顶层的业务 `error` 字段误判为请求失败,导致「安装失败」态错显「读取失败」——改为只按 HTTP 状态码判定。
+- 装配指纹基线(`test_frontend_assets`)已更新;前端守卫(无 innerHTML、CSS token、全局符号预算)全过。
+- **仍未做**:从冻结精简包出发的真机安装—离线对齐端到端(本轮受环境 TLS/网络限制未跑);Windows / macOS Intel 真机证据。

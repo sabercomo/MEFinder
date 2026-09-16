@@ -576,6 +576,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-collapse-body" id="embedding-model-body">
               <div class="settings-subhead"><span class="settings-section-title">计算组件</span><span id="alignment-compute-status" class="settings-status" role="status" aria-live="polite">读取中…</span></div>
               <p class="settings-footnote" id="alignment-compute-note">对齐计算运行时随应用提供，无需单独安装即可离线生成对齐</p>
+              <section class="local-ocr-component" id="alignment-runtime-component" hidden>
+                <div class="local-ocr-component-head">
+                  <span class="embedding-model-copy"><strong>独立计算运行时</strong><small id="alignment-runtime-sub">隔离的计算环境（numpy / onnxruntime / fastembed），装好后离线生成对齐</small></span>
+                  <span id="alignment-runtime-state" class="settings-status">读取中…</span>
+                </div>
+                <div class="local-ocr-install-row">
+                  <div class="local-ocr-install-copy">
+                    <span id="alignment-runtime-hint" role="status" aria-live="polite">首次生成对齐前需安装，运行时只保存在本机</span>
+                    <div id="alignment-runtime-progress" class="local-ocr-progress" role="progressbar" aria-label="对齐计算运行时安装进度" hidden><span></span></div>
+                  </div>
+                  <div class="settings-actions local-ocr-install-actions">
+                    <button class="action-btn" id="alignment-runtime-cancel" type="button" hidden>取消</button>
+                    <button class="action-btn" id="alignment-runtime-uninstall" type="button" hidden>卸载</button>
+                    <button class="action-btn" id="alignment-runtime-action" type="button" hidden>安装</button>
+                  </div>
+                </div>
+              </section>
               <div class="settings-subhead"><span class="settings-section-title">对齐模型</span></div>
               <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型">
                 <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">

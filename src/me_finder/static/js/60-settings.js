@@ -428,7 +428,10 @@
     if (sectionId === 'statistics-settings' && typeof loadParserStatistics === 'function') {
       loadParserStatistics();
     }
-    if (sectionId === 'text-alignment-settings') loadAlignmentModelComponent();
+    if (sectionId === 'text-alignment-settings') {
+      loadAlignmentModelComponent();
+      loadAlignmentRuntime();
+    }
   }
 
   // Fall back to the first platform-visible category when the active one is hidden
@@ -1041,6 +1044,181 @@
       showToast('删除模型文件失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
+  }
+
+  function renderAlignmentRuntimeComponent(runtime) {
+    var card = document.getElementById('alignment-runtime-component');
+    if (!card || !runtime) return;
+    settingsStore.alignmentRuntime = runtime;
+    var compute = runtime.compute || {};
+    var busyStates = {provisioning: 1, validating: 1, cleaning: 1, uninstall_pending: 1, upgrade_pending: 1};
+    var busy = !!busyStates[runtime.state];
+    // 自带栈的老用户(provider==='builtin' 且未装独立运行时)无需安装，卡片保持隐藏、
+    // 不打扰——维持 2B 的产品判断；精简包缺栈(provider==='none')或已装独立运行时时才
+    // 呈现管理入口。
+    var show = !!runtime.supported && (runtime.installed || busy || compute.provider === 'none');
+    card.hidden = !show;
+    var note = document.getElementById('alignment-compute-note');
+    if (note) {
+      if (!show) {
+        note.textContent = '对齐计算运行时随应用提供，无需单独安装即可离线生成对齐';
+      } else if (runtime.installed) {
+        note.textContent = '对齐计算运行时已独立安装在本机，离线生成对齐';
+      } else {
+        note.textContent = '需安装独立计算运行时后才能生成对齐；搜索、阅读和已有对齐成果不受影响';
+      }
+    }
+    if (!show) {
+      if (settingsStore.alignmentRuntimePollTimer) {
+        clearTimeout(settingsStore.alignmentRuntimePollTimer);
+        settingsStore.alignmentRuntimePollTimer = null;
+      }
+      return;
+    }
+    var stateEl = document.getElementById('alignment-runtime-state');
+    var hintEl = document.getElementById('alignment-runtime-hint');
+    var progress = document.getElementById('alignment-runtime-progress');
+    var progressFill = progress ? progress.querySelector('span') : null;
+    var actionBtn = document.getElementById('alignment-runtime-action');
+    var uninstallBtn = document.getElementById('alignment-runtime-uninstall');
+    var cancelBtn = document.getElementById('alignment-runtime-cancel');
+    if (!stateEl || !hintEl || !progress || !actionBtn || !uninstallBtn || !cancelBtn) return;
+    // 每次渲染先收起可选控件，再按状态点亮，避免上一次状态的按钮残留。
+    actionBtn.hidden = true; actionBtn.disabled = false; actionBtn.classList.remove('danger');
+    uninstallBtn.hidden = true; uninstallBtn.disabled = false; uninstallBtn.classList.remove('danger');
+    cancelBtn.hidden = true; cancelBtn.disabled = false;
+    progress.hidden = true; progress.classList.remove('indeterminate');
+    actionBtn.onclick = null; uninstallBtn.onclick = null; cancelBtn.onclick = null;
+
+    function showProgress(indeterminate) {
+      progress.hidden = false;
+      progress.classList.toggle('indeterminate', !!indeterminate);
+      var pct = 0;
+      if (!indeterminate && runtime.total_bytes) {
+        pct = Math.max(0, Math.min(100, Math.round(runtime.downloaded_bytes / runtime.total_bytes * 100)));
+      }
+      if (progressFill) progressFill.style.width = indeterminate ? '0%' : pct + '%';
+      progress.setAttribute('aria-valuemin', '0');
+      progress.setAttribute('aria-valuemax', '100');
+      if (indeterminate) { progress.removeAttribute('aria-valuenow'); }
+      else { progress.setAttribute('aria-valuenow', String(pct)); }
+      return pct;
+    }
+
+    if (busy) {
+      cancelBtn.hidden = false;
+      cancelBtn.onclick = function() { manageAlignmentRuntime('cancel', cancelBtn); };
+      stateEl.className = 'settings-status';
+      if (runtime.state === 'provisioning') {
+        var pct = showProgress(!runtime.total_bytes);
+        var verb = runtime.operation === 'update' ? '升级中' : '安装中';
+        stateEl.textContent = verb + (runtime.total_bytes ? ' ' + pct + '%' : '');
+        hintEl.textContent = runtime.message || '正在准备独立计算环境…';
+      } else if (runtime.state === 'validating') {
+        showProgress(true);
+        stateEl.textContent = '验证中';
+        hintEl.textContent = runtime.message || '正在验证独立运行时…';
+      } else if (runtime.state === 'cleaning') {
+        showProgress(true);
+        stateEl.textContent = '卸载中';
+        hintEl.textContent = runtime.message || '正在移除运行时与所属模型…';
+      } else if (runtime.state === 'upgrade_pending') {
+        showProgress(true);
+        stateEl.textContent = '等待升级';
+        hintEl.textContent = runtime.message || '当前有对齐任务在运行，任务结束后自动升级';
+      } else {
+        showProgress(true);
+        stateEl.textContent = '等待卸载';
+        hintEl.textContent = runtime.message || '当前有对齐任务在运行，任务结束后自动卸载';
+      }
+    } else if (runtime.installed) {
+      stateEl.className = 'settings-status ready';
+      stateEl.textContent = runtime.installed_version ? '已安装 · v' + runtime.installed_version : '已安装';
+      uninstallBtn.hidden = false;
+      uninstallBtn.classList.add('danger');
+      uninstallBtn.textContent = '卸载';
+      uninstallBtn.onclick = function() { uninstallAlignmentRuntime(uninstallBtn); };
+      if (runtime.update_available) {
+        actionBtn.hidden = false;
+        actionBtn.textContent = '升级';
+        actionBtn.onclick = function() { manageAlignmentRuntime('update', actionBtn); };
+        hintEl.textContent = '有新版本可升级；升级会等待当前对齐任务结束';
+      } else if (runtime.error) {
+        hintEl.textContent = '上次操作失败：' + runtime.error;
+      } else {
+        hintEl.textContent = '运行时已就绪，可离线生成对齐';
+      }
+    } else {
+      var failed = !!runtime.error;
+      stateEl.className = 'settings-status' + (failed ? ' warning' : '');
+      stateEl.textContent = failed ? '安装失败' : '未安装';
+      hintEl.textContent = failed
+        ? '上次安装失败：' + runtime.error
+        : '首次生成对齐前需安装，运行时只保存在本机';
+      actionBtn.hidden = false;
+      actionBtn.textContent = failed ? '重试安装' : '安装';
+      actionBtn.onclick = function() { manageAlignmentRuntime('install', actionBtn); };
+    }
+
+    if (settingsStore.alignmentRuntimePollTimer) {
+      clearTimeout(settingsStore.alignmentRuntimePollTimer);
+      settingsStore.alignmentRuntimePollTimer = null;
+    }
+    if (busy) {
+      settingsStore.alignmentRuntimePollTimer = setTimeout(loadAlignmentRuntime, 1000);
+    }
+  }
+
+  async function loadAlignmentRuntime() {
+    try {
+      var resp = await fetch('/api/text-alignment/runtime', {cache: 'no-store'});
+      var data = await resp.json();
+      // 成功响应就是 summary，其顶层 error 是「上次操作失败」的业务字段（渲染时呈现），
+      // 不是请求失败；只有 HTTP 非 2xx（后端 400/500）才算读取失败。
+      if (!resp.ok) throw new Error(data.error || '读取失败');
+      renderAlignmentRuntimeComponent(data);
+    } catch (e) {
+      // 从未成功渲染过就保持隐藏(如运行方式不支持该组件)；已显示才提示读取失败。
+      var card = document.getElementById('alignment-runtime-component');
+      if (card && !card.hidden) {
+        var stateEl = document.getElementById('alignment-runtime-state');
+        if (stateEl) { stateEl.className = 'settings-status warning'; stateEl.textContent = '读取失败'; }
+      }
+      if (settingsStore.alignmentRuntimePollTimer) {
+        clearTimeout(settingsStore.alignmentRuntimePollTimer);
+        settingsStore.alignmentRuntimePollTimer = null;
+      }
+    }
+  }
+
+  async function manageAlignmentRuntime(action, button) {
+    if (button) { button.disabled = true; }
+    try {
+      var resp = await fetch('/api/text-alignment/runtime', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: action})
+      });
+      var data = await resp.json();
+      // 成功响应是 {ok, ...summary}；summary 顶层 error 是业务字段（上次操作失败），
+      // 由渲染呈现，不当作请求失败。只有 HTTP 非 2xx 才是操作失败。
+      if (!resp.ok) throw new Error(data.error || '操作失败');
+      renderAlignmentRuntimeComponent(data);
+    } catch (e) {
+      var labels = {install: '安装', update: '升级', uninstall: '卸载', cancel: '取消'};
+      showToast('对齐计算组件' + (labels[action] || '操作') + '失败：' + e.message, 'danger');
+      loadAlignmentRuntime();
+    }
+  }
+
+  async function uninstallAlignmentRuntime(button) {
+    // 已确认的产品规则:卸载删除组件所属模型，但保留文献、已有对齐成果与人工修正。
+    if (!await showAppConfirm(
+      '将删除独立计算运行时及其所属的对齐模型文件。文献、已有对齐成果与人工修正都会保留；'
+        + '重新生成新的对齐前需要再次安装运行时与模型。',
+      {title: '卸载对齐计算组件', confirmText: '卸载', tone: 'danger'}
+    )) return;
+    manageAlignmentRuntime('uninstall', button);
   }
 
   function applyPreferencesData(data, requestedThemeRevision) {
