@@ -1,7 +1,7 @@
 # 阶段2C —— 主包精简与译本对齐组件闭环
 
 - 日期：2026-09-15
-- 目标版本：**0.5.5**(组件化版本；本轮仓库 `__version__` 暂留 0.5.4,构建产物用 `MEFINDER_APP_VERSION=0.5.5` 标号,正式 bump 留切版时)
+- 目标版本：**0.5.5**(组件化版本；`src/me_finder/__init__.py` `__version__` 已提升至 0.5.5,连带 `test_mcp_v1_baseline`、`test_http_api_contract`+新契约 `docs/contracts/v0.5.5-http-api.json`、`test_mcp_packaging`+`windows-release-smoke.yml` 一并同步;各平台构建产物由此命名为 `v0.5.5`,无需再传 `MEFINDER_APP_VERSION`/`-Version`)
 - 范围：把 2B 的"可选独立对齐运行时"推进到**主程序不携带数值栈**——`numpy` / `onnxruntime` / `fastembed` 及其重传递依赖不再打进桌面主包;计算与模型探针只在独立解释器里跑。本轮**做**:主包精简闭环(spec 排除 + 冻结态 worker 源交付 + 导入边界钉死 + 模型下载精简守卫 + before/after 体积实测)。本轮**不做**(单列 §6):设置页安装/升级/卸载**大按钮 UI**、sidecar 精简、Windows / macOS Intel 冻结验证。
 - 不变量:算法、阈值、缓存版本、成果格式、worker 协议(`ALIGNMENT_COMPUTE_PROTOCOL=1`)、错误码与取消语义**均未改动**;已有数据库、文献、对齐结果与引用定位信息保留,不重解析、不引入联网必需路径。
 
