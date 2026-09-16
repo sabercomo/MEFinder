@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import tempfile
 import time
 import unittest
 from contextlib import contextmanager
@@ -67,6 +68,9 @@ class _StubComputeRunner:
 
 class TextAlignmentCoordinatorTests(unittest.TestCase):
     def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
         # These tests cover write windows and shutdown semantics; the managed
         # model component is assumed installed and the external compute runtime
         # is assumed capable (its probe is stubbed — the compute itself is
@@ -90,8 +94,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
         # is that the coordinator never touches the runtime's live engine.
         index_runtime = _IndexRuntime()
         paths = SimpleNamespace(
-            index_path=Path("D:/runtime/data/index.sqlite3"),
-            runtime_root=Path("D:/runtime"),
+            index_path=self.root / "data/index.sqlite3",
+            runtime_root=self.root,
         )
         coordinator = TextAlignmentCoordinator(
             paths, index_runtime, _DurableOperations(),
@@ -129,7 +133,7 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
         self.assertFalse(index_runtime.suspended)
         self.assertEqual(
             generate.call_args.kwargs["model_cache_dir"],
-            Path("D:/runtime/components/text-alignment/models"),
+            self.root / "components/text-alignment/models",
         )
         self.assertEqual(
             generate.call_args.kwargs["embedding_model_id"], "minilm-l12-v2"
@@ -142,8 +146,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
     def test_force_recomputation_is_forwarded(self) -> None:
         index_runtime = _IndexRuntime()
         paths = SimpleNamespace(
-            index_path=Path("D:/runtime/data/index.sqlite3"),
-            runtime_root=Path("D:/runtime"),
+            index_path=self.root / "data/index.sqlite3",
+            runtime_root=self.root,
         )
         coordinator = TextAlignmentCoordinator(
             paths, index_runtime, _DurableOperations(),
@@ -168,8 +172,8 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
 
         index_runtime = _IndexRuntime()
         paths = SimpleNamespace(
-            index_path=Path("D:/runtime/data/index.sqlite3"),
-            runtime_root=Path("D:/runtime"),
+            index_path=self.root / "data/index.sqlite3",
+            runtime_root=self.root,
         )
         coordinator = TextAlignmentCoordinator(
             paths, index_runtime, _ClosedDurableOperations(),
@@ -213,6 +217,9 @@ class TextAlignmentCoordinatorProbeTests(unittest.TestCase):
     on close, cancellable) and its failures mapped like compute failures."""
 
     def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
         patch = mock.patch(
             "src.me_finder.application.text_alignment_coordinator."
             "model_component_installed",
@@ -223,8 +230,8 @@ class TextAlignmentCoordinatorProbeTests(unittest.TestCase):
         # Leave the module-global cancel flag clean for other tests.
         self.addCleanup(embedding_runtime.begin_embedding_run)
         self.paths = SimpleNamespace(
-            index_path=Path("D:/runtime/data/index.sqlite3"),
-            runtime_root=Path("D:/runtime"),
+            index_path=self.root / "data/index.sqlite3",
+            runtime_root=self.root,
         )
 
     def test_probe_component_missing_maps_to_component_unavailable(self) -> None:

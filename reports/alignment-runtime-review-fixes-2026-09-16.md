@@ -40,3 +40,8 @@
 - `git diff --check` 通过；架构循环依赖与前端守卫包含在全量测试中。
 - macOS Intel：uv 按 Python 3.12 / x86_64-apple-darwin / only-binary 解析 **32 个包成功**。这证明安装依赖可解析，不替代 Intel 真机推理验收。
 - Windows / Linux：以本提交远端 CI 为准；Windows lane 在 push 上启用，执行包含跨进程租约测试的全量测试。
+
+### 卸载与测试目录收尾
+
+- 真实安装后通过生产组件装配执行卸载：运行时和所属模型目录均删除，临时正式书库的既有对齐链接 **8→8**，未删除成果。
+- 协调器旧测试的 `D:/runtime` 改为 TemporaryDirectory，避免真实锁在假路径创建文件。没有恢复“目录不存在便跳过租约”的旧漏洞。
