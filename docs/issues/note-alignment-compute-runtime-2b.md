@@ -75,3 +75,7 @@
 ## 6. 验收与未完成项
 
 见 `reports/alignment-compute-runtime-2b-2026-09-14.md`。要点：源码层 11 项新测 + 全量 2322（23 跳过）绿、Ruff 零告警；**未做**：真机 uv 安装（网络）、Windows / macOS Intel / macOS ARM 冻结产物冒烟、设置页安装/升级/卸载 UI。不声称跨平台或端到端交付完成。
+
+## 2026-09-16 — Astra 实施审计修复
+
+此前“维护恢复、关闭无残留、所有平台安装就绪”的结论不完整。本轮补齐遗留维护标记恢复、下载及回执发布的共享租约、Windows LockFileEx、关闭取消与等待、旧清单的组件级内置定义补全。清单解释器改为 Python 3.12，Intel 对齐组件单独固定 ONNX Runtime 1.23.2。详细复现、真实安装和离线发布证据见 [修复报告](../../reports/alignment-runtime-review-fixes-2026-09-16.md)。普通用户安装入口和正式冻结验收仍待完成。

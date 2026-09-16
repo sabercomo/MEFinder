@@ -35,7 +35,6 @@ import threading
 import time
 import uuid
 import zipfile
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -44,6 +43,13 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from .alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
+from .alignment_runtime_lock import (
+    RuntimeFileLock,
+    _COMPUTE_LOCK,
+    _MAINTENANCE_MARKER,
+    ComputeUnavailable as ComputeUnavailable,
+    compute_admission as compute_admission,
+)
 from .local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
     PlatformManifest,
@@ -62,83 +68,11 @@ ALIGNMENT_RUNTIME_RECEIPT_SCHEMA = 1
 # Directory names under components/text-alignment/.
 _RUNTIME_DIR = "runtime"
 _MODELS_DIR = "models"
-_COMPUTE_LOCK = ".compute.lock"
-_MAINTENANCE_MARKER = ".maintenance"
 # How long an install/upgrade/uninstall waits for an in-flight compute task
 # before giving up (so a stuck task cannot wedge the operation forever).
 _MAINTENANCE_WAIT_TIMEOUT = 30 * 60
 
 
-class ComputeUnavailable(RuntimeError):
-    """A compute task cannot be admitted: the runtime is under maintenance.
-
-    Raised by :func:`compute_admission` so the coordinator refuses a new task
-    (mapping it to a user-actionable 503) instead of racing an in-progress
-    install / upgrade / uninstall.
-    """
-
-
-def _text_alignment_component_root(runtime_root: Path) -> Path:
-    return (
-        component_runtime_root(Path(runtime_root))
-        / "components"
-        / "text-alignment"
-    )
-
-
-@contextmanager
-def compute_admission(runtime_root: Path):
-    """Hold a shared 'compute in progress' lease for one compute task.
-
-    Refuses admission (``ComputeUnavailable``) while the runtime is under
-    maintenance — an install / upgrade / uninstall raised the maintenance marker
-    or holds the exclusive compute lock (any application instance). While a task
-    holds this shared lease, such an operation waits for it to finish before
-    touching the runtime, so the runtime is never swapped or deleted out from
-    under a running computation, and once maintenance begins no new task starts.
-
-    On POSIX this is an ``fcntl`` shared/exclusive file lock, so it coordinates
-    across processes. On other platforms it degrades to the marker check (the
-    same-instance wait is covered by the in-process activity signal); real
-    cross-instance coverage there is pending platform verification.
-    """
-
-    root = _text_alignment_component_root(runtime_root)
-    if not root.exists():
-        # No component directory ⇒ no install/op could be under way, so there is
-        # nothing to coordinate with. Never create directories from the admission
-        # path (it must be a cheap, side-effect-free gate).
-        yield
-        return
-    marker = root / _MAINTENANCE_MARKER
-    if marker.exists():
-        raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
-    if os.name != "posix":
-        yield
-        return
-    import fcntl
-
-    handle = os.open(root / _COMPUTE_LOCK, os.O_CREAT | os.O_RDWR, 0o600)
-    try:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
-        except OSError as exc:
-            raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。") from exc
-        # Close the race where maintenance began between the marker check and
-        # the lease: if the marker now exists, back out.
-        if marker.exists():
-            try:
-                fcntl.flock(handle, fcntl.LOCK_UN)
-            except OSError:
-                pass
-            raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
-        yield
-    finally:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_UN)
-        except OSError:
-            pass
-        os.close(handle)
 
 
 def _builtin_stack_present() -> bool:
@@ -222,9 +156,8 @@ def load_alignment_runtime_manifest(
 ) -> AlignmentRuntimeManifest:
     """Read the ``alignment`` runtime block and the shared platform matrix.
 
-    The numeric packages (numpy / fastembed) are shared across platforms; the
-    per-platform ONNX Runtime pin and uv download come from the shared
-    ``platforms`` matrix, so there is one source of truth for both.
+    The alignment block owns its numeric pins, including the Intel ONNX pin.
+    Only the uv distribution and interpreter layout use the shared platform matrix.
     """
 
     try:
@@ -270,6 +203,9 @@ def load_alignment_runtime_manifest(
     _engines, selected_platform = load_local_ocr_installer_manifest(
         Path(path), platform_key=selected_key
     )
+    onnx_pin = raw.get("onnxruntime_by_platform", {}).get(selected_key)
+    if onnx_pin is not None:
+        packages = [onnx_pin if pin.startswith("onnxruntime==") else pin for pin in packages]
     return AlignmentRuntimeManifest(
         runtime_version=str(raw.get("version") or ""),
         python=str(raw.get("python") or ""),
@@ -278,68 +214,24 @@ def load_alignment_runtime_manifest(
     )
 
 
-class _CrossProcessOperationLock:
-    """A best-effort exclusive lock held for the length of one operation.
-
-    Unlike an in-process ``threading.Lock``, this is an OS advisory lock on a
-    file, so a second application instance or an independent process cannot
-    install / upgrade / uninstall the same component concurrently. The lock is
-    released by the operating system if the holder dies, so a crash mid-install
-    never wedges the component permanently.
-    """
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._handle: Optional[int] = None
+class _CrossProcessOperationLock(RuntimeFileLock):
+    """Exclusive installation lock shared by application instances."""
 
     def acquire(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        handle = os.open(self._path, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            if sys.platform == "win32":
-                import msvcrt
-
-                msvcrt.locking(handle, msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            acquired = self.try_acquire()
         except OSError as exc:
-            os.close(handle)
+            raise ManagedAlignmentRuntimeError(f"无法锁定对齐组件目录：{exc}") from exc
+        if not acquired:
             raise ManagedAlignmentRuntimeError(
                 "另一个进程正在安装或卸载对齐计算组件，请稍后重试。"
-            ) from exc
-        self._handle = handle
+            )
 
-    def release(self) -> None:
-        handle = self._handle
-        self._handle = None
-        if handle is None:
-            return
-        try:
-            if sys.platform == "win32":
-                import msvcrt
-
-                try:
-                    os.lseek(handle, 0, os.SEEK_SET)
-                    msvcrt.locking(handle, msvcrt.LK_UNLCK, 1)
-                except OSError:
-                    pass
-            else:
-                import fcntl
-
-                try:
-                    fcntl.flock(handle, fcntl.LOCK_UN)
-                except OSError:
-                    pass
-        finally:
-            os.close(handle)
-
-    def __enter__(self) -> "_CrossProcessOperationLock":
+    def __enter__(self):
         self.acquire()
         return self
 
-    def __exit__(self, *_exc) -> None:
+    def __exit__(self, *_exc):
         self.release()
 
 
@@ -383,6 +275,7 @@ class ManagedAlignmentRuntime:
         self.manifest = self._load_manifest_safely()
         self._lock = threading.RLock()
         self._operation_lock = threading.Lock()
+        self._closing = False
         # Recover from a crash that interrupted an atomic swap before setting the
         # initial state, so a valid previous runtime is not left stranded.
         self._recover_interrupted_state()
@@ -497,6 +390,7 @@ class ManagedAlignmentRuntime:
         except ManagedAlignmentRuntimeError:
             return
         try:
+            (root / _MAINTENANCE_MARKER).unlink(missing_ok=True)
             for stale in list(root.glob(".staging-*")) + list(root.glob(".uv-*")):
                 self._remove_tree(stale)
             previous = sorted(root.glob(".previous-*"))
@@ -626,6 +520,8 @@ class ManagedAlignmentRuntime:
         return self.summary()
 
     def _start_operation(self, action: str) -> None:
+        if self._closing:
+            raise ManagedAlignmentRuntimeError("应用正在关闭。")
         installed = self._installed()
         if action == "install" and installed:
             raise ManagedAlignmentRuntimeError("对齐计算组件已安装。")
@@ -648,6 +544,9 @@ class ManagedAlignmentRuntime:
             "validate": "validating",
         }[action]
         with self._lock:
+            if self._closing:
+                self._operation_lock.release()
+                raise ManagedAlignmentRuntimeError("应用正在关闭。")
             state = self._state
             state.state = initial
             state.operation = action
@@ -665,7 +564,7 @@ class ManagedAlignmentRuntime:
                 daemon=True,
             )
             state.thread = thread
-        thread.start()
+            thread.start()
 
     def _operation_worker(self, action: str) -> None:
         cross_lock = _CrossProcessOperationLock(self.component_root / ".operation.lock")
@@ -903,7 +802,7 @@ class ManagedAlignmentRuntime:
         Raises the maintenance marker (new tasks are refused across instances),
         shows the pending state, then acquires the exclusive compute lock — which
         blocks until every in-flight compute task (this and other instances,
-        POSIX) releases its shared lease. Cancellable and time-bounded so a stuck
+        all platforms) releases its shared lease. Cancellable and time-bounded so a stuck
         task cannot wedge the operation. Returns a handle for ``_exit_maintenance``.
         """
 
@@ -915,52 +814,29 @@ class ManagedAlignmentRuntime:
             self._state.message = message
             if deferred:
                 self._state.uninstall_deferred = True
-        handle: Optional[int] = None
+        lease = RuntimeFileLock(self.component_root / _COMPUTE_LOCK)
         deadline = time.monotonic() + _MAINTENANCE_WAIT_TIMEOUT
         try:
-            if os.name == "posix":
-                import fcntl
-
-                handle = os.open(
-                    self.component_root / _COMPUTE_LOCK, os.O_CREAT | os.O_RDWR, 0o600
-                )
-                while True:
-                    self._raise_if_cancelled()
-                    try:
-                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        break
-                    except OSError:
-                        pass
-                    if time.monotonic() >= deadline:
-                        raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
-                    if self._state.cancel_event.wait(0.2):
-                        raise _Cancelled("操作已取消。")
-            else:
-                while self._is_compute_active():
-                    if self._state.cancel_event.wait(0.2):
-                        raise _Cancelled("操作已取消。")
-                    if time.monotonic() >= deadline:
-                        raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
+            while True:
+                self._raise_if_cancelled()
+                if lease.try_acquire():
+                    break
+                if time.monotonic() >= deadline:
+                    raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
+                if self._state.cancel_event.wait(0.1):
+                    raise _Cancelled("操作已取消。")
         except BaseException:
-            if handle is not None:
-                os.close(handle)
+            lease.release()
             marker.unlink(missing_ok=True)
             with self._lock:
                 self._state.uninstall_deferred = False
             raise
         self._set_state("cleaning" if deferred else "provisioning")
-        return (handle, marker)
+        return (lease, marker)
 
     def _exit_maintenance(self, handle_marker) -> None:
-        handle, marker = handle_marker
-        if handle is not None:
-            try:
-                import fcntl
-
-                fcntl.flock(handle, fcntl.LOCK_UN)
-            except OSError:
-                pass
-            os.close(handle)
+        lease, marker = handle_marker
+        lease.release()
         marker.unlink(missing_ok=True)
         with self._lock:
             self._state.uninstall_deferred = False
@@ -1157,7 +1033,12 @@ class ManagedAlignmentRuntime:
                 state.message = message
             state.error = error
 
-    def close(self) -> None:
+    def begin_shutdown(self) -> None:
+        with self._lock:
+            self._closing = True
+            self._state.cancel_event.set()
+
+    def close(self, timeout: float | None = 30) -> bool:
         """Cancel any in-flight operation and wait for its subprocess to be reaped.
 
         Called on application shutdown: it must not report done while an install
@@ -1166,9 +1047,10 @@ class ManagedAlignmentRuntime:
         child and releases the locks), so shutdown genuinely leaves nothing behind.
         """
 
+        self.begin_shutdown()
         with self._lock:
             state = self._state
-            thread = state.thread if state.operation is not None else None
+            thread = state.thread
             if state.operation is not None:
                 state.cancel_event.set()
                 process = state.process
@@ -1177,7 +1059,8 @@ class ManagedAlignmentRuntime:
         if process is not None:
             self._stop_process(process)
         if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=30)
+            thread.join(timeout=timeout)
+        return thread is None or not thread.is_alive()
 
     # --- helpers --------------------------------------------------------- #
     @staticmethod
@@ -1282,6 +1165,7 @@ def make_model_downloader(
     manifest_path: Path | Callable[[], Path] = LOCAL_OCR_MANIFEST_FILE,
     worker_context: Optional[Callable[[], tuple[str, Path]]] = None,
     process_launcher: Callable = subprocess.Popen,
+    cancel_check: Callable[[], bool] = lambda: False,
 ) -> Callable[[str, Path], None]:
     """A model downloader that runs in the independent runtime when installed.
 
@@ -1293,6 +1177,8 @@ def make_model_downloader(
     """
 
     def _download(model_id: str, cache_dir: Path) -> None:
+        if cancel_check():
+            raise _Cancelled("模型下载已取消。")
         launch = resolve_installed_runtime_launch(
             runtime_root,
             platform_key=platform_key,
@@ -1316,6 +1202,7 @@ def make_model_downloader(
         work = Path(tempfile.mkdtemp(prefix="mefinder-model-download-"))
         control = work / "control.ndjson"
         control.write_text("", encoding="utf-8")
+        process = None
         try:
             kwargs: dict = {}
             if os.name == "nt":
@@ -1329,7 +1216,12 @@ def make_model_downloader(
                 stderr=subprocess.DEVNULL,
                 **kwargs,
             )
-            process.wait()
+            while process.poll() is None:
+                if cancel_check():
+                    raise _Cancelled("模型下载已取消。")
+                time.sleep(0.05)
+            if cancel_check():
+                raise _Cancelled("模型下载已取消。")
             messages = [
                 json.loads(line)
                 for line in control.read_text(encoding="utf-8").splitlines()
@@ -1340,12 +1232,15 @@ def make_model_downloader(
                 raise ManagedAlignmentRuntimeError(
                     f"独立运行时下载模型失败：{error.get('message')}"
                 )
-            if not any(m.get("type") == "result" for m in messages):
+            if process.returncode or not any(m.get("type") == "result" for m in messages):
                 raise ManagedAlignmentRuntimeError(
                     f"独立运行时未完成模型下载(exit={process.returncode})。"
                 )
         finally:
-            shutil.rmtree(work, ignore_errors=True)
+            if process is not None:
+                ManagedAlignmentRuntime._stop_process(process)
+                process.wait()
+            shutil.rmtree(work)
 
     return _download
 

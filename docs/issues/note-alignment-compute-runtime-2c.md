@@ -75,3 +75,7 @@ PY
 - **Windows / macOS Intel 冻结冒烟**:本轮仅 macOS ARM 定向构建实测;`_MEIPASS/me_finder` 在 Windows onedir(`_internal/me_finder`)的解析、进程回收与路径待核实。
 - **真机 uv 安装独立运行时后的正向计算闭环**(2B 遗留):装真栈后 probe 通过 + 最小计算逐位一致、pin 可解析/离线加载;仍待网络/真机。
 - **完整 `build_macos.sh` 发布产物 + 全量门禁在本轮改动上的绿**:见报告;定向构建证明精简与源交付成立,发布级冒烟随切版做。
+
+## 2026-09-16 — 补齐精简包依赖的运行时修复
+
+已在临时目录真实安装独立运行时；使用随包源码布局完成离线结果等价验证，并在禁止导入数值栈的 ApplicationRuntime 中生成、发布 8 条完整等价链接。旧缓存缺少对齐定义时改用内置对齐清单，不再因精简包无栈而无法安装。详见 [审计修复报告](../../reports/alignment-runtime-review-fixes-2026-09-16.md)。本轮不重建正式分发包，不扩展 UI 或 sidecar 主题。

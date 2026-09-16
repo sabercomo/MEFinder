@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import shutil
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Mapping
 
 from .runtime_location import component_runtime_root
+from .alignment_runtime_lock import compute_admission
 from .embedding_models import (
     EMBEDDING_MODELS,
     embedding_model_config,
@@ -52,6 +54,8 @@ class ManagedEmbeddingModels:
         *,
         downloader: Callable[[str, Path], None] = download_embedding_model,
     ) -> None:
+        self._runtime_root = runtime_root
+        self._closing = threading.Event()
         self._cache_dir = (
             component_runtime_root(runtime_root) / "components" / "text-alignment" / "models"
         )
@@ -195,6 +199,8 @@ class ManagedEmbeddingModels:
             result["freed_bytes"] = freed
             return result
         with self._lock:
+            if self._closing.is_set():
+                raise ManagedEmbeddingModelsError("应用正在关闭，不能开始模型下载。")
             state = self._states[model_id]
             if state.thread is not None and state.thread.is_alive():
                 raise ManagedEmbeddingModelsError("该译本对齐模型正在下载。")
@@ -217,8 +223,18 @@ class ManagedEmbeddingModels:
 
     def _download(self, model_id: str) -> None:
         try:
-            self._downloader(model_id, self._cache_dir)
-            self._mark_installed(model_id)
+            with compute_admission(self._runtime_root):
+                if self._closing.is_set():
+                    raise ManagedEmbeddingModelsError("模型下载已取消。")
+                self._downloader(model_id, self._cache_dir)
+                if self._closing.is_set():
+                    raise ManagedEmbeddingModelsError("模型下载已取消。")
+                self._mark_installed(model_id)
+                with self._lock:
+                    state = self._states[model_id]
+                    state.state = "installed"
+                    state.message = "模型已下载"
+                    state.error = ""
         except Exception as exc:
             with self._lock:
                 state = self._states[model_id]
@@ -226,16 +242,29 @@ class ManagedEmbeddingModels:
                 state.message = "模型下载失败"
                 state.error = str(exc)
             return
+
+    def download_cancel_requested(self) -> bool:
+        return self._closing.is_set()
+
+    def begin_shutdown(self) -> None:
         with self._lock:
-            state = self._states[model_id]
-            state.state = "installed"
-            state.message = "模型已下载"
-            state.error = ""
+            self._closing.set()
+
+    def close(self, timeout: float | None = 30) -> bool:
+        """Cancel downloads and join their threads before the application exits."""
+        self.begin_shutdown()
+        deadline = None if timeout is None else time.monotonic() + timeout
+        with self._lock:
+            threads = [state.thread for state in self._states.values() if state.thread]
+        for thread in threads:
+            thread.join(None if deadline is None else max(0, deadline - time.monotonic()))
+        return all(not thread.is_alive() for thread in threads)
 
     def delete_all_models(self) -> int:
         """Delete every managed model's files and receipts; return freed bytes.
 
-        Used when the whole alignment compute component is uninstalled: per the
+        The caller must hold the exclusive runtime lease. Used when the
+        whole alignment compute component is uninstalled: per the
         confirmed product rule, uninstalling the component removes the models it
         owns. Documents, notes and existing alignment results are untouched —
         those live in the library database, not here.
@@ -244,10 +273,6 @@ class ManagedEmbeddingModels:
         freed = 0
         with self._lock:
             for model_id, state in self._states.items():
-                if state.thread is not None and state.thread.is_alive():
-                    raise ManagedEmbeddingModelsError(
-                        "有译本对齐模型正在下载，先取消或等待完成再卸载组件。"
-                    )
                 freed += self._delete_model_files(model_id)
                 state.state = "not_installed"
                 state.message = "模型文件已删除"

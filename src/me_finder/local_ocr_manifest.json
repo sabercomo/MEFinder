@@ -4,12 +4,15 @@
   "uv_version": "0.12.1",
   "alignment": {
     "version": "1",
-    "python": "3.11",
+    "python": "3.12",
     "packages": [
       "numpy==2.5.2",
       "onnxruntime==1.29.0",
       "fastembed==0.8.0"
-    ]
+    ],
+    "onnxruntime_by_platform": {
+      "darwin-x86_64": "onnxruntime==1.23.2"
+    }
   },
   "mineru": {
     "version": "3.4.5",

@@ -79,13 +79,8 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
             "from pathlib import Path\n"
             "if sys.argv[1] == 'venv':\n"
             "    venv = Path(sys.argv[-1])\n"
-            "    (venv / 'bin').mkdir(parents=True, exist_ok=True)\n"
-            "    (venv / 'pyvenv.cfg').write_text('include-system-site-packages = false\\n')\n"
-            "    target = venv / 'bin' / 'python'\n"
-            "    try:\n"
-            "        target.symlink_to(sys.executable)\n"
-            "    except OSError:\n"
-            "        target.write_text(sys.executable)\n"
+            "    import venv as venv_module\n"
+            "    venv_module.EnvBuilder(with_pip=False).create(venv)\n"
             "elif sys.argv[1:3] == ['pip', 'install']:\n"
             "    pass\n"
             "else:\n"
@@ -109,7 +104,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
             "platforms": {
                 "test-platform": {
                     "python": "3.11",
-                    "venv_python": "venv/bin/python",
+                    "venv_python": "venv/Scripts/python.exe" if sys.platform == "win32" else "venv/bin/python",
                     "onnxruntime": "onnxruntime==1.29.0",
                     "uv": {
                         "url": archive.as_uri(),
@@ -261,7 +256,6 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertFalse(manager.runtime_dir.exists())
         self.assertFalse((models_dir / "models--fake").exists())
 
-    @unittest.skipUnless(os.name == "posix", "shared/exclusive compute lock is POSIX")
     def test_uninstall_defers_until_compute_task_finishes(self) -> None:
         from src.me_finder.managed_alignment_runtime import compute_admission
 
@@ -487,7 +481,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         calls = []
         with mock.patch.object(
             emod, "download_embedding_model", lambda model_id, cache: calls.append(model_id)
-        ):
+        ), mock.patch("src.me_finder.managed_alignment_runtime._builtin_stack_present", return_value=True):
             downloader = make_model_downloader(
                 self.runtime,
                 platform_key="test-platform",

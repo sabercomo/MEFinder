@@ -41,10 +41,8 @@ jobs:
           python -m unittest tests.test_script_conversion tests.test_script_search
 
   windows-tests:
-    # Pull requests also exercise the real Windows path and filesystem
-    # semantics used by desktop releases. Push CI keeps the existing Linux
-    # lane; the manually triggered release smoke still owns packaging.
-    if: github.event_name == 'pull_request'
+    # Runtime maintenance uses Windows file locks as well as POSIX leases.
+    # Exercise both platforms on pushes; release smoke still owns packaging.
     runs-on: windows-2022
     timeout-minutes: 20
     steps:

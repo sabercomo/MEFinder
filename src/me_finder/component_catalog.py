@@ -147,6 +147,15 @@ def validate_component_catalog(payload: object) -> None:
             raise ComponentCatalogError(
                 "对齐计算运行时必须固定 numpy、onnxruntime、fastembed。"
             )
+        overrides = alignment.get("onnxruntime_by_platform", {})
+        if not isinstance(overrides, Mapping) or any(
+            key not in payload["platforms"]
+            or not isinstance(pin, str)
+            or not pin.startswith("onnxruntime==")
+            or _PINNED_REQUIREMENT.fullmatch(pin) is None
+            for key, pin in overrides.items()
+        ):
+            raise ComponentCatalogError("对齐运行时的平台 ONNX 依赖必须固定版本。")
     mineru = payload.get("mineru")
     if mineru is not None and not isinstance(mineru, Mapping):
         raise ComponentCatalogError("组件清单中的 MinerU 定义无效。")
@@ -246,6 +255,13 @@ class ComponentCatalog:
     def manifest_path(self) -> Path:
         with self._lock:
             return self.cached_path if self.cached_path.is_file() else self.bundled_path
+
+    def alignment_manifest_path(self) -> Path:
+        """Use the bundled alignment definition when a legacy cache lacks it."""
+        path = self.manifest_path()
+        if path != self.bundled_path and "alignment" not in self._read_json(path):
+            return self.bundled_path
+        return path
 
     @property
     def revision(self) -> int:

@@ -34,6 +34,7 @@ class ManagedComponents:
     catalog: ComponentCatalog
     mineru: ManagedMinerU
     alignment_runtime: ManagedAlignmentRuntime
+    embedding_models: ManagedEmbeddingModels
     registry: Dict[str, object]
 
 
@@ -45,11 +46,14 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
     # so a main process without the numeric stack can still complete them.
     embedding_models = ManagedEmbeddingModels(
         root,
-        downloader=make_model_downloader(root, manifest_path=catalog.manifest_path),
+        downloader=make_model_downloader(
+            root, manifest_path=catalog.alignment_manifest_path,
+            cancel_check=lambda: embedding_models.download_cancel_requested(),
+        ),
     )
     alignment_runtime = ManagedAlignmentRuntime(
         root,
-        manifest_path=catalog.manifest_path,
+        manifest_path=catalog.alignment_manifest_path,
         catalog_summary=catalog.summary,
         models_component=embedding_models,
         is_compute_active=embedding_run_active,
@@ -79,6 +83,7 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
         catalog=catalog,
         mineru=mineru,
         alignment_runtime=alignment_runtime,
+        embedding_models=embedding_models,
         registry={
             local_ocr.component_id: local_ocr,
             mineru.component_id: mineru,

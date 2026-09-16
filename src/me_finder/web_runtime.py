@@ -620,6 +620,8 @@ def build_application_runtime(
         from .embedding_runtime import request_embedding_cancel
 
         request_embedding_cancel()
+        managed.embedding_models.begin_shutdown()
+        managed.alignment_runtime.begin_shutdown()
         durable_operations.begin_shutdown()
         index_runtime.begin_shutdown()
         import_task_queue.shutdown(wait=False)
@@ -657,7 +659,10 @@ def build_application_runtime(
         managed_mineru.close()
         # Cancel and reap any in-flight alignment-runtime install/verify process
         # before reporting shutdown complete, so nothing is left behind.
-        managed.alignment_runtime.close()
+        if not managed.embedding_models.close(timeout=remaining):
+            return False
+        if not managed.alignment_runtime.close(timeout=remaining):
+            return False
         index_runtime.close()
         return True
 
