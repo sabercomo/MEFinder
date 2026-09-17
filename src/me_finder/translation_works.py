@@ -287,7 +287,7 @@ def _direct_run_statistics(
         "SELECT l.alignment_link_id, m.side, m.segment_id "
         "FROM alignment_links l JOIN alignment_link_members m "
         "ON m.alignment_link_id = l.alignment_link_id "
-        "WHERE l.alignment_run_id = ? AND l.review_status IN ('rejected', 'unmatched')",
+        "WHERE l.alignment_run_id = ? AND l.review_status = 'rejected'",
         (run["alignment_run_id"],),
     ):
         bucket = link_members.setdefault(
@@ -295,6 +295,10 @@ def _direct_run_statistics(
         )
         bucket[str(row["side"])].append(str(row["segment_id"]))
     for bucket in link_members.values():
+        # 只有算法给出了对应、但置信度低于门槛的链接才需要人工检查；
+        # 一侧为空的是没有对应（副文本或漏段），不算「待检查」。
+        if not bucket["pivot"] or not bucket["target"]:
+            continue
         keys = {_segment_key(ids) for ids in bucket.values() if ids}
         if not keys & corrected_keys:
             review_count += 1
@@ -314,6 +318,9 @@ def alignment_overview(
     ``status`` is ``direct`` (a completed run joins the two versions),
     ``indirect`` (both versions are aligned to the work's base version on the
     same base segmentation, and reads are chained through it) or ``none``.
+    ``review_count`` counts rejected links that still propose a counterpart
+    (low confidence) and have no confirmed correction; links with an empty side
+    mean "no counterpart" and are not counted.
     ``stale_reason`` is set when a run no longer matches the current model or
     algorithm: ``model_changed`` / ``algorithm_updated`` are still readable,
     ``algorithm_unreadable`` is not.
@@ -685,7 +692,9 @@ def review_candidates(
     source_id = _validate_source_id(source_file_id)
     target_id = _validate_source_id(target_source_file_id)
     source_ids = _clean_ids(source_segment_ids, name="source_segment_ids")
-    near_ids = _clean_ids(near_target_segment_ids, name="near_target_segment_ids")
+    near_ids = _clean_ids(
+        near_target_segment_ids or [], name="near_target_segment_ids", allow_empty=True
+    )
     width = _validate_nonnegative_integer("radius", radius)
     if not 1 <= width <= MAX_CANDIDATE_RADIUS:
         raise InvalidAlignmentRequest(f"radius 必须在 1 到 {MAX_CANDIDATE_RADIUS} 之间。")
@@ -699,6 +708,20 @@ def review_candidates(
         source_rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
         if len(source_rows) != len(source_ids):
             raise InvalidAlignmentRequest("源段落不属于当前对齐，请刷新后重试。")
+        if not near_ids:
+            near_ids = _nearest_aligned_targets(
+                connection, route_runs, source_id, source_rows
+            )
+            if not near_ids:
+                return {
+                    "source_file_id": source_id,
+                    "target_source_file_id": target_id,
+                    "source_segments": [
+                        {"segment_id": str(row["segment_id"]), "text": str(row["text_raw"])}
+                        for row in source_rows
+                    ],
+                    "candidates": [],
+                }
         near_rows = _ordered_segments_in_set(connection, target_set_id, near_ids)
         if len(near_rows) != len(near_ids):
             raise InvalidAlignmentRequest("参考译文段落不属于当前对齐，请刷新后重试。")
@@ -721,6 +744,47 @@ def review_candidates(
         }
     finally:
         connection.close()
+
+
+def _nearest_aligned_targets(
+    connection: sqlite3.Connection,
+    route_runs: Sequence[sqlite3.Row],
+    source_id: str,
+    source_rows: Sequence[sqlite3.Row],
+) -> List[str]:
+    """Target segments of the direct link nearest to the source selection.
+
+    Used when the selection's own link has no target (unmatched, or front
+    matter): candidates are centred on the closest link that does have one.
+    Indirect routes return nothing; their corrections are not offered.
+    """
+
+    if len(route_runs) != 1 or not source_rows:
+        return []
+    run = route_runs[0]
+    side = "pivot" if str(run["pivot_source_file_id"]) == source_id else "target"
+    other = "target" if side == "pivot" else "pivot"
+    order = int(source_rows[0]["order_index"])
+    row = connection.execute(
+        "SELECT l.alignment_link_id FROM alignment_links l "
+        "JOIN alignment_link_members sm ON sm.alignment_link_id = l.alignment_link_id "
+        "AND sm.side = ? JOIN text_segments s ON s.segment_id = sm.segment_id "
+        "WHERE l.alignment_run_id = ? AND EXISTS (SELECT 1 FROM alignment_link_members tm "
+        "WHERE tm.alignment_link_id = l.alignment_link_id AND tm.side = ?) "
+        "ORDER BY ABS(s.order_index - ?) LIMIT 1",
+        (side, run["alignment_run_id"], other, order),
+    ).fetchone()
+    if row is None:
+        return []
+    return [
+        str(member[0])
+        for member in connection.execute(
+            "SELECT m.segment_id FROM alignment_link_members m "
+            "JOIN text_segments s ON s.segment_id = m.segment_id "
+            "WHERE m.alignment_link_id = ? AND m.side = ? ORDER BY s.order_index",
+            (row[0], other),
+        )
+    ]
 
 
 def save_correction(

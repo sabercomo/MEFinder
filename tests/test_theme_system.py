@@ -780,17 +780,18 @@ class ThemeMarkupTests(unittest.TestCase):
         # 切主题不重载页面。
         self.assertNotIn("location.reload", HTML)
 
-    def test_document_group_dialog_uses_theme_tokens(self) -> None:
+    def test_translation_work_dialogs_use_theme_tokens(self) -> None:
         self.assertIn("background: var(--dialog-backdrop);", HTML)
-        self.assertIn(".group-manage-card", HTML)
-        group_card = HTML.split(".group-manage-card {", 1)[1].split("}", 1)[0]
-        self.assertIn("background: var(--dialog-bg)", group_card)
-        self.assertIn("box-shadow: var(--shadow-popover)", group_card)
+        dialog = HTML.split(".tw-dialog {", 1)[1].split("}", 1)[0]
+        self.assertIn("background: var(--surface-elevated)", dialog)
+        self.assertIn("box-shadow: var(--shadow-popover)", dialog)
+        sheet = HTML.split(".tw-sheet {", 1)[1].split("}", 1)[0]
+        self.assertIn("background: var(--surface-elevated)", sheet)
 
-    def test_document_group_menu_is_taller_but_viewport_limited(self) -> None:
-        group_menu = HTML.split(".library-group-scope-menu {", 1)[1].split("}", 1)[0]
-        self.assertIn("max-height: min(560px, calc(100dvh - 160px))", group_menu)
-        self.assertIn("overflow-y: auto", group_menu)
+    def test_translation_work_menu_is_viewport_limited(self) -> None:
+        menu = HTML.split(".tw-select-menu {", 1)[1].split("}", 1)[0]
+        self.assertIn("max-height: min(320px, 50vh)", menu)
+        self.assertIn("overflow-y: auto", menu)
 
     def test_confirmation_is_above_parent_modals_but_below_toasts(self) -> None:
         layers = {

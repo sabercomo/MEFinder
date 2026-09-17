@@ -52,6 +52,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </span>
         <span>文献库</span>
       </button>
+      <button class="sidebar-item" data-page="works" title="译本对照" onclick="navigateTo('works')" hidden>
+        <span class="sidebar-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>
+        </span>
+        <span>译本对照</span>
+        <span class="sidebar-item-tag" hidden>只读</span>
+      </button>
       <button class="sidebar-item" data-page="import" title="文献导入" onclick="navigateTo('import')">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>
@@ -182,14 +189,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
               <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
             </div>
-              <div class="app-select library-group-scope" id="library-group-scope">
-                <button class="app-select-trigger library-group-scope-btn" type="button" aria-haspopup="listbox" aria-expanded="false" title="作品组范围" onclick="toggleAppSelect(event,'library-group-scope')">
-                  <svg class="library-group-scope-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 2.5 6.25 10 10l7.5-3.75L10 2.5Z"/><path d="M2.5 10 10 13.75 17.5 10"/><path d="M2.5 13.75 10 17.5l7.5-3.75"/></svg>
-                  <span class="app-select-value" id="library-group-scope-label">全部文献</span>
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
-                </button>
-                <div class="app-select-menu library-group-scope-menu" role="listbox" id="library-group-scope-menu"></div>
-              </div>
               <div class="app-select library-filter" id="library-filter">
                 <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
                   <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
@@ -244,13 +243,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="library-selection-spacer"></span>
             <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
             <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选文档包</button>
-            <div class="app-select library-join-group" id="library-join-group">
-              <button class="app-select-trigger library-join-trigger" type="button" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,'library-join-group')">
-                <span class="app-select-value">加入作品组</span>
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>
-              </button>
-              <div class="app-select-menu library-join-group-menu" role="menu" id="library-join-group-menu"></div>
-            </div>
+            <button class="action-btn" type="button" id="library-assign-work-btn" hidden disabled onclick="MEFinder.works.assignSelection()">加入作品…</button>
             <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
           </div>
         </div>
@@ -347,6 +340,9 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="library-stats-row" id="library-stats"></div>
       </div>
     </div>
+
+    <!-- ── Translation Works Page ── -->
+    <div id="page-works" class="page" aria-label="译本对照"></div>
 
     <!-- ── Import Page ── -->
     <div id="page-import" class="page">
@@ -1205,19 +1201,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     <div class="app-dialog-actions">
       <button class="action-btn" type="button" id="app-dialog-cancel" onclick="settleAppDialog(false)">取消</button>
       <button class="action-btn primary" type="button" id="app-dialog-confirm" onclick="settleAppDialog(true)">确定</button>
-    </div>
-  </div>
-</div>
-<div id="group-manage-modal" class="group-manage-backdrop" aria-hidden="true" onclick="groupManageBackdrop(event)">
-  <div class="group-manage-card" role="dialog" aria-labelledby="group-manage-title" aria-describedby="group-manage-description" onclick="event.stopPropagation()">
-    <div class="group-manage-head">
-      <span class="group-manage-heading"><span id="group-manage-title" class="group-manage-title">管理作品组</span><span id="group-manage-description" class="group-manage-description">整理同一作品的不同版本</span></span>
-      <button class="group-manage-close" type="button" aria-label="关闭" onclick="closeGroupManageModal()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
-    </div>
-    <div class="group-manage-body" id="group-manage-body"></div>
-    <div class="group-manage-foot">
-      <button id="group-realign-all" class="action-btn group-realign-all" type="button" onclick="realignAllTextAlignmentsAction(this)" aria-live="polite" disabled>暂无已对齐译本</button>
-      <button class="action-btn" type="button" onclick="closeGroupManageModal()">关闭</button>
     </div>
   </div>
 </div>

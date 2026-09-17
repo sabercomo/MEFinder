@@ -284,6 +284,31 @@ class MoveMembersTests(_ThreeVersionWork):
             move_members_into_group([], self.db, title="空")
 
 
+class GroupMemberPageSourceTests(_ThreeVersionWork):
+    def test_epub_members_report_publisher_pages_from_import_audit(self) -> None:
+        connection = sqlite3.connect(str(self.db))
+        connection.execute(
+            "INSERT INTO source_files VALUES ('epub-a', 'word', 'a.epub', NULL, NULL, ?)",
+            (json.dumps({"source_format": "epub"}),),
+        )
+        connection.execute(
+            "INSERT INTO source_files VALUES ('epub-b', 'word', 'b.epub', NULL, NULL, '{}')"
+        )
+        connection.execute(
+            "INSERT INTO audit_issues(source_file_id, issue_type, payload_json) "
+            "VALUES ('epub-b', 'epub_page_list_missing', '{}')"
+        )
+        connection.commit()
+        connection.close()
+        move_members_into_group(["epub-a", "epub-b"], self.db, document_group_id="work-one")
+        members = {
+            m["source_file_id"]: m for m in list_document_groups(self.db)[0]["members"]
+        }
+        self.assertTrue(members["epub-a"]["epub_publisher_pages"])
+        self.assertFalse(members["epub-b"]["epub_publisher_pages"])
+        self.assertIsNone(members["pdf-de"]["epub_publisher_pages"])
+
+
 class TranslationWorkMigrationTests(unittest.TestCase):
     def test_v6_database_gains_v7_tables(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

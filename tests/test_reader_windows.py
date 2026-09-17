@@ -77,6 +77,25 @@ class ReaderWindowTests(unittest.TestCase):
         window.evaluate_js.assert_not_called()
         window.run_js.assert_not_called()
 
+    def test_return_to_main_forwards_serialized_location_and_closes_reader(self):
+        main = Mock()
+        self.windows.set_main_window(main)
+        self.windows.open_reader({"sourceId": "book"})
+        reader = self.windows._windows[0]
+        reader.state.fire("change", "readerReturn", {"sourceId": "</script>\"x", "targetIndex": 3})
+        script = main.evaluate_js.call_args.args[0]
+        self.assertIn("openReaderFromWindow(", script)
+        self.assertIn('\\"x', script)
+        reader.destroy.assert_called_once()
+
+        another = self.windows.open_reader({"sourceId": "book"})
+        self.assertTrue(another)
+        reader = self.windows._windows[0]
+        reader.state.fire("change", "readerReturn", {"sourceId": ""})
+        reader.state.fire("change", "readerReturn", "not-a-mapping")
+        self.assertEqual(main.evaluate_js.call_count, 1)
+        reader.destroy.assert_not_called()
+
     def test_readers_keep_separate_locations_and_share_only_backend(self):
         options = {
             "sourceId": "中文书", "anchorId": "p-12", "matchQuote": "𠮷😀原句",

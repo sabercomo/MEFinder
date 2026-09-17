@@ -1,0 +1,716 @@
+<title>MEFinder 译本对照原型</title>
+<style>
+/* Hallmark · macrostructure: Edition Ledger (app page, Workbench family) · tone: utilitarian, quiet
+ * theme: existing MEFinder theme system (frost-blue tokens, names mirror 00-themes.css) · enrichment: none
+ * pre-emit critique: P4 H4 E4 S5 R5 V4
+ * follows design.md §3 作品版本页 / 阅读与对照 · §5 界面文案（句末不加句号）· 自绘下拉
+ */
+:root{
+  --app-bg:#F5F8FC;--sidebar-bg:#F1F5FA;--surface-primary:#FFFFFF;--surface-secondary:#F8FAFD;--surface-elevated:#FFFFFF;
+  --surface-hover:#F1F5FA;--surface-selected:#EAF3FF;
+  --text-primary:#172033;--text-secondary:#414D61;--text-tertiary:#667085;--text-decorative:#98A2B3;
+  --border-subtle:#EDF1F6;--border-default:#DDE5EF;--border-strong:#C8D4E2;--border-control:#828CA0;
+  --accent-fill:#0F62E6;--accent-hover:#0B54C9;--accent-soft:#EAF3FF;--accent-text:#0B5EC7;--accent-contrast:#FFFFFF;
+  --success:#168A46;--warning:#B8620F;--warning-soft:#FFF2E2;--danger:#C8322B;--neutral-soft:#EEF1F5;
+  --match-block-bg:#FFF8E6;--match-block-accent:#B86C08;
+  --shadow-popover:0 12px 32px rgba(23,32,51,.14);--dialog-backdrop:rgba(23,32,51,.30);
+  --focus-ring:0 0 0 3px rgba(22,119,255,.22);
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-pill:999px;
+  --font-ui:"PingFang SC","Microsoft YaHei UI","Segoe UI Variable",-apple-system,system-ui,sans-serif;
+  --font-reading:"Noto Serif SC","Songti SC","STSong",Georgia,serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --app-bg:#0F141C;--sidebar-bg:#131A24;--surface-primary:#161E29;--surface-secondary:#1A232F;--surface-elevated:#1D2733;
+  --surface-hover:#1F2937;--surface-selected:#1B2C45;
+  --text-primary:#E7ECF3;--text-secondary:#BAC4D2;--text-tertiary:#8E99AA;--text-decorative:#667085;
+  --border-subtle:#222C39;--border-default:#2C3847;--border-strong:#3A4757;--border-control:#6B7688;
+  --accent-fill:#5B9BFF;--accent-hover:#79AEFF;--accent-soft:#1A2C47;--accent-text:#8FBBFF;--accent-contrast:#0B1422;
+  --success:#4CC27E;--warning:#F0A04B;--warning-soft:#2E2215;--danger:#FF7A72;--neutral-soft:#222A36;
+  --match-block-bg:#2E2615;--match-block-accent:#F0C877;
+  --shadow-popover:0 16px 40px rgba(0,0,0,.5);--dialog-backdrop:rgba(0,0,0,.5);
+}}
+:root[data-theme="dark"]{
+  --app-bg:#0F141C;--sidebar-bg:#131A24;--surface-primary:#161E29;--surface-secondary:#1A232F;--surface-elevated:#1D2733;
+  --surface-hover:#1F2937;--surface-selected:#1B2C45;
+  --text-primary:#E7ECF3;--text-secondary:#BAC4D2;--text-tertiary:#8E99AA;--text-decorative:#667085;
+  --border-subtle:#222C39;--border-default:#2C3847;--border-strong:#3A4757;--border-control:#6B7688;
+  --accent-fill:#5B9BFF;--accent-hover:#79AEFF;--accent-soft:#1A2C47;--accent-text:#8FBBFF;--accent-contrast:#0B1422;
+  --success:#4CC27E;--warning:#F0A04B;--warning-soft:#2E2215;--danger:#FF7A72;--neutral-soft:#222A36;
+  --match-block-bg:#2E2615;--match-block-accent:#F0C877;
+  --shadow-popover:0 16px 40px rgba(0,0,0,.5);--dialog-backdrop:rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow-x:clip}
+body{margin:0;background:var(--app-bg);color:var(--text-primary);font-family:var(--font-ui);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:12px 16px;display:flex;flex-direction:column;gap:10px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+input{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+[hidden]{display:none!important}
+
+.demo{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-tertiary)}
+.demo b{color:var(--text-secondary);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:2px;background:var(--surface-primary)}
+.seg button{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+
+/* shell */
+.win{position:relative;flex:1;min-height:700px;display:grid;grid-template-columns:188px minmax(0,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-primary)}
+.win.rail{grid-template-columns:56px minmax(0,1fr)}
+.side{background:var(--sidebar-bg);border-right:1px solid var(--border-subtle);padding:16px 10px 12px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.side-top{display:flex;align-items:center;gap:6px;padding:0 2px 16px 10px;min-height:32px}
+.brand{font-weight:650;font-size:14.5px;white-space:nowrap;flex:1;overflow:hidden}
+.win.rail .brand{display:none}.win.rail .side-top{padding:0 0 16px;justify-content:center}
+.nav{display:grid;gap:2px}
+.item{position:relative;display:flex;align-items:center;gap:11px;height:38px;padding:0 12px;border-radius:var(--radius-md);color:var(--text-secondary);font-size:14.5px;text-align:left;white-space:nowrap;min-width:0}
+.item:hover{background:var(--surface-hover);color:var(--text-primary)}
+.item[aria-current="page"]{background:var(--surface-selected);color:var(--text-primary);font-weight:600}
+.item svg{flex:none}
+.item .ro{margin-left:auto;font-size:11px;color:var(--text-tertiary)}
+.win.rail .item{justify-content:center;padding:0}
+.win.rail .item .lbl,.win.rail .item .ro,.win.rail .foot{display:none}
+.foot{margin-top:auto;font-size:12px;color:var(--text-tertiary);padding:10px 12px 0}
+.main{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+
+/* controls */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;border-radius:var(--radius-md);border:1px solid var(--border-default);background:var(--surface-primary);color:var(--text-primary);font-size:13.5px;white-space:nowrap;transition:transform 120ms var(--ease-out),background-color 120ms var(--ease-out)}
+@media (hover:hover) and (pointer:fine){.btn:hover{background:var(--surface-hover)}}
+.btn:active:not([disabled]){transform:scale(.97)}
+.btn.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--accent-contrast);font-weight:600}
+@media (hover:hover) and (pointer:fine){.btn.primary:hover{background:var(--accent-hover)}}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--text-secondary)}
+.btn.danger{border-color:transparent;background:transparent;color:var(--danger);padding:0 4px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.sm{height:28px;padding:0 10px;font-size:12.5px}
+.textbtn{color:var(--accent-text);font-size:13px;font-weight:600;padding:4px 2px;border-radius:var(--radius-sm);white-space:nowrap}
+.textbtn:hover{text-decoration:underline}
+.textbtn[disabled]{color:var(--text-decorative);pointer-events:none}
+.icon-btn{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:var(--radius-md);color:var(--text-tertiary)}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+.sw{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.sw input{appearance:none;margin:0;width:36px;height:22px;border-radius:var(--radius-pill);background:var(--border-strong);position:relative;cursor:pointer;transition:background-color 160ms var(--ease-out);flex:none}
+.sw input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface-elevated);transition:transform 160ms var(--ease-out)}
+.sw input:checked{background:var(--accent-fill)}
+.sw input:checked::after{transform:translateX(14px)}
+.cb{width:18px;height:18px;flex:none;border-radius:5px;border:1.5px solid var(--border-control);display:grid;place-items:center;color:var(--accent-contrast);background:var(--surface-primary)}
+.cb[aria-checked="true"]{background:var(--accent-fill);border-color:var(--accent-fill)}
+.field{height:36px;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:0 10px;background:var(--surface-primary);min-width:0;width:100%}
+.field:focus{outline:none;border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+.find{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary);color:var(--text-decorative)}
+.find input{border:0;outline:0;background:transparent;min-width:0;flex:1;font-size:13.5px}
+.find:focus-within{border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+
+/* custom dropdown — design.md §5 */
+.dd{position:relative;min-width:0}
+.dd-trigger{display:flex;align-items:center;gap:8px;height:32px;width:100%;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary);text-align:left;font-size:13px}
+.dd-trigger .v{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-trigger .k{color:var(--text-tertiary)}
+.dd-trigger svg{flex:none;color:var(--text-tertiary);transition:transform 150ms var(--ease-out)}
+.dd-trigger[aria-expanded="true"]{border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+.dd-trigger[aria-expanded="true"] svg{transform:rotate(180deg)}
+.menu{position:absolute;z-index:30;top:calc(100% + 4px);left:0;min-width:100%;background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);padding:4px;animation:menuIn 150ms var(--ease-out)}
+.menu.right{left:auto;right:0}
+@keyframes menuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.opt{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 10px;border-radius:var(--radius-sm);text-align:left;font-size:13px;white-space:nowrap}
+.opt:hover,.opt:focus-visible{background:var(--surface-hover);box-shadow:none}
+.opt .tick{width:14px;flex:none;color:var(--accent-text)}
+.opt small{margin-left:auto;padding-left:16px;font-size:12px;color:var(--text-tertiary)}
+.opt[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.opt.danger{color:var(--danger)}
+.msep{height:1px;background:var(--border-subtle);margin:4px 0}
+
+/* status vocabulary — words carry state, colour only supports */
+.state{font-size:12.5px;color:var(--text-tertiary);white-space:nowrap}
+.state b{font-weight:600;color:var(--text-secondary)}
+.state.direct b{color:var(--success)}
+.state.stale b{color:var(--warning)}
+.state.run b{color:var(--accent-text)}
+.meter{display:inline-block;vertical-align:middle;width:88px;height:3px;border-radius:2px;background:var(--border-subtle);overflow:hidden;margin:0 6px}
+.meter i{display:block;height:100%;background:var(--accent-fill);transition:width 400ms var(--ease-out)}
+
+/* 译本对照 page: works list | edition ledger */
+.page{flex:1;min-height:0;display:grid;grid-template-columns:232px minmax(0,1fr)}
+.works{border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;min-height:0}
+.works-head{display:flex;align-items:center;justify-content:space-between;padding:18px 12px 10px 18px}
+.works-head h1{margin:0;font-size:15px;font-weight:650}
+.works .find{margin:0 12px 8px}
+.wlist{flex:1;overflow:auto;padding:0 8px 8px}
+.w{display:grid;gap:1px;width:100%;padding:9px 10px;border-radius:var(--radius-md);text-align:left}
+.w:hover{background:var(--surface-hover)}
+.w[aria-current="true"]{background:var(--surface-selected)}
+.w .t{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w .s{font-size:12.5px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hintrow{padding:10px 18px 14px;border-top:1px solid var(--border-subtle);font-size:12.5px;color:var(--text-tertiary);line-height:1.6}
+.hintrow .acts{display:flex;gap:10px;margin-top:2px}
+
+.work{min-width:0;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.work-in{padding:22px 32px 0;flex:1}
+.wh{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.wh .ttl{flex:1;min-width:220px}
+.wh h2{margin:0;font-size:23px;font-weight:650;line-height:1.3;overflow-wrap:anywhere}
+.wh .by{font-size:13.5px;color:var(--text-tertiary);margin-top:2px}
+.resume{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;padding:14px 0;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)}
+.resume .txt{flex:1;min-width:200px;font-size:14px}
+.resume .txt span{display:block;font-size:12.5px;color:var(--text-tertiary);margin-top:1px}
+.ro-note{margin-top:14px;font-size:13px;color:var(--text-secondary)}
+
+.ledger{margin-top:22px;width:100%;border-collapse:collapse}
+.ledger caption{text-align:left;font-size:13px;font-weight:600;color:var(--text-secondary);padding-bottom:8px}
+.ledger caption span{font-weight:400;color:var(--text-tertiary);margin-left:8px}
+.ledger th{font-size:12px;font-weight:500;color:var(--text-tertiary);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border-default);white-space:nowrap}
+.ledger td{padding:12px 10px;border-bottom:1px solid var(--border-subtle);vertical-align:middle;font-size:13.5px}
+.ledger tr.sel td{background:var(--surface-secondary)}
+.ledger td.name b{display:block;font-size:14.5px;font-weight:600}
+.ledger td.name span{display:block;font-size:12.5px;color:var(--text-tertiary);margin-top:1px;overflow-wrap:anywhere}
+.ledger td.muted{color:var(--text-secondary);white-space:nowrap}
+.ledger td.act{text-align:right;white-space:nowrap}
+.ledger .basemark{font-size:12px;color:var(--text-tertiary);margin-left:6px;font-weight:400}
+.warnword{color:var(--warning)}
+.tablewrap{overflow-x:auto}
+
+.comparebar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 32px;border-top:1px solid var(--border-default);background:var(--surface-primary);min-height:58px}
+.comparebar .pair{font-size:14px;font-weight:600;min-width:0}
+.comparebar .grow{flex:1}
+
+/* 管理版本 sheet */
+.sheet-scrim{position:absolute;inset:0;z-index:40;background:var(--dialog-backdrop);display:flex;justify-content:flex-end}
+.sheet{width:min(440px,100%);height:100%;background:var(--surface-elevated);box-shadow:var(--shadow-popover);display:flex;flex-direction:column;animation:sheetIn 200ms var(--ease-out)}
+@keyframes sheetIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.sheet-h{display:flex;align-items:center;gap:8px;padding:16px 16px 10px 22px;border-bottom:1px solid var(--border-subtle)}
+.sheet-h h3{margin:0;font-size:16px;font-weight:650;flex:1}
+.sheet-b{flex:1;overflow:auto;padding:4px 22px 22px}
+.grp{padding-top:18px}
+.grp h4{margin:0 0 8px;font-size:12.5px;font-weight:600;color:var(--text-tertiary)}
+.mrow{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border-subtle)}
+.radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border-control);background:var(--surface-primary)}
+.radio[aria-checked="true"]{border:5px solid var(--accent-fill)}
+.mrow .nm{border:1px solid transparent;border-radius:var(--radius-sm);padding:2px 6px;margin-left:-6px;font-weight:600;font-size:14px;background:transparent;width:100%}
+.mrow .nm:hover{border-color:var(--border-default)}
+.mrow .nm:focus{outline:none;border-color:var(--accent-fill);box-shadow:var(--focus-ring);background:var(--surface-primary)}
+.mrow .sub{font-size:12px;color:var(--text-tertiary);padding-left:0;margin-top:1px;overflow-wrap:anywhere}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-subtle)}
+.prow .pn{font-size:13.5px;font-weight:600}
+.results{margin-top:6px;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:4px;max-height:220px;overflow:auto}
+.note{font-size:12.5px;color:var(--text-tertiary);line-height:1.6;margin-top:8px}
+
+/* dialogs */
+.scrim{position:fixed;inset:0;z-index:45;background:var(--dialog-backdrop);display:grid;place-items:center;padding:16px}
+.dlg{width:min(560px,100%);max-height:calc(100% - 32px);display:flex;flex-direction:column;background:var(--surface-elevated);border-radius:var(--radius-lg);box-shadow:var(--shadow-popover);overflow:hidden}
+.dlg-h{padding:18px 22px 6px}
+.dlg-h h3{margin:0;font-size:16px;font-weight:650}
+.dlg-b{padding:6px 22px 16px;overflow:auto}
+.dlg-f{padding:12px 22px 16px;border-top:1px solid var(--border-subtle);display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.pickrow{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:9px 4px;border-bottom:1px solid var(--border-subtle);text-align:left}
+.pickrow:hover{background:var(--surface-hover)}
+.pickrow .ti{font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.pickrow .su{font-size:12px;color:var(--text-tertiary)}
+.cmp{width:100%;border-collapse:collapse;font-size:13px}
+.cmp th,.cmp td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--border-subtle);vertical-align:top}
+.cmp th{font-weight:500;color:var(--text-tertiary);width:64px;white-space:nowrap}
+.cmp td.diff{color:var(--warning);font-weight:600}
+
+/* library */
+.lib-head{padding:20px 24px 12px}
+.lib-head h1{margin:0;font-size:23px;font-weight:650}
+.lib{flex:1;overflow:auto}
+.lrow{display:grid;grid-template-columns:18px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:11px 24px;border-bottom:1px solid var(--border-subtle)}
+.lrow.sel{background:var(--surface-secondary)}
+.lrow .bt{text-align:left;min-width:0}
+.lrow .bt b{display:block;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .bt span{font-size:12.5px;color:var(--text-tertiary)}
+.wtag{font-size:12.5px;color:var(--accent-text);white-space:nowrap}
+.wtag:hover{text-decoration:underline}
+.selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 24px;border-top:1px solid var(--border-default);background:var(--surface-primary)}
+.hit{margin:0 24px;padding:14px 0;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.hit .q{flex:1;min-width:220px;font-family:var(--font-reading);font-size:15.5px}
+.hit .q span{display:block;font-family:var(--font-ui);font-size:12.5px;color:var(--text-tertiary);margin-top:4px}
+
+/* reader — continuous reading, not a table */
+.reader{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface-primary)}
+.rbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-subtle);min-width:0}
+.rbar .dd{flex:0 1 230px}
+.rbar .grow{flex:1;min-width:0}
+.notice{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 20px;font-size:13px;color:var(--text-secondary);border-bottom:1px solid var(--border-subtle);background:var(--surface-secondary)}
+.notice.warn{background:var(--warning-soft)}
+.rbody{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+.pane-labels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;max-width:1180px;margin:0 auto;padding:14px 40px 0;font-size:12px;color:var(--text-tertiary)}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:48px;max-width:1180px;margin:0 auto;padding:4px 40px 60px;position:relative}
+.duo.indirect{background-image:linear-gradient(var(--border-strong) 50%,transparent 0);background-size:1px 8px;background-repeat:repeat-y;background-position:50% 0}
+.duo:not(.indirect){background-image:linear-gradient(var(--border-subtle),var(--border-subtle));background-size:1px 100%;background-repeat:no-repeat;background-position:50% 0}
+.solo{max-width:720px;margin:0 auto;padding:20px 40px 60px}
+.para{position:relative;font-family:var(--font-reading);font-size:18px;line-height:1.85;padding:8px 10px;margin:0 -10px;border-radius:var(--radius-sm);cursor:pointer;overflow-wrap:anywhere}
+.para:hover{background:var(--surface-secondary)}
+.para.hl{background:var(--match-block-bg)}
+.pg{font-family:var(--font-ui);font-size:11.5px;color:var(--text-decorative);margin:14px 0 2px;font-variant-numeric:tabular-nums}
+.flag{position:absolute;right:-30px;top:12px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:600 11px var(--font-ui);background:var(--warning-soft);color:var(--warning)}
+.flag.later{background:var(--neutral-soft);color:var(--text-decorative)}
+.pending{align-self:start;position:sticky;top:20px;margin-top:14px;padding:18px 0;border-top:1px solid var(--border-default)}
+.pending h4{margin:0 0 6px;font-size:15px;font-weight:600}
+.pending p{margin:0 0 12px;font-size:13px;color:var(--text-tertiary);line-height:1.6}
+.skel{display:grid;gap:10px;padding:14px 0}
+.skel i{display:block;height:10px;border-radius:4px;background:var(--border-subtle)}
+
+.pop{position:fixed;z-index:50;width:min(380px,calc(100vw - 32px));background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--shadow-popover);padding:14px 16px;display:grid;gap:8px;animation:menuIn 150ms var(--ease-out)}
+.pop h4{margin:0;font-size:14px;font-weight:600}
+.pop p{margin:0 0 2px;font-size:12.5px;color:var(--text-tertiary)}
+.pop .pickrow .ti{font-family:var(--font-reading);font-weight:400;font-size:13.5px;line-height:1.6}
+.pop .acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-top:4px}
+.detached{position:absolute;z-index:60;inset:5% 6%;display:flex;flex-direction:column;border:1px solid var(--border-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-popover);overflow:hidden;background:var(--surface-primary)}
+.detached-cap{font-size:12px;color:var(--text-tertiary);padding:6px 14px;border-bottom:1px solid var(--border-subtle);background:var(--surface-secondary)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:14px;background:var(--text-primary);color:var(--app-bg);padding:10px 16px;border-radius:var(--radius-md);font-size:13px;box-shadow:var(--shadow-popover);max-width:calc(100vw - 32px)}
+.toast button{color:inherit;font-weight:600;text-decoration:underline}
+
+@media (max-width:1100px){.rbar .hide-md{display:none}.duo,.pane-labels{padding-inline:24px;column-gap:28px;gap:28px}.flag{right:-22px}}
+@media (max-width:900px){
+  .page{grid-template-columns:1fr}
+  .works{border-right:0;border-bottom:1px solid var(--border-subtle);max-height:230px}
+  .ledger th.opt-col,.ledger td.opt-col{display:none}
+  .work-in{padding:18px 18px 0}.comparebar{padding:10px 18px}
+}
+@media (max-width:640px){
+  .win,.win.rail{grid-template-columns:1fr}
+  .side{flex-direction:row;padding:6px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border-subtle)}
+  .side-top,.foot{display:none}
+  .nav{display:flex}
+  .item,.win.rail .item{height:34px;padding:0 10px;font-size:13px}
+  .item svg{display:none}.win.rail .item .lbl{display:inline}
+  .rbar{flex-wrap:wrap}.rbar .dd{flex:1 1 140px}
+  .duo,.pane-labels{grid-template-columns:minmax(0,1fr);padding-inline:16px}
+  .duo{background-image:none!important}
+  .para{font-size:16px}
+  .flag{right:4px;top:4px}
+  .ledger th.lang-col,.ledger td.lang-col{display:none}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+
+<div class="demo" role="region" aria-label="原型演示">
+  <b>原型</b>
+  <span>组件状态</span>
+  <span class="seg" id="instseg"><button data-inst="none">未安装</button><button data-inst="on">已安装</button><button data-inst="removed">已卸载，保留成果</button></span>
+  <span>书目、页码与译文均为示例</span>
+</div>
+
+<div class="win" id="win">
+  <aside class="side">
+    <div class="side-top"><span class="brand">文献原句定位器</span><button class="icon-btn" data-act="toggleSide" id="sidebtn" aria-label="收起或展开侧栏"></button></div>
+    <nav class="nav" id="nav" aria-label="主导航"></nav>
+    <div class="foot">MEFinder v0.5.5</div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ic={
+ search:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>',
+ library:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><line x1="7" y1="3" x2="7" y2="17"/></svg>',
+ bilingual:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>',
+ import:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>',
+ settings:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg>',
+ find:'<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>',
+ check:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>',
+ chev:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg>',
+ back:'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg>',
+ x:'<svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>',
+ swap:'<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h10l-3-3M14 14H4l3 3"/></svg>',
+ dots:'<svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><circle cx="4.5" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="15.5" cy="10" r="1.5"/></svg>',
+ panel:'<svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M7.5 3.5v13"/></svg>'
+};
+const LANG={ZH:'中文',DE:'德文',EN:'英文'};
+
+/* 示例数据 */
+const docs={
+ k2:{name:'德文原版',lang:'DE',fmt:'PDF',book:'Das Kapital · Erster Band',author:'Karl Marx',pub:'MEW 23 · 1962',pages:'出版方页码'},
+ k1:{name:'中文译本',lang:'ZH',fmt:'PDF',book:'资本论（第一卷）',author:'马克思',pub:'中译本 · 2004',pages:'出版方页码'},
+ k3:{name:'中文新译本',lang:'ZH',fmt:'EPUB',book:'资本论（第一卷）',author:'马克思',pub:'中译本 · 2021',pages:'EPUB 页码表'},
+ h1:{name:'德文原版',lang:'DE',fmt:'PDF',book:'Phänomenologie des Geistes',author:'G. W. F. Hegel',pub:'Werke 3',pages:'出版方页码'},
+ h2:{name:'中文译本',lang:'ZH',fmt:'PDF',book:'精神现象学',author:'黑格尔',pub:'中译本',pages:'出版方页码'},
+ p2:{name:'德文原版',lang:'DE',fmt:'PDF',book:'Einleitung zur Kritik der politischen Ökonomie',author:'Karl Marx',pub:'MEW 13',pages:'出版方页码'},
+ p1:{name:'中文译本',lang:'ZH',fmt:'PDF',book:'政治经济学批判导言',author:'马克思',pub:'中译本',pages:'未校准'},
+ e1:{name:'英文译本',lang:'EN',fmt:'EPUB',book:'Capital, Volume I',author:'Karl Marx',pub:'英译本',pages:'EPUB 页码表'},
+ c1:{name:'',lang:'ZH',fmt:'PDF',book:'批判理论',author:'霍克海默',pub:'412 页',pages:'出版方页码'},
+ c2:{name:'',lang:'ZH',fmt:'EPUB',book:'批判理论',author:'作者信息待完善',pub:'—',pages:'未校准'},
+ x1:{name:'',lang:'ZH',fmt:'PDF',book:'后欧洲',author:'许煜',pub:'228 页',pages:'出版方页码'}
+};
+const rows=[
+ {k2:['49','Der Reichtum der Gesellschaften, in welchen kapitalistische Produktionsweise herrscht, erscheint als eine „ungeheure Warensammlung“, die einzelne Ware als seine Elementarform.'],k1:['47','在资本主义生产方式占统治地位的社会里，社会的财富表现为“庞大的商品堆积”，单个的商品表现为这种财富的元素形式。'],k3:['52','在资本主义生产方式居于支配地位的社会中，财富显现为“庞大的商品积聚”，单个商品则是它的基本形式。']},
+ {k2:['49','Unsere Untersuchung beginnt daher mit der Analyse der Ware.'],k1:['47','因此，我们的研究就从分析商品开始。'],k3:['52','所以，我们的研究从商品分析开始。']},
+ {low:true,k2:['49','Die Ware ist zunächst ein äußerer Gegenstand, ein Ding, das durch seine Eigenschaften menschliche Bedürfnisse irgendeiner Art befriedigt.'],k1:['47','商品首先是一个外界的对象，一个靠自己的属性来满足人的某种需要的物。'],k3:['52','商品首先是外在的对象，是一种凭借自身属性满足人的某种需要的物。']},
+ {k2:['50','Die Nützlichkeit eines Dings macht es zum Gebrauchswert.'],k1:['48','物的有用性使物成为使用价值。'],k3:['53','物的有用性使它成为使用价值。']},
+ {k2:['50','Aber diese Nützlichkeit schwebt nicht in der Luft.'],k1:['48','但这种有用性不是悬在空中的。'],k3:['53','但这种有用性并非悬在空中。']}
+];
+let works=[
+ {id:'g1',title:'资本论 · 第一卷',author:'马克思',base:'k2',members:['k2','k1','k3'],last:{L:'k2',R:'k1',at:'S. 50 · 第 48 页'},
+  pairs:{'k1|k2':{s:'direct',m:96,chk:3},'k2|k3':{s:'direct',m:93,chk:1},'k1|k3':{s:'indirect',via:'k2'}}},
+ {id:'g2',title:'精神现象学',author:'黑格尔',base:'h1',members:['h1','h2'],last:null,pairs:{'h1|h2':{s:'stale',m:90}}},
+ {id:'g3',title:'政治经济学批判导言',author:'马克思',base:'p2',members:['p2','p1'],last:null,pairs:{}}
+];
+const S={inst:'on',page:'bilingual',wid:'g1',pick:['k2','k1'],q:'',menu:null,sheet:false,sheetAdd:'',dialog:null,
+  reading:null,detached:false,L:null,R:null,hl:null,follow:true,side:'full',sideBefore:'full',libSel:[],hint:true,justInstalled:false};
+
+const pk=(a,b)=>[a,b].sort().join('|');
+const W=()=>works.find(w=>w.id===S.wid);
+const workOf=id=>works.find(w=>w.members.includes(id));
+const dn=id=>docs[id].name||docs[id].book;
+const pairOf=(w,a,b)=>w.pairs[pk(a,b)]||{s:'none'};
+const canGen=()=>S.inst==='on';
+const pageLabel=(id,c)=>docs[id].lang==='ZH'?'第 '+c[0]+' 页':docs[id].lang==='DE'?'S. '+c[0]:'p. '+c[0];
+
+function stateText(w,p){
+  switch(p.s){
+    case 'direct':return `<span class="state direct" title="左侧版本中找到对应段落的比例，不代表对应一定准确"><b>直接对齐</b> · 已匹配段落 ${p.m}%${p.chk?' · '+p.chk+' 处待检查':''}</span>`;
+    case 'indirect':return `<span class="state"><b>间接关联</b> · 经「${esc(dn(p.via))}」换算，未直接对齐</span>`;
+    case 'stale':return `<span class="state stale"><b>需重新对齐</b> · 模型已更换，旧结果可读</span>`;
+    case 'run':return `<span class="state run"><b>生成中</b><span class="meter"><i style="width:${p.pct}%"></i></span>${p.pct}%</span>`;
+    default:return `<span class="state"><b>尚未对齐</b></span>`;
+  }
+}
+
+/* ── render ── */
+function nav(){
+  const items=[['search','文献检索'],['library','文献库']];
+  if(S.inst!=='none')items.push(['bilingual','译本对照']);
+  items.push(['import','文献导入'],['settings','设置']);
+  const cur=S.reading&&!S.detached?S.reading.from:S.page;
+  $('#nav').innerHTML=items.map(([k,l])=>`<button class="item ${k==='bilingual'&&S.justInstalled?'new':''}" ${cur===k?'aria-current="page"':''} data-go="${k}" title="${l}">${ic[k]}<span class="lbl">${l}</span>${k==='bilingual'&&S.inst==='removed'?'<span class="ro">只读</span>':''}</button>`).join('');
+  S.justInstalled=false;
+  $('#win').classList.toggle('rail',S.side==='rail');
+  $('#sidebtn').innerHTML=ic.panel;
+  document.querySelectorAll('#instseg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.inst===S.inst));
+}
+function render(keepFocus){
+  const f=document.activeElement,fid=f&&f.id,sel=f&&f.selectionStart;
+  const keep=[...document.querySelectorAll('[data-keep]')].map(e=>[e.dataset.keep,e.scrollTop]);
+  nav();
+  document.querySelectorAll('.scrim,.detached').forEach(e=>e.remove());
+  const m=$('#main');
+  if(S.reading&&!S.detached)m.innerHTML=reader();
+  else if(S.page==='bilingual'&&S.inst!=='none')m.innerHTML=worksPage();
+  else if(S.page==='library')m.innerHTML=libraryPage();
+  else m.innerHTML=otherPage();
+  if(S.reading&&S.detached)$('#win').insertAdjacentHTML('beforeend',`<div class="detached" role="dialog" aria-label="独立阅读窗口"><div class="detached-cap">独立阅读窗口（示意：真实软件中是可移动、可缩放的系统窗口）</div>${reader()}</div>`);
+  if(S.dialog)document.body.insertAdjacentHTML('beforeend',dialog());
+  keep.forEach(([k,t])=>{const e=document.querySelector(`[data-keep="${k}"]`);if(e)e.scrollTop=t;});
+  if(keepFocus&&fid&&document.getElementById(fid)){const e=document.getElementById(fid);e.focus();try{e.setSelectionRange(sel,sel)}catch(_){}}
+}
+
+function otherPage(){
+  if(S.page==='search')return `<div class="lib-head"><h1>文献检索</h1></div>
+    <div class="hit"><div class="q">…erscheint als eine „ungeheure Warensammlung“…<span>Das Kapital · Erster Band · S. 49</span></div><button class="btn" data-act="fromSearch">阅读</button></div>`;
+  if(S.page==='settings'){
+    const t={none:['未安装','安装后侧栏出现「译本对照」','<button class="btn primary" data-act="install">安装</button>'],
+      on:['已安装','卸载只移除计算组件与模型，作品、已有对齐和人工校正保留','<button class="btn" data-act="uninstall">卸载</button>'],
+      removed:['已卸载','已有对齐可以只读阅读，生成新对齐需要重新安装','<button class="btn primary" data-act="install">重新安装</button>']}[S.inst];
+    return `<div class="lib-head"><h1>设置</h1></div><div style="padding:0 24px"><div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;padding:20px 0;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);max-width:760px"><div><div style="font-size:15px;font-weight:600">译本对照组件 · ${t[0]}</div><div style="font-size:13px;color:var(--text-tertiary);margin-top:2px">${t[1]}</div></div>${t[2]}</div></div>`;
+  }
+  return `<div class="lib-head"><h1>文献导入</h1></div>`;
+}
+
+function worksPage(){
+  const q=S.q.trim().toLowerCase();
+  const list=works.filter(x=>!q||(x.title+x.author+x.members.map(id=>dn(id)+docs[id].book).join()).toLowerCase().includes(q));
+  const w=W();
+  return `<div class="page">
+    <aside class="works" aria-label="作品">
+      <div class="works-head"><h1>译本对照</h1>${S.inst==='on'?`<button class="btn sm" data-act="newWork">新建作品</button>`:''}</div>
+      <label class="find">${ic.find}<input id="q" placeholder="搜索作品" value="${esc(S.q)}" aria-label="搜索作品"></label>
+      <div class="wlist" data-keep="wlist">${list.map(x=>{
+        const run=Object.values(x.pairs).find(p=>p.s==='run');
+        const langs=[...new Set(x.members.map(id=>LANG[docs[id].lang]))].join('、');
+        return `<button class="w" ${x.id===S.wid?'aria-current="true"':''} data-wid="${x.id}"><span class="t">${esc(x.title)}</span><span class="s">${run?'对齐生成中 '+run.pct+'%':x.members.length+' 个版本 · '+langs}</span></button>`}).join('')||'<div class="note" style="padding:8px 10px">没有匹配的作品</div>'}</div>
+      ${S.hint&&S.inst==='on'?`<div class="hintrow">《批判理论》有两份书名相同的文献，可能是同一作品<div class="acts"><button class="textbtn" data-act="reviewMerge">核对</button><button class="textbtn" style="color:var(--text-tertiary);font-weight:400" data-act="dismissHint">忽略</button></div></div>`:''}
+    </aside>
+    <section class="work" data-keep="work">${w?workView(w):'<div class="work-in"><p class="note">还没有作品。新建作品，或在文献库里勾选几本后加入作品</p></div>'}</section>
+  </div>`;
+}
+
+function workView(w){
+  const ms=w.members;
+  const pick=S.pick.filter(id=>ms.includes(id));
+  const lastOk=w.last&&ms.includes(w.last.L)&&ms.includes(w.last.R)&&!['none','run'].includes(pairOf(w,w.last.L,w.last.R).s);
+  const p=pick.length===2?pairOf(w,pick[0],pick[1]):null;
+  let bar='';
+  if(ms.length<2)bar=`<span class="state">只有一个版本</span><span class="grow"></span>${S.inst==='on'?'<button class="btn" data-act="manage">添加版本</button>':''}`;
+  else if(pick.length<2)bar=`<span class="state">${pick.length?'再勾选一个版本即可对照':'勾选两个版本进行对照'}</span><span class="grow"></span><button class="btn" disabled>对照阅读</button>`;
+  else{
+    const main=lastOk?'btn':'btn primary';
+    let acts='';
+    if(p.s==='none')acts=`<button class="btn primary" data-act="genPick" ${canGen()?'':'disabled'}>生成对齐</button>`;
+    else if(p.s==='run')acts=`<button class="btn quiet" data-act="cancelPick">取消</button>`;
+    else acts=`${p.s==='indirect'&&canGen()?'<button class="btn quiet" data-act="genPick">生成直接对齐</button>':''}${p.s==='stale'&&canGen()?'<button class="btn quiet" data-act="genPick">重新对齐</button>':''}<button class="${main}" data-act="readPick">对照阅读</button>`;
+    bar=`<span class="pair">${esc(dn(pick[0]))} 与 ${esc(dn(pick[1]))}</span>${stateText(w,p)}<span class="grow"></span>${acts}`;
+  }
+  return `<div class="work-in">
+    <div class="wh">
+      <div class="ttl"><h2>${esc(w.title)}</h2><div class="by">${esc(w.author)} · ${ms.length} 个版本</div></div>
+      <button class="btn" data-act="manage">管理版本</button>
+    </div>
+    ${S.inst==='removed'?`<p class="ro-note">对齐组件已卸载，已有对齐可以阅读 · <button class="textbtn" data-go="settings">重新安装</button></p>`:''}
+    ${lastOk?`<div class="resume"><div class="txt">${esc(dn(w.last.L))} 与 ${esc(dn(w.last.R))}<span>上次读到 ${esc(w.last.at)}</span></div><button class="btn primary" data-act="resume">继续阅读</button></div>`:''}
+    <div class="tablewrap"><table class="ledger">
+      <caption>版本<span>勾选两个进行对照</span></caption>
+      <thead><tr><th style="width:28px"><span class="vh" style="position:absolute;clip:rect(0 0 0 0)">选择</span></th><th>版本</th><th class="lang-col">语言</th><th class="opt-col">出版</th><th class="opt-col">页码</th><th></th></tr></thead>
+      <tbody>${ms.map(id=>{const d=docs[id],on=pick.includes(id);return `<tr class="${on?'sel':''}">
+        <td><button class="cb" role="checkbox" aria-checked="${on}" aria-label="选择 ${esc(dn(id))}" data-pick="${id}">${on?ic.check:''}</button></td>
+        <td class="name"><b>${esc(dn(id))}${id===w.base?'<span class="basemark">基准</span>':''}</b><span>${esc(d.book)} · ${d.fmt}</span></td>
+        <td class="muted lang-col">${LANG[d.lang]}</td>
+        <td class="muted opt-col">${esc(d.pub)}</td>
+        <td class="muted opt-col ${d.pages==='未校准'?'warnword':''}">${esc(d.pages)}</td>
+        <td class="act"><button class="textbtn" data-readone="${id}">阅读</button></td>
+      </tr>`}).join('')}</tbody>
+    </table></div>
+  </div>
+  <div class="comparebar" role="region" aria-label="对照">${bar}</div>
+  ${S.sheet?sheet(w):''}`;
+}
+
+/* 管理版本 — the one named maintenance entry */
+function sheet(w){
+  const ms=w.members,edit=S.inst==='on';
+  const pairs=[];for(let i=0;i<ms.length;i++)for(let j=i+1;j<ms.length;j++)pairs.push([ms[i],ms[j]]);
+  const q=S.sheetAdd.trim().toLowerCase();
+  const found=q?Object.entries(docs).filter(([id,d])=>!ms.includes(id)&&(d.book+d.author).toLowerCase().includes(q)):[];
+  return `<div class="sheet-scrim" data-act="closeSheetBg"><aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-t">
+    <div class="sheet-h"><h3 id="sheet-t">管理版本</h3><button class="icon-btn" data-act="closeSheet" aria-label="关闭">${ic.x}</button></div>
+    <div class="sheet-b">
+      <div class="grp"><h4>作品名称</h4><input id="wname" class="field" value="${esc(w.title)}" ${edit?'':'disabled'}></div>
+      <div class="grp"><h4>版本</h4>
+        ${ms.map(id=>`<div class="mrow">
+          <button class="radio" role="radio" aria-checked="${id===w.base}" aria-label="设 ${esc(dn(id))} 为基准" data-base="${id}" ${edit?'':'disabled'}></button>
+          <div><input class="nm" id="vn-${id}" data-vname="${id}" value="${esc(docs[id].name)}" placeholder="${esc(docs[id].book)}" aria-label="版本名" ${edit?'':'disabled'}><div class="sub">${esc(docs[id].book)} · ${LANG[docs[id].lang]} · ${docs[id].fmt}</div></div>
+          ${edit?`<button class="textbtn" style="color:var(--text-tertiary);font-weight:400" data-rm="${id}">移出</button>`:'<span></span>'}
+        </div>`).join('')}
+        <p class="note">圆点标记基准版本，其他版本默认与它直接对齐</p>
+        ${edit?`<label class="find" style="margin-top:10px">${ic.find}<input id="sheetAdd" placeholder="添加版本：搜索文献库" value="${esc(S.sheetAdd)}" aria-label="添加版本"></label>
+        ${q?`<div class="results">${found.map(([id,d])=>{const ow=workOf(id);return `<button class="opt" ${ow?'aria-disabled="true"':''} data-addver="${id}">${esc(d.book)}<small>${ow?'已在「'+esc(ow.title)+'」':LANG[d.lang]+' · '+d.fmt}</small></button>`}).join('')||'<div class="note" style="padding:6px 10px;margin:0">没有匹配的文献</div>'}</div>`:''}`:''}
+      </div>
+      ${pairs.length?`<div class="grp"><h4>对齐</h4>${pairs.map(([a,b])=>{const pp=pairOf(w,a,b);
+        const act=!canGen()?'':pp.s==='none'?`<button class="btn sm" data-gen="${a}|${b}">生成</button>`:pp.s==='indirect'?`<button class="btn sm" data-gen="${a}|${b}">生成直接对齐</button>`:pp.s==='run'?`<button class="textbtn" data-cancel="${a}|${b}">取消</button>`:`<button class="btn sm quiet" data-gen="${a}|${b}">重新对齐</button>`;
+        return `<div class="prow"><div class="pn">${esc(dn(a))} 与 ${esc(dn(b))}</div>${act||'<span></span>'}<div style="grid-column:1/-1">${stateText(w,pp)}</div></div>`}).join('')}
+        ${canGen()?'':'<p class="note">对齐组件已卸载，重新安装后才能生成</p>'}</div>`:''}
+      ${edit?`<div class="grp"><button class="btn danger" data-act="delWork">删除作品</button><p class="note" style="margin-top:2px">只解除归组，文献与人工校正保留</p></div>`:''}
+    </div>
+  </aside></div>`;
+}
+
+function libraryPage(){
+  const ids=['k1','k2','k3','e1','h1','h2','p1','c1','c2','x1'];
+  const n=S.libSel.length;
+  return `<div class="lib-head"><h1>文献库</h1></div>
+  <div class="lib" data-keep="lib">${ids.map(id=>{const d=docs[id],ow=workOf(id),on=S.libSel.includes(id);return `<div class="lrow ${on?'sel':''}">
+    <button class="cb" role="checkbox" aria-checked="${on}" aria-label="选择 ${esc(d.book)}" data-libsel="${id}">${on?ic.check:''}</button>
+    <button class="bt" data-openbook="${id}"><b>${esc(d.book)}</b><span>${esc(d.author)} · ${LANG[d.lang]} · ${d.fmt}</span></button>
+    ${ow&&S.inst!=='none'?`<button class="wtag" data-gowork="${ow.id}">${esc(ow.title)}</button>`:'<span></span>'}
+    <span class="state">${esc(d.pages)}</span></div>`}).join('')}</div>
+  ${n?`<div class="selbar"><span style="font-size:13.5px;font-weight:600">已选 ${n} 本</span>${S.inst==='on'?'<button class="btn primary sm" data-act="assign">加入作品…</button>':''}<span style="flex:1"></span><button class="btn sm quiet" data-act="clearSel">取消选择</button></div>`:''}`;
+}
+
+function dialog(){
+  const D=S.dialog;
+  if(D.type==='assign'){
+    const q=D.q.trim().toLowerCase();
+    const list=Object.entries(docs).filter(([id,d])=>!q||(d.book+d.author).toLowerCase().includes(q)).sort((a,b)=>D.sel.includes(b[0])-D.sel.includes(a[0]));
+    const movers=D.sel.filter(id=>{const ow=workOf(id);return ow&&ow.id!==D.target;});
+    const tgt=works.find(x=>x.id===D.target);
+    const ddOpen=S.menu==='target';
+    const tLabel=D.target==='new'?'新建作品':tgt.title;
+    return `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <div class="dlg-h"><h3 id="dlg-t">${D.fromLib?'加入作品':'新建作品'}</h3></div>
+      <div class="dlg-b">
+        <div style="display:grid;gap:10px;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end">
+          <div><div class="note" style="margin:0 0 4px">加入到</div><div class="dd"><button class="dd-trigger" data-menu="target" aria-haspopup="listbox" aria-expanded="${ddOpen}" style="height:36px"><span class="v">${esc(tLabel)}</span>${ic.chev}</button>
+            ${ddOpen?`<div class="menu" role="listbox"><button class="opt" role="option" aria-selected="${D.target==='new'}" data-target="new"><span class="tick">${D.target==='new'?ic.check:''}</span>新建作品</button><div class="msep"></div>${works.map(x=>`<button class="opt" role="option" aria-selected="${D.target===x.id}" data-target="${x.id}"><span class="tick">${D.target===x.id?ic.check:''}</span>${esc(x.title)}<small>${x.members.length} 个版本</small></button>`).join('')}</div>`:''}</div></div>
+          ${D.target==='new'?`<label><div class="note" style="margin:0 0 4px">作品名称</div><input id="dname" class="field" value="${esc(D.name)}" placeholder="例如：资本论 · 第一卷"></label>`:'<span></span>'}
+        </div>
+        <div class="note" style="margin:16px 0 4px">文献 · 已选 ${D.sel.length} 本${D.target==='new'&&D.sel.length?'，第一本作为基准':''}</div>
+        <label class="find">${ic.find}<input id="dq" placeholder="搜索文献库" value="${esc(D.q)}" aria-label="搜索文献库"></label>
+        <div style="max-height:250px;overflow:auto;margin-top:4px">${list.map(([id,d])=>{const ow=workOf(id),on=D.sel.includes(id);return `<button class="pickrow" data-pickdoc="${id}"><span class="cb" role="checkbox" aria-checked="${on}">${on?ic.check:''}</span><span><div class="ti">${esc(d.book)}</div><div class="su">${esc(d.author)} · ${LANG[d.lang]} · ${d.fmt}</div></span><span class="su">${ow?'在「'+esc(ow.title)+'」':''}</span></button>`}).join('')}</div>
+        ${movers.length?`<p class="note warnword">${movers.length} 本已在其他作品中，确认后会移到这里</p>`:''}
+      </div>
+      <div class="dlg-f"><button class="btn quiet" data-act="closeDlg">取消</button><button class="btn primary" data-act="doAssign" ${D.sel.length&&(D.target!=='new'||D.name.trim())?'':'disabled'}>${D.target==='new'?'新建':'加入'}</button></div>
+    </div></div>`;
+  }
+  if(D.type==='merge'){
+    const a=docs.c1,b=docs.c2,row=(k,l)=>`<tr><th>${l}</th><td class="${a[k]!==b[k]?'diff':''}">${esc(a[k])}</td><td class="${a[k]!==b[k]?'diff':''}">${esc(b[k])}</td></tr>`;
+    return `<div class="scrim"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+      <div class="dlg-h"><h3 id="dlg-t">是同一部作品吗？</h3><p class="note" style="margin:4px 0 0">书名相同只是线索，不一致的项已标出</p></div>
+      <div class="dlg-b"><div class="tablewrap"><table class="cmp"><tbody>${row('book','书名')}${row('author','作者')}${row('fmt','格式')}${row('pub','篇幅')}${row('pages','页码')}</tbody></table></div></div>
+      <div class="dlg-f"><button class="btn quiet" data-act="notSame" style="margin-right:auto">不是同一作品</button><button class="btn" data-act="closeDlg">稍后</button><button class="btn primary" data-act="doMerge">归为一部作品</button></div>
+    </div></div>`;
+  }
+  return '';
+}
+
+/* reader */
+function dd(id,cur,list,labelFor){
+  const open=S.menu===id;
+  return `<div class="dd"><button class="dd-trigger" data-menu="${id}" aria-haspopup="listbox" aria-expanded="${open}"><span class="v">${esc(dn(cur))} <span class="k">${LANG[docs[cur].lang]}</span></span>${ic.chev}</button>
+    ${open?`<div class="menu" role="listbox">${list.map(m=>`<button class="opt" role="option" aria-selected="${m===cur}" data-dd="${id}" data-id="${m}"><span class="tick">${m===cur?ic.check:''}</span>${esc(dn(m))} · ${LANG[docs[m].lang]}${labelFor?`<small>${labelFor(m)}</small>`:''}</button>`).join('')}</div>`:''}</div>`;
+}
+function reader(){
+  const w=W(),has=w.id==='g1',R=S.R,p=R?pairOf(w,S.L,R):null;
+  const from={bilingual:'译本对照',search:'检索结果',library:'文献库'}[S.reading.from];
+  const others=w.members.filter(m=>m!==S.L);
+  const lab=m=>({direct:'直接对齐',indirect:'间接关联',stale:'需重新对齐',run:'生成中',none:'尚未对齐'})[pairOf(w,S.L,m).s];
+  const addMenu=S.menu==='add'?`<div class="menu" role="listbox">${others.map(m=>`<button class="opt" role="option" data-addcmp="${m}"><span class="tick"></span>${esc(dn(m))} · ${LANG[docs[m].lang]}<small>${lab(m)}</small></button>`).join('')}<div class="msep"></div><button class="opt" data-act="toWork"><span class="tick"></span>管理版本…</button></div>`:'';
+  const more=S.menu==='more'?`<div class="menu right" role="menu">
+    <button class="opt" data-act="note" data-msg="按任一栏的页码跳转"><span class="tick"></span>跳到页…</button>
+    <button class="opt" data-act="note" data-msg="在本作品所有版本中查找"><span class="tick"></span>在作品中查找…</button>
+    <div class="msep"></div>
+    ${S.detached?'<button class="opt" data-act="attach"><span class="tick"></span>回到主窗口阅读</button>':'<button class="opt" data-act="detach"><span class="tick"></span>在新窗口打开</button>'}
+    <button class="opt" data-act="toWork"><span class="tick"></span>管理版本…</button></div>`:'';
+  const bar=`<div class="rbar">
+    ${S.detached?'':`<button class="btn quiet sm" data-act="back">${ic.back}<span class="hide-md">${from}</span></button>`}
+    ${dd('ddL',S.L,w.members)}
+    ${R?`<button class="icon-btn" data-act="swap" aria-label="交换左右">${ic.swap}</button>${dd('ddR',R,others,lab)}<button class="icon-btn" data-act="closeCmp" aria-label="关闭对照">${ic.x}</button>`
+       :(others.length&&S.inst!=='none'?`<div class="dd" style="flex:none"><button class="btn sm" data-menu="add" aria-haspopup="listbox" aria-expanded="${S.menu==='add'}">添加对照版本</button>${addMenu}</div>`:'')}
+    <span class="grow"></span>
+    ${R?`<label class="sw"><input id="follow" type="checkbox" ${S.follow?'checked':''}><span class="hide-md">跟随滚动</span></label>`:''}
+    <button class="btn sm" data-act="cite" ${S.hl===null||!has?'disabled':''}>复制引文</button>
+    <div class="dd" style="flex:none"><button class="icon-btn" data-menu="more" aria-haspopup="menu" aria-expanded="${S.menu==='more'}" aria-label="更多">${ic.dots}</button>${more}</div>
+    ${S.detached?`<button class="icon-btn" data-act="closeDetached" aria-label="关闭窗口">${ic.x}</button>`:''}
+  </div>`;
+  let notice='';
+  if(p&&p.s==='indirect')notice=`<div class="notice">这两版没有直接对齐，位置经「${esc(dn(p.via))}」换算，可能错位或漏段<span style="flex:1"></span>${canGen()?'<button class="btn sm" data-act="genRead">生成直接对齐</button>':''}</div>`;
+  if(p&&p.s==='stale')notice=`<div class="notice warn">对齐模型已更换，以下是旧结果<span style="flex:1"></span>${canGen()?'<button class="btn sm" data-act="genRead">重新对齐</button>':''}</div>`;
+  const skel=n=>`<div class="skel">${Array.from({length:n},(_,i)=>`<i style="width:${[94,88,97,62][i%4]}%"></i>`).join('')}</div>`;
+  const text=(id,i)=>{const r=rows[i];const prev=rows[i-1];const pg=!prev||prev[id][0]!==r[id][0]?`<div class="pg">${pageLabel(id,r[id])}</div>`:'';return pg};
+  let body;
+  if(!R){
+    body=`<div class="solo">${has?rows.map((r,i)=>`${text(S.L,i)}<p class="para ${S.hl===i?'hl':''}" data-hl="${i}">${esc(r[S.L][1])}</p>`).join(''):skel(16)}</div>`;
+  }else if(p.s==='none'||p.s==='run'){
+    body=`<div class="pane-labels"><span>${esc(dn(S.L))} · ${LANG[docs[S.L].lang]}</span><span>${esc(dn(R))} · ${LANG[docs[R].lang]}</span></div>
+      <div class="duo"><div>${has?rows.map((r,i)=>`${text(S.L,i)}<p class="para" style="cursor:default">${esc(r[S.L][1])}</p>`).join(''):skel(16)}</div>
+      <div class="pending">${p.s==='none'?`<h4>这两版尚未对齐</h4><p>${canGen()?'在本机生成，文本不会上传。生成时左栏照常阅读，完成后译文出现在这里':'对齐组件已卸载，重新安装后才能生成'}</p>${canGen()?'<button class="btn primary" data-act="genRead">生成对齐</button>':'<button class="btn" data-go="settings">去安装</button>'}`
+        :`<h4>正在生成对齐</h4><p><span class="meter" style="margin-left:0;width:160px"><i style="width:${p.pct}%"></i></span>${p.pct}%<br>关闭阅读器也会在后台继续</p>`}</div></div>`;
+  }else{
+    body=`<div class="pane-labels"><span>${esc(dn(S.L))} · ${LANG[docs[S.L].lang]}</span><span>${esc(dn(R))} · ${LANG[docs[R].lang]}</span></div>
+      <div class="duo ${p.s==='indirect'?'indirect':''}">${has?rows.map((r,i)=>{
+        const flag=r.low&&p.s==='direct'?`<button class="flag ${r.later?'later':''}" data-act="check" data-i="${i}" aria-label="检查这一段的对应" title="${r.later?'已暂不处理':'对应可能不准'}">!</button>`:'';
+        return `<div>${text(S.L,i)}<p class="para ${S.hl===i?'hl':''}" data-hl="${i}">${esc(r[S.L][1])}</p></div><div>${text(R,i)}<p class="para ${S.hl===i?'hl':''}" data-hl="${i}">${esc(r[R][1])}${flag}</p></div>`}).join(''):`<div>${skel(16)}</div><div>${skel(16)}</div>`}</div>`;
+  }
+  return `<div class="reader">${bar}${notice}<div class="rbody" data-keep="rbody">${body}</div></div>`;
+}
+
+/* ── behaviour ── */
+let tT;
+function toast(m,act){document.querySelector('.toast')?.remove();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.append(m);if(act){const b=document.createElement('button');b.textContent=act.label;b.onclick=()=>{t.remove();act.fn();};t.appendChild(b);}document.body.appendChild(t);clearTimeout(tT);tT=setTimeout(()=>t.remove(),act?5000:2400);}
+const closePop=()=>document.querySelector('.pop')?.remove();
+let timer=null;
+function gen(w,a,b){
+  if(!canGen())return;
+  w.pairs[pk(a,b)]={s:'run',pct:6};
+  if(timer)return;
+  timer=setInterval(()=>{let any=false;
+    works.forEach(x=>Object.keys(x.pairs).forEach(k=>{const p=x.pairs[k];if(p.s!=='run')return;any=true;p.pct=Math.min(100,p.pct+11);if(p.pct>=100){x.pairs[k]={s:'direct',m:89+Math.floor(Math.random()*8),chk:Math.floor(Math.random()*4)};toast('「'+x.title+'」对齐已生成');}}));
+    const busy=S.menu||S.dialog||document.querySelector('.pop')||(document.activeElement&&document.activeElement.tagName==='INPUT');
+    if(!busy)render();
+    if(!any){clearInterval(timer);timer=null;}
+  },700);
+}
+function openReader(from,L,R){S.L=L;S.R=R;S.reading={from};S.hl=null;S.menu=null;S.sheet=false;if(!S.detached){S.sideBefore=S.side;S.side='rail';}render();}
+function closeReader(){S.reading=null;S.detached=false;S.menu=null;S.side=S.sideBefore;render();}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');
+  if(!e.target.closest('.pop'))closePop();
+  if(e.target.classList.contains('scrim')){S.dialog=null;S.menu=null;render();return;}
+  if(e.target.classList.contains('sheet-scrim')){S.sheet=false;render();return;}
+  if(S.menu&&!(t&&(t.dataset.menu||t.closest('.menu')))){S.menu=null;if(!t){render();return;}}
+  if(!t)return;
+  const d=t.dataset,w=W();
+  if(d.inst){S.inst=d.inst;if(d.inst==='on')S.justInstalled=true;if(d.inst==='none'){S.reading=null;S.detached=false;S.sheet=false;S.side=S.sideBefore;if(S.page==='bilingual')S.page='settings';}render();return;}
+  if(d.go){if(S.reading&&!S.detached){S.reading=null;S.side=S.sideBefore;}S.page=d.go;S.menu=null;S.sheet=false;render();return;}
+  if(d.menu){S.menu=S.menu===d.menu?null:d.menu;render();return;}
+  if(d.wid){S.wid=d.wid;const x=W();S.pick=x.last?[x.last.L,x.last.R]:x.members.slice(0,2);render();return;}
+  if(d.pick){const i=S.pick.indexOf(d.pick);if(i>=0)S.pick.splice(i,1);else{S.pick.push(d.pick);if(S.pick.length>2)S.pick.shift();}render();return;}
+  if(d.readone){openReader('bilingual',d.readone,null);return;}
+  if(d.hl!==undefined){S.hl=S.hl===+d.hl?null:+d.hl;render();return;}
+  if(d.dd){S.menu=null;if(d.dd==='ddL'){S.L=d.id;if(S.R===S.L)S.R=null;}else S.R=d.id;S.hl=null;render();return;}
+  if(d.addcmp){S.menu=null;S.R=d.addcmp;S.hl=null;render();return;}
+  if(d.base){w.base=d.base;render();return;}
+  if(d.rm){const id=d.rm;w.members=w.members.filter(x=>x!==id);Object.keys(w.pairs).forEach(k=>{if(k.split('|').includes(id))delete w.pairs[k];});if(w.base===id)w.base=w.members[0];S.pick=S.pick.filter(x=>x!==id);render();toast('已移出作品，文献仍在文献库');return;}
+  if(d.addver){w.members.push(d.addver);S.sheetAdd='';render();toast('已添加版本');return;}
+  if(d.gen){const[a,b]=d.gen.split('|');gen(w,a,b);render();return;}
+  if(d.cancel){delete w.pairs[d.cancel];render();return;}
+  if(d.libsel){const i=S.libSel.indexOf(d.libsel);i<0?S.libSel.push(d.libsel):S.libSel.splice(i,1);render();return;}
+  if(d.gowork){S.page='bilingual';S.wid=d.gowork;render();return;}
+  if(d.openbook){const ow=workOf(d.openbook);if(ow){S.wid=ow.id;openReader('library',d.openbook,null);}else toast('打开结构化阅读');return;}
+  if(d.target){S.dialog.target=d.target;S.menu=null;render();return;}
+  if(d.pickdoc){const D=S.dialog,i=D.sel.indexOf(d.pickdoc);if(i<0){D.sel.push(d.pickdoc);if(!D.name)D.name=docs[d.pickdoc].book.replace(/[（(].*$/,'').trim();}else D.sel.splice(i,1);render();return;}
+  switch(d.act){
+    case 'toggleSide':S.side=S.side==='rail'?'full':'rail';render();break;
+    case 'install':S.inst='on';S.justInstalled=true;render();toast('已安装，侧栏出现「译本对照」');break;
+    case 'uninstall':S.inst='removed';render();toast('已卸载组件，作品与已有对齐保留为只读');break;
+    case 'manage':S.sheet=true;S.sheetAdd='';render();break;
+    case 'closeSheet':S.sheet=false;render();break;
+    case 'delWork':{S.sheet=false;const gone=w;works=works.filter(x=>x!==gone);S.wid=works[0]?.id;render();toast('作品已删除，文献保留',{label:'撤销',fn:()=>{works.unshift(gone);S.wid=gone.id;render();}});break;}
+    case 'genPick':gen(w,S.pick[0],S.pick[1]);render();break;
+    case 'cancelPick':delete w.pairs[pk(S.pick[0],S.pick[1])];render();break;
+    case 'readPick':openReader('bilingual',S.pick[0],S.pick[1]);break;
+    case 'resume':openReader('bilingual',w.last.L,w.last.R);break;
+    case 'fromSearch':S.wid='g1';openReader('search','k2',null);S.hl=0;render();break;
+    case 'back':closeReader();break;
+    case 'swap':[S.L,S.R]=[S.R,S.L];S.hl=null;render();break;
+    case 'closeCmp':S.R=null;S.hl=null;render();break;
+    case 'genRead':gen(w,S.L,S.R);render();break;
+    case 'detach':S.menu=null;S.detached=true;S.side=S.sideBefore;S.page=S.reading.from;render();break;
+    case 'attach':S.menu=null;S.detached=false;S.sideBefore=S.side;S.side='rail';render();break;
+    case 'closeDetached':S.detached=false;S.reading=null;render();break;
+    case 'toWork':S.menu=null;S.reading=null;S.detached=false;S.side=S.sideBefore;S.page='bilingual';S.sheet=true;render();break;
+    case 'note':S.menu=null;render();toast(d.msg);break;
+    case 'cite':{const r=rows[S.hl];toast(S.R?`已复制：${docs[S.L].book}，${pageLabel(S.L,r[S.L])}；${docs[S.R].book}（${dn(S.R)}），${pageLabel(S.R,r[S.R])}`:`已复制：${docs[S.L].book}，${pageLabel(S.L,r[S.L])}`);break;}
+    case 'newWork':S.dialog={type:'assign',q:'',sel:[],name:'',target:'new',fromLib:false};render();$('#dname')?.focus();break;
+    case 'assign':S.dialog={type:'assign',q:'',sel:[...S.libSel],name:docs[S.libSel[0]].book.replace(/[（(].*$/,'').trim(),target:'new',fromLib:true};render();break;
+    case 'clearSel':S.libSel=[];render();break;
+    case 'closeDlg':S.dialog=null;S.menu=null;render();break;
+    case 'doAssign':{const D=S.dialog;
+      D.sel.forEach(id=>{const ow=workOf(id);if(ow&&ow.id!==D.target){ow.members=ow.members.filter(m=>m!==id);if(ow.base===id)ow.base=ow.members[0];}});
+      let x;
+      if(D.target==='new'){x={id:'g'+Date.now(),title:D.name.trim(),author:docs[D.sel[0]].author,base:D.sel[0],members:[...D.sel],last:null,pairs:{}};works.unshift(x);}
+      else{x=works.find(v=>v.id===D.target);D.sel.forEach(id=>{if(!x.members.includes(id))x.members.push(id);});}
+      works=works.filter(v=>v.members.length);S.dialog=null;S.menu=null;
+      if(D.fromLib){S.libSel=[];render();toast(`已加入「${x.title}」`,{label:'前往译本对照',fn:()=>{S.page='bilingual';S.wid=x.id;S.pick=x.members.slice(0,2);render();}});}
+      else{S.wid=x.id;S.pick=x.members.slice(0,2);render();}
+      break;}
+    case 'reviewMerge':S.dialog={type:'merge'};render();break;
+    case 'doMerge':{const x={id:'g'+Date.now(),title:'批判理论',author:'霍克海默',base:'c1',members:['c1','c2'],last:null,pairs:{}};works.unshift(x);S.dialog=null;S.hint=false;S.wid=x.id;S.pick=['c1','c2'];render();break;}
+    case 'notSame':S.dialog=null;S.hint=false;render();toast('已记住，不再提示');break;
+    case 'dismissHint':S.hint=false;render();break;
+    case 'check':{
+      e.stopPropagation();const i=+d.i,rect=t.getBoundingClientRect(),R=S.R;
+      const cands=[i-1,i,i+1,i+2].filter(j=>rows[j]);const sel=new Set([i]);
+      const pop=document.createElement('div');pop.className='pop';pop.setAttribute('role','dialog');pop.setAttribute('aria-label','检查对应');
+      const draw=()=>{pop.innerHTML=`<h4>¶${i+1} 的对应可能不准</h4><p>勾选这段原文对应的全部译文段落</p>
+        ${cands.map(j=>`<button class="pickrow" data-c="${j}"><span class="cb" role="checkbox" aria-checked="${sel.has(j)}">${sel.has(j)?ic.check:''}</span><span class="ti">${esc(rows[j][R][1])}</span><span class="su">${pageLabel(R,rows[j][R])}</span></button>`).join('')}
+        <div class="acts"><button class="btn primary sm" data-p="save" ${sel.size?'':'disabled'}>保存校正</button><button class="btn quiet sm" data-p="none">译本无对应</button><span style="flex:1"></span><button class="btn quiet sm" data-p="later">暂不处理</button></div>`;};
+      draw();
+      pop.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b)return;ev.stopPropagation();
+        if(b.dataset.c!==undefined){const j=+b.dataset.c;sel.has(j)?sel.delete(j):sel.add(j);draw();return;}
+        pop.remove();const a=b.dataset.p;
+        if(a==='later'){rows[i].later=true;render();}
+        else{rows[i].low=false;render();toast(a==='none'?'已记录：译本无对应':'已保存校正，对应 '+sel.size+' 段译文');}});
+      document.body.appendChild(pop);
+      pop.style.left=Math.max(16,Math.min(rect.right-380,innerWidth-396))+'px';pop.style.top=Math.max(16,Math.min(rect.bottom+8,innerHeight-pop.offsetHeight-16))+'px';break;}
+  }
+});
+document.addEventListener('input',e=>{
+  const id=e.target.id;
+  if(id==='q'){S.q=e.target.value;render(true);}
+  if(id==='sheetAdd'){S.sheetAdd=e.target.value;render(true);}
+  if(id==='dq'){S.dialog.q=e.target.value;render(true);}
+  if(id==='dname'){S.dialog.name=e.target.value;const b=document.querySelector('[data-act="doAssign"]');if(b)b.disabled=!(S.dialog.sel.length&&e.target.value.trim());}
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='follow')S.follow=e.target.checked;
+  if(e.target.id==='wname'){const w=W();w.title=e.target.value.trim()||w.title;render();}
+  if(e.target.dataset.vname){docs[e.target.dataset.vname].name=e.target.value.trim();render();}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(document.querySelector('.pop'))closePop();else if(S.menu)S.menu=null;else if(S.dialog)S.dialog=null;else if(S.sheet)S.sheet=false;render();}
+  if(e.key==='Enter'&&e.target.classList&&e.target.classList.contains('nm'))e.target.blur();
+});
+render();
+</script>

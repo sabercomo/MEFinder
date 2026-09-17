@@ -13,6 +13,17 @@
     alignmentLocateEndpoint: '/api/text-alignments/locate',
     alignmentStartEndpoint: '/api/text-alignments/start',
     alignmentStatusEndpoint: '/api/text-alignments/status',
+    alignmentCancelEndpoint: '/api/text-alignments/cancel',
+    alignmentModelsEndpoint: '/api/text-alignment/models',
+    preferencesEndpoint: '/api/preferences',
+    groupsEndpoint: '/api/document-groups',
+    overviewEndpoint: '/api/translation-works/overview',
+    currentJobEndpoint: '/api/text-alignments/current',
+    linksEndpoint: '/api/text-alignments/links',
+    reviewCandidatesEndpoint: '/api/text-alignments/review-candidates',
+    correctionSaveEndpoint: '/api/text-alignments/corrections/save',
+    correctionDeferEndpoint: '/api/text-alignments/corrections/defer',
+    readingPositionEndpoint: '/api/translation-works/reading-position',
     batchSize: 20,
     radiusBatches: 1,
     estimatedItemHeight: 360
@@ -25,13 +36,31 @@
     alignmentLocateEndpoint: DEFAULTS.alignmentLocateEndpoint,
     alignmentStartEndpoint: DEFAULTS.alignmentStartEndpoint,
     alignmentStatusEndpoint: DEFAULTS.alignmentStatusEndpoint,
+    alignmentCancelEndpoint: DEFAULTS.alignmentCancelEndpoint,
+    alignmentModelsEndpoint: DEFAULTS.alignmentModelsEndpoint,
+    preferencesEndpoint: DEFAULTS.preferencesEndpoint,
+    groupsEndpoint: DEFAULTS.groupsEndpoint,
+    overviewEndpoint: DEFAULTS.overviewEndpoint,
+    currentJobEndpoint: DEFAULTS.currentJobEndpoint,
+    linksEndpoint: DEFAULTS.linksEndpoint,
+    reviewCandidatesEndpoint: DEFAULTS.reviewCandidatesEndpoint,
+    correctionSaveEndpoint: DEFAULTS.correctionSaveEndpoint,
+    correctionDeferEndpoint: DEFAULTS.correctionDeferEndpoint,
+    readingPositionEndpoint: DEFAULTS.readingPositionEndpoint,
     batchSize: DEFAULTS.batchSize,
     radiusBatches: DEFAULTS.radiusBatches,
     estimatedItemHeight: DEFAULTS.estimatedItemHeight,
     fetch: null,
     notify: null,
     openExternal: null,
-    onClose: null
+    onClose: null,
+    // 主窗口宿主提供的能力；独立阅读窗口里没有这些回调，对应入口随之隐藏。
+    onOpenChange: null,
+    onManageWork: null,
+    onInstallComponent: null,
+    onFindInWork: null,
+    openInNewWindow: null,
+    canOpenInNewWindow: null
   };
 
   var state = {
@@ -73,7 +102,22 @@
     alignmentGroupId: '',
     alignmentLoading: false,
     alignmentRequestSerial: 0,
-    directAlignmentPending: false,
+    defaultComparisonTarget: '',
+    returnLabel: '',
+    work: {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}},
+    workRequestSerial: 0,
+    availability: 'unknown',
+    pendingCompareWith: '',
+    generation: null,
+    pollingJobId: '',
+    openMenu: '',
+    links: null,
+    linkRequestSerial: 0,
+    linkedRanges: new Map(),
+    selectedLinkKey: '',
+    review: null,
+    flagLayoutTimer: null,
+    positionTimer: null,
     comparison: {
       open: false,
       targetSourceId: '',
@@ -86,6 +130,8 @@
       lastSourceRange: '',
       items: new Map(),
       highlights: new Map(),
+      indexHighlights: new Map(),
+      lowConfidence: false,
       currentIndex: 0,
       previousStart: null,
       nextStart: null,
@@ -231,7 +277,8 @@
   function setAlert(message, kind) {
     ensureDom();
     var alert = state.elements.alert;
-    alert.textContent = message || '';
+    // 后端错误句末常带句号；界面文案句末不加句号（DESIGN.md §5）。
+    alert.textContent = String(message || '').replace(/。$/, '');
     alert.hidden = !message;
     alert.dataset.kind = kind || 'info';
   }
@@ -245,111 +292,185 @@
     return button;
   }
 
+  function createIcon(pathData, size, strokeWidth) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var icon = document.createElementNS(ns, 'svg');
+    icon.setAttribute('viewBox', '0 0 20 20');
+    icon.setAttribute('width', String(size || 16));
+    icon.setAttribute('height', String(size || 16));
+    icon.setAttribute('fill', 'none');
+    icon.setAttribute('stroke', 'currentColor');
+    icon.setAttribute('stroke-width', String(strokeWidth || 1.8));
+    icon.setAttribute('stroke-linecap', 'round');
+    icon.setAttribute('stroke-linejoin', 'round');
+    icon.setAttribute('aria-hidden', 'true');
+    String(pathData).split('|').forEach(function (d) {
+      var path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      icon.appendChild(path);
+    });
+    return icon;
+  }
+
+  var ICON_BACK = 'M12.5 4.5 7 10l5.5 5.5';
+  var ICON_CHEVRON = 'm6 8 4 4 4-4';
+  var ICON_SWAP = 'M6 6h10l-3-3|M14 14H4l3 3';
+  var ICON_CLOSE = 'M5.5 5.5l9 9|M14.5 5.5l-9 9';
+  var ICON_MORE = 'M4.5 10h.01|M10 10h.01|M15.5 10h.01';
+
+  function createIconButton(label, action, pathData) {
+    var button = createButton('', 'mef-reader-icon-btn', action);
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.appendChild(createIcon(pathData, 16));
+    return button;
+  }
+
+  // 自绘下拉：触发器 aria-haspopup=listbox，菜单 role=listbox/option；
+  // 键盘由 handleMenuKeydown 统一处理（上下键、Home/End、Enter/Space、Escape）。
+  function createDropdown(key, triggerClass, menuRole) {
+    var wrap = document.createElement('div');
+    wrap.className = 'mef-reader-dd';
+    wrap.dataset.readerMenu = key;
+    var trigger = createButton('', 'mef-reader-dd-trigger ' + (triggerClass || ''), 'toggle-menu');
+    trigger.dataset.readerMenuKey = key;
+    trigger.setAttribute('aria-haspopup', menuRole || 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    var value = document.createElement('span');
+    value.className = 'mef-reader-dd-value';
+    trigger.appendChild(value);
+    var menu = document.createElement('div');
+    menu.className = 'mef-reader-menu';
+    menu.setAttribute('role', menuRole || 'listbox');
+    menu.id = 'mef-reader-menu-' + key;
+    menu.hidden = true;
+    trigger.setAttribute('aria-controls', menu.id);
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+    return {wrap: wrap, trigger: trigger, value: value, menu: menu};
+  }
+
   function ensureDom() {
     if (state.elements && state.elements.root.isConnected) return state.elements;
 
+    var isReaderWindow = document.documentElement.dataset.readerWindow === 'true';
     var root = document.createElement('div');
     root.className = 'mef-structured-reader';
     root.id = 'mef-structured-reader';
     root.hidden = true;
     root.setAttribute('aria-hidden', 'true');
 
-    var backdrop = document.createElement('button');
-    backdrop.type = 'button';
-    backdrop.className = 'mef-reader-backdrop';
-    backdrop.dataset.readerAction = 'close';
-    backdrop.setAttribute('aria-label', '关闭结构化阅读器');
-
     var panel = document.createElement('section');
     panel.className = 'mef-reader-panel';
-    panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-modal', document.documentElement.dataset.readerWindow === 'true' ? 'false' : 'true');
     panel.setAttribute('aria-labelledby', 'mef-reader-title');
 
     var header = document.createElement('header');
     header.className = 'mef-reader-header';
 
-    // ── 第一行：正在阅读 · 书名 · 作者 ·········· ⋯ ×
-    var headRow = document.createElement('div');
-    headRow.className = 'mef-reader-headrow';
+    // ── 工具栏：返回 · 左栏版本 ·（添加对照版本 | 交换 · 右栏版本 · 关闭对照）… 跟随滚动 · 复制引文 · ⋯
+    var toolbar = document.createElement('div');
+    toolbar.className = 'mef-reader-toolbar';
+    toolbar.setAttribute('role', 'toolbar');
+    toolbar.setAttribute('aria-label', '阅读工具');
 
-    var heading = document.createElement('div');
-    heading.className = 'mef-reader-heading';
-    var eyebrow = document.createElement('span');
-    eyebrow.className = 'mef-reader-eyebrow';
-    eyebrow.textContent = '正在阅读';
-    var title = document.createElement('h2');
-    title.id = 'mef-reader-title';
-    title.className = 'mef-reader-title';
-    title.textContent = '文献阅读';
-    var subtitle = document.createElement('div');
-    subtitle.className = 'mef-reader-subtitle';
-    subtitle.hidden = true;
-    heading.appendChild(eyebrow);
-    heading.appendChild(title);
-    heading.appendChild(subtitle);
+    var back = createButton('', 'mef-reader-back', 'close');
+    back.appendChild(createIcon(ICON_BACK, 16));
+    var backLabel = document.createElement('span');
+    backLabel.className = 'mef-reader-back-label';
+    backLabel.textContent = '返回';
+    back.appendChild(backLabel);
+    back.hidden = isReaderWindow;
 
-    var close = createButton('', 'mef-reader-close', 'close');
-    close.setAttribute('aria-label', '关闭结构化阅读器');
-    var closeGlyph = document.createElement('span');
-    closeGlyph.setAttribute('aria-hidden', 'true');
-    closeGlyph.textContent = '✕';
-    close.appendChild(closeGlyph);
+    var leftPicker = createDropdown('left', 'is-version');
+    leftPicker.trigger.setAttribute('aria-label', '左栏版本');
+    leftPicker.trigger.appendChild(createIcon(ICON_CHEVRON, 14));
 
-    headRow.appendChild(heading);
-    headRow.appendChild(close);
+    var addPicker = createDropdown('add', 'is-add');
+    addPicker.value.textContent = '添加对照版本';
+    addPicker.wrap.hidden = true;
 
-    // ── 第二行：[阅读 | 双栏对照] ·········· 页眉页脚开关  引用页
-    var toolRow = document.createElement('div');
-    toolRow.className = 'mef-reader-toolrow';
+    var swap = createIconButton('交换左右栏', 'swap-comparison', ICON_SWAP);
+    swap.hidden = true;
+    var rightPicker = createDropdown('right', 'is-version');
+    rightPicker.trigger.setAttribute('aria-label', '右栏版本');
+    rightPicker.trigger.appendChild(createIcon(ICON_CHEVRON, 14));
+    rightPicker.wrap.hidden = true;
+    var closeCompare = createIconButton('关闭对照', 'close-comparison', ICON_CLOSE);
+    closeCompare.hidden = true;
 
-    // 模式轴：阅读 / 双栏对照（分段控件）。无对齐版本时整体隐藏。
-    var modeSeg = document.createElement('div');
-    modeSeg.className = 'mef-reader-mode-seg';
-    modeSeg.hidden = true;
+    var spacer = document.createElement('span');
+    spacer.className = 'mef-reader-toolbar-spacer';
 
-    var current = createButton(
-      '正在载入…',
-      'mef-reader-current',
-      'toggle-citation'
-    );
-    current.className = 'mef-reader-current';
-    current.setAttribute('aria-live', 'polite');
-    current.setAttribute('aria-haspopup', 'true');
-    current.setAttribute('aria-expanded', 'false');
-    current.textContent = '正在载入…';
+    // 跟随滚动：可立即切换的二元状态 → 开关。
+    var comparisonFollow = createButton('', 'mef-reader-follow-switch is-active', 'toggle-comparison-follow');
+    comparisonFollow.setAttribute('role', 'switch');
+    comparisonFollow.setAttribute('aria-checked', 'true');
+    var comparisonFollowTrack = document.createElement('span');
+    comparisonFollowTrack.className = 'mef-follow-track';
+    comparisonFollowTrack.setAttribute('aria-hidden', 'true');
+    var comparisonFollowLabel = document.createElement('span');
+    comparisonFollowLabel.className = 'mef-follow-label';
+    comparisonFollowLabel.textContent = '跟随滚动';
+    comparisonFollow.appendChild(comparisonFollowTrack);
+    comparisonFollow.appendChild(comparisonFollowLabel);
+    comparisonFollow.setAttribute('aria-label', '跟随滚动');
+    comparisonFollow.title = '开启后右栏随左栏滚动到对应段落';
+    comparisonFollow.hidden = true;
 
-    // 页眉页脚：开／关状态 → 开关（复用对照栏那套开关样式）。
-    var toggleDecorations = createButton(
-      '',
-      'mef-reader-follow-switch mef-reader-decoration-switch',
-      'toggle-decorations'
-    );
-    toggleDecorations.setAttribute('aria-pressed', 'false');
-    toggleDecorations.setAttribute('aria-label', '显示页眉页脚');
-    toggleDecorations.setAttribute(
-      'title',
-      '页眉、页脚与页码默认隐藏；开启以对照原书'
-    );
-    var decoTrack = document.createElement('span');
-    decoTrack.className = 'mef-follow-track';
-    decoTrack.setAttribute('aria-hidden', 'true');
-    var decoLabel = document.createElement('span');
-    decoLabel.className = 'mef-follow-label';
-    decoLabel.textContent = '页眉页脚';
-    toggleDecorations.appendChild(decoTrack);
-    toggleDecorations.appendChild(decoLabel);
+    var cite = createButton('复制引文', 'mef-reader-tool-btn', 'toggle-citation');
+    cite.setAttribute('aria-haspopup', 'true');
+    cite.setAttribute('aria-expanded', 'false');
 
-    // 右侧控件自成一组、靠右——无论模式轴是否显示，页眉页脚开关与引用页始终贴右。
-    var toolRight = document.createElement('div');
-    toolRight.className = 'mef-reader-toolrow-right';
-    toolRight.appendChild(toggleDecorations);
-    toolRight.appendChild(current);
-    toolRow.appendChild(modeSeg);
-    toolRow.appendChild(toolRight);
+    var morePicker = createDropdown('more', 'is-icon', 'menu');
+    morePicker.trigger.setAttribute('aria-label', '更多');
+    morePicker.trigger.title = '更多';
+    morePicker.trigger.appendChild(createIcon(ICON_MORE, 18, 3));
+    morePicker.menu.classList.add('is-right');
 
-    header.appendChild(headRow);
-    header.appendChild(toolRow);
+    var close = createIconButton('关闭阅读窗口', 'close', ICON_CLOSE);
+    close.classList.add('mef-reader-close');
+    close.hidden = !isReaderWindow;
+
+    toolbar.appendChild(back);
+    toolbar.appendChild(leftPicker.wrap);
+    toolbar.appendChild(addPicker.wrap);
+    toolbar.appendChild(swap);
+    toolbar.appendChild(rightPicker.wrap);
+    toolbar.appendChild(closeCompare);
+    toolbar.appendChild(spacer);
+    toolbar.appendChild(comparisonFollow);
+    toolbar.appendChild(cite);
+    toolbar.appendChild(morePicker.wrap);
+    toolbar.appendChild(close);
+    header.appendChild(toolbar);
+
+    // 跳到页：⋯ 菜单打开的小表单，按当前栏的 PDF 页序或段落序号跳转（不按印刷页码猜）。
+    var jumpForm = document.createElement('form');
+    jumpForm.className = 'mef-reader-jump';
+    jumpForm.hidden = true;
+    var jumpLabel = document.createElement('label');
+    jumpLabel.className = 'mef-reader-jump-label';
+    jumpLabel.setAttribute('for', 'mef-reader-jump-input');
+    jumpLabel.textContent = '跳到 PDF 第';
+    var jumpInput = document.createElement('input');
+    jumpInput.id = 'mef-reader-jump-input';
+    jumpInput.className = 'mef-reader-jump-input';
+    jumpInput.type = 'number';
+    jumpInput.min = '1';
+    jumpInput.step = '1';
+    jumpInput.required = true;
+    var jumpUnit = document.createElement('span');
+    jumpUnit.className = 'mef-reader-jump-unit';
+    jumpUnit.textContent = '页';
+    var jumpSubmit = createButton('跳转', 'mef-reader-tool-btn', 'jump-submit');
+    jumpSubmit.type = 'submit';
+    var jumpCancel = createButton('取消', 'mef-reader-tool-btn is-quiet', 'jump-cancel');
+    jumpForm.appendChild(jumpLabel);
+    jumpForm.appendChild(jumpInput);
+    jumpForm.appendChild(jumpUnit);
+    jumpForm.appendChild(jumpSubmit);
+    jumpForm.appendChild(jumpCancel);
+    header.appendChild(jumpForm);
 
     var citationBar = document.createElement('div');
     citationBar.className = 'mef-reader-citation-bar';
@@ -390,6 +511,16 @@
     alert.setAttribute('aria-live', 'polite');
     alert.hidden = true;
 
+    // 对照说明条：间接关联 / 需重新对齐 / 粗定位，带就地动作。
+    var comparisonNotice = document.createElement('div');
+    comparisonNotice.className = 'mef-reader-notice';
+    comparisonNotice.hidden = true;
+    var comparisonNoticeText = document.createElement('span');
+    comparisonNoticeText.className = 'mef-reader-notice-text';
+    var comparisonNoticeAction = createButton('', 'mef-reader-tool-btn', 'generate-alignment');
+    comparisonNotice.appendChild(comparisonNoticeText);
+    comparisonNotice.appendChild(comparisonNoticeAction);
+
     var viewport = document.createElement('div');
     viewport.className = 'mef-reader-viewport';
     viewport.tabIndex = 0;
@@ -406,11 +537,26 @@
     sourcePane.className = 'mef-reader-source-pane';
     var sourcePaneHeader = document.createElement('div');
     sourcePaneHeader.className = 'mef-reader-pane-header';
-    sourcePaneHeader.hidden = true;
-    var sourcePaneTitle = document.createElement('strong');
-    sourcePaneTitle.className = 'mef-reader-pane-title';
-    sourcePaneTitle.textContent = '当前版本';
-    sourcePaneHeader.appendChild(sourcePaneTitle);
+    var heading = document.createElement('div');
+    heading.className = 'mef-reader-heading';
+    var eyebrow = document.createElement('span');
+    eyebrow.className = 'mef-reader-eyebrow';
+    eyebrow.textContent = '正在阅读';
+    var title = document.createElement('h2');
+    title.id = 'mef-reader-title';
+    title.className = 'mef-reader-title';
+    title.textContent = '文献阅读';
+    var subtitle = document.createElement('span');
+    subtitle.className = 'mef-reader-subtitle';
+    subtitle.hidden = true;
+    heading.appendChild(eyebrow);
+    heading.appendChild(title);
+    heading.appendChild(subtitle);
+    var current = createButton('正在载入…', 'mef-reader-current', 'toggle-citation');
+    current.setAttribute('aria-live', 'polite');
+    current.title = '当前页码，点击复制此页或当前选区的引文';
+    sourcePaneHeader.appendChild(heading);
+    sourcePaneHeader.appendChild(current);
     sourcePane.appendChild(sourcePaneHeader);
     sourcePane.appendChild(viewport);
 
@@ -420,110 +566,48 @@
     comparisonPane.hidden = true;
     var comparisonHeader = document.createElement('div');
     comparisonHeader.className = 'mef-reader-pane-header';
-    // 对照版本：语言/格式落在这个选择器里（拆胶囊后的去处）。
-    // 多译本时点开是真下拉，列出全部译本（语言·格式·版本名）供切换；单译本则只是纯标签。
-    var comparisonVersionPicker = document.createElement('div');
-    comparisonVersionPicker.className = 'mef-reader-version-picker';
-    var comparisonTitle = createButton('', 'mef-reader-version-select', 'toggle-version-menu');
-    comparisonTitle.setAttribute('aria-haspopup', 'listbox');
-    comparisonTitle.setAttribute('aria-expanded', 'false');
-    comparisonTitle.setAttribute('aria-label', '切换对照版本');
+    var comparisonHeading = document.createElement('div');
+    comparisonHeading.className = 'mef-reader-heading';
     var comparisonTitleText = document.createElement('span');
-    comparisonTitleText.className = 'mef-reader-version-name';
-    comparisonTitleText.textContent = '对齐版本';
-    var comparisonTitleCaret = document.createElement('span');
-    comparisonTitleCaret.className = 'mef-reader-version-caret';
-    comparisonTitleCaret.setAttribute('aria-hidden', 'true');
-    comparisonTitleCaret.textContent = '▾';
-    comparisonTitle.appendChild(comparisonTitleText);
-    comparisonTitle.appendChild(comparisonTitleCaret);
-    var comparisonVersionMenu = document.createElement('div');
-    comparisonVersionMenu.className = 'mef-reader-version-menu';
-    comparisonVersionMenu.setAttribute('role', 'listbox');
-    comparisonVersionMenu.hidden = true;
-    comparisonVersionPicker.appendChild(comparisonTitle);
-    comparisonVersionPicker.appendChild(comparisonVersionMenu);
+    comparisonTitleText.className = 'mef-reader-pane-title';
+    comparisonTitleText.textContent = '对照版本';
+    comparisonHeading.appendChild(comparisonTitleText);
     var comparisonNavigation = document.createElement('div');
     comparisonNavigation.className = 'mef-reader-comparison-navigation';
-    // 自动跟随是一个开／关状态 → 用开关，而不是文字按钮。
-    var comparisonFollow = createButton(
-      '',
-      'mef-reader-follow-switch is-active',
-      'toggle-comparison-follow'
-    );
-    var comparisonFollowTrack = document.createElement('span');
-    comparisonFollowTrack.className = 'mef-follow-track';
-    comparisonFollowTrack.setAttribute('aria-hidden', 'true');
-    var comparisonFollowLabel = document.createElement('span');
-    comparisonFollowLabel.className = 'mef-follow-label';
-    comparisonFollowLabel.textContent = '自动跟随';
-    comparisonFollow.appendChild(comparisonFollowTrack);
-    comparisonFollow.appendChild(comparisonFollowLabel);
-    comparisonFollow.setAttribute('aria-pressed', 'true');
-    comparisonFollow.setAttribute('aria-label', '自动跟随源文滚动');
-    comparisonFollow.setAttribute('title', '开启后对照栏随源文自动滚动到对应段落');
-    // 翻页是独立动作 → 一对 ‹ › 图标按钮。
-    var comparisonPrevious = createButton(
-      '‹',
-      'mef-reader-pane-action mef-reader-pane-icon',
-      'comparison-previous'
-    );
+    var comparisonPrevious = createButton('‹', 'mef-reader-pane-action mef-reader-pane-icon', 'comparison-previous');
     comparisonPrevious.setAttribute('aria-label', '向前翻');
-    comparisonPrevious.setAttribute('title', '向前翻');
-    var comparisonNext = createButton(
-      '›',
-      'mef-reader-pane-action mef-reader-pane-icon',
-      'comparison-next'
-    );
+    comparisonPrevious.title = '向前翻';
+    var comparisonNext = createButton('›', 'mef-reader-pane-action mef-reader-pane-icon', 'comparison-next');
     comparisonNext.setAttribute('aria-label', '向后翻');
-    comparisonNext.setAttribute('title', '向后翻');
-    var comparisonClose = createButton(
-      '收起',
-      'mef-reader-pane-action',
-      'close-comparison'
-    );
-    comparisonNavigation.appendChild(comparisonFollow);
+    comparisonNext.title = '向后翻';
     comparisonNavigation.appendChild(comparisonPrevious);
     comparisonNavigation.appendChild(comparisonNext);
-    comparisonNavigation.appendChild(comparisonClose);
-    comparisonHeader.appendChild(comparisonVersionPicker);
+    comparisonHeader.appendChild(comparisonHeading);
     comparisonHeader.appendChild(comparisonNavigation);
     var comparisonViewport = document.createElement('div');
     comparisonViewport.className = 'mef-reader-viewport mef-reader-comparison-viewport';
     comparisonViewport.tabIndex = 0;
-    comparisonViewport.setAttribute('aria-label', '对齐版本正文');
+    comparisonViewport.setAttribute('aria-label', '对照版本正文');
     var comparisonContent = document.createElement('div');
     comparisonContent.className = 'mef-reader-content';
     comparisonViewport.appendChild(comparisonContent);
-    // 低置信对齐提示：命中不精确（precise_highlight_available=false）时显式标注 + 校正入口。
-    var comparisonWarn = createButton(
-      '对齐可能不准 · 校正',
-      'mef-reader-align-warn',
-      'report-misalignment'
-    );
-    comparisonWarn.hidden = true;
-    comparisonWarn.setAttribute(
-      'title',
-      '此处对齐为粗定位，可能锚到相邻段落或注释；点此了解如何校正'
-    );
-    // 两跳中转提示：当前对照经第三个版本（基准）中转（via_source_file_id）时，完整度受限，
-    // 提供「生成直接对照」一键在两版本间直接对齐，避免中转丢段。
-    var comparisonRouteNotice = document.createElement('div');
-    comparisonRouteNotice.className = 'mef-reader-route-notice';
-    comparisonRouteNotice.hidden = true;
-    var comparisonRouteText = document.createElement('span');
-    comparisonRouteText.className = 'mef-reader-route-text';
-    var comparisonRouteButton = createButton(
-      '生成直接对照',
-      'mef-reader-route-action',
-      'generate-direct-comparison'
-    );
-    comparisonRouteNotice.appendChild(comparisonRouteText);
-    comparisonRouteNotice.appendChild(comparisonRouteButton);
+
+    // 选中一个尚未对齐的版本时，右栏原位显示生成入口；左栏照常阅读。
+    var pending = document.createElement('div');
+    pending.className = 'mef-reader-pending';
+    pending.hidden = true;
+    var pendingTitle = document.createElement('h3');
+    pendingTitle.className = 'mef-reader-pending-title';
+    var pendingText = document.createElement('p');
+    pendingText.className = 'mef-reader-pending-text';
+    var pendingAction = createButton('生成对齐', 'mef-reader-tool-btn is-primary', 'generate-alignment');
+    pending.appendChild(pendingTitle);
+    pending.appendChild(pendingText);
+    pending.appendChild(pendingAction);
+
     comparisonPane.appendChild(comparisonHeader);
-    comparisonPane.appendChild(comparisonWarn);
-    comparisonPane.appendChild(comparisonRouteNotice);
     comparisonPane.appendChild(comparisonViewport);
+    comparisonPane.appendChild(pending);
 
     readerBody.appendChild(sourcePane);
     readerBody.appendChild(comparisonPane);
@@ -537,50 +621,65 @@
     panel.appendChild(header);
     panel.appendChild(citationBar);
     panel.appendChild(alert);
+    panel.appendChild(comparisonNotice);
     panel.appendChild(readerBody);
     panel.appendChild(loading);
-    root.appendChild(backdrop);
     root.appendChild(panel);
-    document.body.appendChild(root);
+    (isReaderWindow ? document.body : (document.querySelector('.main-area') || document.body)).appendChild(root);
 
     root.addEventListener('click', function (event) {
-      // 用 closest 兜住按钮内部的子元素（开关的标签/轨道、分段按钮的文字）。
+      // 用 closest 兜住按钮内部的子元素（开关的标签/轨道、图标）。
       var trigger = event.target && event.target.closest
         ? event.target.closest('[data-reader-action]')
         : null;
       var action = trigger ? trigger.dataset.readerAction : '';
-      // 点选择器以外任意处，收起版本下拉。
-      if (action !== 'toggle-version-menu'
-          && (!event.target.closest || !event.target.closest('.mef-reader-version-picker'))) {
-        closeVersionMenu();
+      if (action !== 'toggle-menu' && (!event.target.closest || !event.target.closest('.mef-reader-menu'))) {
+        closeMenus();
       }
+      if (!event.target.closest || !event.target.closest('.mef-reader-review')) closeReviewPopover();
       if (action === 'close') closeReader();
+      if (action === 'toggle-menu') toggleMenu(trigger.dataset.readerMenuKey);
+      if (action === 'pick-left') pickLeftVersion(trigger.dataset.readerTarget || '');
+      if (action === 'pick-right' || action === 'add-comparison') {
+        closeMenus();
+        openComparisonWith(trigger.dataset.readerTarget || '');
+      }
+      if (action === 'manage-work') runHost('onManageWork', state.work.groupId);
+      if (action === 'find-in-work') runHost('onFindInWork', state.work.groupId);
+      if (action === 'open-jump') openJumpForm();
+      if (action === 'jump-cancel') closeJumpForm();
+      if (action === 'open-new-window') openInNewWindow();
+      if (action === 'return-main') returnToMainWindow();
+      if (action === 'install-component') runHost('onInstallComponent');
+      if (action === 'swap-comparison') swapComparison();
       if (action === 'toggle-citation') toggleCitationMenu();
       if (action === 'copy-footnote') copyCachedCitation('chinese');
       if (action === 'copy-gbt7714') copyCachedCitation('gb');
       if (action === 'locate-alignment') {
         locateInAlignedVersion(trigger.dataset.readerTarget || '');
       }
-      if (action === 'reader-single') closeComparison();
-      if (action === 'toggle-version-menu') toggleVersionMenu();
-      if (action === 'pick-comparison-target') {
-        closeVersionMenu();
-        locateInAlignedVersion(trigger.dataset.readerTarget || '', sourceCenterRange());
-      }
-      if (action === 'report-misalignment') reportMisalignment();
-      if (action === 'generate-direct-comparison') generateDirectComparison();
-      if (action === 'open-comparison') {
-        locateInAlignedVersion(
-          trigger.dataset.readerTarget || '',
-          sourceCenterRange()
-        );
-      }
+      if (action === 'generate-alignment') startComparisonAlignment(trigger.dataset.readerForce === 'true');
+      if (action === 'cancel-alignment') cancelComparisonAlignment();
       if (action === 'toggle-comparison-follow') toggleComparisonFollow();
       if (action === 'close-comparison') closeComparison();
       if (action === 'comparison-previous') loadComparisonPrevious();
       if (action === 'comparison-next') loadComparisonNext();
       if (action === 'clear-selection') clearCitationRange();
-      if (action === 'toggle-decorations') toggleDecorationVisibility();
+      if (action === 'toggle-decorations') { closeMenus(); toggleDecorationVisibility(); }
+      if (action === 'review-link') openReviewPopover(trigger);
+      if (!action && event.target.closest && event.target.closest('.mef-reader-source-pane .mef-reader-item-text')) {
+        selectLinkAtClick(event);
+      }
+    });
+    root.addEventListener('keydown', handleMenuKeydown);
+    jumpForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      submitJumpForm();
+    });
+    jumpInput.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      submitJumpForm();
     });
     viewport.addEventListener('mousedown', function () {
       state.selectionDragging = true;
@@ -593,16 +692,29 @@
     viewport.addEventListener('scroll', scheduleComparisonFollow, {
       passive: true
     });
+    global.addEventListener('resize', scheduleFlagLayout, {passive: true});
 
     state.elements = {
       root: root,
       panel: panel,
+      header: header,
+      back: back,
+      backLabel: backLabel,
+      leftPicker: leftPicker,
+      addPicker: addPicker,
+      rightPicker: rightPicker,
+      morePicker: morePicker,
+      swap: swap,
+      closeCompare: closeCompare,
+      cite: cite,
+      jumpForm: jumpForm,
+      jumpLabel: jumpLabel,
+      jumpInput: jumpInput,
+      jumpUnit: jumpUnit,
       title: title,
       eyebrow: eyebrow,
       subtitle: subtitle,
       current: current,
-      toggleDecorations: toggleDecorations,
-      modeSeg: modeSeg,
       citationBar: citationBar,
       citationContext: citationContext,
       copyFootnote: copyFootnote,
@@ -610,25 +722,25 @@
       alignmentActions: alignmentActions,
       clearSelection: clearSelection,
       alert: alert,
+      comparisonNotice: comparisonNotice,
+      comparisonNoticeText: comparisonNoticeText,
+      comparisonNoticeAction: comparisonNoticeAction,
       readerBody: readerBody,
       sourcePane: sourcePane,
       sourcePaneHeader: sourcePaneHeader,
-      sourcePaneTitle: sourcePaneTitle,
       viewport: viewport,
       content: content,
       comparisonPane: comparisonPane,
-      comparisonWarn: comparisonWarn,
-      comparisonRouteNotice: comparisonRouteNotice,
-      comparisonRouteText: comparisonRouteText,
-      comparisonRouteButton: comparisonRouteButton,
-      comparisonTitle: comparisonTitle,
       comparisonTitleText: comparisonTitleText,
-      comparisonVersionMenu: comparisonVersionMenu,
       comparisonPrevious: comparisonPrevious,
       comparisonNext: comparisonNext,
       comparisonFollow: comparisonFollow,
       comparisonViewport: comparisonViewport,
       comparisonContent: comparisonContent,
+      pending: pending,
+      pendingTitle: pendingTitle,
+      pendingText: pendingText,
+      pendingAction: pendingAction,
       loading: loading,
       close: close
     };
@@ -683,7 +795,8 @@
     if (!state.elements) return;
     var target = citationTargetRange();
     state.elements.current.disabled = !state.items.has(state.currentIndex);
-    state.elements.current.setAttribute(
+    state.elements.cite.disabled = !state.items.has(state.currentIndex);
+    state.elements.cite.setAttribute(
       'aria-expanded',
       state.citationMenuOpen ? 'true' : 'false'
     );
@@ -697,9 +810,6 @@
     state.elements.alignmentActions.hidden = !state.citationRange ||
       !state.alignmentTargets.length;
     Array.from(state.elements.alignmentActions.querySelectorAll('button')).forEach(
-      function (button) { button.disabled = state.alignmentLoading; }
-    );
-    Array.from(state.elements.modeSeg.querySelectorAll('button')).forEach(
       function (button) { button.disabled = state.alignmentLoading; }
     );
     if (!target) {
@@ -745,79 +855,26 @@
     de: '德语',
     fr: '法语',
     ja: '日语',
-    ko: '韩语'
+    ko: '韩语',
+    ru: '俄语',
+    it: '意大利语',
+    es: '西班牙语',
+    la: '拉丁语'
   };
 
-  // 紧凑版本标签：语言 · 格式（拆胶囊后落在选择器/栏头里）。
-  function compactVersionLabel(languageCode, format) {
-    var language = READER_LANGUAGE_LABELS[String(languageCode || '')] || '未识别语言';
-    var fmt = String(format || '').toUpperCase();
-    return language + (fmt ? ' · ' + fmt : '');
-  }
-
-  function shortAlignLabel(target) {
-    return compactVersionLabel(target.language_code, target.source_format);
-  }
-
-  function sourceVersionLabel() {
-    var s = state.source || {};
-    if (!s.language_code) return cleanReaderTitle(state.title) || '当前版本';
-    return compactVersionLabel(s.language_code, s.source_format || s.format);
-  }
-
-  // 低置信对齐的「校正」入口：先说明成因，并把当前源栏可见范围重新定位一次（多为最有效的自助校正）。
-  function reportMisalignment() {
-    notify('这处为粗定位，可能锚到相邻段落或注释。已按当前可见段落重新定位；如仍不准，可用页脚「在…中定位」精确校正');
-    if (state.comparison.open && state.comparison.targetSourceId) {
-      locateInAlignedVersion(state.comparison.targetSourceId, sourceCenterRange());
-    }
-  }
-
-  // 多译本时，右栏版本选择器点开是真下拉：列出全部对齐目标供切换。
-  function renderVersionMenu() {
-    if (!state.elements) return;
-    var menu = state.elements.comparisonVersionMenu;
-    menu.replaceChildren();
-    var currentId = state.comparison.targetSourceId;
-    (state.alignmentTargets || []).forEach(function (t) {
-      var tid = String(t.source_file_id || '');
-      var isCur = tid === currentId;
-      var item = createButton(
-        alignmentTargetDisplayLabel(t),
-        'mef-reader-version-option' + (isCur ? ' is-current' : ''),
-        'pick-comparison-target'
-      );
-      item.dataset.readerTarget = tid;
-      item.setAttribute('role', 'option');
-      item.setAttribute('aria-selected', isCur ? 'true' : 'false');
-      menu.appendChild(item);
-    });
-  }
-
-  function toggleVersionMenu() {
-    if (!state.elements) return;
-    if ((state.alignmentTargets || []).length < 2) return; // 单译本不弹菜单
-    var menu = state.elements.comparisonVersionMenu;
-    var willOpen = menu.hidden;
-    if (willOpen) renderVersionMenu();
-    menu.hidden = !willOpen;
-    state.elements.comparisonTitle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-  }
-
-  function closeVersionMenu() {
-    if (!state.elements || state.elements.comparisonVersionMenu.hidden) return;
-    state.elements.comparisonVersionMenu.hidden = true;
-    state.elements.comparisonTitle.setAttribute('aria-expanded', 'false');
+  function languageLabel(code) {
+    var value = String(code || '');
+    return READER_LANGUAGE_LABELS[value] || READER_LANGUAGE_LABELS[value.split('-')[0]] || '';
   }
 
   function alignmentTargetDisplayLabel(target) {
-    var language = READER_LANGUAGE_LABELS[String(target.language_code || '')] || '未识别语言';
+    var language = languageLabel(target.language_code) || '未识别语言';
     var format = String(target.source_format || '').toUpperCase();
     var displayName = String(target.display_name || '另一版本');
     return language + (format ? ' · ' + format : '') + ' · ' + displayName;
   }
 
-  // 记住每本书上次选择的对照目标；重新打开时只在跨语言候选中恢复记忆。
+  // 记住每本书上次选择的对照目标；「添加对照版本」菜单把它排在最前。
   // 按源文献 id 存入 localStorage；不可用或读写失败时静默回退，不影响阅读。
   var COMPARISON_TARGET_STORE_PREFIX = 'mef-reader-comparison-target:';
 
@@ -842,8 +899,6 @@
   function renderAlignmentActions() {
     if (!state.elements) return;
     state.elements.alignmentActions.replaceChildren();
-    var seg = state.elements.modeSeg;
-    seg.replaceChildren();
     var targets = state.alignmentTargets;
     targets.forEach(function (target) {
       var button = createButton(
@@ -854,7 +909,8 @@
       button.dataset.readerTarget = String(target.source_file_id || '');
       state.elements.alignmentActions.appendChild(button);
     });
-    // 模式轴：[阅读 | 译本对照]。新开对照先选不同语言；正在阅读时保留手动选择。
+    // 默认对照候选：先选不同语言；正在对照时保留手动选择。
+    state.defaultComparisonTarget = '';
     if (targets.length) {
       var remembered = recallComparisonTarget(state.sourceId);
       var sourceLanguage = state.alignmentSourceLanguage.toLowerCase().split('-')[0];
@@ -870,35 +926,10 @@
       var defaultTarget = state.comparison.open && state.comparison.targetSourceId
         ? state.comparison.targetSourceId
         : (rememberedValid || String(defaultTargets[0].source_file_id || ''));
-      var defaultTargetObj = targets.filter(function (t) {
-        return String(t.source_file_id || '') === defaultTarget;
-      })[0] || targets[0];
-      var readBtn = createButton('阅读', 'mef-reader-mode-btn', 'reader-single');
-      var compBtn = createButton('译本对照', 'mef-reader-mode-btn', 'open-comparison');
-      compBtn.dataset.readerTarget = defaultTarget;
-      // 语言/格式落在提示里（拆开原来「译本对照 · 英语 · EPUB · 英文」那颗胶囊）。
-      compBtn.title = '译本对照 · ' + alignmentTargetDisplayLabel(defaultTargetObj);
-      seg.appendChild(readBtn);
-      seg.appendChild(compBtn);
-      seg.hidden = false;
-      syncModeSegment();
-    } else {
-      seg.hidden = true;
+      state.defaultComparisonTarget = defaultTarget;
     }
     updateCitationControls();
-  }
-
-  // 让模式分段的选中态跟随「是否正在对照」。
-  function syncModeSegment() {
-    if (!state.elements || !state.elements.modeSeg || state.elements.modeSeg.hidden) return;
-    var comparing = !!state.comparison.open;
-    Array.from(state.elements.modeSeg.querySelectorAll('.mef-reader-mode-btn')).forEach(
-      function (btn) {
-        var active = btn.dataset.readerAction === 'open-comparison' ? comparing : !comparing;
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-      }
-    );
+    renderToolbar();
   }
 
   async function loadAlignmentTargets(sourceId) {
@@ -933,96 +964,1010 @@
   }
 
   function alignmentTargetName(targetSourceId) {
+    var member = workMember(targetSourceId);
+    if (member) return member.name;
     var target = state.alignmentTargets.find(function (candidate) {
       return String(candidate.source_file_id || '') === targetSourceId;
     });
     return target ? String(target.display_name || '') : '';
   }
 
-  // 当前对照目标经基准版本两跳中转（via_source_file_id 非空）时，完整度受限：
-  // 显示提示并允许一键在两版本间直接对齐。直接对齐存在或不可判定时隐藏提示。
-  function updateComparisonRouteNotice(targetObj) {
-    if (!state.elements || !state.elements.comparisonRouteNotice) return;
-    var notice = state.elements.comparisonRouteNotice;
-    var routed = !!(targetObj && targetObj.via_source_file_id);
-    var canGenerate = !!(state.alignmentGroupId && state.sourceId
-      && state.comparison.targetSourceId);
-    if (!routed || !canGenerate) {
-      notice.hidden = true;
-      return;
-    }
-    var viaName = alignmentTargetName(String(targetObj.via_source_file_id || ''));
-    state.elements.comparisonRouteText.textContent = state.directAlignmentPending
-      ? '正在生成直接对照…'
-      : ('当前对照经' + (viaName ? '「' + viaName + '」' : '第三个版本')
-        + '中转，可能漏配；建议生成两版本的直接对照');
-    state.elements.comparisonRouteButton.hidden = state.directAlignmentPending;
-    notice.hidden = false;
+  function runHost(name, argument) {
+    closeMenus();
+    if (typeof config[name] === 'function') config[name](argument);
   }
 
-  async function generateDirectComparison() {
-    var comparison = state.comparison;
-    if (state.directAlignmentPending) return;
-    if (!state.alignmentGroupId || !state.sourceId || !comparison.targetSourceId) {
-      setAlert('缺少作品组信息，无法生成直接对照', 'warning');
-      return;
+  async function readJSON(url, options) {
+    var response = await fetchFunction()(url, options || {headers: {'Accept': 'application/json'}});
+    var payload = {};
+    try { payload = await response.json(); } catch (_error) { payload = {}; }
+    if (!response.ok || payload.error) {
+      var error = new Error(payload.error || '请求失败');
+      error.status = response.status;
+      throw error;
     }
-    var targetId = comparison.targetSourceId;
-    state.directAlignmentPending = true;
-    updateComparisonRouteNotice(currentComparisonTargetObj());
+    return payload;
+  }
+
+  function postJSON(url, body) {
+    return readJSON(url, {
+      method: 'POST',
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+      body: JSON.stringify(body || {})
+    });
+  }
+
+  /* ── 作品上下文：成员、每对版本的状态、组件可用性 ─────────────── */
+  function pairKey(a, b) { return [String(a), String(b)].sort().join('|'); }
+
+  function workMember(sourceId) {
+    return state.work.members.find(function (member) { return member.id === sourceId; }) || null;
+  }
+
+  function pairInfo(a, b) {
+    var running = state.generation;
+    if (running && running.groupId === state.work.groupId && running.key === pairKey(a, b)) {
+      return {status: 'running'};
+    }
+    return state.work.pairs[pairKey(a, b)] || {status: 'none'};
+  }
+
+  function pairReadable(info) {
+    return (info.status === 'direct' || info.status === 'indirect') &&
+      info.stale_reason !== 'algorithm_unreadable';
+  }
+
+  function pairStatusWord(info) {
+    if (info.status === 'running') return '生成中';
+    if (info.stale_reason) return '需重新对齐';
+    if (info.status === 'direct') return '直接对齐';
+    if (info.status === 'indirect') return '间接关联';
+    return '尚未对齐';
+  }
+
+  function canGenerate() {
+    return state.availability === 'ready';
+  }
+
+  function generateBlockedReason() {
+    if (state.availability === 'model_missing') return '需先在设置中下载对齐模型';
+    if (state.availability === 'unavailable') return '对齐组件已卸载，重新安装后才能生成';
+    return '对齐组件状态读取失败';
+  }
+
+  async function loadAvailability() {
     try {
-      var startResp = await fetchFunction()(config.alignmentStartEndpoint, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-        body: JSON.stringify({
-          document_group_id: state.alignmentGroupId,
-          pivot_source_file_id: state.sourceId,
-          target_source_file_id: targetId
-        })
+      var results = await Promise.all([
+        readJSON(config.alignmentModelsEndpoint),
+        readJSON(config.preferencesEndpoint)
+      ]);
+      var compute = results[0].compute || null;
+      var selected = (results[0].models || []).find(function (model) {
+        return model.id === results[1].alignment_embedding_model_id;
       });
-      var startPayload = await startResp.json();
-      if (!startResp.ok || startPayload.error || !startPayload.job_id) {
-        throw new Error(startPayload.error || '生成直接对照失败');
-      }
-      await pollDirectComparison(startPayload.job_id, targetId);
-    } catch (error) {
-      setAlert(error && error.message ? error.message : '生成直接对照失败', 'warning');
-    } finally {
-      state.directAlignmentPending = false;
-      updateComparisonRouteNotice(currentComparisonTargetObj());
+      if (!compute) state.availability = 'unknown';
+      else if (compute.available !== true) state.availability = 'unavailable';
+      else state.availability = selected && selected.installed ? 'ready' : 'model_missing';
+    } catch (_error) {
+      state.availability = 'unknown';
     }
   }
 
-  function currentComparisonTargetObj() {
-    var id = state.comparison.targetSourceId;
-    return (state.alignmentTargets || []).filter(function (t) {
-      return String(t.source_file_id || '') === id;
-    })[0];
+  async function loadWorkContext(sourceId) {
+    var serial = state.workRequestSerial + 1;
+    state.workRequestSerial = serial;
+    try {
+      var results = await Promise.all([
+        readJSON(config.groupsEndpoint),
+        readJSON(config.overviewEndpoint),
+        readJSON(config.currentJobEndpoint).catch(function () { return {running: false}; }),
+        loadAvailability()
+      ]);
+      if (serial !== state.workRequestSerial || state.sourceId !== sourceId) return;
+      var group = (results[0].document_groups || []).find(function (candidate) {
+        return (candidate.members || []).some(function (member) { return member.source_file_id === sourceId; });
+      });
+      var work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
+      if (group) {
+        work.groupId = group.document_group_id;
+        work.title = group.title;
+        work.baseId = group.base_source_file_id || '';
+        work.members = (group.members || []).map(function (member) {
+          return {id: member.source_file_id, name: member.display_name || member.source_file_id, isBase: !!member.is_base};
+        });
+        (results[1].works || []).forEach(function (entry) {
+          if (entry.document_group_id !== work.groupId) return;
+          work.languages = entry.languages || {};
+          (entry.pairs || []).forEach(function (pair) {
+            work.pairs[pairKey(pair.source_file_ids[0], pair.source_file_ids[1])] = pair;
+          });
+        });
+      }
+      state.work = work;
+      var running = results[2];
+      if (running && running.running && running.document_group_id === work.groupId) {
+        trackGeneration(running.job_id, work.groupId, running.pivot_source_file_id, running.target_source_file_id);
+      }
+      renderToolbar();
+      if (state.pendingCompareWith) {
+        var target = state.pendingCompareWith;
+        state.pendingCompareWith = '';
+        openComparisonWith(target);
+      } else if (state.comparison.open) {
+        updateComparisonNotice();
+      }
+    } catch (error) {
+      if (serial !== state.workRequestSerial) return;
+      state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
+      renderToolbar();
+    }
   }
 
-  async function pollDirectComparison(jobId, targetId) {
-    // 后台生成期间每 ~1.5s 查询一次任务状态，直到非 202（完成或失败）。
-    for (var attempt = 0; attempt < 400; attempt += 1) {
-      await new Promise(function (resolve) { global.setTimeout(resolve, 1500); });
-      if (!state.comparison.open || state.sourceId == null) return;
-      var resp = await fetchFunction()(
-        config.alignmentStatusEndpoint + '?job_id=' + encodeURIComponent(jobId),
-        {headers: {'Accept': 'application/json'}}
-      );
-      if (resp.status === 202) continue;
-      var payload = await resp.json();
-      if (!resp.ok || payload.error || payload.ok === false) {
-        throw new Error(payload.error || '生成直接对照失败');
+  /* ── 自绘下拉与菜单 ─────────────────────────────────────────── */
+  function pickerFor(key) {
+    if (!state.elements) return null;
+    return {left: state.elements.leftPicker, add: state.elements.addPicker,
+      right: state.elements.rightPicker, more: state.elements.morePicker}[key] || null;
+  }
+
+  function closeMenus(returnFocusKey) {
+    if (!state.elements) return;
+    ['left', 'add', 'right', 'more'].forEach(function (key) {
+      var picker = pickerFor(key);
+      if (!picker || picker.menu.hidden) return;
+      picker.menu.hidden = true;
+      picker.trigger.setAttribute('aria-expanded', 'false');
+      if (returnFocusKey === key) picker.trigger.focus();
+    });
+    state.openMenu = '';
+  }
+
+  function menuOption(label, action, options) {
+    options = options || {};
+    var item = createButton('', 'mef-reader-option', action);
+    item.setAttribute('role', options.role || 'option');
+    if (options.role !== 'menuitem') item.setAttribute('aria-selected', options.selected ? 'true' : 'false');
+    if (options.target) item.dataset.readerTarget = options.target;
+    if (options.disabled) {
+      item.disabled = true;
+      item.setAttribute('aria-disabled', 'true');
+    }
+    var tick = document.createElement('span');
+    tick.className = 'mef-reader-option-tick';
+    tick.setAttribute('aria-hidden', 'true');
+    if (options.selected) tick.appendChild(createIcon('m4.5 10.5 3.5 3.5 7.5-8', 14));
+    var text = document.createElement('span');
+    text.className = 'mef-reader-option-label';
+    text.textContent = label;
+    item.appendChild(tick);
+    item.appendChild(text);
+    if (options.meta) {
+      var meta = document.createElement('small');
+      meta.className = 'mef-reader-option-meta';
+      meta.textContent = options.meta;
+      item.appendChild(meta);
+    }
+    return item;
+  }
+
+  function menuSeparator() {
+    var separator = document.createElement('div');
+    separator.className = 'mef-reader-menu-separator';
+    separator.setAttribute('role', 'separator');
+    return separator;
+  }
+
+  function memberLabel(member) {
+    var language = languageLabel(state.work.languages[member.id]);
+    return member.name + (language ? ' · ' + language : '');
+  }
+
+  function renderMenu(key) {
+    var picker = pickerFor(key);
+    if (!picker) return;
+    var menu = picker.menu;
+    menu.replaceChildren();
+    var targetId = state.comparison.targetSourceId;
+    if (key === 'left') {
+      state.work.members.forEach(function (member) {
+        menu.appendChild(menuOption(memberLabel(member), 'pick-left', {
+          target: member.id, selected: member.id === state.sourceId
+        }));
+      });
+    } else if (key === 'add' || key === 'right') {
+      var others = state.work.members.filter(function (member) {
+        return member.id !== state.sourceId;
+      });
+      var preferred = state.defaultComparisonTarget;
+      others.sort(function (a, b) { return (b.id === preferred) - (a.id === preferred); });
+      others.forEach(function (member) {
+        menu.appendChild(menuOption(memberLabel(member), key === 'add' ? 'add-comparison' : 'pick-right', {
+          target: member.id,
+          selected: key === 'right' && member.id === targetId,
+          meta: pairStatusWord(pairInfo(state.sourceId, member.id))
+        }));
+      });
+      if (key === 'add' && typeof config.onManageWork === 'function') {
+        menu.appendChild(menuSeparator());
+        menu.appendChild(menuOption('管理版本…', 'manage-work'));
       }
-      // 成功：刷新对齐目标（此时已有直接 run），再按当前源栏重新定位到直接对照。
-      await loadAlignmentTargets(state.sourceId);
-      if (state.comparison.open && state.comparison.targetSourceId === targetId) {
-        locateInAlignedVersion(targetId, sourceCenterRange());
+    } else if (key === 'more') {
+      var unit = state.source && state.source.source_type === 'pdf' ? ' PDF 页' : '段落';
+      menu.appendChild(menuOption('跳到' + unit + '…', 'open-jump', {role: 'menuitem'}));
+      if (state.work.groupId && typeof config.onFindInWork === 'function') {
+        menu.appendChild(menuOption('在作品中查找…', 'find-in-work', {role: 'menuitem'}));
       }
-      notify('已生成直接对照，完整度已提升');
+      var decorations = menuOption(state.showDecorations ? '隐藏页眉页脚' : '显示页眉页脚', 'toggle-decorations', {role: 'menuitem'});
+      menu.appendChild(decorations);
+      var isReaderWindow = document.documentElement.dataset.readerWindow === 'true';
+      var canNewWindow = !isReaderWindow && typeof config.canOpenInNewWindow === 'function' && config.canOpenInNewWindow();
+      var canReturn = isReaderWindow && global.pywebview && global.pywebview.state;
+      if (canNewWindow || canReturn || (state.work.groupId && typeof config.onManageWork === 'function')) {
+        menu.appendChild(menuSeparator());
+      }
+      if (canNewWindow) menu.appendChild(menuOption('在新窗口打开', 'open-new-window', {role: 'menuitem'}));
+      if (canReturn) menu.appendChild(menuOption('回到主窗口', 'return-main', {role: 'menuitem'}));
+      if (state.work.groupId && typeof config.onManageWork === 'function') {
+        menu.appendChild(menuOption('管理版本…', 'manage-work', {role: 'menuitem'}));
+      }
+    }
+  }
+
+  function toggleMenu(key) {
+    var picker = pickerFor(key);
+    if (!picker) return;
+    var willOpen = picker.menu.hidden;
+    closeMenus();
+    if (!willOpen) return;
+    if (key === 'left' && state.work.members.length < 2) return;
+    renderMenu(key);
+    picker.menu.hidden = false;
+    picker.trigger.setAttribute('aria-expanded', 'true');
+    state.openMenu = key;
+    var first = picker.menu.querySelector('.mef-reader-option[aria-selected="true"]:not(:disabled)') ||
+      picker.menu.querySelector('.mef-reader-option:not(:disabled)');
+    if (first) first.focus();
+  }
+
+  function handleMenuKeydown(event) {
+    var key = state.openMenu;
+    if (!key) {
+      if (event.key === 'Escape' && state.review) {
+        event.stopPropagation();
+        closeReviewPopover(true);
+      }
       return;
     }
-    throw new Error('生成直接对照超时，请稍后在「管理作品组」重试');
+    var picker = pickerFor(key);
+    if (!picker) return;
+    var options = Array.prototype.filter.call(
+      picker.menu.querySelectorAll('.mef-reader-option'),
+      function (option) { return !option.disabled; }
+    );
+    var index = options.indexOf(document.activeElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenus(key);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!options.length) return;
+      var step = event.key === 'ArrowDown' ? 1 : -1;
+      options[(index + step + options.length) % options.length].focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      if (options.length) options[event.key === 'Home' ? 0 : options.length - 1].focus();
+    } else if (event.key === 'Tab') {
+      closeMenus();
+    }
+  }
+
+  function renderToolbar() {
+    if (!state.elements) return;
+    var elements = state.elements;
+    var members = state.work.members;
+    var comparing = state.comparison.open;
+    elements.backLabel.textContent = state.returnLabel || '返回';
+    elements.back.setAttribute('aria-label', '返回' + (state.returnLabel || ''));
+    var leftMember = workMember(state.sourceId);
+    elements.leftPicker.value.textContent = leftMember
+      ? memberLabel(leftMember)
+      : (cleanReaderTitle(state.title) || '文献阅读');
+    elements.leftPicker.trigger.classList.toggle('is-static', members.length < 2);
+    elements.leftPicker.trigger.setAttribute('aria-haspopup', members.length < 2 ? 'false' : 'listbox');
+    elements.addPicker.wrap.hidden = comparing || members.length < 2;
+    elements.swap.hidden = !comparing;
+    elements.rightPicker.wrap.hidden = !comparing;
+    elements.closeCompare.hidden = !comparing;
+    elements.comparisonFollow.hidden = !comparing || !elements.pending.hidden;
+    if (comparing) {
+      var rightMember = workMember(state.comparison.targetSourceId);
+      elements.rightPicker.value.textContent = rightMember
+        ? memberLabel(rightMember)
+        : (state.comparison.targetDisplayName || '对照版本');
+      elements.comparisonTitleText.textContent = elements.rightPicker.value.textContent;
+    }
+    if (state.openMenu) renderMenu(state.openMenu);
+  }
+
+  function pickLeftVersion(targetId) {
+    closeMenus();
+    if (!targetId || targetId === state.sourceId) return;
+    if (state.comparison.open && targetId === state.comparison.targetSourceId) {
+      swapComparison();
+      return;
+    }
+    var keepCompare = state.comparison.open ? state.comparison.targetSourceId : '';
+    var from = state.sourceId;
+    var selection = sourceCenterRange();
+    var reopen = function (index) {
+      openReader({
+        sourceId: targetId,
+        targetIndex: index,
+        compareWith: keepCompare,
+        returnLabel: state.returnLabel,
+        noExternal: true,
+        keepHostState: true
+      });
+    };
+    if (!selection || !pairReadable(pairInfo(from, targetId))) {
+      reopen(0);
+      return;
+    }
+    postJSON(config.alignmentLocateEndpoint, {
+      source_file_id: from,
+      target_source_file_id: targetId,
+      start_page_index: selection.startIndex,
+      end_page_index: selection.endIndex,
+      start_offset: selection.startOffset,
+      end_offset: selection.endOffset
+    }).then(function (payload) {
+      reopen(Number(payload.target_index) || 0);
+    }).catch(function () { reopen(0); });
+  }
+
+  function swapComparison() {
+    if (!state.comparison.open || !state.comparison.targetSourceId) return;
+    var nextSource = state.comparison.targetSourceId;
+    var nextTarget = state.sourceId;
+    var index = state.comparison.items.size ? state.comparison.currentIndex : 0;
+    openReader({
+      sourceId: nextSource,
+      targetIndex: index,
+      compareWith: nextTarget,
+      returnLabel: state.returnLabel,
+      noExternal: true,
+      keepHostState: true
+    });
+  }
+
+  function openComparisonWith(targetId) {
+    if (!targetId || targetId === state.sourceId) return;
+    var info = pairInfo(state.sourceId, targetId);
+    rememberComparisonTarget(state.sourceId, targetId);
+    if (pairReadable(info)) {
+      showPendingPane(false);
+      locateInAlignedVersion(targetId, sourceCenterRange(), true).then(function (located) {
+        if (!located && state.open && state.comparison.targetSourceId !== targetId) {
+          showComparison({targetSourceId: targetId, targetIndex: 0, pageMatchSpans: []},
+            alignmentTargetName(targetId));
+          setAlert('当前位置没有可用的对应段落，右栏从开头显示；滚动左栏后会跟随定位', 'info');
+        }
+      });
+      return;
+    }
+    openPendingComparison(targetId, info);
+  }
+
+  function markComparisonOpen(targetId) {
+    var comparison = state.comparison;
+    if (comparison.targetSourceId !== targetId) {
+      comparison.items.clear();
+      comparison.highlights.clear();
+      comparison.indexHighlights.clear();
+      state.links = null;
+      clearLinkedSelection();
+    }
+    comparison.open = true;
+    comparison.targetSourceId = targetId;
+    comparison.targetDisplayName = alignmentTargetName(targetId);
+    state.elements.panel.classList.add('is-comparing');
+    state.elements.readerBody.classList.add('is-comparing');
+    state.elements.comparisonPane.hidden = false;
+  }
+
+  function showPendingPane(show) {
+    if (!state.elements) return;
+    state.elements.pending.hidden = !show;
+    state.elements.comparisonViewport.hidden = show;
+    state.elements.comparisonPrevious.hidden = show;
+    state.elements.comparisonNext.hidden = show;
+    state.elements.readerBody.classList.toggle('is-pending', show);
+  }
+
+  function openPendingComparison(targetId, info) {
+    markComparisonOpen(targetId);
+    showPendingPane(true);
+    var elements = state.elements;
+    var running = info.status === 'running';
+    elements.pendingAction.dataset.readerForce = info.stale_reason ? 'true' : 'false';
+    if (running) {
+      elements.pendingTitle.textContent = '正在生成对齐';
+      elements.pendingText.textContent = '在本机计算，文本不会上传。关闭阅读器也会在后台继续';
+      elements.pendingAction.textContent = '取消';
+      elements.pendingAction.dataset.readerAction = 'cancel-alignment';
+      elements.pendingAction.classList.remove('is-primary');
+      elements.pendingAction.disabled = false;
+    } else if (canGenerate()) {
+      elements.pendingTitle.textContent = info.stale_reason ? '旧对齐已不可读' : '这两版尚未对齐';
+      elements.pendingText.textContent = '在本机生成，文本不会上传。生成时左栏照常阅读，完成后译文出现在这里';
+      elements.pendingAction.textContent = info.stale_reason ? '重新对齐' : '生成对齐';
+      elements.pendingAction.dataset.readerAction = 'generate-alignment';
+      elements.pendingAction.classList.add('is-primary');
+      elements.pendingAction.disabled = false;
+    } else {
+      elements.pendingTitle.textContent = '这两版尚未对齐';
+      elements.pendingText.textContent = generateBlockedReason();
+      var installable = typeof config.onInstallComponent === 'function' && state.availability !== 'unknown';
+      elements.pendingAction.textContent = state.availability === 'model_missing' ? '去设置' : '重新安装';
+      elements.pendingAction.dataset.readerAction = 'install-component';
+      elements.pendingAction.classList.remove('is-primary');
+      elements.pendingAction.hidden = !installable;
+    }
+    if (canGenerate() || running) elements.pendingAction.hidden = false;
+    updateComparisonNotice();
+    updateComparisonControls();
+    renderToolbar();
+    scheduleReadingPositionSave();
+  }
+
+  function updateComparisonNotice() {
+    if (!state.elements) return;
+    var elements = state.elements;
+    var notice = elements.comparisonNotice;
+    var targetId = state.comparison.targetSourceId;
+    if (!state.comparison.open || !targetId || !elements.pending.hidden) {
+      notice.hidden = true;
+      elements.readerBody.classList.remove('is-indirect');
+      return;
+    }
+    var info = pairInfo(state.sourceId, targetId);
+    var target = (state.alignmentTargets || []).find(function (t) {
+      return String(t.source_file_id || '') === targetId;
+    });
+    var viaId = (info.status === 'indirect' && info.via_source_file_id) ||
+      (target && target.via_source_file_id) || '';
+    elements.readerBody.classList.toggle('is-indirect', !!viaId);
+    var text = '';
+    var actionLabel = '';
+    var force = false;
+    if (info.status === 'running') {
+      text = '正在生成对齐，完成后自动刷新';
+      actionLabel = '取消';
+    } else if (info.stale_reason) {
+      text = info.stale_reason === 'model_changed'
+        ? '对齐模型已更换，以下是旧结果'
+        : '对齐算法已更新，以下是旧结果';
+      actionLabel = '重新对齐';
+      force = true;
+    } else if (viaId) {
+      var viaName = alignmentTargetName(String(viaId));
+      text = '这两版没有直接对齐，位置经' + (viaName ? '「' + viaName + '」' : '基准版本') + '换算，可能错位或漏段';
+      actionLabel = '生成直接对齐';
+    } else if (state.comparison.lowConfidence) {
+      text = '此处为粗定位，可能锚到相邻段落或注释';
+    }
+    notice.hidden = !text;
+    elements.comparisonNoticeText.textContent = text;
+    var action = elements.comparisonNoticeAction;
+    action.dataset.readerForce = force ? 'true' : 'false';
+    if (!actionLabel) {
+      action.hidden = true;
+    } else if (info.status === 'running') {
+      action.hidden = false;
+      action.textContent = actionLabel;
+      action.dataset.readerAction = 'cancel-alignment';
+    } else if (canGenerate()) {
+      action.hidden = false;
+      action.textContent = actionLabel;
+      action.dataset.readerAction = 'generate-alignment';
+    } else {
+      action.hidden = state.availability !== 'unavailable' || typeof config.onInstallComponent !== 'function';
+      action.textContent = '重新安装';
+      action.dataset.readerAction = 'install-component';
+    }
+  }
+
+  function trackGeneration(jobId, groupId, pivotId, targetId) {
+    state.generation = {jobId: jobId, groupId: groupId, key: pairKey(pivotId, targetId)};
+    pollComparisonAlignment(jobId);
+  }
+
+  async function startComparisonAlignment(force) {
+    var targetId = state.comparison.targetSourceId;
+    var groupId = state.work.groupId || state.alignmentGroupId;
+    if (!targetId || !groupId) {
+      setAlert('这两个版本不在同一部作品中，无法生成对齐', 'warning');
+      return;
+    }
+    if (!canGenerate()) {
+      setAlert(generateBlockedReason(), 'warning');
+      return;
+    }
+    var pivotId = state.sourceId;
+    if (state.work.baseId === targetId) {
+      pivotId = targetId;
+      targetId = state.sourceId;
+    }
+    try {
+      var payload = await postJSON(config.alignmentStartEndpoint, {
+        document_group_id: groupId,
+        pivot_source_file_id: pivotId,
+        target_source_file_id: targetId,
+        force: !!force
+      });
+      trackGeneration(payload.job_id, groupId, pivotId, targetId);
+      refreshComparisonAfterStatusChange();
+    } catch (error) {
+      setAlert(error && error.message ? error.message : '生成对齐失败', 'warning');
+    }
+  }
+
+  async function cancelComparisonAlignment() {
+    try {
+      await postJSON(config.alignmentCancelEndpoint, {});
+      notify('正在取消，当前批次结束后停止');
+    } catch (error) {
+      setAlert(error && error.message ? error.message : '取消失败', 'warning');
+    }
+  }
+
+  function refreshComparisonAfterStatusChange() {
+    renderToolbar();
+    var targetId = state.comparison.targetSourceId;
+    if (!state.comparison.open || !targetId) return;
+    if (!state.elements.pending.hidden) {
+      var info = pairInfo(state.sourceId, targetId);
+      if (pairReadable(info)) openComparisonWith(targetId);
+      else openPendingComparison(targetId, info);
+    } else {
+      updateComparisonNotice();
+    }
+  }
+
+  async function pollComparisonAlignment(jobId) {
+    if (state.pollingJobId === jobId) return;
+    state.pollingJobId = jobId;
+    // 后台生成期间每 ~1.5s 查询一次任务状态，直到非 202（完成、失败或取消）。
+    while (state.pollingJobId === jobId) {
+      await new Promise(function (resolve) { global.setTimeout(resolve, 1500); });
+      if (state.pollingJobId !== jobId) return;
+      var response;
+      try {
+        response = await fetchFunction()(
+          config.alignmentStatusEndpoint + '?job_id=' + encodeURIComponent(jobId),
+          {headers: {'Accept': 'application/json'}}
+        );
+      } catch (_error) {
+        continue;
+      }
+      if (response.status === 202) continue;
+      var payload = {};
+      try { payload = await response.json(); } catch (_error) { payload = {}; }
+      state.pollingJobId = '';
+      state.generation = null;
+      if (!state.open) return;
+      if (response.ok && payload.ok) notify('对齐已生成');
+      else if (payload.cancelled) notify('已取消生成对齐');
+      else if (response.status !== 404) setAlert(payload.error || '生成对齐失败', 'warning');
+      await loadAlignmentTargets(state.sourceId);
+      await loadWorkContext(state.sourceId);
+      refreshComparisonAfterStatusChange();
+      return;
+    }
+  }
+
+  /* ── 新窗口 / 回到主窗口 / 跳到页 ─────────────────────────────── */
+  function currentLocationOptions() {
+    return {
+      sourceId: state.sourceId,
+      title: state.title,
+      targetIndex: state.currentIndex,
+      compareWith: state.comparison.open ? state.comparison.targetSourceId : ''
+    };
+  }
+
+  function openInNewWindow() {
+    closeMenus();
+    if (typeof config.openInNewWindow !== 'function') return;
+    Promise.resolve(config.openInNewWindow(currentLocationOptions())).then(function (opened) {
+      if (opened) closeReader();
+    }).catch(function (error) {
+      setAlert(error && error.message ? error.message : '无法打开新窗口', 'warning');
+    });
+  }
+
+  function returnToMainWindow() {
+    closeMenus();
+    if (!global.pywebview || !global.pywebview.state) return;
+    global.pywebview.state.readerReturn = currentLocationOptions();
+  }
+
+  function openJumpForm() {
+    closeMenus();
+    var elements = state.elements;
+    var isPdf = state.source && state.source.source_type === 'pdf';
+    elements.jumpLabel.textContent = isPdf ? '跳到 PDF 第' : '跳到第';
+    elements.jumpUnit.textContent = isPdf ? '页' : '段';
+    if (state.total) elements.jumpInput.max = String(state.total);
+    elements.jumpInput.value = String(state.currentIndex + 1);
+    elements.jumpForm.hidden = false;
+    elements.jumpInput.focus();
+    elements.jumpInput.select();
+  }
+
+  function closeJumpForm() {
+    if (!state.elements || state.elements.jumpForm.hidden) return;
+    state.elements.jumpForm.hidden = true;
+    state.elements.morePicker.trigger.focus();
+  }
+
+  function submitJumpForm() {
+    var value = Math.floor(Number(state.elements.jumpInput.value));
+    if (!Number.isFinite(value) || value < 1) return;
+    var index = state.total ? Math.min(value, state.total) - 1 : value - 1;
+    state.elements.jumpForm.hidden = true;
+    goTo({targetIndex: index});
+    state.elements.viewport.focus();
+  }
+
+  /* ── 阅读位置：按作品保存版本对与位置，供「继续阅读」 ─────────── */
+  function saveReadingPositionNow() {
+    if (state.positionTimer !== null) {
+      global.clearTimeout(state.positionTimer);
+      state.positionTimer = null;
+    }
+    if (!state.open || !state.work.groupId || !state.items.has(state.currentIndex)) return;
+    postJSON(config.readingPositionEndpoint, {
+      document_group_id: state.work.groupId,
+      left_source_file_id: state.sourceId,
+      right_source_file_id: state.comparison.open ? state.comparison.targetSourceId : null,
+      item_index: state.currentIndex,
+      char_offset: 0
+    }).catch(function () { /* 位置只是便利信息，保存失败不打扰阅读。 */ });
+  }
+
+  function scheduleReadingPositionSave() {
+    if (!state.open || !state.work.groupId || !state.items.has(state.currentIndex)) return;
+    if (state.positionTimer !== null) global.clearTimeout(state.positionTimer);
+    state.positionTimer = global.setTimeout(saveReadingPositionNow, 1500);
+  }
+
+  /* ── 逐段对应：选中段落高亮对应段，低置信段落标「!」 ───────────── */
+  function loadLinkWindow() {
+    var comparison = state.comparison;
+    if (!state.open || !comparison.open || !comparison.targetSourceId ||
+        !state.elements.pending.hidden || !state.items.size) return;
+    var positions = Array.from(state.items.keys()).sort(function (a, b) { return a - b; });
+    var start = positions[0];
+    var end = positions[positions.length - 1];
+    var targetId = comparison.targetSourceId;
+    var key = [state.sourceId, targetId, start, end].join(':');
+    if (state.links && state.links.key === key) {
+      renderFlags();
+      return;
+    }
+    var serial = state.linkRequestSerial + 1;
+    state.linkRequestSerial = serial;
+    var query = new URLSearchParams({
+      source_file_id: state.sourceId,
+      target_source_file_id: targetId,
+      start_index: String(start),
+      end_index: String(end)
+    });
+    readJSON(config.linksEndpoint + '?' + query.toString()).then(function (payload) {
+      if (serial !== state.linkRequestSerial || comparison.targetSourceId !== targetId) return;
+      state.links = {key: key, viaId: payload.via_source_file_id || '', items: payload.links || []};
+      renderFlags();
+    }).catch(function () {
+      if (serial !== state.linkRequestSerial) return;
+      state.links = {key: key, viaId: '', items: []};
+      renderFlags();
+    });
+  }
+
+  // 低置信：算法给出了对应段落但置信度低于门槛。没有对应的（副文本、漏段）不标。
+  function linkNeedsReview(link) {
+    return !link.manual && link.review_status === 'rejected' &&
+      (link.target_segment_ids || []).length > 0;
+  }
+
+  function linkKey(link) {
+    return (link.source_segment_ids || []).slice().sort().join('|');
+  }
+
+  function textPointAt(body, codePointOffset) {
+    var walker = document.createTreeWalker(body, global.NodeFilter ? global.NodeFilter.SHOW_TEXT : 4);
+    var remaining = codePointOffset;
+    var node = walker.nextNode();
+    while (node) {
+      var value = String(node.nodeValue || '');
+      var length = codePointLength(value);
+      if (remaining <= length) {
+        return {node: node, offset: codePointToUtf16Index(value, remaining)};
+      }
+      remaining -= length;
+      node = walker.nextNode();
+    }
+    return null;
+  }
+
+  function renderFlags() {
+    if (!state.elements) return;
+    state.elements.content.querySelectorAll('.mef-reader-flag').forEach(function (flag) { flag.remove(); });
+    var links = state.links;
+    // 只在直接对齐上标注：间接关联的置信度来自两段换算，不适合逐段人工校正。
+    if (!links || links.viaId || !state.comparison.open) return;
+    links.items.forEach(function (link, index) {
+      if (!linkNeedsReview(link)) return;
+      var span = (link.source_spans || [])[0];
+      if (!span) return;
+      var article = state.elements.content.querySelector('[data-reader-index="' + span.item_index + '"]');
+      var body = article && article.querySelector('.mef-reader-item-text');
+      if (!body) return;
+      var top = 0;
+      var point = textPointAt(body, span.char_start);
+      if (point && typeof document.createRange === 'function') {
+        var range = document.createRange();
+        range.setStart(point.node, point.offset);
+        range.collapse(true);
+        var rect = range.getClientRects()[0];
+        var articleRect = article.getClientRects()[0];
+        if (rect && articleRect) top = Math.max(0, rect.top - articleRect.top);
+      }
+      var flag = createButton('!', 'mef-reader-flag' + (link.deferred ? ' is-deferred' : ''), 'review-link');
+      flag.dataset.readerLink = String(index);
+      flag.style.top = top + 'px';
+      flag.setAttribute('aria-label', link.deferred ? '已暂不处理的对应，点击重新检查' : '对应可能不准，点击检查');
+      flag.title = link.deferred ? '已暂不处理' : '对应可能不准';
+      flag.setAttribute('aria-haspopup', 'dialog');
+      article.appendChild(flag);
+    });
+  }
+
+  function scheduleFlagLayout() {
+    if (state.flagLayoutTimer !== null) return;
+    state.flagLayoutTimer = global.setTimeout(function () {
+      state.flagLayoutTimer = null;
+      if (state.open) renderFlags();
+    }, 120);
+  }
+
+  function clearLinkedSelection() {
+    var changed = Array.from(state.linkedRanges.keys());
+    state.linkedRanges.clear();
+    state.selectedLinkKey = '';
+    changed.forEach(refreshSourceItem);
+  }
+
+  function refreshSourceItem(index) {
+    if (!state.elements) return;
+    var article = state.elements.content.querySelector('[data-reader-index="' + index + '"]');
+    var item = state.items.get(index);
+    if (!article || !item) return;
+    var body = article.querySelector('.mef-reader-item-text');
+    var text = typeof item.text_raw === 'string' ? item.text_raw : '';
+    if (!body || item.is_empty || !text) return;
+    body.replaceChildren();
+    var anchorId = itemAnchor(item, index);
+    appendHighlightedText(
+      body, text, state.resolvedHighlights.get(anchorId) || [], item.decoration_spans,
+      state.linkedRanges.get(index) || []
+    );
+    article.classList.toggle('is-linked', state.linkedRanges.has(index));
+  }
+
+  function selectLinkAtClick(event) {
+    if (!state.comparison.open || !state.links || !state.links.items.length) return;
+    var selection = typeof global.getSelection === 'function' ? global.getSelection() : null;
+    if (selection && !selection.isCollapsed) return;
+    var body = event.target.closest('.mef-reader-item-text');
+    var article = body && body.closest('.mef-reader-item');
+    var index = article ? Number(article.dataset.readerIndex) : NaN;
+    if (!Number.isFinite(index)) return;
+    var caretNode = null;
+    var caretOffset = null;
+    if (typeof document.caretPositionFromPoint === 'function') {
+      var position = document.caretPositionFromPoint(event.clientX, event.clientY);
+      if (position) { caretNode = position.offsetNode; caretOffset = position.offset; }
+    } else if (typeof document.caretRangeFromPoint === 'function') {
+      var caretRange = document.caretRangeFromPoint(event.clientX, event.clientY);
+      if (caretRange) { caretNode = caretRange.startContainer; caretOffset = caretRange.startOffset; }
+    }
+    var utf16 = textOffsetWithin(body, caretNode, caretOffset);
+    var item = state.items.get(index);
+    if (utf16 === null || !item) return;
+    var offset = utf16ToCodePointIndex(item.text_raw || '', utf16);
+    var link = state.links.items.find(function (candidate) {
+      return (candidate.source_spans || []).some(function (span) {
+        return span.item_index === index && span.char_start <= offset && offset < span.char_end;
+      });
+    });
+    if (!link) return;
+    if (state.selectedLinkKey === linkKey(link)) {
+      clearLinkedSelection();
+      state.comparison.indexHighlights.clear();
+      renderComparisonWindow();
+      return;
+    }
+    highlightLink(link);
+  }
+
+  function highlightLink(link) {
+    var previous = Array.from(state.linkedRanges.keys());
+    state.linkedRanges.clear();
+    state.selectedLinkKey = linkKey(link);
+    (link.source_spans || []).forEach(function (span) {
+      if (!state.linkedRanges.has(span.item_index)) state.linkedRanges.set(span.item_index, []);
+      state.linkedRanges.get(span.item_index).push({start: span.char_start, end: span.char_end});
+    });
+    previous.concat(Array.from(state.linkedRanges.keys())).forEach(refreshSourceItem);
+    var comparison = state.comparison;
+    comparison.indexHighlights.clear();
+    comparison.highlights.clear();
+    (link.target_spans || []).forEach(function (span) {
+      if (!comparison.indexHighlights.has(span.item_index)) comparison.indexHighlights.set(span.item_index, []);
+      comparison.indexHighlights.get(span.item_index).push({start: span.char_start, end: span.char_end});
+    });
+    var first = (link.target_spans || [])[0];
+    if (!first) {
+      renderComparisonWindow();
+      setAlert(link.manual === 'no_counterpart' ? '已人工确认：另一版本中没有对应段落' : '这一段在另一版本中没有找到对应段落', 'info');
+      return;
+    }
+    comparison.currentIndex = first.item_index;
+    if (comparison.items.has(first.item_index)) renderComparisonWindow();
+    else loadComparisonWindow(first.item_index);
+  }
+
+  function closeReviewPopover(restoreFocus) {
+    var review = state.review;
+    if (!review) return;
+    state.review = null;
+    review.node.remove();
+    if (restoreFocus && review.trigger && review.trigger.isConnected) review.trigger.focus();
+  }
+
+  function candidateLocation(candidate) {
+    var span = (candidate.page_match_spans || [])[0];
+    if (!span) return '';
+    if (span.pdf_page_index != null) return 'PDF 第 ' + (Number(span.pdf_page_index) + 1) + ' 页';
+    if (span.paragraph_index != null) return '第 ' + (Number(span.paragraph_index) + 1) + ' 段';
+    return '';
+  }
+
+  async function openReviewPopover(trigger) {
+    closeReviewPopover();
+    var index = Number(trigger.dataset.readerLink);
+    var link = state.links && state.links.items[index];
+    if (!link) return;
+    var near = link.target_segment_ids || [];
+    var node = document.createElement('div');
+    node.className = 'mef-reader-review';
+    node.setAttribute('role', 'dialog');
+    node.setAttribute('aria-labelledby', 'mef-reader-review-title');
+    var heading = document.createElement('h4');
+    heading.id = 'mef-reader-review-title';
+    heading.textContent = '这一段的对应可能不准';
+    var hint = document.createElement('p');
+    hint.textContent = '勾选这段原文对应的全部译文段落';
+    var list = document.createElement('div');
+    list.className = 'mef-reader-review-list';
+    list.setAttribute('role', 'group');
+    list.setAttribute('aria-label', '候选译文段落');
+    var loadingText = document.createElement('p');
+    loadingText.className = 'mef-reader-review-loading';
+    loadingText.textContent = '正在读取候选段落…';
+    list.appendChild(loadingText);
+    var actions = document.createElement('div');
+    actions.className = 'mef-reader-review-actions';
+    var save = createButton('保存校正', 'mef-reader-tool-btn is-primary', '');
+    save.disabled = true;
+    var none = createButton('译本无对应', 'mef-reader-tool-btn is-quiet', '');
+    var later = createButton('暂不处理', 'mef-reader-tool-btn is-quiet', '');
+    var grow = document.createElement('span');
+    grow.className = 'mef-reader-toolbar-spacer';
+    actions.appendChild(save);
+    actions.appendChild(none);
+    actions.appendChild(grow);
+    actions.appendChild(later);
+    node.appendChild(heading);
+    node.appendChild(hint);
+    node.appendChild(list);
+    node.appendChild(actions);
+    state.elements.root.appendChild(node);
+    state.review = {node: node, trigger: trigger};
+    var rect = trigger.getClientRects()[0];
+    var rootRect = state.elements.root.getClientRects()[0];
+    var width = Math.min(400, rootRect.width - 32);
+    node.style.width = width + 'px';
+    node.style.left = Math.max(16, Math.min(rect.right - rootRect.left - width, rootRect.width - width - 16)) + 'px';
+    node.style.top = Math.max(16, Math.min(rect.bottom - rootRect.top + 8, rootRect.height - 320)) + 'px';
+
+    var checked = new Set(link.target_segment_ids || []);
+    function syncSave() { save.disabled = checked.size === 0; }
+    async function submit(kind) {
+      [save, none, later].forEach(function (button) { button.disabled = true; });
+      try {
+        if (kind === 'later') {
+          await postJSON(config.correctionDeferEndpoint, {
+            source_file_id: state.sourceId,
+            target_source_file_id: state.comparison.targetSourceId,
+            source_segment_ids: link.source_segment_ids
+          });
+        } else {
+          await postJSON(config.correctionSaveEndpoint, {
+            source_file_id: state.sourceId,
+            target_source_file_id: state.comparison.targetSourceId,
+            source_segment_ids: link.source_segment_ids,
+            target_segment_ids: kind === 'none' ? [] : Array.from(checked)
+          });
+          notify(kind === 'none' ? '已记录：译本无对应' : '已保存校正，对应 ' + checked.size + ' 段译文');
+        }
+        closeReviewPopover(false);
+        state.links = null;
+        loadLinkWindow();
+      } catch (error) {
+        [none, later].forEach(function (button) { button.disabled = false; });
+        syncSave();
+        setAlert(error && error.message ? error.message : '保存失败', 'warning');
+      }
+    }
+    save.addEventListener('click', function () { submit('save'); });
+    none.addEventListener('click', function () { submit('none'); });
+    later.addEventListener('click', function () { submit('later'); });
+    none.focus();
+    try {
+      var payload = await postJSON(config.reviewCandidatesEndpoint, {
+        source_file_id: state.sourceId,
+        target_source_file_id: state.comparison.targetSourceId,
+        source_segment_ids: link.source_segment_ids,
+        near_target_segment_ids: near,
+        radius: 3
+      });
+      if (!state.review || state.review.node !== node) return;
+      list.replaceChildren();
+      if (!(payload.candidates || []).length) {
+        loadingText.textContent = '附近没有可选的译文段落';
+        list.appendChild(loadingText);
+      }
+      (payload.candidates || []).forEach(function (candidate) {
+        var id = String(candidate.segment_id);
+        var row = document.createElement('label');
+        row.className = 'mef-reader-review-row';
+        var box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = checked.has(id);
+        box.addEventListener('change', function () {
+          if (box.checked) checked.add(id);
+          else checked.delete(id);
+          syncSave();
+        });
+        var text = document.createElement('span');
+        text.className = 'mef-reader-review-text';
+        text.textContent = String(candidate.text || '');
+        var where = document.createElement('small');
+        where.textContent = candidateLocation(candidate);
+        row.appendChild(box);
+        row.appendChild(text);
+        row.appendChild(where);
+        list.appendChild(row);
+      });
+      syncSave();
+    } catch (error) {
+      if (!state.review || state.review.node !== node) return;
+      loadingText.textContent = error && error.message ? error.message : '候选段落读取失败';
+    }
   }
 
   function nearestTextOffset(text, requestedOffset) {
@@ -1166,7 +2111,7 @@
     );
   }
 
-  function renderComparisonItem(item, absoluteIndex) {
+  function renderComparisonItem(item, absoluteIndex, previousItem) {
     var anchorId = comparisonItemAnchor(item, absoluteIndex);
     var article = document.createElement('article');
     article.className = 'mef-reader-item';
@@ -1191,13 +2136,22 @@
       body.classList.add('is-empty');
       body.textContent = isParagraph ? '本段无可显示文本' : '本页无文本层';
     } else {
-      var ranges = state.comparison.highlights.get(anchorId) || [];
+      var ranges = (state.comparison.highlights.get(anchorId) || [])
+        .concat(state.comparison.indexHighlights.get(absoluteIndex) || []);
       appendHighlightedText(body, text, ranges, item.decoration_spans);
       if (ranges.length) article.classList.add('has-highlight');
     }
+    if (isPageContinuation(item, previousItem)) article.classList.add('is-continued');
     article.appendChild(meta);
     article.appendChild(body);
     return article;
+  }
+
+  // 连续段落排版：同一页的相邻段落不重复页码，只在页码变化处标出。
+  function isPageContinuation(item, previousItem) {
+    if (!previousItem || item.item_type !== 'word_paragraph') return false;
+    var label = String(item.page_display || '');
+    return !!label && label === String(previousItem.page_display || '');
   }
 
   function updateComparisonControls() {
@@ -1209,7 +2163,7 @@
       !comparison.hasMore || comparison.nextStart === null;
     state.elements.comparisonFollow.classList.toggle('is-active', comparison.autoFollow);
     state.elements.comparisonFollow.setAttribute(
-      'aria-pressed',
+      'aria-checked',
       comparison.autoFollow ? 'true' : 'false'
     );
   }
@@ -1221,7 +2175,8 @@
       .forEach(function (index) {
         fragment.appendChild(renderComparisonItem(
           state.comparison.items.get(index),
-          index
+          index,
+          state.comparison.items.get(index - 1)
         ));
       });
     state.elements.comparisonContent.replaceChildren(fragment);
@@ -1311,8 +2266,8 @@
     var sourceHighlight = visibleSourceHighlightRange();
     var targetSourceId = String(payload.targetSourceId || payload.target_source_file_id || '');
     var changedTarget = comparison.targetSourceId !== targetSourceId;
-    comparison.open = true;
-    comparison.targetSourceId = targetSourceId;
+    markComparisonOpen(targetSourceId);
+    showPendingPane(false);
     rememberComparisonTarget(state.sourceId, targetSourceId);
     comparison.targetDisplayName = targetDisplayName ||
       String(payload.targetTitle || payload.target_title || '对齐版本');
@@ -1325,36 +2280,22 @@
       0,
       Number.MAX_SAFE_INTEGER
     );
+    comparison.indexHighlights.clear();
     setComparisonHighlights(payload.pageMatchSpans || payload.page_match_spans || []);
-    state.elements.panel.classList.add('is-comparing');
-    state.elements.readerBody.classList.add('is-comparing');
-    state.elements.comparisonPane.hidden = false;
-    state.elements.sourcePaneHeader.hidden = false;
-    state.elements.sourcePaneTitle.textContent = sourceVersionLabel();
-    var targetObj = (state.alignmentTargets || []).filter(function (t) {
-      return String(t.source_file_id || '') === targetSourceId;
-    })[0];
-    state.elements.comparisonTitleText.textContent = targetObj
-      ? shortAlignLabel(targetObj)
-      : comparison.targetDisplayName;
-    state.elements.comparisonTitle.classList.toggle(
-      'is-switchable',
-      (state.alignmentTargets || []).length > 1
-    );
-    updateComparisonRouteNotice(targetObj);
-    // 精确高亮不可用 = 粗定位 → 显式标注低置信，给「校正」入口。
-    var lowConfidence = (payload.preciseHighlightAvailable != null
+    // 精确高亮不可用 = 粗定位 → 说明条如实标注。
+    comparison.lowConfidence = (payload.preciseHighlightAvailable != null
       ? payload.preciseHighlightAvailable
       : payload.precise_highlight_available) === false;
-    comparison.lowConfidence = lowConfidence;
-    state.elements.comparisonWarn.hidden = !lowConfidence;
     if (sourceHighlight) {
       positionSourceTarget(state.elements.content.querySelector(
         '[data-reader-index="' + sourceHighlight.startIndex + '"]'
       ));
     }
+    updateComparisonNotice();
     updateComparisonControls();
-    syncModeSegment();
+    renderToolbar();
+    loadLinkWindow();
+    scheduleReadingPositionSave();
     return loadComparisonWindow(comparison.currentIndex);
   }
 
@@ -1369,22 +2310,28 @@
     comparison.targetDisplayName = '';
     comparison.targetTitle = '';
     comparison.lastSourceRange = '';
+    comparison.lowConfidence = false;
     comparison.items.clear();
     comparison.highlights.clear();
+    comparison.indexHighlights.clear();
     comparison.previousStart = null;
     comparison.nextStart = null;
     comparison.hasMore = false;
     comparison.loading = false;
+    state.links = null;
+    state.linkRequestSerial += 1;
+    closeReviewPopover();
     if (!state.elements) return;
+    clearLinkedSelection();
+    renderFlags();
     state.elements.panel.classList.remove('is-comparing');
-    state.elements.readerBody.classList.remove('is-comparing');
+    state.elements.readerBody.classList.remove('is-comparing', 'is-indirect', 'is-pending');
     state.elements.comparisonPane.hidden = true;
-    state.elements.sourcePaneHeader.hidden = true;
-    state.elements.comparisonWarn.hidden = true;
-    state.elements.comparisonRouteNotice.hidden = true;
-    closeVersionMenu();
+    state.elements.comparisonNotice.hidden = true;
+    showPendingPane(false);
     state.elements.comparisonContent.replaceChildren();
-    syncModeSegment();
+    renderToolbar();
+    scheduleReadingPositionSave();
   }
 
   function toggleComparisonFollow() {
@@ -1995,6 +2942,7 @@
     if (currentChanged) {
       scheduleReaderDeepLink(item, index, anchorId);
       scheduleComparisonFollow();
+      scheduleReadingPositionSave();
     }
     if (typeof state.onCurrentChange === 'function') {
       state.onCurrentChange({
@@ -2119,12 +3067,7 @@
         }
       }
     );
-    var button = state.elements.toggleDecorations;
-    if (button) {
-      button.classList.toggle('is-active', show);
-      button.setAttribute('aria-pressed', show ? 'true' : 'false');
-      button.setAttribute('aria-label', show ? '隐藏页眉页脚' : '显示页眉页脚');
-    }
+    if (state.openMenu === 'more') renderMenu('more');
   }
 
   function toggleDecorationVisibility() {
@@ -2170,9 +3113,10 @@
   // stays character-for-character equal to text_raw — the citation/highlight
   // offset coordinate system (see textOffsetWithin) is never disturbed, whether
   // or not the decoration is visually shown.
-  function appendHighlightedText(container, text, ranges, decorations) {
+  function appendHighlightedText(container, text, ranges, decorations, linkedRanges) {
     var codePoints = Array.from(text);
     var highlights = mergeCodePointRanges(ranges, codePointLength(text));
+    var linked = mergeCodePointRanges(linkedRanges, codePointLength(text));
     var decoRanges = (decorations || [])
       .map(function (span) {
         var range = {
@@ -2205,7 +3149,7 @@
         return range;
       })
       .filter(function (span) { return span.end > span.start; });
-    if (!highlights.length && !decoRanges.length) {
+    if (!highlights.length && !decoRanges.length && !linked.length) {
       container.appendChild(document.createTextNode(text));
       return;
     }
@@ -2220,6 +3164,10 @@
     decoRanges.forEach(function (span) {
       boundarySet[span.start] = true;
       boundarySet[span.end] = true;
+    });
+    linked.forEach(function (range) {
+      boundarySet[range.start] = true;
+      boundarySet[range.end] = true;
     });
     var boundaries = Object.keys(boundarySet)
       .map(Number)
@@ -2246,6 +3194,13 @@
         mark.className = 'mef-reader-highlight';
         mark.appendChild(node);
         node = mark;
+      }
+      // 选中段落的对应关系：只包一层 span，文本节点不变，偏移坐标系不受影响。
+      if (linked.some(function (range) { return range.start <= start && end <= range.end; })) {
+        var linkedSpan = document.createElement('span');
+        linkedSpan.className = 'mef-reader-linked';
+        linkedSpan.appendChild(node);
+        node = linkedSpan;
       }
       var kind = decorationKindAt(decoRanges, start, end);
       if (kind) {
@@ -2358,10 +3313,8 @@
       item.page_note &&
       item.page_note !== item.page_display
     ) {
-      var note = document.createElement('span');
-      note.className = 'mef-reader-item-note';
-      note.textContent = item.page_note;
-      meta.appendChild(note);
+      // 页码来源说明放进提示，连续排版里不再与页码并排重复。
+      label.title = item.page_note;
     }
 
     var body = document.createElement('div');
@@ -2375,8 +3328,12 @@
     } else {
       var ranges = highlightRangesForItem(item, anchorId);
       state.resolvedHighlights.set(anchorId, ranges);
-      appendHighlightedText(body, text, ranges, item.decoration_spans);
+      appendHighlightedText(body, text, ranges, item.decoration_spans, state.linkedRanges.get(absoluteIndex));
       if (ranges.length) article.classList.add('has-highlight');
+      if (state.linkedRanges.has(absoluteIndex)) article.classList.add('is-linked');
+    }
+    if (isPageContinuation(item, state.items.get(absoluteIndex - 1))) {
+      article.classList.add('is-continued');
     }
 
     article.appendChild(meta);
@@ -2461,6 +3418,7 @@
       state.boundaryObserver.observe(beforeBoundary);
       state.boundaryObserver.observe(afterBoundary);
     }
+    if (state.comparison.open) loadLinkWindow();
   }
 
   function findAnchorNode(anchorId) {
@@ -2754,6 +3712,12 @@
     }
     if (typeof options.openExternal === 'function') config.openExternal = options.openExternal;
     if (typeof options.onClose === 'function') config.onClose = options.onClose;
+    [
+      'onOpenChange', 'onManageWork', 'onInstallComponent', 'onFindInWork',
+      'openInNewWindow', 'canOpenInNewWindow'
+    ].forEach(function (name) {
+      if (typeof options[name] === 'function') config[name] = options[name];
+    });
     if (typeof options.fetch === 'function') config.fetch = options.fetch;
     if (typeof options.notify === 'function') config.notify = options.notify;
     if (options.notify === null) config.notify = null;
@@ -2779,9 +3743,12 @@
     options = options || parseReaderDeepLink(global.location) || state.lastSession || {};
     var sourceId = String(options.sourceId || options.source_id || '');
     if (!sourceId) throw new Error('缺少文献标识，无法打开结构化文本');
-    if (config.openExternal && await config.openExternal(options)) return true;
+    if (!options.noExternal && config.openExternal && await config.openExternal(options)) return true;
     ensureDom();
+    closeMenus();
+    closeReviewPopover();
     if (state.comparison.open) closeComparison();
+    var wasOpen = state.open;
 
     if (options.config) configure(options.config);
     if (!state.open) {
@@ -2793,6 +3760,13 @@
     state.open = true;
     state.sourceId = sourceId;
     state.source = null;
+    if (options.returnLabel || !wasOpen) state.returnLabel = String(options.returnLabel || '');
+    state.pendingCompareWith = String(options.compareWith || '');
+    state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
+    state.links = null;
+    state.linkedRanges.clear();
+    state.selectedLinkKey = '';
+    state.elements.jumpForm.hidden = true;
     state.title = String(options.title || options.documentTitle || options.document_title || '');
     state.targetAnchorId = String(
       options.anchorId ||
@@ -2844,10 +3818,12 @@
     state.elements.root.hidden = false;
     state.elements.root.setAttribute('aria-hidden', 'false');
     document.body.classList.add('mef-reader-open');
+    if (!wasOpen && typeof config.onOpenChange === 'function') config.onOpenChange(true);
     setAlert('', 'info');
     renderAlignmentActions();
     updateCitationControls();
     loadAlignmentTargets(sourceId);
+    loadWorkContext(sourceId);
 
     if (!state.preciseHighlight && (
       options.preciseHighlightAvailable === false ||
@@ -2861,7 +3837,10 @@
     }
 
     var loaded = await loadWindow(state.currentIndex, state.targetAnchorId);
-    if (loaded) state.elements.close.focus();
+    if (loaded && !wasOpen) {
+      var focusTarget = state.elements.back.hidden ? state.elements.viewport : state.elements.back;
+      focusTarget.focus();
+    }
     return loaded;
   }
 
@@ -2924,7 +3903,16 @@
   function closeReader() {
     if (!state.elements || !state.open) return;
     flushPendingReaderDeepLink();
+    closeMenus();
+    closeReviewPopover();
+    state.elements.jumpForm.hidden = true;
+    // 关闭前立即写一次当前位置（含右栏），再收起对照；收起对照排队的保存随之取消。
+    saveReadingPositionNow();
     closeComparison();
+    if (state.positionTimer !== null) {
+      global.clearTimeout(state.positionTimer);
+      state.positionTimer = null;
+    }
     state.open = false;
     state.requestSerial += 1;
     state.citationRequestSerial += 1;
@@ -2951,6 +3939,9 @@
     state.elements.root.hidden = true;
     state.elements.root.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('mef-reader-open');
+    state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
+    state.pendingCompareWith = '';
+    if (typeof config.onOpenChange === 'function') config.onOpenChange(false);
     if (
       global.history &&
       typeof global.history.replaceState === 'function' &&
@@ -3004,12 +3995,21 @@
       comparisonOpen: state.comparison.open,
       comparisonTargetSourceId: state.comparison.targetSourceId,
       comparisonAutoFollow: state.comparison.autoFollow,
+      comparisonPending: !!(state.elements && state.comparison.open && !state.elements.pending.hidden),
+      workGroupId: state.work.groupId,
+      linkCount: state.links ? state.links.items.length : 0,
       lastDeepLink: state.lastDeepLink
     };
   }
 
   document.addEventListener('keydown', function (event) {
-    if (state.open && event.key === 'Escape') closeReader();
+    if (!state.open || event.key !== 'Escape' || event.defaultPrevented) return;
+    if (state.openMenu) { closeMenus(state.openMenu); return; }
+    if (state.review) { closeReviewPopover(true); return; }
+    if (state.elements && !state.elements.jumpForm.hidden) { closeJumpForm(); return; }
+    // 应用自己的弹窗或抽屉在上层时，Esc 先交给它们。
+    if (document.querySelector('.tw-dialog-scrim, .tw-sheet-scrim, .app-dialog-backdrop.open')) return;
+    closeReader();
   });
   document.addEventListener('mouseup', function () {
     if (state.open && state.selectionDragging) scheduleSelectionCapture();

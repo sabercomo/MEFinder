@@ -32,13 +32,84 @@ INDEX_HTML = (ROOT / "src" / "me_finder" / "templates" / "index.html").read_text
 
 
 class StructuredReaderFrontendTests(unittest.TestCase):
-    def test_reader_header_keeps_close_in_the_rightmost_column(self) -> None:
-        # 两行式头部：书名行（含 ⋯ 与 ×）在上，模式轴 / 控件行在下。
-        self.assertIn(".mef-reader-headrow", READER_CSS)
-        self.assertIn(".mef-reader-toolrow", READER_CSS)
-        # × 关闭在书名行右侧（headRow：heading + close，无用的 ⋯ 已删）。
-        self.assertIn("headRow.appendChild(close)", READER_JS)
-        self.assertNotIn("mef-reader-overflow", READER_JS)
+    def test_reader_toolbar_orders_back_versions_follow_cite_and_more(self) -> None:
+        # 单行工具栏：返回 · 左栏版本 ·（添加对照版本 | 交换 · 右栏版本 · 关闭对照）· 跟随滚动 · 复制引文 · ⋯
+        self.assertIn(".mef-reader-toolbar", READER_CSS)
+        order = [
+            "toolbar.appendChild(back)",
+            "toolbar.appendChild(leftPicker.wrap)",
+            "toolbar.appendChild(addPicker.wrap)",
+            "toolbar.appendChild(swap)",
+            "toolbar.appendChild(rightPicker.wrap)",
+            "toolbar.appendChild(closeCompare)",
+            "toolbar.appendChild(comparisonFollow)",
+            "toolbar.appendChild(cite)",
+            "toolbar.appendChild(morePicker.wrap)",
+            "toolbar.appendChild(close)",
+        ]
+        positions = [READER_JS.index(marker) for marker in order]
+        self.assertEqual(positions, sorted(positions))
+        # 独立阅读窗口没有「返回」，只保留关闭窗口。
+        self.assertIn("back.hidden = isReaderWindow", READER_JS)
+        self.assertIn("close.hidden = !isReaderWindow", READER_JS)
+        # 原「阅读 | 译本对照」分段切换不再存在，只保留添加 / 关闭对照这一套入口。
+        self.assertNotIn("mef-reader-mode-seg", READER_JS)
+        self.assertNotIn("open-comparison", READER_JS)
+        self.assertIn("'添加对照版本'", READER_JS)
+
+    def test_reader_dropdowns_are_listboxes_with_keyboard_support(self) -> None:
+        self.assertIn("trigger.setAttribute('aria-haspopup', menuRole || 'listbox')", READER_JS)
+        self.assertIn("menu.setAttribute('role', menuRole || 'listbox')", READER_JS)
+        self.assertIn("item.setAttribute('role', options.role || 'option')", READER_JS)
+        self.assertIn("aria-selected", READER_JS)
+        keydown = READER_JS[READER_JS.index("function handleMenuKeydown(event)"):]
+        keydown = keydown[:keydown.index("function renderToolbar()")]
+        for key in ("'Escape'", "'ArrowDown'", "'ArrowUp'", "'Home'", "'End'", "'Tab'"):
+            self.assertIn(key, keydown)
+        self.assertIn("closeMenus(key)", keydown)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", READER_CSS)
+        self.assertNotIn("transition: all", READER_CSS)
+        self.assertIn("transform: scale(0.97)", READER_CSS)
+
+    def test_unaligned_version_offers_generation_in_place(self) -> None:
+        pending = READER_JS[READER_JS.index("function openPendingComparison(targetId, info)"):]
+        pending = pending[:pending.index("function updateComparisonNotice()")]
+        self.assertIn("'这两版尚未对齐'", pending)
+        self.assertIn("'生成对齐'", pending)
+        self.assertIn("关闭阅读器也会在后台继续", pending)
+        self.assertIn("generateBlockedReason()", pending)
+        # 左栏不跳走：只打开右栏的待生成面板。
+        self.assertNotIn("openReader(", pending)
+        self.assertIn("state.pendingCompareWith", READER_JS)
+
+    def test_low_confidence_review_saves_one_to_many_or_no_counterpart(self) -> None:
+        self.assertIn("correctionSaveEndpoint: '/api/text-alignments/corrections/save'", READER_JS)
+        self.assertIn("correctionDeferEndpoint: '/api/text-alignments/corrections/defer'", READER_JS)
+        self.assertIn("reviewCandidatesEndpoint: '/api/text-alignments/review-candidates'", READER_JS)
+        review = READER_JS[READER_JS.index("async function openReviewPopover(trigger)"):]
+        review = review[:review.index("function nearestTextOffset(")]
+        for label in ("'保存校正'", "'译本无对应'", "'暂不处理'"):
+            self.assertIn(label, review)
+        self.assertIn("target_segment_ids: kind === 'none' ? [] : Array.from(checked)", review)
+        self.assertIn("box.type = 'checkbox'", review)
+        # 「!」不进入文本节点，引文偏移坐标系不受影响；暂不处理后变灰保留。
+        self.assertIn("article.appendChild(flag)", READER_JS)
+        self.assertIn("is-deferred", READER_JS)
+        self.assertIn(".mef-reader-flag.is-deferred", READER_CSS)
+
+    def test_reading_position_is_saved_per_work(self) -> None:
+        self.assertIn("readingPositionEndpoint: '/api/translation-works/reading-position'", READER_JS)
+        save = READER_JS[READER_JS.index("function saveReadingPositionNow()"):]
+        save = save[:save.index("function scheduleReadingPositionSave()")]
+        self.assertIn("document_group_id: state.work.groupId", save)
+        self.assertIn("right_source_file_id: state.comparison.open ? state.comparison.targetSourceId : null", save)
+        self.assertIn("saveReadingPositionNow();", READER_JS[READER_JS.index("function closeReader()"):])
+
+    def test_reader_window_can_return_location_to_main_window(self) -> None:
+        self.assertIn("global.pywebview.state.readerReturn = currentLocationOptions()", READER_JS)
+        self.assertIn("config.openInNewWindow(currentLocationOptions())", READER_JS)
+        self.assertIn("'在新窗口打开'", READER_JS)
+        self.assertIn("'回到主窗口'", READER_JS)
 
     def test_comparison_default_target_remembers_last_choice_per_book(self) -> None:
         # 对照记忆按书保存，默认候选筛选后再恢复选择。
@@ -57,7 +128,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         )
         # 在跨语言候选中恢复仍有效的记忆。
         render_start = READER_JS.index("function renderAlignmentActions()")
-        render_end = READER_JS.index("function syncModeSegment()", render_start)
+        render_end = READER_JS.index("async function loadAlignmentTargets(", render_start)
         render_body = READER_JS[render_start:render_end]
         self.assertIn("var remembered = recallComparisonTarget(state.sourceId)", render_body)
         self.assertIn("rememberedValid || String(defaultTargets[0].source_file_id", render_body)
@@ -65,7 +136,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_comparison_defaults_to_other_language_despite_same_language_memory(self) -> None:
         start = READER_JS.index("      var remembered = recallComparisonTarget(state.sourceId)")
-        end = READER_JS.index("      var readBtn =", start)
+        end = READER_JS.index("      state.defaultComparisonTarget = defaultTarget;", start)
         selection = READER_JS[start:end]
         script = """
 const assert = require('assert');
@@ -92,26 +163,25 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_two_hop_routed_comparison_offers_direct_alignment(self) -> None:
-        # 两跳中转对照（via_source_file_id 非空）时提示并给「生成直接对照」一键入口。
-        self.assertIn("function updateComparisonRouteNotice(targetObj)", READER_JS)
-        self.assertIn("targetObj && targetObj.via_source_file_id", READER_JS)
-        self.assertIn("generate-direct-comparison", READER_JS)
-        self.assertIn("function generateDirectComparison()", READER_JS)
-        # 用作品组 id + 源/目标发起后台直接对齐，再轮询状态。
+        # 间接关联（经基准换算）时说明条如实提示，并给「生成直接对齐」就地入口。
+        notice = READER_JS[READER_JS.index("function updateComparisonNotice()"):]
+        notice = notice[:notice.index("function trackGeneration(")]
+        self.assertIn("target.via_source_file_id", notice)
+        self.assertIn("'生成直接对齐'", notice)
+        self.assertIn("换算，可能错位或漏段", notice)
+        self.assertIn("readerBody.classList.toggle('is-indirect', !!viaId)", notice)
+        self.assertIn("'对齐模型已更换，以下是旧结果'", notice)
+        self.assertIn("function startComparisonAlignment(force)", READER_JS)
         self.assertIn("config.alignmentStartEndpoint", READER_JS)
         self.assertIn("config.alignmentStatusEndpoint", READER_JS)
-        self.assertIn("document_group_id: state.alignmentGroupId", READER_JS)
-        self.assertIn("pivot_source_file_id: state.sourceId", READER_JS)
-        # 成功后刷新目标并按当前源栏重新定位到直接对照。
-        poll_start = READER_JS.index("async function pollDirectComparison(")
-        poll_end = READER_JS.index("function nearestTextOffset(", poll_start)
-        poll_body = READER_JS[poll_start:poll_end]
-        self.assertIn("await loadAlignmentTargets(state.sourceId)", poll_body)
-        self.assertIn("locateInAlignedVersion(targetId, sourceCenterRange())", poll_body)
-        # 关闭对照要隐藏中转提示。
-        self.assertIn("state.elements.comparisonRouteNotice.hidden = true", READER_JS)
-        # 目标响应要带作品组 id 供前端发起直接对齐。
+        poll = READER_JS[READER_JS.index("async function pollComparisonAlignment("):]
+        poll = poll[:poll.index("function currentLocationOptions()")]
+        self.assertIn("await loadAlignmentTargets(state.sourceId)", poll)
+        self.assertIn("await loadWorkContext(state.sourceId)", poll)
+        self.assertIn("state.elements.comparisonNotice.hidden = true", READER_JS)
         self.assertIn("state.alignmentGroupId = String(payload.document_group_id", READER_JS)
+        # 两栏之间：直接对齐实线，间接关联虚线。
+        self.assertIn(".mef-reader-body.is-indirect .mef-reader-comparison-pane { border-left: 1px dashed", READER_CSS)
 
     def test_reader_header_identifies_the_current_parsing_record(self) -> None:
         self.assertIn("eyebrow: eyebrow", READER_JS)
@@ -304,16 +374,8 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("'在' + alignmentTargetDisplayLabel(target) + '中定位'", READER_JS)
         self.assertIn("function alignmentTargetDisplayLabel(target)", READER_JS)
         self.assertIn(".mef-reader-alignment-action", READER_CSS)
-        self.assertIn("function generateTextAlignmentAction", APP_JS)
         self.assertIn("'/api/text-alignments/start'", APP_JS)
         self.assertIn("'/api/text-alignments/status?job_id='", APP_JS)
-        self.assertIn("pivot_source_file_id: pivotSourceId", APP_JS)
-        self.assertIn("generateSelectedTextAlignmentAction", APP_JS)
-        self.assertIn("openVersionSelect", APP_JS)
-        self.assertIn("pickPairVersion", APP_JS)
-        self.assertIn("result.accepted_link_count", APP_JS)
-        self.assertIn("result.rejected_link_count", APP_JS)
-        self.assertIn("result.unmatched_link_count", APP_JS)
         comparison_start = READER_JS.index("function renderComparisonWindow()")
         comparison_end = READER_JS.index("async function loadComparisonWindow", comparison_start)
         comparison_body = READER_JS[comparison_start:comparison_end]
@@ -322,44 +384,16 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("viewport.scrollLeft = 0", comparison_body)
         self.assertNotIn("scrollIntoView", comparison_body)
 
-    def test_group_alignment_accepts_pdf_and_epub_but_not_docx(self) -> None:
-        helper = re.search(
-            r"function documentSupportsTextAlignment\(source\) \{"
-            r"(?P<body>.*?)\n\s*\}",
-            APP_JS,
-            flags=re.DOTALL,
-        )
-        self.assertIsNotNone(helper)
-        body = helper.group("body")
-        self.assertIn("libraryFileFacet(source)", body)
-        self.assertIn("facet === 'pdf' || facet === 'epub'", body)
-        self.assertNotIn("'word'", body)
-        self.assertIn("documentSupportsTextAlignment(src)", APP_JS)
-
-    def test_group_manager_has_a_fixed_shell_and_one_vertical_scroll_region(self) -> None:
-        self.assertIn("height: min(760px, calc(100dvh - 48px))", APP_CSS)
-        self.assertIn(".group-manage-body { flex: 1 1 auto; min-height: 0; overflow-y: auto", APP_CSS)
-        self.assertIn("scrollbar-gutter: stable", APP_CSS)
-        self.assertIn(".grp-remove-btn { grid-column: 2; grid-row: 2; }", APP_CSS)
-        self.assertNotIn(".grp-remove-btn:active { transform", APP_CSS)
-        self.assertIn(".group-manage-foot { flex: 0 0 auto", APP_CSS)
-        self.assertIn('id="group-realign-all"', INDEX_HTML)
-        self.assertIn('onclick="realignAllTextAlignmentsAction(this)"', INDEX_HTML)
-        self.assertIn("function documentGroupExistingAlignmentPairs", APP_JS)
-        self.assertIn("function realignAllTextAlignmentsAction", APP_JS)
-        self.assertIn("force: force", APP_JS)
-        self.assertIn(".group-realign-all { margin-right: auto; }", APP_CSS)
-
     def test_aligned_pdf_versions_can_read_side_by_side_by_segment(self) -> None:
         self.assertIn("function sourceCenterRange()", READER_JS)
         self.assertIn("caretPositionFromPoint", READER_JS)
         self.assertIn("function showComparison(payload, targetDisplayName)", READER_JS)
         self.assertIn("function scheduleComparisonFollow()", READER_JS)
         self.assertIn("function loadComparisonWindow", READER_JS)
-        self.assertIn("译本对照 · ", READER_JS)
+        self.assertIn("'添加对照版本'", READER_JS)
         # 自动跟随从文字按钮改为开关（标签 + 轨道），状态用 is-active + aria-pressed 表达。
         self.assertIn("mef-reader-follow-switch", READER_JS)
-        self.assertIn("自动跟随", READER_JS)
+        self.assertIn("跟随滚动", READER_JS)
         self.assertIn("dataset.readerComparison", READER_JS)
         self.assertIn("payload.previous_start", READER_JS)
         self.assertIn("payload.next_start", READER_JS)
@@ -561,7 +595,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("var(--surface-primary)", READER_CSS)
         self.assertIn("var(--text-primary)", READER_CSS)
         self.assertIn("var(--border-default)", READER_CSS)
-        self.assertIn("var(--accent)", READER_CSS)
+        self.assertIn("var(--accent-fill)", READER_CSS)
         self.assertNotRegex(READER_CSS, r"#[0-9a-fA-F]{3,8}\b")
         reader_variables = set(re.findall(r"var\((--[\w-]+)", READER_CSS))
         app_variables = set(re.findall(r"(--[\w-]+)\s*:", APP_CSS))
@@ -578,18 +612,26 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
             "@media (min-width: 1500px) and (min-height: 800px)",
             READER_CSS,
         )
-        self.assertIn("width: min(900px, calc(100% - 64px));", READER_CSS)
-        self.assertIn("font-size: 18px; line-height: 1.92;", READER_CSS)
+        self.assertIn("width: min(780px, calc(100% - 80px));", READER_CSS)
+        self.assertIn("font-size: 19px; line-height: 1.85;", READER_CSS)
+        # 常规阅读：18px 起，行距约 1.85，连续段落只在页码变化处标页码。
+        self.assertRegex(READER_CSS, r"\.mef-reader-item-text \{[^}]*font-size: 18px;[^}]*line-height: 1.85;")
+        self.assertIn(".mef-reader-item.is-continued .mef-reader-item-meta { display: none; }", READER_CSS)
+        self.assertIn("function isPageContinuation(item, previousItem)", READER_JS)
 
     def test_reader_panel_is_contained_by_the_application_viewport(self) -> None:
+        # 主窗口：阅读器占满内容区（不是大弹窗），侧栏由宿主收成图标栏。
+        self.assertIn(".main-area { position: relative; }", READER_CSS)
         self.assertRegex(
             READER_CSS,
-            r"\.mef-structured-reader \{[^}]*padding: 24px;[^}]*overflow: hidden;",
+            r"\.mef-structured-reader \{[^}]*position: absolute;[^}]*inset: 0;[^}]*overflow: hidden;",
         )
-        self.assertRegex(
-            READER_CSS,
-            r"\.mef-reader-panel \{[^}]*max-width: 980px;[^}]*max-height: 900px;[^}]*margin: auto;",
-        )
+        self.assertNotIn("mef-reader-backdrop", READER_JS)
+        self.assertIn("document.querySelector('.main-area')", READER_JS)
+        self.assertIn("config.onOpenChange(true)", READER_JS)
+        self.assertIn("config.onOpenChange(false)", READER_JS)
+        # 独立阅读窗口：占满整个窗口。
+        self.assertIn('html[data-reader-window="true"] .mef-structured-reader { position: fixed; }', READER_CSS)
         self.assertRegex(
             READER_CSS,
             r"\.mef-reader-pane-header \{[^}]*flex-wrap: wrap;",
@@ -598,7 +640,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
     def test_search_detail_exposes_reader_without_replacing_open_original(self) -> None:
         self.assertIn("查看结构化文本", APP_JS)
         self.assertIn("function openSelectedStructuredReader()", APP_JS)
-        self.assertIn("reader.openForSearchResult(item)", APP_JS)
+        self.assertIn("reader.openForSearchResult(item, {returnLabel: '检索结果'})", APP_JS)
         self.assertIn("function openSource(sourceId, page)", APP_JS)
 
 

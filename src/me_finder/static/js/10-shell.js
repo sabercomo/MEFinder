@@ -160,6 +160,11 @@
     // 「返回搜索」横幅只在从检索结果跳来补书目时点亮；任何导航都先清掉（S-03）。
     var returnBanner = document.getElementById('library-return-banner');
     if (returnBanner) returnBanner.hidden = true;
+    // 主窗口里的阅读器占着内容区：切换页面即结束阅读（侧栏状态由阅读器宿主恢复）。
+    if (global.MEFinderReader && global.MEFinderReader.isOpen() && document.documentElement.dataset.readerWindow !== 'true') {
+      global.MEFinderReader.close({silentReturn: true});
+    }
+    if (global.MEFinder.works) global.MEFinder.works.closeOverlays();
     currentPage = page;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.sidebar-item').forEach(a => a.classList.remove('active'));
@@ -168,6 +173,7 @@
     const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
     if (link) link.classList.add('active');
     if (page === 'library' && !libraryStore.loaded) global.MEFinder.library.load();
+    if (page === 'works') global.MEFinder.works.load();
     if (page === 'import') {
       if (!parserStore.visionConfigLoaded) global.MEFinder.visionProviders.load();
       if (!parserStore.mineruConfigLoaded) global.MEFinder.parserRuntime.loadMineruConfig();

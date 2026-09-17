@@ -90,6 +90,7 @@ MEFinder.imports.setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
+MEFinder.works.load();
 MEFinder.imports.loadResumableImports();
 MEFinder.library.syncViewButtons();
 // 文献库只在用户展开文献下拉或进入文献库页时才读取：启动时不预取整库。

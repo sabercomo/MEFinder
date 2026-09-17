@@ -603,6 +603,7 @@ def main() -> None:
     )
     window, window_controller = create_main_window(webview, theme)
     window.expose(reader_windows.open_reader)
+    reader_windows.set_main_window(window)
     window.events.closed += reader_windows.close_all
     if sys.platform == "darwin":
         window.events.closing += pdf_viewer.close

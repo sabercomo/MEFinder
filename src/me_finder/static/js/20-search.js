@@ -219,7 +219,7 @@
     var allOption = '<button class="app-select-option' + (noScope ? ' is-selected' : '') + '" type="button" onclick="selectSearchScopeAll(event)"><span>全部文献</span>' + (noScope ? check : '') + '</button>';
     var groupsHtml = '';
     if (typeof libraryStore.documentGroups !== 'undefined' && libraryStore.documentGroups.length) {
-      groupsHtml = '<div class="document-options-head">作品组</div>' + libraryStore.documentGroups.map(function(group) {
+      groupsHtml = '<div class="document-options-head">作品</div>' + libraryStore.documentGroups.map(function(group) {
         var selected = group.document_group_id === searchStore.groupId;
         var count = (group.members || []).length;
         return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" onclick="selectSearchGroup(event,\'' + esc(group.document_group_id) + '\')"><span class="document-option-main"><span class="document-option-title">' + esc(group.title) + '</span><span class="document-option-meta">' + count + ' 个版本</span></span>' + (selected ? check : '') + '</button>';
@@ -732,7 +732,7 @@
       return;
     }
     try {
-      await reader.openForSearchResult(item);
+      await reader.openForSearchResult(item, {returnLabel: '检索结果'});
     } catch (error) {
       showToast(error && error.message ? error.message : '结构化文本打开失败', 'danger');
     }

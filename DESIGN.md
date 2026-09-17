@@ -2,7 +2,9 @@
 
 2026-09-12：设计方向已确认。本文件用于指导后续界面实施。
 
-2026-09-13：设置页已按本规范分五个主题落地（空间与控件规范、自绘下拉语义与动效、PDF 原文与段落显示改下拉行、MinerU 账号状态、本地 OCR 六态与其余分类行式布局），实施记录见 `docs/release-notes-0.5.4.md`。阅读器与作品版本页仍未按本规范改造。
+2026-09-13：设置页已按本规范分五个主题落地（空间与控件规范、自绘下拉语义与动效、PDF 原文与段落显示改下拉行、MinerU 账号状态、本地 OCR 六态与其余分类行式布局），实施记录见 `docs/release-notes-0.5.4.md`。
+
+2026-09-18：阅读器与作品版本页已按本规范落地为「译本对照」（作品—版本页、管理版本抽屉、统一阅读器），交互原型见 `docs/design/translation-comparison-prototype.html`，实施记录见 `docs/release-notes-0.5.5.md` 与 `docs/issues/translation-comparison-redesign.md`
 
 ## 1. 产品与设计目标
 

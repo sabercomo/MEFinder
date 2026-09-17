@@ -79,13 +79,12 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertIn(f"MEFinder v{__version__}", HTML)
         self.assertIn(f"v{__version__}", HTML)
 
-    def test_group_title_uses_available_row_width(self):
-        css = _read("static/css/40-library.css")
-        match = re.search(r"\.grp-head2 \.grp-title\s*\{([^}]*)\}", css)
+    def test_work_titles_wrap_instead_of_clipping(self):
+        css = _read("static/css/45-works.css")
+        match = re.search(r"\.tw-work-title \{([^}]*)\}", css)
         self.assertIsNotNone(match)
-        declarations = match.group(1)
-        self.assertIn("max-width: 100%", declarations)
-        self.assertNotRegex(declarations, r"max-width:\s*\d+ch")
+        self.assertIn("overflow-wrap: anywhere", match.group(1))
+        self.assertIn("container-type: inline-size", css)
 
     def test_mineru_brand_asset_is_packaged(self):
         """MinerU 账号与统计页共用官方矢量标识，打包时不能漏掉。"""
@@ -311,7 +310,11 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.2 +1：管理弹窗头部「＋ 新建作品组」切换 toggleGroupCreate（净 46）。
             # 0.5.2 +1：作品组搜索框 groupSearchInputAction（净 47）。
             # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
-            "static/js/30-library.js": 48,
+            # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
+            # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
+            "static/js/30-library.js": 21,
+            # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
+            "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
             "static/js/40-bibliography.js": 27,
             "static/js/70-vision.js": 24,
@@ -494,10 +497,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   incompatible detail（不兼容原因），与实际启动条件一致。
     #   0.5.5 版本号落库（__version__ 0.5.4→0.5.5，经 web_assets `__APP_VERSION__`
     #   注入装配 HTML）：字节数不变，仅指纹更新。
+    # 0.5.5 译本对照改版：侧栏新增「译本对照」、35-works.js / 45-works.css 作品—版本页与管理版本抽屉、
+    #   文献库去掉作品组下拉与管理弹窗改「加入作品…」、reader.js / reader.css 统一阅读器（工具栏、
+    #   添加 / 关闭对照、连续段落、低置信校正弹层、阅读位置）。
     BASELINE_SHA256 = (
-        "2068534e149e1ec892babdb91743f5d62840d1b6647bcfe2c5e6dfc2405ecfb1"
+        "d41cffbe5d372f11c61d48e7ac88f6cad07b4c2e376129ac9d05d1bc6a4b9cbb"
     )
-    BASELINE_BYTES = 1135419
+    BASELINE_BYTES = 1182032
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

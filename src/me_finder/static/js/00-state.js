@@ -61,7 +61,6 @@ const libraryStore = {
   stats: null,
   loaded: false,
   documentGroups: [],
-  groupScopeId: '',
   detailLoaded: {},
   detailPending: {},
   filterTimer: null,
@@ -80,7 +79,6 @@ const libraryStore = {
   sortField: ['imported_at','title','author','modified_at','source_type','status'].indexOf(localStorage.getItem('meFinderLibrarySortField')) >= 0 ? localStorage.getItem('meFinderLibrarySortField') : 'imported_at',
   sortDirection: localStorage.getItem('meFinderLibrarySortDirection') === 'asc' ? 'asc' : 'desc'
 };
-// 作品组：只限定 source_file 集合，不引入 folder/root scope。空串 = 全部文献。
 const LIBRARY_RENDER_BATCH = 50;
 const DRAG_SELECT_EDGE_ZONE = 56;
 const DRAG_SELECT_MAX_SCROLL_SPEED = 26;

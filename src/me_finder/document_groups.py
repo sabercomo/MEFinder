@@ -620,6 +620,33 @@ def _member_source_payload(row: sqlite3.Row) -> Dict[str, object]:
     return payload
 
 
+def _epub_publisher_pages(
+    connection: sqlite3.Connection, member: sqlite3.Row, has_audit: bool
+) -> Optional[bool]:
+    """For EPUB members, whether the publisher supplied page numbers.
+
+    Import records ``epub_page_list_missing`` when an EPUB has neither a
+    page-list nor pagebreak markers; nothing is inferred beyond that record.
+    Non-EPUB members return ``None``.
+    """
+
+    payload = _member_source_payload(member)
+    file_name = str(payload.get("file_name") or "").lower()
+    source_format = str(
+        payload.get("source_format") or payload.get("file_format") or ""
+    ).lower()
+    if source_format != "epub" and not file_name.endswith(".epub"):
+        return None
+    if not has_audit:
+        return None
+    missing = connection.execute(
+        "SELECT 1 FROM audit_issues WHERE source_file_id = ? "
+        "AND issue_type = 'epub_page_list_missing' LIMIT 1",
+        (member["source_file_id"],),
+    ).fetchone()
+    return missing is None
+
+
 def list_document_groups(
     db_path: Path = DEFAULT_DATABASE_PATH,
 ) -> List[Dict[str, object]]:
@@ -659,6 +686,7 @@ def list_document_groups(
                 }
                 for row in alignment_rows
             ]
+            has_audit = _table_exists(connection, "audit_issues")
             members = connection.execute(
                 "SELECT m.source_file_id AS source_file_id, m.version_label AS "
                 "version_label, m.member_order AS member_order, "
@@ -688,6 +716,9 @@ def list_document_groups(
                             ),
                             "is_base": member["source_file_id"]
                             == group["base_source_file_id"],
+                            "epub_publisher_pages": _epub_publisher_pages(
+                                connection, member, has_audit
+                            ),
                         }
                         for member in members
                     ],

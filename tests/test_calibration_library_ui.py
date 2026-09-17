@@ -466,8 +466,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("当前筛选没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
         clear_filters = HTML.split("function clearLibraryFilters()", 1)[1].split("}", 1)[0]
-        self.assertIn("libraryStore.groupScopeId = '';", clear_filters)
-        self.assertIn("renderGroupScopeSelector();", clear_filters)
+        self.assertIn("libraryStore.statusFilter = 'all';", clear_filters)
+        self.assertNotIn("groupScopeId", HTML)
         self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
         # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。

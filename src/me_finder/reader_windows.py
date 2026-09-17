@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from typing import Mapping
 
@@ -27,6 +28,11 @@ class ReaderWindows:
         self._windows: list = []
         self._lock = threading.RLock()
         self._closing = False
+        self._main_window = None
+
+    def set_main_window(self, window) -> None:
+        """Remember the main window so a reader can hand its location back."""
+        self._main_window = window
 
     def set_base_url(self, url: str) -> None:
         """Bind the already-started backend before exposing the main application."""
@@ -63,6 +69,8 @@ class ReaderWindows:
                 # JS-originated state notifications do not send a reply.
                 if event_type == "change" and key == "readerClosed" and value is True:
                     window.destroy()
+                if event_type == "change" and key == "readerReturn":
+                    self._return_to_main(window, value)
 
             def forget_window() -> None:
                 with self._lock:
@@ -71,6 +79,27 @@ class ReaderWindows:
             window.events.closed += forget_window
             window.state += reader_state_changed
         return True
+
+    def _return_to_main(self, window, value: object) -> None:
+        """Reopen this reader's location in the main window, then close it.
+
+        Only a validated plain location is forwarded; it is serialized with
+        ``json.dumps`` so reader-supplied text can never become script.
+        """
+        if not isinstance(value, Mapping):
+            return
+        source_id = value.get("sourceId")
+        if not isinstance(source_id, str) or not source_id.strip() or len(source_id) > 256:
+            return
+        main = self._main_window
+        if main is None:
+            return
+        payload = json.dumps(dict(value), ensure_ascii=True)
+        main.evaluate_js(
+            "window.MEFinder && window.MEFinder.works && "
+            "window.MEFinder.works.openReaderFromWindow(" + payload + ")"
+        )
+        window.destroy()
 
     def close_all(self) -> None:
         """Close readers after the main window has actually closed."""

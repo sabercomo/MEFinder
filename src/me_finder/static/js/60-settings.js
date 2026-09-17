@@ -842,6 +842,7 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id;
+      if (global.MEFinder && global.MEFinder.works) global.MEFinder.works.refreshAvailability();
       showToast('译本对齐模型已切换；请对已有配对重新运行对齐');
     } catch (e) {
       settingsStore.currentAlignmentEmbeddingModel = previous;
@@ -875,6 +876,13 @@
 
   function renderAlignmentModelComponent(component) {
     if (!component || !Array.isArray(component.models)) return;
+    var installedSignature = component.models.filter(function(model) { return model.installed; })
+      .map(function(model) { return model.id; }).join(',');
+    if (global.MEFinder && global.MEFinder.works && settingsStore.alignmentModelInstalledSignature !== undefined
+        && settingsStore.alignmentModelInstalledSignature !== installedSignature) {
+      global.MEFinder.works.refreshAvailability();
+    }
+    settingsStore.alignmentModelInstalledSignature = installedSignature;
     settingsStore.alignmentModelComponent = component;
     if (component.compute && !settingsStore.alignmentRuntime) renderAlignmentComputeStatus(component.compute);
     var downloading = false;
@@ -1059,6 +1067,9 @@
     renderAlignmentComputeStatus(compute);
     var busyStates = {provisioning: 1, validating: 1, cleaning: 1, uninstall_pending: 1, upgrade_pending: 1};
     var busy = !!busyStates[runtime.state];
+    if (global.MEFinder && global.MEFinder.works && (!previous || previous.state !== runtime.state || previous.installed !== runtime.installed)) {
+      global.MEFinder.works.refreshAvailability();
+    }
     if (!busy && previous && (previous.state !== runtime.state
         || previous.installed !== runtime.installed || previous.operation)) {
       loadAlignmentModelComponent();
