@@ -38,5 +38,46 @@
       "list_alignment_corrections": "passed",
       "list_documents": "passed"
     }
+  },
+  "x86_64_rosetta": {
+    "desktop": {
+      "platform": "macOS x86_64 under Rosetta",
+      "model": "minilm-l12-v2",
+      "offline": "HF_HUB_OFFLINE=1",
+      "alignment_links": 4,
+      "full_persisted_links_equal": true,
+      "members_before_uninstall": 20,
+      "members_after_uninstall": 20,
+      "uninstall_error": "",
+      "scope": "actual frozen portable copy; fresh uv runtime installation; existing model files copied",
+      "version": "0.5.5",
+      "segment_and_run_tables_equal_except_run_id_and_timestamps": {
+        "segment_sets": 2,
+        "text_segments": 20,
+        "text_segment_spans": 0,
+        "text_segment_paragraph_spans": 20,
+        "alignment_runs": 1
+      },
+      "runtime_and_models_removed": true,
+      "after_uninstall_http_search_and_targets": "passed"
+    },
+    "sidecar": {
+      "version": "0.5.5",
+      "sidecar_bytes": 50703312,
+      "excluded_stack_modules": [],
+      "stdio_checks": {
+        "find_parallel_passages": "passed",
+        "locate_quote": "passed",
+        "list_alignment_corrections": "passed",
+        "list_documents": "passed"
+      }
+    },
+    "dependencies": {
+      "python": "3.12",
+      "numpy": "2.5.2",
+      "fastembed": "0.8.0",
+      "onnxruntime": "1.23.2"
+    },
+    "hardware": "Apple Silicon running x86_64 binaries under Rosetta; not Intel hardware"
   }
 }

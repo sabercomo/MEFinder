@@ -51,3 +51,14 @@ node --check src/me_finder/static/js/60-settings.js
 - Windows / macOS Intel 的冻结组件安装、外部 worker 离线计算与结果对照；Windows 发布冒烟 workflow 可验证打包/安装升级/MCP/卸载，但不包含完整对齐组件安装计算链。
 - 首次从冻结包联网下载模型，以及正式用户数据路径、发布级 ZIP/DMG/签名验收。本轮复用了既有模型文件，并用 portable.flag 隔离验证。
 - 本轮不创建 tag 或 Release，不把本机或源码 CI 成功外推为三平台交付完成。
+
+## 2026-09-17 补充：x86_64 冻结产物的 Rosetta 验证
+
+使用既有 `.venv-macos12-x86_64`，以 `arch -x86_64 env MEFINDER_TARGET_ARCH=x86_64` 运行上述 PyInstaller 命令；桌面和 sidecar 的 Mach-O 均确认为纯 x86_64。该验证运行在 Apple Silicon 的 Rosetta 上，**不是 Intel 真机验收**。
+
+- 冻结桌面正常启动，选择 `darwin-x86_64` 清单；经生产 HTTP 真实安装独立 Python 3.12 运行时，NumPy 2.5.2 / fastembed 0.8.0 / ONNX Runtime 1.23.2，实际独立解释器报告 x86_64。
+- 复制同一 MiniLM 模型文件，`HF_HUB_OFFLINE=1`；用同版本 x86_64 依赖的原进程内路径作比较，4 条链接和20个成员全部相等，段落区间与运行参数的比较口径同 ARM。卸载后模型/运行时删除、20个成员保留，搜索与已有目标读取通过。
+- sidecar 50,703,312 B，归档/PYZ 无三栈模块；真实 STDIO 四工具均通过。
+- 临时桌面进程已终止；用户正式库和正式组件未修改。ARM 与 x86_64 分别同架构比较，不以跨 ONNX 版本数值比较替代各自等价验证。
+
+修复提交 `8d571fe` 已推送；代码 CI：[35177699594](https://github.com/sabercomo/MEFinder/actions/runs/35177699594)。另已启动现有 [Windows 发布冒烟 35177710345](https://github.com/sabercomo/MEFinder/actions/runs/35177710345)，写本段时尚在构建步骤。用户明确要求：该发布冒烟若失败只记录位置，不继续排修，由用户后续在 Windows 本机运行。
