@@ -30,9 +30,7 @@ def assemble_library_routes(
         "/api/library/document": lambda params: library_query_controller.document(
             (params.get("source_id") or [""])[0]
         ),
-        "/api/calibration-library": (
-            lambda _params: library_query_controller.calibration_library()
-        ),
+        "/api/calibration-library": lambda _params: library_query_controller.calibration_library(),
         "/api/document-groups": lambda _params: document_group_controller.list(),
     }
     post_routes = {
@@ -41,6 +39,7 @@ def assemble_library_routes(
         "/api/document-groups/rename": document_group_controller.rename,
         "/api/document-groups/delete": document_group_controller.delete,
         "/api/document-groups/add-member": document_group_controller.add_member,
+        "/api/document-groups/move-members": document_group_controller.move_members,
         "/api/document-groups/remove-member": document_group_controller.remove_member,
         "/api/document-groups/set-base": document_group_controller.set_base,
         "/api/document-groups/version-label": document_group_controller.set_version_label,
@@ -57,9 +56,7 @@ def assemble_library_routes(
 def assemble_preference_routes(preferences_controller) -> RoutePair:
     get_routes = {
         "/api/preferences": lambda _params: preferences_controller.preferences(),
-        "/api/scan-directories": (
-            lambda _params: preferences_controller.scan_directories()
-        ),
+        "/api/scan-directories": lambda _params: preferences_controller.scan_directories(),
     }
     post_routes = {
         "/api/preferences": preferences_controller.save_preferences,
@@ -69,33 +66,21 @@ def assemble_preference_routes(preferences_controller) -> RoutePair:
 
 def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
     get_routes = {
-        "/api/mineru-accounts": (
-            lambda _params: parser_settings_controller.mineru_accounts()
-        ),
-        "/api/mineru-statistics": (
-            lambda _params: parser_settings_controller.mineru_statistics()
-        ),
-        "/api/parser-statistics": (
-            lambda _params: parser_settings_controller.parser_statistics()
-        ),
-        "/api/components": (
-            lambda _params: parser_settings_controller.component_diagnostics()
-        ),
+        "/api/mineru-accounts": lambda _params: parser_settings_controller.mineru_accounts(),
+        "/api/mineru-statistics": lambda _params: parser_settings_controller.mineru_statistics(),
+        "/api/parser-statistics": lambda _params: parser_settings_controller.parser_statistics(),
+        "/api/components": lambda _params: parser_settings_controller.component_diagnostics(),
         "/api/text-alignment/models": (
             lambda _params: parser_settings_controller.text_alignment_models_component()
         ),
         "/api/text-alignment/runtime": (
             lambda _params: parser_settings_controller.text_alignment_runtime_component()
         ),
-        "/api/mineru-config": (
-            lambda _params: parser_settings_controller.mineru_config()
-        ),
+        "/api/mineru-config": lambda _params: parser_settings_controller.mineru_config(),
         "/api/mineru-local/component": (
             lambda _params: parser_settings_controller.managed_mineru_local_component()
         ),
-        "/api/local-ocr": (
-            lambda _params: parser_settings_controller.local_ocr_config()
-        ),
+        "/api/local-ocr": lambda _params: parser_settings_controller.local_ocr_config(),
         "/api/vision-providers": (
             lambda _params: parser_settings_controller.vision_providers()
         ),
@@ -180,9 +165,7 @@ def assemble_import_routes(import_job_controller) -> RoutePair:
     post_routes = {
         "/api/mineru-reparse": import_job_controller.reparse_with_mineru,
         "/api/import-retry-mineru": import_job_controller.retry_with_mineru,
-        "/api/import-retry-mineru-local": (
-            import_job_controller.retry_with_local_mineru
-        ),
+        "/api/import-retry-mineru-local": import_job_controller.retry_with_local_mineru,
         "/api/import-retry": import_job_controller.retry_with_provider,
         "/api/import-resume": import_job_controller.resume,
         "/api/import-resume-dismiss": import_job_controller.dismiss,
@@ -193,11 +176,18 @@ def assemble_import_routes(import_job_controller) -> RoutePair:
 def assemble_reader_routes(
     structured_reader_controller,
     text_alignment_controller,
+    translation_work_controller,
 ) -> RoutePair:
+    works = translation_work_controller
     get_routes = {
         "/api/document/pages": structured_reader_controller.pages,
         "/api/text-alignments/targets": text_alignment_controller.targets,
         "/api/text-alignments/status": text_alignment_controller.status,
+        "/api/text-alignments/current": text_alignment_controller.current,
+        "/api/text-alignments/links": works.links,
+        "/api/translation-works/overview": works.overview,
+        "/api/translation-works/reading-position": works.reading_position,
+        "/api/translation-works/suggestion-dismissals": works.suggestion_dismissals,
     }
     post_routes = {
         "/api/document/citation": structured_reader_controller.citation,
@@ -205,6 +195,11 @@ def assemble_reader_routes(
         "/api/text-alignments/start": text_alignment_controller.start,
         "/api/text-alignments/cancel": text_alignment_controller.cancel,
         "/api/text-alignments/locate": text_alignment_controller.locate,
+        "/api/text-alignments/review-candidates": works.review_candidates,
+        "/api/text-alignments/corrections/save": works.save_correction,
+        "/api/text-alignments/corrections/defer": works.defer_review,
+        "/api/translation-works/reading-position": works.save_reading_position,
+        "/api/translation-works/dismiss-suggestion": works.dismiss_suggestion,
     }
     return get_routes, post_routes
 

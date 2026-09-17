@@ -1,0 +1,340 @@
+"""Translation-comparison workspace: v7 storage, pair overview, link window,
+reader review writes and moving books between works."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import tempfile
+import unittest
+from pathlib import Path
+
+from src.me_finder import translation_works
+from src.me_finder.document_groups import (
+    list_document_groups,
+    move_members_into_group,
+)
+from src.me_finder.persistence.index_schema import SCHEMA
+from src.me_finder.persistence.migrations import migrate_index_database
+from src.me_finder.text_alignment import (
+    AlignmentNotFound,
+    InvalidAlignmentRequest,
+    generate_alignment,
+    locate_alignment,
+)
+from src.me_finder.translation_work_controller import TranslationWorkController
+from tests import test_alignment_overrides as override_fixture
+from tests.test_text_alignment import _page
+
+
+class _ThreeVersionWork(unittest.TestCase):
+    """German base with a Chinese and an English version."""
+
+    def setUp(self) -> None:
+        override_fixture.AlignmentOverrideTests.setUp(self)
+        self.addCleanup(self.embedding_patch.stop)
+        self.addCleanup(self.directory.cleanup)
+        english_text = "The spirit is actual. The true is the whole."
+        english = _page(
+            "pdf-en",
+            0,
+            english_text,
+            [{"block_index": 0, "text": english_text, "bbox": [1, 2, 3, 4],
+              "bbox_normalized": [0.1, 0.1, 0.2, 0.2]}],
+        )
+        connection = sqlite3.connect(str(self.db))
+        connection.execute(
+            "INSERT INTO source_files(source_file_id, source_type, file_name, "
+            "relative_path, volume_number, payload_json) VALUES "
+            "('pdf-en', 'pdf', 'phenomenology.pdf', NULL, NULL, ?)",
+            (json.dumps({"source_file_id": "pdf-en", "title": "Phenomenology",
+                         "language_code": "en"}),),
+        )
+        connection.execute(
+            "INSERT INTO document_group_members(document_group_id, source_file_id, "
+            "version_label, member_order, added_at) VALUES ('work-one', 'pdf-en', NULL, 2, 't')"
+        )
+        connection.execute(
+            "INSERT INTO pdf_pages(source_file_id, pdf_page_index, payload_json) "
+            "VALUES ('pdf-en', 0, ?)",
+            (json.dumps(english),),
+        )
+        connection.commit()
+        connection.close()
+
+    def tearDown(self) -> None:
+        pass
+
+    def _pair(self, overview, left, right):
+        work = overview["works"][0]
+        for pair in work["pairs"]:
+            if set(pair["source_file_ids"]) == {left, right}:
+                return pair
+        self.fail("pair missing")
+
+    def _model_id(self) -> str:
+        connection = sqlite3.connect(str(self.db))
+        try:
+            parameters = connection.execute(
+                "SELECT parameters_json FROM alignment_runs LIMIT 1"
+            ).fetchone()[0]
+        finally:
+            connection.close()
+        return json.loads(parameters)["embedding_model_id"]
+
+
+class TranslationWorkOverviewTests(_ThreeVersionWork):
+    def test_overview_reports_direct_indirect_and_none(self) -> None:
+        overview = translation_works.alignment_overview(self.db)
+        self.assertEqual(self._pair(overview, "pdf-de", "pdf-zh")["status"], "none")
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-en")
+        model_id = self._model_id()
+        overview = translation_works.alignment_overview(
+            self.db, active_model_id=model_id
+        )
+        direct = self._pair(overview, "pdf-de", "pdf-zh")
+        self.assertEqual(direct["status"], "direct")
+        self.assertIsNone(direct["stale_reason"])
+        self.assertIsInstance(direct["matched_segment_ratio"], float)
+        self.assertGreaterEqual(direct["review_count"], 0)
+        indirect = self._pair(overview, "pdf-zh", "pdf-en")
+        self.assertEqual(indirect["status"], "indirect")
+        self.assertEqual(indirect["via_source_file_id"], "pdf-de")
+        self.assertIsNone(indirect["matched_segment_ratio"])
+
+    def test_model_change_marks_pair_stale_but_readable(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        overview = translation_works.alignment_overview(
+            self.db, active_model_id="another-model"
+        )
+        pair = self._pair(overview, "pdf-de", "pdf-zh")
+        self.assertEqual(pair["status"], "direct")
+        self.assertEqual(pair["stale_reason"], "model_changed")
+
+
+class TranslationWorkLinkWindowTests(_ThreeVersionWork):
+    def test_window_returns_links_with_spans_on_both_sides(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        window = translation_works.alignment_link_window(self.db, "pdf-de", "pdf-zh", 0, 0)
+        self.assertIsNone(window["via_source_file_id"])
+        self.assertTrue(window["links"])
+        first = window["links"][0]
+        self.assertTrue(first["source_spans"])
+        self.assertEqual(first["source_spans"][0]["item_index"], 0)
+        self.assertIsNone(first["manual"])
+        self.assertFalse(first["deferred"])
+
+    def test_indirect_window_composes_through_base(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-en")
+        window = translation_works.alignment_link_window(self.db, "pdf-zh", "pdf-en", 0, 0)
+        self.assertEqual(window["via_source_file_id"], "pdf-de")
+        self.assertTrue(any(link["target_spans"] for link in window["links"]))
+
+    def test_window_bounds_are_validated(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        with self.assertRaises(InvalidAlignmentRequest):
+            translation_works.alignment_link_window(self.db, "pdf-de", "pdf-zh", 3, 1)
+        with self.assertRaises(InvalidAlignmentRequest):
+            translation_works.alignment_link_window(self.db, "pdf-de", "pdf-zh", 0, 5000)
+
+    def test_unaligned_pair_is_not_found(self) -> None:
+        with self.assertRaises(AlignmentNotFound):
+            translation_works.alignment_link_window(self.db, "pdf-de", "pdf-zh", 0, 0)
+
+
+class TranslationWorkReviewTests(_ThreeVersionWork):
+    def _first_link(self):
+        return translation_works.alignment_link_window(
+            self.db, "pdf-de", "pdf-zh", 0, 0
+        )["links"][0]
+
+    def test_one_to_many_correction_applies_immediately(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        link = self._first_link()
+        candidates = translation_works.review_candidates(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"],
+            link["target_segment_ids"], 2,
+        )
+        all_targets = [item["segment_id"] for item in candidates["candidates"]]
+        self.assertGreaterEqual(len(all_targets), 2)
+        result = translation_works.save_correction(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"], all_targets[:2]
+        )
+        self.assertEqual(result["manual"], "corrected")
+        corrected = self._first_link()
+        self.assertEqual(corrected["manual"], "corrected")
+        self.assertEqual(corrected["target_segment_ids"], all_targets[:2])
+
+    def test_no_counterpart_correction_is_reported_by_locate(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        link = self._first_link()
+        translation_works.save_correction(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"], []
+        )
+        self.assertEqual(self._first_link()["manual"], "no_counterpart")
+        with self.assertRaises(AlignmentNotFound):
+            locate_alignment(
+                self.db, "pdf-de", "pdf-zh", start_page_index=0, end_page_index=0,
+                start_offset=0, end_offset=len("Der Geist ist wirklich."),
+            )
+
+    def test_deferral_marks_link_and_correction_clears_it(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        link = self._first_link()
+        translation_works.defer_review(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"]
+        )
+        translation_works.defer_review(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"]
+        )
+        self.assertTrue(self._first_link()["deferred"])
+        translation_works.save_correction(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"],
+            link["target_segment_ids"],
+        )
+        connection = sqlite3.connect(str(self.db))
+        try:
+            self.assertEqual(
+                connection.execute(
+                    "SELECT COUNT(*) FROM alignment_review_deferrals"
+                ).fetchone()[0],
+                0,
+            )
+        finally:
+            connection.close()
+
+
+class TranslationWorkStorageTests(_ThreeVersionWork):
+    def test_reading_position_round_trip_and_membership_check(self) -> None:
+        self.assertIsNone(
+            translation_works.read_reading_position(self.db, "work-one")["position"]
+        )
+        translation_works.save_reading_position(
+            self.db, "work-one", "pdf-zh", "pdf-de", 3, 17
+        )
+        translation_works.save_reading_position(
+            self.db, "work-one", "pdf-zh", None, 4, 0
+        )
+        position = translation_works.read_reading_position(self.db, "work-one")["position"]
+        self.assertEqual(position["left_source_file_id"], "pdf-zh")
+        self.assertIsNone(position["right_source_file_id"])
+        self.assertEqual(position["item_index"], 4)
+        with self.assertRaises(InvalidAlignmentRequest):
+            translation_works.save_reading_position(
+                self.db, "work-one", "pdf-zh", "pdf-zh", 0
+            )
+
+    def test_suggestion_dismissal_is_order_independent(self) -> None:
+        translation_works.dismiss_suggestion(self.db, ["pdf-zh", "pdf-de"])
+        translation_works.dismiss_suggestion(self.db, ["pdf-de", "pdf-zh"])
+        self.assertEqual(
+            translation_works.list_suggestion_dismissals(self.db)["dismissals"],
+            [["pdf-de", "pdf-zh"]],
+        )
+        with self.assertRaises(InvalidAlignmentRequest):
+            translation_works.dismiss_suggestion(self.db, ["pdf-de"])
+
+
+class MoveMembersTests(_ThreeVersionWork):
+    def test_new_work_takes_first_as_base_and_empties_are_deleted(self) -> None:
+        connection = sqlite3.connect(str(self.db))
+        connection.execute(
+            "INSERT INTO document_groups VALUES ('work-two', '其他', NULL, 't', 't')"
+        )
+        connection.execute("DELETE FROM document_group_members WHERE source_file_id = 'pdf-en'")
+        connection.execute(
+            "INSERT INTO document_group_members VALUES ('work-two', 'pdf-en', NULL, 0, 't')"
+        )
+        connection.commit()
+        connection.close()
+
+        result = move_members_into_group(["pdf-en", "pdf-zh"], self.db, title="新作品")
+        self.assertTrue(result["created"])
+        self.assertEqual(result["base_source_file_id"], "pdf-en")
+        self.assertEqual(result["deleted_document_group_ids"], ["work-two"])
+        groups = {group["document_group_id"]: group for group in list_document_groups(self.db)}
+        self.assertNotIn("work-two", groups)
+        self.assertEqual(
+            [m["source_file_id"] for m in groups[result["document_group_id"]]["members"]],
+            ["pdf-en", "pdf-zh"],
+        )
+        self.assertEqual(len(groups["work-one"]["members"]), 1)
+
+    def test_move_into_existing_work_drops_moved_alignment_runs(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        created = move_members_into_group(["pdf-en"], self.db, title="英译")
+        result = move_members_into_group(
+            ["pdf-zh", "pdf-en"], self.db, document_group_id=created["document_group_id"]
+        )
+        self.assertFalse(result["created"])
+        self.assertEqual([item["source_file_id"] for item in result["moved"]], ["pdf-zh"])
+        connection = sqlite3.connect(str(self.db))
+        try:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM alignment_runs").fetchone()[0], 0
+            )
+        finally:
+            connection.close()
+
+    def test_move_requires_sources(self) -> None:
+        with self.assertRaises(ValueError):
+            move_members_into_group([], self.db, title="空")
+
+
+class TranslationWorkMigrationTests(unittest.TestCase):
+    def test_v6_database_gains_v7_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.sqlite3"
+            connection = sqlite3.connect(str(path))
+            connection.executescript(SCHEMA.replace("PRAGMA user_version = 7;", ""))
+            connection.execute("PRAGMA user_version = 6")
+            connection.commit()
+            connection.close()
+            self.assertTrue(migrate_index_database(path))
+            connection = sqlite3.connect(str(path))
+            try:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+                self.assertEqual(
+                    connection.execute("PRAGMA user_version").fetchone()[0], 7
+                )
+            finally:
+                connection.close()
+            self.assertTrue(
+                {
+                    "document_group_reading_positions",
+                    "alignment_review_deferrals",
+                    "document_group_suggestion_dismissals",
+                }
+                <= tables
+            )
+
+
+class TranslationWorkControllerTests(unittest.TestCase):
+    def test_controller_maps_errors_and_rebuild(self) -> None:
+        def ready(operation):
+            return operation(Path("/nonexistent/index.sqlite3"))
+
+        logged = []
+        controller = TranslationWorkController(
+            ready, active_model_id=lambda: "m", log_exception=logged.append
+        )
+        status, body = controller.links({"source_file_id": ["a"]})
+        self.assertEqual(status, 400)
+        status, body = controller.save_reading_position(["not", "a", "mapping"])
+        self.assertEqual(status, 400)
+        busy = TranslationWorkController(
+            lambda operation: None, active_model_id=lambda: "m", log_exception=logged.append
+        )
+        self.assertEqual(busy.overview()[0], 503)
+
+
+if __name__ == "__main__":
+    unittest.main()

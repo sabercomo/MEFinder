@@ -18,6 +18,7 @@ from ..document_groups import (
     create_document_group,
     delete_document_group,
     list_document_groups,
+    move_members_into_group,
     remove_group_member,
     rename_document_group,
     set_document_group_base,
@@ -88,6 +89,18 @@ class DocumentGroupCoordinator:
         return self._write(
             lambda path: add_group_member(
                 document_group_id, source_file_id, path, version_label
+            )
+        )
+
+    def move_members(
+        self,
+        source_file_ids: object,
+        document_group_id: object = None,
+        title: object = None,
+    ) -> Dict[str, object]:
+        return self._write(
+            lambda path: move_members_into_group(
+                source_file_ids, path, document_group_id, title
             )
         )
 

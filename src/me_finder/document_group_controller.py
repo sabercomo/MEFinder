@@ -58,6 +58,16 @@ class DocumentGroupController:
             ),
         )
 
+    def move_members(self, payload: object) -> GroupResponse:
+        return self._run(
+            payload,
+            lambda value: self._groups.move_members(
+                value.get("source_file_ids"),
+                value.get("document_group_id"),
+                value.get("title"),
+            ),
+        )
+
     def remove_member(self, payload: object) -> GroupResponse:
         return self._run(
             payload,

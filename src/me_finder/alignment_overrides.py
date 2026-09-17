@@ -37,8 +37,13 @@ def resolve_override_context(
     target_source_file_id: object,
     source_segment_ids: Sequence[object],
     target_segment_ids: Sequence[object],
+    *,
+    allow_empty_target: bool = False,
 ) -> Dict[str, object]:
     """Validate a proposed correction against the current alignment run.
+
+    ``allow_empty_target`` records "the other version has no counterpart"; only
+    the in-app reviewer uses it, agent proposals must name target segments.
 
     Confirms both versions share a completed alignment route and that every
     referenced segment belongs to that route's current segment sets, so a
@@ -51,7 +56,7 @@ def resolve_override_context(
         raise InvalidAlignmentRequest("源版本和目标版本不能相同。")
     source_ids = [str(value) for value in source_segment_ids]
     target_ids = [str(value) for value in target_segment_ids]
-    if not source_ids or not target_ids:
+    if not source_ids or (not target_ids and not allow_empty_target):
         raise InvalidAlignmentRequest("源和目标 Segment 都不能为空。")
     connection = sqlite3.connect(str(db_path))
     connection.row_factory = sqlite3.Row
@@ -106,6 +111,7 @@ def create_override_proposal(
     *,
     evidence: Mapping[str, object] | None = None,
     write_window: WriteWindow | None = None,
+    allow_empty_target: bool = False,
 ) -> Dict[str, object]:
     """Record a pending correction. It does not affect reads until confirmed."""
 
@@ -115,6 +121,7 @@ def create_override_proposal(
         target_source_file_id,
         source_segment_ids,
         target_segment_ids,
+        allow_empty_target=allow_empty_target,
     )
     override_id = f"alignment-override-{uuid.uuid4().hex}"
     confirmation_token = uuid.uuid4().hex

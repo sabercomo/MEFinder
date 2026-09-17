@@ -20,6 +20,15 @@
 
 - MCP sidecar 只读已有对齐、不做对齐计算,不再重复携带数值栈:独立可执行由 77.9 MiB 降到 45.9 MiB(macOS ARM 实测)。这份收益独立于桌面主包——sidecar 是分发包里的第二份数值栈,主包缩小的数字不代表整分发收益。工具行为不变。
 
+### 译本对照改版：后端存储与接口（前端改版进行中）
+
+- 数据库 schema 升到 v7(附加迁移,只新增表):`document_group_reading_positions`(每部作品上次阅读的版本对与位置,锚点为条目序号 + 码点偏移,不存页码)、`alignment_review_deferrals`(低置信段落「暂不处理」)、`document_group_suggestion_dismissals`(同名归组建议「不是同一作品」)。**v7 库无法再被 0.5.5 之前的版本打开**(旧版会拒绝更高 schema)。
+- 新接口:`/api/translation-works/overview`(每对版本的直接 / 间接 / 未对齐状态、已匹配段落比例、待检查数、模型或算法变更)、`/api/text-alignments/links`(阅读器按页或段落范围读取逐段对应关系)、`/api/text-alignments/review-candidates`、`/api/text-alignments/corrections/save|defer`、`/api/translation-works/reading-position`、`/api/translation-works/suggestion-dismissals|dismiss-suggestion`、`/api/document-groups/move-members`、`/api/text-alignments/current`。契约见 `docs/contracts/v0.5.5-http-api.json`。
+- 人工校正支持一对多与「译本无对应」(空目标的已确认校正,定位时明确返回无对应,不退回算法结果)。应用内校正视为用户直接确认;MCP 的提议—确认—撤销流程不变,提议仍须给出目标段落。
+- 「已匹配段落」只统计基准一侧被算法接受的段落比例,不代表对应准确。
+- 批量加入作品在一个事务内完成:一本书只属于一个作品,从原作品移入时删除该书在原作品中的对齐,原作品变空则删除。
+- 对齐计算进程只上报开始与结果,没有批次进度,「生成中」暂不显示百分比。
+
 ## Bug 修复
 
 - 第二阶段复审：修复安装/卸载后计算与模型状态不刷新、旧请求覆盖安装状态、首次读取失败无恢复入口，以及不支持/不兼容组件误报可用。修复安装取消被改写为失败、验证后取消仍发布与 uv 下载进度沿用的问题；新增 10 项回归，全量 2369 项（23 跳过）通过。详见 [本轮审核报告](../reports/alignment-phase2-review-2026-09-17.md)。

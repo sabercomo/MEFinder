@@ -348,6 +348,137 @@ def combine_into_group(
     }
 
 
+def move_members_into_group(
+    source_file_ids: object,
+    db_path: Path = DEFAULT_DATABASE_PATH,
+    document_group_id: object = None,
+    title: object = None,
+) -> Dict[str, object]:
+    """Put SourceFiles into one work, creating it when no id is given.
+
+    One transaction: a new work takes ``title`` and the first file as its base;
+    an existing work without a base gets the first moved file as base. A file
+    already in another work is moved (one work per file): its alignment runs
+    are removed, as ``add_group_member`` does, and any previous work left with
+    no members is deleted. Files already in the target work are left as is.
+    """
+
+    ordered_ids: List[str] = []
+    for raw in source_file_ids if isinstance(source_file_ids, (list, tuple)) else []:
+        source_id = str(raw or "").strip()
+        if not source_id:
+            raise ValueError("source_file_id is required")
+        if source_id not in ordered_ids:
+            ordered_ids.append(source_id)
+    if not ordered_ids:
+        raise ValueError("请至少选择一份文献。")
+    group_id = str(document_group_id or "").strip()
+    timestamp = _now()
+    ensure_document_group_schema(db_path)
+    connection = _connect_writable(db_path)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        created = not group_id
+        if created:
+            group_title = _clean_title(title)
+            group_id = f"document-group-{uuid.uuid4().hex}"
+            connection.execute(
+                "INSERT INTO document_groups"
+                "(document_group_id, title, base_source_file_id, created_at, updated_at) "
+                "VALUES (?, ?, NULL, ?, ?)",
+                (group_id, group_title, timestamp, timestamp),
+            )
+        else:
+            _require_group(connection, group_id)
+            group_title = str(
+                connection.execute(
+                    "SELECT title FROM document_groups WHERE document_group_id = ?",
+                    (group_id,),
+                ).fetchone()[0]
+            )
+        moved: List[Dict[str, object]] = []
+        previous_groups: List[str] = []
+        for source_id in ordered_ids:
+            _require_source_exists(connection, source_id)
+            existing = connection.execute(
+                "SELECT document_group_id FROM document_group_members "
+                "WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()
+            previous_group = existing["document_group_id"] if existing else None
+            if previous_group == group_id:
+                continue
+            if previous_group is not None:
+                connection.execute(
+                    "DELETE FROM alignment_runs WHERE pivot_source_file_id = ? "
+                    "OR target_source_file_id = ?",
+                    (source_id, source_id),
+                )
+                connection.execute(
+                    "UPDATE document_groups SET base_source_file_id = NULL, "
+                    "updated_at = ? WHERE document_group_id = ? "
+                    "AND base_source_file_id = ?",
+                    (timestamp, previous_group, source_id),
+                )
+                connection.execute(
+                    "DELETE FROM document_group_members WHERE source_file_id = ?",
+                    (source_id,),
+                )
+                if previous_group not in previous_groups:
+                    previous_groups.append(previous_group)
+            order = int(
+                connection.execute(
+                    "SELECT COALESCE(MAX(member_order), -1) + 1 "
+                    "FROM document_group_members WHERE document_group_id = ?",
+                    (group_id,),
+                ).fetchone()[0]
+            )
+            connection.execute(
+                "INSERT INTO document_group_members"
+                "(document_group_id, source_file_id, version_label, member_order, added_at) "
+                "VALUES (?, ?, NULL, ?, ?)",
+                (group_id, source_id, order, timestamp),
+            )
+            moved.append(
+                {"source_file_id": source_id, "previous_document_group_id": previous_group}
+            )
+        connection.execute(
+            "UPDATE document_groups SET base_source_file_id = ?, updated_at = ? "
+            "WHERE document_group_id = ? AND base_source_file_id IS NULL",
+            (ordered_ids[0], timestamp, group_id),
+        )
+        deleted_group_ids: List[str] = []
+        for previous_group in previous_groups:
+            remaining = connection.execute(
+                "SELECT COUNT(*) FROM document_group_members WHERE document_group_id = ?",
+                (previous_group,),
+            ).fetchone()[0]
+            if int(remaining) == 0:
+                connection.execute(
+                    "DELETE FROM document_groups WHERE document_group_id = ?",
+                    (previous_group,),
+                )
+                deleted_group_ids.append(previous_group)
+        base_id = connection.execute(
+            "SELECT base_source_file_id FROM document_groups WHERE document_group_id = ?",
+            (group_id,),
+        ).fetchone()[0]
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "document_group_id": group_id,
+        "title": group_title,
+        "created": created,
+        "base_source_file_id": base_id,
+        "moved": moved,
+        "deleted_document_group_ids": deleted_group_ids,
+    }
+
+
 def remove_group_member(
     source_file_id: object, db_path: Path = DEFAULT_DATABASE_PATH
 ) -> Dict[str, object]:

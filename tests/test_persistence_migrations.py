@@ -31,7 +31,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 6
+                connection.execute("PRAGMA user_version").fetchone()[0], 7
             )
             tables = {
                 row[0]
@@ -66,7 +66,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 6
+                connection.execute("PRAGMA user_version").fetchone()[0], 7
             )
             columns = [
                 row[1]
@@ -114,7 +114,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 6
+                connection.execute("PRAGMA user_version").fetchone()[0], 7
             )
             columns = [
                 row[1]

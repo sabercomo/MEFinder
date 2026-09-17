@@ -57,6 +57,7 @@ from .database import replace_source_in_database
 from .desktop_shell_controller import DesktopShellController
 from .document_deletion import DocumentDeletionService
 from .document_group_controller import DocumentGroupController
+from .translation_work_controller import TranslationWorkController
 from .document_lifecycle_controller import DocumentLifecycleController
 from .import_job_controller import ImportJobController
 from .import_job_journal import (
@@ -418,6 +419,15 @@ def build_application_runtime(
         ),
         log_exception=lambda message: logging.exception(message),
     )
+    translation_work_controller = TranslationWorkController(
+        index_runtime.run_when_ready,
+        active_model_id=lambda: str(
+            read_preferences(resolve_preferences_path(root))[
+                "alignment_embedding_model_id"
+            ]
+        ),
+        log_exception=lambda message: logging.exception(message),
+    )
     structured_reader_controller = StructuredReaderController(
         index_runtime.run_when_ready,
         get_window=(
@@ -543,6 +553,7 @@ def build_application_runtime(
     reader_get_routes, reader_post_routes = assemble_reader_routes(
         structured_reader_controller,
         text_alignment_controller,
+        translation_work_controller,
     )
     archive_get_routes, archive_post_routes = assemble_archive_routes(
         archive_transfer_controller

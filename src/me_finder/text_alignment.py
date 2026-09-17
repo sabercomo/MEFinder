@@ -2177,6 +2177,8 @@ def locate_alignment(
         )
         if override is not None:
             target_segment_ids = override["target_segment_ids"]
+            if not target_segment_ids:
+                raise AlignmentNotFound("已人工确认：另一版本中没有对应段落。")
             alignment_source = "manual_review"
             manual_override_id: str | None = override["override_id"]
         else:

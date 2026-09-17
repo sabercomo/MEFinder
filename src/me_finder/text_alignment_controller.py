@@ -105,6 +105,25 @@ class TextAlignmentController:
                 return 404, {"error": "对齐任务不存在，请刷新作品组查看已保存的结果"}
             return self._job_response or (202, {"job_id": self._job_id, "status": "running"})
 
+    def current(self, _params: object = None) -> AlignmentResponse:
+        """Report the in-flight run, so a reloaded page can show it again.
+
+        Only the run's identity is known here; the compute worker does not
+        report batch progress, so no percentage is invented.
+        """
+        with self._job_lock:
+            if self._job_id is None or self._job_response is not None:
+                return 200, {"running": False}
+            payload = dict(self._job_payload or {})
+            return 200, {
+                "running": True,
+                "job_id": self._job_id,
+                "document_group_id": payload.get("document_group_id"),
+                "pivot_source_file_id": payload.get("pivot_source_file_id"),
+                "target_source_file_id": payload.get("target_source_file_id"),
+                "force": bool(payload.get("force", False)),
+            }
+
     def generate(self, payload: object) -> AlignmentResponse:
         """Generate synchronously for existing API clients and the worker."""
         if not self._valid_generate_payload(payload):

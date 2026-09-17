@@ -252,3 +252,66 @@ def install_text_alignment_schema(connection: sqlite3.Connection) -> bool:
         )
         changed = True
     return changed
+
+
+def install_translation_workspace_schema(connection: sqlite3.Connection) -> bool:
+    """Install the v7 tables behind the translation-comparison workspace.
+
+    * ``document_group_reading_positions`` — the last version pair and anchor a
+      user read inside one work ("继续阅读"). Anchors are item index + code-point
+      offset in the left version, so resuming never invents a page number.
+    * ``alignment_review_deferrals`` — low-confidence links the user chose to
+      leave for later ("暂不处理"). Keyed like manual overrides, so a
+      re-segmentation cascade-deletes them.
+    * ``document_group_suggestion_dismissals`` — same-title grouping suggestions
+      the user rejected ("不是同一作品"), keyed on the sorted source-id set.
+    """
+
+    changed = False
+    if not _table_exists(connection, "document_group_reading_positions"):
+        connection.execute(
+            """
+            CREATE TABLE document_group_reading_positions (
+                document_group_id TEXT PRIMARY KEY
+                    REFERENCES document_groups(document_group_id) ON DELETE CASCADE,
+                left_source_file_id TEXT NOT NULL
+                    REFERENCES source_files(source_file_id) ON DELETE CASCADE,
+                right_source_file_id TEXT
+                    REFERENCES source_files(source_file_id) ON DELETE SET NULL,
+                item_index INTEGER NOT NULL,
+                char_offset INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        changed = True
+    if not _table_exists(connection, "alignment_review_deferrals"):
+        connection.execute(
+            """
+            CREATE TABLE alignment_review_deferrals (
+                source_file_id TEXT NOT NULL
+                    REFERENCES source_files(source_file_id) ON DELETE CASCADE,
+                target_source_file_id TEXT NOT NULL
+                    REFERENCES source_files(source_file_id) ON DELETE CASCADE,
+                source_segment_set_id TEXT NOT NULL
+                    REFERENCES segment_sets(segment_set_id) ON DELETE CASCADE,
+                source_segment_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(source_file_id, target_source_file_id,
+                            source_segment_set_id, source_segment_key)
+            )
+            """
+        )
+        changed = True
+    if not _table_exists(connection, "document_group_suggestion_dismissals"):
+        connection.execute(
+            """
+            CREATE TABLE document_group_suggestion_dismissals (
+                suggestion_key TEXT PRIMARY KEY,
+                source_file_ids_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        changed = True
+    return changed
