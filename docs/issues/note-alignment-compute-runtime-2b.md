@@ -94,3 +94,7 @@ sidecar 只读已有对齐、不做对齐计算,此前与桌面主包各自重�
 - **真机验证(macOS ARM,无头 serve + 浏览器)**:6 个状态分支逐一渲染核对(builtin 隐藏 / none 安装 / provisioning 30%+取消 / installed+升级+卸载 / uninstall_pending 等待 / failed 重试),卸载确认对话措辞逐字核对。过程中发现并修复一处前端 bug:`loadAlignmentRuntime`/`manageAlignmentRuntime` 把成功响应里 summary 顶层的业务 `error` 字段误判为请求失败,导致「安装失败」态错显「读取失败」——改为只按 HTTP 状态码判定。
 - 装配指纹基线(`test_frontend_assets`)已更新;前端守卫(无 innerHTML、CSS token、全局符号预算)全过。
 - **仍未做**:从冻结精简包出发的真机安装—离线对齐端到端(本轮受环境 TLS/网络限制未跑);Windows / macOS Intel 真机证据。
+
+## 2026-09-17 — 第二阶段复审修复与冻结闭环
+
+事实：安装状态同步、取消边界与进度错误已复现并修复；新增 10 项回归，全量 2369（23 跳过）通过。macOS ARM 定向冻结包经生产 HTTP 真实安装运行时，复用 MiniLM 模型文件离线生成 4 条完全等价链接，卸载后 20 个成果成员保留，搜索和已有目标读取正常。冻结 sidecar 真实 STDIO 四项通过。此前“TLS 阻塞 ARM 冻结闭环”的状态已被本次证据部分取代：仍未验首次模型联网下载、正式分发路径及 Windows/Intel 完整冻结计算链。详见 [审核报告](../../reports/alignment-phase2-review-2026-09-17.md)。

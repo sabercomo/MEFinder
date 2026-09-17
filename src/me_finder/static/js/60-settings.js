@@ -876,7 +876,7 @@
   function renderAlignmentModelComponent(component) {
     if (!component || !Array.isArray(component.models)) return;
     settingsStore.alignmentModelComponent = component;
-    if (component.compute) renderAlignmentComputeStatus(component.compute);
+    if (component.compute && !settingsStore.alignmentRuntime) renderAlignmentComputeStatus(component.compute);
     var downloading = false;
     component.models.forEach(function(model) {
       var button = document.getElementById('embedding-model-download-' + model.id);
@@ -980,12 +980,16 @@
   }
 
   async function loadAlignmentModelComponent() {
+    var revision = (settingsStore.alignmentModelLoadRevision || 0) + 1;
+    settingsStore.alignmentModelLoadRevision = revision;
     try {
       var resp = await fetch('/api/text-alignment/models');
       var data = await resp.json();
+      if (revision !== settingsStore.alignmentModelLoadRevision) return;
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       renderAlignmentModelComponent(data);
     } catch (e) {
+      if (revision !== settingsStore.alignmentModelLoadRevision) return;
       var status = document.getElementById('alignment-model-status');
       if (status) {
         status.className = 'settings-status warning';
@@ -1049,10 +1053,16 @@
   function renderAlignmentRuntimeComponent(runtime) {
     var card = document.getElementById('alignment-runtime-component');
     if (!card || !runtime) return;
+    var previous = settingsStore.alignmentRuntime;
     settingsStore.alignmentRuntime = runtime;
     var compute = runtime.compute || {};
+    renderAlignmentComputeStatus(compute);
     var busyStates = {provisioning: 1, validating: 1, cleaning: 1, uninstall_pending: 1, upgrade_pending: 1};
     var busy = !!busyStates[runtime.state];
+    if (!busy && previous && (previous.state !== runtime.state
+        || previous.installed !== runtime.installed || previous.operation)) {
+      loadAlignmentModelComponent();
+    }
     // 自带栈的老用户(provider==='builtin' 且未装独立运行时)无需安装，卡片保持隐藏、
     // 不打扰——维持 2B 的产品判断；精简包缺栈(provider==='none')或已装独立运行时时才
     // 呈现管理入口。
@@ -1060,10 +1070,14 @@
     card.hidden = !show;
     var note = document.getElementById('alignment-compute-note');
     if (note) {
-      if (!show) {
+      if (compute.available && compute.provider === 'builtin') {
         note.textContent = '对齐计算运行时随应用提供，无需单独安装即可离线生成对齐';
-      } else if (runtime.installed) {
+      } else if (compute.available) {
         note.textContent = '对齐计算运行时已独立安装在本机，离线生成对齐';
+      } else if (!runtime.supported) {
+        note.textContent = '当前平台或组件清单不支持安装对齐计算运行时；搜索、阅读和已有对齐成果不受影响';
+      } else if (compute.detail) {
+        note.textContent = compute.detail;
       } else {
         note.textContent = '需安装独立计算运行时后才能生成对齐；搜索、阅读和已有对齐成果不受影响';
       }
@@ -1132,8 +1146,9 @@
         hintEl.textContent = runtime.message || '当前有对齐任务在运行，任务结束后自动卸载';
       }
     } else if (runtime.installed) {
-      stateEl.className = 'settings-status ready';
-      stateEl.textContent = runtime.installed_version ? '已安装 · v' + runtime.installed_version : '已安装';
+      stateEl.className = 'settings-status' + (compute.available ? ' ready' : ' warning');
+      stateEl.textContent = !compute.available ? '已安装 · 不可用'
+        : (runtime.installed_version ? '已安装 · v' + runtime.installed_version : '已安装');
       uninstallBtn.hidden = false;
       uninstallBtn.classList.add('danger');
       uninstallBtn.textContent = '卸载';
@@ -1145,6 +1160,8 @@
         hintEl.textContent = '有新版本可升级；升级会等待当前对齐任务结束';
       } else if (runtime.error) {
         hintEl.textContent = '上次操作失败：' + runtime.error;
+      } else if (!compute.available) {
+        hintEl.textContent = compute.detail || '运行时不可用，请卸载后重新安装';
       } else {
         hintEl.textContent = '运行时已就绪，可离线生成对齐';
       }
@@ -1170,19 +1187,33 @@
   }
 
   async function loadAlignmentRuntime() {
+    var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
+    settingsStore.alignmentRuntimeLoadRevision = revision;
     try {
       var resp = await fetch('/api/text-alignment/runtime', {cache: 'no-store'});
       var data = await resp.json();
+      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
       // 成功响应就是 summary，其顶层 error 是「上次操作失败」的业务字段（渲染时呈现），
       // 不是请求失败；只有 HTTP 非 2xx（后端 400/500）才算读取失败。
       if (!resp.ok) throw new Error(data.error || '读取失败');
       renderAlignmentRuntimeComponent(data);
     } catch (e) {
-      // 从未成功渲染过就保持隐藏(如运行方式不支持该组件)；已显示才提示读取失败。
+      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
       var card = document.getElementById('alignment-runtime-component');
-      if (card && !card.hidden) {
+      if (card) {
+        card.hidden = false;
         var stateEl = document.getElementById('alignment-runtime-state');
         if (stateEl) { stateEl.className = 'settings-status warning'; stateEl.textContent = '读取失败'; }
+        document.getElementById('alignment-runtime-hint').textContent = '无法读取计算组件状态：' + e.message;
+        document.getElementById('alignment-compute-note').textContent = '计算组件状态未能刷新，请重试';
+        document.getElementById('alignment-runtime-progress').hidden = true;
+        document.getElementById('alignment-runtime-uninstall').hidden = true;
+        document.getElementById('alignment-runtime-cancel').hidden = true;
+        var retry = document.getElementById('alignment-runtime-action');
+        retry.hidden = false;
+        retry.disabled = false;
+        retry.textContent = '重新读取';
+        retry.onclick = loadAlignmentRuntime;
       }
       if (settingsStore.alignmentRuntimePollTimer) {
         clearTimeout(settingsStore.alignmentRuntimePollTimer);
@@ -1192,6 +1223,10 @@
   }
 
   async function manageAlignmentRuntime(action, button) {
+    var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
+    settingsStore.alignmentRuntimeLoadRevision = revision;
+    clearTimeout(settingsStore.alignmentRuntimePollTimer);
+    settingsStore.alignmentRuntimePollTimer = null;
     if (button) { button.disabled = true; }
     try {
       var resp = await fetch('/api/text-alignment/runtime', {
@@ -1200,11 +1235,13 @@
         body: JSON.stringify({action: action})
       });
       var data = await resp.json();
+      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
       // 成功响应是 {ok, ...summary}；summary 顶层 error 是业务字段（上次操作失败），
       // 由渲染呈现，不当作请求失败。只有 HTTP 非 2xx 才是操作失败。
       if (!resp.ok) throw new Error(data.error || '操作失败');
       renderAlignmentRuntimeComponent(data);
     } catch (e) {
+      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
       var labels = {install: '安装', update: '升级', uninstall: '卸载', cancel: '取消'};
       showToast('对齐计算组件' + (labels[action] || '操作') + '失败：' + e.message, 'danger');
       loadAlignmentRuntime();

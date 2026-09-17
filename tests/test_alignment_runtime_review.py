@@ -167,6 +167,59 @@ with compute_admission(Path(sys.argv[1])):
             with runtime.compute_admission(self.fixture.runtime):
                 self.assertTrue(True)
 
+    def test_cancelled_command_exit_is_not_reported_as_install_failure(self):
+        manager = self.fixture._manager()
+        process = mock.Mock(returncode=-15)
+        process.poll.return_value = -15
+
+        def launch(*args, **kwargs):
+            # Cancel can terminate the process before the install thread polls it.
+            manager._state.cancel_event.set()
+            return process
+
+        manager.process_launcher = launch
+        with self.assertRaises(runtime._Cancelled):
+            manager._run_command(
+                [sys.executable], cwd=self.fixture.root, environment={},
+                log_path=self.fixture.root / 'cancel.log', timeout=5,
+            )
+
+    def test_cancellation_after_verify_does_not_publish_staging(self):
+        manager = self.fixture._manager()
+        validate = manager._validate
+
+        def cancel_after_verify(root):
+            validate(root)
+            manager._state.cancel_event.set()
+
+        with mock.patch.object(manager, '_validate', side_effect=cancel_after_verify):
+            manager.perform({'action': 'install'})
+            result = self.fixture._wait(manager)
+        self.assertFalse(result['installed'])
+        self.assertEqual(result['message'], '操作已取消')
+        self.assertEqual(result['error'], '')
+
+    def test_verify_preserves_cancellation_outcome(self):
+        manager = self.install()
+        with mock.patch.object(manager, '_run_command', side_effect=runtime._Cancelled('操作已取消')):
+            with self.assertRaises(runtime._Cancelled):
+                manager._validate(manager.runtime_dir)
+
+    def test_python_install_does_not_reuse_uv_download_progress(self):
+        manager = self.fixture._manager()
+        command = manager._run_command
+        states = []
+
+        def record(*args, **kwargs):
+            states.append(manager.summary())
+            return command(*args, **kwargs)
+
+        with mock.patch.object(manager, '_run_command', side_effect=record):
+            manager.perform({'action': 'install'})
+            self.assertTrue(self.fixture._wait(manager)['installed'])
+        self.assertEqual(states[0]['total_bytes'], 0)
+        self.assertEqual(states[0]['downloaded_bytes'], 0)
+
     def test_bundled_numpy_pin_supports_selected_python(self):
         alignment = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding='utf-8'))['alignment']
         # numpy 2.5.2 published Requires-Python >=3.12 (PyPI metadata).

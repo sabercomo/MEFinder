@@ -51,3 +51,7 @@ PYTHONUTF8=1 python -m PyInstaller packaging/mcp_sidecar.spec \
   - Windows / macOS Intel 的冻结 sidecar 构建体积与冒烟(单机无法产,如实标注 `未测`);
   - `build_macos.sh` 发布级签名/公证后 sidecar 的完整冒烟(发布级构建随切版做)。
 - 结论只在 macOS ARM 定向构建成立;跨平台数字待各自平台真机构建后回填,不由本平台外推。
+
+## 2026-09-17 — 补充真实冻结 STDIO 与归档检查
+
+本轮重新构建 macOS ARM sidecar（48,148,288 B），CArchiveReader 检查内嵌 PYZ 与归档条目均无 NumPy / ONNX Runtime / fastembed；经真实 MCP SDK STDIO 调用跨译本查询、引文定位、修正列表、文献列表全部通过。此证据补充此前 strings / --help / 禁栈解释器测试；Windows / Intel 不由此推断。详见 [第二阶段审核报告](alignment-phase2-review-2026-09-17.md)。

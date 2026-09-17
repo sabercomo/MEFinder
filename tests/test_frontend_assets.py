@@ -495,9 +495,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   0.5.5 版本号落库（__version__ 0.5.4→0.5.5，经 web_assets `__APP_VERSION__`
     #   注入装配 HTML）：字节数不变，仅指纹更新。
     BASELINE_SHA256 = (
-        "605d8d426e18bb389320bbd8b1cd35be7c6854ab26e62d5d2ec49659a50e7c09"
+        "2068534e149e1ec892babdb91743f5d62840d1b6647bcfe2c5e6dfc2405ecfb1"
     )
-    BASELINE_BYTES = 1133065
+    BASELINE_BYTES = 1135419
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

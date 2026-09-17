@@ -654,6 +654,11 @@ class ManagedAlignmentRuntime:
         staging.mkdir(parents=True)
         try:
             uv_path = self._ensure_uv(platform_manifest)
+            # The archive progress covers uv only, not Python/package installation.
+            with self._lock:
+                self._state.total_bytes = 0
+                self._state.downloaded_bytes = 0
+                self._state.progress = None
             environment = self._install_environment(staging)
             install_log = staging / "install.log"
             self._set_state("provisioning", message="正在创建独立 Python 环境")
@@ -696,6 +701,7 @@ class ManagedAlignmentRuntime:
             # not merely exist on disk.
             self._set_state("validating", message="正在验证独立运行时")
             self._validate(staging)
+            self._raise_if_cancelled()
             atomic_write_json(
                 staging / "installed.json",
                 {
@@ -754,6 +760,8 @@ class ManagedAlignmentRuntime:
                 log_path=root / "validation.log",
                 timeout=300,
             )
+        except _Cancelled:
+            raise
         except ManagedAlignmentRuntimeError as exc:
             # --verify exits non-zero when the stack fails to load; prefer the
             # worker's specific reason over the generic "process exited N".
@@ -995,6 +1003,7 @@ class ManagedAlignmentRuntime:
                 with self._lock:
                     if self._state.process is process:
                         self._state.process = None
+        self._raise_if_cancelled()
         if process.returncode:
             detail = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
             raise ManagedAlignmentRuntimeError(
