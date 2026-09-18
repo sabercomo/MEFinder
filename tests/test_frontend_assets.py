@@ -500,10 +500,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 译本对照改版：侧栏新增「译本对照」、35-works.js / 45-works.css 作品—版本页与管理版本抽屉、
     #   文献库去掉作品组下拉与管理弹窗改「加入作品…」、reader.js / reader.css 统一阅读器（工具栏、
     #   添加 / 关闭对照、连续段落、低置信校正弹层、阅读位置）。
+    # 0.5.5 审核修复：过期对照请求、任务完成缓存刷新及搜索高亮干扰跟随。
     BASELINE_SHA256 = (
-        "d41cffbe5d372f11c61d48e7ac88f6cad07b4c2e376129ac9d05d1bc6a4b9cbb"
+        "6ff89c8f1759246adff24e806bed182e978d1eeec349f7037485deb039612ccd"
     )
-    BASELINE_BYTES = 1182032
+    BASELINE_BYTES = 1182687
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

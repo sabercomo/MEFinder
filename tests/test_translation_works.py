@@ -10,6 +10,11 @@ import unittest
 from pathlib import Path
 
 from src.me_finder import translation_works
+from src.me_finder.alignment_overrides import (
+    confirm_override,
+    create_override_proposal,
+    revoke_override,
+)
 from src.me_finder.document_groups import (
     list_document_groups,
     move_members_into_group,
@@ -146,6 +151,62 @@ class TranslationWorkLinkWindowTests(_ThreeVersionWork):
 
 
 class TranslationWorkReviewTests(_ThreeVersionWork):
+    def test_contained_correction_keeps_scope_precedence_and_revocation(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        links = translation_works.alignment_link_window(
+            self.db, "pdf-de", "pdf-zh", 0, 0
+        )["links"]
+        source_ids = [sid for link in links for sid in link["source_segment_ids"]]
+        targets = [sid for link in links for sid in link["target_segment_ids"]]
+        selection = dict(start_page_index=0, end_page_index=0, start_offset=1, end_offset=2)
+        # Agent corrections continue to apply to the exact proposed selection.
+        proposal = create_override_proposal(self.db, "pdf-de", "pdf-zh", source_ids, targets)
+        confirm_override(self.db, proposal["override_id"], proposal["confirmation_token"])
+        self.assertEqual(locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)["alignment_source"], "automatic")
+        broad = translation_works.save_correction(self.db, "pdf-de", "pdf-zh", source_ids, [])
+        exact = translation_works.save_correction(self.db, "pdf-de", "pdf-zh", [source_ids[0]], targets)
+        self.assertEqual(locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)["manual_override_id"], exact["override_id"])
+        revoke_override(self.db, exact["override_id"])
+        with self.assertRaisesRegex(AlignmentNotFound, "已人工确认"):
+            locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)
+        revoke_override(self.db, broad["override_id"])
+        self.assertEqual(locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)["alignment_source"], "automatic")
+
+    def test_multi_source_correction_applies_to_scroll_selection(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        connection = sqlite3.connect(self.db)
+        links = connection.execute(
+            "SELECT alignment_link_id FROM alignment_links ORDER BY order_index"
+        ).fetchall()
+        # The algorithm supports links joining several source segments.
+        for order, (other,) in enumerate(links[1:], 1):
+            connection.execute(
+                "UPDATE alignment_link_members SET alignment_link_id = ?, "
+                "member_order = member_order + ? WHERE alignment_link_id = ?",
+                (links[0][0], order * 100, other),
+            )
+            connection.execute(
+                "DELETE FROM alignment_links WHERE alignment_link_id = ?", (other,)
+            )
+        connection.commit()
+        connection.close()
+        link = self._first_link()
+        self.assertGreater(len(link["source_segment_ids"]), 1)
+        for targets in (link["target_segment_ids"][-1:], []):
+            with self.subTest(targets=targets):
+                translation_works.save_correction(
+                    self.db, "pdf-de", "pdf-zh", link["source_segment_ids"], targets
+                )
+                self.assertIsNotNone(self._first_link()["manual"])
+                selection = dict(start_page_index=0, end_page_index=0,
+                                 start_offset=1, end_offset=2)
+                if targets:
+                    located = locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)
+                    self.assertEqual(located["alignment_source"], "manual_review")
+                else:
+                    with self.assertRaisesRegex(AlignmentNotFound, "已人工确认"):
+                        locate_alignment(self.db, "pdf-de", "pdf-zh", **selection)
+
     def _first_link(self):
         return translation_works.alignment_link_window(
             self.db, "pdf-de", "pdf-zh", 0, 0

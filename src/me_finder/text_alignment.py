@@ -2057,7 +2057,28 @@ def _lookup_confirmed_override(
         (source_id, target_id, source_set_id, _segment_key(source_segments)),
     ).fetchone()
     if row is None:
-        return None
+        # Reader corrections describe a whole alignment link. Scrolling locates
+        # a single character, hence often only one of that link's segments.
+        # Keep agent proposals selection-scoped; only reader link corrections
+        # apply to a contained selection. Exact corrections above take priority.
+        selection = set(source_segments)
+        candidates = []
+        for candidate in connection.execute(
+            "SELECT override_id, source_segment_ids_json, target_segment_ids_json, "
+            "target_segment_set_id, evidence_json FROM alignment_manual_overrides "
+            "WHERE source_file_id = ? AND target_source_file_id = ? "
+            "AND source_segment_set_id = ? AND target_segment_set_id = ? "
+            "AND status = 'confirmed' ORDER BY confirmed_at DESC, override_id",
+            (source_id, target_id, source_set_id, target_set_id),
+        ):
+            if json.loads(candidate["evidence_json"]).get("origin") != "reader_review":
+                continue
+            stored_source = set(json.loads(candidate["source_segment_ids_json"]))
+            if selection and selection <= stored_source:
+                candidates.append((len(stored_source), candidate))
+        if not candidates:
+            return None
+        row = min(candidates, key=lambda item: item[0])[1]
     # A re-alignment or re-segmentation would move the confirmed target to a new
     # segment set; treat the stored correction as stale rather than mapping to
     # segments the current alignment no longer uses.

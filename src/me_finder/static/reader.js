@@ -1347,8 +1347,12 @@
     rememberComparisonTarget(state.sourceId, targetId);
     if (pairReadable(info)) {
       showPendingPane(false);
-      locateInAlignedVersion(targetId, sourceCenterRange(), true).then(function (located) {
-        if (!located && state.open && state.comparison.targetSourceId !== targetId) {
+      var sourceId = state.sourceId;
+      var request = locateInAlignedVersion(targetId, sourceCenterRange(), true);
+      var serial = state.comparison.locateSerial;
+      request.then(function (located) {
+        if (serial !== state.comparison.locateSerial || state.sourceId !== sourceId || !state.open) return;
+        if (!located && state.comparison.targetSourceId !== targetId) {
           showComparison({targetSourceId: targetId, targetIndex: 0, pageMatchSpans: []},
             alignmentTargetName(targetId));
           setAlert('当前位置没有可用的对应段落，右栏从开头显示；滚动左栏后会跟随定位', 'info');
@@ -1554,15 +1558,30 @@
       if (response.status === 202) continue;
       var payload = {};
       try { payload = await response.json(); } catch (_error) { payload = {}; }
+      if (state.pollingJobId !== jobId) return;
+      var completed = state.generation;
       state.pollingJobId = '';
       state.generation = null;
       if (!state.open) return;
+      var sourceId = state.sourceId;
       if (response.ok && payload.ok) notify('对齐已生成');
       else if (payload.cancelled) notify('已取消生成对齐');
       else if (response.status !== 404) setAlert(payload.error || '生成对齐失败', 'warning');
       await loadAlignmentTargets(state.sourceId);
       await loadWorkContext(state.sourceId);
-      refreshComparisonAfterStatusChange();
+      if (!state.open || state.sourceId !== sourceId) return;
+      if (response.ok && payload.ok && completed && completed.groupId === state.work.groupId &&
+          state.comparison.open) {
+        // A base-leg update also changes indirect pairs within this work.
+        state.links = null;
+        state.linkRequestSerial += 1;
+        clearLinkedSelection();
+        state.comparison.lastSourceRange = '';
+        openComparisonWith(state.comparison.targetSourceId);
+        renderToolbar();
+      } else {
+        refreshComparisonAfterStatusChange();
+      }
       return;
     }
   }
@@ -2263,7 +2282,6 @@
 
   function showComparison(payload, targetDisplayName) {
     var comparison = state.comparison;
-    var sourceHighlight = visibleSourceHighlightRange();
     var targetSourceId = String(payload.targetSourceId || payload.target_source_file_id || '');
     var changedTarget = comparison.targetSourceId !== targetSourceId;
     markComparisonOpen(targetSourceId);
@@ -2286,11 +2304,6 @@
     comparison.lowConfidence = (payload.preciseHighlightAvailable != null
       ? payload.preciseHighlightAvailable
       : payload.precise_highlight_available) === false;
-    if (sourceHighlight) {
-      positionSourceTarget(state.elements.content.querySelector(
-        '[data-reader-index="' + sourceHighlight.startIndex + '"]'
-      ));
-    }
     updateComparisonNotice();
     updateComparisonControls();
     renderToolbar();
@@ -2407,6 +2420,7 @@
         throw new Error(payload.error || '跨版本定位失败');
       }
       if (serial !== state.comparison.locateSerial || !state.open) return false;
+      setAlert('', 'info');
       return showComparison({
         targetSourceId: payload.target_source_file_id,
         targetTitle: payload.target_title,

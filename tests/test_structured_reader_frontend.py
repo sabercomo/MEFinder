@@ -262,8 +262,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         comparison_start = READER_JS.index("function showComparison(")
         comparison_end = READER_JS.index("function closeComparison()", comparison_start)
         comparison_body = READER_JS[comparison_start:comparison_end]
-        self.assertIn("var sourceHighlight = visibleSourceHighlightRange()", comparison_body)
-        self.assertIn("positionSourceTarget(state.elements.content.querySelector", comparison_body)
+        self.assertNotIn("positionSourceTarget(", comparison_body)
 
     def test_home_and_end_jump_to_document_boundaries_without_blank_spacers(
         self,
