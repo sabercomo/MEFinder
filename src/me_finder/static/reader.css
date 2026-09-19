@@ -125,6 +125,18 @@
 .mef-reader-dd-trigger[aria-expanded="true"] { border-color: var(--accent-fill); box-shadow: var(--focus-ring); }
 .mef-reader-dd-trigger.is-version[aria-expanded="true"] svg { transform: rotate(180deg); }
 .mef-reader-dd-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Hallmark · component: chapter picker · genre: quiet reading navigation
+   · pre-emit critique: reuse menu, no extra reading column or animation
+   · checks: contrast / slop / chrome / tokens / responsive */
+.mef-reader-outline-trigger { gap: 4px; }
+.mef-reader-menu.mef-reader-outline-menu {
+  width: min(360px, calc(100vw - 112px));
+  max-height: min(480px, 65vh);
+}
+.mef-reader-outline-menu .mef-reader-option-label { white-space: normal; line-height: 1.5; }
+.mef-reader-outline-menu .is-subchapter { padding-left: 30px; }
+.mef-reader-outline-message { margin: 0; padding: 12px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
 .mef-reader-dd-trigger.is-icon .mef-reader-dd-value { display: none; }
 .mef-reader-dd-trigger.is-version { flex: 1 1 auto; }
 

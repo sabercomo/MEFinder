@@ -184,6 +184,11 @@
     var value = Math.round(Number(pct));
     if (!Number.isFinite(value)) return;
     value = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, value));
+    // 值没变只补 UI：偏好写盘有启动期被 syncOnlineAutoMatchControl 程序性回填触发的路径。
+    if (Math.round(onlineMetadataAutoMatchThreshold * 100) === value) {
+      syncOnlineAutoMatchControl();
+      return;
+    }
     onlineMetadataAutoMatchThreshold = value / 100;
     try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(value)); } catch (_) {}
     persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);  // 随数据备份/迁移（C-01）
@@ -195,8 +200,17 @@
     var slider = document.getElementById('online-auto-match-range');
     var label = document.getElementById('online-auto-match-value');
     if (slider && String(slider.value) !== String(pct)) slider.value = String(pct);
-    // 程序性赋值不触发 input 事件，填充比例要自己补一次
-    if (slider) slider.dispatchEvent(new Event('input', {bubbles: true}));
+    // 程序性赋值不触发 input 事件（且这里绝不能 dispatch 合成 input：
+    // inline oninput 会再进 setOnlineAutoMatchThreshold，形成写偏好的递归风暴），
+    // 填充比例与算法对齐 60-settings.js 的 syncRangeFill，就地补一次。
+    if (slider) {
+      var span = Number(slider.max || 0) - Number(slider.min || 0);
+      var ratio = span > 0 ? (pct - Number(slider.min || 0)) / span : 0;
+      slider.style.setProperty(
+        '--range-fill',
+        (Math.min(Math.max(ratio, 0), 1) * 100).toFixed(2) + '%'
+      );
+    }
     if (label) label.textContent = pct + '%';
   }
 

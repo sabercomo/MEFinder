@@ -181,6 +181,7 @@ def assemble_reader_routes(
     works = translation_work_controller
     get_routes = {
         "/api/document/pages": structured_reader_controller.pages,
+        "/api/document/outline": structured_reader_controller.outline,
         "/api/text-alignments/targets": text_alignment_controller.targets,
         "/api/text-alignments/status": text_alignment_controller.status,
         "/api/text-alignments/current": text_alignment_controller.current,

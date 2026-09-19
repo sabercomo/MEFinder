@@ -979,6 +979,8 @@
         if (data.status === 'completed') {
           showToast(data.message || '备份已恢复');
           invalidateLibraryCatalog();
+          // 备份恢复整体替换索引库，作品与对齐数据一并失效。
+          if (global.MEFinder && global.MEFinder.works) global.MEFinder.works.invalidate();
           loadMeta();
           return;
         }

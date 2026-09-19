@@ -650,6 +650,36 @@ def trusted_heading(block, *, page, region, profile) -> HeadingDecision:
     return HeadingDecision(None, kind, "NO_HEADING_EVIDENCE")
 
 
+def reader_heading_spans(page, *, profile) -> list[dict]:
+    """Return trusted level-1/2 headings with offsets into unchanged page text."""
+    raw = str(page.get("text_raw") or "")
+    blocks = _ordered_body_blocks(page)
+    if not blocks or not blocks_aligned_with_text(blocks, raw):
+        return []
+    width, height = _page_scale(page)
+    headings = []
+    cursor = 0
+    for index, block in enumerate(blocks):
+        text = str(block.get("text") or "").strip()
+        if _has_valid_offsets(block, raw):
+            start, end = int(block["page_char_start"]), int(block["page_char_end"])
+        else:
+            start = raw.find(text, cursor)
+            if start < 0:
+                continue
+            end = start + len(text)
+        cursor = end
+        region = _region_of(index, len(blocks), _block_y_center(block, width, height))
+        decision = trusted_heading(block, page=page, region=region, profile=profile)
+        if decision.level in (1, 2):
+            headings.append({
+                "level": decision.level,
+                "title": str(block.get("document_heading_title") or text).strip(),
+                "char_start": start, "char_end": end,
+            })
+    return headings
+
+
 @dataclass
 class ExportStructure:
     pages: list[list[dict]]

@@ -9,6 +9,7 @@ GET_API_ROUTES = frozenset(
         "/api/data-location",
         "/api/document-groups",
         "/api/document/pages",
+        "/api/document/outline",
         "/api/text-alignments/targets",
         "/api/text-alignments/status",
         "/api/text-alignments/current",

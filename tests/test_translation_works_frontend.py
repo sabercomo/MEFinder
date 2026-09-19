@@ -17,6 +17,7 @@ STATIC = ROOT / "src" / "me_finder" / "static"
 WORKS_JS = (STATIC / "js" / "35-works.js").read_text(encoding="utf-8")
 WORKS_CSS = (STATIC / "css" / "45-works.css").read_text(encoding="utf-8")
 LIBRARY_JS = (STATIC / "js" / "30-library.js").read_text(encoding="utf-8")
+INIT_JS = (STATIC / "js" / "90-init.js").read_text(encoding="utf-8")
 INDEX_HTML = (ROOT / "src" / "me_finder" / "templates" / "index.html").read_text(encoding="utf-8")
 
 
@@ -126,6 +127,67 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         literals = re.findall(r"'([^'\n]*[一-鿿][^'\n]*)'", WORKS_JS)
         self.assertTrue(literals)
         self.assertEqual([text for text in literals if text.endswith("。")], [])
+
+    def test_startup_defers_the_heavy_overview_fetch(self) -> None:
+        """总览是启动链路里唯一的秒级接口，不得回到启动关键路径上。"""
+
+        # 启动只拉毫秒级的可用性；整页数据延后后台预取。
+        self.assertNotRegex(INIT_JS, r"^MEFinder\.works\.load\(\);", re.MULTILINE)
+        self.assertIn("MEFinder.works.refreshAvailability();", INIT_JS)
+        self.assertRegex(
+            INIT_JS, r"setTimeout\(function \(\) \{ MEFinder\.works\.load\(\); \}, \d+\);"
+        )
+
+    def test_load_is_gated_and_deduplicated(self) -> None:
+        load_body = _function_body(WORKS_JS, "function load(options)")
+        # 已加载过不再整页重拉；进行中共用同一请求（切换页面不重付秒级查询）。
+        self.assertIn("if (works.loaded && !options.force)", load_body)
+        self.assertIn("if (currentPage === 'works')", load_body)
+        self.assertIn("render();", load_body)
+        self.assertIn("if (loadInflight) return loadInflight;", load_body)
+        # 库结构变化（删除文献、恢复备份）必须能重置加载门。
+        self.assertIn("works.loaded = false;", _function_body(WORKS_JS, "function invalidate()"))
+        self.assertIn("library_changed", WORKS_JS)
+        self.assertIn("invalidate: invalidate,", WORKS_JS)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_load_retries_failure_and_refreshes_invalidated_inflight_data(self) -> None:
+        start = WORKS_JS.index("  var loadInflight = null;")
+        end = WORKS_JS.index("  async function refreshAvailability()", start)
+        script = r"""
+const assert = require('assert/strict');
+const works = {loaded:false,loadSerial:0,currentId:'',hiddenGroupIds:new Set()};
+const currentPage = 'library', libraryStore = {loaded:false}, global = {MEFinder:{}};
+const showToast=()=>{}, renderSidebarEntry=()=>{}, syncLibraryAssignButton=()=>{};
+const visibleGroups=()=>[], groupById=()=>null;
+const loadAvailability=async()=>{}, ensureCatalog=async()=>{};
+let queries=0, fail=true, release;
+const loadGroupsAndOverview=()=>{
+ queries++;
+ if(fail) return Promise.reject(new Error('offline'));
+ return new Promise(resolve=>{release=resolve;});
+};
+(async()=>{
+ await load();
+ assert.equal(works.loaded,false,'failed requests must remain retryable');
+ fail=false;
+ const pending=load(), duplicate=load();
+ assert.equal(pending,duplicate,'deduplicate an active request');
+ invalidate();
+ release();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(queries,3,'invalidation during loading must fetch a fresh snapshot');
+ assert.equal(works.loaded,false,'stale snapshot must not become loaded');
+ release();await pending;
+ assert.equal(works.loaded,true);
+ await load();assert.equal(queries,3,'successful snapshot should be reused');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", WORKS_JS[start:end] + script],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_module_parses(self) -> None:

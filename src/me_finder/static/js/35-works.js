@@ -301,13 +301,16 @@
     }
   }
 
-  async function load(options) {
-    options = options || {};
+  var loadInflight = null;
+  var loadInvalidated = false;
+
+  async function performLoad(options) {
     var serial = ++works.loadSerial;
     try {
       await Promise.all([loadAvailability(), loadGroupsAndOverview(), ensureCatalog(options.forceCatalog)]);
     } catch (error) {
       if (serial === works.loadSerial) showToast(error.message || '译本对照加载失败', 'danger');
+      return;
     }
     if (serial !== works.loadSerial) return;
     works.loaded = true;
@@ -323,6 +326,39 @@
     }
     if (global.MEFinder.library && libraryStore.loaded) global.MEFinder.library.renderList();
     syncLibraryAssignButton();
+  }
+
+  // 总览接口是启动链路里唯一的秒级查询：已加载过就不再整页重拉（切换页面即时渲染），
+  // 进行中则共用同一请求；库结构被删除/恢复改变时由 invalidate() 重置后重新加载。
+  function load(options) {
+    options = options || {};
+    if (works.loaded && !options.force) {
+      if (currentPage === 'works') {
+        render();
+        loadPosition(works.currentId);
+      }
+      return Promise.resolve();
+    }
+    if (loadInflight) return loadInflight;
+    loadInflight = performLoad(options).then(function (value) {
+      loadInflight = null;
+      if (loadInvalidated) {
+        loadInvalidated = false;
+        return load(options);
+      }
+      return value;
+    }, function (error) {
+      loadInflight = null;
+      throw error;
+    });
+    return loadInflight;
+  }
+
+  function invalidate() {
+    works.loaded = false;
+    works.loadSerial++;
+    if (loadInflight) loadInvalidated = true;
+    if (currentPage === 'works') load();
   }
 
   async function refreshAvailability() {
@@ -1394,10 +1430,14 @@
     });
   }, {once: true});
 
+  // 删除文献可能解散或缩小作品：重置加载门，下次进入译本对照页重新拉取。
+  window.addEventListener('library_changed', function () { invalidate(); });
+
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.works = {
     load: load,
     refreshAvailability: refreshAvailability,
+    invalidate: invalidate,
     open: openWork,
     openSheet: openSheet,
     assignSelection: assignSelection,

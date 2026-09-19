@@ -769,6 +769,24 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         citation_at = HTML.index('data-target="citation-format-settings"')
         self.assertNotEqual(bib_at, citation_at)
 
+    def test_online_auto_match_slider_does_not_dispatch_synthetic_input(self) -> None:
+        """程序性回填绝不能 dispatch 合成 input（0.5.4 起每轮启动递归写偏好 80+ 次）。
+
+        inline oninput 会把合成事件当用户输入再进 setOnlineAutoMatchThreshold，
+        它又调 syncOnlineAutoMatchControl，形成 persistDisplayPreference 风暴；
+        且值未变化时不得写偏好。
+        """
+
+        sync_at = HTML.index("function syncOnlineAutoMatchControl()")
+        sync_body = HTML[sync_at:HTML.index("function automaticBatchCandidateIndex", sync_at)]
+        self.assertNotIn("dispatchEvent", sync_body)
+        self.assertIn("--range-fill", sync_body)
+        set_at = HTML.index("function setOnlineAutoMatchThreshold(pct)")
+        set_body = HTML[set_at:sync_at]
+        self.assertIn(
+            "Math.round(onlineMetadataAutoMatchThreshold * 100) === value", set_body
+        )
+
     def test_citation_format_preferences_filter_the_result_dropdown(self) -> None:
         vision_at = HTML.index('data-target="vision-api-settings"')
         citation_at = HTML.index('data-target="citation-format-settings"')

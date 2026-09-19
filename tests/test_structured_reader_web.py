@@ -126,6 +126,15 @@ def _reader_index() -> dict[str, object]:
 
 
 class StructuredReaderWebTests(unittest.TestCase):
+    def test_outline_route_returns_empty_or_explicit_errors(self):
+        with self._server() as (base, handler):
+            status, data = self._get_json(base, "/api/document/outline?source_id=pdf-http")
+            self.assertEqual(status, 200)
+            self.assertEqual(data["entries"], [])
+            for query, expected in (("", 400), ("?source_id=missing", 404),
+                                    ("?source_id=pdf-http&source_id=word-http", 400)):
+                self.assertEqual(self._get_json(base, "/api/document/outline" + query)[0], expected)
+
     @contextmanager
     def _server(self):
         with TemporaryDirectory() as temp_dir:

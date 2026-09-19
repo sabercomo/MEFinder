@@ -90,7 +90,10 @@ MEFinder.imports.setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
-MEFinder.works.load();
+// 译本对照的总览查询是启动链路里唯一的秒级接口：先拉毫秒级的可用性（侧栏入口立即可判），
+// 整页数据延后到首屏请求返回后再后台预取，避免把文献库的初次加载一起拖慢。
+MEFinder.works.refreshAvailability();
+setTimeout(function () { MEFinder.works.load(); }, 1200);
 MEFinder.imports.loadResumableImports();
 MEFinder.library.syncViewButtons();
 // 文献库只在用户展开文献下拉或进入文献库页时才读取：启动时不预取整库。

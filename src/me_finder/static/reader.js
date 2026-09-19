@@ -8,6 +8,7 @@
    */
   var DEFAULTS = {
     endpoint: '/api/document/pages',
+    outlineEndpoint: '/api/document/outline',
     citationEndpoint: '/api/document/citation',
     alignmentTargetsEndpoint: '/api/text-alignments/targets',
     alignmentLocateEndpoint: '/api/text-alignments/locate',
@@ -31,6 +32,7 @@
 
   var config = {
     endpoint: DEFAULTS.endpoint,
+    outlineEndpoint: DEFAULTS.outlineEndpoint,
     citationEndpoint: DEFAULTS.citationEndpoint,
     alignmentTargetsEndpoint: DEFAULTS.alignmentTargetsEndpoint,
     alignmentLocateEndpoint: DEFAULTS.alignmentLocateEndpoint,
@@ -111,6 +113,9 @@
     generation: null,
     pollingJobId: '',
     openMenu: '',
+    outline: {items: null, loading: false, error: ''},
+    outlineJumpSerial: 0,
+    outlineNavigating: false,
     links: null,
     linkRequestSerial: 0,
     linkedRanges: new Map(),
@@ -431,7 +436,14 @@
     close.classList.add('mef-reader-close');
     close.hidden = !isReaderWindow;
 
+    var outlinePicker = createDropdown('outline', 'mef-reader-outline-trigger');
+    outlinePicker.value.textContent = '目录';
+    outlinePicker.trigger.setAttribute('aria-label', '章节目录');
+    outlinePicker.menu.setAttribute('aria-label', '一、二级章节');
+    outlinePicker.menu.classList.add('mef-reader-outline-menu');
+
     toolbar.appendChild(back);
+    toolbar.appendChild(outlinePicker.wrap);
     toolbar.appendChild(leftPicker.wrap);
     toolbar.appendChild(addPicker.wrap);
     toolbar.appendChild(swap);
@@ -638,6 +650,8 @@
       }
       if (!event.target.closest || !event.target.closest('.mef-reader-review')) closeReviewPopover();
       if (action === 'close') closeReader();
+      if (action === 'jump-chapter') jumpToChapter(Number(trigger.dataset.readerChapter));
+      if (action === 'retry-outline') loadOutline();
       if (action === 'toggle-menu') toggleMenu(trigger.dataset.readerMenuKey);
       if (action === 'pick-left') pickLeftVersion(trigger.dataset.readerTarget || '');
       if (action === 'pick-right' || action === 'add-comparison') {
@@ -704,6 +718,7 @@
       addPicker: addPicker,
       rightPicker: rightPicker,
       morePicker: morePicker,
+      outlinePicker: outlinePicker,
       swap: swap,
       closeCompare: closeCompare,
       cite: cite,
@@ -1104,15 +1119,91 @@
   }
 
   /* ── 自绘下拉与菜单 ─────────────────────────────────────────── */
+  async function loadOutline() {
+    var outline = state.outline;
+    if (outline.loading) return;
+    outline.loading = true;
+    outline.error = '';
+    if (state.openMenu === 'outline') renderMenu('outline');
+    try {
+      var payload = await readJSON(config.outlineEndpoint + '?source_id=' + encodeURIComponent(state.sourceId));
+      if (outline !== state.outline || !state.open) return;
+      outline.items = payload.entries;
+    } catch (error) {
+      if (outline !== state.outline || !state.open) return;
+      outline.error = error.message || '目录读取失败';
+    } finally {
+      outline.loading = false;
+      if (outline === state.outline && state.openMenu === 'outline') {
+        renderMenu('outline');
+        var first = state.elements.outlinePicker.menu.querySelector('.mef-reader-option:not(:disabled)');
+        if (first) first.focus();
+      }
+    }
+  }
+
+  async function jumpToChapter(index) {
+    var entry = state.outline.items[index];
+    state.outline.selectedIndex = index;
+    closeMenus('outline');
+    var sourceId = state.sourceId;
+    var targetId = state.comparison.open ? state.comparison.targetSourceId : '';
+    var serial = ++state.outlineJumpSerial;
+    var locateSerial = ++state.comparison.locateSerial;
+    state.comparison.requestSerial += 1;
+    state.outlineNavigating = true;
+    if (state.comparison.followTimer !== null) global.clearTimeout(state.comparison.followTimer);
+    state.comparison.followTimer = null;
+    state.comparison.lastSourceRange = '';
+    state.citationRange = null;
+    state.citationRequestSerial += 1;
+    clearLinkedSelection();
+    var anchorId = entry.anchor_id || itemAnchor({}, entry.item_index);
+    prepareHighlights({pageMatchSpans: [{anchor_id: anchorId,
+      page_char_start: entry.char_start, page_char_end: entry.char_end}]});
+    state.targetAnchorId = anchorId;
+    state.currentIndex = entry.item_index;
+    setAlert('', 'info');
+    try {
+      var loaded = await loadWindow(entry.item_index, state.targetAnchorId);
+      if (!loaded || serial !== state.outlineJumpSerial || !state.open || state.sourceId !== sourceId) return;
+      state.elements.viewport.focus();
+      if (targetId && state.comparison.open && state.comparison.targetSourceId === targetId &&
+          locateSerial === state.comparison.locateSerial) {
+        if (!state.elements.pending.hidden) {
+          setAlert('已跳到章节；两个版本尚无可用对齐，右栏无法同步', 'info');
+          return;
+        }
+        // An explicit chapter jump synchronizes once even when scroll-follow is paused.
+        var located = await locateInAlignedVersion(targetId, {
+          startIndex: entry.item_index, endIndex: entry.item_index,
+          startOffset: entry.char_start, endOffset: entry.char_end
+        }, true);
+        if (!located && serial === state.outlineJumpSerial && state.open &&
+            state.comparison.targetSourceId === targetId && state.comparison.locateSerial === locateSerial + 1) {
+          state.comparison.highlights.clear();
+          state.comparison.indexHighlights.clear();
+          var previousTop = state.elements.comparisonViewport.scrollTop;
+          renderComparisonWindow();
+          state.elements.comparisonViewport.scrollTop = previousTop;
+          setAlert('已跳到章节；右栏未同步，保留原位置：' + state.elements.alert.textContent, 'warning');
+        }
+      }
+    } finally {
+      if (serial === state.outlineJumpSerial) state.outlineNavigating = false;
+    }
+  }
+
   function pickerFor(key) {
     if (!state.elements) return null;
     return {left: state.elements.leftPicker, add: state.elements.addPicker,
-      right: state.elements.rightPicker, more: state.elements.morePicker}[key] || null;
+      right: state.elements.rightPicker, more: state.elements.morePicker,
+      outline: state.elements.outlinePicker}[key] || null;
   }
 
   function closeMenus(returnFocusKey) {
     if (!state.elements) return;
-    ['left', 'add', 'right', 'more'].forEach(function (key) {
+    ['left', 'add', 'right', 'more', 'outline'].forEach(function (key) {
       var picker = pickerFor(key);
       if (!picker || picker.menu.hidden) return;
       picker.menu.hidden = true;
@@ -1168,7 +1259,28 @@
     var menu = picker.menu;
     menu.replaceChildren();
     var targetId = state.comparison.targetSourceId;
-    if (key === 'left') {
+    if (key === 'outline') {
+      var outline = state.outline;
+      if (outline.loading || outline.error || !outline.items || !outline.items.length) {
+        var message = document.createElement('p');
+        message.className = 'mef-reader-outline-message';
+        message.setAttribute('role', 'status');
+        message.textContent = outline.loading ? '正在读取章节…' :
+          (outline.error || '此文献暂无可定位的一、二级标题');
+        menu.appendChild(message);
+        if (outline.error) menu.appendChild(menuOption('重试', 'retry-outline'));
+      } else {
+        outline.items.forEach(function (entry, index) {
+          var option = menuOption(entry.title, 'jump-chapter', {
+            selected: outline.selectedIndex === index,
+            meta: entry.level === 1 ? '一级' : '二级'
+          });
+          option.dataset.readerChapter = String(index);
+          option.classList.toggle('is-subchapter', entry.level === 2);
+          menu.appendChild(option);
+        });
+      }
+    } else if (key === 'left') {
       state.work.members.forEach(function (member) {
         menu.appendChild(menuOption(memberLabel(member), 'pick-left', {
           target: member.id, selected: member.id === state.sourceId
@@ -1224,6 +1336,7 @@
     picker.menu.hidden = false;
     picker.trigger.setAttribute('aria-expanded', 'true');
     state.openMenu = key;
+    if (key === 'outline' && state.outline.items === null && !state.outline.error) loadOutline();
     var first = picker.menu.querySelector('.mef-reader-option[aria-selected="true"]:not(:disabled)') ||
       picker.menu.querySelector('.mef-reader-option:not(:disabled)');
     if (first) first.focus();
@@ -2370,12 +2483,12 @@
 
   function scheduleComparisonFollow() {
     var comparison = state.comparison;
-    if (!comparison.open || !comparison.autoFollow) return;
+    if (!comparison.open || !comparison.autoFollow || state.outlineNavigating) return;
     if (comparison.followTimer !== null) global.clearTimeout(comparison.followTimer);
     comparison.followTimer = global.setTimeout(function () {
       comparison.followTimer = null;
       var selection = sourceCenterRange();
-      if (!selection || !comparison.open || !comparison.autoFollow) return;
+      if (!selection || !comparison.open || !comparison.autoFollow || state.outlineNavigating) return;
       var rangeKey = [
         selection.startIndex,
         selection.startOffset,
@@ -3715,6 +3828,7 @@
   function configure(options) {
     options = options || {};
     if (options.endpoint) config.endpoint = String(options.endpoint);
+    if (options.outlineEndpoint) config.outlineEndpoint = String(options.outlineEndpoint);
     if (options.citationEndpoint) {
       config.citationEndpoint = String(options.citationEndpoint);
     }
@@ -3773,6 +3887,9 @@
     }
     state.open = true;
     state.sourceId = sourceId;
+    state.outline = {items: null, loading: false, error: ''};
+    state.outlineJumpSerial += 1;
+    state.outlineNavigating = false;
     state.source = null;
     if (options.returnLabel || !wasOpen) state.returnLabel = String(options.returnLabel || '');
     state.pendingCompareWith = String(options.compareWith || '');
@@ -3860,6 +3977,8 @@
 
   async function goTo(target) {
     if (!state.open) return false;
+    state.outlineJumpSerial += 1;
+    state.outlineNavigating = false;
     var options = typeof target === 'object' && target !== null
       ? target
       : (typeof target === 'number' ? {targetIndex: target} : {anchorId: target});
@@ -3928,6 +4047,8 @@
       state.positionTimer = null;
     }
     state.open = false;
+    state.outlineJumpSerial += 1;
+    state.outlineNavigating = false;
     state.requestSerial += 1;
     state.citationRequestSerial += 1;
     state.alignmentRequestSerial += 1;

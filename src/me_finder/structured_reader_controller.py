@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
+from .document_outline import get_document_outline
 from .structured_reader import (
     CitationPositionNotFound,
     InvalidCitationRange,
@@ -34,11 +35,31 @@ class StructuredReaderController:
         get_window: ReaderOperation,
         get_citation: ReaderOperation,
         log_exception: ExceptionLogger,
+        get_outline: ReaderOperation = get_document_outline,
     ) -> None:
         self._run_when_ready = run_when_ready
         self._get_window = get_window
         self._get_citation = get_citation
         self._log_exception = log_exception
+        self._get_outline = get_outline
+
+    def outline(self, params: Mapping[str, Sequence[object]]) -> StructuredReaderResponse:
+        """Read persisted chapter anchors through the same readiness gate as pages."""
+        ids = params.get("source_id", [])
+        if set(params) != {"source_id"} or len(ids) != 1:
+            return 400, {"error": "source_id 必须提供一次"}
+        try:
+            result = self._run_when_ready(lambda path: self._get_outline(path, ids[0]))
+        except (InvalidSourceId, UnsupportedSourceType) as exc:
+            return 400, {"error": str(exc)}
+        except SourceNotFound as exc:
+            return 404, {"error": str(exc)}
+        except (OSError, sqlite3.Error, StructuredReaderError):
+            self._log_exception("structured reader outline request failed")
+            return 500, {"error": "章节目录读取失败，请稍后重试"}
+        if result is None:
+            return 503, {"error": "索引正在重建，请稍候再打开目录"}
+        return 200, result
 
     def pages(
         self,

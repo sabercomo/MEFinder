@@ -18,6 +18,7 @@
     "/api/components",
     "/api/data-location",
     "/api/document-groups",
+    "/api/document/outline",
     "/api/document/pages",
     "/api/general-model",
     "/api/import-resumable",

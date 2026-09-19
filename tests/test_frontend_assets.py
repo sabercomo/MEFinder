@@ -501,10 +501,14 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   文献库去掉作品组下拉与管理弹窗改「加入作品…」、reader.js / reader.css 统一阅读器（工具栏、
     #   添加 / 关闭对照、连续段落、低置信校正弹层、阅读位置）。
     # 0.5.5 审核修复：过期对照请求、任务完成缓存刷新及搜索高亮干扰跟随。
+    # 0.5.5 阅读器章节目录及一次双栏跳转；缓存加载失败可重试，在途失效补拉新快照。
+    # 0.5.5 启动提速：译本对照总览移出启动关键路径（先可用性、延迟预取），
+    #   works.load 加已加载门与在途去重，库删除/恢复后经 invalidate 重置；
+    #   自动匹配阈值滑杆不再 dispatch 合成 input（曾触发递归写偏好风暴）。
     BASELINE_SHA256 = (
-        "6ff89c8f1759246adff24e806bed182e978d1eeec349f7037485deb039612ccd"
+        "9f972805bb25d83c4ad989631565a2534af8b23603ef4fb719cb409ab95d916a"
     )
-    BASELINE_BYTES = 1182687
+    BASELINE_BYTES = 1191668
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
