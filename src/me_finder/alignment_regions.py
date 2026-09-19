@@ -19,6 +19,16 @@ from .semantic_alignment import (
 )
 
 
+_REFERENCE_TITLES = frozenset({
+    "参考文献", "參考文獻", "bibliography", "references", "bibliographie",
+})
+
+
+def _first_line_title(text: str) -> str:
+    lines = text.strip().splitlines()
+    return re.sub(r"\s+", "", lines[0]).casefold() if lines else ""
+
+
 def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
     """Bound the main text using existing TOC-aware chapter detection.
 
@@ -48,8 +58,24 @@ def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
         and len(lines[0]) <= 80
         and _INTRODUCTION_HEADING.match(lines[0])
     ]
+    first_chapter = min(body_positions, default=None)
+    if first_chapter is not None:
+        # An introduction that closes with its own reference list before the
+        # first chapter is editorial apparatus (e.g. a translation's scholarly
+        # introduction), not the author's opening argument.
+        leading = [index for index in introduction_positions if index < first_chapter]
+        if leading and any(
+            _first_line_title(texts[index]) in _REFERENCE_TITLES
+            for index in range(min(leading) + 1, first_chapter)
+        ):
+            introduction_positions = [
+                index for index in introduction_positions if index >= first_chapter
+            ]
     start = min(body_positions + introduction_positions, default=0)
     end = len(texts)
+    # Book backmatter cannot precede the first chapter: Notes/References that
+    # belong to a leading introduction must not end the body.
+    scan_from = max(start, first_chapter if first_chapter is not None else start) + 1
     backmatter_titles = {
         "译后记", "譯後記", "译者后记", "譯者後記", "后记", "後記",
         "致谢", "致謝", "鸣谢", "鳴謝", "索引", "尾注", "尾註",
@@ -61,13 +87,12 @@ def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
     }
     note_titles = {"注释", "註釋", "notes", "anmerkungen"}
     note_positions = [
-        index for index in range(start + 1, len(texts))
+        index for index in range(scan_from, len(texts))
         if texts[index].strip().splitlines()
         and re.sub(r"\s+", "", texts[index].strip().splitlines()[0]).casefold() in note_titles
     ]
-    for index in range(start + 1, len(texts)):
-        lines = texts[index].strip().splitlines()
-        title = re.sub(r"\s+", "", lines[0]).casefold() if lines else ""
+    for index in range(scan_from, len(texts)):
+        title = _first_line_title(texts[index])
         if title in backmatter_titles:
             # Repeated chapter-note blocks are not a single end-of-book region.
             # The existing anchor reader stops at Notes, so inspect later

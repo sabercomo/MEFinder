@@ -761,6 +761,7 @@
     else if (status.stale_reason === 'algorithm_unreadable') put('需重新对齐', '算法已更新，旧结果不可读', 'stale');
     else if (status.stale_reason === 'model_changed') put('需重新对齐', '模型已更换，旧结果可读', 'stale');
     else if (status.stale_reason === 'algorithm_updated') put('需重新对齐', '算法已更新，旧结果可读', 'stale');
+    else if (status.stale_reason === 'body_range_changed') put('需重新对齐', '正文范围识别已修正，旧结果可读', 'stale');
     else if (status.status === 'direct') {
       var parts = [];
       if (status.review_count == null && !status.statisticsState) loadPairStatistics(group, status);

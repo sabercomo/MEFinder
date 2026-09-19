@@ -509,9 +509,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 作品页改版：对齐状态逐对常显（去掉勾选两个 + 底部对照栏）、
     #   作品列表「全部重新对齐」队列与需重新对齐标记，管理版本抽屉移除重复的对齐列表。
     BASELINE_SHA256 = (
-        "08408d7fd55fbd9fbce73dd2ce8e223896d6c71872a008bc48190f448d7593b4"
+        "13746d98cad1c420173c4a0b69526795a36099f160271d016e1c4de6c3c41ff1"
     )
-    BASELINE_BYTES = 1201163
+    BASELINE_BYTES = 1201422
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

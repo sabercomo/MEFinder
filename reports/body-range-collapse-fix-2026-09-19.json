@@ -1,0 +1,461 @@
+{
+ "generated_by": "scripts/body_range_bounds_diff.py + scripts/body_range_controls_rescore.py",
+ "date": "2026-09-19",
+ "code_base": "7717cd5 + 工作区改动",
+ "snapshot": {
+  "path": ".codex-tmp/d-round2/index-baseline.sqlite3（APFS 克隆副本上运行，原快照未写）",
+  "db_sha256_baseline": "adc34d4f9d0cfff50948dcb6ad2a2644e81dbce70f283436bba03ce254806b52",
+  "model_id": "multilingual-e5-large",
+  "vectors": "d-round2 缓存命中，未重新推理"
+ },
+ "bounds_regression": {
+  "epub-238424f6926e518201c245cd359d0668": {
+   "segments": 3951,
+   "before": [
+    3,
+    3918
+   ],
+   "after": [
+    3,
+    3918
+   ]
+  },
+  "epub-520f768a77b06bb633d00237f2a440b7": {
+   "segments": 11785,
+   "before": [
+    998,
+    11785
+   ],
+   "after": [
+    998,
+    11785
+   ]
+  },
+  "epub-6ab83756d871862581ac8b8cb2a14c91": {
+   "segments": 5532,
+   "before": [
+    22,
+    4231
+   ],
+   "after": [
+    22,
+    4231
+   ]
+  },
+  "epub-c3fce4b8db255943379ff83408d48b8a": {
+   "segments": 1743,
+   "before": [
+    42,
+    1640
+   ],
+   "after": [
+    42,
+    1640
+   ]
+  },
+  "pdf-consumer-society": {
+   "segments": 3739,
+   "before": [
+    409,
+    3739
+   ],
+   "after": [
+    409,
+    3739
+   ]
+  },
+  "pdf-hegel-philosophy-right": {
+   "segments": 6170,
+   "before": [
+    627,
+    6170
+   ],
+   "after": [
+    627,
+    6170
+   ]
+  },
+  "pdf-import-0cdfc70dc7574b98": {
+   "segments": 10226,
+   "before": [
+    1103,
+    10226
+   ],
+   "after": [
+    1103,
+    10226
+   ]
+  },
+  "pdf-import-18222098e2fe451a": {
+   "segments": 7379,
+   "before": [
+    632,
+    7379
+   ],
+   "after": [
+    632,
+    7379
+   ]
+  },
+  "pdf-import-1d4016f99fc5dbba": {
+   "segments": 3601,
+   "before": [
+    202,
+    3601
+   ],
+   "after": [
+    202,
+    3601
+   ]
+  },
+  "pdf-import-3c211c5a7ad5bc3c": {
+   "segments": 4000,
+   "before": [
+    28,
+    3958
+   ],
+   "after": [
+    28,
+    3958
+   ]
+  },
+  "pdf-import-3eedba8ff70fc8e0": {
+   "segments": 4268,
+   "before": [
+    42,
+    584
+   ],
+   "after": [
+    635,
+    3946
+   ]
+  },
+  "pdf-import-49635cecdd201dd9": {
+   "segments": 3404,
+   "before": [
+    36,
+    3226
+   ],
+   "after": [
+    36,
+    3226
+   ]
+  },
+  "pdf-import-49ca07456db6f580": {
+   "segments": 5855,
+   "before": [
+    624,
+    5855
+   ],
+   "after": [
+    624,
+    5855
+   ]
+  },
+  "pdf-import-6a0325052e779b9e": {
+   "segments": 6087,
+   "before": [
+    326,
+    6087
+   ],
+   "after": [
+    326,
+    6087
+   ]
+  },
+  "pdf-import-7a70c26b6b8a8bdd": {
+   "segments": 3131,
+   "before": [
+    123,
+    2408
+   ],
+   "after": [
+    123,
+    2408
+   ]
+  },
+  "pdf-import-a47c115e247c8194": {
+   "segments": 3676,
+   "before": [
+    126,
+    3676
+   ],
+   "after": [
+    126,
+    3676
+   ]
+  },
+  "pdf-import-d574027d045ce657": {
+   "segments": 1901,
+   "before": [
+    33,
+    1901
+   ],
+   "after": [
+    33,
+    1901
+   ]
+  },
+  "pdf-import-de1cf03d323b0c6c": {
+   "segments": 1499,
+   "before": [
+    150,
+    1434
+   ],
+   "after": [
+    150,
+    1434
+   ]
+  },
+  "pdf-import-e63bdea39567e3ac": {
+   "segments": 2047,
+   "before": [
+    0,
+    2033
+   ],
+   "after": [
+    0,
+    2033
+   ]
+  },
+  "pdf-import-f98e6ed83b837958": {
+   "segments": 3018,
+   "before": [
+    510,
+    2971
+   ],
+   "after": [
+    510,
+    2971
+   ]
+  }
+ },
+ "pairs": {
+  "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0": {
+   "seconds": 6.8,
+   "body_ranges_before": {
+    "pivot": [
+     409,
+     3739
+    ],
+    "target": [
+     42,
+     584
+    ]
+   },
+   "body_ranges_after": {
+    "pivot": [
+     409,
+     3739
+    ],
+    "target": [
+     635,
+     3946
+    ]
+   },
+   "status_before": {
+    "rejected": 4643,
+    "unmatched": 1704,
+    "automatic": 34
+   },
+   "status_after": {
+    "rejected": 1410,
+    "automatic": 1285,
+    "unmatched": 1
+   }
+  },
+  "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0": {
+   "seconds": 7.7,
+   "body_ranges_before": {
+    "pivot": [
+     36,
+     3226
+    ],
+    "target": [
+     42,
+     584
+    ]
+   },
+   "body_ranges_after": {
+    "pivot": [
+     36,
+     3226
+    ],
+    "target": [
+     635,
+     3946
+    ]
+   },
+   "status_before": {
+    "rejected": 4268,
+    "unmatched": 1564,
+    "automatic": 214
+   },
+   "status_after": {
+    "rejected": 1188,
+    "automatic": 1941,
+    "unmatched": 19
+   }
+  }
+ },
+ "controls": [
+  {
+   "n": 25,
+   "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    2107,
+    2108
+   ],
+   "before": [
+    null,
+    "unmatched",
+    false
+   ],
+   "after": [
+    [
+     2107,
+     2108
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 62,
+   "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    1817,
+    1818,
+    1819
+   ],
+   "before": [
+    null,
+    "unmatched",
+    false
+   ],
+   "after": [
+    [
+     1817,
+     1818,
+     1819
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 75,
+   "pair": "pdf-consumer-society -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    3128,
+    3129
+   ],
+   "before": [
+    [
+     435,
+     436
+    ],
+    "rejected",
+    false
+   ],
+   "after": [
+    [
+     3128,
+     3129
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 0,
+   "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    2940,
+    2941
+   ],
+   "before": [
+    [
+     421,
+     422
+    ],
+    "rejected",
+    false
+   ],
+   "after": [
+    [
+     2940,
+     2941
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 26,
+   "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    3086
+   ],
+   "before": [
+    null,
+    "unmatched",
+    false
+   ],
+   "after": [
+    [
+     3086
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 42,
+   "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    1373,
+    1374
+   ],
+   "before": [
+    null,
+    "unmatched",
+    false
+   ],
+   "after": [
+    [
+     1373,
+     1374
+    ],
+    "automatic",
+    true
+   ]
+  },
+  {
+   "n": 57,
+   "pair": "pdf-import-49635cecdd201dd9 -> pdf-import-3eedba8ff70fc8e0",
+   "gold": [
+    3329
+   ],
+   "before": [
+    [
+     486,
+     487
+    ],
+    "automatic",
+    false
+   ],
+   "after": [
+    [
+     3329
+    ],
+    "automatic",
+    true
+   ]
+  }
+ ],
+ "controls_summary": {
+  "before": "50/61",
+  "after": "57/61（推断：其余 54 条所在书的正文范围逐本不变，计算核未改，结果应与基线一致；未逐条重跑）"
+ }
+}

@@ -1564,7 +1564,9 @@
     } else if (info.stale_reason) {
       text = info.stale_reason === 'model_changed'
         ? '对齐模型已更换，以下是旧结果'
-        : '对齐算法已更新，以下是旧结果';
+        : info.stale_reason === 'body_range_changed'
+          ? '正文范围识别已修正，以下是旧结果'
+          : '对齐算法已更新，以下是旧结果';
       actionLabel = '重新对齐';
       force = true;
     } else if (viaId) {

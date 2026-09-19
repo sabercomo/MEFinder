@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_overrides import confirm_override, create_override_proposal
+from .alignment_regions import alignment_body_bounds
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import (
     install_document_group_schema,
@@ -228,7 +229,54 @@ def dismiss_suggestion(
 # ── pair status overview ───────────────────────────────────────────────────
 
 
-def _run_staleness(run: Mapping[str, object], active_model_id: str) -> str | None:
+# Segment sets are immutable, so detected bounds are cached per set id.
+_DETECTED_BOUNDS_CACHE: Dict[str, Tuple[int, int]] = {}
+_DETECTED_BOUNDS_CACHE_LIMIT = 256
+
+
+def _detected_body_bounds(
+    connection: sqlite3.Connection, segment_set_id: str
+) -> Tuple[int, int]:
+    bounds = _DETECTED_BOUNDS_CACHE.get(segment_set_id)
+    if bounds is None:
+        bounds = alignment_body_bounds([
+            str(row[0])
+            for row in connection.execute(
+                "SELECT text_raw FROM text_segments WHERE segment_set_id = ? "
+                "ORDER BY order_index",
+                (segment_set_id,),
+            )
+        ])
+        if len(_DETECTED_BOUNDS_CACHE) >= _DETECTED_BOUNDS_CACHE_LIMIT:
+            _DETECTED_BOUNDS_CACHE.clear()
+        _DETECTED_BOUNDS_CACHE[segment_set_id] = bounds
+    return bounds
+
+
+def _body_range_changed(
+    connection: sqlite3.Connection, run: Mapping[str, object], parameters: Mapping[str, object]
+) -> bool:
+    """True when a detected body range no longer matches current detection."""
+    if parameters.get("body_range_source") != "detected":
+        return False
+    stored = parameters.get("body_ranges")
+    if not isinstance(stored, dict):
+        return False
+    for side in ("pivot", "target"):
+        bounds = stored.get(side)
+        set_id = run[side + "_segment_set_id"]
+        if isinstance(bounds, list) and set_id and (
+            list(_detected_body_bounds(connection, str(set_id))) != bounds
+        ):
+            return True
+    return False
+
+
+def _run_staleness(
+    run: Mapping[str, object],
+    active_model_id: str,
+    connection: sqlite3.Connection | None = None,
+) -> str | None:
     if (
         run["algorithm"] != ALIGNMENT_ALGORITHM
         or run["algorithm_version"] not in READABLE_ALIGNMENT_VERSIONS
@@ -237,6 +285,8 @@ def _run_staleness(run: Mapping[str, object], active_model_id: str) -> str | Non
     parameters = _json_object(run["parameters_json"])
     if active_model_id and parameters.get("embedding_model_id") != active_model_id:
         return "model_changed"
+    if connection is not None and _body_range_changed(connection, run, parameters):
+        return "body_range_changed"
     if run["algorithm_version"] != ALIGNMENT_ALGORITHM_VERSION:
         return "algorithm_updated"
     return None
@@ -322,8 +372,9 @@ def alignment_overview(
     ``review_count`` counts rejected links that still propose a counterpart
     (low confidence) and have no confirmed correction; links with an empty side
     mean "no counterpart" and are not counted.
-    ``stale_reason`` is set when a run no longer matches the current model or
-    algorithm: ``model_changed`` / ``algorithm_updated`` are still readable,
+    ``stale_reason`` is set when a run no longer matches the current model,
+    body-range detection or algorithm: ``model_changed`` /
+    ``body_range_changed`` / ``algorithm_updated`` are still readable,
     ``algorithm_unreadable`` is not.
     """
 
@@ -386,7 +437,7 @@ def alignment_overview(
                     if direct is not None:
                         pair.update(
                             status="direct",
-                            stale_reason=_run_staleness(direct, active_model_id),
+                            stale_reason=_run_staleness(direct, active_model_id, connection),
                             completed_at=direct["completed_at"],
                         )
                         if include_statistics:
@@ -403,8 +454,8 @@ def alignment_overview(
                             reasons = [
                                 reason
                                 for reason in (
-                                    _run_staleness(first, active_model_id),
-                                    _run_staleness(second, active_model_id),
+                                    _run_staleness(first, active_model_id, connection),
+                                    _run_staleness(second, active_model_id, connection),
                                 )
                                 if reason
                             ]

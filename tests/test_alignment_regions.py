@@ -56,6 +56,44 @@ class AlignmentRegionTests(TestCase):
         texts = ["I. Wood, Allen W. II.", "Preface", "§ 1", "Body.", "§ 2", "Body."]
         self.assertEqual(alignment_body_bounds(texts)[0], 2)
 
+    def test_introduction_references_do_not_end_body(self):
+        # Regression (Baudrillard EN, target body collapsed to [42,584)): an
+        # editor's Introduction carries its own Notes/References before PART I.
+        # Neither may end the body, and a leading introduction with its own
+        # reference list is editorial apparatus, so the body opens at chapter 1.
+        texts = [
+            "Contents\nForeword\nIntroduction\nPart I",
+            "Introduction \nGeorge Ritzer \nThis English translation of the book.",
+            "Ritzer's argument.",
+            "Notes \n1 \nThe other major possibility.",
+            "References \nBaudrillard, Jean (1968/1996) The System of Objects.",
+            "London: Verso.",
+            "PART I",
+            "THE FORMAL LITURGY \nOF THE OBJECT \n1 \nProfusion \nThere is all around us.",
+            "Body.",
+            "PART II",
+            "THE THEORY OF CONSUMPTION \n4 \nThe Social Logic of Consumption",
+            "Body.",
+            "Notes \nChapter 1 \nK. Marx, A Contribution.",
+            "Index \naccounting of growth, 41-2",
+        ]
+        self.assertEqual(alignment_body_bounds(texts), (6, 12))
+
+    def test_author_introduction_with_own_notes_stays_body(self):
+        # Chapter-end notes after an author introduction do not make it editorial.
+        texts = [
+            "封面",
+            "导论 社会性别意识形态",
+            "导论正文。",
+            "注释",
+            "注一。",
+            "第一章 全球局势",
+            "正文。",
+            "参考文献",
+            "文献一。",
+        ]
+        self.assertEqual(alignment_body_bounds(texts), (1, 7))
+
     def test_numbered_prose_is_not_a_body_heading(self):
         texts = ["Body.", "1 der", "Erstauflage des Kapital."]
         self.assertEqual(alignment_body_bounds(texts)[0], 0)
