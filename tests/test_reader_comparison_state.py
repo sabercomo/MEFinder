@@ -12,6 +12,22 @@ READER = (Path(__file__).resolve().parents[1] / "src/me_finder/static/reader.js"
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderComparisonStateTests(unittest.TestCase):
+    def test_body_is_loaded_before_work_metadata_and_overview_is_scoped(self):
+        body = READER[READER.index("  async function openReader("):READER.index("  async function goTo(")]
+        self.assertLess(body.index("await loadWindow("), body.index("loadWorkContext(sourceId)"))
+        self.assertLess(body.index("await loadWindow("), body.index("loadAlignmentTargets(sourceId)"))
+        self.run_js([("  async function loadWorkContext(", "  /* ── 自绘下拉")], """
+const state={sourceId:'A',workRequestSerial:0,comparison:{open:false}};
+const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/job'};
+const urls=[];
+const readJSON=async url=>{urls.push(url);return {document_groups:[],works:[],running:false};};
+const loadAvailability=async()=>{},renderToolbar=()=>{};
+(async()=>{
+ await loadWorkContext('A');
+ assert.deepEqual(urls,['/groups','/overview?include_statistics=0&source_id=A','/job']);
+})();
+""")
+
     def run_js(self, functions, script):
         bodies = []
         for start, end in functions:

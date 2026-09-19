@@ -7,6 +7,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from src.me_finder import translation_works
@@ -89,6 +90,27 @@ class _ThreeVersionWork(unittest.TestCase):
 
 
 class TranslationWorkOverviewTests(_ThreeVersionWork):
+    def test_lightweight_overview_keeps_status_without_reading_link_statistics(self):
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        full = translation_works.alignment_overview(self.db)
+        with mock.patch.object(translation_works, "_direct_run_statistics", side_effect=AssertionError("eager statistics")):
+            light = translation_works.alignment_overview(self.db, include_statistics=False)
+        for work in full["works"]:
+            for pair in work["pairs"]:
+                pair["matched_segment_ratio"] = None
+                pair["review_count"] = None
+        self.assertEqual(light, full)
+
+    def test_scoped_overview_only_computes_requested_pair(self):
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-en")
+        full = translation_works.alignment_overview(self.db)
+        with mock.patch.object(translation_works, "_direct_run_statistics", wraps=translation_works._direct_run_statistics) as stats:
+            pair = translation_works.alignment_overview(self.db, source_id="pdf-zh", target_id="pdf-de")
+        self.assertEqual(stats.call_count, 1)
+        self.assertEqual(pair["works"][0]["pairs"], [self._pair(full, "pdf-zh", "pdf-de")])
+        self.assertEqual(translation_works.alignment_overview(self.db, source_id="not-grouped", include_statistics=False)["works"], [])
+
     def test_overview_reports_direct_indirect_and_none(self) -> None:
         overview = translation_works.alignment_overview(self.db)
         self.assertEqual(self._pair(overview, "pdf-de", "pdf-zh")["status"], "none")
@@ -404,6 +426,19 @@ class TranslationWorkMigrationTests(unittest.TestCase):
 
 
 class TranslationWorkControllerTests(unittest.TestCase):
+    def test_overview_validates_and_passes_lightweight_scope(self):
+        controller = TranslationWorkController(
+            lambda operation: operation(Path("unused.sqlite3")),
+            active_model_id=lambda: "model", log_exception=lambda message: None,
+        )
+        with mock.patch.object(translation_works, "alignment_overview", return_value={"works": []}) as overview:
+            self.assertEqual(controller.overview({"include_statistics": ["0"], "source_id": ["book"]}), (200, {"works": []}))
+            self.assertEqual(overview.call_args.kwargs, {"active_model_id": "model", "include_statistics": False, "source_id": "book", "target_id": ""})
+            overview.reset_mock()
+            for params in ({"include_statistics": ["bad"]}, {"source_id": ["a", "b"]}, {"source_id": [""]}, {"unknown": ["x"]}):
+                self.assertEqual(controller.overview(params)[0], 400)
+            overview.assert_not_called()
+
     def test_controller_maps_errors_and_rebuild(self) -> None:
         def ready(operation):
             return operation(Path("/nonexistent/index.sqlite3"))

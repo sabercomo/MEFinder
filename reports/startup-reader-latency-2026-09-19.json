@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-19",
+  "baseline_revision": "5af40cf",
+  "scope": "same-process HTTP diagnostic: full overview vs lightweight overview; not desktop cold startup benchmark",
+  "fixture": {
+    "bytes": 3471327232,
+    "works": 8,
+    "pairs": 17,
+    "links": 656325,
+    "members": 1608118
+  },
+  "library_queue": [
+    {
+      "statistics": "1",
+      "overview": {
+        "ms": 3138.3,
+        "status": 200,
+        "bytes": 6394,
+        "sha256": "b73ee08b454cf4cc0c9b73bac9619bd1e2d88a34dc3fae4926797d00b1575606"
+      },
+      "concurrent_library": {
+        "ms": 3250.67,
+        "status": 200,
+        "bytes": 259499,
+        "sha256": "be3ebfe2e8d4e70d4970fc29e8a48df3e088730c9c8b69ab7271f5831a8a1469"
+      }
+    },
+    {
+      "statistics": "0",
+      "overview": {
+        "ms": 2.94,
+        "status": 200,
+        "bytes": 6393,
+        "sha256": "179be514a50245fd99cd5d7d6ab2bdb09117aeefc3466dfdc5fb0156d412cfd9"
+      },
+      "concurrent_library": {
+        "ms": 58.14,
+        "status": 200,
+        "bytes": 259499,
+        "sha256": "be3ebfe2e8d4e70d4970fc29e8a48df3e088730c9c8b69ab7271f5831a8a1469"
+      }
+    }
+  ],
+  "reader_queue": [
+    {
+      "statistics": "1",
+      "overview": {
+        "ms": 2164.6,
+        "sha256": "b73ee08b454cf4cc0c9b73bac9619bd1e2d88a34dc3fae4926797d00b1575606"
+      },
+      "pages": {
+        "ms": 2165.01,
+        "sha256": "7a8a09e89b15cd6cb35524a3840617be8c3027fcc3eb58d582f743b2e6bc669a"
+      }
+    },
+    {
+      "statistics": "0",
+      "overview": {
+        "ms": 2.69,
+        "sha256": "179be514a50245fd99cd5d7d6ab2bdb09117aeefc3466dfdc5fb0156d412cfd9"
+      },
+      "pages": {
+        "ms": 24.26,
+        "sha256": "7a8a09e89b15cd6cb35524a3840617be8c3027fcc3eb58d582f743b2e6bc669a"
+      }
+    }
+  ],
+  "isolated_pages": {
+    "ms": 36.06,
+    "status": 200,
+    "bytes": 198378,
+    "sha256": "7a8a09e89b15cd6cb35524a3840617be8c3027fcc3eb58d582f743b2e6bc669a"
+  },
+  "reader_work_context": {
+    "ms": 2.31,
+    "status": 200,
+    "bytes": 1989,
+    "sha256": "4ec47fd74589b191d89c5d3ca63532bc0d21a2513c0663c7a5a8b4dcaae0f3f3"
+  },
+  "equality": {
+    "full_overview_before_after": true,
+    "light_matches_full_except_statistics": true,
+    "library_response_identical": true,
+    "reader_response_identical": true
+  },
+  "limitations": [
+    "Single local library snapshot, warm/cold cache uncontrolled",
+    "Concurrent separate memory profiling and later build workload; do not use these as stable speedup factors",
+    "No formal user database writes or alignment algorithm changes"
+  ]
+}

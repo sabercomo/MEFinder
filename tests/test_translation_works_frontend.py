@@ -128,15 +128,42 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         self.assertTrue(literals)
         self.assertEqual([text for text in literals if text.endswith("。")], [])
 
-    def test_startup_defers_the_heavy_overview_fetch(self) -> None:
-        """总览是启动链路里唯一的秒级接口，不得回到启动关键路径上。"""
+    def test_startup_loads_lightweight_status_without_a_fixed_delay(self) -> None:
+        self.assertRegex(INIT_JS, re.compile(r"^MEFinder\.works\.load\(\);", re.MULTILINE))
+        self.assertNotIn("setTimeout(function () { MEFinder.works.load();", INIT_JS)
+        overview = _function_body(WORKS_JS, "async function loadGroupsAndOverview()")
+        self.assertIn("requestJSON('/api/translation-works/overview?include_statistics=0')", overview)
+        library = _function_body(LIBRARY_JS, "async function loadLibrary(force)")
+        self.assertLess(library.index("renderLibraryList();"), library.index("await loadDocumentGroups();"))
 
-        # 启动只拉毫秒级的可用性；整页数据延后后台预取。
-        self.assertNotRegex(INIT_JS, r"^MEFinder\.works\.load\(\);", re.MULTILINE)
-        self.assertIn("MEFinder.works.refreshAvailability();", INIT_JS)
-        self.assertRegex(
-            INIT_JS, r"setTimeout\(function \(\) \{ MEFinder\.works\.load\(\); \}, \d+\);"
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_pair_statistics_are_scoped_and_obsolete_results_are_ignored(self) -> None:
+        script = r"""
+const assert=require('assert/strict');
+const group={document_group_id:'G'}, status={source_file_ids:['A','B'],status:'direct'};
+const works={pairsByGroup:{G:{'A:B':status}},currentId:'G'}, currentPage='works';
+const pairKey=(a,b)=>[a,b].sort().join(':');
+const urls=[],errors=[];let release, renders=0;
+const requestJSON=url=>{urls.push(url);return new Promise(resolve=>{release=resolve;});};
+const showToast=message=>errors.push(message), render=()=>{renders++;}, invalidate=()=>{};
+(async()=>{
+ const pending=loadPairStatistics(group,status);
+ assert.equal(status.statisticsState,'loading');
+ assert.deepEqual(urls,['/api/translation-works/overview?source_id=A&target_id=B']);
+ const replacement={source_file_ids:['A','B'],status:'none'};
+ works.pairsByGroup.G['A:B']=replacement;
+ release({works:[{document_group_id:'G',pairs:[{source_file_ids:['A','B'],review_count:7}]}]});
+ await pending;assert.equal(renders,0);assert.equal(replacement.review_count,undefined);
+ const fresh=loadPairStatistics(group,replacement);
+ release({works:[{document_group_id:'G',pairs:[{source_file_ids:['A','B'],status:'direct',review_count:2}]}]});
+ await fresh;assert.equal(replacement.review_count,2);assert.equal(renders,1);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", _function_body(WORKS_JS, "async function loadPairStatistics(group, status)") + script],
+            capture_output=True, text=True, timeout=15,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_load_is_gated_and_deduplicated(self) -> None:
         load_body = _function_body(WORKS_JS, "function load(options)")
@@ -149,6 +176,7 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         self.assertIn("works.loaded = false;", _function_body(WORKS_JS, "function invalidate()"))
         self.assertIn("library_changed", WORKS_JS)
         self.assertIn("invalidate: invalidate,", WORKS_JS)
+        self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open)"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_load_retries_failure_and_refreshes_invalidated_inflight_data(self) -> None:

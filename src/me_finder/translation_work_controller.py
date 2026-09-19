@@ -43,14 +43,26 @@ class TranslationWorkController:
         self._active_model_id = active_model_id
         self._log_exception = log_exception
 
-    def overview(self, _params: object = None) -> WorkResponse:
+    def overview(self, params: Mapping[str, Sequence[object]] | None = None) -> WorkResponse:
         model_id = self._active_model_id()
-        return self._call(
-            lambda path: translation_works.alignment_overview(
-                path, active_model_id=model_id
-            ),
-            "translation work overview failed",
-        )
+        params = params or {}
+
+        def operation(path: Path) -> Dict[str, object]:
+            if set(params) - {"include_statistics", "source_id", "target_id"}:
+                raise InvalidAlignmentRequest("不支持的总览参数。")
+            statistics = _single(params, "include_statistics") if "include_statistics" in params else "1"
+            if statistics not in ("0", "1"):
+                raise InvalidAlignmentRequest("include_statistics 必须为 0 或 1。")
+            for name in ("source_id", "target_id"):
+                if name in params and not _single(params, name):
+                    raise InvalidAlignmentRequest(f"{name} 不能为空。")
+            return translation_works.alignment_overview(
+                path, active_model_id=model_id, include_statistics=statistics == "1",
+                source_id=_single(params, "source_id") if "source_id" in params else "",
+                target_id=_single(params, "target_id") if "target_id" in params else "",
+            )
+
+        return self._call(operation, "translation work overview failed")
 
     def reading_position(self, params: Mapping[str, Sequence[object]]) -> WorkResponse:
         return self._call(

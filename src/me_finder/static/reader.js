@@ -1074,7 +1074,7 @@
     try {
       var results = await Promise.all([
         readJSON(config.groupsEndpoint),
-        readJSON(config.overviewEndpoint),
+        readJSON(config.overviewEndpoint + '?include_statistics=0&source_id=' + encodeURIComponent(sourceId)),
         readJSON(config.currentJobEndpoint).catch(function () { return {running: false}; }),
         loadAvailability()
       ]);
@@ -3953,8 +3953,6 @@
     setAlert('', 'info');
     renderAlignmentActions();
     updateCitationControls();
-    loadAlignmentTargets(sourceId);
-    loadWorkContext(sourceId);
 
     if (!state.preciseHighlight && (
       options.preciseHighlightAvailable === false ||
@@ -3968,6 +3966,10 @@
     }
 
     var loaded = await loadWindow(state.currentIndex, state.targetAnchorId);
+    if (loaded && state.open && state.sourceId === sourceId) {
+      loadAlignmentTargets(sourceId);
+      loadWorkContext(sourceId);
+    }
     if (loaded && !wasOpen) {
       var focusTarget = state.elements.back.hidden ? state.elements.viewport : state.elements.back;
       focusTarget.focus();

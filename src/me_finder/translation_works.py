@@ -311,7 +311,8 @@ def _direct_run_statistics(
 
 
 def alignment_overview(
-    db_path: Path, *, active_model_id: str = ""
+    db_path: Path, *, active_model_id: str = "", include_statistics: bool = True,
+    source_id: str = "", target_id: str = "",
 ) -> Dict[str, object]:
     """Return the status of every version pair in every work.
 
@@ -326,15 +327,25 @@ def alignment_overview(
     ``algorithm_unreadable`` is not.
     """
 
+    if source_id:
+        source_id = _validate_source_id(source_id)
+    if target_id:
+        target_id = _validate_source_id(target_id)
+        if not source_id or source_id == target_id:
+            raise InvalidAlignmentRequest("target_id 需要一个不同的 source_id。")
     connection = _read_connection(db_path)
     try:
         if not _table_exists(connection, "document_groups"):
             return {"works": []}
         has_runs = _table_exists(connection, "alignment_runs")
         works: List[Dict[str, object]] = []
-        groups = connection.execute(
-            "SELECT document_group_id, base_source_file_id FROM document_groups"
-        ).fetchall()
+        group_query = "SELECT document_group_id, base_source_file_id FROM document_groups"
+        if source_id:
+            group_query += (
+                " WHERE document_group_id IN (SELECT document_group_id "
+                "FROM document_group_members WHERE source_file_id = ?)"
+            )
+        groups = connection.execute(group_query, (source_id,) if source_id else ()).fetchall()
         for group in groups:
             group_id = str(group["document_group_id"])
             base_id = str(group["base_source_file_id"] or "")
@@ -359,6 +370,8 @@ def alignment_overview(
                 if row is not None and row[0] and str(row[0]) != "und":
                     languages[member_id] = str(row[0])
             for left_id, right_id in combinations(member_ids, 2):
+                if target_id and {left_id, right_id} != {source_id, target_id}:
+                    continue
                 pair: Dict[str, object] = {
                     "source_file_ids": [left_id, right_id],
                     "status": "none",
@@ -375,8 +388,9 @@ def alignment_overview(
                             status="direct",
                             stale_reason=_run_staleness(direct, active_model_id),
                             completed_at=direct["completed_at"],
-                            **_direct_run_statistics(connection, direct),
                         )
+                        if include_statistics:
+                            pair.update(_direct_run_statistics(connection, direct))
                     elif base_id and base_id not in (left_id, right_id):
                         first = _latest_pair_run(connection, group_id, left_id, base_id)
                         second = _latest_pair_run(connection, group_id, base_id, right_id)

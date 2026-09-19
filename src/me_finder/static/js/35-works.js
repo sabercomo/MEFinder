@@ -272,7 +272,7 @@
   async function loadGroupsAndOverview() {
     var results = await Promise.all([
       requestJSON('/api/document-groups'),
-      requestJSON('/api/translation-works/overview').catch(function () { return {works: []}; }),
+      requestJSON('/api/translation-works/overview?include_statistics=0'),
       requestJSON('/api/translation-works/suggestion-dismissals').catch(function () { return {dismissals: []}; }),
       requestJSON('/api/text-alignments/current').catch(function () { return {running: false}; })
     ]);
@@ -328,8 +328,7 @@
     syncLibraryAssignButton();
   }
 
-  // 总览接口是启动链路里唯一的秒级查询：已加载过就不再整页重拉（切换页面即时渲染），
-  // 进行中则共用同一请求；库结构被删除/恢复改变时由 invalidate() 重置后重新加载。
+  // 首屏只读轻量状态；已加载时直接渲染，在途请求共用，删除/恢复后失效。
   function load(options) {
     options = options || {};
     if (works.loaded && !options.force) {
@@ -646,6 +645,28 @@
     return el('div', {className: 'tw-ledger-wrap'}, table);
   }
 
+  async function loadPairStatistics(group, status) {
+    status.statisticsState = 'loading';
+    var ids = status.source_file_ids;
+    var key = pairKey(ids[0], ids[1]);
+    try {
+      var payload = await requestJSON('/api/translation-works/overview?source_id=' +
+        encodeURIComponent(ids[0]) + '&target_id=' + encodeURIComponent(ids[1]));
+      if ((works.pairsByGroup[group.document_group_id] || {})[key] !== status) return;
+      var entry = payload.works.find(function (work) { return work.document_group_id === group.document_group_id; });
+      var updated = entry && entry.pairs.find(function (pair) {
+        return pairKey(pair.source_file_ids[0], pair.source_file_ids[1]) === key;
+      });
+      if (!updated) { invalidate(); return; }
+      Object.assign(status, updated, {statisticsState: 'loaded'});
+    } catch (error) {
+      if ((works.pairsByGroup[group.document_group_id] || {})[key] !== status) return;
+      status.statisticsState = 'error';
+      showToast(error.message || '对齐统计读取失败', 'danger');
+    }
+    if (currentPage === 'works' && works.currentId === group.document_group_id) render();
+  }
+
   function statusLine(group, status) {
     var node = el('span', {className: 'tw-state'});
     function put(strong, rest, modifier, title) {
@@ -660,9 +681,13 @@
     else if (status.stale_reason === 'algorithm_updated') put('需重新对齐', '算法已更新，旧结果可读', 'stale');
     else if (status.status === 'direct') {
       var parts = [];
+      if (status.review_count == null && !status.statisticsState) loadPairStatistics(group, status);
       if (status.matched_segment_ratio != null) parts.push('已匹配段落 ' + Math.round(status.matched_segment_ratio * 100) + '%');
       if (status.review_count) parts.push(status.review_count + ' 处待检查');
       put('直接对齐', parts.join(' · '), 'direct', '已匹配段落是算法在另一版本中找到对应的段落比例，不代表对应一定准确');
+      if (status.statisticsState === 'error') node.appendChild(button('重试统计', 'link', function () {
+        loadPairStatistics(group, status);
+      }));
     } else if (status.status === 'indirect') {
       put('间接关联', '经「' + memberName(group, status.via_source_file_id) + '」换算，未直接对齐');
     } else put('尚未对齐');
@@ -1388,6 +1413,8 @@
       }
       // 阅读器关闭时会写入最新位置；稍后重新读取，让「继续阅读」反映这次阅读。
       works.positions = {};
+      // 阅读期间可能生成对齐或人工校正；轻量刷新，同时失效旧的逐对统计。
+      invalidate();
       setTimeout(function () {
         if (currentPage === 'works' && works.currentId) loadPosition(works.currentId);
       }, 400);

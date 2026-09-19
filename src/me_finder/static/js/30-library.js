@@ -17,10 +17,11 @@
   async function loadLibrary(force) {
     try {
       applyLibraryCatalog(await fetchLibraryCatalog(force));
-      await loadDocumentGroups();
       renderLibraryStats();
       syncLibraryViewButtons();
       syncLibrarySortControls();
+      renderLibraryList();
+      await loadDocumentGroups();
       renderLibraryList();
     } catch(e) {
       document.getElementById('library-list').innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">' + esc(e.message || '文献库加载失败') + '</div></div>';

@@ -505,10 +505,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 启动提速：译本对照总览移出启动关键路径（先可用性、延迟预取），
     #   works.load 加已加载门与在途去重，库删除/恢复后经 invalidate 重置；
     #   自动匹配阈值滑杆不再 dispatch 合成 input（曾触发递归写偏好风暴）。
+    # 0.5.5 首屏复审：轻量状态与按需逐对统计分离，正文先于作品上下文请求。
     BASELINE_SHA256 = (
-        "9f972805bb25d83c4ad989631565a2534af8b23603ef4fb719cb409ab95d916a"
+        "8ba34d8061f4b108ffe75b3b3fbe88dd455d647b7de32163eb46a5eed2944fb7"
     )
-    BASELINE_BYTES = 1191668
+    BASELINE_BYTES = 1192979
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
