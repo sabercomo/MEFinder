@@ -1,7 +1,7 @@
 """译本对照页（作品—版本—统一阅读器）的前端守卫。
 
-锁住产品决定里容易被「顺手改回去」的点：入口门控、状态措辞、最多勾两个、
-删除作品先隐藏后提交可撤销、批量加入走单一接口、DOM 不拼 HTML。
+锁住产品决定里容易被「顺手改回去」的点：入口门控、状态措辞、每对版本常显对齐状态、
+换模型后全部重新对齐、删除作品先隐藏后提交可撤销、批量加入走单一接口、DOM 不拼 HTML。
 """
 
 from __future__ import annotations
@@ -68,19 +68,86 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         # 没有真实批次进度，不显示百分比。
         self.assertNotRegex(status, r"生成中[^']*%")
 
-    def test_at_most_two_versions_and_third_replaces_the_oldest(self) -> None:
-        body = _function_body(WORKS_JS, "function togglePick(group, sourceId)")
-        self.assertIn("pick.push(sourceId);", body)
-        self.assertIn("if (pick.length > 2) pick.shift();", body)
+    def test_every_pair_shows_its_alignment_state_without_picking(self) -> None:
+        # 对齐状态逐对常显：不再要求先勾选两个版本、也没有底部对照栏。
+        for removed in ("togglePick", "currentPick", "compareBar", "tw-compare-bar"):
+            self.assertNotIn(removed, WORKS_JS)
+            self.assertNotIn(removed, WORKS_CSS)
+        pane = _function_body(WORKS_JS, "function workPane()")
+        self.assertLess(pane.index("pairSection(group)"), pane.index("versionTable(group)"))
+        section = _function_body(WORKS_JS, "function pairSection(group)")
+        self.assertIn("workPairs(group).forEach", section)
+        self.assertIn("statusLine(group, status)", section)
+        self.assertIn("对照阅读按对齐结果逐段跟随", section)
+        # 禁用必须给出原因：全区说明一次。
+        self.assertIn("el('span', {className: 'tw-state', text: generateBlockedReason()})", section)
+        # 含基准版本的对排在前。
+        self.assertIn("p.withBase", _function_body(WORKS_JS, "function workPairs(group)"))
 
-    def test_compare_bar_actions_follow_pair_status(self) -> None:
-        actions = _function_body(WORKS_JS, "function pairActions(group, a, b, status, compact)")
-        self.assertIn("generate(compact ? '生成' : '生成对齐', false", actions)
+    def test_pair_actions_follow_pair_status(self) -> None:
+        actions = _function_body(WORKS_JS, "function pairActions(group, a, b, status)")
+        self.assertIn("generate('生成对齐', false", actions)
         self.assertIn("generate('重新对齐', true", actions)
         self.assertIn("generate('生成直接对齐', false", actions)
         self.assertIn("'对照阅读'", actions)
-        # 禁用必须给出原因。
-        self.assertIn("el('span', {className: 'tw-state', text: reason})", actions)
+        self.assertIn("title: blocked ? generateBlockedReason() : null", actions)
+        # 行内不出现第二个主按钮（DESIGN.md §5：一组操作至多一个主按钮）。
+        self.assertNotIn("'primary'", actions)
+
+    def test_stale_alignments_can_be_realigned_in_one_batch(self) -> None:
+        notice = _function_body(WORKS_JS, "function realignNotice()")
+        self.assertIn("'全部重新对齐'", notice)
+        self.assertIn("staleQueueItems(visibleGroups())", notice)
+        self.assertIn("'停止'", notice)
+        # 只统计直接对齐；间接关联随两段直接对齐一起更新。
+        stale = _function_body(WORKS_JS, "function staleDirectPairs(group)")
+        self.assertIn("pair.status === 'direct' && !!pair.stale_reason", stale)
+        # 沿用原对齐方向重跑，并强制重算。
+        items = _function_body(WORKS_JS, "function staleQueueItems(groups)")
+        self.assertIn("run.pivot_source_file_id, run.target_source_file_id", items)
+        self.assertIn("startJob(group, item.pivot, item.target, true)",
+                      _function_body(WORKS_JS, "async function runRealignQueue()"))
+        self.assertIn("showAppConfirm", _function_body(WORKS_JS, "async function realignPairs(items, scope)"))
+        # 队列中逐个任务不弹提示，结束时汇总一次。
+        watch = _function_body(WORKS_JS, "async function watchRunningJob(jobId)")
+        self.assertLess(watch.index("advanceRealignQueue(outcome"), watch.index("对齐已生成"))
+        # 换模型后作品页的状态快照必须失效。
+        settings = (STATIC / "js" / "60-settings.js").read_text(encoding="utf-8")
+        self.assertIn("global.MEFinder.works.invalidate();", settings)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_realign_queue_runs_pairs_in_order_and_stops_on_cancel(self) -> None:
+        start = WORKS_JS.index("  function staleDirectPairs(group) {")
+        end = WORKS_JS.index("  function refreshViews() {", start)
+        script = r"""
+const assert=require('assert/strict');
+const pairKey=(a,b)=>[a,b].sort().join('|');
+const groups={G:{document_group_id:'G',title:'W',members:[],alignments:[{pivot_source_file_id:'B',target_source_file_id:'A'}]}};
+const works={queue:null,running:null,pairsByGroup:{G:{'A|B':{source_file_ids:['A','B'],status:'direct',stale_reason:'model_changed'},
+ 'A|C':{source_file_ids:['A','C'],status:'direct',stale_reason:null},'B|C':{source_file_ids:['B','C'],status:'indirect',stale_reason:'model_changed'}}}};
+const groupById=id=>groups[id], pivotFor=(g,a,b)=>[a,b], canGenerate=()=>true, refreshViews=()=>{};
+const toasts=[], started=[];
+const showToast=m=>toasts.push(m), showAppConfirm=async()=>true, cancelAlignment=()=>{};
+const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};return true;};
+(async()=>{
+ const items=staleQueueItems([groups.G]);
+ assert.deepEqual(items.map(i=>[i.pivot,i.target]),[['B','A']],'only stale direct pairs, original direction');
+ await realignPairs(items.concat([{groupId:'G',pivot:'A',target:'C'}]),'x');
+ assert.deepEqual(started,[['B','A',true]]);
+ assert.equal(queuedPair('G','C','A'),true);
+ works.running=null;advanceRealignQueue('ok');await new Promise(r=>setImmediate(r));
+ assert.deepEqual(started[1],['A','C',true]);
+ works.running=null;advanceRealignQueue('cancelled');await new Promise(r=>setImmediate(r));
+ assert.equal(works.queue,null);
+ assert.equal(started.length,2);
+ assert.match(toasts[0],/已停止重新对齐，完成 1\/2 组/);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", WORKS_JS[start:end] + script],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_deleting_a_work_is_deferred_and_undoable(self) -> None:
         body = _function_body(WORKS_JS, "function deleteWork(group)")
@@ -111,7 +178,7 @@ class TranslationWorksFrontendTests(unittest.TestCase):
 
     def test_manage_sheet_covers_every_maintenance_action(self) -> None:
         sheet = _function_body(WORKS_JS, "function renderSheet()")
-        for fragment in ("'作品名称'", "type: 'radio'", "'版本名'", "'移出'", "'添加版本：搜索文献库'", "'对齐'", "'删除作品'"):
+        for fragment in ("'作品名称'", "type: 'radio'", "'版本名'", "'移出'", "'添加版本：搜索文献库'", "'删除作品'"):
             self.assertIn(fragment, sheet)
 
     def test_dom_is_built_without_html_strings_and_css_uses_tokens(self) -> None:

@@ -842,8 +842,12 @@
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
       settingsStore.currentAlignmentEmbeddingModel = data.alignment_embedding_model_id;
-      if (global.MEFinder && global.MEFinder.works) global.MEFinder.works.refreshAvailability();
-      showToast('译本对齐模型已切换；请对已有配对重新运行对齐');
+      // 换模型后旧对齐标为「需重新对齐」：作品页状态要重新读取，不能沿用旧快照。
+      if (global.MEFinder && global.MEFinder.works) {
+        global.MEFinder.works.refreshAvailability();
+        global.MEFinder.works.invalidate();
+      }
+      showToast('译本对齐模型已切换，已有对齐可在「译本对照」全部重新对齐');
     } catch (e) {
       settingsStore.currentAlignmentEmbeddingModel = previous;
       showToast('译本对齐模型保存失败：' + e.message, 'danger');

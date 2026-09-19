@@ -1,7 +1,8 @@
 /* Hallmark · component: translation works (作品—版本页) · genre: modern-minimal · tone: utilitarian, quiet
- * macrostructure: Edition Ledger (works list | version ledger + sticky compare bar) · theme: existing MEFinder tokens
- * pre-emit critique: P4 H5 E4 S5 R5 V4 · enrichment: none
- * states: default/hover/focus/active/disabled/loading(running)/warning/readonly
+ * macrostructure: Edition Ledger (works list + realign notice | pair ledger with alignment state + version ledger) · theme: existing MEFinder tokens
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · enrichment: none
+ * redesign 2026-09-19: 对齐状态逐对常显（取代勾选两个 + 底部对照栏），恢复「全部重新对齐」
+ * states: default/hover/focus/active/disabled/loading(running/queued)/warning(stale)/readonly
  * checks: contrast 40–41 · slop 42–46 · chrome 47 · tokens 48 · responsive 49–57
  * follows DESIGN.md §3 作品版本页 · §5 自绘下拉 / 按钮 / 界面文案 · §7 动效 */
 
@@ -146,6 +147,22 @@
 @media (hover: hover) and (pointer: fine) { .tw-work-item:not([aria-current="true"]):hover { background: var(--surface-hover); } }
 .tw-work-item-title { font-size: 14px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tw-work-item-meta { font-size: 12.5px; color: var(--text-tertiary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tw-work-item-flag { color: var(--warning); }
+.tw-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0 12px 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+}
+.tw-notice-text { min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.tw-notice-text b { display: block; font-weight: 600; color: var(--text-primary); }
+.tw-notice-sub { display: block; }
+.tw-notice .tw-btn.link { margin-left: -2px; padding-block: 0; line-height: 1.55; }
 .tw-hint { padding: 10px 18px 14px; border-top: 1px solid var(--border-subtle); }
 .tw-hint-text { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); overflow-wrap: anywhere; }
 .tw-hint-actions { display: flex; gap: 10px; margin-top: 2px; }
@@ -172,9 +189,10 @@
 .tw-resume-at { display: block; margin-top: 1px; font-size: 12.5px; color: var(--text-tertiary); }
 
 .tw-ledger-wrap { max-width: 100%; overflow-x: auto; }
-.tw-ledger { width: 100%; margin-top: 22px; border-collapse: collapse; }
-.tw-ledger caption { padding-bottom: 8px; text-align: left; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.tw-ledger caption span { margin-left: 8px; font-weight: 400; color: var(--text-tertiary); }
+.tw-section { margin-top: 28px; }
+.tw-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; margin-bottom: 6px; }
+.tw-section-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.tw-ledger { width: 100%; border-collapse: collapse; }
 .tw-ledger th {
   padding: 6px 8px;
   border-bottom: 1px solid var(--border-default);
@@ -185,8 +203,6 @@
   white-space: nowrap;
 }
 .tw-ledger td { padding: 12px 8px; border-bottom: 1px solid var(--border-subtle); font-size: 13.5px; vertical-align: middle; }
-.tw-ledger tr.is-selected td { background: var(--surface-secondary); }
-.tw-col-check { width: 28px; }
 .tw-col-name { min-width: 150px; }
 .tw-col-muted { color: var(--text-secondary); }
 .tw-col-muted.is-warning { color: var(--warning); }
@@ -200,30 +216,51 @@
 @container tw-work (max-width: 460px) {
   .tw-col-lang { display: none; }
   .tw-work-inner { padding-inline: 18px; }
-  .tw-compare-bar { padding-inline: 18px; }
 }
 .tw-version-name { display: block; font-size: 14.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
 .tw-version-sub { display: block; margin-top: 1px; font-size: 12.5px; color: var(--text-tertiary); overflow-wrap: anywhere; }
 .tw-base-mark { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
 
-.tw-compare-bar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
+.tw-pairs { border-top: 1px solid var(--border-default); }
+.tw-pair-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.5fr) auto;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  min-height: 58px;
-  padding: 12px 32px;
-  border-top: 1px solid var(--border-default);
-  background: var(--surface-primary);
+  gap: 4px 16px;
+  min-height: 56px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border-subtle);
 }
-.tw-pair { min-width: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.tw-pair-name { min-width: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.tw-pair-joint { margin: 0 7px; font-weight: 400; color: var(--text-decorative); }
+.tw-pair-line .tw-state { min-width: 0; overflow-wrap: anywhere; }
+.tw-pair-actions { display: inline-flex; justify-content: flex-end; gap: 6px; }
+.tw-pair-empty { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 0; border-top: 1px solid var(--border-default); }
+@container tw-work (max-width: 620px) {
+  .tw-pair-line { grid-template-columns: minmax(0, 1fr) auto; }
+  .tw-pair-line .tw-state { grid-column: 1; grid-row: 2; }
+  .tw-pair-actions { grid-column: 2; grid-row: 1 / span 2; }
+}
 .tw-state { font-size: 12.5px; color: var(--text-tertiary); }
 .tw-state b { font-weight: 600; color: var(--text-secondary); }
 .tw-state.is-direct b { color: var(--success); }
 .tw-state.is-stale b { color: var(--warning); }
 .tw-state.is-running b { color: var(--accent-text); }
+.tw-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  vertical-align: 1px;
+}
+.tw-state.is-direct .tw-dot { background: var(--success); }
+.tw-state.is-stale .tw-dot { background: var(--warning); }
+.tw-state.is-running .tw-dot, .tw-state.is-queued .tw-dot { background: var(--accent-fill); }
+.tw-state.is-indirect .tw-dot { background: var(--text-decorative); }
+.tw-state.is-running .tw-dot { animation: tw-pulse 1.2s cubic-bezier(0.37, 0, 0.63, 1) infinite; }
+@keyframes tw-pulse { 50% { opacity: 0.35; } }
 
 /* ── manage sheet ──────────────────────────────────────────── */
 .tw-sheet-scrim {
@@ -296,17 +333,6 @@
 @media (hover: hover) and (pointer: fine) { .tw-result:hover { background: var(--surface-hover); } }
 .tw-result-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tw-result small { flex: none; max-width: 45%; font-size: 12px; color: var(--text-tertiary); text-align: right; overflow-wrap: anywhere; }
-.tw-pair-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.tw-pair-name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-.tw-pair-actions { display: inline-flex; gap: 6px; }
-.tw-pair-state { grid-column: 1 / -1; }
 
 /* ── dialogs ───────────────────────────────────────────────── */
 .tw-dialog-scrim {
@@ -380,9 +406,9 @@
 /* ── responsive ────────────────────────────────────────────── */
 @media (max-width: 900px) {
   #page-works.active { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .tw-works { max-height: 230px; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+  /* 列表叠在上方时要容下「重新对齐」提示和几行作品。 */
+  .tw-works { max-height: min(340px, 45vh); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .tw-work-inner { padding: 18px 18px 20px; }
-  .tw-compare-bar { padding: 10px 18px; }
 }
 @media (max-width: 640px) {
   .tw-assign-grid { grid-template-columns: minmax(0, 1fr); }
@@ -391,5 +417,5 @@
 @media (prefers-reduced-motion: reduce) {
   .tw-btn, .tw-icon-btn { transition: none; }
   .tw-btn:active:not(:disabled), .tw-icon-btn:active { transform: none; }
-  .tw-sheet, .tw-dialog { animation: none; }
+  .tw-sheet, .tw-dialog, .tw-state.is-running .tw-dot { animation: none; }
 }

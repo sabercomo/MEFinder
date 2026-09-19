@@ -68,3 +68,14 @@
 ## 2026-09-19 — 启动与结构化阅读延迟复审
 
 事实：延迟 1.2 秒启动 overview 未消除其持索引状态锁的全库统计耗时，阅读器也在正文前调用全库统计。已拆轻量状态与按需逐对统计，正文优先，未改变索引锁或结果计算。诊断/完整响应一致性及限制见 [报告](../../reports/startup-reader-latency-2026-09-19.md)。GLM 的滑杆递归修复保留；“单线程 HTTP”说法更正为共享索引状态锁导致排队。
+
+## 2026-09-19 — 作品页对齐状态常显与全部重新对齐
+
+用户反馈两点：看不出「对照阅读」是否就是「对齐」；换模型后一键重新对齐的按钮不见了。
+
+事实：旧版文献库的「重新对齐已有译本（N 组）」（`7adac7f` 引入）在 `646a325` 移除文献库作品组 UI 时一并删除，新作品页没有替代；对齐状态只在勾选两个版本后的底部栏和「管理版本」抽屉里出现。后端 `/api/translation-works/overview?include_statistics=0` 已为每对版本返回 `status` 与 `stale_reason`，无需新接口。
+
+处理：先出可交互效果图确认方案（用户确认后实施），再改 `35-works.js` / `45-works.css`：逐对常显对齐状态的「对照」区取代勾选 + 底部栏；作品列表顶部「全部重新对齐」前端队列（沿用原 pivot/target、`force: true`、逐个等待任务结束、可停止）；设置切换模型后 `MEFinder.works.invalidate()`。DESIGN.md §3「作品版本页」同步改为逐对列出。守卫见 `tests/test_translation_works_frontend.py` 的 `test_every_pair_shows_its_alignment_state_without_picking`、`test_stale_alignments_can_be_realigned_in_one_batch`、`test_realign_queue_runs_pairs_in_order_and_stops_on_cancel`。
+
+限制：队列只存在于当前页面内存，刷新后正在跑的那一组仍会被接回显示，但剩余组需要再点一次；批量重算的真实耗时未在本轮测量（本机开发环境未装对齐模型，浏览器验证用模拟任务接口）。
+

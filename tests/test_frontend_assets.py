@@ -506,10 +506,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   works.load 加已加载门与在途去重，库删除/恢复后经 invalidate 重置；
     #   自动匹配阈值滑杆不再 dispatch 合成 input（曾触发递归写偏好风暴）。
     # 0.5.5 首屏复审：轻量状态与按需逐对统计分离，正文先于作品上下文请求。
+    # 0.5.5 作品页改版：对齐状态逐对常显（去掉勾选两个 + 底部对照栏）、
+    #   作品列表「全部重新对齐」队列与需重新对齐标记，管理版本抽屉移除重复的对齐列表。
     BASELINE_SHA256 = (
-        "8ba34d8061f4b108ffe75b3b3fbe88dd455d647b7de32163eb46a5eed2944fb7"
+        "08408d7fd55fbd9fbce73dd2ce8e223896d6c71872a008bc48190f448d7593b4"
     )
-    BASELINE_BYTES = 1192979
+    BASELINE_BYTES = 1201163
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

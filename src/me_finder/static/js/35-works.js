@@ -20,7 +20,7 @@
     dismissals: [],
     suggestionsHidden: false,
     currentId: '',
-    picks: {},
+    queue: null,
     query: '',
     positions: {},
     running: null,
@@ -167,6 +167,7 @@
         pairKey(running.pivot_source_file_id, running.target_source_file_id) === pairKey(a, b)) {
       return {status: 'running'};
     }
+    if (queuedPair(groupId, a, b)) return {status: 'queued'};
     var pairs = works.pairsByGroup[groupId] || {};
     return pairs[pairKey(a, b)] || {status: 'none'};
   }
@@ -447,15 +448,21 @@
       });
       var running = works.running && works.running.document_group_id === group.document_group_id;
       var current = group.document_group_id === works.currentId;
+      var stale = !running && staleDirectPairs(group).length > 0;
       list.appendChild(el('button', {
         type: 'button', className: 'tw-work-item', role: 'listitem',
         'aria-current': current ? 'true' : null,
         onclick: function () { selectWork(group.document_group_id); }
       }, [
         el('span', {className: 'tw-work-item-title', text: group.title}),
-        el('span', {className: 'tw-work-item-meta', text: running
+        el('span', {className: 'tw-work-item-meta'}, running
           ? '对齐生成中'
-          : members.length + ' 个版本' + (languages.length ? ' · ' + languages.join('、') : '')})
+          : [
+            // 标记放在行首：窄列表按省略号截断语言，不截掉状态。
+            stale ? el('span', {className: 'tw-work-item-flag', text: '需重新对齐'}) : null,
+            stale ? ' · ' : null,
+            members.length + ' 个版本' + (languages.length ? ' · ' + languages.join('、') : '')
+          ])
       ]));
     });
     if (!groups.length) {
@@ -473,7 +480,40 @@
         oninput: function (event) { works.query = event.target.value; render(); }
       })
     ]);
-    return el('aside', {className: 'tw-works', 'aria-label': '作品'}, [head, search, list, suggestionRow()]);
+    return el('aside', {className: 'tw-works', 'aria-label': '作品'}, [head, search, realignNotice(), list, suggestionRow()]);
+  }
+
+  // 全库一处：换模型或算法升级后，旧对齐集中在这里一键重跑，不必逐部作品点。
+  function realignNotice() {
+    var queue = works.queue;
+    if (queue) {
+      var item = queue.items[queue.index];
+      var group = item ? groupById(item.groupId) : null;
+      return el('div', {className: 'tw-notice is-running', role: 'status', 'aria-live': 'polite'}, [
+        el('p', {className: 'tw-notice-text'}, [
+          el('b', {text: queue.stopped ? '正在停止' : '正在重新对齐 ' + Math.min(queue.index + 1, queue.items.length) + '/' + queue.items.length}),
+          group ? el('span', {className: 'tw-notice-sub', text: '《' + group.title + '》' + memberName(group, item.pivot) + ' 与 ' + memberName(group, item.target)}) : null
+        ]),
+        queue.stopped ? null : button('停止', 'link muted', stopRealignQueue)
+      ]);
+    }
+    var items = staleQueueItems(visibleGroups());
+    if (!items.length) return null;
+    var modelOnly = items.every(function (entry) { return entry.reason === 'model_changed'; });
+    var readable = items.every(function (entry) { return entry.reason !== 'algorithm_unreadable'; });
+    var text = (modelOnly ? '对齐模型已更换，' : '') + items.length + ' 组对齐需重新生成';
+    // 只陈述能确认的事实：算法不兼容的旧结果不可读，不能笼统说「仍可阅读」。
+    var sub = !canGenerate() ? generateBlockedReason()
+      : readable ? '旧结果仍可阅读，重新对齐后按当前模型生成' : '部分旧结果已不可读，需重新对齐后才能对照阅读';
+    return el('div', {className: 'tw-notice', role: 'status'}, [
+      el('p', {className: 'tw-notice-text'}, [
+        el('b', {text: text}),
+        el('span', {className: 'tw-notice-sub', text: sub})
+      ]),
+      canGenerate()
+        ? button('全部重新对齐', 'link', function () { realignPairs(items, '全部作品'); }, {disabled: !!works.running})
+        : button(works.availability.state === 'model_missing' ? '去设置' : '重新安装', 'link', openAlignmentSettings)
+    ]);
   }
 
   function normalizeTitle(value) {
@@ -520,24 +560,6 @@
     loadPosition(groupId);
   }
 
-  function currentPick(group) {
-    var ids = (group.members || []).map(function (m) { return m.source_file_id; });
-    var pick = (works.picks[group.document_group_id] || []).filter(function (id) { return ids.indexOf(id) >= 0; });
-    works.picks[group.document_group_id] = pick;
-    return pick;
-  }
-
-  function togglePick(group, sourceId) {
-    var pick = currentPick(group);
-    var index = pick.indexOf(sourceId);
-    if (index >= 0) pick.splice(index, 1);
-    else {
-      pick.push(sourceId);
-      if (pick.length > 2) pick.shift();
-    }
-    render();
-  }
-
   function workPane() {
     var group = groupById(works.currentId);
     if (!group || works.hiddenGroupIds.has(group.document_group_id)) {
@@ -564,8 +586,9 @@
     }
     var resume = resumeRow(group);
     if (resume) inner.appendChild(resume);
+    inner.appendChild(pairSection(group));
     inner.appendChild(versionTable(group));
-    return el('section', {className: 'tw-work'}, [inner, compareBar(group)]);
+    return el('section', {className: 'tw-work'}, inner);
   }
 
   function resumeRow(group) {
@@ -601,20 +624,11 @@
   }
 
   function versionTable(group) {
-    var pick = currentPick(group);
     var body = el('tbody');
     (group.members || []).forEach(function (member) {
       var id = member.source_file_id;
-      var selected = pick.indexOf(id) >= 0;
       var pages = pageSource(member);
-      var checkbox = el('input', {
-        type: 'checkbox', className: 'tw-check', checked: selected,
-        'aria-label': '选择 ' + (member.display_name || id),
-        onchange: function () { togglePick(group, id); }
-      });
-      checkbox.checked = selected;
-      body.appendChild(el('tr', {className: selected ? 'is-selected' : ''}, [
-        el('td', {className: 'tw-col-check'}, checkbox),
+      body.appendChild(el('tr', {}, [
         el('td', {className: 'tw-col-name'}, [
           el('span', {className: 'tw-version-name'}, [
             member.display_name || sourceTitle(id),
@@ -630,10 +644,8 @@
         }))
       ]));
     });
-    var table = el('table', {className: 'tw-ledger'}, [
-      el('caption', {}, ['版本', el('span', {text: '勾选两个进行对照'})]),
+    var table = el('table', {className: 'tw-ledger', 'aria-labelledby': 'tw-versions-title'}, [
       el('thead', {}, el('tr', {}, [
-        el('th', {className: 'tw-col-check', scope: 'col'}, el('span', {className: 'tw-visually-hidden', text: '选择'})),
         el('th', {scope: 'col', text: '版本'}),
         el('th', {scope: 'col', className: 'tw-col-lang', text: '语言'}),
         el('th', {scope: 'col', className: 'tw-col-optional', text: '出版'}),
@@ -642,7 +654,74 @@
       ])),
       body
     ]);
-    return el('div', {className: 'tw-ledger-wrap'}, table);
+    return el('section', {className: 'tw-section'}, [
+      el('div', {className: 'tw-section-head'}, el('h3', {id: 'tw-versions-title', className: 'tw-section-title', text: '版本'})),
+      el('div', {className: 'tw-ledger-wrap'}, table)
+    ]);
+  }
+
+  // 版本两两成对：含基准版本的对排在前，其余按成员顺序。
+  function workPairs(group) {
+    var members = group.members || [];
+    var base = (members.find(function (m) { return m.is_base; }) || {}).source_file_id;
+    var pairs = [];
+    for (var i = 0; i < members.length; i += 1) {
+      for (var j = i + 1; j < members.length; j += 1) {
+        var a = members[i].source_file_id;
+        var b = members[j].source_file_id;
+        // 基准放在右侧，读作「译本 与 原文」。
+        if (a === base) { var swap = a; a = b; b = swap; }
+        pairs.push({a: a, b: b, withBase: a === base || b === base});
+      }
+    }
+    return pairs.filter(function (p) { return p.withBase; }).concat(pairs.filter(function (p) { return !p.withBase; }));
+  }
+
+  // 对照区：对齐是两版本间逐段对应的计算结果，对照阅读依据它跟随滚动。
+  // 每一对都直接写出对齐状态，而不是勾选两个之后才显示。
+  function pairSection(group) {
+    var members = group.members || [];
+    var head = el('div', {className: 'tw-section-head'}, el('h3', {id: 'tw-pairs-title', className: 'tw-section-title', text: '对照'}));
+    var section = el('section', {className: 'tw-section', 'aria-labelledby': 'tw-pairs-title'}, head);
+    if (members.length < 2) {
+      section.appendChild(el('div', {className: 'tw-pair-empty'}, [
+        el('span', {className: 'tw-state', text: '只有一个版本，添加另一版本后才能对照'}),
+        button('添加版本', 'sm', function () { openSheet(group.document_group_id); })
+      ]));
+      return section;
+    }
+    var stale = staleQueueItems([group]);
+    if (stale.length > 1 && canGenerate() && !works.queue) {
+      head.appendChild(button('重新对齐 ' + stale.length + ' 组', 'sm', function () {
+        realignPairs(stale, '《' + group.title + '》');
+      }, {disabled: !!works.running}));
+    }
+    var list = el('div', {className: 'tw-pairs', role: 'list'});
+    workPairs(group).forEach(function (pair) {
+      var status = pairStatus(group.document_group_id, pair.a, pair.b);
+      var actions = el('div', {className: 'tw-pair-actions'});
+      pairActions(group, pair.a, pair.b, status).forEach(function (node) { actions.appendChild(node); });
+      list.appendChild(el('div', {className: 'tw-pair-line', role: 'listitem'}, [
+        el('span', {className: 'tw-pair-name'}, [
+          memberName(group, pair.a),
+          el('span', {className: 'tw-pair-joint', text: '与'}),
+          memberName(group, pair.b)
+        ]),
+        statusLine(group, status),
+        actions
+      ]));
+    });
+    section.appendChild(list);
+    // 禁用必须给出原因：全区只说一次，不在每一行重复。
+    if (!canGenerate() && !isReadOnly()) {
+      section.appendChild(el('p', {className: 'tw-note'}, [
+        el('span', {className: 'tw-state', text: generateBlockedReason()}),
+        ' · ',
+        button(works.availability.state === 'model_missing' ? '去设置' : '重新安装', 'link', openAlignmentSettings)
+      ]));
+    }
+    section.appendChild(el('p', {className: 'tw-note', text: '对照阅读按对齐结果逐段跟随；对齐由本地模型生成，更换模型后需重新对齐'}));
+    return section;
   }
 
   async function loadPairStatistics(group, status) {
@@ -671,11 +750,14 @@
     var node = el('span', {className: 'tw-state'});
     function put(strong, rest, modifier, title) {
       node.className = 'tw-state' + (modifier ? ' is-' + modifier : '');
+      // 圆点只是辅助，状态始终由文字说明。
+      node.appendChild(el('span', {className: 'tw-dot', 'aria-hidden': 'true'}));
       node.appendChild(el('b', {text: strong}));
       if (rest) node.appendChild(document.createTextNode(' · ' + rest));
       if (title) node.title = title;
     }
     if (status.status === 'running') put('生成中', '', 'running');
+    else if (status.status === 'queued') put('等待重新对齐', '', 'queued');
     else if (status.stale_reason === 'algorithm_unreadable') put('需重新对齐', '算法已更新，旧结果不可读', 'stale');
     else if (status.stale_reason === 'model_changed') put('需重新对齐', '模型已更换，旧结果可读', 'stale');
     else if (status.stale_reason === 'algorithm_updated') put('需重新对齐', '算法已更新，旧结果可读', 'stale');
@@ -689,66 +771,34 @@
         loadPairStatistics(group, status);
       }));
     } else if (status.status === 'indirect') {
-      put('间接关联', '经「' + memberName(group, status.via_source_file_id) + '」换算，未直接对齐');
-    } else put('尚未对齐');
+      put('间接关联', '经「' + memberName(group, status.via_source_file_id) + '」换算，未直接对齐', 'indirect');
+    } else put('尚未对齐', '生成后才能对照阅读', 'none');
     return node;
   }
 
-  function pairActions(group, a, b, status, compact) {
+  function pairActions(group, a, b, status) {
     var actions = [];
     var blocked = !canGenerate();
-    var reason = generateBlockedReason();
     function generate(label, force, style) {
-      var node = button(label, style, function () { startAlignment(group, a, b, force); }, {
-        disabled: blocked, title: blocked ? reason : null
-      });
-      actions.push(node);
+      actions.push(button(label, 'sm ' + style, function () { startAlignment(group, a, b, force); }, {
+        disabled: blocked || !!works.running || !!works.queue, title: blocked ? generateBlockedReason() : null
+      }));
     }
     if (status.status === 'running') {
-      actions.push(button('取消', compact ? 'sm quiet' : 'quiet', cancelAlignment));
+      actions.push(button(works.queue ? '停止' : '取消', 'sm quiet', works.queue ? stopRealignQueue : cancelAlignment));
       return actions;
     }
+    if (status.status === 'queued') return actions;
     var readable = status.status !== 'none' && status.stale_reason !== 'algorithm_unreadable';
-    if (status.status === 'none') generate(compact ? '生成' : '生成对齐', false, compact ? 'sm' : 'primary');
-    else if (status.stale_reason) generate('重新对齐', true, compact ? 'sm quiet' : (readable ? 'quiet' : 'primary'));
-    else if (status.status === 'indirect') generate('生成直接对齐', false, compact ? 'sm' : 'quiet');
-    if (!compact && readable) {
-      var hasResume = !!works.positions[group.document_group_id];
-      actions.push(button('对照阅读', hasResume ? '' : 'primary', function () {
+    if (status.status === 'none') generate('生成对齐', false, '');
+    else if (status.stale_reason) generate('重新对齐', true, readable ? 'quiet' : '');
+    else if (status.status === 'indirect') generate('生成直接对齐', false, 'quiet');
+    if (readable) {
+      actions.push(button('对照阅读', 'sm', function () {
         openReader({groupId: group.document_group_id, sourceId: a, compareWith: b, returnLabel: '译本对照'});
       }));
     }
-    // 禁用必须给出原因：生成类按钮不可用时，在按钮前就地写明并给出设置入口。
-    var hasGenerate = status.status === 'none' || !!status.stale_reason || status.status === 'indirect';
-    if (blocked && hasGenerate && !compact) {
-      actions.unshift(button(works.availability.state === 'model_missing' ? '去设置' : '重新安装', 'link', openAlignmentSettings));
-      actions.unshift(el('span', {className: 'tw-state', text: reason}));
-    }
     return actions;
-  }
-
-  function compareBar(group) {
-    var members = group.members || [];
-    var pick = currentPick(group);
-    var bar = el('div', {className: 'tw-compare-bar', role: 'region', 'aria-label': '对照', 'aria-live': 'polite'});
-    if (members.length < 2) {
-      bar.appendChild(el('span', {className: 'tw-state', text: '只有一个版本'}));
-      bar.appendChild(el('span', {className: 'tw-grow'}));
-      bar.appendChild(button('添加版本', '', function () { openSheet(group.document_group_id); }));
-      return bar;
-    }
-    if (pick.length < 2) {
-      bar.appendChild(el('span', {className: 'tw-state', text: pick.length ? '再勾选一个版本即可对照' : '勾选两个版本进行对照'}));
-      bar.appendChild(el('span', {className: 'tw-grow'}));
-      bar.appendChild(button('对照阅读', '', null, {disabled: true}));
-      return bar;
-    }
-    var status = pairStatus(group.document_group_id, pick[0], pick[1]);
-    bar.appendChild(el('span', {className: 'tw-pair', text: memberName(group, pick[0]) + ' 与 ' + memberName(group, pick[1])}));
-    bar.appendChild(statusLine(group, status));
-    bar.appendChild(el('span', {className: 'tw-grow'}));
-    pairActions(group, pick[0], pick[1], status, false).forEach(function (node) { bar.appendChild(node); });
-    return bar;
   }
 
   /* ── alignment jobs ──────────────────────────────────────────── */
@@ -759,23 +809,31 @@
   }
 
   async function startAlignment(group, a, b, force) {
-    if (!canGenerate()) { showToast(generateBlockedReason(), 'warning'); return; }
     var order = pivotFor(group, a, b);
+    await startJob(group, order[0], order[1], force);
+  }
+
+  // 发起一次对齐任务；成功返回 true，失败就地提示并返回 false。
+  async function startJob(group, pivotId, targetId, force) {
+    if (!canGenerate()) { showToast(generateBlockedReason(), 'warning'); return false; }
     try {
       var data = await postJSON('/api/text-alignments/start', {
         document_group_id: group.document_group_id,
-        pivot_source_file_id: order[0],
-        target_source_file_id: order[1],
+        pivot_source_file_id: pivotId,
+        target_source_file_id: targetId,
         force: !!force
       });
       works.running = {
         job_id: data.job_id, document_group_id: group.document_group_id,
-        pivot_source_file_id: order[0], target_source_file_id: order[1]
+        pivot_source_file_id: pivotId, target_source_file_id: targetId
       };
       refreshViews();
       watchRunningJob(data.job_id);
+      return true;
     } catch (error) {
-      showToast(error.message || '生成对齐失败', 'danger');
+      if (!works.queue) showToast(error.message || '生成对齐失败', 'danger');
+      else works.queue.lastError = error.message || '生成对齐失败';
+      return false;
     }
   }
 
@@ -796,14 +854,17 @@
       var group = running ? groupById(running.document_group_id) : null;
       watchedJobId = '';
       works.running = null;
-      if (response.ok && payload.ok) {
-        showToast((group ? '「' + group.title + '」' : '') + '对齐已生成', 'success');
-      } else if (payload.cancelled) {
-        showToast('已取消生成对齐', 'info');
-      } else if (response.status !== 404) {
-        showToast(payload.error || '生成对齐失败', 'danger');
-      }
+      var outcome = response.ok && payload.ok ? 'ok'
+        : payload.cancelled ? 'cancelled'
+          : response.status === 404 ? 'unknown' : 'failed';
       await loadGroupsAndOverview().catch(function () {});
+      if (works.queue) {
+        advanceRealignQueue(outcome, payload.error);
+        return;
+      }
+      if (outcome === 'ok') showToast((group ? '「' + group.title + '」' : '') + '对齐已生成', 'success');
+      else if (outcome === 'cancelled') showToast('已取消生成对齐', 'info');
+      else if (outcome === 'failed') showToast(payload.error || '生成对齐失败', 'danger');
       refreshViews();
       return;
     }
@@ -816,6 +877,97 @@
     } catch (error) {
       showToast(error.message || '取消失败', 'danger');
     }
+  }
+
+  /* ── batch realign ───────────────────────────────────────────── */
+  // 需重跑的只看直接对齐：间接关联随它经过的两段直接对齐一起更新。
+  function staleDirectPairs(group) {
+    var pairs = works.pairsByGroup[group.document_group_id] || {};
+    return Object.keys(pairs).map(function (key) { return pairs[key]; }).filter(function (pair) {
+      return pair.status === 'direct' && !!pair.stale_reason;
+    });
+  }
+
+  // 沿用该对原先的对齐方向（最近一次运行的 pivot/target），找不到才按基准推定。
+  function staleQueueItems(groups) {
+    var items = [];
+    groups.forEach(function (group) {
+      staleDirectPairs(group).forEach(function (pair) {
+        var ids = pair.source_file_ids;
+        var run = (group.alignments || []).find(function (item) {
+          return pairKey(item.pivot_source_file_id, item.target_source_file_id) === pairKey(ids[0], ids[1]);
+        });
+        var order = run ? [run.pivot_source_file_id, run.target_source_file_id] : pivotFor(group, ids[0], ids[1]);
+        items.push({groupId: group.document_group_id, pivot: order[0], target: order[1], reason: pair.stale_reason});
+      });
+    });
+    return items;
+  }
+
+  function queuedPair(groupId, a, b) {
+    var queue = works.queue;
+    if (!queue) return false;
+    return queue.items.slice(queue.index + 1).some(function (item) {
+      return item.groupId === groupId && pairKey(item.pivot, item.target) === pairKey(a, b);
+    });
+  }
+
+  async function realignPairs(items, scope) {
+    if (!items.length || works.queue || works.running) return;
+    if (!canGenerate()) { showToast(generateBlockedReason(), 'warning'); return; }
+    if (!await showAppConfirm(
+      '将用当前模型依次重新计算 ' + items.length + ' 组对齐，耗时取决于书籍长度，可随时停止',
+      {title: '重新对齐' + scope + '？', confirmText: '开始重新对齐'}
+    )) return;
+    works.queue = {items: items.slice(), index: 0, completed: 0, failures: [], stopped: false, lastError: ''};
+    runRealignQueue();
+  }
+
+  async function runRealignQueue() {
+    var queue = works.queue;
+    while (queue && !queue.stopped && queue.index < queue.items.length) {
+      var item = queue.items[queue.index];
+      var group = groupById(item.groupId);
+      if (group) {
+        refreshViews();
+        if (await startJob(group, item.pivot, item.target, true)) return;
+        queue.failures.push(queue.lastError || '生成对齐失败');
+      }
+      queue.index += 1;
+    }
+    finishRealignQueue();
+  }
+
+  function advanceRealignQueue(outcome, error) {
+    var queue = works.queue;
+    if (outcome === 'ok') queue.completed += 1;
+    else if (outcome === 'cancelled') queue.stopped = true;
+    else if (outcome === 'failed') queue.failures.push(error || '生成对齐失败');
+    queue.index += 1;
+    runRealignQueue();
+  }
+
+  function finishRealignQueue() {
+    var queue = works.queue;
+    works.queue = null;
+    refreshViews();
+    if (!queue) return;
+    var total = queue.items.length;
+    if (queue.stopped) {
+      showToast('已停止重新对齐，完成 ' + queue.completed + '/' + total + ' 组', 'info');
+    } else if (queue.failures.length) {
+      showToast('重新对齐完成 ' + queue.completed + '/' + total + ' 组，' + queue.failures.length + ' 组失败：' + queue.failures[0], 'danger');
+    } else {
+      showToast('已重新对齐 ' + queue.completed + ' 组', 'success');
+    }
+  }
+
+  function stopRealignQueue() {
+    if (!works.queue) return;
+    works.queue.stopped = true;
+    refreshViews();
+    if (works.running) cancelAlignment();
+    else finishRealignQueue();
   }
 
   function refreshViews() {
@@ -916,27 +1068,6 @@
       versionGroup.appendChild(results);
     }
     body.appendChild(versionGroup);
-
-    if (members.length > 1) {
-      var alignGroup = el('div', {className: 'tw-sheet-group'}, el('h4', {className: 'tw-sheet-label', text: '对齐'}));
-      for (var i = 0; i < members.length; i += 1) {
-        for (var j = i + 1; j < members.length; j += 1) {
-          var a = members[i].source_file_id;
-          var b = members[j].source_file_id;
-          var status = pairStatus(group.document_group_id, a, b);
-          var row = el('div', {className: 'tw-pair-row'}, [
-            el('span', {className: 'tw-pair-name', text: memberName(group, a) + ' 与 ' + memberName(group, b)})
-          ]);
-          var actionBox = el('span', {className: 'tw-pair-actions'});
-          pairActions(group, a, b, status, true).forEach(function (node) { actionBox.appendChild(node); });
-          row.appendChild(actionBox);
-          row.appendChild(el('div', {className: 'tw-pair-state'}, statusLine(group, status)));
-          alignGroup.appendChild(row);
-        }
-      }
-      if (!canGenerate()) alignGroup.appendChild(el('p', {className: 'tw-note', text: generateBlockedReason()}));
-      body.appendChild(alignGroup);
-    }
 
     body.appendChild(el('div', {className: 'tw-sheet-group'}, [
       button('删除作品', 'danger', function () { deleteWork(group); }),
