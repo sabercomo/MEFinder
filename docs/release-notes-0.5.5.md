@@ -4,6 +4,11 @@
 
 ## 更新内容
 
+### 启动守卫:云端占位索引明确报错
+
+- 索引数据库被云盘(如 OneDrive)降级为「仅云端」占位文件时,启动首次读取会等待整份数据库下载,窗口无限停留在加载页。现在启动先检测占位属性,直接给出带操作步骤的错误页(右键文件→「始终保留在此设备」→等待同步完成后重启),不再假死。
+- 背景与证据见 `docs/issues/onedrive-placeholder-startup-hang.md`;测试 `tests/test_desktop_backend_cloud_placeholder.py`。
+
 ### 章节目录与双语跳转
 
 - 阅读器工具栏新增「目录」，按原有层级展示已入库的一、二级标题，支持方向键、Enter 和 Escape。

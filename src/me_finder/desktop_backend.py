@@ -9,6 +9,8 @@ business pages only ever see an ``http://127.0.0.1`` URL.
 from __future__ import annotations
 
 import logging
+import os
+import stat
 import threading
 import traceback
 from dataclasses import dataclass
@@ -37,6 +39,36 @@ class DesktopBackendStopReport:
 
     handlers_stopped: bool
     runtime_closed: bool
+
+
+def cloud_placeholder_hint(path: Path) -> str | None:
+    """Return remediation text when ``path`` is a cloud-only placeholder file.
+
+    OneDrive Files-On-Demand demotes synced files to placeholders; the first
+    read then blocks on a multi-gigabyte hydration and the desktop window sits
+    on the loading splash forever. Detect the placeholder attributes up front
+    so startup fails with actionable guidance instead of hanging.
+    """
+
+    try:
+        attributes = getattr(os.stat(path), "st_file_attributes", 0)
+    except OSError:
+        return None
+    recall = getattr(stat, "FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS", 0x00400000)
+    offline = getattr(stat, "FILE_ATTRIBUTE_OFFLINE", 0x00100000)
+    if not attributes & (recall | offline):
+        return None
+    return (
+        "%s\n\n"
+        "该文件当前是云盘(如 OneDrive)的「仅云端」占位文件,启动时首次读取会触发"
+        "整份数据库的下载,程序会一直停在加载页。\n\n"
+        "处理方法:\n"
+        "1. 在文件资源管理器中右键该文件,选择「始终保留在此设备」;\n"
+        "2. 等待云盘下载完成(文件状态图标变为绿色对勾);\n"
+        "3. 重新启动本程序。\n\n"
+        "若此文献库由多台电脑经云盘共享,请避免两台机器同时启动并写入,"
+        "否则会产生同步冲突副本(文件名带机器名后缀)。" % path
+    )
 
 
 class DesktopBackend:
@@ -116,6 +148,14 @@ class DesktopBackend:
                     )
                 return False
             logging.info("loading index from %s", self._index_path)
+            placeholder_hint = cloud_placeholder_hint(self._index_path)
+            if placeholder_hint is not None:
+                logging.error("index is a cloud placeholder: %s", self._index_path)
+                with self._lock:
+                    closing = self._closing
+                if not closing:
+                    show_error("索引数据库在云端,尚未同步到本机", placeholder_hint)
+                return False
             handler = self._create_handler()
             server = self._create_server(handler)
             server_thread = threading.Thread(
