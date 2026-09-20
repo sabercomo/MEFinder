@@ -6,7 +6,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Sequence
 
 from .import_config_store import attach_mineru_manifest, attach_parser_manifest
 from .import_resume import COMPLETED_UNIT_STATUSES, resume_summary
@@ -31,7 +31,7 @@ from .mineru_local_provider import (
 )
 from .mineru_local_settings import load_mineru_local_config
 from .large_document.engine import LargeDocumentJobEngine
-from .large_document.job_ledger import JobLedger
+from .large_document.job_ledger import JobLedger, SliceJob
 from .large_document.merge import iter_normalized_pages
 from .large_document.mineru_accounts import (
     MinerUAccountService,
@@ -272,6 +272,31 @@ def parse_pdf_with_mineru(
     }
 
 
+_SLICE_IN_FLIGHT_STATUSES = frozenset({"running", "submitted", "waiting"})
+
+
+def slices_are_waiting_for_credential(slices: Sequence[SliceJob]) -> bool:
+    """Report a credential shortage only when nothing is actually in flight.
+
+    A slice that is queued behind a busy credential looks exactly like a slice
+    that cannot find one: both sit at ``waiting`` with no remote task.  With
+    more slices than credential slots there is always at least one such slice,
+    so keying the message off any single unsubmitted slice mislabels a healthy
+    parse as a credential shortage.  Only when no slice holds a remote task is
+    the queue genuinely blocked on credentials.
+    """
+
+    unsubmitted = any(
+        item.status == "waiting" and not item.remote_task_id for item in slices
+    )
+    if not unsubmitted:
+        return False
+    return not any(
+        item.remote_task_id and item.status in _SLICE_IN_FLIGHT_STATUSES
+        for item in slices
+    )
+
+
 def _parse_pdf_with_mineru_accounts(
     root: Path,
     pdf_path: Path,
@@ -321,10 +346,7 @@ def _parse_pdf_with_mineru_accounts(
         job = engine.run_once(job.id)
         if on_progress:
             slices = ledger.list_slice_jobs(job.id)
-            waiting_for_credential = any(
-                item.status == "waiting" and not item.remote_task_id
-                for item in slices
-            )
+            waiting_for_credential = slices_are_waiting_for_credential(slices)
             completed_pages = [
                 page
                 for item in slices
