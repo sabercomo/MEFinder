@@ -1811,9 +1811,9 @@
   }
 
   // 低置信：算法给出了对应段落但置信度低于门槛。没有对应的（副文本、漏段）不标。
+  // 待检查与否由后端判定（与作品页「N 处待检查」同一口径），前端不另立规则。
   function linkNeedsReview(link) {
-    return !link.manual && link.review_status === 'rejected' &&
-      (link.target_segment_ids || []).length > 0;
+    return link.needs_review === true;
   }
 
   function linkKey(link) {

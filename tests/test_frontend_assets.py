@@ -511,10 +511,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 正文范围检查与修改：作品页每对版本新增「正文范围」入口，双栏对照编辑弹窗
     #   （35-works.js openBodyRangeDialog / 45-works.css .tw-range-*），两本书各自
     #   一个连续区间，一次提交两个范围并重跑当前版本对。
+    # 0.5.5 校正读取统一：阅读器「!」标记改读后端 needs_review，不再自算口径。
     BASELINE_SHA256 = (
-        "bd7a9f6b5872721b5d8b3c7ec0db8e3d8c4b13048ce047e455c8430926a679e4"
+        "4418d5c3fd18c363d13f860a6157a662ea52006f3be424cee3f1aabbc6e42c41"
     )
-    BASELINE_BYTES = 1223766
+    BASELINE_BYTES = 1223804
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

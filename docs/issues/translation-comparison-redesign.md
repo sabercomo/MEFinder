@@ -79,3 +79,23 @@
 
 限制：队列只存在于当前页面内存，刷新后正在跑的那一组仍会被接回显示，但剩余组需要再点一次；批量重算的真实耗时未在本轮测量（本机开发环境未装对齐模型，浏览器验证用模拟任务接口）。
 
+
+## 2026-09-20 — 第五阶段业务重构（一）：校正读取
+
+按「业务重构随当前问题推进，不另开全仓拆分」推进第一项：人工校正的读取。
+
+事实（改前，均已复现于单元测试）：
+
+- 同一条 `alignment_manual_overrides` 记录有三套读取规则：`text_alignment._lookup_confirmed_override`（精确 + `reader_review` 包含回退 + 目标分段集过期判定）、`translation_works.alignment_link_window`（只有精确命中）、`translation_works._override_keys`（只有精确命中，且不校验目标分段集与目标段是否仍在）。
+- 可观察后果：阅读器按人工校正定位成功的链接，逐段「!」与作品页「N 处待检查」可能仍当它没改；重新分段后已失效的校正仍被统计算作「已处理」。
+- 「待检查」的判定另有两份实现：后端 `_direct_run_statistics` 与前端 `reader.js` 的 `linkNeedsReview`。
+
+处理：
+
+- `text_alignment.confirmed_overrides_for_pair()` 承担唯一读取（含过期判定），`override_for_selection()` 承担唯一选取规则（精确优先，`reader_review` 可作用于所含选区）；定位、链接窗口、逐对统计三处改调同一对函数。分层不变：核心模块不反向依赖 `alignment_overrides.py`。
+- 「待检查」收敛为后端一个谓词 `_link_needs_review`（rejected + 两侧非空 + 两个方向都无有效校正），链接窗口每条返回 `needs_review`，前端只读不再自算。
+- 行为变更一处：精确命中的校正若已过期，现在会回退到仍然有效的、范围更大的阅读器校正，而不是直接退回算法结果——只使用当前分段集内仍然成立的校正，不触碰「页码/定位不虚构」。
+
+守卫：`tests/test_translation_works.py` 新增三例（校正后三处一致、从另一版改也算已处理、重新分段后三处同时判过期）；前端口径由 `tests/test_structured_reader_frontend.py` 钉死。契约见 `docs/contracts/v0.5.5-alignment-corrections.md`。
+
+未做（下一步，用户已排序）：② 任务完成刷新（`35-works.js` 与 `reader.js` 两个独立轮询器）、③ 阅读会话状态（位置 / 对照目标散在五处）。

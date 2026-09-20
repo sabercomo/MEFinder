@@ -2081,71 +2081,81 @@ def _ordered_segments_in_set(
     ).fetchall()
 
 
-def _lookup_confirmed_override(
+def confirmed_overrides_for_pair(
     connection: sqlite3.Connection,
     source_id: str,
     target_id: str,
     source_set_id: str,
     target_set_id: str,
-    source_segments: Sequence[str],
-) -> Dict[str, object] | None:
-    """Return the human-confirmed target segments for this selection, if any."""
+) -> Dict[str, Dict[str, object]]:
+    """Confirmed corrections this alignment can still use, keyed by source key.
+
+    The one reading path for every consumer (locate, link window, pair
+    statistics), so a correction cannot look applied in one view and absent in
+    another. A re-alignment or re-segmentation moves the confirmed target to a
+    new segment set: such a correction is stale and left out rather than mapped
+    onto segments the current alignment no longer uses. Most recent first.
+    """
 
     if not _table_exists(connection, "alignment_manual_overrides"):
+        return {}
+    overrides: Dict[str, Dict[str, object]] = {}
+    for row in connection.execute(
+        "SELECT override_id, source_segment_key, source_segment_ids_json, "
+        "target_segment_ids_json, evidence_json FROM alignment_manual_overrides "
+        "WHERE source_file_id = ? AND target_source_file_id = ? "
+        "AND source_segment_set_id = ? AND target_segment_set_id = ? "
+        "AND status = 'confirmed' ORDER BY confirmed_at DESC, override_id",
+        (source_id, target_id, source_set_id, target_set_id),
+    ):
+        key = str(row["source_segment_key"])
+        if key in overrides:
+            continue
+        stored_ids = json.loads(str(row["target_segment_ids_json"] or "[]"))
+        ordered = _ordered_segments_in_set(connection, target_set_id, stored_ids)
+        if len(ordered) != len({str(item) for item in stored_ids}):
+            continue
+        overrides[key] = {
+            "override_id": str(row["override_id"]),
+            "origin": str(_json_object(row["evidence_json"]).get("origin") or ""),
+            "source_segment_ids": [
+                str(item)
+                for item in json.loads(str(row["source_segment_ids_json"] or "[]"))
+            ],
+            "target_segment_ids": [str(item["segment_id"]) for item in ordered],
+        }
+    return overrides
+
+
+def override_for_selection(
+    overrides: Mapping[str, Dict[str, object]],
+    source_segments: Sequence[str],
+) -> Dict[str, object] | None:
+    """Pick the correction governing this selection out of a prepared mapping.
+
+    Split from the query so a caller reading a whole window of selections
+    applies the same rule as a single lookup, reading the corrections once.
+    """
+
+    exact = overrides.get(_segment_key(source_segments))
+    if exact is not None:
+        return exact
+    # Reader corrections describe a whole alignment link. Scrolling locates
+    # a single character, hence often only one of that link's segments.
+    # Keep agent proposals selection-scoped; only reader link corrections
+    # apply to a contained selection. Exact corrections above take priority.
+    selection = {str(segment_id) for segment_id in source_segments}
+    if not selection:
         return None
-    row = connection.execute(
-        "SELECT override_id, target_segment_ids_json, target_segment_set_id "
-        "FROM alignment_manual_overrides WHERE source_file_id = ? "
-        "AND target_source_file_id = ? AND source_segment_set_id = ? "
-        "AND source_segment_key = ? AND status = 'confirmed' LIMIT 1",
-        (source_id, target_id, source_set_id, _segment_key(source_segments)),
-    ).fetchone()
-    if row is None:
-        # Reader corrections describe a whole alignment link. Scrolling locates
-        # a single character, hence often only one of that link's segments.
-        # Keep agent proposals selection-scoped; only reader link corrections
-        # apply to a contained selection. Exact corrections above take priority.
-        selection = set(source_segments)
-        candidates = []
-        for candidate in connection.execute(
-            "SELECT override_id, source_segment_ids_json, target_segment_ids_json, "
-            "target_segment_set_id, evidence_json FROM alignment_manual_overrides "
-            "WHERE source_file_id = ? AND target_source_file_id = ? "
-            "AND source_segment_set_id = ? AND target_segment_set_id = ? "
-            "AND status = 'confirmed' ORDER BY confirmed_at DESC, override_id",
-            (source_id, target_id, source_set_id, target_set_id),
-        ):
-            if json.loads(candidate["evidence_json"]).get("origin") != "reader_review":
-                continue
-            stored_source = set(json.loads(candidate["source_segment_ids_json"]))
-            if selection and selection <= stored_source:
-                candidates.append((len(stored_source), candidate))
-        if not candidates:
-            return None
-        row = min(candidates, key=lambda item: item[0])[1]
-    # A re-alignment or re-segmentation would move the confirmed target to a new
-    # segment set; treat the stored correction as stale rather than mapping to
-    # segments the current alignment no longer uses.
-    if str(row["target_segment_set_id"]) != target_set_id:
+    contained = [
+        override
+        for override in overrides.values()
+        if override["origin"] == "reader_review"
+        and selection <= set(override["source_segment_ids"])
+    ]
+    if not contained:
         return None
-    stored_ids = json.loads(str(row["target_segment_ids_json"] or "[]"))
-    ordered = _ordered_segments_in_set(connection, target_set_id, stored_ids)
-    if len(ordered) != len({str(item) for item in stored_ids}):
-        return None
-    return {
-        "override_id": str(row["override_id"]),
-        "target_segment_ids": [str(item["segment_id"]) for item in ordered],
-    }
-
-
-
-
-
-
-
-
-
-
+    return min(contained, key=lambda item: len(item["source_segment_ids"]))
 
 
 def locate_alignment(
@@ -2232,12 +2242,10 @@ def locate_alignment(
         )
         if not source_segments:
             raise AlignmentNotFound("所选文字没有落入可对齐的 Segment。")
-        override = _lookup_confirmed_override(
-            connection,
-            source_id,
-            target_id,
-            source_set_id,
-            target_set_id,
+        override = override_for_selection(
+            confirmed_overrides_for_pair(
+                connection, source_id, target_id, source_set_id, target_set_id
+            ),
             source_segments,
         )
         if override is not None:

@@ -96,6 +96,11 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("article.appendChild(flag)", READER_JS)
         self.assertIn("is-deferred", READER_JS)
         self.assertIn(".mef-reader-flag.is-deferred", READER_CSS)
+        # 待检查口径只有后端一份：前端不再自己看 review_status / manual。
+        flag_rule = READER_JS[READER_JS.index("function linkNeedsReview(link)"):]
+        flag_rule = flag_rule[:flag_rule.index("function linkKey(link)")]
+        self.assertIn("link.needs_review === true", flag_rule)
+        self.assertNotIn("review_status", flag_rule)
 
     def test_reading_position_is_saved_per_work(self) -> None:
         self.assertIn("readingPositionEndpoint: '/api/translation-works/reading-position'", READER_JS)

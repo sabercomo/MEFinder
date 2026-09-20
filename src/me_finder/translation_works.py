@@ -49,6 +49,8 @@ from .text_alignment import (
     _table_exists,
     _validate_nonnegative_integer,
     _validate_source_id,
+    confirmed_overrides_for_pair,
+    override_for_selection,
 )
 
 UNMATCHED_STATUSES = frozenset({"rejected", "unmatched"})
@@ -292,20 +294,55 @@ def _run_staleness(
     return None
 
 
-def _override_keys(
-    connection: sqlite3.Connection, source_id: str, target_id: str, source_set_id: str
-) -> set[str]:
-    if not _table_exists(connection, "alignment_manual_overrides"):
-        return set()
-    return {
-        str(row[0])
-        for row in connection.execute(
-            "SELECT source_segment_key FROM alignment_manual_overrides "
-            "WHERE source_file_id = ? AND target_source_file_id = ? "
-            "AND source_segment_set_id = ? AND status = 'confirmed'",
-            (source_id, target_id, source_set_id),
-        )
-    }
+def _pair_corrections(
+    connection: sqlite3.Connection,
+    source_id: str,
+    target_id: str,
+    source_set_id: str,
+    target_set_id: str,
+) -> Tuple[Dict[str, Dict[str, object]], Dict[str, Dict[str, object]]]:
+    """Confirmed corrections for this pair, read from both sides.
+
+    A reviewer corrects a pair from whichever version they were reading, so a
+    link counts as settled when either side carries a correction. Staleness is
+    decided by ``confirmed_overrides_for_pair``: a correction left behind by a
+    re-alignment or re-segmentation no longer counts.
+    """
+
+    return (
+        confirmed_overrides_for_pair(
+            connection, source_id, target_id, source_set_id, target_set_id
+        ),
+        confirmed_overrides_for_pair(
+            connection, target_id, source_id, target_set_id, source_set_id
+        ),
+    )
+
+
+def _link_needs_review(
+    review_status: object,
+    source_segment_ids: Sequence[str],
+    target_segment_ids: Sequence[str],
+    corrections: Tuple[Dict[str, Dict[str, object]], Dict[str, Dict[str, object]]],
+) -> bool:
+    """Whether a link is still waiting for a human to check it.
+
+    Single rule behind the pair's「N 处待检查」and the reader's「!」marks: the
+    algorithm proposed a counterpart but scored it below the threshold, and no
+    confirmed correction settled it from either side. A link with one empty
+    side means "no counterpart" (front matter or a missed segment), not a
+    low-confidence guess, so it is not counted.
+    """
+
+    if str(review_status) != "rejected":
+        return False
+    if not source_segment_ids or not target_segment_ids:
+        return False
+    forward, backward = corrections
+    return (
+        override_for_selection(forward, source_segment_ids) is None
+        and override_for_selection(backward, target_segment_ids) is None
+    )
 
 
 def _direct_run_statistics(
@@ -326,10 +363,12 @@ def _direct_run_statistics(
     }
     total = sum(segment_counts.values())
     unmatched = sum(segment_counts.get(status, 0) for status in UNMATCHED_STATUSES)
-    corrected_keys = _override_keys(
-        connection, pivot_id, target_id, str(run["pivot_segment_set_id"])
-    ) | _override_keys(
-        connection, target_id, pivot_id, str(run["target_segment_set_id"])
+    corrections = _pair_corrections(
+        connection,
+        pivot_id,
+        target_id,
+        str(run["pivot_segment_set_id"]),
+        str(run["target_segment_set_id"]),
     )
     review_count = 0
     link_members: Dict[str, Dict[str, List[str]]] = {}
@@ -345,12 +384,9 @@ def _direct_run_statistics(
         )
         bucket[str(row["side"])].append(str(row["segment_id"]))
     for bucket in link_members.values():
-        # 只有算法给出了对应、但置信度低于门槛的链接才需要人工检查；
-        # 一侧为空的是没有对应（副文本或漏段），不算「待检查」。
-        if not bucket["pivot"] or not bucket["target"]:
-            continue
-        keys = {_segment_key(ids) for ids in bucket.values() if ids}
-        if not keys & corrected_keys:
+        if _link_needs_review(
+            "rejected", bucket["pivot"], bucket["target"], corrections
+        ):
             review_count += 1
     return {
         "matched_segment_ratio": (
@@ -664,18 +700,10 @@ def alignment_link_window(
                 link["review_status"] = status
                 link["confidence"] = confidence
 
-        overrides: Dict[str, List[str]] = {}
-        if _table_exists(connection, "alignment_manual_overrides"):
-            for row in connection.execute(
-                "SELECT source_segment_key, target_segment_ids_json "
-                "FROM alignment_manual_overrides WHERE source_file_id = ? "
-                "AND target_source_file_id = ? AND source_segment_set_id = ? "
-                "AND target_segment_set_id = ? AND status = 'confirmed'",
-                (source_id, target_id, source_set_id, target_set_id),
-            ):
-                overrides[str(row[0])] = [
-                    str(value) for value in json.loads(row[1] or "[]")
-                ]
+        corrections = _pair_corrections(
+            connection, source_id, target_id, source_set_id, target_set_id
+        )
+        overrides = corrections[0]
         deferred: set[str] = set()
         if _table_exists(connection, "alignment_review_deferrals"):
             deferred = {
@@ -693,18 +721,24 @@ def alignment_link_window(
             key = _segment_key(link["from_segment_ids"])
             manual = None
             target_ids = list(link["to_segment_ids"])
-            if key in overrides:
-                stored = overrides[key]
-                valid = _ordered_segments_in_set(connection, target_set_id, stored)
-                if len(valid) == len(set(stored)):
-                    target_ids = [str(row["segment_id"]) for row in valid]
-                    manual = "corrected" if target_ids else "no_counterpart"
+            # Same correction rule as locate: the exact selection first, then a
+            # reader correction that covers this link.
+            override = override_for_selection(overrides, link["from_segment_ids"])
+            if override is not None:
+                target_ids = list(override["target_segment_ids"])
+                manual = "corrected" if target_ids else "no_counterpart"
             result_links.append(
                 {
                     "order_index": link["order_index"],
                     "review_status": link["review_status"],
                     "confidence": link["confidence"],
                     "manual": manual,
+                    "needs_review": _link_needs_review(
+                        link["review_status"],
+                        link["from_segment_ids"],
+                        link["to_segment_ids"],
+                        corrections,
+                    ),
                     "deferred": key in deferred and manual is None,
                     "source_segment_ids": link["from_segment_ids"],
                     "target_segment_ids": target_ids,

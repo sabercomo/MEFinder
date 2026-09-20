@@ -270,6 +270,87 @@ class TranslationWorkReviewTests(_ThreeVersionWork):
             self.db, "pdf-de", "pdf-zh", 0, 0
         )["links"][0]
 
+    def _reject_all_links(self) -> None:
+        """Make the generated links low-confidence so they await a human."""
+
+        connection = sqlite3.connect(str(self.db))
+        try:
+            connection.execute(
+                "UPDATE alignment_links SET review_status = 'rejected'"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _review_count(self) -> int:
+        overview = translation_works.alignment_overview(self.db)
+        return self._pair(overview, "pdf-de", "pdf-zh")["review_count"]
+
+    def test_correction_settles_link_for_locate_window_and_count(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        self._reject_all_links()
+        link = self._first_link()
+        self.assertTrue(link["needs_review"])
+        before = self._review_count()
+        translation_works.save_correction(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"],
+            link["target_segment_ids"],
+        )
+        corrected = self._first_link()
+        self.assertEqual(corrected["manual"], "corrected")
+        self.assertFalse(corrected["needs_review"])
+        self.assertEqual(self._review_count(), before - 1)
+        located = locate_alignment(
+            self.db, "pdf-de", "pdf-zh", start_page_index=0, end_page_index=0,
+            start_offset=1, end_offset=2,
+        )
+        self.assertEqual(located["alignment_source"], "manual_review")
+
+    def test_correction_from_the_other_side_settles_the_same_link(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        self._reject_all_links()
+        link = self._first_link()
+        before = self._review_count()
+        translation_works.save_correction(
+            self.db, "pdf-zh", "pdf-de", link["target_segment_ids"],
+            link["source_segment_ids"],
+        )
+        self.assertFalse(self._first_link()["needs_review"])
+        self.assertEqual(self._review_count(), before - 1)
+
+    def test_correction_left_behind_by_resegmentation_is_stale_everywhere(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        self._reject_all_links()
+        link = self._first_link()
+        before = self._review_count()
+        translation_works.save_correction(
+            self.db, "pdf-de", "pdf-zh", link["source_segment_ids"],
+            link["target_segment_ids"],
+        )
+        self.assertEqual(self._review_count(), before - 1)
+        # A re-alignment re-segments the target: the stored correction now
+        # names segments this alignment no longer uses.
+        connection = sqlite3.connect(str(self.db))
+        try:
+            connection.execute(
+                "UPDATE alignment_manual_overrides SET target_segment_set_id = ?",
+                ("segment-set-retired",),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        stale = self._first_link()
+        self.assertIsNone(stale["manual"])
+        self.assertTrue(stale["needs_review"])
+        self.assertEqual(self._review_count(), before)
+        # Back to the algorithm's own verdict, which for a rejected link is
+        # "too low to locate" rather than a correction on a retired segment.
+        with self.assertRaisesRegex(AlignmentNotFound, "置信度过低"):
+            locate_alignment(
+                self.db, "pdf-de", "pdf-zh", start_page_index=0, end_page_index=0,
+                start_offset=1, end_offset=2,
+            )
+
     def test_one_to_many_correction_applies_immediately(self) -> None:
         generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         link = self._first_link()
