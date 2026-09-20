@@ -736,6 +736,12 @@ def load_mineru_pdf_pages(
                     "page_index_offset": page_index_offset,
                     "pdf_page_index": global_index,
                     "result_dir": str(result_dir),
+                    **(
+                        {"bbox_normalized": item["bbox_normalized"]}
+                        if isinstance(item.get("bbox_normalized"), list)
+                        and len(item["bbox_normalized"]) == 4
+                        else {}
+                    ),
                 }
             )
     detected_page_count = max(page_texts.keys()) + 1 if page_texts else 0

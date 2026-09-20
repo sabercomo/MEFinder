@@ -1,22 +1,43 @@
-"""Adapter for the external ``mineru-api`` / ``mineru-router`` service.
+"""Adapter for a locally deployed MinerU service.
 
 MinerU, model weights, PyTorch, and CUDA remain outside the MEFinder process.
-The adapter follows MinerU's current official async interface: ``GET /health``,
-``POST /tasks``, ``GET /tasks/{id}``, and ``GET /tasks/{id}/result``.
+Two MinerU protocols are supported and detected at runtime, so a user who
+upgrades their own MinerU install does not have to wait for a MEFinder release:
+
+* ``tasks`` — MinerU 3.x: ``GET /health``, ``POST /tasks``,
+  ``GET /tasks/{id}``, ``GET /tasks/{id}/result``.
+* ``v1-jobs`` — MinerU 4.x: ``GET /v1/health`` plus the upload/parse-job API
+  implemented in :mod:`me_finder.mineru_local_v1`.
 """
 
 from __future__ import annotations
 
-import http.client
 import json
 import mimetypes
 import socket
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
+from .mineru_local_http import (
+    MINERU_LOCAL_PROVIDER_ID,
+    MinerULocalTransport,
+)
+from .mineru_local_v1 import (
+    MINERU_V1_PROTOCOL,
+    MinerUV1Client,
+    block_bbox,
+    block_text,
+    block_text_level,
+    decode_structured_content,
+    iter_page_blocks,
+    job_status,
+    scaled_bbox,
+    structured_content_file_id,
+    tier_for_backend,
+)
 from .parser_provider import (
     NormalizedBlock,
     NormalizedPage,
@@ -32,8 +53,13 @@ from .parser_provider import (
 )
 
 
-MINERU_LOCAL_PROVIDER_ID = "mineru-local"
-MAX_LOCAL_JSON_RESPONSE_BYTES = 64 * 1024 * 1024
+MINERU_TASKS_PROTOCOL = "tasks"
+MINERU_PROTOCOL_AUTO = "auto"
+MINERU_LOCAL_PROTOCOLS = (
+    MINERU_PROTOCOL_AUTO,
+    MINERU_TASKS_PROTOCOL,
+    MINERU_V1_PROTOCOL,
+)
 DEFAULT_LOCAL_SLICE_MAX_PAGES = 200
 DEFAULT_LOCAL_SLICE_MAX_BYTES = 200 * 1024 * 1024
 
@@ -52,6 +78,9 @@ class MinerULocalConfig:
     return_middle_json: bool = True
     formula_enable: bool = True
     table_enable: bool = True
+    protocol: str = MINERU_PROTOCOL_AUTO
+    api_key: str = ""
+    tier: str = ""
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.endpoint)
@@ -59,15 +88,24 @@ class MinerULocalConfig:
             raise ValueError("MinerU Local endpoint must be an http(s) URL")
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if self.protocol not in MINERU_LOCAL_PROTOCOLS:
+            raise ValueError("MinerU Local protocol must be auto, tasks, or v1-jobs")
 
 
 class MinerULocalHTTPClient:
+    """MinerU 3.x ``/tasks`` client."""
+
     def __init__(self, config: MinerULocalConfig) -> None:
         self.config = config
-        self.base = urlparse(config.endpoint.rstrip("/"))
+        self.transport = MinerULocalTransport(
+            config.endpoint,
+            timeout_seconds=config.timeout_seconds,
+            api_key=config.api_key,
+        )
+        self.base = self.transport.base
 
     def health(self) -> Dict[str, object]:
-        return self._json_request("GET", "/health")
+        return self.transport.json_request("GET", "/health")
 
     def submit(self, path: Path, fields: Mapping[str, str]) -> Dict[str, object]:
         boundary = f"----MEFinderMinerU{uuid.uuid4().hex}"
@@ -90,14 +128,15 @@ class MinerULocalHTTPClient:
         prefix = b"".join(prefix_parts)
         suffix = f"\r\n--{boundary}--\r\n".encode("ascii")
         content_length = len(prefix) + Path(path).stat().st_size + len(suffix)
-        connection = self._connection()
+        connection = self.transport.connection()
         try:
-            connection.putrequest("POST", self._path("/tasks"))
+            connection.putrequest("POST", self.transport.path("/tasks"))
             connection.putheader(
                 "Content-Type", f"multipart/form-data; boundary={boundary}"
             )
             connection.putheader("Content-Length", str(content_length))
-            connection.putheader("Accept", "application/json")
+            for name, value in self.transport.headers().items():
+                connection.putheader(name, value)
             connection.endheaders()
             connection.send(prefix)
             with Path(path).open("rb") as stream:
@@ -108,31 +147,7 @@ class MinerULocalHTTPClient:
                     connection.send(chunk)
             connection.send(suffix)
             response = connection.getresponse()
-            return self._decode_response(response)
-        except (OSError, socket.timeout) as exc:
-            raise ParserProviderError(
-                f"MinerU Local connection failed: {exc}",
-                provider_id=MINERU_LOCAL_PROVIDER_ID,
-                retryable=True,
-            ) from exc
-        finally:
-            connection.close()
-
-    def task_status(self, task_id: str) -> Dict[str, object]:
-        return self._json_request("GET", f"/tasks/{task_id}")
-
-    def task_result(self, task_id: str) -> Dict[str, object]:
-        return self._json_request("GET", f"/tasks/{task_id}/result")
-
-    def _json_request(self, method: str, endpoint: str) -> Dict[str, object]:
-        connection = self._connection()
-        try:
-            connection.request(
-                method,
-                self._path(endpoint),
-                headers={"Accept": "application/json"},
-            )
-            return self._decode_response(connection.getresponse())
+            return self.transport.decode_response(response)
         except ParserProviderError:
             raise
         except (OSError, socket.timeout) as exc:
@@ -144,53 +159,11 @@ class MinerULocalHTTPClient:
         finally:
             connection.close()
 
-    def _decode_response(self, response) -> Dict[str, object]:
-        raw = response.read(MAX_LOCAL_JSON_RESPONSE_BYTES + 1)
-        if len(raw) > MAX_LOCAL_JSON_RESPONSE_BYTES:
-            raise ParserProviderError(
-                "MinerU Local JSON response exceeds the configured safety limit",
-                provider_id=MINERU_LOCAL_PROVIDER_ID,
-            )
-        status = int(response.status)
-        if status < 200 or status >= 300:
-            remote_missing = status in {404, 410}
-            raise ParserProviderError(
-                f"MinerU Local HTTP {status}: {raw[:500].decode('utf-8', 'replace')}",
-                provider_id=MINERU_LOCAL_PROVIDER_ID,
-                retryable=status >= 500 or status in {408, 429} or remote_missing,
-                rate_limited=status == 429,
-                remote_task_missing=remote_missing,
-                status_code=status,
-            )
-        try:
-            value = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ParserProviderError(
-                "MinerU Local returned malformed JSON",
-                provider_id=MINERU_LOCAL_PROVIDER_ID,
-            ) from exc
-        if not isinstance(value, dict):
-            raise ParserProviderError(
-                "MinerU Local response must be a JSON object",
-                provider_id=MINERU_LOCAL_PROVIDER_ID,
-            )
-        return value
+    def task_status(self, task_id: str) -> Dict[str, object]:
+        return self.transport.json_request("GET", f"/tasks/{task_id}")
 
-    def _connection(self):
-        connection_type = (
-            http.client.HTTPSConnection
-            if self.base.scheme == "https"
-            else http.client.HTTPConnection
-        )
-        return connection_type(
-            self.base.hostname,
-            self.base.port,
-            timeout=self.config.timeout_seconds,
-        )
-
-    def _path(self, endpoint: str) -> str:
-        prefix = self.base.path.rstrip("/")
-        return f"{prefix}{endpoint}" or "/"
+    def task_result(self, task_id: str) -> Dict[str, object]:
+        return self.transport.json_request("GET", f"/tasks/{task_id}/result")
 
 
 class MinerULocalProvider(ParserProvider):
@@ -201,9 +174,15 @@ class MinerULocalProvider(ParserProvider):
         config: MinerULocalConfig,
         *,
         client: Optional[MinerULocalHTTPClient] = None,
+        v1_client: Optional[MinerUV1Client] = None,
     ) -> None:
         self.config = config
         self.client = client or MinerULocalHTTPClient(config)
+        self._v1_client = v1_client
+        self._detected_protocol: Optional[str] = (
+            None if config.protocol == MINERU_PROTOCOL_AUTO else config.protocol
+        )
+        self._detected_version = ""
         self._capabilities = ProviderCapabilities(
             max_pages_per_file=config.max_pages_per_file,
             max_bytes_per_file=config.max_bytes_per_file,
@@ -214,15 +193,90 @@ class MinerULocalProvider(ParserProvider):
             supports_async_jobs=True,
             supports_stream_upload=True,
             supported_models=(config.backend,),
-            optional_limits={"protocol": "mineru-api-tasks"},
+            optional_limits={"protocol": config.protocol},
         )
 
+    # ── protocol detection ───────────────────────────────────────────
+
+    @property
+    def v1_client(self) -> MinerUV1Client:
+        if self._v1_client is None:
+            self._v1_client = MinerUV1Client(
+                MinerULocalTransport(
+                    self.config.endpoint,
+                    timeout_seconds=self.config.timeout_seconds,
+                    api_key=self.config.api_key,
+                )
+            )
+        return self._v1_client
+
+    def resolve_protocol(self) -> str:
+        """Return the protocol this endpoint speaks, probing it once."""
+
+        if self._detected_protocol is not None:
+            return self._detected_protocol
+        self.probe()
+        assert self._detected_protocol is not None
+        return self._detected_protocol
+
+    def probe(self) -> Dict[str, object]:
+        """Detect the endpoint's protocol and report its health payload."""
+
+        configured = self.config.protocol
+        attempts = (
+            (MINERU_V1_PROTOCOL, MINERU_TASKS_PROTOCOL)
+            if configured == MINERU_PROTOCOL_AUTO
+            else (configured,)
+        )
+        last_error: Optional[ParserProviderError] = None
+        for protocol in attempts:
+            try:
+                payload = (
+                    self.v1_client.health()
+                    if protocol == MINERU_V1_PROTOCOL
+                    else self.client.health()
+                )
+            except ParserProviderError as exc:
+                # A missing route means "not this protocol"; anything else
+                # (refused connection, unhealthy service) is a real failure.
+                if exc.status_code in {404, 405}:
+                    last_error = exc
+                    continue
+                raise
+            self._detected_protocol = protocol
+            self._detected_version = str(payload.get("version") or "")
+            return {
+                "protocol": protocol,
+                "version": self._detected_version,
+                "health": payload,
+            }
+        raise ParserProviderError(
+            "MinerU Local endpoint exposes neither the 3.x /tasks API nor the "
+            "4.x /v1 API; check the service address and version",
+            provider_id=self.provider_id,
+            retryable=False,
+        ) from last_error
+
     def capabilities(self) -> ProviderCapabilities:
-        return self._capabilities
+        if self._detected_protocol is None:
+            return self._capabilities
+        return replace(
+            self._capabilities,
+            optional_limits={"protocol": self._detected_protocol},
+        )
 
     def health(self) -> Dict[str, object]:
-        result = self.client.health()
-        return {"ok": True, **result}
+        probed = self.probe()
+        payload = probed["health"]
+        merged = dict(payload) if isinstance(payload, Mapping) else {}
+        return {
+            "ok": True,
+            "protocol": probed["protocol"],
+            "mineru_version": probed["version"],
+            **merged,
+        }
+
+    # ── submission ───────────────────────────────────────────────────
 
     def submit(
         self,
@@ -231,6 +285,11 @@ class MinerULocalProvider(ParserProvider):
         credential: Optional[ParserCredential] = None,
     ) -> ParserSubmission:
         request = self.prepare(request)
+        if self.resolve_protocol() == MINERU_V1_PROTOCOL:
+            return self._submit_v1(request)
+        return self._submit_tasks(request)
+
+    def _submit_tasks(self, request: ParserRequest) -> ParserSubmission:
         fields = {
             "backend": str(request.options.get("backend") or self.config.backend),
             "parse_method": str(
@@ -258,13 +317,54 @@ class MinerULocalProvider(ParserProvider):
                 "MinerU Local did not return a task_id",
                 provider_id=self.provider_id,
             )
-        status = _task_status(response)
         return ParserSubmission(
             provider_id=self.provider_id,
             remote_task_id=task_id,
-            status=status,
-            metadata={"queued_ahead": response.get("queued_ahead")},
+            status=_task_status(response),
+            metadata={
+                "queued_ahead": response.get("queued_ahead"),
+                "protocol": MINERU_TASKS_PROTOCOL,
+            },
         )
+
+    def _submit_v1(self, request: ParserRequest) -> ParserSubmission:
+        client = self.v1_client
+        file_id = client.upload_file(Path(request.source_path))
+        response = client.create_job(
+            file_id,
+            tier=self._v1_tier(request),
+            ocr_mode=self._v1_ocr_mode(request),
+            output_formats=["structured_content"],
+        )
+        job_id = str(response.get("job_id") or "")
+        if not job_id:
+            raise ParserProviderError(
+                "MinerU Local did not return a job_id",
+                provider_id=self.provider_id,
+            )
+        return ParserSubmission(
+            provider_id=self.provider_id,
+            remote_task_id=job_id,
+            status=job_status(response),
+            metadata={"protocol": MINERU_V1_PROTOCOL, "file_id": file_id},
+        )
+
+    def _v1_tier(self, request: ParserRequest) -> str:
+        requested = str(
+            request.options.get("tier") or self.config.tier or ""
+        ).strip().lower()
+        if requested:
+            return tier_for_backend(requested)
+        backend = str(request.options.get("backend") or self.config.backend)
+        return tier_for_backend(backend)
+
+    def _v1_ocr_mode(self, request: ParserRequest) -> str:
+        mode = str(
+            request.options.get("parse_method") or self.config.parse_method or "auto"
+        ).strip().lower()
+        return mode if mode in {"auto", "txt", "ocr"} else "auto"
+
+    # ── polling and results ──────────────────────────────────────────
 
     def poll(
         self,
@@ -272,6 +372,14 @@ class MinerULocalProvider(ParserProvider):
         *,
         credential: Optional[ParserCredential] = None,
     ) -> ParserPollResult:
+        if self.resolve_protocol() == MINERU_V1_PROTOCOL:
+            response = self.v1_client.job(remote_task_id)
+            return ParserPollResult(
+                status=job_status(response),
+                raw_status=response,
+                progress=_v1_progress(response),
+                message=_v1_message(response),
+            )
         response = self.client.task_status(remote_task_id)
         return ParserPollResult(
             status=_task_status(response),
@@ -295,9 +403,21 @@ class MinerULocalProvider(ParserProvider):
                 "MinerU Local result requires a task id",
                 provider_id=self.provider_id,
             )
+        if self.resolve_protocol() == MINERU_V1_PROTOCOL:
+            job = self.v1_client.job(submission.remote_task_id)
+            file_id = structured_content_file_id(job)
+            payload = self.v1_client.file_content(file_id)
+            return decode_structured_content(payload)
         return self.client.task_result(submission.remote_task_id)
 
     def normalize_result(
+        self, raw_result: object, request: ParserRequest
+    ) -> NormalizedParseResult:
+        if _is_structured_content(raw_result):
+            return self._normalize_v1(raw_result, request)
+        return self._normalize_tasks(raw_result, request)
+
+    def _normalize_tasks(
         self, raw_result: object, request: ParserRequest
     ) -> NormalizedParseResult:
         content = _find_content_list(raw_result)
@@ -332,6 +452,55 @@ class MinerULocalProvider(ParserProvider):
                     provenance={"mineru_local_item_index": item_index},
                 )
             )
+        return self._assemble(blocks_by_page, request, MINERU_TASKS_PROTOCOL)
+
+    def _normalize_v1(
+        self, raw_result: object, request: ParserRequest
+    ) -> NormalizedParseResult:
+        assert isinstance(raw_result, Mapping)
+        grouped = iter_page_blocks(raw_result)
+        blocks_by_page: Dict[int, list[NormalizedBlock]] = {
+            index: [] for index in range(request.page_count)
+        }
+        for local_page, blocks in grouped.items():
+            if local_page not in blocks_by_page:
+                continue
+            for item_index, block in enumerate(blocks):
+                text = block_text(block).strip()
+                if not text:
+                    continue
+                normalized_bbox = block_bbox(block)
+                provenance: Dict[str, object] = {
+                    "mineru_local_item_index": item_index,
+                    "mineru_local_protocol": MINERU_V1_PROTOCOL,
+                }
+                if normalized_bbox is not None:
+                    # MinerU 4.x reports 0..1 boxes; keep the citation canvas
+                    # identical to 3.x documents and publish the exact
+                    # normalized box alongside it.
+                    provenance["bbox_normalized"] = list(normalized_bbox)
+                blocks_by_page[local_page].append(
+                    NormalizedBlock(
+                        text=text,
+                        block_type=str(block.get("type") or "") or None,
+                        bbox=(
+                            scaled_bbox(normalized_bbox)
+                            if normalized_bbox is not None
+                            else None
+                        ),
+                        reading_order=len(blocks_by_page[local_page]),
+                        text_level=block_text_level(block),
+                        provenance=provenance,
+                    )
+                )
+        return self._assemble(blocks_by_page, request, MINERU_V1_PROTOCOL)
+
+    def _assemble(
+        self,
+        blocks_by_page: Mapping[int, Sequence[NormalizedBlock]],
+        request: ParserRequest,
+        protocol: str,
+    ) -> NormalizedParseResult:
         pages = tuple(
             NormalizedPage(
                 physical_pdf_page=request.global_page_offset + local_page + 1,
@@ -340,17 +509,19 @@ class MinerULocalProvider(ParserProvider):
                 parser_provenance={
                     "provider": self.provider_id,
                     "backend": self.config.backend,
+                    "protocol": protocol,
                     "local_page_index": local_page,
                     "global_page_offset": request.global_page_offset,
                 },
             )
-            for local_page, blocks in blocks_by_page.items()
+            for local_page, blocks in sorted(blocks_by_page.items())
         )
         return NormalizedParseResult(
             provider_id=self.provider_id,
             model=self.config.backend,
             pages=pages,
-            provenance={"endpoint": self.config.endpoint},
+            parser_version=self._detected_version or None,
+            provenance={"endpoint": self.config.endpoint, "protocol": protocol},
         )
 
 
@@ -365,6 +536,35 @@ def _optional_float(value: object) -> Optional[float]:
         return None
 
 
+def _v1_progress(response: Mapping[str, object]) -> Optional[float]:
+    progress = response.get("progress")
+    if not isinstance(progress, Mapping):
+        return None
+    try:
+        total = float(progress.get("total") or 0)
+        completed = float(progress.get("completed") or 0)
+    except (TypeError, ValueError):
+        return None
+    if total <= 0:
+        return None
+    return max(0.0, min(1.0, completed / total))
+
+
+def _v1_message(response: Mapping[str, object]) -> Optional[str]:
+    files = response.get("files")
+    if not isinstance(files, Sequence) or isinstance(files, (str, bytes)):
+        return None
+    for entry in files:
+        if not isinstance(entry, Mapping):
+            continue
+        error = entry.get("error")
+        if isinstance(error, Mapping):
+            message = str(error.get("message") or "").strip()
+            if message:
+                return message
+    return None
+
+
 def _task_status(response: Mapping[str, object]) -> ParserTaskStatus:
     value = str(response.get("status") or response.get("state") or "queued").lower()
     if value in {"completed", "complete", "done", "success", "succeeded"}:
@@ -376,6 +576,20 @@ def _task_status(response: Mapping[str, object]) -> ParserTaskStatus:
     if value in {"queued", "pending"}:
         return ParserTaskStatus.SUBMITTED
     return ParserTaskStatus.WAITING
+
+
+def _is_structured_content(value: object) -> bool:
+    """Recognize a MinerU 4.x ``structured_content`` payload."""
+
+    if not isinstance(value, Mapping):
+        return False
+    pages = value.get("pages")
+    if not isinstance(pages, list):
+        return False
+    return all(
+        isinstance(page, Mapping) and "page_idx" in page and "blocks" in page
+        for page in pages
+    )
 
 
 def _find_content_list(value: object) -> Optional[Sequence[object]]:

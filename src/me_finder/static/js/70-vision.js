@@ -573,6 +573,14 @@
     }
   }
 
+  function mineruLocalDetectionLabel(data) {
+    var labels = {'tasks': 'MinerU 3.x 任务接口', 'v1-jobs': 'MinerU 4.x /v1 接口'};
+    var protocol = labels[String(data.protocol || '')] || '';
+    var version = String(data.mineru_version || '').trim();
+    if (protocol && version) return protocol + ' · ' + version;
+    return protocol || (version ? '版本 ' + version : '');
+  }
+
   async function testMineruLocalConnection() {
     var button = document.getElementById('mineru-local-test');
     var hint = document.getElementById('mineru-local-hint');
@@ -587,7 +595,12 @@
       });
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '连接失败');
-      if (hint) hint.textContent = '连接成功 · ' + data.latency_ms + ' ms';
+      if (hint) {
+        // 让检测结论带上握手到的接口代数与版本：用户自己升级 MinerU 后，
+        // 这里就是「软件认出来了」的凭证。
+        var detected = mineruLocalDetectionLabel(data);
+        hint.textContent = '连接成功 · ' + data.latency_ms + ' ms' + (detected ? ' · ' + detected : '');
+      }
       var runtime = parserStore.mineruLocalConfig.managed_runtime || {};
       var service = runtime.service || {};
       updateMineruLocalStatus(true, parserStore.mineruLocalConfig.managed

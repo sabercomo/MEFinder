@@ -32,6 +32,9 @@ class MinerULocalSettingsTests(unittest.TestCase):
                 "managed_profile": "",
                 "endpoint": "http://127.0.0.1:8000",
                 "backend": "pipeline",
+                "protocol": "auto",
+                "tier": "",
+                "has_api_key": False,
             },
         )
         self.path.parent.mkdir(parents=True)

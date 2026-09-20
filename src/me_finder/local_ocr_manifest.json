@@ -17,36 +17,105 @@
   "mineru": {
     "version": "3.4.5",
     "python": "3.12",
+    "auto_upgrade": {
+      "minimum": "3.4.5",
+      "below": "5.0.0",
+      "metadata_url": "https://pypi.org/pypi/mineru/json"
+    },
+    "series": {
+      "3": {
+        "config_style": "tools_json",
+        "model_download_args": [
+          "-s",
+          "auto",
+          "-m",
+          "{model_type}"
+        ],
+        "packages": {
+          "pipeline": {
+            "default": [
+              "mineru[pipeline]=={version}"
+            ]
+          },
+          "vlm": {
+            "darwin-arm64": [
+              "mineru[core,mlx]=={version}"
+            ],
+            "win32-x86_64": [
+              "mineru[core,lmdeploy]=={version}"
+            ],
+            "linux-x86_64": [
+              "mineru[core,vllm]=={version}"
+            ]
+          }
+        }
+      },
+      "4": {
+        "config_style": "mineru_home",
+        "model_download_args": [
+          "-s",
+          "auto",
+          "--tier",
+          "{tier}"
+        ],
+        "packages": {
+          "pipeline": {
+            "default": [
+              "mineru=={version}"
+            ]
+          },
+          "vlm": {
+            "darwin-arm64": [
+              "mineru[torch]=={version}",
+              "mlx-vlm>=0.7.0,<0.8.0"
+            ],
+            "win32-x86_64": [
+              "mineru[full]=={version}"
+            ],
+            "linux-x86_64": [
+              "mineru[full]=={version}"
+            ]
+          }
+        }
+      }
+    },
     "profiles": {
       "pipeline": {
         "display_name": "Pipeline",
-        "package": "mineru[pipeline]==3.4.5",
         "model_type": "pipeline",
         "backend": "pipeline",
         "model_download_bytes": 2595586833,
         "minimum_memory_gb": 16,
-        "minimum_disk_gb": 20
+        "minimum_disk_gb": 20,
+        "tier": "basic"
       },
       "vlm": {
         "display_name": "VLM 高精度",
-        "packages": {
-          "darwin-arm64": "mineru[core,mlx]==3.4.5",
-          "win32-x86_64": "mineru[core,lmdeploy]==3.4.5",
-          "linux-x86_64": "mineru[core,vllm]==3.4.5"
-        },
         "model_type": "vlm",
         "backend": "vlm-auto-engine",
         "model_download_bytes": 2328028720,
         "minimum_vram_gb": 8,
         "minimum_memory_gb": 16,
-        "minimum_disk_gb": 20
+        "minimum_disk_gb": 20,
+        "tier": "standard"
       }
     },
     "platforms": {
-      "darwin-arm64": ["pipeline", "vlm"],
-      "darwin-x86_64": ["pipeline"],
-      "win32-x86_64": ["pipeline", "vlm"],
-      "linux-x86_64": ["pipeline", "vlm"]
+      "darwin-arm64": [
+        "pipeline",
+        "vlm"
+      ],
+      "darwin-x86_64": [
+        "pipeline"
+      ],
+      "win32-x86_64": [
+        "pipeline",
+        "vlm"
+      ],
+      "linux-x86_64": [
+        "pipeline",
+        "vlm"
+      ]
     }
   },
   "engines": {
@@ -60,7 +129,9 @@
       "archive_root": "ndlocr-lite-1.2.3",
       "script_path": "src/ocr.py",
       "sample_path": "resource/yokogaki2026-04-24-103617.png",
-      "cli_extra_args": ["--json-only"],
+      "cli_extra_args": [
+        "--json-only"
+      ],
       "dependencies": [
         "dill==0.3.8",
         "lxml==5.4.0",

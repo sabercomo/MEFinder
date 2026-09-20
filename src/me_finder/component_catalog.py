@@ -163,30 +163,27 @@ def validate_component_catalog(payload: object) -> None:
         version = str(mineru.get("version") or "")
         profiles = mineru.get("profiles")
         supported = mineru.get("platforms")
+        series = mineru.get("series")
         if (
             re.fullmatch(r"\d+\.\d+\.\d+", version) is None
             or mineru.get("python") != "3.12"
             or not isinstance(profiles, Mapping)
             or set(profiles) != {"pipeline", "vlm"}
             or not isinstance(supported, Mapping)
+            or not isinstance(series, Mapping)
+            or version.split(".", 1)[0] not in series
         ):
             raise ComponentCatalogError("MinerU 组件版本或配置无效。")
+        _validate_mineru_upgrade_range(mineru.get("auto_upgrade"), version, series)
         pipeline = profiles["pipeline"]
         vlm = profiles["vlm"]
-        packages = vlm.get("packages") if isinstance(vlm, Mapping) else None
         model_sizes = (
             pipeline.get("model_download_bytes") if isinstance(pipeline, Mapping) else None,
             vlm.get("model_download_bytes") if isinstance(vlm, Mapping) else None,
         )
         if (
             not isinstance(pipeline, Mapping)
-            or pipeline.get("package") != f"mineru[pipeline]=={version}"
-            or not isinstance(packages, Mapping)
-            or packages.get("darwin-arm64") != f"mineru[core,mlx]=={version}"
-            or packages.get("win32-x86_64")
-            != f"mineru[core,lmdeploy]=={version}"
-            or packages.get("linux-x86_64")
-            != f"mineru[core,vllm]=={version}"
+            or not isinstance(vlm, Mapping)
             or pipeline.get("model_type") != "pipeline"
             or pipeline.get("backend") != "pipeline"
             or vlm.get("model_type") != "vlm"
@@ -205,6 +202,75 @@ def validate_component_catalog(payload: object) -> None:
             )
         ):
             raise ComponentCatalogError("MinerU 安装包未固定到清单版本。")
+
+
+def _validate_mineru_upgrade_range(
+    upgrade: object, pinned: str, series: Mapping[str, object]
+) -> None:
+    """Keep the auto-upgrade window inside the series recipes we ship."""
+
+    if upgrade is None:
+        return
+    if not isinstance(upgrade, Mapping):
+        raise ComponentCatalogError("MinerU 自动升级范围无效。")
+    minimum = str(upgrade.get("minimum") or "")
+    below = str(upgrade.get("below") or "")
+    url = str(upgrade.get("metadata_url") or "")
+    if (
+        re.fullmatch(r"\d+\.\d+\.\d+", minimum) is None
+        or re.fullmatch(r"\d+\.\d+\.\d+", below) is None
+        or not url.startswith("https://")
+    ):
+        raise ComponentCatalogError("MinerU 自动升级范围无效。")
+    minimum_key = tuple(int(part) for part in minimum.split("."))
+    below_key = tuple(int(part) for part in below.split("."))
+    pinned_key = tuple(int(part) for part in pinned.split("."))
+    if not minimum_key <= pinned_key < below_key:
+        raise ComponentCatalogError("MinerU 固定版本不在自动升级范围内。")
+    # ``below`` is exclusive, so a 5.0.0 bound needs no 5.x recipe while a
+    # 5.1.0 bound does.
+    highest_major = below_key[0] if below_key[1:] != (0, 0) else below_key[0] - 1
+    for major in range(minimum_key[0], highest_major + 1):
+        if str(major) not in series:
+            raise ComponentCatalogError(
+                f"MinerU 自动升级范围覆盖了缺少安装配方的 {major}.x。"
+            )
+    for major, recipe in series.items():
+        _validate_mineru_series(str(major), recipe)
+
+
+def _validate_mineru_series(major: str, recipe: object) -> None:
+    """Every series must pin its mineru requirement to the target version."""
+
+    if not isinstance(recipe, Mapping):
+        raise ComponentCatalogError(f"MinerU {major}.x 安装配方无效。")
+    if recipe.get("config_style") not in {"tools_json", "mineru_home"}:
+        raise ComponentCatalogError(f"MinerU {major}.x 配置方式无效。")
+    download_args = recipe.get("model_download_args")
+    if not isinstance(download_args, list) or not all(
+        isinstance(item, str) and item for item in download_args
+    ):
+        raise ComponentCatalogError(f"MinerU {major}.x 模型下载参数无效。")
+    packages = recipe.get("packages")
+    if not isinstance(packages, Mapping) or set(packages) != {"pipeline", "vlm"}:
+        raise ComponentCatalogError(f"MinerU {major}.x 安装包配置无效。")
+    for entry in packages.values():
+        if not isinstance(entry, Mapping) or not entry:
+            raise ComponentCatalogError(f"MinerU {major}.x 安装包配置无效。")
+        for requirements in entry.values():
+            if not isinstance(requirements, list) or not requirements:
+                raise ComponentCatalogError(f"MinerU {major}.x 安装包配置无效。")
+            if not any(
+                isinstance(item, str)
+                and re.fullmatch(
+                    r"mineru(\[[a-z0-9,_-]+\])?=={version}", item
+                )
+                is not None
+                for item in requirements
+            ):
+                raise ComponentCatalogError(
+                    f"MinerU {major}.x 安装包未固定到目标版本。"
+                )
 
 
 def _safe_relative_path(value: object) -> bool:

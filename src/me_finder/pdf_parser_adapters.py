@@ -498,16 +498,25 @@ def _publish_mineru_engine_results(
                     if not text:
                         continue
                     has_text = True
-                    content.append(
-                        {
-                            "page_idx": local_page,
-                            "text": text,
-                            "type": block.get("type"),
-                            "text_level": block.get("text_level"),
-                            "bbox": block.get("bbox"),
-                            "reading_order": block.get("reading_order"),
-                        }
+                    item_payload = {
+                        "page_idx": local_page,
+                        "text": text,
+                        "type": block.get("type"),
+                        "text_level": block.get("text_level"),
+                        "bbox": block.get("bbox"),
+                        "reading_order": block.get("reading_order"),
+                    }
+                    provenance = block.get("provenance")
+                    normalized_bbox = (
+                        provenance.get("bbox_normalized")
+                        if isinstance(provenance, dict)
+                        else None
                     )
+                    if isinstance(normalized_bbox, list) and len(normalized_bbox) == 4:
+                        # MinerU 4.x reports exact 0..1 boxes; keep them so page
+                        # anchors do not depend on the rescaled 1000 canvas.
+                        item_payload["bbox_normalized"] = normalized_bbox
+                    content.append(item_payload)
             else:
                 text = str(page.get("text") or "").strip()
                 if text:

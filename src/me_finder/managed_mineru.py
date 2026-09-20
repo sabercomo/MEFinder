@@ -85,11 +85,12 @@ class _Cancelled(ManagedMinerUError):
 class MinerUProfile:
     profile_id: str
     display_name: str
-    package: str
+    packages: tuple[str, ...]
     model_type: str
     backend: str
     minimum_memory_gb: int
     minimum_disk_gb: int
+    tier: str = "standard"
     minimum_vram_gb: int = 0
     model_download_bytes: int = 0
 
@@ -101,6 +102,10 @@ class MinerUManifest:
     profiles: Dict[str, MinerUProfile]
     supported_profiles: tuple[str, ...]
     platform: Optional[PlatformManifest]
+    series: str = ""
+    config_style: str = "tools_json"
+    model_download_args: tuple[str, ...] = ()
+    pinned_version: str = ""
 
 
 @dataclass
@@ -121,10 +126,102 @@ class _ProfileState:
     thread: Optional[threading.Thread] = None
 
 
+_VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+_MINERU_REQUIREMENT = re.compile(r"^mineru(\[[a-z0-9,_-]+\])?==(?P<version>[^\s]+)$")
+
+
+def _version_key(value: str) -> Optional[tuple[int, int, int]]:
+    match = _VERSION_PATTERN.match(str(value or "").strip())
+    if match is None:
+        return None
+    return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
+
+
+def _series_of(version: str) -> str:
+    key = _version_key(version)
+    return str(key[0]) if key else ""
+
+
+def resolve_managed_mineru_version(
+    path: Path,
+    *,
+    platform_key: Optional[str] = None,
+    fetch: Optional[Callable[[str], bytes]] = None,
+) -> Dict[str, object]:
+    """Pick the newest MinerU release inside the manifest's compatible range.
+
+    The pinned manifest version is always a usable answer: when PyPI cannot be
+    reached, returns something unparseable, or offers nothing newer in range,
+    the pinned version is returned unchanged so installs keep working offline.
+    """
+
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ManagedMinerUError("MinerU 组件清单无法读取。") from exc
+    raw = payload.get("mineru") if isinstance(payload, Mapping) else None
+    if not isinstance(raw, Mapping):
+        raise ManagedMinerUError("组件清单缺少 MinerU 定义。")
+    pinned = str(raw.get("version") or "")
+    upgrade = raw.get("auto_upgrade")
+    result: Dict[str, object] = {
+        "pinned": pinned,
+        "resolved": pinned,
+        "source": "manifest",
+        "detail": "",
+    }
+    if not isinstance(upgrade, Mapping):
+        return result
+    metadata_url = str(upgrade.get("metadata_url") or "")
+    minimum = _version_key(str(upgrade.get("minimum") or pinned))
+    below = _version_key(str(upgrade.get("below") or ""))
+    pinned_key = _version_key(pinned)
+    if not metadata_url or minimum is None or below is None or pinned_key is None:
+        return result
+    supported_series = {
+        str(key) for key in (raw.get("series") or {})
+    } if isinstance(raw.get("series"), Mapping) else set()
+    reader = fetch or _read_url_bytes
+    try:
+        metadata = json.loads(reader(metadata_url).decode("utf-8"))
+    except Exception as exc:  # network, TLS, JSON, decoding - all non-fatal
+        result["detail"] = f"无法读取 PyPI 版本列表：{exc}"
+        return result
+    releases = metadata.get("releases") if isinstance(metadata, Mapping) else None
+    if not isinstance(releases, Mapping):
+        result["detail"] = "PyPI 版本列表结构无法识别。"
+        return result
+    best = pinned_key
+    for candidate, files in releases.items():
+        key = _version_key(str(candidate))
+        if key is None or key <= best or not (minimum <= key < below):
+            continue
+        if str(key[0]) not in supported_series:
+            continue
+        if not isinstance(files, list) or not files:
+            continue
+        if all(
+            isinstance(item, Mapping) and item.get("yanked") for item in files
+        ):
+            continue
+        best = key
+    resolved = ".".join(str(part) for part in best)
+    result["resolved"] = resolved
+    result["source"] = "pypi" if resolved != pinned else "manifest"
+    return result
+
+
+def _read_url_bytes(url: str) -> bytes:
+    request = Request(url, headers={"Accept": "application/json"})
+    with urlopen(request, timeout=15) as response:  # noqa: S310 - manifest URL
+        return response.read(8 * 1024 * 1024)
+
+
 def load_managed_mineru_manifest(
     path: Path,
     *,
     platform_key: Optional[str] = None,
+    version: Optional[str] = None,
 ) -> MinerUManifest:
     try:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -135,36 +232,44 @@ def load_managed_mineru_manifest(
         raise ManagedMinerUError("组件清单缺少 MinerU 定义。")
     raw_profiles = raw.get("profiles")
     raw_platforms = raw.get("platforms")
-    if not isinstance(raw_profiles, Mapping) or not isinstance(raw_platforms, Mapping):
+    raw_series = raw.get("series")
+    if (
+        not isinstance(raw_profiles, Mapping)
+        or not isinstance(raw_platforms, Mapping)
+        or not isinstance(raw_series, Mapping)
+    ):
         raise ManagedMinerUError("MinerU 组件清单结构无效。")
     selected_key = platform_key or current_platform_key()
     supported = raw_platforms.get(selected_key, [])
     if not isinstance(supported, list):
         raise ManagedMinerUError("MinerU 平台安装矩阵无效。")
+    pinned = str(raw.get("version") or "")
+    resolved_version = str(version or pinned)
+    series = _series_of(resolved_version)
+    series_manifest = raw_series.get(series)
+    if not isinstance(series_manifest, Mapping):
+        raise ManagedMinerUError(
+            f"MinerU {resolved_version} 属于未支持的大版本系列，请更新 MEFinder。"
+        )
+    series_packages = series_manifest.get("packages")
+    if not isinstance(series_packages, Mapping):
+        raise ManagedMinerUError("MinerU 系列安装配方无效。")
     profiles: Dict[str, MinerUProfile] = {}
     for profile_id, item in raw_profiles.items():
         if not isinstance(profile_id, str) or not isinstance(item, Mapping):
             raise ManagedMinerUError("MinerU 组件配置无效。")
-        raw_packages = item.get("packages")
-        package = str(
-            raw_packages.get(selected_key) if isinstance(raw_packages, Mapping)
-            else item.get("package") or ""
+        packages = _series_profile_packages(
+            series_packages.get(profile_id), selected_key, resolved_version
         )
-        version = str(raw.get("version") or "")
-        allowed_packages = {
-            f"mineru[pipeline]=={version}",
-            f"mineru[core,mlx]=={version}",
-            f"mineru[core,lmdeploy]=={version}",
-            f"mineru[core,vllm]=={version}",
-        }
-        if profile_id in supported and package not in allowed_packages:
-            raise ManagedMinerUError("MinerU 安装包未固定到清单版本。")
+        if profile_id in supported and not packages:
+            raise ManagedMinerUError("MinerU 安装包未固定到目标版本。")
         profiles[profile_id] = MinerUProfile(
             profile_id=profile_id,
             display_name=str(item.get("display_name") or profile_id),
-            package=package,
+            packages=packages,
             model_type=str(item.get("model_type") or ""),
             backend=str(item.get("backend") or ""),
+            tier=str(item.get("tier") or "standard"),
             minimum_memory_gb=int(item.get("minimum_memory_gb") or 0),
             minimum_disk_gb=int(item.get("minimum_disk_gb") or 0),
             minimum_vram_gb=int(item.get("minimum_vram_gb") or 0),
@@ -177,16 +282,55 @@ def load_managed_mineru_manifest(
         not isinstance(item, str) or item not in profiles for item in supported
     ):
         raise ManagedMinerUError("MinerU 平台安装矩阵无效。")
+    download_args = series_manifest.get("model_download_args")
+    if not isinstance(download_args, list) or not all(
+        isinstance(item, str) for item in download_args
+    ):
+        raise ManagedMinerUError("MinerU 模型下载参数无效。")
     _engines, selected_platform = load_local_ocr_installer_manifest(
         Path(path), platform_key=selected_key
     )
     return MinerUManifest(
-        version=str(raw.get("version") or ""),
+        version=resolved_version,
         python=str(raw.get("python") or ""),
         profiles=profiles,
         supported_profiles=tuple(supported),
         platform=selected_platform,
+        series=series,
+        config_style=str(series_manifest.get("config_style") or "tools_json"),
+        model_download_args=tuple(download_args),
+        pinned_version=pinned,
     )
+
+
+def _series_profile_packages(
+    entry: object, platform_key: str, version: str
+) -> tuple[str, ...]:
+    """Resolve one profile's requirement list for a platform and version."""
+
+    if not isinstance(entry, Mapping):
+        return ()
+    raw = entry.get(platform_key)
+    if raw is None:
+        raw = entry.get("default")
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list) or not raw:
+        return ()
+    packages: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            return ()
+        requirement = item.replace("{version}", version)
+        match = _MINERU_REQUIREMENT.match(requirement)
+        if match is not None and match.group("version") != version:
+            # A mineru requirement that is not pinned to the resolved version
+            # would silently install a different protocol generation.
+            return ()
+        packages.append(requirement)
+    if not any(_MINERU_REQUIREMENT.match(item) for item in packages):
+        return ()
+    return tuple(packages)
 
 
 def detect_mineru_hardware(
@@ -299,6 +443,7 @@ class ManagedMinerU:
         process_launcher: Callable = subprocess.Popen,
         hardware_detector: Optional[Callable[[], Dict[str, object]]] = None,
         catalog_summary: Optional[Callable[[], Dict[str, object]]] = None,
+        version_fetch: Optional[Callable[[str], bytes]] = None,
     ) -> None:
         self.runtime_root = Path(runtime_root).resolve()
         self.config_path = Path(config_path).resolve()
@@ -315,6 +460,13 @@ class ManagedMinerU:
         self.manifest = load_managed_mineru_manifest(
             self._current_manifest_path(), platform_key=self.platform_key
         )
+        self._version_fetch = version_fetch
+        self._version_resolution: Dict[str, object] = {
+            "pinned": self.manifest.pinned_version or self.manifest.version,
+            "resolved": self.manifest.version,
+            "source": "manifest",
+            "detail": "",
+        }
         self._lock = threading.RLock()
         self._operation_lock = threading.Lock()
         self._service_process: Optional[subprocess.Popen] = None
@@ -340,6 +492,10 @@ class ManagedMinerU:
             "supported": self.manifest.platform is not None,
             "platform": self.platform_key,
             "version": self.manifest.version,
+            "pinned_version": self.manifest.pinned_version or self.manifest.version,
+            "series": self.manifest.series,
+            "version_source": str(self._version_resolution.get("source") or "manifest"),
+            "version_detail": str(self._version_resolution.get("detail") or ""),
             "hardware": dict(self._hardware),
             "profiles": profiles,
             "service": {
@@ -351,6 +507,38 @@ class ManagedMinerU:
         if self._catalog_summary is not None:
             result["catalog"] = self._catalog_summary()
         return result
+
+    def refresh_available_version(self) -> Dict[str, object]:
+        """Re-target the newest MinerU release the manifest declares compatible.
+
+        Never raises on network trouble: an unreachable PyPI leaves the pinned
+        manifest version in place, so the component stays installable offline.
+        """
+
+        manifest_path = self._current_manifest_path()
+        resolution = resolve_managed_mineru_version(
+            manifest_path,
+            platform_key=self.platform_key,
+            fetch=self._version_fetch,
+        )
+        resolved = str(resolution.get("resolved") or "")
+        if resolved and resolved != self.manifest.version:
+            try:
+                self.manifest = load_managed_mineru_manifest(
+                    manifest_path,
+                    platform_key=self.platform_key,
+                    version=resolved,
+                )
+            except ManagedMinerUError as exc:
+                resolution = {
+                    **resolution,
+                    "resolved": self.manifest.version,
+                    "source": "manifest",
+                    "detail": str(exc),
+                }
+        with self._lock:
+            self._version_resolution = dict(resolution)
+        return self.summary()
 
     def diagnostics(self) -> Dict[str, object]:
         summary = self.summary()
@@ -385,6 +573,10 @@ class ManagedMinerU:
             }
 
     def perform(self, payload: Mapping[str, object]) -> Dict[str, object]:
+        if str(payload.get("action") or "").strip().lower() == "check-updates":
+            # Not profile-scoped: re-target the newest compatible release and
+            # let the existing update_available flag drive the UI.
+            return self.refresh_available_version()
         requested = str(payload.get("profile") or "auto").strip().lower()
         profile_id = (
             str(self._hardware["recommended_profile"])
@@ -580,7 +772,7 @@ class ManagedMinerU:
                     "install",
                     "--python",
                     str(python_path),
-                    profile.package,
+                    *profile.packages,
                 ],
                 cwd=staging,
                 environment=environment,
@@ -606,7 +798,7 @@ class ManagedMinerU:
                 try:
                     self._run_command(
                         profile_id,
-                        [str(downloader), "-s", "auto", "-m", profile.model_type],
+                        [str(downloader), *self._model_download_args(profile)],
                         cwd=staging,
                         environment=environment,
                         log_path=staging / "models.log",
@@ -638,8 +830,9 @@ class ManagedMinerU:
                     "schema_version": 1,
                     "profile": profile_id,
                     "version": self.manifest.version,
+                    "series": self.manifest.series,
                     "backend": profile.backend,
-                    "package": profile.package,
+                    "packages": list(profile.packages),
                     "platform": self.platform_key,
                     "installed_at": datetime.now(timezone.utc).isoformat(),
                 },
@@ -648,7 +841,8 @@ class ManagedMinerU:
                 final.replace(previous)
             staging.replace(final)
             published = True
-            self._rewrite_config_paths(final / "mineru.json", staging, final)
+            if self.manifest.config_style != "mineru_home":
+                self._rewrite_config_paths(final / "mineru.json", staging, final)
             self._validate(profile_id)
             self._remove_tree(previous)
         except (
@@ -941,6 +1135,32 @@ class ManagedMinerU:
                 f"MinerU 安装子进程退出 {process.returncode}：{detail.strip()}"
             )
 
+    def _model_download_args(self, profile: MinerUProfile) -> list[str]:
+        """Fill the series' download template for one profile."""
+
+        substitutions = {
+            "{model_type}": profile.model_type,
+            "{tier}": profile.tier,
+            "{profile}": profile.profile_id,
+        }
+        args: list[str] = []
+        for item in self.manifest.model_download_args:
+            for token, value in substitutions.items():
+                item = item.replace(token, value)
+            args.append(item)
+        return args
+
+    def _config_environment(self, root: Path) -> Dict[str, str]:
+        """Point MinerU at the component directory the way its series expects.
+
+        MinerU 3.x reads a JSON tools config named by ``MINERU_TOOLS_CONFIG_JSON``;
+        4.x dropped that file and derives every path from ``MINERU_HOME``.
+        """
+
+        if self.manifest.config_style == "mineru_home":
+            return {"MINERU_HOME": str(root)}
+        return {"MINERU_TOOLS_CONFIG_JSON": str(root / "mineru.json")}
+
     def _install_environment(self, staging: Path) -> Dict[str, str]:
         environment = os.environ.copy()
         proxies = getproxies()
@@ -956,7 +1176,7 @@ class ManagedMinerU:
                 "UV_CACHE_DIR": str(staging / ".uv-cache"),
                 "UV_PYTHON_INSTALL_DIR": str(self.component_root / "_python"),
                 "UV_NO_PROGRESS": "1",
-                "MINERU_TOOLS_CONFIG_JSON": str(staging / "mineru.json"),
+                **self._config_environment(staging),
                 "HF_HOME": str(staging / "models/huggingface"),
                 "MODELSCOPE_CACHE": str(staging / "models/modelscope"),
             }
@@ -968,7 +1188,7 @@ class ManagedMinerU:
         environment = os.environ.copy()
         environment.update(
             {
-                "MINERU_TOOLS_CONFIG_JSON": str(final / "mineru.json"),
+                **self._config_environment(final),
                 "MINERU_MODEL_SOURCE": "local",
                 "HF_HOME": str(final / "models/huggingface"),
                 "MODELSCOPE_CACHE": str(final / "models/modelscope"),
@@ -1029,7 +1249,10 @@ class ManagedMinerU:
             receipt.get("profile") == profile_id
             and (final / self.manifest.platform.venv_python).is_file()
             and self._venv_executable(final, "mineru-api").is_file()
-            and (final / "mineru.json").is_file()
+            and (
+                self.manifest.config_style == "mineru_home"
+                or (final / "mineru.json").is_file()
+            )
         )
 
     def _update_available(self, profile_id: str) -> bool:

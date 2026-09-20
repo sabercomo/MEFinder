@@ -5,15 +5,22 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict, Mapping
 
 from .mineru_api import MinerUError, read_mineru_config_data
-from .mineru_local_provider import MinerULocalConfig, MinerULocalProvider
+from .mineru_local_provider import (
+    MINERU_LOCAL_PROTOCOLS,
+    MINERU_PROTOCOL_AUTO,
+    MinerULocalConfig,
+    MinerULocalProvider,
+)
 
 
 DEFAULT_MINERU_LOCAL_ENDPOINT = "http://127.0.0.1:8000"
 DEFAULT_MINERU_LOCAL_BACKEND = "pipeline"
+DEFAULT_MINERU_LOCAL_PROTOCOL = MINERU_PROTOCOL_AUTO
 
 
 def mineru_local_config_summary(config_path: Path) -> Dict[str, object]:
@@ -32,6 +39,9 @@ def mineru_local_config_summary(config_path: Path) -> Dict[str, object]:
             data.get("local_deployment_backend")
             or DEFAULT_MINERU_LOCAL_BACKEND
         ).strip(),
+        "protocol": _normalized_protocol(data.get("local_deployment_protocol")),
+        "tier": str(data.get("local_deployment_tier") or "").strip(),
+        "has_api_key": bool(str(data.get("local_deployment_api_key") or "").strip()),
     }
 
 
@@ -53,8 +63,12 @@ def save_mineru_local_config(
             "local_deployment_managed_profile": "",
             "local_deployment_endpoint": config.endpoint.rstrip("/"),
             "local_deployment_backend": config.backend,
+            "local_deployment_protocol": config.protocol,
+            "local_deployment_tier": config.tier,
         }
     )
+    if "api_key" in payload:
+        data["local_deployment_api_key"] = str(payload.get("api_key") or "").strip()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(
@@ -84,6 +98,8 @@ def configure_managed_mineru(
             "local_deployment_managed_profile": profile,
             "local_deployment_endpoint": config.endpoint.rstrip("/"),
             "local_deployment_backend": config.backend,
+            "local_deployment_protocol": config.protocol,
+            "local_deployment_tier": config.tier,
         }
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,9 +146,13 @@ def load_mineru_local_config(
     summary = mineru_local_config_summary(config_path)
     if require_enabled and not summary["enabled"]:
         raise MinerUError("尚未在设置中启用本地部署。")
+    data = read_mineru_config_data(Path(config_path))
     return MinerULocalConfig(
         endpoint=str(summary["endpoint"]),
         backend=str(summary["backend"]),
+        protocol=str(summary["protocol"]),
+        tier=str(summary["tier"]),
+        api_key=str(data.get("local_deployment_api_key") or "").strip(),
     )
 
 
@@ -140,21 +160,47 @@ def test_mineru_local_connection(
     payload: Mapping[str, object],
     config_path: Path,
 ) -> Dict[str, object]:
-    config = (
-        _config_from_payload(payload)
-        if payload
-        else load_mineru_local_config(config_path, require_enabled=False)
-    )
+    if payload:
+        config = _config_from_payload(payload)
+        if not config.api_key and "api_key" not in payload:
+            stored = read_mineru_config_data(Path(config_path))
+            saved_key = str(stored.get("local_deployment_api_key") or "").strip()
+            if saved_key:
+                config = replace(config, api_key=saved_key)
+    else:
+        config = load_mineru_local_config(config_path, require_enabled=False)
     started = time.perf_counter()
     result = MinerULocalProvider(config).health()
+    protocol = str(result.get("protocol") or "")
+    version = str(result.get("mineru_version") or "")
     return {
         "ok": True,
-        "message": "本地 MinerU 连接成功",
+        "message": _connection_message(protocol, version),
         "latency_ms": int(round((time.perf_counter() - started) * 1000)),
         "endpoint": config.endpoint.rstrip("/"),
         "backend": config.backend,
+        "protocol": protocol,
+        "mineru_version": version,
         "health": result,
     }
+
+
+_PROTOCOL_LABELS = {
+    "tasks": "MinerU 3.x 任务接口",
+    "v1-jobs": "MinerU 4.x /v1 接口",
+}
+
+
+def _connection_message(protocol: str, version: str) -> str:
+    label = _PROTOCOL_LABELS.get(protocol, "未知接口")
+    if version:
+        return f"本地 MinerU 连接成功（{label}，版本 {version}）"
+    return f"本地 MinerU 连接成功（{label}）"
+
+
+def _normalized_protocol(value: object) -> str:
+    protocol = str(value or "").strip().lower()
+    return protocol if protocol in MINERU_LOCAL_PROTOCOLS else DEFAULT_MINERU_LOCAL_PROTOCOL
 
 
 def _config_from_payload(payload: Mapping[str, object]) -> MinerULocalConfig:
@@ -166,7 +212,20 @@ def _config_from_payload(payload: Mapping[str, object]) -> MinerULocalConfig:
     ).strip()
     if not backend:
         raise MinerUError("请填写本地 MinerU 解析后端。")
+    protocol = str(
+        payload.get("protocol") or DEFAULT_MINERU_LOCAL_PROTOCOL
+    ).strip().lower()
+    if protocol not in MINERU_LOCAL_PROTOCOLS:
+        raise MinerUError("本地部署接口协议只能是 auto、tasks 或 v1-jobs。")
+    tier = str(payload.get("tier") or "").strip().lower()
+    api_key = str(payload.get("api_key") or "").strip()
     try:
-        return MinerULocalConfig(endpoint=endpoint, backend=backend)
+        return MinerULocalConfig(
+            endpoint=endpoint,
+            backend=backend,
+            protocol=protocol,
+            tier=tier,
+            api_key=api_key,
+        )
     except ValueError as exc:
         raise MinerUError("本地服务地址必须是以 http:// 或 https:// 开头的网址。") from exc

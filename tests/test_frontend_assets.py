@@ -515,10 +515,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 任务完成刷新统一：对齐任务监听收归 reader.js 一份，作品页订阅结局。
     # 0.5.5 阅读会话统一：currentReadingSession() 一份会话记录，深链带右栏，
     #   关闭阅读器把刚写出的位置交回宿主。
+    # 0.5.5 本地 MinerU 接口自适应：检测连接的提示带上握手到的接口代数与版本。
     BASELINE_SHA256 = (
-        "5acb9ab74044e04ec9401bee966d4934316d42b6352face7f5c0eb81e1c31624"
+        "f3afd4e530acd853bef0580d37bb6f69bd7062ba7e8161f5f04823f334f5ce79"
     )
-    BASELINE_BYTES = 1229834
+    BASELINE_BYTES = 1230496
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

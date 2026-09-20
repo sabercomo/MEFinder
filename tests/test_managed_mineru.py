@@ -16,6 +16,7 @@ from src.me_finder.managed_mineru import (
     ManagedMinerUError,
     detect_mineru_hardware,
     load_managed_mineru_manifest,
+    resolve_managed_mineru_version,
 )
 from src.me_finder.mineru_local_settings import mineru_local_config_summary
 
@@ -94,22 +95,52 @@ else:
             "mineru": {
                 "version": "3.4.5",
                 "python": "3.12",
+                "auto_upgrade": {
+                    "minimum": "3.4.5",
+                    "below": "5.0.0",
+                    "metadata_url": "https://pypi.example/mineru/json",
+                },
+                "series": {
+                    "3": {
+                        "config_style": "tools_json",
+                        "model_download_args": ["-s", "auto", "-m", "{model_type}"],
+                        "packages": {
+                            "pipeline": {
+                                "default": ["mineru[pipeline]=={version}"]
+                            },
+                            "vlm": {
+                                "test-platform": ["mineru[core,vllm]=={version}"]
+                            },
+                        },
+                    },
+                    "4": {
+                        "config_style": "mineru_home",
+                        "model_download_args": ["-s", "auto", "--tier", "{tier}"],
+                        "packages": {
+                            "pipeline": {"default": ["mineru=={version}"]},
+                            "vlm": {
+                                "test-platform": [
+                                    "mineru[full]=={version}",
+                                    "mlx-vlm>=0.7.0,<0.8.0",
+                                ]
+                            },
+                        },
+                    },
+                },
                 "profiles": {
                     "pipeline": {
                         "display_name": "Pipeline",
-                        "package": "mineru[pipeline]==3.4.5",
                         "model_type": "pipeline",
                         "backend": "pipeline",
+                        "tier": "basic",
                         "minimum_memory_gb": 16,
                         "minimum_disk_gb": 20,
                     },
                     "vlm": {
                         "display_name": "VLM",
-                        "packages": {
-                            "test-platform": "mineru[core,vllm]==3.4.5"
-                        },
                         "model_type": "vlm",
                         "backend": "vlm-auto-engine",
+                        "tier": "standard",
                         "minimum_memory_gb": 16,
                         "minimum_disk_gb": 20,
                         "minimum_vram_gb": 8,
@@ -175,6 +206,94 @@ else:
         self.assertEqual(manifest.supported_profiles, ("pipeline", "vlm"))
         self.assertEqual(manifest.profiles["vlm"].backend, "vlm-auto-engine")
         self.assertGreater(manifest.profiles["vlm"].model_download_bytes, 2 * 1024**3)
+
+    def test_series_recipes_resolve_per_version_and_platform(self) -> None:
+        path = self._manifest()
+        three = load_managed_mineru_manifest(path, platform_key="test-platform")
+        self.assertEqual(three.version, "3.4.5")
+        self.assertEqual(three.series, "3")
+        self.assertEqual(three.config_style, "tools_json")
+        self.assertEqual(
+            three.profiles["vlm"].packages, ("mineru[core,vllm]==3.4.5",)
+        )
+        four = load_managed_mineru_manifest(
+            path, platform_key="test-platform", version="4.0.4"
+        )
+        self.assertEqual(four.series, "4")
+        self.assertEqual(four.config_style, "mineru_home")
+        self.assertEqual(
+            four.profiles["vlm"].packages,
+            ("mineru[full]==4.0.4", "mlx-vlm>=0.7.0,<0.8.0"),
+        )
+        self.assertEqual(four.profiles["pipeline"].packages, ("mineru==4.0.4",))
+        self.assertEqual(
+            four.model_download_args, ("-s", "auto", "--tier", "{tier}")
+        )
+
+    def test_unsupported_major_series_is_refused(self) -> None:
+        with self.assertRaises(ManagedMinerUError):
+            load_managed_mineru_manifest(
+                self._manifest(), platform_key="test-platform", version="9.0.0"
+            )
+
+    def test_version_resolution_picks_newest_in_range(self) -> None:
+        payload = json.dumps(
+            {
+                "releases": {
+                    "3.4.4": [{"filename": "a"}],
+                    "3.4.5": [{"filename": "b"}],
+                    "4.0.4": [{"filename": "c"}],
+                    "4.9.9": [{"filename": "d", "yanked": True}],
+                    "5.0.0": [{"filename": "e"}],
+                    "nightly": [{"filename": "f"}],
+                }
+            }
+        ).encode("utf-8")
+        resolution = resolve_managed_mineru_version(
+            self._manifest(),
+            platform_key="test-platform",
+            fetch=lambda url: payload,
+        )
+        self.assertEqual(resolution["resolved"], "4.0.4")
+        self.assertEqual(resolution["source"], "pypi")
+
+    def test_version_resolution_falls_back_to_pinned_when_offline(self) -> None:
+        def offline(url: str) -> bytes:
+            raise OSError("network unreachable")
+
+        resolution = resolve_managed_mineru_version(
+            self._manifest(), platform_key="test-platform", fetch=offline
+        )
+        self.assertEqual(resolution["resolved"], "3.4.5")
+        self.assertEqual(resolution["source"], "manifest")
+        self.assertIn("PyPI", str(resolution["detail"]))
+
+    def test_check_updates_retargets_manifest_without_touching_installs(self) -> None:
+        payload = json.dumps(
+            {"releases": {"3.4.5": [{"filename": "a"}], "4.0.4": [{"filename": "b"}]}}
+        ).encode("utf-8")
+        manager = ManagedMinerU(
+            self.runtime,
+            self.config,
+            manifest_path=self._manifest(),
+            platform_key="test-platform",
+            process_launcher=_test_process_launcher,
+            hardware_detector=lambda: {
+                "kind": "nvidia",
+                "name": "Test GPU",
+                "vlm_supported": True,
+                "recommended_profile": "vlm",
+                "vram_mb": 24576,
+                "compute_capability": 8.9,
+            },
+            version_fetch=lambda url: payload,
+        )
+        self.assertEqual(manager.summary()["version"], "3.4.5")
+        summary = manager.perform({"action": "check-updates"})
+        self.assertEqual(summary["version"], "4.0.4")
+        self.assertEqual(summary["pinned_version"], "3.4.5")
+        self.assertEqual(summary["series"], "4")
+        self.assertEqual(summary["version_source"], "pypi")
 
     def test_download_progress_reports_speed_and_eta(self) -> None:
         manager = self._manager()
