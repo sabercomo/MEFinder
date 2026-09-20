@@ -974,6 +974,51 @@ def _generate_alignment_on_connection(
     }
 
 
+def latest_reviewed_body_ranges(
+    connection: sqlite3.Connection,
+    pivot_segment_set_id: str,
+    target_segment_set_id: str,
+) -> Dict[str, List[int]] | None:
+    """Return the most recent human-reviewed body ranges for these two sets.
+
+    Reviewed ranges are segment indices, so they only apply to the exact
+    segmentation they were recorded against; a re-parse produces a new segment
+    set and the review no longer matches, by design.
+    """
+
+    reviewed = connection.execute(
+        "SELECT parameters_json FROM alignment_runs WHERE pivot_segment_set_id=? "
+        "AND target_segment_set_id=? AND json_extract(parameters_json,'$.body_range_source')='reviewed' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (pivot_segment_set_id, target_segment_set_id),
+    ).fetchone()
+    if reviewed is None:
+        return None
+    ranges = json.loads(reviewed[0])["body_ranges"]
+    return ranges if isinstance(ranges, dict) else None
+
+
+def validate_reviewed_body_ranges(
+    reviewed_body_ranges: Mapping[str, object],
+    pivot_segment_count: int,
+    target_segment_count: int,
+) -> None:
+    """Reject anything that is not a valid half-open segment interval per side."""
+
+    for side, segment_count in (
+        ("pivot", pivot_segment_count),
+        ("target", target_segment_count),
+    ):
+        bounds = reviewed_body_ranges.get(side)
+        if (
+            not isinstance(bounds, list)
+            or len(bounds) != 2
+            or not all(type(value) is int for value in bounds)
+            or not 0 <= bounds[0] < bounds[1] <= segment_count
+        ):
+            raise InvalidAlignmentRequest("复核正文范围必须是有效的半开 Segment 区间。")
+
+
 def generate_alignment(
     db_path: Path,
     document_group_id: object,
@@ -1011,21 +1056,13 @@ def generate_alignment(
             pivot_set_id, pivot_segments = _segment_set(connection, pivot_id)
             target_set_id, target_segments = _segment_set(connection, target_id)
             if reviewed_body_ranges is None:
-                # Reuse reviewed annotations only for these exact segment sets.
-                reviewed = connection.execute(
-                    "SELECT parameters_json FROM alignment_runs WHERE pivot_segment_set_id=? "
-                    "AND target_segment_set_id=? AND json_extract(parameters_json,'$.body_range_source')='reviewed' "
-                    "ORDER BY created_at DESC LIMIT 1", (pivot_set_id, target_set_id),
-                ).fetchone()
-                if reviewed is not None:
-                    reviewed_body_ranges = json.loads(reviewed[0])["body_ranges"]
+                reviewed_body_ranges = latest_reviewed_body_ranges(
+                    connection, pivot_set_id, target_set_id
+                )
             if reviewed_body_ranges is not None:
-                for side, segments in (("pivot", pivot_segments), ("target", target_segments)):
-                    bounds = reviewed_body_ranges.get(side)
-                    if (not isinstance(bounds, list) or len(bounds) != 2
-                            or not all(type(n) is int for n in bounds)
-                            or not 0 <= bounds[0] < bounds[1] <= len(segments)):
-                        raise InvalidAlignmentRequest("复核正文范围必须是有效的半开 Segment 区间。")
+                validate_reviewed_body_ranges(
+                    reviewed_body_ranges, len(pivot_segments), len(target_segments)
+                )
             preparation = AlignmentPreparation(
                 pivot_set_id,
                 target_set_id,

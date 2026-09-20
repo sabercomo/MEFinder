@@ -134,6 +134,7 @@ class TextAlignmentCoordinator:
         target_source_file_id: object,
         *,
         force: bool = False,
+        reviewed_body_ranges=None,
     ):
         preferences = read_preferences(
             resolve_preferences_path(self._paths.runtime_root)
@@ -191,6 +192,7 @@ class TextAlignmentCoordinator:
                         embedding_model_id=model_id,
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
+                        reviewed_body_ranges=reviewed_body_ranges,
                         compute_runner=runner,
                     )
             except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:

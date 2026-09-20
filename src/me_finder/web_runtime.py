@@ -137,6 +137,10 @@ from .structured_reader import (
     get_document_window,
 )
 from .structured_reader_controller import StructuredReaderController
+from .alignment_body_range import (
+    read_body_range_segments,
+    read_pair_body_ranges,
+)
 from .text_alignment import (
     list_alignment_targets,
     locate_alignment,
@@ -416,6 +420,12 @@ def build_application_runtime(
         ),
         locate=(
             lambda *args, **kwargs: locate_alignment(*args, **kwargs)
+        ),
+        read_body_ranges=(
+            lambda *args, **kwargs: read_pair_body_ranges(*args, **kwargs)
+        ),
+        read_body_range_segments=(
+            lambda *args, **kwargs: read_body_range_segments(*args, **kwargs)
         ),
         log_exception=lambda message: logging.exception(message),
     )

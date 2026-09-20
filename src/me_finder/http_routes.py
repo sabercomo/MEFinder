@@ -186,6 +186,9 @@ def assemble_reader_routes(
         "/api/text-alignments/status": text_alignment_controller.status,
         "/api/text-alignments/current": text_alignment_controller.current,
         "/api/text-alignments/links": works.links,
+        "/api/text-alignments/body-range/segments": (
+            text_alignment_controller.body_range_segments
+        ),
         "/api/translation-works/overview": works.overview,
         "/api/translation-works/reading-position": works.reading_position,
         "/api/translation-works/suggestion-dismissals": works.suggestion_dismissals,
@@ -196,6 +199,7 @@ def assemble_reader_routes(
         "/api/text-alignments/start": text_alignment_controller.start,
         "/api/text-alignments/cancel": text_alignment_controller.cancel,
         "/api/text-alignments/locate": text_alignment_controller.locate,
+        "/api/text-alignments/body-range": text_alignment_controller.body_ranges,
         "/api/text-alignments/review-candidates": works.review_candidates,
         "/api/text-alignments/corrections/save": works.save_correction,
         "/api/text-alignments/corrections/defer": works.defer_review,

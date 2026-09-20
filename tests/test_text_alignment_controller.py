@@ -86,6 +86,8 @@ class TextAlignmentControllerTests(unittest.TestCase):
                 "targets": [],
             },
             locate=self._locate,
+            read_body_ranges=self._read_body_ranges,
+            read_body_range_segments=self._read_body_range_segments,
             log_exception=self.logged.append,
         )
 
@@ -99,6 +101,27 @@ class TextAlignmentControllerTests(unittest.TestCase):
             "source_file_id": source_id,
             "target_source_file_id": target_id,
             "selection": selection,
+        }
+
+    @staticmethod
+    def _read_body_ranges(path, group_id, pivot_id, target_id):
+        return {
+            "path": path,
+            "document_group_id": group_id,
+            "range_source": "detected",
+            "sides": [
+                {"side": "pivot", "source_file_id": pivot_id},
+                {"side": "target", "source_file_id": target_id},
+            ],
+        }
+
+    @staticmethod
+    def _read_body_range_segments(path, source_id, segment_set_id, **window):
+        return {
+            "path": path,
+            "source_file_id": source_id,
+            "segment_set_id": segment_set_id,
+            "window": window,
         }
 
     @staticmethod
@@ -138,6 +161,64 @@ class TextAlignmentControllerTests(unittest.TestCase):
         status, body = self.controller.locate(self._locate_payload())
         self.assertEqual(status, 200)
         self.assertEqual(body["selection"]["start_offset"], 2)
+
+    def test_body_range_review_reads_both_sides_and_submits_two_ranges(self) -> None:
+        status, body = self.controller.body_ranges(self._generate_payload())
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            [side["source_file_id"] for side in body["sides"]], ["pdf-de", "pdf-zh"]
+        )
+        self.assertEqual(body["range_source"], "detected")
+
+        status, body = self.controller.body_range_segments(
+            {
+                "source_id": ["pdf-de"],
+                "segment_set_id": ["segment-set-1"],
+                "start": ["12"],
+                "count": ["9"],
+            }
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["window"], {"start": "12", "count": "9", "pdf_page": None})
+
+        # One submission carries both books' ranges; the half-open interval is
+        # what reaches the coordinator.
+        payload = self._generate_payload() | {
+            "force": True,
+            "reviewed_body_ranges": {"pivot": [4, 900], "target": [7, 1200]},
+        }
+        status, body = self.controller.generate(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            body["result"]["options"]["reviewed_body_ranges"],
+            {"pivot": [4, 900], "target": [7, 1200]},
+        )
+
+    def test_malformed_body_ranges_never_reach_the_coordinator(self) -> None:
+        for ranges in (
+            {"pivot": [4, 900]},
+            {"pivot": [4, 900], "target": [7, 7]},
+            {"pivot": [4, 900], "target": [-1, 7]},
+            {"pivot": [4, 900], "target": [7, "9"]},
+            {"pivot": [4, 900], "target": [900, 7]},
+            {"pivot": [4, 900], "target": [7, 1200], "extra": [0, 1]},
+        ):
+            with self.subTest(ranges=ranges):
+                payload = self._generate_payload() | {"reviewed_body_ranges": ranges}
+                self.assertEqual(self.controller.generate(payload)[0], 400)
+                self.assertEqual(self.controller.start(payload)[0], 400)
+        self.assertEqual(
+            self.controller.body_ranges({"document_group_id": "group-one"})[0], 400
+        )
+        self.assertEqual(self.controller.body_range_segments({})[0], 400)
+        self.assertEqual(
+            self.controller.body_range_segments(
+                {"source_id": ["pdf-de"], "segment_set_id": ["a", "b"]}
+            )[0],
+            400,
+        )
+        self.ready = False
+        self.assertEqual(self.controller.body_ranges(self._generate_payload())[0], 503)
 
     def test_invalid_shapes_are_rejected_before_dependencies(self) -> None:
         self.assertEqual(

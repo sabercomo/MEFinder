@@ -40,12 +40,16 @@ class TextAlignmentController:
         *,
         list_targets: ReadOperation,
         locate: ReadOperation,
+        read_body_ranges: ReadOperation,
+        read_body_range_segments: ReadOperation,
         log_exception: Callable[[str], None],
     ) -> None:
         self._coordinator = coordinator
         self._run_when_ready = run_when_ready
         self._list_targets = list_targets
         self._locate = locate
+        self._read_body_ranges = read_body_ranges
+        self._read_body_range_segments = read_body_range_segments
         self._log_exception = log_exception
         self._job_lock = threading.Lock()
         self._job_id: str | None = None
@@ -53,17 +57,40 @@ class TextAlignmentController:
         self._job_response: AlignmentResponse | None = None
 
     @staticmethod
-    def _valid_generate_payload(payload: object) -> bool:
+    def _valid_body_ranges(value: object) -> bool:
+        """Accept only a half-open segment interval per side.
+
+        The exact bounds are re-validated against the live segmentation in
+        ``generate_alignment``; this only keeps malformed payloads out.
+        """
+
+        if not isinstance(value, Mapping) or set(value) != {"pivot", "target"}:
+            return False
+        return all(
+            isinstance(bounds, list)
+            and len(bounds) == 2
+            and all(type(number) is int for number in bounds)
+            and 0 <= bounds[0] < bounds[1]
+            for bounds in value.values()
+        )
+
+    @classmethod
+    def _valid_generate_payload(cls, payload: object) -> bool:
         required = {
             "document_group_id",
             "pivot_source_file_id",
             "target_source_file_id",
         }
+        optional = {"force", "reviewed_body_ranges"}
         return (
             isinstance(payload, Mapping)
             and required.issubset(payload)
-            and set(payload).issubset(required | {"force"})
+            and set(payload).issubset(required | optional)
             and isinstance(payload.get("force", False), bool)
+            and (
+                "reviewed_body_ranges" not in payload
+                or cls._valid_body_ranges(payload["reviewed_body_ranges"])
+            )
         )
 
     def start(self, payload: object) -> AlignmentResponse:
@@ -141,6 +168,7 @@ class TextAlignmentController:
                 payload["pivot_source_file_id"],
                 payload["target_source_file_id"],
                 force=payload.get("force", False),
+                reviewed_body_ranges=payload.get("reviewed_body_ranges"),
             )
         except TextAlignmentCancelled:
             LOGGER.info("text alignment cancelled by user")
@@ -190,6 +218,59 @@ class TextAlignmentController:
             unavailable="索引正在重建，请稍候再读取对齐版本。",
             failure_message="对齐版本读取失败，请稍后重试。",
             log_message="alignment targets request failed",
+        )
+
+    def body_ranges(self, payload: object) -> AlignmentResponse:
+        """Describe both books' current body range for the review screen.
+
+        A POST because a pair that has never been aligned is segmented here;
+        nothing is aligned and no source file is re-parsed.
+        """
+
+        required = {
+            "document_group_id",
+            "pivot_source_file_id",
+            "target_source_file_id",
+        }
+        if not isinstance(payload, Mapping) or set(payload) != required:
+            return 400, {"error": "正文范围请求字段无效。"}
+        return self._read(
+            lambda path: self._read_body_ranges(
+                path,
+                payload["document_group_id"],
+                payload["pivot_source_file_id"],
+                payload["target_source_file_id"],
+            ),
+            unavailable="索引正在重建，请稍候再读取正文范围。",
+            failure_message="正文范围读取失败，请稍后重试。",
+            log_message="body range request failed",
+        )
+
+    def body_range_segments(
+        self, params: Mapping[str, Sequence[object]]
+    ) -> AlignmentResponse:
+        allowed = {"source_id", "segment_set_id", "start", "count", "pdf_page"}
+        if not set(params).issubset(allowed) or not {
+            "source_id",
+            "segment_set_id",
+        }.issubset(params):
+            return 400, {"error": "正文范围文本段请求字段无效。"}
+        if any(len(values) != 1 for values in params.values()):
+            return 400, {"error": "正文范围文本段请求字段无效。"}
+        return self._read(
+            lambda path: self._read_body_range_segments(
+                path,
+                params["source_id"][0],
+                params["segment_set_id"][0],
+                start=params.get("start", ["0"])[0],
+                count=params.get("count", ["9"])[0],
+                pdf_page=(
+                    params["pdf_page"][0] if "pdf_page" in params else None
+                ),
+            ),
+            unavailable="索引正在重建，请稍候再读取文本段。",
+            failure_message="文本段读取失败，请稍后重试。",
+            log_message="body range segment window request failed",
         )
 
     def locate(self, payload: object) -> AlignmentResponse:

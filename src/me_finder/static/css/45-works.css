@@ -386,6 +386,87 @@
 .tw-compare-table td { color: var(--text-primary); }
 .tw-compare-table td.is-different { color: var(--warning); font-weight: 600; }
 
+/* ── body range review ────────────────────────────────────── */
+/* Hallmark · component: 正文范围检查与修改 · genre: modern-minimal · tone: utilitarian, quiet
+ * macrostructure: Facing Pages（两本书并排各自编辑，底部一组提交）· theme: existing MEFinder tokens
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · enrichment: none
+ * states: default/hover/focus/selected/disabled/loading/error
+ * checks: contrast 40–41 · slop 42–46 · chrome 47 · tokens 48 · responsive 49–57
+ * follows DESIGN.md §3 作品版本页 · §5 按钮 / 界面文案 · §7 动效 */
+.tw-dialog.is-wide { width: min(1020px, 100%); }
+.tw-range-note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.tw-range-error { margin: 8px 0 0; font-size: 13px; color: var(--danger); }
+.tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.tw-range-book { display: flex; min-width: 0; flex-direction: column; padding: 4px 16px 12px; }
+.tw-range-book + .tw-range-book { border-left: 1px solid var(--border-subtle); }
+.tw-range-book-head h4 { margin: 0 0 4px; font-size: 15px; font-weight: 650; color: var(--text-primary); overflow-wrap: anywhere; }
+.tw-range-book-head p { overflow-wrap: anywhere; }
+.tw-range-bounds { margin: 12px 0; padding: 0 12px; border-radius: var(--radius-md); background: var(--surface-hover); }
+.tw-range-bound {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.tw-range-bound + .tw-range-bound { border-top: 1px solid var(--border-subtle); }
+.tw-range-bound-main { min-width: 0; }
+.tw-range-snippet {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tw-range-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tw-range-number {
+  width: 76px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+.tw-range-number:focus { outline: none; border-color: var(--accent-fill); box-shadow: var(--focus-ring); }
+.tw-range-outline { margin-top: 10px; }
+.tw-range-outline summary { font-size: 13px; color: var(--accent-text); cursor: pointer; }
+.tw-range-outline summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tw-range-chapters { display: flex; flex-wrap: wrap; gap: 4px; max-height: 128px; overflow-y: auto; padding-top: 8px; }
+.tw-range-segments { min-width: 0; margin: 10px 0 0; padding: 0; border: 0; }
+.tw-range-segment {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  margin: 4px 0;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+@media (hover: hover) and (pointer: fine) { .tw-range-segment:hover { background: var(--surface-hover); } }
+.tw-range-segment.is-selected { border-color: var(--accent-fill); background: var(--surface-selected); }
+.tw-range-segment input { width: 15px; height: 15px; margin: 3px 0; accent-color: var(--accent-fill); }
+.tw-range-segment input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.tw-range-segment-main { min-width: 0; }
+.tw-range-segment-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tw-range-tag { font-size: 12px; color: var(--accent-text); }
+.tw-range-text { display: block; margin-top: 6px; font-size: 15px; line-height: 1.75; color: var(--text-primary); overflow-wrap: anywhere; }
+.tw-range-pager { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0; }
+.tw-range-set {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.tw-range-set-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
 /* 提示条里的动作（撤销 / 前往译本对照）：提示层整体不接收指针，只放开按钮。 */
 .toast-action {
   flex: none;
@@ -409,6 +490,11 @@
   /* 列表叠在上方时要容下「重新对齐」提示和几行作品。 */
   .tw-works { max-height: min(340px, 45vh); border-right: 0; border-bottom: 1px solid var(--border-subtle); }
   .tw-work-inner { padding: 18px 18px 20px; }
+}
+@media (max-width: 860px) {
+  /* 窄窗口里两栏叠成上下，仍是两本各自独立的编辑区。 */
+  .tw-range-pair { grid-template-columns: minmax(0, 1fr); }
+  .tw-range-book + .tw-range-book { border-left: 0; border-top: 1px solid var(--border-subtle); padding-top: 14px; }
 }
 @media (max-width: 640px) {
   .tw-assign-grid { grid-template-columns: minmax(0, 1fr); }

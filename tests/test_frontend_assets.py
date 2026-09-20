@@ -508,10 +508,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 首屏复审：轻量状态与按需逐对统计分离，正文先于作品上下文请求。
     # 0.5.5 作品页改版：对齐状态逐对常显（去掉勾选两个 + 底部对照栏）、
     #   作品列表「全部重新对齐」队列与需重新对齐标记，管理版本抽屉移除重复的对齐列表。
+    # 0.5.5 正文范围检查与修改：作品页每对版本新增「正文范围」入口，双栏对照编辑弹窗
+    #   （35-works.js openBodyRangeDialog / 45-works.css .tw-range-*），两本书各自
+    #   一个连续区间，一次提交两个范围并重跑当前版本对。
     BASELINE_SHA256 = (
-        "13746d98cad1c420173c4a0b69526795a36099f160271d016e1c4de6c3c41ff1"
+        "0a8dca1ec8c74e190dc557c3b86b67909ae6f3cdb8b8c625f5d50e821c5715da"
     )
-    BASELINE_BYTES = 1201422
+    BASELINE_BYTES = 1221492
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

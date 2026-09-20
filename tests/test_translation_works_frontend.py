@@ -181,6 +181,47 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         for fragment in ("'作品名称'", "type: 'radio'", "'版本名'", "'移出'", "'添加版本：搜索文献库'", "'删除作品'"):
             self.assertIn(fragment, sheet)
 
+    def test_body_range_entry_sits_on_the_pair_and_needs_no_compute_component(self) -> None:
+        actions = _function_body(WORKS_JS, "function pairActions(group, a, b, status) {")
+        self.assertIn("openBodyRangeDialog(group, a, b)", actions)
+        self.assertIn("'正文范围'", actions)
+        # 查看/修改范围只读已入库文本；缺计算组件时只挡提交，不挡入口。
+        entry = actions[actions.index("'正文范围'"):]
+        self.assertNotIn("blocked", entry[:entry.index("}));")])
+
+    def test_body_range_submits_both_ranges_once_and_keeps_the_last_segment(self) -> None:
+        dialog = _function_body(WORKS_JS, "function openBodyRangeDialog(group, a, b) {")
+        # 界面的「结尾」是最后一段，库内是半开区间：+1 才不漏末段。
+        self.assertIn("ranges[side.side] = [side.start, side.end + 1];", dialog)
+        self.assertIn("startJob(group, order[0], order[1], true, ranges)", dialog)
+        # 两个范围一起提交，未修改的一本沿用当前显示范围。
+        self.assertIn("state.sides.forEach(function (side) {", dialog)
+        # 只有设置按钮改范围；点选只改当前选中段。
+        self.assertIn("function setEdge(side, edge) {", dialog)
+        self.assertIn("side.selected = index; draw();", dialog)
+        # 单本确认环节已删除，不得回流。
+        for removed in ("确认这本", "已确认这本", "范围待确认", "范围已确认", "confirmed"):
+            self.assertNotIn(removed, dialog)
+        # 结尾早于开头必须挡住提交，不偷偷移动另一端。
+        self.assertIn("function invalid(side) { return side.end < side.start; }", dialog)
+        self.assertIn("!state.sides.some(invalid)", dialog)
+
+    def test_failed_body_range_submission_keeps_the_draft_for_retry(self) -> None:
+        dialog = _function_body(WORKS_JS, "function openBodyRangeDialog(group, a, b) {")
+        self.assertIn("works.rangeDrafts[draftKey] = {sets: sets, ranges: ranges};", dialog)
+        # 草稿只在同一份分段数据上恢复，运行成功后由 clearRangeDraft 清掉。
+        self.assertIn("draft.sets[side.side] === side.segment_set_id", dialog)
+        self.assertIn("clearRangeDraft(running);", WORKS_JS)
+
+    def test_body_range_css_follows_the_pair_layout_and_stacks_when_narrow(self) -> None:
+        self.assertIn("Hallmark · component: 正文范围检查与修改", WORKS_CSS)
+        self.assertIn(
+            ".tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }",
+            WORKS_CSS,
+        )
+        narrow = WORKS_CSS[WORKS_CSS.index("@media (max-width: 860px)"):]
+        self.assertIn(".tw-range-pair { grid-template-columns: minmax(0, 1fr); }", narrow)
+
     def test_dom_is_built_without_html_strings_and_css_uses_tokens(self) -> None:
         self.assertNotIn("innerHTML", WORKS_JS)
         self.assertNotIn("insertAdjacentHTML", WORKS_JS)
