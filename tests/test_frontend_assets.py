@@ -517,9 +517,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   关闭阅读器把刚写出的位置交回宿主。
     # 0.5.5 本地 MinerU 接口自适应：检测连接的提示带上握手到的接口代数与版本。
     BASELINE_SHA256 = (
-        "f3afd4e530acd853bef0580d37bb6f69bd7062ba7e8161f5f04823f334f5ce79"
+        "372acfb65b8cda9851ea050938b6ae00c028d12bee3e404f8ca40c1b7c60b0ba"
     )
-    BASELINE_BYTES = 1230496
+    BASELINE_BYTES = 1230858
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

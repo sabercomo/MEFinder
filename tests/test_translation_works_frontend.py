@@ -299,6 +299,44 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open, savedPosition)"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_close_handoff_wins_over_an_inflight_position_read(self) -> None:
+        bodies = "\n".join(_function_body(WORKS_JS, signature) for signature in (
+            "async function loadPosition(groupId)",
+            "function onReaderOpenChange(open, savedPosition)",
+        ))
+        script = r"""
+const assert=require('assert/strict');
+const works={positions:{},currentId:'G'},currentPage='works';
+const document={documentElement:{classList:{toggle:()=>{}}}};
+let sidebarBeforeReader=null;
+const render=()=>{},invalidate=()=>{};
+let finishGet,failGet;
+const requestJSON=()=>new Promise((resolve,reject)=>{finishGet=resolve;failGet=reject;});
+(async()=>{
+ for (const failed of [false,true]) {
+  delete works.positions.G;
+  const loading=loadPosition('G');
+  const fresh={left_source_file_id:'A',right_source_file_id:'B',item_index:7,char_offset:0};
+  onReaderOpenChange(false,{document_group_id:'G',position:fresh});
+  if (failed) failGet(new Error('old request failed'));
+  else finishGet({position:{item_index:1,right_source_file_id:null}});
+  await loading;
+  assert.equal(works.positions.G,fresh,'an obsolete read must not replace the close handoff');
+ }
+ // 正常首次读取仍可填充缓存。
+ delete works.positions.G;
+ const loading=loadPosition('G');
+ finishGet({position:{item_index:3}});await loading;
+ assert.equal(works.positions.G.item_index,3);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", bodies + script],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_load_retries_failure_and_refreshes_invalidated_inflight_data(self) -> None:
         start = WORKS_JS.index("  var loadInflight = null;")
         end = WORKS_JS.index("  async function refreshAvailability()", start)

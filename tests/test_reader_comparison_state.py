@@ -62,6 +62,35 @@ setImmediate(() => assert.deepEqual(shown, []));
 
     JOB_WATCH = ("  /* ── 对齐任务：后端只跑一个", "  /* ── 新窗口")
 
+    def test_finished_job_does_not_invalidate_the_next_books_context(self):
+        self.run_js([
+            ("  async function loadWorkContext(", "  /* ── 自绘下拉"),
+            ("  async function applyAlignmentJobEnd(", "  /* ── 新窗口"),
+        ], """
+const state={open:true,sourceId:'A',workRequestSerial:0,work:{groupId:''},comparison:{open:false}};
+const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/current'};
+const renderToolbar=()=>{},loadAvailability=async()=>{},notify=()=>{},setAlert=()=>{};
+const refreshComparisonAfterStatusChange=()=>{};
+let finishTargets;const loadAlignmentTargets=()=>new Promise(r=>finishTargets=r);
+const reads=[];const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}));
+(async()=>{
+ const ended=applyAlignmentJobEnd({outcome:'ok',meta:{origin:'works',groupId:'GA'}});
+ state.sourceId='B';
+ const newWork=loadWorkContext('B');
+ finishTargets(); await new Promise(setImmediate);
+ const groups={document_groups:[{document_group_id:'GB',title:'B work',members:[{source_file_id:'B'}]}]};
+ reads.forEach(x=>x.resolve(x.url==='/groups'?groups:{works:[],running:false}));
+ await Promise.all([ended,newWork]);
+ assert.equal(state.work.groupId,'GB','old job must not invalidate the new book context');
+ assert.ok(!reads.some(x=>x.url.endsWith('source_id=A')));
+ // 关闭期间结束的刷新也不能发起后续作品请求。
+ const closing=applyAlignmentJobEnd({outcome:'ok',meta:{origin:'works',groupId:'GB'}});
+ state.open=false; const readCount=reads.length;
+ finishTargets(); await closing;
+ assert.equal(reads.length,readCount);
+})();
+""")
+
     def test_completed_alignment_invalidates_links_and_relocates_open_pair(self):
         self.run_js([
             self.JOB_WATCH,

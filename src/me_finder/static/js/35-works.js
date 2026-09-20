@@ -377,8 +377,11 @@
     if (!groupId || works.positions[groupId] !== undefined) return;
     try {
       var data = await requestJSON('/api/translation-works/reading-position?document_group_id=' + encodeURIComponent(groupId));
+      // 关闭阅读器可能已交回最新位置，旧请求不能覆盖它。
+      if (works.positions[groupId] !== undefined) return;
       works.positions[groupId] = data.position || null;
     } catch (_) {
+      if (works.positions[groupId] !== undefined) return;
       works.positions[groupId] = null;
     }
     if (currentPage === 'works' && works.currentId === groupId) render();

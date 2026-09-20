@@ -1743,6 +1743,8 @@
     if (!state.open) return;
     var sourceId = state.sourceId;
     await loadAlignmentTargets(sourceId);
+    // 等待目标列表时可能已换书或关闭；旧刷新不能使新书的作品请求失效。
+    if (!state.open || state.sourceId !== sourceId) return;
     await loadWorkContext(sourceId);
     if (!state.open || state.sourceId !== sourceId) return;
     if (event.outcome === 'ok' && event.meta.groupId &&
