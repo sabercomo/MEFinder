@@ -109,8 +109,14 @@ class TranslationWorksFrontendTests(unittest.TestCase):
                       _function_body(WORKS_JS, "async function runRealignQueue()"))
         self.assertIn("showAppConfirm", _function_body(WORKS_JS, "async function realignPairs(items, scope)"))
         # 队列中逐个任务不弹提示，结束时汇总一次。
-        watch = _function_body(WORKS_JS, "async function watchRunningJob(jobId)")
-        self.assertLess(watch.index("advanceRealignQueue(outcome"), watch.index("对齐已生成"))
+        watch = _function_body(WORKS_JS, "async function onAlignmentJobEnd(event)")
+        self.assertLess(watch.index("advanceRealignQueue(event.outcome"), watch.index("对齐已生成"))
+        # 任务监听只有一份（在 reader.js 里），作品页只认领并订阅，不再自己轮询。
+        self.assertNotIn("/api/text-alignments/status", WORKS_JS)
+        self.assertIn("global.MEFinderReader.alignmentJobs.subscribe(", WORKS_JS)
+        self.assertIn("jobs.watch(jobId, {", WORKS_JS)
+        # 提示只由发起方给出，阅读器发起的任务由阅读器报告。
+        self.assertIn("event.meta.origin === 'works'", watch)
         # 换模型后作品页的状态快照必须失效。
         settings = (STATIC / "js" / "60-settings.js").read_text(encoding="utf-8")
         self.assertIn("global.MEFinder.works.invalidate();", settings)

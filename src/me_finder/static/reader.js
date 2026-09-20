@@ -58,6 +58,8 @@
     onClose: null,
     // 主窗口宿主提供的能力；独立阅读窗口里没有这些回调，对应入口随之隐藏。
     onOpenChange: null,
+    // 人工校正立即改变作品页的「N 处待检查」，宿主据此失效自己的缓存。
+    onAlignmentDataChanged: null,
     onManageWork: null,
     onInstallComponent: null,
     onFindInWork: null,
@@ -110,8 +112,6 @@
     workRequestSerial: 0,
     availability: 'unknown',
     pendingCompareWith: '',
-    generation: null,
-    pollingJobId: '',
     openMenu: '',
     outline: {items: null, loading: false, error: ''},
     outlineJumpSerial: 0,
@@ -1020,7 +1020,7 @@
   }
 
   function pairInfo(a, b) {
-    var running = state.generation;
+    var running = runningAlignmentJob();
     if (running && running.groupId === state.work.groupId && running.key === pairKey(a, b)) {
       return {status: 'running'};
     }
@@ -1101,7 +1101,12 @@
       state.work = work;
       var running = results[2];
       if (running && running.running && running.document_group_id === work.groupId) {
-        trackGeneration(running.job_id, work.groupId, running.pivot_source_file_id, running.target_source_file_id);
+        // 页面刷新或任务由别处发起：认领它，不改已有认领者的归属。
+        watchAlignmentJob(running.job_id, {
+          origin: 'reader',
+          groupId: work.groupId,
+          key: pairKey(running.pivot_source_file_id, running.target_source_file_id)
+        });
       }
       renderToolbar();
       if (state.pendingCompareWith) {
@@ -1597,11 +1602,6 @@
     }
   }
 
-  function trackGeneration(jobId, groupId, pivotId, targetId) {
-    state.generation = {jobId: jobId, groupId: groupId, key: pairKey(pivotId, targetId)};
-    pollComparisonAlignment(jobId);
-  }
-
   async function startComparisonAlignment(force) {
     var targetId = state.comparison.targetSourceId;
     var groupId = state.work.groupId || state.alignmentGroupId;
@@ -1625,7 +1625,9 @@
         target_source_file_id: targetId,
         force: !!force
       });
-      trackGeneration(payload.job_id, groupId, pivotId, targetId);
+      watchAlignmentJob(payload.job_id, {
+        origin: 'reader', groupId: groupId, key: pairKey(pivotId, targetId)
+      });
       refreshComparisonAfterStatusChange();
     } catch (error) {
       setAlert(error && error.message ? error.message : '生成对齐失败', 'warning');
@@ -1654,13 +1656,44 @@
     }
   }
 
-  async function pollComparisonAlignment(jobId) {
-    if (state.pollingJobId === jobId) return;
-    state.pollingJobId = jobId;
+  /* ── 对齐任务：后端只跑一个，前端只监听一份 ───────────────────── */
+  // 后端一次只有一个对齐任务（单 job_id）。阅读器和作品页都要知道它何时结束，
+  // 所以监听只有这一份：谁先认领就由谁记下 origin，结束后广播给所有订阅者，
+  // 结局提示只由发起方给出——两份监听会让同一个任务弹两次提示、刷两次视图。
+  var JOB_POLL_MS = 1500;
+  var jobWatch = {jobId: '', meta: null, subscribers: []};
+
+  function subscribeAlignmentJob(handler) {
+    if (typeof handler !== 'function') return function () {};
+    jobWatch.subscribers.push(handler);
+    return function () {
+      var index = jobWatch.subscribers.indexOf(handler);
+      if (index >= 0) jobWatch.subscribers.splice(index, 1);
+    };
+  }
+
+  // 已在监听的任务不改归属：后认领者只是共享同一份监听。
+  function watchAlignmentJob(jobId, meta) {
+    if (!jobId || jobWatch.jobId === jobId) return;
+    jobWatch.jobId = String(jobId);
+    jobWatch.meta = meta || {};
+    pollAlignmentJob(jobWatch.jobId);
+  }
+
+  function runningAlignmentJob() {
+    if (!jobWatch.jobId) return null;
+    var running = {jobId: jobWatch.jobId};
+    Object.keys(jobWatch.meta || {}).forEach(function (name) {
+      running[name] = jobWatch.meta[name];
+    });
+    return running;
+  }
+
+  async function pollAlignmentJob(jobId) {
     // 后台生成期间每 ~1.5s 查询一次任务状态，直到非 202（完成、失败或取消）。
-    while (state.pollingJobId === jobId) {
-      await new Promise(function (resolve) { global.setTimeout(resolve, 1500); });
-      if (state.pollingJobId !== jobId) return;
+    while (jobWatch.jobId === jobId) {
+      await new Promise(function (resolve) { global.setTimeout(resolve, JOB_POLL_MS); });
+      if (jobWatch.jobId !== jobId) return;
       var response;
       try {
         response = await fetchFunction()(
@@ -1673,31 +1706,55 @@
       if (response.status === 202) continue;
       var payload = {};
       try { payload = await response.json(); } catch (_error) { payload = {}; }
-      if (state.pollingJobId !== jobId) return;
-      var completed = state.generation;
-      state.pollingJobId = '';
-      state.generation = null;
-      if (!state.open) return;
-      var sourceId = state.sourceId;
-      if (response.ok && payload.ok) notify('对齐已生成');
-      else if (payload.cancelled) notify('已取消生成对齐');
-      else if (response.status !== 404) setAlert(payload.error || '生成对齐失败', 'warning');
-      await loadAlignmentTargets(state.sourceId);
-      await loadWorkContext(state.sourceId);
-      if (!state.open || state.sourceId !== sourceId) return;
-      if (response.ok && payload.ok && completed && completed.groupId === state.work.groupId &&
-          state.comparison.open) {
-        // A base-leg update also changes indirect pairs within this work.
-        state.links = null;
-        state.linkRequestSerial += 1;
-        clearLinkedSelection();
-        state.comparison.lastSourceRange = '';
-        openComparisonWith(state.comparison.targetSourceId);
-        renderToolbar();
-      } else {
-        refreshComparisonAfterStatusChange();
-      }
+      if (jobWatch.jobId !== jobId) return;
+      var event = {
+        jobId: jobId,
+        meta: jobWatch.meta || {},
+        outcome: response.ok && payload.ok ? 'ok'
+          : payload.cancelled ? 'cancelled'
+            : response.status === 404 ? 'unknown' : 'failed',
+        error: payload.error || ''
+      };
+      jobWatch.jobId = '';
+      jobWatch.meta = null;
+      jobWatch.subscribers.slice().forEach(function (handler) {
+        try { handler(event); } catch (_error) { /* 一个订阅者出错不拖垮其他订阅者。*/ }
+      });
       return;
+    }
+  }
+
+  subscribeAlignmentJob(function (event) {
+    Promise.resolve(applyAlignmentJobEnd(event)).catch(function () { /* 刷新失败不打断阅读。*/ });
+  });
+
+  async function applyAlignmentJobEnd(event) {
+    // 提示只给发起方；由作品页发起的任务由作品页报告结果。
+    if (event.meta.origin === 'reader') {
+      if (event.outcome === 'ok') notify('对齐已生成');
+      else if (event.outcome === 'cancelled') notify('已取消生成对齐');
+      else if (event.outcome === 'failed') {
+        // 阅读器已关闭时没有可写的提示条，退回宿主 toast。
+        if (state.open) setAlert(event.error || '生成对齐失败', 'warning');
+        else notify(event.error || '生成对齐失败');
+      }
+    }
+    if (!state.open) return;
+    var sourceId = state.sourceId;
+    await loadAlignmentTargets(sourceId);
+    await loadWorkContext(sourceId);
+    if (!state.open || state.sourceId !== sourceId) return;
+    if (event.outcome === 'ok' && event.meta.groupId &&
+        event.meta.groupId === state.work.groupId && state.comparison.open) {
+      // A base-leg update also changes indirect pairs within this work.
+      state.links = null;
+      state.linkRequestSerial += 1;
+      clearLinkedSelection();
+      state.comparison.lastSourceRange = '';
+      openComparisonWith(state.comparison.targetSourceId);
+      renderToolbar();
+    } else {
+      refreshComparisonAfterStatusChange();
     }
   }
 
@@ -2051,6 +2108,10 @@
         closeReviewPopover(false);
         state.links = null;
         loadLinkWindow();
+        // 校正与暂缓都会改变「N 处待检查」：同一条失效通道通知宿主。
+        if (typeof config.onAlignmentDataChanged === 'function') {
+          config.onAlignmentDataChanged();
+        }
       } catch (error) {
         [none, later].forEach(function (button) { button.disabled = false; });
         syncSave();
@@ -4163,6 +4224,12 @@
   });
 
   global.MEFinderReader = Object.freeze({
+    // 对齐任务的唯一监听：作品页订阅它，不再自己轮询同一个任务。
+    alignmentJobs: Object.freeze({
+      watch: watchAlignmentJob,
+      subscribe: subscribeAlignmentJob,
+      running: runningAlignmentJob
+    }),
     open: openReader,
     openForSearchResult: openForSearchResult,
     close: closeReader,

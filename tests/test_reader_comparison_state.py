@@ -60,31 +60,71 @@ finish(false);
 setImmediate(() => assert.deepEqual(shown, []));
 """.replace("REPLACEMENT", json.dumps(replacement)))
 
+    JOB_WATCH = ("  /* ── 对齐任务：后端只跑一个", "  /* ── 新窗口")
+
     def test_completed_alignment_invalidates_links_and_relocates_open_pair(self):
         self.run_js([
-            ("  function refreshComparisonAfterStatusChange(", "  /* ── 新窗口"),
+            self.JOB_WATCH,
+            ("  function refreshComparisonAfterStatusChange(", "  /* ── 对齐任务"),
             ("  function loadLinkWindow(", "  // 低置信"),
         ], """
 const old = {key:'A:B:0:0',items:[{target_segment_ids:['old-target']}]};
-const state = {open:true, sourceId:'A', work:{groupId:'G'}, pollingJobId:'',
-  generation:{jobId:'J',groupId:'G',key:'A|B'},items:new Map([[0,{}]]),
+const state = {open:true, sourceId:'A', work:{groupId:'G'},
+  items:new Map([[0,{}]]),
   elements:{pending:{hidden:true}},comparison:{open:true,targetSourceId:'B',lastSourceRange:'old'},
   links:old,linkRequestSerial:0};
 const config={alignmentStatusEndpoint:'/status',linksEndpoint:'/links'};
 const global={setTimeout:resolve=>resolve()};
 const fetchFunction=()=>async()=>({status:200,ok:true,json:async()=>({ok:true})});
 const pairKey=(a,b)=>[a,b].sort().join('|');
-const notify=()=>{}, setAlert=()=>{}, loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
+let notices=0;
+const notify=()=>{notices++;}, setAlert=()=>{}, loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
 const renderToolbar=()=>{},updateComparisonNotice=()=>{},renderFlags=()=>{},clearLinkedSelection=()=>{};
 let reads=0, relocated=0;
 const readJSON=async()=>{reads++;return {links:[]};};
 const openComparisonWith=()=>{relocated++;loadLinkWindow();};
 (async()=>{
- await pollComparisonAlignment('J');
+ watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
+ await new Promise(resolve=>setImmediate(resolve));
+ await new Promise(resolve=>setImmediate(resolve));
  loadLinkWindow();
  assert.notEqual(state.links,old);
  assert.ok(reads>0);
  assert.equal(relocated,1);
+ // 发起方是阅读器，结局提示由阅读器给出，且只给一次。
+ assert.equal(notices,1);
+ assert.equal(runningAlignmentJob(),null);
+})();
+""")
+
+    def test_one_job_keeps_one_watcher_and_its_first_owner(self):
+        """两处认领同一个任务时只轮询一次、只广播一次，提示归第一个认领者。"""
+
+        self.run_js([self.JOB_WATCH], """
+const state={open:false, sourceId:'A', work:{groupId:'G'}, comparison:{open:false}};
+const config={alignmentStatusEndpoint:'/status'};
+const global={setTimeout:resolve=>resolve()};
+let polls=0;
+const fetchFunction=()=>async()=>{polls++;return {status:200,ok:true,json:async()=>({ok:true})};};
+let notices=0;
+const notify=()=>{notices++;}, setAlert=()=>{};
+const loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
+const renderToolbar=()=>{},updateComparisonNotice=()=>{},clearLinkedSelection=()=>{};
+const refreshComparisonAfterStatusChange=()=>{}, openComparisonWith=()=>{};
+const events=[];
+subscribeAlignmentJob(event=>{events.push(event);});
+(async()=>{
+ watchAlignmentJob('J',{origin:'works',groupId:'G',key:'A|B'});
+ watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
+ assert.equal(runningAlignmentJob().origin,'works');
+ await new Promise(resolve=>setImmediate(resolve));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(polls,1);
+ assert.equal(events.length,1);
+ assert.equal(events[0].meta.origin,'works');
+ assert.equal(events[0].outcome,'ok');
+ // 作品页发起的任务不由阅读器报告结果。
+ assert.equal(notices,0);
 })();
 """)
 

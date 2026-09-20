@@ -10,7 +10,6 @@
     pt: '葡萄牙文', la: '拉丁文', grc: '古希腊文', el: '希腊文', nl: '荷兰文'
   };
   var DELETE_UNDO_MS = 6000;
-  var POSITION_POLL_MS = 1500;
 
   var works = {
     groups: [],
@@ -292,7 +291,12 @@
     });
     works.dismissals = (results[2].dismissals || []).map(function (ids) { return ids.slice().sort().join('\n'); });
     works.running = results[3].running ? results[3] : null;
-    if (works.running) watchRunningJob(works.running.job_id);
+    if (works.running) {
+      watchAlignmentJob(
+        works.running.job_id, 'works', works.running.document_group_id,
+        works.running.pivot_source_file_id, works.running.target_source_file_id
+      );
+    }
   }
 
   async function ensureCatalog(force) {
@@ -840,7 +844,7 @@
         pivot_source_file_id: pivotId, target_source_file_id: targetId
       };
       refreshViews();
-      watchRunningJob(data.job_id);
+      watchAlignmentJob(data.job_id, 'works', group.document_group_id, pivotId, targetId);
       return true;
     } catch (error) {
       if (!works.queue) showToast(error.message || '生成对齐失败', 'danger');
@@ -849,40 +853,43 @@
     }
   }
 
-  var watchedJobId = '';
-  async function watchRunningJob(jobId) {
-    if (!jobId || watchedJobId === jobId) return;
-    watchedJobId = jobId;
-    while (watchedJobId === jobId) {
-      await new Promise(function (resolve) { setTimeout(resolve, POSITION_POLL_MS); });
-      var response;
-      try {
-        response = await fetch('/api/text-alignments/status?job_id=' + encodeURIComponent(jobId));
-      } catch (_) { continue; }
-      if (response.status === 202) continue;
-      var payload = {};
-      try { payload = await response.json(); } catch (_) {}
-      var running = works.running;
-      var group = running ? groupById(running.document_group_id) : null;
-      watchedJobId = '';
-      works.running = null;
-      var outcome = response.ok && payload.ok ? 'ok'
-        : payload.cancelled ? 'cancelled'
-          : response.status === 404 ? 'unknown' : 'failed';
-      await loadGroupsAndOverview().catch(function () {});
-      if (works.queue) {
-        advanceRealignQueue(outcome, payload.error);
-        return;
-      }
-      if (outcome === 'ok') {
+  // 对齐任务只有一个监听器，由 reader.js 持有（index.html 与独立阅读窗口都装它）。
+  // 作品页只认领任务并订阅结局：两份轮询会让同一个任务弹两次提示、刷两次视图。
+  function alignmentJobs() {
+    var reader = global.MEFinderReader;
+    return reader && reader.alignmentJobs ? reader.alignmentJobs : null;
+  }
+
+  function watchAlignmentJob(jobId, origin, groupId, pivotId, targetId) {
+    var jobs = alignmentJobs();
+    if (!jobs) return;
+    jobs.watch(jobId, {
+      origin: origin,
+      groupId: groupId || '',
+      key: pivotId && targetId ? pairKey(pivotId, targetId) : ''
+    });
+  }
+
+  async function onAlignmentJobEnd(event) {
+    var running = works.running;
+    var group = running ? groupById(running.document_group_id) : null;
+    works.running = null;
+    // 阅读器里生成的对齐同样改变逐对状态与统计：无论谁发起都重读一次。
+    if (works.loaded) await loadGroupsAndOverview().catch(function () {});
+    if (works.queue) {
+      advanceRealignQueue(event.outcome, event.error);
+      return;
+    }
+    // 提示只由发起方给出；阅读器发起的由阅读器报告结果。
+    if (event.meta.origin === 'works') {
+      if (event.outcome === 'ok') {
         // 范围随这次运行落库，草稿失去意义；失败或取消时保留，供重开时恢复。
         clearRangeDraft(running);
         showToast((group ? '「' + group.title + '」' : '') + '对齐已生成', 'success');
-      } else if (outcome === 'cancelled') showToast('已取消生成对齐', 'info');
-      else if (outcome === 'failed') showToast(payload.error || '生成对齐失败', 'danger');
-      refreshViews();
-      return;
+      } else if (event.outcome === 'cancelled') showToast('已取消生成对齐', 'info');
+      else if (event.outcome === 'failed') showToast(event.error || '生成对齐失败', 'danger');
     }
+    refreshViews();
   }
 
   async function cancelAlignment() {
@@ -1943,8 +1950,13 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     if (!global.MEFinderReader) return;
+    global.MEFinderReader.alignmentJobs.subscribe(function (event) {
+      onAlignmentJobEnd(event).catch(function () { /* 刷新失败不影响任务结局。*/ });
+    });
     global.MEFinderReader.configure({
       onOpenChange: onReaderOpenChange,
+      // 阅读器里保存校正或暂缓后立刻失效逐对统计，不等阅读器关闭。
+      onAlignmentDataChanged: invalidate,
       onManageWork: function (groupId) {
         global.MEFinderReader.close();
         openWork(groupId);

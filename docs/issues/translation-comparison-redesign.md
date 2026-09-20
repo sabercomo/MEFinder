@@ -99,3 +99,23 @@
 守卫：`tests/test_translation_works.py` 新增三例（校正后三处一致、从另一版改也算已处理、重新分段后三处同时判过期）；前端口径由 `tests/test_structured_reader_frontend.py` 钉死。契约见 `docs/contracts/v0.5.5-alignment-corrections.md`。
 
 未做（下一步，用户已排序）：② 任务完成刷新（`35-works.js` 与 `reader.js` 两个独立轮询器）、③ 阅读会话状态（位置 / 对照目标散在五处）。
+
+## 2026-09-20 — 第五阶段业务重构（二）：任务完成刷新
+
+事实（改前）：
+
+- 后端一次只有一个对齐任务（`text_alignment_controller` 单 `_job_id`），前端却有两个轮询器：`35-works.js` 的 `watchRunningJob` 与 `reader.js` 的 `pollComparisonAlignment`，各自分类结局、各自弹提示、各自决定刷新什么。
+- 阅读器关闭时 `onReaderOpenChange` 会 `invalidate()` → `loadGroupsAndOverview()` → 读 `/current` → 作品页接管阅读器发起的那个任务，于是同一次生成弹两次提示。
+- 反向缺口：在阅读器里生成的对齐、保存的校正，都不会立刻更新作品页的逐对状态与「N 处待检查」。
+
+处理：
+
+- 监听收归 reader.js 一份（`index.html` 与独立阅读窗口都装 reader.js，作品页模块只在主窗口里有——方向只能这样）：`MEFinderReader.alignmentJobs.watch/subscribe/running`。已在监听的任务不改归属，后认领者共享同一份监听；结束后广播 `{jobId, meta, outcome, error}`。
+- 提示只由 `meta.origin` 指向的一方给出；作品页与阅读器各自按同一次事件刷新自己的视图。作品页删除 `watchRunningJob` 与 `POSITION_POLL_MS`。
+- 新增宿主回调 `onAlignmentDataChanged`：阅读器保存校正/暂缓后作品页立即失效逐对统计。
+
+守卫：`tests/test_reader_comparison_state.py` 的 `test_one_job_keeps_one_watcher_and_its_first_owner`（两处认领同一任务只轮询一次、只广播一次、归属归第一个认领者、非发起方不提示）与改写后的 `test_completed_alignment_invalidates_links_and_relocates_open_pair`；`tests/test_translation_works_frontend.py` 断言作品页不再出现 `/api/text-alignments/status` 且订阅共享监听。
+
+浏览器核实（`serve` + 预览库，用注入的 fetch 桩模拟任务状态，未真跑模型）：同一任务两处认领 → 状态请求 1 次、提示 1 条、归属 `works`；阅读器发起的任务结束后作品页重读一次 overview；控制台无报错。
+
+未做：③ 阅读会话状态。

@@ -170,7 +170,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
     def test_two_hop_routed_comparison_offers_direct_alignment(self) -> None:
         # 间接关联（经基准换算）时说明条如实提示，并给「生成直接对齐」就地入口。
         notice = READER_JS[READER_JS.index("function updateComparisonNotice()"):]
-        notice = notice[:notice.index("function trackGeneration(")]
+        notice = notice[:notice.index("async function startComparisonAlignment(")]
         self.assertIn("target.via_source_file_id", notice)
         self.assertIn("'生成直接对齐'", notice)
         self.assertIn("换算，可能错位或漏段", notice)
@@ -179,10 +179,10 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("function startComparisonAlignment(force)", READER_JS)
         self.assertIn("config.alignmentStartEndpoint", READER_JS)
         self.assertIn("config.alignmentStatusEndpoint", READER_JS)
-        poll = READER_JS[READER_JS.index("async function pollComparisonAlignment("):]
-        poll = poll[:poll.index("function currentLocationOptions()")]
-        self.assertIn("await loadAlignmentTargets(state.sourceId)", poll)
-        self.assertIn("await loadWorkContext(state.sourceId)", poll)
+        applied = READER_JS[READER_JS.index("async function applyAlignmentJobEnd(event)"):]
+        applied = applied[:applied.index("  /* ── 新窗口")]
+        self.assertIn("await loadAlignmentTargets(sourceId)", applied)
+        self.assertIn("await loadWorkContext(sourceId)", applied)
         self.assertIn("state.elements.comparisonNotice.hidden = true", READER_JS)
         self.assertIn("state.alignmentGroupId = String(payload.document_group_id", READER_JS)
         # 两栏之间：直接对齐实线，间接关联虚线。
@@ -379,7 +379,9 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("function alignmentTargetDisplayLabel(target)", READER_JS)
         self.assertIn(".mef-reader-alignment-action", READER_CSS)
         self.assertIn("'/api/text-alignments/start'", APP_JS)
-        self.assertIn("'/api/text-alignments/status?job_id='", APP_JS)
+        # 任务状态轮询只在 reader.js 里一份；作品页订阅它，不自己查询。
+        self.assertIn("config.alignmentStatusEndpoint + '?job_id='", READER_JS)
+        self.assertNotIn("/api/text-alignments/status", APP_JS)
         comparison_start = READER_JS.index("function renderComparisonWindow()")
         comparison_end = READER_JS.index("async function loadComparisonWindow", comparison_start)
         comparison_body = READER_JS[comparison_start:comparison_end]
