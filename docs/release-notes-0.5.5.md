@@ -107,9 +107,12 @@
 - **自部署不再受版本约束**：连接本地 MinerU 时先握手探测接口代数——`GET /v1/health` 通则走 MinerU 4.x 的 `/v1` 作业接口，回落 `GET /health` 则走 3.x 的 `/tasks` 接口。用户自己把本地 MinerU 升级到 4.x，MEFinder 自动切换，不需要等新版本；「检测连接」的提示直接显示握手到的接口代数与版本（如「MinerU 3.x 任务接口 · 3.4.4」）。设置里也可显式锁定 `tasks` / `v1-jobs`，锁定后不静默回落。
 - **新增 MinerU 4.x 解析通道**：4.x 用「注册上传 → 流式 PUT 字节 → 完成上传取 file_id → 创建 parse job」取代 3.x 的 multipart 直投 `/tasks`；结果改为下载 `structured_content` 工件。3.x 的 `backend` 名按官方档位模型映射为 tier（`pipeline`→`basic`，各 VLM 后端→`standard`），`parse_method` 映射为 `ocr_mode`。服务端若启用了 API key，可在本地部署设置里配置，按 `Authorization: Bearer` 发送。
 - **页码锚点不因换代漂移**：MinerU 4.x 的块坐标是归一化 `0..1`，3.x 是 1000 单位画布。新通道把归一化坐标按 1000 画布换算后入库（与既有文献同坐标系），同时把**精确的归一化坐标**原样带到 `bbox_normalized`，页码识别与引用定位优先用后者，不依赖换算后的取整值。
-- **托管安装器改为「兼容区间 + 取区间内最新」**：清单不再把安装命令写死成固定版本，改为按大版本系列声明安装配方（3.x：`mineru[pipeline]` / `mineru[core,mlx|lmdeploy|vllm]`；4.x：`mineru` / `mineru[torch]`+`mlx-vlm` / `mineru[full]`，以及各自的模型下载参数与配置方式——3.x 的 `MINERU_TOOLS_CONFIG_JSON`、4.x 的 `MINERU_HOME`）。新增「检查更新」动作：从 PyPI 取兼容区间内最新版本并作为安装目标，已装版本落后时沿用原有「可升级」提示。
+- **正文入库是印刷原文，不是 Markdown**：MinerU 4.x 交付的块正文是渲染后的 Markdown（粗体 `**`、行内代码、`$…$` 公式、链接与图片、以及对字面 `*_` 等字符的反斜杠转义）。解析适配层会还原为纯正文再入库并据此生成字符区间，否则「劳动是**价值**的实体」这类句子按无标记原句精确匹配会失配、引文里还会带出格式标记。转义过的字面字符原样保留。
+- **托管安装器改为「兼容区间 + 取区间内最新」**：清单不再把安装命令写死成固定版本，改为按大版本系列声明安装配方（3.x：`mineru[pipeline]` / `mineru[core,mlx|lmdeploy|vllm]`；4.x：`mineru` / `mineru[torch]`+`mlx-vlm` / `mineru[full]`，以及各自的模型下载参数与配置方式——3.x 的 `MINERU_TOOLS_CONFIG_JSON`、4.x 的 `MINERU_HOME`）。**安装与更新本身**就会先取兼容区间内最新版本作为目标（在后台线程里查，不卡请求；查不到即沿用清单固定版本）；设置页「MEFinder 托管运行时」新增**「检查新版本」**按钮，并如实标明当前安装目标是「兼容区间内最新」还是「清单固定版本」。
+- **安装版本按各自回执识别**：已安装组件的识别与启动一律读它自己的 `installed.json`（记录 version / series / config_style），不受当前安装目标影响——装了 4.x 的组件在目标仍是 3.x 时不会被误判成「未安装」，装了 3.x 的组件在目标切到 4.x 后也仍按 3.x 的配置方式启动。旧回执（无 series 字段）一律按 3.x 处理。
+- **一次安装只用一份配方**：安装期间的版本、extras、模型下载参数与配置方式在操作开始时冻结；安装进行中调用「检查新版本」不会中途换配方（会明确回答「组件正在操作中，暂不检查新版本」），回执不会写出混版结果。
 - **离线仍可装**：PyPI 不可达、返回无法解析或区间内没有更新时，一律回落到清单固定版本（当前 3.4.5），不阻塞安装、不引入必须联网的路径。区间外的大版本（当前 5.x）会明确报「缺少安装配方」，而不是装上去再炸。
-- 契约实测依据：MinerU 4.0.4 wheel 的 `mineru/parser/api_server.py`（`APIRouter(prefix="/v1")`，全包无 `/tasks` 路由）与 PyPI 元数据的 extras 清单（4.x 仅 `dev/test/torch/full/all`，`pipeline`/`core` 已移除）。测试 `tests/test_mineru_local_v1_protocol.py`、`tests/test_managed_mineru.py`；3.x 通道另在本机 MinerU 3.4.4 上跑通提交—轮询—取结果全链。
+- 契约实测依据：MinerU 4.0.4 wheel 的 `mineru/parser/api_server.py`（`APIRouter(prefix="/v1")`，全包无 `/tasks` 路由）与 PyPI 元数据的 extras 清单（4.x 仅 `dev/test/torch/full/all`，`pipeline`/`core` 已移除）。测试 `tests/test_mineru_local_v1_protocol.py`、`tests/test_managed_mineru.py`（含只暴露 `/v1/health` 的假 4.x 服务走完整托管安装—启动—探测）；3.x 通道另在本机 MinerU 3.4.4 上跑通提交—轮询—取结果全链。**尚未用真实 MinerU 4.x 做过端到端解析验收**，4.x 托管安装的 extras 映射与模型落盘路径仍是依据上游元数据的推断。
 
 ## Bug 修复
 

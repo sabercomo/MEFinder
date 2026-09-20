@@ -462,12 +462,21 @@
         ? '已安装'
         : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
     }
+    var checkButton = document.getElementById('managed-mineru-check-updates');
+    if (checkButton) {
+      checkButton.disabled = active || !runtime.supported;
+      checkButton.textContent = '检查新版本';
+    }
     var hint = document.getElementById('managed-mineru-hint');
     if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
       ? ''
       : active ? '安装需要约 20GB 可用空间，请保持应用开启'
       : externalConfigured ? '已配置自部署服务 ' + parserStore.mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案'
       : '组件按需下载，不会随主程序更新自动安装');
+    if (hint && !errors.length) {
+      var versionLine = managedMineruVersionText(runtime);
+      if (versionLine) hint.textContent = (hint.textContent ? hint.textContent + ' · ' : '') + versionLine;
+    }
     if (parserStore.mineruLocalConfig.managed) {
       updateMineruLocalStatus(
         !!parserStore.mineruLocalConfig.enabled,
@@ -478,6 +487,34 @@
     parserStore.managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
     if (parserStore.managedMineruWasBusy && !active) loadMineruConfig();
     parserStore.managedMineruWasBusy = active;
+  }
+
+  function managedMineruVersionText(runtime) {
+    // 如实说明安装目标是从 PyPI 取到的还是清单固定版本，别让用户以为一定是最新
+    var target = String(runtime.version || '').trim();
+    if (!target) return '';
+    var detail = String(runtime.version_detail || '').trim();
+    var source = String(runtime.version_source || '') === 'pypi' ? '兼容区间内最新' : '清单固定版本';
+    return '安装目标 MinerU ' + target + '（' + source + '）' + (detail ? ' · ' + detail : '');
+  }
+
+  async function checkManagedMineruUpdates(button) {
+    var hint = document.getElementById('managed-mineru-hint');
+    if (button) { button.disabled = true; button.textContent = '检查中…'; }
+    if (hint) hint.textContent = '正在查询可用版本…';
+    try {
+      var response = await fetch('/api/mineru-local/component', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'check-updates'})
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '查询失败');
+      renderManagedMineru(data.managed_runtime || data);
+    } catch (error) {
+      if (hint) hint.textContent = '查询版本失败：' + error.message;
+      if (button) { button.disabled = false; button.textContent = '检查新版本'; }
+    }
   }
 
   async function loadManagedMineruStatus() {
@@ -1329,6 +1366,7 @@
   global.manageLocalOCRComponent = manageLocalOCRComponent;
   global.testLocalOCREngine = testLocalOCREngine;
   global.manageMineruComponent = manageMineruComponent;
+  global.checkManagedMineruUpdates = checkManagedMineruUpdates;
   global.saveMineruLocalSettings = saveMineruLocalSettings;
   global.testMineruLocalConnection = testMineruLocalConnection;
   global.openMineruTokenPage = openMineruTokenPage;

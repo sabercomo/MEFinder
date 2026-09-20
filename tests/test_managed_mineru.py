@@ -55,24 +55,33 @@ elif sys.argv[1:3] == ['pip', 'install']:
     downloader.write_text('''#!/usr/bin/env python3
 from pathlib import Path
 import json, os
-config = Path(os.environ["MINERU_TOOLS_CONFIG_JSON"])
-models = config.parent / "models" / "fake"
-models.mkdir(parents=True, exist_ok=True)
-(models / "weights.bin").write_bytes(b"weights")
-config.write_text(json.dumps({"models-dir": {"pipeline": str(models), "vlm": str(models)}}))
+home = os.environ.get("MINERU_HOME")
+if home:
+    # MinerU 4.x：一切路径从 MINERU_HOME 派生，不写 mineru.json
+    models = Path(home) / "models" / "fake"
+    models.mkdir(parents=True, exist_ok=True)
+    (models / "weights.bin").write_bytes(b"weights")
+else:
+    config = Path(os.environ["MINERU_TOOLS_CONFIG_JSON"])
+    models = config.parent / "models" / "fake"
+    models.mkdir(parents=True, exist_ok=True)
+    (models / "weights.bin").write_bytes(b"weights")
+    config.write_text(json.dumps({"models-dir": {"pipeline": str(models), "vlm": str(models)}}))
 ''')
     api = bindir / 'mineru-api'
     api.write_text('''#!/usr/bin/env python3
-import json, sys
+import json, os, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 if "--help" in sys.argv:
     raise SystemExit(0)
 port = int(sys.argv[sys.argv.index("--port") + 1])
+# 4.x 只有 /v1/health，3.x 只有 /health：按安装形态决定，逼真到能被探测
+healthy = "/v1/health" if os.environ.get("MINERU_HOME") else "/health"
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args): pass
     def do_GET(self):
-        raw = json.dumps({"protocol_version": "test"}).encode()
-        self.send_response(200 if self.path == "/health" else 404)
+        raw = json.dumps({"protocol_version": "test", "version": "test"}).encode()
+        self.send_response(200 if self.path == healthy else 404)
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers(); self.wfile.write(raw)
 ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
@@ -168,7 +177,7 @@ else:
         path.write_text(json.dumps(payload), encoding="utf-8")
         return path
 
-    def _manager(self) -> ManagedMinerU:
+    def _manager(self, **overrides) -> ManagedMinerU:
         return ManagedMinerU(
             self.runtime,
             self.config,
@@ -183,6 +192,7 @@ else:
                 "vram_mb": 24576,
                 "compute_capability": 8.9,
             },
+            **overrides,
         )
 
     def _wait(self, manager: ManagedMinerU, profile: str, timeout: float = 20) -> dict:
@@ -295,6 +305,137 @@ else:
         self.assertEqual(summary["series"], "4")
         self.assertEqual(summary["version_source"], "pypi")
 
+    def _fake_receipt(self, profile: str, payload: dict) -> Path:
+        root = self.runtime / "components/mineru" / profile
+        (root / "venv/bin").mkdir(parents=True, exist_ok=True)
+        (root / "venv/bin/python").write_text("", encoding="utf-8")
+        (root / "venv/bin/mineru-api").write_text("", encoding="utf-8")
+        (root / "installed.json").write_text(json.dumps(payload), encoding="utf-8")
+        return root
+
+    def test_installed_component_is_read_back_by_its_own_receipt(self) -> None:
+        """A 4.x install must stay recognized while the target is still 3.x."""
+
+        root = self._fake_receipt(
+            "pipeline",
+            {
+                "schema_version": 1,
+                "profile": "pipeline",
+                "version": "4.0.4",
+                "series": "4",
+                "config_style": "mineru_home",
+                "backend": "pipeline",
+                "packages": ["mineru==4.0.4"],
+                "platform": "test-platform",
+            },
+        )
+        manager = self._manager()
+        self.assertEqual(manager.manifest.version, "3.4.5")
+        # No mineru.json exists, because MinerU 4.x never writes one.
+        self.assertFalse((root / "mineru.json").is_file())
+        self.assertTrue(manager._installed("pipeline"))
+        environment = manager._runtime_environment(
+            root, manager._installed_config_style("pipeline")
+        )
+        self.assertEqual(environment["MINERU_HOME"], str(root))
+        self.assertNotIn("MINERU_TOOLS_CONFIG_JSON", environment)
+
+    def test_retargeted_manifest_keeps_launching_installed_3x_the_old_way(self) -> None:
+        root = self._fake_receipt(
+            "pipeline",
+            {
+                "schema_version": 1,
+                "profile": "pipeline",
+                "version": "3.4.5",
+                "series": "3",
+                "config_style": "tools_json",
+                "backend": "pipeline",
+                "packages": ["mineru[pipeline]==3.4.5"],
+                "platform": "test-platform",
+            },
+        )
+        (root / "mineru.json").write_text("{}", encoding="utf-8")
+        payload = json.dumps(
+            {"releases": {"3.4.5": [{"filename": "a"}], "4.0.4": [{"filename": "b"}]}}
+        ).encode("utf-8")
+        manager = self._manager(version_fetch=lambda url: payload)
+        manager.perform({"action": "check-updates"})
+        self.assertEqual(manager.manifest.version, "4.0.4")
+        # The install itself did not move, so it must still be launched as 3.x.
+        self.assertTrue(manager._installed("pipeline"))
+        environment = manager._runtime_environment(
+            root, manager._installed_config_style("pipeline")
+        )
+        self.assertEqual(
+            environment["MINERU_TOOLS_CONFIG_JSON"], str(root / "mineru.json")
+        )
+        self.assertNotIn("MINERU_HOME", environment)
+
+    def test_legacy_receipt_without_series_is_treated_as_3x(self) -> None:
+        root = self._fake_receipt(
+            "pipeline",
+            {"schema_version": 1, "profile": "pipeline", "version": "3.4.5"},
+        )
+        (root / "mineru.json").write_text("{}", encoding="utf-8")
+        manager = self._manager()
+        self.assertEqual(manager._installed_config_style("pipeline"), "tools_json")
+        self.assertTrue(manager._installed("pipeline"))
+
+    def test_check_updates_cannot_retarget_a_running_operation(self) -> None:
+        payload = json.dumps(
+            {"releases": {"3.4.5": [{"filename": "a"}], "4.0.4": [{"filename": "b"}]}}
+        ).encode("utf-8")
+        manager = self._manager(version_fetch=lambda url: payload)
+        with manager._lock:
+            manager._states["pipeline"].operation = "install"
+        try:
+            summary = manager.perform({"action": "check-updates"})
+        finally:
+            with manager._lock:
+                manager._states["pipeline"].operation = None
+        self.assertEqual(manager.manifest.version, "3.4.5")
+        self.assertEqual(summary["version"], "3.4.5")
+        self.assertIn("暂不检查", str(summary["version_detail"]))
+
+    def test_install_freezes_one_recipe_and_records_it(self) -> None:
+        """An install writes the version and series it actually installed."""
+
+        payload = json.dumps(
+            {"releases": {"3.4.5": [{"filename": "a"}], "4.0.4": [{"filename": "b"}]}}
+        ).encode("utf-8")
+        manager = self._manager(version_fetch=lambda url: payload)
+        manager.perform({"profile": "pipeline", "action": "install"})
+        item = self._wait(manager, "pipeline")
+        self.assertFalse(item["error"], item["error"])
+        receipt = json.loads(
+            (self.runtime / "components/mineru/pipeline/installed.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        # Plain install resolved the newest compatible release by itself, and the
+        # receipt records one coherent recipe (version, series, packages).
+        self.assertEqual(receipt["version"], "4.0.4")
+        self.assertEqual(receipt["series"], "4")
+        self.assertEqual(receipt["config_style"], "mineru_home")
+        self.assertEqual(receipt["packages"], ["mineru==4.0.4"])
+        self.assertEqual(manager._installed_config_style("pipeline"), "mineru_home")
+
+    def test_plain_install_without_network_stays_on_the_pinned_version(self) -> None:
+        def offline(url: str) -> bytes:
+            raise OSError("network unreachable")
+
+        manager = self._manager(version_fetch=offline)
+        manager.perform({"profile": "pipeline", "action": "install"})
+        item = self._wait(manager, "pipeline")
+        self.assertFalse(item["error"], item["error"])
+        receipt = json.loads(
+            (self.runtime / "components/mineru/pipeline/installed.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(receipt["version"], "3.4.5")
+        self.assertEqual(receipt["series"], "3")
+
     def test_download_progress_reports_speed_and_eta(self) -> None:
         manager = self._manager()
         with mock.patch(
@@ -367,7 +508,7 @@ else:
                 },
             ),
         ):
-            environment = manager._install_environment(staging)
+            environment = manager._install_environment(staging, manager.manifest)
         self.assertEqual(environment["HTTP_PROXY"], "http://127.0.0.1:1082")
         self.assertEqual(environment["HTTPS_PROXY"], "http://127.0.0.1:1082")
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import re
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
@@ -252,23 +253,105 @@ def iter_page_blocks(
     return grouped
 
 
+#: Characters upstream escapes when they appear as literal text
+#: (docvortex ``escape_conservative_markdown_text``).
+_MARKDOWN_ESCAPABLE = "*_`~$#+-\\[]()!"
+_ESCAPE_SENTINEL = "\x00{}\x00"
+_ESCAPED_RE = re.compile(r"\\([" + re.escape(_MARKDOWN_ESCAPABLE) + r"])")
+_HTML_TAG_RE = re.compile(r"</?[A-Za-z][^<>\n]*>|<!--.*?-->")
+_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_CODE_FENCE_RE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
+_INLINE_MATH_RE = re.compile(r"\$([^$]+)\$|\\\((.+?)\\\)", re.DOTALL)
+_EMPHASIS_RE = re.compile(r"(\*{1,3}|~~|_{1,2})(?=\S)(.+?)(?<=\S)\1", re.DOTALL)
+_LIST_MARKER_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+", re.MULTILINE)
+_HEADING_MARKER_RE = re.compile(r"^[ \t]*#{1,6}[ \t]+", re.MULTILINE)
+_TABLE_RULE_RE = re.compile(r"^[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*$", re.MULTILINE)
+_HTML_ENTITIES = {
+    "&nbsp;": " ",
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+}
+
+
+def plain_text_from_markdown(value: str) -> str:
+    """Recover the printed text from one rendered-Markdown ``content`` string.
+
+    MinerU 4.x hands back Markdown, not source text: upstream applies emphasis
+    wrappers (``**`` / ``*`` / ``***`` / ``~~``), HTML wrappers for the styles
+    Markdown cannot express (``<strong>`` / ``<u>`` / ``<sup>`` / ``<s>`` …),
+    inline-code fences, LaTeX delimiters, links and images, and it escapes
+    literal ``*_`~$`` and leading block markers with a backslash.  Storing that
+    verbatim would break exact quote location and leak markup into citations,
+    so the markup is removed while every literal character is preserved.
+    """
+
+    if not value:
+        return ""
+    # Literal characters upstream escaped must survive markup removal, so park
+    # them behind sentinels first and restore them at the very end.
+    protected: list[str] = []
+
+    def _park(match: "re.Match[str]") -> str:
+        protected.append(match.group(1))
+        return _ESCAPE_SENTINEL.format(len(protected) - 1)
+
+    text = _ESCAPED_RE.sub(_park, value)
+    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    text = _HTML_TAG_RE.sub("", text)
+    for entity, replacement in _HTML_ENTITIES.items():
+        text = text.replace(entity, replacement)
+    text = _IMAGE_RE.sub("", text)
+    text = _LINK_RE.sub(r"\1", text)
+    text = _CODE_FENCE_RE.sub(lambda match: match.group(2).strip(), text)
+    text = _INLINE_MATH_RE.sub(
+        lambda match: (match.group(1) or match.group(2) or "").strip(), text
+    )
+    previous = None
+    while previous != text:
+        previous = text
+        text = _EMPHASIS_RE.sub(r"\2", text)
+    text = _TABLE_RULE_RE.sub("", text)
+    text = "\n".join(_table_row_text(line) for line in text.split("\n"))
+    text = _LIST_MARKER_RE.sub("", text)
+    text = _HEADING_MARKER_RE.sub("", text)
+    for index, character in enumerate(protected):
+        text = text.replace(_ESCAPE_SENTINEL.format(index), character)
+    lines = [line.strip() for line in text.split("\n")]
+    return "\n".join(line for line in lines if line)
+
+
+def _table_row_text(line: str) -> str:
+    """Turn one Markdown table row into spaced cell text."""
+
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return line
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    return " ".join(cell for cell in cells if cell)
+
+
 def block_text(block: Mapping[str, object]) -> str:
-    """Flatten one structured-content block into plain text.
+    """Flatten one structured-content block into plain source text.
 
     Every block carries its body as a rendered Markdown ``content`` string;
     image, table, chart, and code blocks additionally carry ``captions`` and
-    ``footnotes`` lists whose entries hold their own ``content``.
+    ``footnotes`` lists whose entries hold their own ``content``.  Markup is
+    stripped so stored text matches the printed page character for character.
     """
 
     parts: list[str] = []
     content = block.get("content")
     if isinstance(content, str):
-        parts.append(content)
+        parts.append(plain_text_from_markdown(content))
     for key in ("captions", "footnotes"):
         for annotation in _annotations(block, key):
             value = annotation.get("content")
             if isinstance(value, str):
-                parts.append(value)
+                parts.append(plain_text_from_markdown(value))
     return "\n".join(part.strip() for part in parts if part and part.strip())
 
 

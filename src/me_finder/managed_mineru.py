@@ -106,6 +106,9 @@ class MinerUManifest:
     config_style: str = "tools_json"
     model_download_args: tuple[str, ...] = ()
     pinned_version: str = ""
+    #: Every shipped series' config style, so an installed component can be
+    #: read back by its own receipt even while the target version differs.
+    series_config_styles: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -300,6 +303,11 @@ def load_managed_mineru_manifest(
         config_style=str(series_manifest.get("config_style") or "tools_json"),
         model_download_args=tuple(download_args),
         pinned_version=pinned,
+        series_config_styles={
+            str(key): str(item.get("config_style") or "tools_json")
+            for key, item in raw_series.items()
+            if isinstance(item, Mapping)
+        },
     )
 
 
@@ -515,30 +523,52 @@ class ManagedMinerU:
         manifest version in place, so the component stays installable offline.
         """
 
-        manifest_path = self._current_manifest_path()
-        resolution = resolve_managed_mineru_version(
-            manifest_path,
+        with self._lock:
+            busy = [
+                profile_id
+                for profile_id, state in self._states.items()
+                if state.operation is not None
+            ]
+        if busy:
+            # Re-targeting now would swap the recipe under a running install.
+            with self._lock:
+                self._version_resolution = {
+                    **self._version_resolution,
+                    "detail": "组件正在操作中，暂不检查新版本。",
+                }
+            return self.summary()
+        resolution = self._resolve_version()
+        with self._lock:
+            self._version_resolution = dict(self._retarget(resolution))
+        return self.summary()
+
+    def _resolve_version(self) -> Dict[str, object]:
+        return resolve_managed_mineru_version(
+            self._current_manifest_path(),
             platform_key=self.platform_key,
             fetch=self._version_fetch,
         )
+
+    def _retarget(self, resolution: Mapping[str, object]) -> Dict[str, object]:
+        """Load the resolved version's recipe, keeping the current one on error."""
+
         resolved = str(resolution.get("resolved") or "")
-        if resolved and resolved != self.manifest.version:
-            try:
-                self.manifest = load_managed_mineru_manifest(
-                    manifest_path,
-                    platform_key=self.platform_key,
-                    version=resolved,
-                )
-            except ManagedMinerUError as exc:
-                resolution = {
-                    **resolution,
-                    "resolved": self.manifest.version,
-                    "source": "manifest",
-                    "detail": str(exc),
-                }
-        with self._lock:
-            self._version_resolution = dict(resolution)
-        return self.summary()
+        if not resolved or resolved == self.manifest.version:
+            return dict(resolution)
+        try:
+            self.manifest = load_managed_mineru_manifest(
+                self._current_manifest_path(),
+                platform_key=self.platform_key,
+                version=resolved,
+            )
+        except ManagedMinerUError as exc:
+            return {
+                **resolution,
+                "resolved": self.manifest.version,
+                "source": "manifest",
+                "detail": str(exc),
+            }
+        return dict(resolution)
 
     def diagnostics(self) -> Dict[str, object]:
         summary = self.summary()
@@ -642,6 +672,11 @@ class ManagedMinerU:
             raise ManagedMinerUError("该 MinerU 组件尚未安装。")
         if not self._operation_lock.acquire(blocking=False):
             raise ManagedMinerUError("另一个 MinerU 组件正在操作。")
+        # Freeze the whole install recipe for this operation: a concurrent
+        # "check-updates" must not be able to swap versions, extras, download
+        # arguments or the config style half-way through an install.
+        with self._lock:
+            manifest = self.manifest
         initial = {
             "install": "provisioning",
             "update": "provisioning",
@@ -665,17 +700,31 @@ class ManagedMinerU:
             state.cancel_event = threading.Event()
             thread = threading.Thread(
                 target=self._operation_worker,
-                args=(profile_id, action),
+                args=(profile_id, action, manifest),
                 name=f"managed-mineru-{action}-{profile_id}",
                 daemon=True,
             )
             state.thread = thread
         thread.start()
 
-    def _operation_worker(self, profile_id: str, action: str) -> None:
+    def _operation_worker(
+        self, profile_id: str, action: str, manifest: MinerUManifest
+    ) -> None:
         try:
             if action in {"install", "update"}:
-                self._install(profile_id)
+                # "Newest release inside the compatible range" is resolved here
+                # rather than in check-updates only, or a plain install would
+                # keep targeting the pinned manifest version.  This runs on the
+                # worker thread (never the request thread) and after
+                # state.operation is set, so check-updates cannot race it;
+                # network trouble is not fatal because _retarget keeps the
+                # current recipe.
+                with self._lock:
+                    self._version_resolution = dict(
+                        self._retarget(self._resolve_version())
+                    )
+                    manifest = self.manifest
+                self._install(profile_id, manifest)
                 self._start_service(profile_id)
                 message = "安装并启动完成"
             elif action == "start":
@@ -721,13 +770,13 @@ class ManagedMinerU:
                 state.thread = None
             self._operation_lock.release()
 
-    def _install(self, profile_id: str) -> None:
-        platform_manifest = self.manifest.platform
+    def _install(self, profile_id: str, manifest: MinerUManifest) -> None:
+        platform_manifest = manifest.platform
         if platform_manifest is None:
             raise ManagedMinerUError("当前平台不在 MinerU 安装矩阵中。")
         if self._service_profile == profile_id:
             self.stop()
-        profile = self.manifest.profiles[profile_id]
+        profile = manifest.profiles[profile_id]
         self.component_root.mkdir(parents=True, exist_ok=True)
         for stale in self.component_root.glob(".staging-*"):
             self._remove_tree(stale)
@@ -738,7 +787,7 @@ class ManagedMinerU:
         staging.mkdir(parents=True)
         try:
             uv_path = self._ensure_uv(profile_id, platform_manifest)
-            environment = self._install_environment(staging)
+            environment = self._install_environment(staging, manifest)
             install_log = staging / "install.log"
             self._set_state(profile_id, "provisioning", message="正在创建独立 Python 环境")
             self._run_command(
@@ -747,7 +796,7 @@ class ManagedMinerU:
                     str(uv_path),
                     "venv",
                     "--python",
-                    self.manifest.python,
+                    manifest.python,
                     "--managed-python",
                     "--relocatable",
                     str(staging / "venv"),
@@ -762,7 +811,7 @@ class ManagedMinerU:
             self._set_state(
                 profile_id,
                 "provisioning",
-                message=f"正在解析并安装 MinerU {self.manifest.version} 依赖",
+                message=f"正在解析并安装 MinerU {manifest.version} 依赖",
             )
             self._run_command(
                 profile_id,
@@ -798,7 +847,7 @@ class ManagedMinerU:
                 try:
                     self._run_command(
                         profile_id,
-                        [str(downloader), *self._model_download_args(profile)],
+                        [str(downloader), *self._model_download_args(profile, manifest)],
                         cwd=staging,
                         environment=environment,
                         log_path=staging / "models.log",
@@ -829,8 +878,9 @@ class ManagedMinerU:
                 {
                     "schema_version": 1,
                     "profile": profile_id,
-                    "version": self.manifest.version,
-                    "series": self.manifest.series,
+                    "version": manifest.version,
+                    "series": manifest.series,
+                    "config_style": manifest.config_style,
                     "backend": profile.backend,
                     "packages": list(profile.packages),
                     "platform": self.platform_key,
@@ -841,7 +891,7 @@ class ManagedMinerU:
                 final.replace(previous)
             staging.replace(final)
             published = True
-            if self.manifest.config_style != "mineru_home":
+            if manifest.config_style != "mineru_home":
                 self._rewrite_config_paths(final / "mineru.json", staging, final)
             self._validate(profile_id)
             self._remove_tree(previous)
@@ -869,7 +919,9 @@ class ManagedMinerU:
             profile_id,
             [str(executable), "--help"],
             cwd=final,
-            environment=self._runtime_environment(final),
+            environment=self._runtime_environment(
+                final, self._installed_config_style(profile_id)
+            ),
             log_path=final / "validation.log",
             timeout=120,
         )
@@ -903,7 +955,9 @@ class ManagedMinerU:
                     str(port),
                 ],
                 cwd=str(final),
-                env=self._runtime_environment(final),
+                env=self._runtime_environment(
+                    final, self._installed_config_style(profile_id)
+                ),
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -1135,7 +1189,9 @@ class ManagedMinerU:
                 f"MinerU 安装子进程退出 {process.returncode}：{detail.strip()}"
             )
 
-    def _model_download_args(self, profile: MinerUProfile) -> list[str]:
+    def _model_download_args(
+        self, profile: MinerUProfile, manifest: MinerUManifest
+    ) -> list[str]:
         """Fill the series' download template for one profile."""
 
         substitutions = {
@@ -1144,24 +1200,45 @@ class ManagedMinerU:
             "{profile}": profile.profile_id,
         }
         args: list[str] = []
-        for item in self.manifest.model_download_args:
+        for item in manifest.model_download_args:
             for token, value in substitutions.items():
                 item = item.replace(token, value)
             args.append(item)
         return args
 
-    def _config_environment(self, root: Path) -> Dict[str, str]:
+    def _config_environment(self, root: Path, config_style: str) -> Dict[str, str]:
         """Point MinerU at the component directory the way its series expects.
 
         MinerU 3.x reads a JSON tools config named by ``MINERU_TOOLS_CONFIG_JSON``;
         4.x dropped that file and derives every path from ``MINERU_HOME``.
         """
 
-        if self.manifest.config_style == "mineru_home":
+        if config_style == "mineru_home":
             return {"MINERU_HOME": str(root)}
         return {"MINERU_TOOLS_CONFIG_JSON": str(root / "mineru.json")}
 
-    def _install_environment(self, staging: Path) -> Dict[str, str]:
+    def _installed_config_style(self, profile_id: str) -> str:
+        """Read one installed component's config style from its own receipt.
+
+        A component must keep being recognized and launched the way it was
+        installed, even after ``check-updates`` re-targets a newer series.
+        Receipts written before series support only ever held MinerU 3.x.
+        """
+
+        receipt = self._receipt(profile_id)
+        recorded = str(receipt.get("config_style") or "")
+        if recorded:
+            return recorded
+        series = str(receipt.get("series") or "")
+        if series:
+            return str(
+                self.manifest.series_config_styles.get(series) or "tools_json"
+            )
+        return "tools_json"
+
+    def _install_environment(
+        self, staging: Path, manifest: MinerUManifest
+    ) -> Dict[str, str]:
         environment = os.environ.copy()
         proxies = getproxies()
         for scheme in ("http", "https"):
@@ -1176,7 +1253,7 @@ class ManagedMinerU:
                 "UV_CACHE_DIR": str(staging / ".uv-cache"),
                 "UV_PYTHON_INSTALL_DIR": str(self.component_root / "_python"),
                 "UV_NO_PROGRESS": "1",
-                **self._config_environment(staging),
+                **self._config_environment(staging, manifest.config_style),
                 "HF_HOME": str(staging / "models/huggingface"),
                 "MODELSCOPE_CACHE": str(staging / "models/modelscope"),
             }
@@ -1184,11 +1261,13 @@ class ManagedMinerU:
         environment.pop("MINERU_MODEL_SOURCE", None)
         return environment
 
-    def _runtime_environment(self, final: Path) -> Dict[str, str]:
+    def _runtime_environment(
+        self, final: Path, config_style: str
+    ) -> Dict[str, str]:
         environment = os.environ.copy()
         environment.update(
             {
-                **self._config_environment(final),
+                **self._config_environment(final, config_style),
                 "MINERU_MODEL_SOURCE": "local",
                 "HF_HOME": str(final / "models/huggingface"),
                 "MODELSCOPE_CACHE": str(final / "models/modelscope"),
@@ -1250,7 +1329,7 @@ class ManagedMinerU:
             and (final / self.manifest.platform.venv_python).is_file()
             and self._venv_executable(final, "mineru-api").is_file()
             and (
-                self.manifest.config_style == "mineru_home"
+                self._installed_config_style(profile_id) == "mineru_home"
                 or (final / "mineru.json").is_file()
             )
         )

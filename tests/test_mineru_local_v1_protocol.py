@@ -15,6 +15,7 @@ from src.me_finder.mineru_local_provider import (
 )
 from src.me_finder.mineru_local_v1 import (
     MINERU_V1_PROTOCOL,
+    plain_text_from_markdown,
     tier_for_backend,
 )
 from src.me_finder.parser_provider import (
@@ -38,7 +39,8 @@ STRUCTURED_CONTENT = {
                 },
                 {
                     "type": "text",
-                    "content": "本書の問いは単純である。",
+                    # 上游交付的是渲染后的 Markdown，粗体带 ** 标记
+                    "content": "労働は**価値**の実体である。",
                     "bbox": [0.1, 0.4, 0.9, 0.5],
                 },
             ],
@@ -309,6 +311,43 @@ class MinerUV1ProtocolTests(unittest.TestCase):
             headers = provider.v1_client.transport.headers()
             self.assertEqual(headers["Authorization"], "Bearer secret-key")
             self.assertTrue(provider.health()["ok"])
+
+    def test_stored_text_is_plain_source_text_not_markdown(self) -> None:
+        with FakeMinerUV1Service() as service:
+            provider = MinerULocalProvider(MinerULocalConfig(endpoint=service.endpoint))
+            submission = provider.submit(self.request())
+            request = self.request()
+            normalized = provider.normalize_result(
+                provider.fetch_result(submission, request), request
+            )
+            body = normalized.pages[0].blocks[1]
+            # 上游给的是渲染后的 Markdown；入库必须是印刷原文，否则逐字定位失配、
+            # 引文里会带出 ** 之类的标记。
+            self.assertEqual(body.text, "労働は価値の実体である。")
+            self.assertNotIn("*", body.text)
+            figure = normalized.pages[1].blocks[1]
+            self.assertNotIn("![", figure.text)
+            self.assertNotIn("](", figure.text)
+
+    def test_markdown_recovery_keeps_literal_characters(self) -> None:
+        cases = (
+            ("劳动是**价值**的实体。", "劳动是价值的实体。"),
+            ("这是 *斜体* 与 ***两者*** 与 ~~删除~~", "这是 斜体 与 两者 与 删除"),
+            # 上游对字面量做了反斜杠转义，还原后必须保留原字符
+            (r"脚注 5\* 与 a\_b", "脚注 5* 与 a_b"),
+            (r"\# 不是标题", "# 不是标题"),
+            ("见 [全集](https://example.com/a) 第 3 卷", "见 全集 第 3 卷"),
+            ("![](fig.png)图注", "图注"),
+            ("代码 `x = 1` 行内", "代码 x = 1 行内"),
+            ("公式 $E = mc^2$ 完", "公式 E = mc^2 完"),
+            ("<strong>强调</strong>与<sup>2</sup>", "强调与2"),
+            ("a&nbsp;b<br>c", "a b\nc"),
+            ("- 甲\n- 乙", "甲\n乙"),
+            ("| 年份 | 页码 |\n|---|---|\n| 1867 | 12 |", "年份 页码\n1867 12"),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(plain_text_from_markdown(source), expected)
 
     def test_backend_names_map_onto_tiers(self) -> None:
         self.assertEqual(tier_for_backend("pipeline"), "basic")

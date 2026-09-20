@@ -317,7 +317,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
             "static/js/40-bibliography.js": 27,
-            "static/js/70-vision.js": 24,
+            # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
+            "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
             "static/js/80-import.js": 20,
         }
@@ -516,10 +517,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.5 阅读会话统一：currentReadingSession() 一份会话记录，深链带右栏，
     #   关闭阅读器把刚写出的位置交回宿主。
     # 0.5.5 本地 MinerU 接口自适应：检测连接的提示带上握手到的接口代数与版本。
+    # 0.5.5 托管 MinerU：补「检查新版本」入口与安装目标版本来源说明。
     BASELINE_SHA256 = (
-        "372acfb65b8cda9851ea050938b6ae00c028d12bee3e404f8ca40c1b7c60b0ba"
+        "e51c13bdd608be9348f878fc93d471ebb01bd6d0f0eedc48ac95657fa8dcca96"
     )
-    BASELINE_BYTES = 1230858
+    BASELINE_BYTES = 1232915
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
