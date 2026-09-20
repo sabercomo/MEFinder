@@ -394,10 +394,16 @@
  * checks: contrast 40–41 · slop 42–46 · chrome 47 · tokens 48 · responsive 49–57
  * follows DESIGN.md §3 作品版本页 · §5 按钮 / 界面文案 · §7 动效 */
 .tw-dialog.is-wide { width: min(1020px, 100%); }
+.tw-range-dialog { height: min(820px, calc(100dvh - 32px)); }
+.tw-range-dialog > .tw-dialog-head, .tw-range-dialog > .tw-dialog-foot { flex: none; }
+.tw-range-dialog > .tw-dialog-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 .tw-range-note { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 .tw-range-error { margin: 8px 0 0; font-size: 13px; color: var(--danger); }
-.tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.tw-range-book { display: flex; min-width: 0; flex-direction: column; padding: 4px 16px 12px; }
+.tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; flex: 1; }
+.tw-range-book { display: flex; min-width: 0; min-height: 0; flex-direction: column; padding: 4px 16px 12px; }
+.tw-range-book > * { flex-shrink: 0; }
+.tw-range-reading { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-top: 8px; }
+.tw-range-book > .tw-range-error:empty { display: none; }
 .tw-range-book + .tw-range-book { border-left: 1px solid var(--border-subtle); }
 .tw-range-book-head h4 { margin: 0 0 4px; font-size: 15px; font-weight: 650; color: var(--text-primary); overflow-wrap: anywhere; }
 .tw-range-book-head p { overflow-wrap: anywhere; }
@@ -493,7 +499,9 @@
 }
 @media (max-width: 860px) {
   /* 窄窗口里两栏叠成上下，仍是两本各自独立的编辑区。 */
-  .tw-range-pair { grid-template-columns: minmax(0, 1fr); }
+  .tw-range-dialog > .tw-dialog-body { overflow-y: auto; padding-inline: 8px; }
+  .tw-range-pair { grid-template-columns: minmax(0, 1fr); grid-auto-rows: 100%; height: 100%; flex: none; }
+  .tw-range-book { padding-inline: 8px; }
   .tw-range-book + .tw-range-book { border-left: 0; border-top: 1px solid var(--border-subtle); padding-top: 14px; }
 }
 @media (max-width: 640px) {

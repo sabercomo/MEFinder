@@ -81,15 +81,22 @@ class TextAlignmentController:
             "pivot_source_file_id",
             "target_source_file_id",
         }
-        optional = {"force", "reviewed_body_ranges"}
+        optional = {"force", "reviewed_body_ranges", "expected_segment_set_ids"}
         return (
             isinstance(payload, Mapping)
             and required.issubset(payload)
             and set(payload).issubset(required | optional)
             and isinstance(payload.get("force", False), bool)
+            and (("reviewed_body_ranges" in payload) == ("expected_segment_set_ids" in payload))
             and (
                 "reviewed_body_ranges" not in payload
-                or cls._valid_body_ranges(payload["reviewed_body_ranges"])
+                or (
+                    cls._valid_body_ranges(payload["reviewed_body_ranges"])
+                    and isinstance(payload["expected_segment_set_ids"], Mapping)
+                    and set(payload["expected_segment_set_ids"]) == {"pivot", "target"}
+                    and all(isinstance(value, str) and value.strip()
+                            for value in payload["expected_segment_set_ids"].values())
+                )
             )
         )
 
@@ -169,6 +176,7 @@ class TextAlignmentController:
                 payload["target_source_file_id"],
                 force=payload.get("force", False),
                 reviewed_body_ranges=payload.get("reviewed_body_ranges"),
+                expected_segment_set_ids=payload.get("expected_segment_set_ids"),
             )
         except TextAlignmentCancelled:
             LOGGER.info("text alignment cancelled by user")

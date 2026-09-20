@@ -157,9 +157,15 @@ class TextAlignmentCoordinatorTests(unittest.TestCase):
             "src.me_finder.application.text_alignment_coordinator.generate_alignment",
             return_value={"status": "completed"},
         ) as generate:
-            coordinator.generate("group", "pdf-de", "epub-en", force=True)
+            coordinator.generate("group", "pdf-de", "epub-en", force=True,
+                                 reviewed_body_ranges={"pivot": [1, 4], "target": [2, 5]},
+                                 expected_segment_set_ids={"pivot": "set-de", "target": "set-en"})
 
         self.assertTrue(generate.call_args.kwargs["force"])
+        self.assertEqual(generate.call_args.kwargs["reviewed_body_ranges"],
+                         {"pivot": [1, 4], "target": [2, 5]})
+        self.assertEqual(generate.call_args.kwargs["expected_segment_set_ids"],
+                         {"pivot": "set-de", "target": "set-en"})
 
     def test_shutdown_closed_durable_gate_reports_cancellation_not_failure(self) -> None:
         # A queued alignment that never starts because the app is closing must

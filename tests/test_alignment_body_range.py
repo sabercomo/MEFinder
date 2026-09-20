@@ -333,6 +333,47 @@ class BodyRangeReviewTests(unittest.TestCase):
                     reviewed_body_ranges=ranges,
                 )
 
+    def test_reparsed_text_rejects_old_ranges_before_computation_or_writes(self) -> None:
+        overview = self._overview()
+        sets = {side["side"]: side["segment_set_id"] for side in overview["sides"]}
+        ranges = {side["side"]: [side["body_start_index"], side["body_end_index"] + 1]
+                  for side in overview["sides"]}
+        with sqlite3.connect(self.db) as connection:
+            payload = json.loads(connection.execute(
+                "SELECT payload_json FROM pdf_pages WHERE pdf_page_index=2"
+            ).fetchone()[0])
+            payload["text_raw"] = "新增前置材料。新增说明。" + payload["text_raw"]
+            connection.execute(
+                "UPDATE pdf_pages SET payload_json=? WHERE pdf_page_index=2",
+                (json.dumps(payload, ensure_ascii=False),),
+            )
+        with mock.patch("src.me_finder.alignment_kernel.embed_text_sequences") as embed:
+            with self.assertRaisesRegex(InvalidAlignmentRequest, "重新加载"):
+                generate_alignment(
+                    self.db, "work", "pdf-zh", "epub-en", force=True,
+                    reviewed_body_ranges=ranges, expected_segment_set_ids=sets,
+                )
+            embed.assert_not_called()
+        with sqlite3.connect(self.db) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM alignment_runs").fetchone()[0], 0)
+        self.assertEqual(self._overview()["range_source"], "detected")
+
+    def test_matching_segment_sets_accept_both_ranges_and_reuse_them(self) -> None:
+        sets = {side["side"]: side["segment_set_id"] for side in self._overview()["sides"]}
+        ranges = {"pivot": [3, 12], "target": [1, 8]}
+        with mock.patch("src.me_finder.alignment_kernel.embed_text_sequences",
+                        side_effect=_fake_embedding_sequences):
+            for options in ({"reviewed_body_ranges": ranges, "expected_segment_set_ids": sets}, {}):
+                result = generate_alignment(
+                    self.db, "work", "pdf-zh", "epub-en", force=True, **options,
+                )
+                self.assertEqual(result["status"], "completed")
+                overview = self._overview()
+                self.assertEqual(overview["range_source"], "reviewed")
+                for side in overview["sides"]:
+                    self.assertEqual([side["body_start_index"], side["body_end_index"] + 1],
+                                     ranges[side["side"]])
+
 
 if __name__ == "__main__":
     unittest.main()

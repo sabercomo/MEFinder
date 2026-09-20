@@ -821,7 +821,7 @@
   }
 
   // 发起一次对齐任务；成功返回 true，失败就地提示并返回 false。
-  async function startJob(group, pivotId, targetId, force, reviewedBodyRanges) {
+  async function startJob(group, pivotId, targetId, force, reviewedBodyRanges, expectedSegmentSetIds) {
     if (!canGenerate()) { showToast(generateBlockedReason(), 'warning'); return false; }
     var payload = {
       document_group_id: group.document_group_id,
@@ -829,7 +829,10 @@
       target_source_file_id: targetId,
       force: !!force
     };
-    if (reviewedBodyRanges) payload.reviewed_body_ranges = reviewedBodyRanges;
+    if (reviewedBodyRanges) {
+      payload.reviewed_body_ranges = reviewedBodyRanges;
+      payload.expected_segment_set_ids = expectedSegmentSetIds;
+    }
     try {
       var data = await postJSON('/api/text-alignments/start', payload);
       works.running = {
@@ -917,7 +920,7 @@
     var draftKey = rangeDraftKey(group.document_group_id, a, b);
     var state = {loading: true, error: '', submitting: false, sides: [], restored: false};
     var dialog = openDialog(el('div'), 'tw-range-title');
-    dialog.classList.add('is-wide');
+    dialog.classList.add('is-wide', 'tw-range-dialog');
 
     function sideOf(name) {
       return state.sides.find(function (item) { return item.side === name; });
@@ -930,8 +933,14 @@
         !state.sides.some(invalid) && !state.submitting;
     }
 
-    function draw() {
+    function draw(side, resetWindow) {
       var focusId = document.activeElement && document.activeElement.id;
+      if (side) {
+        updateBook(side, resetWindow);
+        dialog.querySelector('#tw-range-submit').disabled = !submittable() || !canGenerate() || !!works.running || !!works.queue;
+        if (focusId) restoreFocus(focusId);
+        return;
+      }
       var body = el('div', {className: 'tw-dialog-body'});
       if (state.loading) body.appendChild(el('p', {className: 'tw-range-note', text: '正在读取两本书的文本…'}));
       else if (state.error) {
@@ -967,11 +976,11 @@
     // 退到同一本书当前选中的文本段，键盘操作不掉回页面开头。
     function restoreFocus(focusId) {
       var restore = dialog.querySelector('#' + focusId);
-      if (restore && !restore.disabled) { restore.focus(); return; }
+      if (restore && !restore.disabled) { restore.focus({preventScroll: true}); return; }
       var owner = /-(pivot|target)$/.exec(focusId);
       var side = owner && sideOf(owner[1]);
       var fallback = side && dialog.querySelector('#tw-range-pick-' + side.side + '-' + side.selected);
-      if (fallback) fallback.focus();
+      if (fallback) fallback.focus({preventScroll: true});
     }
 
     function bookColumn(side) {
@@ -984,21 +993,43 @@
         boundsSummary(side),
         navRow(side)
       ]);
-      if (side.outline.length) column.appendChild(outlineRow(side));
-      column.appendChild(segmentList(side));
-      column.appendChild(el('div', {className: 'tw-range-pager'}, [
+      var reading = el('div', {className: 'tw-range-reading'});
+      if (side.outline.length) reading.appendChild(outlineRow(side));
+      reading.appendChild(segmentList(side));
+      column.appendChild(reading);
+      column.appendChild(pagerRow(side));
+      column.appendChild(setterRow(side));
+      column.appendChild(el('p', {className: 'tw-range-error', role: 'alert',
+        text: invalid(side) ? '结尾在开头之前，请重新设置这一端' : side.message}));
+      side.column = column;
+      return column;
+    }
+
+    // 仅更新这一侧的范围与文本；保留两侧目录、输入框和滚动容器本身。
+    function updateBook(side, resetWindow) {
+      var column = side.column;
+      var reading = column.querySelector('.tw-range-reading');
+      var scrollTop = reading.scrollTop;
+      column.querySelector('.tw-range-bounds').replaceWith(boundsSummary(side));
+      column.querySelector('.tw-range-segments').replaceWith(segmentList(side));
+      column.querySelector('.tw-range-pager').replaceWith(pagerRow(side));
+      column.querySelector('.tw-range-set').replaceWith(setterRow(side));
+      column.querySelector(':scope > .tw-range-error').textContent = invalid(side)
+        ? '结尾在开头之前，请重新设置这一端' : side.message;
+      reading.scrollTop = resetWindow ? 0 : scrollTop;
+      if (resetWindow) {
+        column.querySelector('.tw-range-number').value = side.locator_kind === 'pdf_page'
+          ? ((side.knownSegments[side.selected] || {}).physical_page_1based || '') : side.selected + 1;
+      }
+    }
+
+    function pagerRow(side) {
+      return el('div', {className: 'tw-range-pager'}, [
         button('↑ 前文', 'quiet sm', function () { showSegment(side, Math.max(0, side.offset - RANGE_WINDOW)); },
           {disabled: side.offset === 0 || side.windowLoading}),
         button('后文 ↓', 'quiet sm', function () { showSegment(side, side.offset + RANGE_WINDOW); },
           {disabled: side.offset + RANGE_WINDOW >= side.segment_count || side.windowLoading})
-      ]));
-      column.appendChild(setterRow(side));
-      if (invalid(side)) {
-        column.appendChild(el('p', {className: 'tw-range-error', role: 'alert', text: '结尾在开头之前，请重新设置这一端'}));
-      } else if (side.message) {
-        column.appendChild(el('p', {className: 'tw-range-error', role: 'alert', text: side.message}));
-      }
-      return column;
+      ]);
     }
 
     function boundsSummary(side) {
@@ -1079,7 +1110,7 @@
           type: 'radio', name: 'tw-range-pick-' + side.side,
           id: 'tw-range-pick-' + side.side + '-' + index,
           checked: side.selected === index,
-          onchange: function () { side.selected = index; draw(); }
+          onchange: function () { side.selected = index; draw(side); }
         });
         list.appendChild(el('label', {
           className: 'tw-range-segment' + (side.selected === index ? ' is-selected' : '')
@@ -1119,7 +1150,7 @@
       side.history.push([side.start, side.end]);
       side[edge] = side.selected;
       side.message = '';
-      draw();
+      draw(side);
     }
 
     function undo(side) {
@@ -1128,14 +1159,14 @@
       side.start = previous[0];
       side.end = previous[1];
       side.message = '';
-      draw();
+      draw(side);
     }
 
     async function showSegment(side, start, select, page) {
       side.windowLoading = true;
       side.windowError = '';
       side.message = '';
-      draw();
+      draw(side);
       var params = page ? {count: RANGE_WINDOW, pdf_page: page} : {count: RANGE_WINDOW, start: Math.max(0, start)};
       try {
         var data = await requestJSON(rangeSegmentsUrl(side, params));
@@ -1154,7 +1185,7 @@
         else side.windowError = error.message || '文本读取失败';
       }
       side.windowLoading = false;
-      draw();
+      draw(side, !side.windowError && !side.message);
     }
 
     async function load() {
@@ -1225,7 +1256,7 @@
       draw();
       works.rangeDrafts[draftKey] = {sets: sets, ranges: ranges};
       closeDialog();
-      await startJob(group, order[0], order[1], true, ranges);
+      await startJob(group, order[0], order[1], true, ranges, sets);
     }
 
     draw();

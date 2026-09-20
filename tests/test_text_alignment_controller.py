@@ -186,6 +186,7 @@ class TextAlignmentControllerTests(unittest.TestCase):
         payload = self._generate_payload() | {
             "force": True,
             "reviewed_body_ranges": {"pivot": [4, 900], "target": [7, 1200]},
+            "expected_segment_set_ids": {"pivot": "set-zh", "target": "set-en"},
         }
         status, body = self.controller.generate(payload)
         self.assertEqual(status, 200)
@@ -193,6 +194,22 @@ class TextAlignmentControllerTests(unittest.TestCase):
             body["result"]["options"]["reviewed_body_ranges"],
             {"pivot": [4, 900], "target": [7, 1200]},
         )
+        self.assertEqual(body["result"]["options"]["expected_segment_set_ids"],
+                         {"pivot": "set-zh", "target": "set-en"})
+
+    def test_reviewed_ranges_require_both_segment_set_ids(self) -> None:
+        ranges = {"reviewed_body_ranges": {"pivot": [4, 900], "target": [7, 1200]}}
+        for sets in (None, {}, {"pivot": "set-zh"}, {"pivot": "", "target": "set-en"},
+                     {"pivot": 1, "target": "set-en"}, {"pivot": "set-zh", "target": " "}):
+            with self.subTest(sets=sets):
+                payload = self._generate_payload() | ranges
+                if sets is not None:
+                    payload["expected_segment_set_ids"] = sets
+                self.assertEqual(self.controller.generate(payload)[0], 400)
+                self.assertEqual(self.controller.start(payload)[0], 400)
+        self.assertEqual(self.controller.start(self._generate_payload() | {
+            "expected_segment_set_ids": {"pivot": "set-zh", "target": "set-en"},
+        })[0], 400)
 
     def test_malformed_body_ranges_never_reach_the_coordinator(self) -> None:
         for ranges in (
@@ -204,7 +221,10 @@ class TextAlignmentControllerTests(unittest.TestCase):
             {"pivot": [4, 900], "target": [7, 1200], "extra": [0, 1]},
         ):
             with self.subTest(ranges=ranges):
-                payload = self._generate_payload() | {"reviewed_body_ranges": ranges}
+                payload = self._generate_payload() | {
+                    "reviewed_body_ranges": ranges,
+                    "expected_segment_set_ids": {"pivot": "set-zh", "target": "set-en"},
+                }
                 self.assertEqual(self.controller.generate(payload)[0], 400)
                 self.assertEqual(self.controller.start(payload)[0], 400)
         self.assertEqual(

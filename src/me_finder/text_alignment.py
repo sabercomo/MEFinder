@@ -1032,6 +1032,7 @@ def generate_alignment(
     alignment_thresholds: AlignmentThresholds | None = None,
     write_window: WriteWindow | None = None,
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
+    expected_segment_set_ids: Mapping[str, str] | None = None,
     compute_runner: Callable[..., Tuple[List[SemanticLink], list]] | None = None,
 ) -> Dict[str, object]:
     group_id = str(document_group_id or "").strip()
@@ -1055,6 +1056,12 @@ def generate_alignment(
             _require_pair(connection, group_id, pivot_id, target_id)
             pivot_set_id, pivot_segments = _segment_set(connection, pivot_id)
             target_set_id, target_segments = _segment_set(connection, target_id)
+            # Compare inside the preparation transaction, before interpreting
+            # indices or creating a run. An in-range index can refer to new text.
+            if expected_segment_set_ids is not None and expected_segment_set_ids != {
+                "pivot": pivot_set_id, "target": target_set_id,
+            }:
+                raise InvalidAlignmentRequest("文献解析文本已更新，请重新加载正文范围后再提交")
             if reviewed_body_ranges is None:
                 reviewed_body_ranges = latest_reviewed_body_ranges(
                     connection, pivot_set_id, target_set_id

@@ -135,6 +135,7 @@ class TextAlignmentCoordinator:
         *,
         force: bool = False,
         reviewed_body_ranges=None,
+        expected_segment_set_ids=None,
     ):
         preferences = read_preferences(
             resolve_preferences_path(self._paths.runtime_root)
@@ -193,6 +194,7 @@ class TextAlignmentCoordinator:
                         alignment_thresholds=thresholds,
                         write_window=self._write_window,
                         reviewed_body_ranges=reviewed_body_ranges,
+                        expected_segment_set_ids=expected_segment_set_ids,
                         compute_runner=runner,
                     )
             except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:

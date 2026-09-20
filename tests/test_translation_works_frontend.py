@@ -193,12 +193,13 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         dialog = _function_body(WORKS_JS, "function openBodyRangeDialog(group, a, b) {")
         # 界面的「结尾」是最后一段，库内是半开区间：+1 才不漏末段。
         self.assertIn("ranges[side.side] = [side.start, side.end + 1];", dialog)
-        self.assertIn("startJob(group, order[0], order[1], true, ranges)", dialog)
+        self.assertIn("startJob(group, order[0], order[1], true, ranges, sets)", dialog)
+        self.assertIn("payload.expected_segment_set_ids = expectedSegmentSetIds;", WORKS_JS)
         # 两个范围一起提交，未修改的一本沿用当前显示范围。
         self.assertIn("state.sides.forEach(function (side) {", dialog)
         # 只有设置按钮改范围；点选只改当前选中段。
         self.assertIn("function setEdge(side, edge) {", dialog)
-        self.assertIn("side.selected = index; draw();", dialog)
+        self.assertIn("side.selected = index; draw(side);", dialog)
         # 单本确认环节已删除，不得回流。
         for removed in ("确认这本", "已确认这本", "范围待确认", "范围已确认", "confirmed"):
             self.assertNotIn(removed, dialog)
@@ -216,11 +217,11 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
     def test_body_range_css_follows_the_pair_layout_and_stacks_when_narrow(self) -> None:
         self.assertIn("Hallmark · component: 正文范围检查与修改", WORKS_CSS)
         self.assertIn(
-            ".tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }",
+            ".tw-range-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);",
             WORKS_CSS,
         )
         narrow = WORKS_CSS[WORKS_CSS.index("@media (max-width: 860px)"):]
-        self.assertIn(".tw-range-pair { grid-template-columns: minmax(0, 1fr); }", narrow)
+        self.assertIn(".tw-range-pair { grid-template-columns: minmax(0, 1fr);", narrow)
 
     def test_dom_is_built_without_html_strings_and_css_uses_tokens(self) -> None:
         self.assertNotIn("innerHTML", WORKS_JS)

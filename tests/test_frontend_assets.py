@@ -512,9 +512,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   （35-works.js openBodyRangeDialog / 45-works.css .tw-range-*），两本书各自
     #   一个连续区间，一次提交两个范围并重跑当前版本对。
     BASELINE_SHA256 = (
-        "0a8dca1ec8c74e190dc557c3b86b67909ae6f3cdb8b8c625f5d50e821c5715da"
+        "bd7a9f6b5872721b5d8b3c7ec0db8e3d8c4b13048ce047e455c8430926a679e4"
     )
-    BASELINE_BYTES = 1221492
+    BASELINE_BYTES = 1223766
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
