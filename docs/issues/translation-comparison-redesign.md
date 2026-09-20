@@ -119,3 +119,23 @@
 浏览器核实（`serve` + 预览库，用注入的 fetch 桩模拟任务状态，未真跑模型）：同一任务两处认领 → 状态请求 1 次、提示 1 条、归属 `works`；阅读器发起的任务结束后作品页重读一次 overview；控制台无报错。
 
 未做：③ 阅读会话状态。
+
+## 2026-09-20 — 第五阶段业务重构（三）：阅读会话状态
+
+事实（改前）：
+
+- 一次阅读的位置有五处记录、三种形状：地址栏深链（只有左栏 + 锚点）、`state.lastSession`（另写一份字面量）、`currentLocationOptions()`（交接新窗口用，含右栏）、服务端 `document_group_reading_positions`（含右栏，按作品）、`works.positions` 缓存。
+- 具体缺口两处：① 独立阅读窗口重载或地址栏刷新后右栏丢失（深链不带对照目标，`restore()` 恢复不出来）；② `onReaderOpenChange` 关闭时清空 `works.positions` 再 `setTimeout(…, 400)` 重新查询，赌 `closeReader()` 里那次 fire-and-forget POST 已经落库。
+
+处理：
+
+- `currentReadingSession()` 成为唯一的会话形状（sourceId / title / targetIndex / anchorId / groupId / compareWith），深链、`lastSession`、「在新窗口打开 / 回到主窗口」、服务端位置四处共用。
+- 深链新增 `c` 参数（对照版本，沿用 source 的 id 校验，等于自身或重复即整条链接作废）；`noteReadingSessionChanged()` 把「开关右栏」同时反映到地址栏与服务端位置。
+- `saveReadingPositionNow()` 返回刚写出的记录（形状与 GET 响应一致），`closeReader()` 经 `config.onOpenChange(false, savedPosition)` 交回宿主；作品页直接采用，删除清空 + 定时重查。
+- 恢复优先级在 `currentReadingSession()` 上方注释成文：显式 options > 深链 > lastSession > localStorage 对照记忆；阅读器不主动读服务端位置跳转（跳不跳由入口决定），本轮不改这一点。
+
+守卫：`tests/test_reader_comparison_state.py` 的 `test_deep_link_carries_the_comparison_pane`、`test_closing_hands_the_position_it_just_saved_to_the_host`（都执行真实函数体）；`tests/test_structured_reader_frontend.py` 与 `tests/test_translation_works_frontend.py` 钉死会话形状、`c` 参数与「作品页不再出现 works.positions = {} 与 setTimeout」。
+
+限制：本轮浏览器只做了加载冒烟（预览库为空，没有可打开的文献），会话行为的证据来自 Node 执行真实函数体的回归。真实库副本上的「刷新保留右栏 / 关闭后继续阅读」仍待在有数据的环境验收。
+
+三条线到此收敛完毕（① 校正读取、② 任务完成刷新、③ 阅读会话状态），业务重构未扩大到全仓拆分。

@@ -1923,24 +1923,24 @@
 
   // 阅读器（主窗口内）需要的宿主能力：侧栏收成图标栏、管理版本、安装入口、新窗口。
   var sidebarBeforeReader = null;
-  function onReaderOpenChange(open) {
+  function onReaderOpenChange(open, savedPosition) {
     var root = document.documentElement;
     if (open) {
       if (sidebarBeforeReader === null) sidebarBeforeReader = root.classList.contains('sidebar-collapsed');
       root.classList.add('sidebar-collapsed');
-    } else {
-      if (sidebarBeforeReader !== null) {
-        root.classList.toggle('sidebar-collapsed', sidebarBeforeReader);
-        sidebarBeforeReader = null;
-      }
-      // 阅读器关闭时会写入最新位置；稍后重新读取，让「继续阅读」反映这次阅读。
-      works.positions = {};
-      // 阅读期间可能生成对齐或人工校正；轻量刷新，同时失效旧的逐对统计。
-      invalidate();
-      setTimeout(function () {
-        if (currentPage === 'works' && works.currentId) loadPosition(works.currentId);
-      }, 400);
+      return;
     }
+    if (sidebarBeforeReader !== null) {
+      root.classList.toggle('sidebar-collapsed', sidebarBeforeReader);
+      sidebarBeforeReader = null;
+    }
+    // 阅读器关闭时把刚写出的位置一并交回：直接采用，不再清空后靠定时器
+    // 重新查询——那是在赌那一次写入已经落库。
+    if (savedPosition && savedPosition.document_group_id) {
+      works.positions[savedPosition.document_group_id] = savedPosition.position || null;
+    }
+    // 阅读期间可能生成对齐或人工校正；轻量刷新，同时失效旧的逐对统计。
+    invalidate();
   }
 
   function canOpenNativeWindow() {

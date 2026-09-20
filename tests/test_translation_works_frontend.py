@@ -117,6 +117,11 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         self.assertIn("jobs.watch(jobId, {", WORKS_JS)
         # 提示只由发起方给出，阅读器发起的任务由阅读器报告。
         self.assertIn("event.meta.origin === 'works'", watch)
+        # 关闭阅读器：直接采用交回的位置，不清空缓存、不用定时器重查。
+        close = _function_body(WORKS_JS, "function onReaderOpenChange(open, savedPosition)")
+        self.assertIn("works.positions[savedPosition.document_group_id] = savedPosition.position", close)
+        self.assertNotIn("setTimeout", close)
+        self.assertNotIn("works.positions = {}", WORKS_JS)
         # 换模型后作品页的状态快照必须失效。
         settings = (STATIC / "js" / "60-settings.js").read_text(encoding="utf-8")
         self.assertIn("global.MEFinder.works.invalidate();", settings)
@@ -291,7 +296,7 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         self.assertIn("works.loaded = false;", _function_body(WORKS_JS, "function invalidate()"))
         self.assertIn("library_changed", WORKS_JS)
         self.assertIn("invalidate: invalidate,", WORKS_JS)
-        self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open)"))
+        self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open, savedPosition)"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_load_retries_failure_and_refreshes_invalidated_inflight_data(self) -> None:

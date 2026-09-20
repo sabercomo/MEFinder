@@ -106,13 +106,34 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("readingPositionEndpoint: '/api/translation-works/reading-position'", READER_JS)
         save = READER_JS[READER_JS.index("function saveReadingPositionNow()"):]
         save = save[:save.index("function scheduleReadingPositionSave()")]
-        self.assertIn("document_group_id: state.work.groupId", save)
-        self.assertIn("right_source_file_id: state.comparison.open ? state.comparison.targetSourceId : null", save)
-        self.assertIn("saveReadingPositionNow();", READER_JS[READER_JS.index("function closeReader()"):])
+        # 会话形状只有一份：位置、深链、交接窗口都从 currentReadingSession() 取。
+        self.assertIn("var session = currentReadingSession();", save)
+        self.assertIn("document_group_id: session.groupId", save)
+        self.assertIn("right_source_file_id: session.compareWith || null", save)
+        session = READER_JS[READER_JS.index("function currentReadingSession()"):]
+        session = session[:session.index("function openInNewWindow()")]
+        for field in ("sourceId:", "targetIndex:", "anchorId:", "groupId:", "compareWith:"):
+            self.assertIn(field, session)
+        close = READER_JS[READER_JS.index("function closeReader()"):]
+        self.assertIn("var savedPosition = saveReadingPositionNow();", close)
+        # 关闭时把刚写出的位置交回宿主，宿主不必再查一次、也不靠定时器等落库。
+        self.assertIn("config.onOpenChange(false, savedPosition)", close)
+
+    def test_reader_session_keeps_the_comparison_pane_across_reloads(self) -> None:
+        # 右栏是会话的一部分：深链带上它，开关右栏时地址栏与服务端位置一起更新。
+        self.assertIn("'off', 'h', 'q', 'c'", READER_JS)
+        self.assertIn("if (compareWith) params.set('c', compareWith);", READER_JS)
+        self.assertIn("compareWith: compareWith,", READER_JS)
+        self.assertIn("state.lastHistoryCompare === compareWith", READER_JS)
+        note = READER_JS[READER_JS.index("function noteReadingSessionChanged()"):]
+        note = note[:note.index("function toggleComparisonFollow()")]
+        self.assertIn("scheduleReaderDeepLink(", note)
+        self.assertIn("scheduleReadingPositionSave();", note)
+        self.assertIn("state.lastSession = Object.assign(currentReadingSession()", READER_JS)
 
     def test_reader_window_can_return_location_to_main_window(self) -> None:
-        self.assertIn("global.pywebview.state.readerReturn = currentLocationOptions()", READER_JS)
-        self.assertIn("config.openInNewWindow(currentLocationOptions())", READER_JS)
+        self.assertIn("global.pywebview.state.readerReturn = currentReadingSession()", READER_JS)
+        self.assertIn("config.openInNewWindow(currentReadingSession())", READER_JS)
         self.assertIn("'在新窗口打开'", READER_JS)
         self.assertIn("'回到主窗口'", READER_JS)
 
@@ -474,7 +495,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("state.deepLinkTimer = global.setTimeout", READER_JS)
         self.assertIn("global.history.replaceState(", READER_JS)
         self.assertIn("state.lastHistoryAnchor = anchorId", READER_JS)
-        self.assertIn("state.lastSession = {", READER_JS)
+        self.assertIn("state.lastSession = Object.assign(currentReadingSession()", READER_JS)
         self.assertIn("function restoreReaderLocation()", READER_JS)
         self.assertIn("parseReaderDeepLink(global.location) || state.lastSession", READER_JS)
         self.assertIn("restore: restoreReaderLocation", READER_JS)
@@ -635,7 +656,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertNotIn("mef-reader-backdrop", READER_JS)
         self.assertIn("document.querySelector('.main-area')", READER_JS)
         self.assertIn("config.onOpenChange(true)", READER_JS)
-        self.assertIn("config.onOpenChange(false)", READER_JS)
+        self.assertIn("config.onOpenChange(false, savedPosition)", READER_JS)
         # 独立阅读窗口：占满整个窗口。
         self.assertIn('html[data-reader-window="true"] .mef-structured-reader { position: fixed; }', READER_CSS)
         self.assertRegex(

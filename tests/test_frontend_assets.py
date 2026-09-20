@@ -513,10 +513,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   一个连续区间，一次提交两个范围并重跑当前版本对。
     # 0.5.5 校正读取统一：阅读器「!」标记改读后端 needs_review，不再自算口径。
     # 0.5.5 任务完成刷新统一：对齐任务监听收归 reader.js 一份，作品页订阅结局。
+    # 0.5.5 阅读会话统一：currentReadingSession() 一份会话记录，深链带右栏，
+    #   关闭阅读器把刚写出的位置交回宿主。
     BASELINE_SHA256 = (
-        "c0c64f2a84b18449994ae8c703b4eb751710b618f26595ba6fd204d1a026e257"
+        "5acb9ab74044e04ec9401bee966d4934316d42b6352face7f5c0eb81e1c31624"
     )
-    BASELINE_BYTES = 1227314
+    BASELINE_BYTES = 1229834
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

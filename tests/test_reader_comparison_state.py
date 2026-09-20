@@ -128,6 +128,46 @@ subscribeAlignmentJob(event=>{events.push(event);});
 })();
 """)
 
+    def test_deep_link_carries_the_comparison_pane(self) -> None:
+        """会话记录包含右栏：刷新或重开独立窗口后对照不会丢。"""
+
+        self.run_js([("  function parseReaderDeepLink(", "  function deepLinkRange(")], """
+const global={location:null};
+const codePointLength=value=>Array.from(value).length;
+const inferIndexFromAnchor=()=>0;
+const parseDeepLinkOffset=()=>null;
+const read=search=>parseReaderDeepLink({pathname:'/reader',search:search});
+assert.equal(read('?source=A&page=A-P1&c=B').compareWith,'B');
+assert.equal(read('?source=A&page=A-P1').compareWith,'');
+// 对照目标不能是自己，也不能给两个。
+assert.equal(read('?source=A&page=A-P1&c=A'),null);
+assert.equal(read('?source=A&page=A-P1&c=B&c=C'),null);
+assert.equal(read('?source=A&page=A-P1&c=%20'),null);
+""")
+
+    def test_closing_hands_the_position_it_just_saved_to_the_host(self) -> None:
+        """位置只写一次，宿主直接采用；不再清空缓存后靠定时器重新查询。"""
+
+        self.run_js([
+            ("  /* ── 阅读会话", "  function openInNewWindow("),
+            ("  function saveReadingPositionNow(", "  function scheduleReadingPositionSave("),
+        ], """
+const state={open:true,positionTimer:null,sourceId:'A',title:'T',currentIndex:7,
+ currentAnchorId:'A-P8',work:{groupId:'G'},items:new Map([[7,{}]]),
+ comparison:{open:true,targetSourceId:'B'}};
+const config={readingPositionEndpoint:'/pos'};
+const global={clearTimeout:()=>{}};
+const posted=[];
+const postJSON=(url,body)=>{posted.push(body);return Promise.resolve({});};
+const saved=saveReadingPositionNow();
+assert.deepEqual(saved,{document_group_id:'G',position:{
+ left_source_file_id:'A',right_source_file_id:'B',item_index:7,char_offset:0}});
+// 交回宿主的形状与写出去的一致，宿主无需再查一次。
+assert.deepEqual(posted[0],Object.assign({document_group_id:'G'},saved.position));
+state.work.groupId='';
+assert.equal(saveReadingPositionNow(),null);
+""")
+
     def test_follow_response_does_not_scroll_source_back_to_search_hit(self):
         self.run_js([("  function showComparison(", "  function closeComparison(")], """
 const comparison={targetSourceId:'B',indexHighlights:new Map(),currentIndex:0};
@@ -137,7 +177,7 @@ const visibleSourceHighlightRange=()=>({startIndex:0});
 const positionSourceTarget=()=>{sourceMoves++;};
 const markComparisonOpen=()=>{},showPendingPane=()=>{},rememberComparisonTarget=()=>{};
 const clampInteger=value=>value, setComparisonHighlights=()=>{},updateComparisonNotice=()=>{};
-const updateComparisonControls=()=>{},renderToolbar=()=>{},loadLinkWindow=()=>{},scheduleReadingPositionSave=()=>{};
+const updateComparisonControls=()=>{},renderToolbar=()=>{},loadLinkWindow=()=>{},noteReadingSessionChanged=()=>{};
 const loadComparisonWindow=()=>{targetMoves++;return true;};
 showComparison({targetSourceId:'B',targetIndex:5,pageMatchSpans:[]},'B');
 assert.equal(sourceMoves,0);

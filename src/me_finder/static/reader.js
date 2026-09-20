@@ -144,6 +144,7 @@
       loading: false
     },
     lastSession: null,
+    lastHistoryCompare: '',
     lastDeepLink: '',
     lastHistoryAnchor: '',
     deepLinkTimer: null,
@@ -1540,7 +1541,7 @@
     updateComparisonNotice();
     updateComparisonControls();
     renderToolbar();
-    scheduleReadingPositionSave();
+    noteReadingSessionChanged();
   }
 
   function updateComparisonNotice() {
@@ -1759,11 +1760,23 @@
   }
 
   /* ── 新窗口 / 回到主窗口 / 跳到页 ─────────────────────────────── */
-  function currentLocationOptions() {
+  /* ── 阅读会话：一次阅读的完整位置 ─────────────────────────────
+   * 同一份会话被四处使用，形状只在这里定义一次：
+   *   1. 地址栏深链（刷新、独立窗口重载后可恢复，带右栏）
+   *   2. state.lastSession（本窗口内的 restore）
+   *   3. 「在新窗口打开 / 回到主窗口」的交接
+   *   4. 服务端 reading_positions（按作品记「上次读到」，供「继续阅读」）
+   * 恢复优先级：显式 options（宿主的「继续阅读」，其右栏来自服务端位置）
+   * > 地址栏深链 > lastSession > 每本书的对照记忆（localStorage）。
+   * 阅读器自己不去读服务端位置擅自跳转——跳不跳由宿主决定。
+   */
+  function currentReadingSession() {
     return {
       sourceId: state.sourceId,
       title: state.title,
       targetIndex: state.currentIndex,
+      anchorId: state.currentAnchorId,
+      groupId: state.work.groupId,
       compareWith: state.comparison.open ? state.comparison.targetSourceId : ''
     };
   }
@@ -1771,7 +1784,7 @@
   function openInNewWindow() {
     closeMenus();
     if (typeof config.openInNewWindow !== 'function') return;
-    Promise.resolve(config.openInNewWindow(currentLocationOptions())).then(function (opened) {
+    Promise.resolve(config.openInNewWindow(currentReadingSession())).then(function (opened) {
       if (opened) closeReader();
     }).catch(function (error) {
       setAlert(error && error.message ? error.message : '无法打开新窗口', 'warning');
@@ -1781,7 +1794,7 @@
   function returnToMainWindow() {
     closeMenus();
     if (!global.pywebview || !global.pywebview.state) return;
-    global.pywebview.state.readerReturn = currentLocationOptions();
+    global.pywebview.state.readerReturn = currentReadingSession();
   }
 
   function openJumpForm() {
@@ -1813,19 +1826,27 @@
   }
 
   /* ── 阅读位置：按作品保存版本对与位置，供「继续阅读」 ─────────── */
+  // 返回刚写出的位置（没写则 null），形状与 GET 的响应一致：关闭阅读器时
+  // 宿主直接拿它更新「继续阅读」，不必再等一次往返或靠定时器猜写入完成。
   function saveReadingPositionNow() {
     if (state.positionTimer !== null) {
       global.clearTimeout(state.positionTimer);
       state.positionTimer = null;
     }
-    if (!state.open || !state.work.groupId || !state.items.has(state.currentIndex)) return;
-    postJSON(config.readingPositionEndpoint, {
-      document_group_id: state.work.groupId,
-      left_source_file_id: state.sourceId,
-      right_source_file_id: state.comparison.open ? state.comparison.targetSourceId : null,
-      item_index: state.currentIndex,
+    if (!state.open || !state.work.groupId || !state.items.has(state.currentIndex)) {
+      return null;
+    }
+    var session = currentReadingSession();
+    var position = {
+      left_source_file_id: session.sourceId,
+      right_source_file_id: session.compareWith || null,
+      item_index: session.targetIndex,
       char_offset: 0
-    }).catch(function () { /* 位置只是便利信息，保存失败不打扰阅读。 */ });
+    };
+    postJSON(config.readingPositionEndpoint, Object.assign(
+      {document_group_id: session.groupId}, position
+    )).catch(function () { /* 位置只是便利信息，保存失败不打扰阅读。 */ });
+    return {document_group_id: session.groupId, position: position};
   }
 
   function scheduleReadingPositionSave() {
@@ -2484,7 +2505,7 @@
     updateComparisonControls();
     renderToolbar();
     loadLinkWindow();
-    scheduleReadingPositionSave();
+    noteReadingSessionChanged();
     return loadComparisonWindow(comparison.currentIndex);
   }
 
@@ -2520,6 +2541,16 @@
     showPendingPane(false);
     state.elements.comparisonContent.replaceChildren();
     renderToolbar();
+    noteReadingSessionChanged();
+  }
+
+  // 开关右栏同样改变会话：地址栏深链与服务端位置一起更新，否则刷新后右栏
+  // 丢失、「继续阅读」记的还是上一次的版本对。
+  function noteReadingSessionChanged() {
+    var item = state.items.get(state.currentIndex);
+    if (item && state.currentAnchorId) {
+      scheduleReaderDeepLink(item, state.currentIndex, state.currentAnchorId);
+    }
     scheduleReadingPositionSave();
   }
 
@@ -2913,7 +2944,7 @@
     var params = new URLSearchParams(search);
     var unknownParameter = false;
     params.forEach(function (_value, key) {
-      if (!['source', 'page', 'off', 'h', 'q'].includes(key)) {
+      if (!['source', 'page', 'off', 'h', 'q', 'c'].includes(key)) {
         unknownParameter = true;
       }
     });
@@ -2923,7 +2954,8 @@
       params.getAll('page').length !== 1 ||
       params.getAll('off').length > 1 ||
       params.getAll('h').length > 1 ||
-      params.getAll('q').length > 1
+      params.getAll('q').length > 1 ||
+      params.getAll('c').length > 1
     ) {
       return null;
     }
@@ -2938,6 +2970,10 @@
     }
     var targetIndex = inferIndexFromAnchor(anchorId);
     if (targetIndex === null) return null;
+    // 右栏属于会话的一部分：刷新或重开独立窗口时一起恢复。
+    var compareWith = String(params.get('c') || '');
+    if (compareWith && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(compareWith)) return null;
+    if (compareWith === sourceId) return null;
     var hashValue = String(params.get('h') || '');
     if (hashValue && !/^[0-9a-f]{16}$/i.test(hashValue)) return null;
     var pageTextHash = hashValue;
@@ -2960,6 +2996,7 @@
       sourceId: sourceId,
       targetIndex: targetIndex,
       anchorId: anchorId,
+      compareWith: compareWith,
       paragraphId: /-P\d+$/.test(anchorId) ? anchorId : '',
       pageMatchSpans: spans,
       matchOffsetUnit: 'unicode_codepoint',
@@ -2980,17 +3017,21 @@
   }
 
   function updateReaderDeepLink(item, index, anchorId) {
+    var compareWith = state.comparison.open
+      ? String(state.comparison.targetSourceId || '')
+      : '';
     if (
       !state.open ||
       !global.history ||
       typeof global.history.replaceState !== 'function' ||
-      state.lastHistoryAnchor === anchorId
+      (state.lastHistoryAnchor === anchorId && state.lastHistoryCompare === compareWith)
     ) {
       return;
     }
     var params = new URLSearchParams();
     params.set('source', state.sourceId);
     params.set('page', anchorId);
+    if (compareWith) params.set('c', compareWith);
     var linkRange = deepLinkRange(anchorId);
     var quote = '';
     var pageTextHash = '';
@@ -3025,10 +3066,9 @@
       url
     );
     state.lastHistoryAnchor = anchorId;
+    state.lastHistoryCompare = compareWith;
     state.lastDeepLink = url;
-    state.lastSession = {
-      sourceId: state.sourceId,
-      title: state.title,
+    state.lastSession = Object.assign(currentReadingSession(), {
       targetIndex: index,
       anchorId: anchorId,
       pageMatchSpans: spans,
@@ -3036,7 +3076,7 @@
       matchQuote: quote,
       preciseHighlightAvailable: spans.length > 0,
       fromDeepLink: true
-    };
+    });
   }
 
   function scheduleReaderDeepLink(item, index, anchorId) {
@@ -3984,6 +4024,7 @@
     state.nextStart = null;
     state.currentAnchorId = '';
     state.lastHistoryAnchor = '';
+    state.lastHistoryCompare = '';
     if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
     if (state.scrollBoundaryTimer !== null) {
       global.clearTimeout(state.scrollBoundaryTimer);
@@ -4105,7 +4146,7 @@
     closeReviewPopover();
     state.elements.jumpForm.hidden = true;
     // 关闭前立即写一次当前位置（含右栏），再收起对照；收起对照排队的保存随之取消。
-    saveReadingPositionNow();
+    var savedPosition = saveReadingPositionNow();
     closeComparison();
     if (state.positionTimer !== null) {
       global.clearTimeout(state.positionTimer);
@@ -4141,7 +4182,8 @@
     document.body.classList.remove('mef-reader-open');
     state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
     state.pendingCompareWith = '';
-    if (typeof config.onOpenChange === 'function') config.onOpenChange(false);
+    // 把刚写出的位置交给宿主：它不必重新查询，也就没有「写入是否已落库」的赌博。
+    if (typeof config.onOpenChange === 'function') config.onOpenChange(false, savedPosition);
     if (
       global.history &&
       typeof global.history.replaceState === 'function' &&
