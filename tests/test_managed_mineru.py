@@ -178,7 +178,9 @@ else:
         return path
 
     def _manager(self, **overrides) -> ManagedMinerU:
-        return ManagedMinerU(
+        # Windows keeps service.log open until the service is stopped, so the
+        # temporary directory cannot be removed while one is still running.
+        manager = ManagedMinerU(
             self.runtime,
             self.config,
             manifest_path=self._manifest(),
@@ -194,6 +196,8 @@ else:
             },
             **overrides,
         )
+        self.addCleanup(manager.close)
+        return manager
 
     def _wait(self, manager: ManagedMinerU, profile: str, timeout: float = 20) -> dict:
         deadline = time.monotonic() + timeout
