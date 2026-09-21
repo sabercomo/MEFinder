@@ -31,6 +31,7 @@ from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .alignment_regions import alignment_body_bounds
 from .alignment_kernel import align_segment_sequences
+from .bertalign_backend import BERTALIGN_ALGORITHM, BERTALIGN_ALGORITHM_VERSION
 from .semantic_alignment import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
@@ -54,6 +55,17 @@ READABLE_ALIGNMENT_VERSIONS = frozenset({"21", ALIGNMENT_ALGORITHM_VERSION})
 RESTORABLE_ALIGNMENT_VERSIONS = frozenset(
     {"16", "17", "18", "19", "20", "21", ALIGNMENT_ALGORITHM_VERSION}
 )
+# Per-backend readable versions: the optional Bertalign backend is a separate
+# algorithm identity (its runs never mix with the default backend's), but its
+# links/members use the same schema, so the reader route accepts it too.
+_READABLE_BY_ALGORITHM = {
+    ALIGNMENT_ALGORITHM: READABLE_ALIGNMENT_VERSIONS,
+    BERTALIGN_ALGORITHM: frozenset({BERTALIGN_ALGORITHM_VERSION}),
+}
+
+
+def _route_run_is_readable(algorithm: object, version: object) -> bool:
+    return str(version) in _READABLE_BY_ALGORITHM.get(str(algorithm), frozenset())
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
@@ -829,11 +841,15 @@ def _generate_alignment_on_connection(
             reviewed_body_ranges=preparation.reviewed_body_ranges,
         )
     aligned, anchors = computed
+    # Supersede only prior runs of THIS backend's algorithm; a Bertalign run and
+    # a default-backend run for the same pair coexist and stay independently
+    # readable.
     connection.execute(
         "UPDATE alignment_runs SET status = 'superseded' "
         "WHERE document_group_id = ? AND pivot_source_file_id = ? "
-        "AND target_source_file_id = ? AND status = 'completed'",
-        (document_group_id, pivot_source_id, target_source_id),
+        "AND target_source_file_id = ? AND status = 'completed' "
+        "AND algorithm = ?",
+        (document_group_id, pivot_source_id, target_source_id, ALIGNMENT_ALGORITHM),
     )
     run_id = f"alignment-run-{uuid.uuid4().hex}"
     timestamp = _now()
@@ -2046,8 +2062,7 @@ def _resolve_alignment_route(
                 "两个对齐使用的基准 Segment 版本不一致，请重新对齐后再定位。"
             )
     if any(
-        run["algorithm"] != ALIGNMENT_ALGORITHM
-        or run["algorithm_version"] not in READABLE_ALIGNMENT_VERSIONS
+        not _route_run_is_readable(run["algorithm"], run["algorithm_version"])
         for run in route_runs
     ):
         raise AlignmentNotFound(

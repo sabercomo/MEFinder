@@ -1,0 +1,14 @@
+# Optional Bertalign semantic-alignment runtime (independent venv).
+#
+# This is a SEPARATE runtime from the default FastEmbed alignment runtime
+# (requirements-alignment.txt); the two never share a venv. The heavy compute
+# stack lives only here, never in the main app process. CPU-only: no CUDA, no
+# faiss-gpu (upstream's GPU path is removed in the vendored corelib).
+#
+# The LaBSE model itself is NOT a pip dependency; it is provisioned through the
+# managed-component mechanism and loaded from a local path at compute time.
+torch
+sentence-transformers
+faiss-cpu
+numba
+numpy

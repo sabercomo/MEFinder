@@ -289,3 +289,22 @@ Source: https://github.com/yichen0831/opencc-python
 License: Apache-2.0. Bundled OpenCC configuration and dictionary data enable
 offline Chinese query conversion. See
 THIRD_PARTY_LICENSES/opencc-python-reimplemented-0.1.7-LICENSE.txt.
+
+Bertalign (vendored, commit df8c63f)
+------------------------------------
+Source: https://github.com/bfsujason/bertalign
+Pinned commit: df8c63f51aa203faed9f2fe45ae39e6fca75e667
+License: GNU General Public License v3 (GPL-3.0). See
+THIRD_PARTY_LICENSES/bertalign-df8c63f-GPL-3.0-LICENSE.txt.
+
+MEFinder vendors Bertalign's LaBSE grouped-embedding and two-stage alignment DP
+as the optional "bertalign" semantic-alignment backend, under
+src/me_finder/_vendor/bertalign/. MEFinder is licensed AGPL-3.0-only; combining
+GPLv3 source into the AGPLv3 whole is license-compatible. The upstream copyright
+and license are preserved. MEFinder's modifications relative to the pinned
+commit (removing the googletrans language-detection and sentence-splitter
+re-segmentation paths and the import-time model download, forcing CPU faiss, and
+loading a local model) are itemized in
+src/me_finder/_vendor/bertalign/MODIFICATIONS.md. The LaBSE model
+(sentence-transformers/LaBSE) is provisioned separately through the managed
+components mechanism and is not distributed in the source tree.
