@@ -566,11 +566,22 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section" id="text-alignment-settings" role="tabpanel">
             <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">译本对齐模型</span><span class="settings-section-note">选择跨语言全文对齐使用的本地模型</span></span>
-              <span id="alignment-model-status" class="settings-status">读取中…</span>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">译本对齐</span><span class="settings-section-note">选择本地对齐算法与计算组件</span></span>
+              <span id="default-alignment-status"><span id="alignment-model-status" class="settings-status">读取中…</span></span>
             </div>
             <div class="settings-collapse-body" id="embedding-model-body">
-              <div class="settings-subhead"><span class="settings-section-title">计算组件</span><span id="alignment-compute-status" class="settings-status" role="status" aria-live="polite">读取中…</span></div>
+              <label class="setting-switch-row" for="alignment-backend">
+                <span class="setting-switch-copy"><strong>对齐算法</strong><small>生成、译本对照和阅读器使用同一选择</small></span>
+                <select id="alignment-backend" aria-label="对齐算法" onchange="MEFinderBertalignSettings.select(this.value)">
+                  <option value="default">现有算法（默认）</option><option value="bertalign">Bertalign + LaBSE（实验）</option>
+                </select>
+              </label>
+              <section class="local-ocr-component" id="bertalign-component">
+                <div class="local-ocr-component-head"><span class="embedding-model-copy"><strong>Bertalign + LaBSE</strong><small>独立计算环境 · 模型约 1.8 GB · 安装后离线使用</small></span><span id="bertalign-state" class="settings-status" role="status">读取中…</span></div>
+                <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="bertalign-hint" role="status" aria-live="polite"></span></div>
+                <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="bertalign-cancel" type="button" hidden>取消</button><button class="action-btn" id="bertalign-uninstall" type="button" hidden>卸载</button><button class="action-btn" id="bertalign-action" type="button">安装组件及模型</button></div></div>
+              </section>
+              <div id="default-alignment-settings"><div class="settings-subhead"><span class="settings-section-title">计算组件</span><span id="alignment-compute-status" class="settings-status" role="status" aria-live="polite">读取中…</span></div>
               <p class="settings-footnote" id="alignment-compute-note">正在读取对齐计算组件状态…</p>
               <section class="local-ocr-component" id="alignment-runtime-component" hidden>
                 <div class="local-ocr-component-head">
@@ -626,7 +637,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   </div>
                 </section>
               </div>
-            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p>
+            <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p></div>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">

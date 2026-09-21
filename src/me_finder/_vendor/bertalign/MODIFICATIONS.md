@@ -70,3 +70,8 @@ to the pinned commit.
 ## Parameters
 Upstream defaults are preserved: `max_align=5, top_k=3, win=5, skip=-0.1,
 margin=True, len_penalty=True`. LaBSE remains the model. No re-tuning.
+
+## 2026-09-21：产品接入补充
+
+- `Encoder` 构造 `SentenceTransformer` 时显式传 `local_files_only=True`，计算阶段禁止隐式下载。
+- 托管安装器固定 LaBSE revision `836121a0533e5664b21c7aacc5d22951f2b8b25b`；模型安装、进程线程设置与缓存隔离在 MEFinder 适配层实现，未修改上游两阶段 DP、评分公式或默认参数。

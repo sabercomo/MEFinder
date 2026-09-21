@@ -1061,6 +1061,11 @@
       var selected = (results[0].models || []).find(function (model) {
         return model.id === results[1].alignment_embedding_model_id;
       });
+      if (results[1].alignment_backend === 'bertalign') {
+        var bertalign = (results[0].backends || {}).bertalign;
+        compute = bertalign ? bertalign.compute : {available: false};
+        selected = {installed: !!(bertalign && bertalign.has_models)};
+      }
       if (!compute) state.availability = 'unknown';
       else if (compute.available !== true) state.availability = 'unavailable';
       else state.availability = selected && selected.installed ? 'ready' : 'model_missing';
@@ -4257,6 +4262,11 @@
   });
   document.addEventListener('mouseup', function () {
     if (state.open && state.selectionDragging) scheduleSelectionCapture();
+  });
+  global.addEventListener('storage', function (event) {
+    if (event.key === 'mefinder-alignment-backend' && state.open) {
+      openReader(Object.assign(currentReadingSession(), {noExternal: true}));
+    }
   });
   global.addEventListener('popstate', function () {
     var deepLink = parseReaderDeepLink(global.location);

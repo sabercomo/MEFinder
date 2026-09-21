@@ -31,7 +31,13 @@ from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .alignment_regions import alignment_body_bounds
 from .alignment_kernel import align_segment_sequences
-from .bertalign_backend import BERTALIGN_ALGORITHM, BERTALIGN_ALGORITHM_VERSION
+from .alignment_backends import (
+    ALIGNMENT_ALGORITHM, ALIGNMENT_ALGORITHM_VERSION,
+    READABLE_ALIGNMENT_VERSIONS as READABLE_ALIGNMENT_VERSIONS,
+    RESTORABLE_ALIGNMENT_VERSIONS as RESTORABLE_ALIGNMENT_VERSIONS,
+    DEFAULT_ALIGNMENT_BACKEND, backend_algorithm,
+    _route_run_is_readable,
+)
 from .semantic_alignment import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
@@ -47,25 +53,6 @@ from .semantic_alignment import (
 
 SEGMENTER = "me-finder-multilingual-sentence"
 SEGMENTER_VERSION = "13"
-ALIGNMENT_ALGORITHM = "chapter-anchored-semantic-dp"
-ALIGNMENT_ALGORITHM_VERSION = "22"
-# v22 changes anchor selection, not stored span semantics. Existing v21 results
-# remain readable; generation only reuses runs of the current version.
-READABLE_ALIGNMENT_VERSIONS = frozenset({"21", ALIGNMENT_ALGORITHM_VERSION})
-RESTORABLE_ALIGNMENT_VERSIONS = frozenset(
-    {"16", "17", "18", "19", "20", "21", ALIGNMENT_ALGORITHM_VERSION}
-)
-# Per-backend readable versions: the optional Bertalign backend is a separate
-# algorithm identity (its runs never mix with the default backend's), but its
-# links/members use the same schema, so the reader route accepts it too.
-_READABLE_BY_ALGORITHM = {
-    ALIGNMENT_ALGORITHM: READABLE_ALIGNMENT_VERSIONS,
-    BERTALIGN_ALGORITHM: frozenset({BERTALIGN_ALGORITHM_VERSION}),
-}
-
-
-def _route_run_is_readable(algorithm: object, version: object) -> bool:
-    return str(version) in _READABLE_BY_ALGORITHM.get(str(algorithm), frozenset())
 MAX_SEGMENT_LENGTH = 1200
 _SOURCE_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 _SENTENCE_ENDINGS = frozenset("。！？!?；;")
@@ -1251,15 +1238,19 @@ def _latest_pair_run(
     document_group_id: str,
     left_source_id: str,
     right_source_id: str,
+    algorithm: str = ALIGNMENT_ALGORITHM,
 ) -> sqlite3.Row | None:
+    # Scoped to one backend's algorithm: the newest default-backend run is not
+    # displaced by a newer Bertalign run (and vice versa).
     return connection.execute(
         "SELECT * FROM alignment_runs WHERE document_group_id = ? "
-        "AND status = 'completed' AND "
+        "AND status = 'completed' AND algorithm = ? AND "
         "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
         "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
         "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
         (
             document_group_id,
+            algorithm,
             left_source_id,
             right_source_id,
             right_source_id,
@@ -1276,8 +1267,11 @@ def _segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str
     raise TextAlignmentError("对齐记录不包含指定版本。")
 
 
-def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, object]:
+def list_alignment_targets(
+    db_path: Path, source_file_id: object, backend: object = DEFAULT_ALIGNMENT_BACKEND
+) -> Dict[str, object]:
     source_id = _validate_source_id(source_file_id)
+    algorithm = backend_algorithm(backend)
     connection = sqlite3.connect(str(db_path))
     connection.row_factory = sqlite3.Row
     try:
@@ -1319,15 +1313,15 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
             if target_id == source_id:
                 continue
             direct_run = _latest_pair_run(
-                connection, group_id, source_id, target_id
+                connection, group_id, source_id, target_id, algorithm
             )
             route_runs = [direct_run] if direct_run is not None else []
             if not route_runs and source_id != pivot_id and target_id != pivot_id:
                 source_run = _latest_pair_run(
-                    connection, group_id, source_id, pivot_id
+                    connection, group_id, source_id, pivot_id, algorithm
                 )
                 target_run = _latest_pair_run(
-                    connection, group_id, pivot_id, target_id
+                    connection, group_id, pivot_id, target_id, algorithm
                 )
                 if (
                     source_run is not None
@@ -1728,6 +1722,8 @@ def _semantic_paragraph_fallback(
     source_segments: Sequence[str],
     model_cache_dir: Path,
 ) -> List[str]:
+    if str(run["algorithm"]) != ALIGNMENT_ALGORITHM:
+        return []  # This fallback uses FastEmbed paragraph anchors only.
     source_is_pivot = str(run["pivot_source_file_id"]) == source_id
     parameters = _json_object(run["parameters_json"])
     model_id = str(
@@ -2019,15 +2015,21 @@ def _resolve_alignment_route(
     connection: sqlite3.Connection,
     source_id: str,
     target_id: str,
+    algorithm: str = ALIGNMENT_ALGORITHM,
 ) -> Tuple[List[sqlite3.Row], str | None]:
-    """Return the completed run route (direct, or via the group pivot)."""
+    """Return the completed run route (direct, or via the group pivot).
+
+    Scoped to one backend's ``algorithm`` (default backend unless the caller asks
+    for the optional Bertalign backend), so the reader follows the selected
+    backend rather than whichever run is newest.
+    """
 
     direct_run = connection.execute(
-        "SELECT * FROM alignment_runs WHERE status = 'completed' AND "
+        "SELECT * FROM alignment_runs WHERE status = 'completed' AND algorithm = ? AND "
         "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
         "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
         "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
-        (source_id, target_id, target_id, source_id),
+        (algorithm, source_id, target_id, target_id, source_id),
     ).fetchone()
     if direct_run is not None:
         route_runs: List[sqlite3.Row] = [direct_run]
@@ -2050,8 +2052,8 @@ def _resolve_alignment_route(
         if source_id == via_source_id or target_id == via_source_id:
             raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
         group_id = str(group["document_group_id"])
-        source_run = _latest_pair_run(connection, group_id, source_id, via_source_id)
-        target_run = _latest_pair_run(connection, group_id, via_source_id, target_id)
+        source_run = _latest_pair_run(connection, group_id, source_id, via_source_id, algorithm)
+        target_run = _latest_pair_run(connection, group_id, via_source_id, target_id, algorithm)
         if source_run is None or target_run is None:
             raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
         route_runs = [source_run, target_run]
@@ -2183,9 +2185,11 @@ def locate_alignment(
     start_offset: object,
     end_offset: object,
     candidate_radius: object = 0,
+    backend: object = DEFAULT_ALIGNMENT_BACKEND,
 ) -> Dict[str, object]:
     source_id = _validate_source_id(source_file_id)
     target_id = _validate_source_id(target_source_file_id)
+    route_algorithm = backend_algorithm(backend)
     start_page = _validate_nonnegative_integer("start_page_index", start_page_index)
     end_page = _validate_nonnegative_integer("end_page_index", end_page_index)
     first_offset = _validate_nonnegative_integer("start_offset", start_offset)
@@ -2240,7 +2244,7 @@ def locate_alignment(
         if last_offset > len(str(endpoint_payloads[end_page].get("text_raw") or "")):
             raise InvalidAlignmentRequest(f"end_offset 超出{offset_boundary}范围。")
         route_runs, via_source_id = _resolve_alignment_route(
-            connection, source_id, target_id
+            connection, source_id, target_id, route_algorithm
         )
         source_run = route_runs[0]
         final_run = route_runs[-1]

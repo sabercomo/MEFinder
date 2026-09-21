@@ -86,9 +86,9 @@ def _text_alignment_component_root(runtime_root: Path) -> Path:
 
 
 @contextmanager
-def compute_admission(runtime_root: Path):
+def compute_admission(runtime_root: Path, *, component_directory: str = "text-alignment"):
     """Hold a shared runtime lease through computation or model publication."""
-    root = _text_alignment_component_root(runtime_root)
+    root = component_runtime_root(Path(runtime_root)) / "components" / component_directory
     root.mkdir(parents=True, exist_ok=True)
     marker = root / _MAINTENANCE_MARKER
     if marker.exists():

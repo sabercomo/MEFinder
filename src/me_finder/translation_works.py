@@ -29,10 +29,11 @@ from .persistence.schema_installers import (
     install_text_alignment_schema,
     install_translation_workspace_schema,
 )
+from .bertalign_backend import BERTALIGN_ALGORITHM, BERTALIGN_ALGORITHM_VERSION, BERTALIGN_MODEL_REVISION
+from .alignment_routes import _resolve_alignment_route_any_backend
 from .text_alignment import (
-    ALIGNMENT_ALGORITHM,
     ALIGNMENT_ALGORITHM_VERSION,
-    READABLE_ALIGNMENT_VERSIONS,
+    DEFAULT_ALIGNMENT_BACKEND,
     AlignmentNotFound,
     InvalidAlignmentRequest,
     WriteWindow,
@@ -42,7 +43,9 @@ from .text_alignment import (
     _now,
     _ordered_segments_in_set,
     _resolve_alignment_route,
+    _route_run_is_readable,
     _segment_key,
+    backend_algorithm,
     _segment_set_id_for_source,
     _source_kind,
     _source_row,
@@ -279,17 +282,32 @@ def _run_staleness(
     active_model_id: str,
     connection: sqlite3.Connection | None = None,
 ) -> str | None:
-    if (
-        run["algorithm"] != ALIGNMENT_ALGORITHM
-        or run["algorithm_version"] not in READABLE_ALIGNMENT_VERSIONS
-    ):
+    """Backend-aware staleness for a completed run.
+
+    Each backend declares its own readable versions; a Bertalign run must not be
+    reported ``algorithm_unreadable`` (bug fix). The default backend's
+    ``model_changed`` signal (active embedding model swapped) does not apply to
+    Bertalign, whose model (LaBSE) is fixed — comparing it to the default active
+    model would falsely flag every Bertalign run.
+    """
+    algorithm = str(run["algorithm"])
+    version = str(run["algorithm_version"])
+    if not _route_run_is_readable(algorithm, version):
         return "algorithm_unreadable"
     parameters = _json_object(run["parameters_json"])
+    if algorithm == BERTALIGN_ALGORITHM:
+        if parameters.get("model_revision") != BERTALIGN_MODEL_REVISION:
+            return "model_changed"
+        if connection is not None and _body_range_changed(connection, run, parameters):
+            return "body_range_changed"
+        if version != BERTALIGN_ALGORITHM_VERSION:
+            return "algorithm_updated"
+        return None
     if active_model_id and parameters.get("embedding_model_id") != active_model_id:
         return "model_changed"
     if connection is not None and _body_range_changed(connection, run, parameters):
         return "body_range_changed"
-    if run["algorithm_version"] != ALIGNMENT_ALGORITHM_VERSION:
+    if version != ALIGNMENT_ALGORITHM_VERSION:
         return "algorithm_updated"
     return None
 
@@ -399,6 +417,7 @@ def _direct_run_statistics(
 def alignment_overview(
     db_path: Path, *, active_model_id: str = "", include_statistics: bool = True,
     source_id: str = "", target_id: str = "",
+    backend: str = DEFAULT_ALIGNMENT_BACKEND,
 ) -> Dict[str, object]:
     """Return the status of every version pair in every work.
 
@@ -420,6 +439,7 @@ def alignment_overview(
         target_id = _validate_source_id(target_id)
         if not source_id or source_id == target_id:
             raise InvalidAlignmentRequest("target_id 需要一个不同的 source_id。")
+    algorithm = backend_algorithm(backend)
     connection = _read_connection(db_path)
     try:
         if not _table_exists(connection, "document_groups"):
@@ -469,7 +489,7 @@ def alignment_overview(
                     "completed_at": None,
                 }
                 if has_runs:
-                    direct = _latest_pair_run(connection, group_id, left_id, right_id)
+                    direct = _latest_pair_run(connection, group_id, left_id, right_id, algorithm)
                     if direct is not None:
                         pair.update(
                             status="direct",
@@ -479,8 +499,8 @@ def alignment_overview(
                         if include_statistics:
                             pair.update(_direct_run_statistics(connection, direct))
                     elif base_id and base_id not in (left_id, right_id):
-                        first = _latest_pair_run(connection, group_id, left_id, base_id)
-                        second = _latest_pair_run(connection, group_id, base_id, right_id)
+                        first = _latest_pair_run(connection, group_id, left_id, base_id, algorithm)
+                        second = _latest_pair_run(connection, group_id, base_id, right_id, algorithm)
                         if (
                             first is not None
                             and second is not None
@@ -517,7 +537,7 @@ def alignment_overview(
                     "pairs": pairs,
                 }
             )
-        return {"works": works, "active_model_id": active_model_id}
+        return {"works": works, "active_model_id": active_model_id, "backend": backend}
     finally:
         connection.close()
 
@@ -644,6 +664,7 @@ def alignment_link_window(
     target_source_file_id: object,
     start_index: object,
     end_index: object,
+    backend: object = DEFAULT_ALIGNMENT_BACKEND,
 ) -> Dict[str, object]:
     """Links touching source items ``start_index..end_index`` (inclusive).
 
@@ -668,7 +689,9 @@ def alignment_link_window(
     try:
         source_kind = _source_kind(_source_row(connection, source_id))
         target_kind = _source_kind(_source_row(connection, target_id))
-        route_runs, via_id = _resolve_alignment_route(connection, source_id, target_id)
+        route_runs, via_id = _resolve_alignment_route(
+            connection, source_id, target_id, backend_algorithm(backend)
+        )
         source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
         target_set_id = _segment_set_id_for_source(route_runs[-1], target_id)
         window_segments = _segments_in_items(
@@ -785,6 +808,7 @@ def review_candidates(
     source_segment_ids: object,
     near_target_segment_ids: object,
     radius: object = 4,
+    backend: object = DEFAULT_ALIGNMENT_BACKEND,
 ) -> Dict[str, object]:
     """Target segments around ``near_target_segment_ids`` for a manual choice."""
 
@@ -801,7 +825,9 @@ def review_candidates(
     try:
         _source_row(connection, source_id)
         target_kind = _source_kind(_source_row(connection, target_id))
-        route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
+        route_runs, _via = _resolve_alignment_route(
+            connection, source_id, target_id, backend_algorithm(backend)
+        )
         source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
         target_set_id = _segment_set_id_for_source(route_runs[-1], target_id)
         source_rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
@@ -939,7 +965,9 @@ def save_correction(
 def _deferral_context(
     connection: sqlite3.Connection, source_id: str, target_id: str, source_ids: List[str]
 ) -> Tuple[str, str]:
-    route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
+    # Deferrals are keyed by segment set (shared across backends); resolve from
+    # whichever backend has a run.
+    route_runs, _via = _resolve_alignment_route_any_backend(connection, source_id, target_id)
     source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
     rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
     if len(rows) != len(source_ids):

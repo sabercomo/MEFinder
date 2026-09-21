@@ -415,6 +415,7 @@ def build_application_runtime(
     text_alignment_controller = TextAlignmentController(
         text_alignment_coordinator,
         index_runtime.run_when_ready,
+        active_backend=lambda: read_preferences(resolve_preferences_path(root))["alignment_backend"],
         list_targets=(
             lambda *args, **kwargs: list_alignment_targets(*args, **kwargs)
         ),
@@ -431,6 +432,7 @@ def build_application_runtime(
     )
     translation_work_controller = TranslationWorkController(
         index_runtime.run_when_ready,
+        active_backend=lambda: read_preferences(resolve_preferences_path(root))["alignment_backend"],
         active_model_id=lambda: str(
             read_preferences(resolve_preferences_path(root))[
                 "alignment_embedding_model_id"
@@ -643,6 +645,7 @@ def build_application_runtime(
         request_embedding_cancel()
         managed.embedding_models.begin_shutdown()
         managed.alignment_runtime.begin_shutdown()
+        managed.bertalign_runtime.begin_shutdown()
         durable_operations.begin_shutdown()
         index_runtime.begin_shutdown()
         import_task_queue.shutdown(wait=False)
@@ -683,6 +686,8 @@ def build_application_runtime(
         if not managed.embedding_models.close(timeout=remaining):
             return False
         if not managed.alignment_runtime.close(timeout=remaining):
+            return False
+        if not managed.bertalign_runtime.close(timeout=remaining):
             return False
         index_runtime.close()
         return True

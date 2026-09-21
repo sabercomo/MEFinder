@@ -131,6 +131,7 @@ class PreferencePersistenceTests(unittest.TestCase):
             "lib_default_language": DEFAULT_LIBRARY_LANGUAGE,
             "online_auto_match_threshold": DEFAULT_ONLINE_AUTO_MATCH,
             "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
+            "alignment_backend": "default",
             "alignment_thresholds": default_alignment_threshold_settings(),
             # 没导出过备份时为 None——界面据此说「还没有导出过备份」，不编日期
             "last_backup_export": None,

@@ -29,6 +29,28 @@ class _Coordinator:
 
 
 class TextAlignmentControllerTests(unittest.TestCase):
+    def test_selected_backend_is_frozen_when_background_job_starts(self):
+        self.controller._active_backend = lambda: "bertalign"
+        entered, release = threading.Event(), threading.Event()
+        original = self.coordinator.generate
+        def generate(*args, **kwargs):
+            entered.set()
+            release.wait(5)
+            return original(*args, **kwargs)
+        self.coordinator.generate = generate
+        try:
+            _, job = self.controller.start(self._generate_payload())
+            self.assertTrue(entered.wait(2))
+            self.controller._active_backend = lambda: "default"
+        finally:
+            release.set()
+            self.controller._job_thread.join(5)
+        _, result = self.controller.status({"job_id": [job["job_id"]]})
+        self.assertEqual(result["result"]["options"]["backend"], "bertalign")
+        self.controller._active_backend = lambda: "bertalign"
+        self.assertEqual(self.controller.targets({"source_id": ["book"]})[1]["backend"], "bertalign")
+        self.assertEqual(self.controller.targets({"source_id": ["book"], "backend": ["default"]})[1]["backend"], "default")
+
     def test_background_generation_returns_before_computation_and_deduplicates(self):
         entered, release = threading.Event(), threading.Event()
         original = self.coordinator.generate
@@ -80,9 +102,10 @@ class TextAlignmentControllerTests(unittest.TestCase):
         self.controller = TextAlignmentController(
             self.coordinator,
             self._run_when_ready,
-            list_targets=lambda path, source_id: {
+            list_targets=lambda path, source_id, backend="default": {
                 "path": path,
                 "source_file_id": source_id,
+                "backend": backend,
                 "targets": [],
             },
             locate=self._locate,

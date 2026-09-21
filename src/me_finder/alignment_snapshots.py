@@ -1,7 +1,7 @@
 """对齐配方快照的读取、还原与整体替换。
 
 重建索引与备份还原时，先把可还原版本的对齐配方读成快照，重建后按配方重跑
-对齐。位于 ``text_alignment`` 之上：消费对齐核心的生成能力，核心不反向依赖。
+对齐；Bertalign 在源文本未变时直接恢复已有定位结果。位于 ``text_alignment`` 之上：消费对齐核心的生成能力，核心不反向依赖。
 消费者是 ``database`` 的重建路径与 ``backup_service``。
 """
 
@@ -11,6 +11,8 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, Mapping
 
+from .bertalign_backend import BERTALIGN_ALGORITHM, BERTALIGN_ALGORITHM_VERSION
+from .bertalign_snapshot import read_bertalign_result, restore_bertalign_result
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
@@ -40,17 +42,18 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
         return {
             "alignment_pairs": [
                 {
+                    **({"bertalign_result": read_bertalign_result(connection, row["alignment_run_id"])}
+                       if row["algorithm"] == BERTALIGN_ALGORITHM else {}),
                     "document_group_id": row["document_group_id"],
                     "pivot_source_file_id": row["pivot_source_file_id"],
                     "target_source_file_id": row["target_source_file_id"],
                     "algorithm": row["algorithm"],
                     "algorithm_version": row["algorithm_version"],
-                    "embedding_model_id": _json_object(
-                        row["parameters_json"]
-                    ).get("embedding_model_id", DEFAULT_EMBEDDING_MODEL_ID),
+                    "embedding_model_id": _json_object(row["parameters_json"]).get(
+                        "embedding_model_id", DEFAULT_EMBEDDING_MODEL_ID),
                 }
                 for row in connection.execute(
-                    "SELECT document_group_id, pivot_source_file_id, "
+                    "SELECT alignment_run_id, document_group_id, pivot_source_file_id, "
                     "target_source_file_id, algorithm, algorithm_version, "
                     "parameters_json "
                     "FROM alignment_runs WHERE status = 'completed' "
@@ -77,17 +80,17 @@ def restore_alignment_recipe_snapshot(
     for pair in snapshot.get("alignment_pairs", []):
         if not isinstance(pair, Mapping):
             continue
-        if (
-            pair.get("algorithm") != ALIGNMENT_ALGORITHM
-            or pair.get("algorithm_version") not in RESTORABLE_ALIGNMENT_VERSIONS
-        ):
+        is_bertalign = pair.get("algorithm") == BERTALIGN_ALGORITHM
+        if is_bertalign:
+            if pair.get("algorithm_version") != BERTALIGN_ALGORITHM_VERSION or "bertalign_result" not in pair:
+                raise ValueError("Bertalign 快照缺少可恢复的定位结果，请使用新版重新导出备份")
+        elif (pair.get("algorithm") != ALIGNMENT_ALGORITHM
+              or pair.get("algorithm_version") not in RESTORABLE_ALIGNMENT_VERSIONS):
             continue
         group_id = str(pair.get("document_group_id") or "")
         pivot_id = str(pair.get("pivot_source_file_id") or "")
         target_id = str(pair.get("target_source_file_id") or "")
-        model_id = str(
-            pair.get("embedding_model_id") or DEFAULT_EMBEDDING_MODEL_ID
-        )
+        model_id = str(pair.get("embedding_model_id") or DEFAULT_EMBEDDING_MODEL_ID)
         present = connection.execute(
             "SELECT COUNT(*) FROM source_files WHERE source_file_id IN (?, ?)",
             (pivot_id, target_id),
@@ -97,6 +100,10 @@ def restore_alignment_recipe_snapshot(
             (group_id,),
         ).fetchone()
         if present != 2 or group_present is None:
+            continue
+        if is_bertalign:
+            restore_bertalign_result(connection, pair["bertalign_result"])
+            restored += 1
             continue
         _generate_alignment_on_connection(
             connection,

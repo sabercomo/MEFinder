@@ -38,17 +38,19 @@ class TranslationWorkController:
         *,
         active_model_id: Callable[[], str],
         log_exception: Callable[[str], None],
+        active_backend: Callable[[], str] = lambda: "default",
     ) -> None:
         self._run_when_ready = run_when_ready
         self._active_model_id = active_model_id
         self._log_exception = log_exception
+        self._active_backend = active_backend
 
     def overview(self, params: Mapping[str, Sequence[object]] | None = None) -> WorkResponse:
         model_id = self._active_model_id()
         params = params or {}
 
         def operation(path: Path) -> Dict[str, object]:
-            if set(params) - {"include_statistics", "source_id", "target_id"}:
+            if set(params) - {"include_statistics", "source_id", "target_id", "backend"}:
                 raise InvalidAlignmentRequest("不支持的总览参数。")
             statistics = _single(params, "include_statistics") if "include_statistics" in params else "1"
             if statistics not in ("0", "1"):
@@ -56,10 +58,14 @@ class TranslationWorkController:
             for name in ("source_id", "target_id"):
                 if name in params and not _single(params, name):
                     raise InvalidAlignmentRequest(f"{name} 不能为空。")
+            backend = _single(params, "backend") if "backend" in params else self._active_backend()
+            if backend not in ("default", "bertalign"):
+                raise InvalidAlignmentRequest("backend 无效。")
             return translation_works.alignment_overview(
                 path, active_model_id=model_id, include_statistics=statistics == "1",
                 source_id=_single(params, "source_id") if "source_id" in params else "",
                 target_id=_single(params, "target_id") if "target_id" in params else "",
+                backend=backend,
             )
 
         return self._call(operation, "translation work overview failed")
@@ -103,12 +109,16 @@ class TranslationWorkController:
 
     def links(self, params: Mapping[str, Sequence[object]]) -> WorkResponse:
         def operation(path: Path) -> Dict[str, object]:
+            backend = _single(params, "backend") if "backend" in params else self._active_backend()
+            if backend not in ("default", "bertalign"):
+                raise InvalidAlignmentRequest("backend 无效。")
             return translation_works.alignment_link_window(
                 path,
                 _single(params, "source_file_id"),
                 _single(params, "target_source_file_id"),
                 _single(params, "start_index"),
                 _single(params, "end_index"),
+                backend=backend,
             )
 
         return self._call(operation, "alignment link window failed")
@@ -123,6 +133,7 @@ class TranslationWorkController:
                 value.get("source_segment_ids"),
                 value.get("near_target_segment_ids"),
                 value.get("radius", 4),
+                backend=value.get("backend", self._active_backend()),
             ),
             "alignment review candidates failed",
         )

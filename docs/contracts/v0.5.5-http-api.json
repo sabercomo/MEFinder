@@ -134,5 +134,28 @@
     "/api/vision-providers",
     "/api/vision-providers/models",
     "/api/vision-providers/test"
-  ]
+  ],
+  "alignment_backend": {
+    "values": [
+      "default",
+      "bertalign"
+    ],
+    "preference": "alignment_backend",
+    "default": "default",
+    "selection": "HTTP 对齐生成、目标列表、定位、作品总览、链接窗口与候选复核：请求显式 backend 优先，否则使用已保存偏好。后台任务在启动时固定 backend。",
+    "runtime_get": "GET /api/text-alignment/runtime?backend=bertalign",
+    "runtime_post": {
+      "path": "/api/text-alignment/runtime",
+      "backend": "bertalign",
+      "action": [
+        "install",
+        "update",
+        "uninstall",
+        "cancel",
+        "validate"
+      ]
+    },
+    "models_summary": "backends.bertalign 提供独立组件状态、compute.available 与 has_models；现有 compute/models 字段保留默认算法口径。",
+    "errors": "未知 backend 返回 400；缺少运行时或模型返回 503 component_unavailable；取消返回 200 cancelled=true，不发布部分结果。"
+  }
 }

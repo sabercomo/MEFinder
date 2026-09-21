@@ -21,7 +21,7 @@ class Encoder:
         # bare model name would only work if it were already in the HF cache and
         # offline flags allow reading it. The MEFinder adapter always passes a
         # resolved local path.
-        self.model = SentenceTransformer(model_name_or_path, device=device)
+        self.model = SentenceTransformer(model_name_or_path, device=device, local_files_only=True)
         self.model_name = str(model_name_or_path)
 
     def transform(self, sents, num_overlaps):

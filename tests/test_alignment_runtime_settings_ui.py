@@ -30,6 +30,7 @@ function node(id) {
 const context = {
   THEME_BUILTIN_CSS_IDS:[], THEME_PRESET_MAP:{light:{}}, THEME_MODE_DEFAULT:{light:'light'},
   settingsStore:{appearanceState:{mode:'light',light:'light'}, currentAlignmentEmbeddingModel:'minilm-l12-v2'},
+  MEFinderBertalignSettings:{load(){}},
   initAppearanceSystemWatch(){}, alignmentModelDownloadProgress(){return null;},
   showToast(){}, showAppConfirm:async()=>true,
   document:{getElementById(id){return /^(alignment-|embedding-|text-alignment-)/.test(id) ? node(id) : null;},

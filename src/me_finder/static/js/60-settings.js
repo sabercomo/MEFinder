@@ -1202,6 +1202,7 @@
   }
 
   async function loadAlignmentRuntime() {
+    MEFinderBertalignSettings.load();
     var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
     settingsStore.alignmentRuntimeLoadRevision = revision;
     try {

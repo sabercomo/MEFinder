@@ -37,6 +37,14 @@ from typing import List, Tuple
 # retained path. The independent alignment runtime installs these into its own
 # venv; the app never imports them in-process.
 ALIGNMENT_COMPUTE_STACK: Tuple[str, ...] = (
+    "torch",
+    "sentence_transformers",
+    "transformers",
+    "faiss",
+    "numba",
+    "llvmlite",
+    "scipy",
+    "sklearn",
     "numpy",
     "onnxruntime",
     "fastembed",

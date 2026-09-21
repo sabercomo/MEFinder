@@ -179,6 +179,9 @@ class ParserSettingsController:
                 summary = {**summary, "compute": runtime.compute_status()}
             except (OSError, ValueError):
                 pass
+        bertalign = self._managed_components.get("text-alignment-bertalign")
+        if bertalign is not None:
+            summary = {**summary, "backends": {"bertalign": bertalign.summary()}}
         return 200, summary
 
     def manage_text_alignment_models_component(
@@ -198,8 +201,12 @@ class ParserSettingsController:
             return 500, {"error": "译本对齐模型操作失败。"}
         return 200, {"ok": True, **result}
 
-    def text_alignment_runtime_component(self) -> ParserSettingsResponse:
-        component = self._managed_components.get("text-alignment-runtime")
+    def text_alignment_runtime_component(self, params=None) -> ParserSettingsResponse:
+        params = params or {}
+        backend = params.get("backend", ["default"])
+        if set(params) - {"backend"} or len(backend) != 1 or backend[0] not in ("default", "bertalign"):
+            return 400, {"error": "backend 无效。"}
+        component = self._managed_components.get("text-alignment-bertalign" if backend[0] == "bertalign" else "text-alignment-runtime")
         if component is None:
             return 400, {"error": "当前运行方式不支持安装对齐计算组件。"}
         try:
@@ -212,7 +219,10 @@ class ParserSettingsController:
     ) -> ParserSettingsResponse:
         if not isinstance(payload, Mapping):
             return 400, {"error": "对齐计算组件操作必须是 JSON 对象。"}
-        component = self._managed_components.get("text-alignment-runtime")
+        backend = payload.get("backend", "default")
+        if backend not in ("default", "bertalign"):
+            return 400, {"error": "backend 无效。"}
+        component = self._managed_components.get("text-alignment-bertalign" if backend == "bertalign" else "text-alignment-runtime")
         if component is None:
             return 400, {"error": "当前运行方式不支持安装对齐计算组件。"}
         try:

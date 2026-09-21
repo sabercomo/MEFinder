@@ -550,7 +550,7 @@ class TranslationWorkControllerTests(unittest.TestCase):
         )
         with mock.patch.object(translation_works, "alignment_overview", return_value={"works": []}) as overview:
             self.assertEqual(controller.overview({"include_statistics": ["0"], "source_id": ["book"]}), (200, {"works": []}))
-            self.assertEqual(overview.call_args.kwargs, {"active_model_id": "model", "include_statistics": False, "source_id": "book", "target_id": ""})
+            self.assertEqual(overview.call_args.kwargs, {"active_model_id": "model", "include_statistics": False, "source_id": "book", "target_id": "", "backend": "default"})
             overview.reset_mock()
             for params in ({"include_statistics": ["bad"]}, {"source_id": ["a", "b"]}, {"source_id": [""]}, {"unknown": ["x"]}):
                 self.assertEqual(controller.overview(params)[0], 400)

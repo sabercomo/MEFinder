@@ -43,6 +43,7 @@ class TextAlignmentController:
         read_body_ranges: ReadOperation,
         read_body_range_segments: ReadOperation,
         log_exception: Callable[[str], None],
+        active_backend: Callable[[], str] = lambda: "default",
     ) -> None:
         self._coordinator = coordinator
         self._run_when_ready = run_when_ready
@@ -51,6 +52,7 @@ class TextAlignmentController:
         self._read_body_ranges = read_body_ranges
         self._read_body_range_segments = read_body_range_segments
         self._log_exception = log_exception
+        self._active_backend = active_backend
         self._job_lock = threading.Lock()
         self._job_id: str | None = None
         self._job_payload: Dict[str, object] | None = None
@@ -81,12 +83,13 @@ class TextAlignmentController:
             "pivot_source_file_id",
             "target_source_file_id",
         }
-        optional = {"force", "reviewed_body_ranges", "expected_segment_set_ids"}
+        optional = {"force", "reviewed_body_ranges", "expected_segment_set_ids", "backend"}
         return (
             isinstance(payload, Mapping)
             and required.issubset(payload)
             and set(payload).issubset(required | optional)
             and isinstance(payload.get("force", False), bool)
+            and payload.get("backend", "default") in ("default", "bertalign")
             and (("reviewed_body_ranges" in payload) == ("expected_segment_set_ids" in payload))
             and (
                 "reviewed_body_ranges" not in payload
@@ -104,6 +107,7 @@ class TextAlignmentController:
         """Start one background run without holding a browser request open."""
         if not self._valid_generate_payload(payload):
             return 400, {"error": "自动对齐请求字段无效。"}
+        payload = {**payload, "backend": payload.get("backend", self._active_backend())}
         with self._job_lock:
             if self._job_id is not None and self._job_response is None:
                 if payload != self._job_payload:
@@ -177,6 +181,7 @@ class TextAlignmentController:
                 force=payload.get("force", False),
                 reviewed_body_ranges=payload.get("reviewed_body_ranges"),
                 expected_segment_set_ids=payload.get("expected_segment_set_ids"),
+                backend=str(payload.get("backend", self._active_backend())),
             )
         except TextAlignmentCancelled:
             LOGGER.info("text alignment cancelled by user")
@@ -219,10 +224,14 @@ class TextAlignmentController:
         self, params: Mapping[str, Sequence[object]]
     ) -> AlignmentResponse:
         source_ids = params.get("source_id", [])
-        if len(source_ids) != 1 or set(params) != {"source_id"}:
+        if len(source_ids) != 1 or not set(params).issubset({"source_id", "backend"}):
             return 400, {"error": "source_id 必须提供一次。"}
+        backend_values = params.get("backend", [self._active_backend()])
+        if len(backend_values) != 1 or backend_values[0] not in ("default", "bertalign"):
+            return 400, {"error": "backend 无效。"}
+        backend = backend_values[0]
         return self._read(
-            lambda path: self._list_targets(path, source_ids[0]),
+            lambda path: self._list_targets(path, source_ids[0], backend),
             unavailable="索引正在重建，请稍候再读取对齐版本。",
             failure_message="对齐版本读取失败，请稍后重试。",
             log_message="alignment targets request failed",
@@ -290,8 +299,12 @@ class TextAlignmentController:
             "start_offset",
             "end_offset",
         }
-        if not isinstance(payload, Mapping) or set(payload) != required:
+        if not isinstance(payload, Mapping) or not required.issubset(payload) or not set(
+            payload
+        ).issubset(required | {"backend"}):
             return 400, {"error": "跨版本定位请求字段无效。"}
+        if payload.get("backend", "default") not in ("default", "bertalign"):
+            return 400, {"error": "backend 无效。"}
         try:
             result = self._run_when_ready(
                 lambda path: self._locate(
@@ -302,6 +315,7 @@ class TextAlignmentController:
                     end_page_index=payload["end_page_index"],
                     start_offset=payload["start_offset"],
                     end_offset=payload["end_offset"],
+                    backend=str(payload.get("backend", self._active_backend())),
                 )
             )
         except InvalidAlignmentRequest as exc:

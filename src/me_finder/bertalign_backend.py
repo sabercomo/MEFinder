@@ -52,6 +52,7 @@ BERTALIGN_UPSTREAM_COMMIT = "df8c63f51aa203faed9f2fe45ae39e6fca75e667"
 # reused as MiniLM/E5 vectors and vice versa.
 BERTALIGN_MODEL_ID = "labse-bertalign"
 BERTALIGN_MODEL_HF_NAME = "sentence-transformers/LaBSE"
+BERTALIGN_MODEL_REVISION = "836121a0533e5664b21c7aacc5d22951f2b8b25b"
 # Bump on any change that would alter Bertalign's output for identical inputs.
 BERTALIGN_ALGORITHM = "bertalign-labse-two-pass"
 BERTALIGN_ALGORITHM_VERSION = "1"
@@ -73,9 +74,8 @@ def bertalign_model_dir(cache_dir: Path) -> Path:
     """Local directory holding the LaBSE snapshot for this backend.
 
     The model is provisioned beforehand through the managed-component mechanism;
-    the compute phase only *reads* it and never downloads.
+    the compute phase only reads it and never downloads.
     """
-
     return Path(cache_dir) / "bertalign" / "labse"
 
 
@@ -124,8 +124,8 @@ def _load_encoder(model_dir: Path, device: str = "cpu"):
         )
     # Belt-and-braces: even if a bare name were ever passed, forbid any network
     # reach-out from the compute phase.
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
     from ._vendor.bertalign.encoder import Encoder
 
     return Encoder(str(model_path), device=device)

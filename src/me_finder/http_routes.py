@@ -74,7 +74,7 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
             lambda _params: parser_settings_controller.text_alignment_models_component()
         ),
         "/api/text-alignment/runtime": (
-            lambda _params: parser_settings_controller.text_alignment_runtime_component()
+            lambda params: parser_settings_controller.text_alignment_runtime_component(params)
         ),
         "/api/mineru-config": lambda _params: parser_settings_controller.mineru_config(),
         "/api/mineru-local/component": (

@@ -48,6 +48,117 @@ from .alignment_compute import (
 _REQUIRED = ("numpy", "fastembed", "onnxruntime")
 
 
+def _apply_bertalign_runtime_knobs(*, offline: bool = True) -> None:
+    """Use the validated CPU thread configuration and explicit offline mode."""
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    os.environ["HF_HUB_OFFLINE"] = "1" if offline else "0"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1" if offline else "0"
+
+
+
+def _bertalign_capabilities() -> dict:
+    from .bertalign_compute import BERTALIGN_REQUIRED
+
+    return {name: find_spec(name) is not None for name in BERTALIGN_REQUIRED}
+
+
+def _bertalign_main(argv: list[str], positional: list[str]) -> int:
+    """Handle a ``--bertalign`` probe or compute request in this runtime."""
+
+    from .bertalign_compute import (
+        BERTALIGN_COMPUTE_PROTOCOL,
+        BERTALIGN_REQUIRED,
+        _bertalign_input_identity,
+        bertalign_model_identity,
+    )
+
+    if any(flag in argv for flag in ("--verify", "--verify-model", "--download-bertalign-model")):
+        from .bertalign_provisioning import verify_bertalign
+        return verify_bertalign(argv, positional, _emit)
+
+    if "--probe" in argv:
+        control = _open_control(positional[0])
+        _emit(
+            control,
+            type="hello",
+            protocol=BERTALIGN_COMPUTE_PROTOCOL,
+            capabilities=_bertalign_capabilities(),
+            pid=os.getpid(),
+        )
+        return 0
+
+    if len(positional) < 3:
+        control = _open_control(positional[-1])
+        _emit(control, type="error", code=COMPUTE_FAILED,
+              message="bertalign worker 需要 <request> <result> <control> 三个路径参数。")
+        return 2
+    request_path, result_path, control_path = (
+        Path(positional[0]), Path(positional[1]), positional[2]
+    )
+    control = _open_control(control_path)
+    _emit(control, type="hello", protocol=BERTALIGN_COMPUTE_PROTOCOL,
+          capabilities=_bertalign_capabilities(), pid=os.getpid())
+
+    missing = [name for name in BERTALIGN_REQUIRED if not _bertalign_capabilities().get(name)]
+    if missing:
+        _emit(control, type="error", code=COMPONENT_MISSING,
+              message="Bertalign 计算运行时缺少依赖：" + "、".join(missing))
+        return 4
+    try:
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _emit(control, type="error", code=COMPUTE_FAILED, message=f"无法读取请求：{exc}")
+        return 2
+    if request.get("protocol") != BERTALIGN_COMPUTE_PROTOCOL:
+        _emit(control, type="error", code=PROTOCOL_INCOMPATIBLE,
+              message="Bertalign 请求协议不兼容。")
+        return 2
+    own = bertalign_model_identity()
+    if request.get("identity") != own:
+        _emit(control, type="error", code=PROTOCOL_INCOMPATIBLE,
+              message=f"Bertalign 身份不匹配：{request.get('identity')} != {own}")
+        return 5
+    try:
+        return _run_bertalign(request, result_path, control, _bertalign_input_identity, own)
+    except Exception as exc:  # noqa: BLE001 - report any compute failure clearly
+        import traceback
+
+        _emit(control, type="error", code=COMPUTE_FAILED,
+              message=str(exc) + "\n" + traceback.format_exc()[-1500:])
+        return 1
+
+
+def _run_bertalign(request, result_path, control, input_identity_fn, identity) -> int:
+    from .bertalign_backend import BertalignParams, align_segments_bertalign
+
+    import torch
+    import faiss
+    torch.set_num_threads(1)
+    faiss.omp_set_num_threads(1)
+
+    inputs = request["inputs"]
+    params = BertalignParams(**inputs["params"])
+    _emit(control, type="progress", task_id=request.get("task_id"), stage="compute-start")
+    computed = align_segments_bertalign(
+        list(inputs["source_texts"]),
+        list(inputs["target_texts"]),
+        model_dir=Path(inputs["model_dir"]),
+        reviewed_body_ranges=inputs["reviewed_body_ranges"],
+        source_language=inputs["source_language"],
+        target_language=inputs["target_language"],
+        params=params,
+    )
+    recomputed = input_identity_fn(inputs, identity)
+    payload = serialize_result(
+        task_id=request.get("task_id", ""), identity=recomputed, computed=computed
+    )
+    result_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    _emit(control, type="result", task_id=request.get("task_id"), input_identity=recomputed)
+    return 0
+
+
 def _capabilities() -> dict:
     """Report what this runtime can import. Runs in the compute process."""
 
@@ -151,6 +262,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2  # no control file to report to
     simulate = os.environ.get(SIMULATE_ENV)
 
+    if "--bertalign" in argv:
+        # Optional Bertalign backend: pin runtime knobs before any heavy import.
+        os.environ.setdefault("NUMBA_CACHE_DIR", str(Path(positional[-1]).parent / "numba-cache"))
+        _apply_bertalign_runtime_knobs(offline="--download-bertalign-model" not in argv)
+        return _bertalign_main(argv, positional)
+
     if "--download-model" in argv:
         # Download and load one embedding model *in this isolated runtime*, so a
         # main process without the numeric stack can still complete the model
@@ -189,6 +306,10 @@ def main(argv: list[str] | None = None) -> int:
         _emit(control, type="hello", protocol=ALIGNMENT_COMPUTE_PROTOCOL,
               capabilities={name: True for name in _REQUIRED}, pid=os.getpid())
         return 0
+
+    if any(flag in argv for flag in ("--verify", "--verify-model", "--download-bertalign-model")):
+        from .bertalign_provisioning import verify_bertalign
+        return verify_bertalign(argv, positional, _emit)
 
     if "--probe" in argv:
         control = _open_control(positional[0])

@@ -25,15 +25,19 @@ import numpy as np
 from src.me_finder.bertalign_backend import (
     BERTALIGN_ALGORITHM,
     BERTALIGN_MODEL_ID,
+    BertalignParams,
     beads_to_semantic_links,
 )
 from src.me_finder.bertalign_alignment import generate_bertalign_alignment
+from src.me_finder.persistence.connection import open_readonly_index
 from src.me_finder.persistence.index_schema import SCHEMA
 from src.me_finder.text_alignment import (
     ALIGNMENT_ALGORITHM,
+    _resolve_alignment_route,
     generate_alignment,
     locate_alignment,
 )
+from src.me_finder.translation_works import alignment_overview
 
 
 def _fake_embeddings(texts, _cache_dir):
@@ -230,6 +234,109 @@ class BertalignBackendIntegrationTests(unittest.TestCase):
         self.assertFalse(first["reused"])
         self.assertTrue(second["reused"])
         self.assertEqual(first["alignment_run_id"], second["alignment_run_id"])
+
+    def test_bug1_param_change_forces_new_run(self) -> None:
+        self._run_default()
+        base = generate_bertalign_alignment(
+            self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner
+        )
+        # Same params -> reused.
+        again = generate_bertalign_alignment(
+            self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner
+        )
+        self.assertTrue(again["reused"])
+        # Changed upstream parameter -> NOT reused, a fresh run.
+        changed = generate_bertalign_alignment(
+            self.db, "work", "pdf-de", "pdf-zh",
+            params=BertalignParams(max_align=6),
+            compute_runner=_stub_bertalign_runner,
+        )
+        self.assertFalse(changed["reused"])
+        self.assertNotEqual(base["alignment_run_id"], changed["alignment_run_id"])
+
+    def test_bug2_default_reader_ignores_newer_bertalign_run(self) -> None:
+        self._run_default()
+        # Bertalign run is created AFTER the default one (newer completed_at).
+        generate_bertalign_alignment(
+            self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner
+        )
+        with open_readonly_index(self.db) as con:
+            con.row_factory = __import__("sqlite3").Row
+            default_route, _ = _resolve_alignment_route(con, "pdf-de", "pdf-zh")
+            berta_route, _ = _resolve_alignment_route(
+                con, "pdf-de", "pdf-zh", BERTALIGN_ALGORITHM
+            )
+        # Default read path stays on the default backend despite the newer run.
+        self.assertEqual(default_route[0]["algorithm"], ALIGNMENT_ALGORITHM)
+        self.assertEqual(berta_route[0]["algorithm"], BERTALIGN_ALGORITHM)
+
+    def test_bug3_overview_backend_aware(self) -> None:
+        self._run_default()
+        generate_bertalign_alignment(
+            self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner
+        )
+
+        def pair_status(backend):
+            works = alignment_overview(self.db, include_statistics=False, backend=backend)["works"]
+            for work in works:
+                for pair in work["pairs"]:
+                    if set(pair["source_file_ids"]) == {"pdf-de", "pdf-zh"}:
+                        return pair
+            return None
+
+        default_pair = pair_status("default")
+        berta_pair = pair_status("bertalign")
+        self.assertEqual(default_pair["status"], "direct")
+        self.assertIsNone(default_pair["stale_reason"])
+        # Bug #3: Bertalign run is NOT reported algorithm_unreadable.
+        self.assertEqual(berta_pair["status"], "direct")
+        self.assertNotEqual(berta_pair["stale_reason"], "algorithm_unreadable")
+        self.assertIsNone(berta_pair["stale_reason"])
+
+    def test_snapshot_preserves_links_and_page_offsets_without_model(self):
+        from src.me_finder.alignment_snapshots import read_alignment_recipe_snapshot, replace_alignment_recipe_snapshot
+        generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner)
+        before = locate_alignment(self.db, "pdf-de", "pdf-zh", start_page_index=0,
+            end_page_index=0, start_offset=0, end_offset=20, backend="bertalign")
+        snapshot = read_alignment_recipe_snapshot(self.db)
+        with mock.patch("src.me_finder.bertalign_backend._load_encoder", side_effect=AssertionError("restore must not compute")):
+            self.assertEqual(replace_alignment_recipe_snapshot(snapshot, self.db), 1)
+        self.assertEqual(read_alignment_recipe_snapshot(self.db), snapshot)
+        after = locate_alignment(self.db, "pdf-de", "pdf-zh", start_page_index=0,
+            end_page_index=0, start_offset=0, end_offset=20, backend="bertalign")
+        self.assertEqual(before, after)
+
+    def test_cancel_before_publication_keeps_previous_run(self):
+        from src.me_finder.embedding_runtime import SemanticAlignmentCancelled
+        first = generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner)
+        with self.assertRaises(SemanticAlignmentCancelled):
+            generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", force=True,
+                compute_runner=_stub_bertalign_runner, cancel_check=lambda: True)
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(con.execute("SELECT alignment_run_id, status FROM alignment_runs").fetchall(),
+                             [(first["alignment_run_id"], "completed")])
+
+    def test_model_revision_change_invalidates_reuse(self):
+        first = generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner)
+        with sqlite3.connect(self.db) as con:
+            params = json.loads(con.execute("SELECT parameters_json FROM alignment_runs").fetchone()[0])
+            params["model_revision"] = "older-model"
+            con.execute("UPDATE alignment_runs SET parameters_json = ?", (json.dumps(params),))
+        new = generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner)
+        self.assertFalse(new["reused"])
+        self.assertNotEqual(first["alignment_run_id"], new["alignment_run_id"])
+
+    def test_manual_correction_for_bertalign_only_pair(self):
+        from src.me_finder.translation_works import save_correction
+        generate_bertalign_alignment(self.db, "work", "pdf-de", "pdf-zh", compute_runner=_stub_bertalign_runner)
+        with sqlite3.connect(self.db) as con:
+            ids = {side: [row[0] for row in con.execute(
+                "SELECT segment_id FROM text_segments JOIN segment_sets USING(segment_set_id) WHERE source_file_id = ? ORDER BY order_index",
+                (side,))] for side in ("pdf-de", "pdf-zh")}
+        save_correction(self.db, "pdf-de", "pdf-zh", [ids["pdf-de"][0]], [ids["pdf-zh"][-1]])
+        located = locate_alignment(self.db, "pdf-de", "pdf-zh", start_page_index=0,
+            end_page_index=0, start_offset=0, end_offset=20, backend="bertalign")
+        self.assertEqual(located["target_segment_ids"], [ids["pdf-zh"][-1]])
 
 
 if __name__ == "__main__":  # pragma: no cover

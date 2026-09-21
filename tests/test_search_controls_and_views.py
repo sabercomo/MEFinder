@@ -51,7 +51,9 @@ class SearchControlsAndViewsTests(unittest.TestCase):
 
     def test_edition_alignment_model_download_shows_determinate_progress(self) -> None:
         self.assertIn("<span>译本对齐</span>", HTML)
-        self.assertIn(">译本对齐模型</span>", HTML)
+        # The settings section now spans algorithm choice + components, so its
+        # title is "译本对齐"; the model label persists on the model radiogroup.
+        self.assertIn(">译本对齐</span>", HTML)
         self.assertIn('aria-label="译本对齐模型"', HTML)
         self.assertNotIn("<span>文本对齐</span>", HTML)
         self.assertIn("alignmentModelDownloadProgress(model)", HTML)

@@ -16,13 +16,13 @@ from typing import Dict, List, Mapping, Sequence
 
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
+from .alignment_routes import _resolve_alignment_route_any_backend
 from .text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     WriteWindow,
     _now,
     _ordered_segments_in_set,
-    _resolve_alignment_route,
     _segment_key,
     _segment_set_id_for_source,
     _source_row,
@@ -63,7 +63,7 @@ def resolve_override_context(
     try:
         _source_row(connection, source_id)
         _source_row(connection, target_id)
-        route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
+        route_runs, _via = _resolve_alignment_route_any_backend(connection, source_id, target_id)
         source_run = route_runs[0]
         final_run = route_runs[-1]
         source_set_id = _segment_set_id_for_source(source_run, source_id)
@@ -232,7 +232,7 @@ def confirm_override(
                 raise InvalidAlignmentRequest("确认令牌不匹配。")
             source_id = str(row["source_file_id"])
             target_id = str(row["target_source_file_id"])
-            route_runs, _via = _resolve_alignment_route(
+            route_runs, _via = _resolve_alignment_route_any_backend(
                 connection, source_id, target_id
             )
             current_source_set = _segment_set_id_for_source(route_runs[0], source_id)

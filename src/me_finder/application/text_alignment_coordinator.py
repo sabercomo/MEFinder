@@ -34,7 +34,17 @@ from ..alignment_compute import (
     WORKER_START_FAILED,
     SubprocessAlignmentComputeRunner,
 )
-from ..text_alignment import InvalidAlignmentRequest, generate_alignment
+from ..text_alignment import (
+    DEFAULT_ALIGNMENT_BACKEND,
+    InvalidAlignmentRequest,
+    generate_alignment,
+)
+from ..bertalign_alignment import generate_bertalign_alignment
+from ..bertalign_runtime import (
+    bertalign_model_cache_dir,
+    bertalign_model_installed,
+    build_bertalign_compute_runner,
+)
 
 
 class TextAlignmentRejected(ValueError):
@@ -136,22 +146,39 @@ class TextAlignmentCoordinator:
         force: bool = False,
         reviewed_body_ranges=None,
         expected_segment_set_ids=None,
+        backend: str = DEFAULT_ALIGNMENT_BACKEND,
     ):
-        preferences = read_preferences(
-            resolve_preferences_path(self._paths.runtime_root)
-        )
-        model_id = str(preferences["alignment_embedding_model_id"])
-        thresholds = resolve_alignment_thresholds(
-            model_id, preferences["alignment_thresholds"]
-        )
-        cache_dir = component_runtime_root(self._paths.runtime_root) / "components" / "text-alignment" / "models"
-        if not model_component_installed(cache_dir, model_id):
-            # The managed model component is a settings-UI download. Starting a
-            # generation job without it must fail clearly and locally — never
-            # trigger a hidden network download from inside the job.
-            raise TextAlignmentComponentUnavailable(
-                "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
+        if backend not in ("default", "bertalign"):
+            raise TextAlignmentRejected("不支持的对齐后端")
+        is_bertalign = str(backend) == "bertalign"
+        runtime_root = self._paths.runtime_root
+        if is_bertalign:
+            # Optional Bertalign backend: its own model/runtime, its own
+            # component check. No hidden network download from inside the job.
+            model_id = ""
+            thresholds = None
+            cache_dir = bertalign_model_cache_dir(runtime_root)
+            if not bertalign_model_installed(runtime_root):
+                raise TextAlignmentComponentUnavailable(
+                    "Bertalign 语义模型（LaBSE）未安装：请先下载 Bertalign 组件后再生成。"
+                )
+        else:
+            preferences = read_preferences(resolve_preferences_path(runtime_root))
+            model_id = str(preferences["alignment_embedding_model_id"])
+            thresholds = resolve_alignment_thresholds(
+                model_id, preferences["alignment_thresholds"]
             )
+            cache_dir = (
+                component_runtime_root(runtime_root)
+                / "components" / "text-alignment" / "models"
+            )
+            if not model_component_installed(cache_dir, model_id):
+                # The managed model component is a settings-UI download. Starting
+                # a generation job without it must fail clearly and locally —
+                # never trigger a hidden network download from inside the job.
+                raise TextAlignmentComponentUnavailable(
+                    "对齐计算组件未安装：请在设置 → 译本对齐 中下载模型后再生成。"
+                )
         with self._index_runtime.mutation():
             # A queued request must not clear cancellation of the run that owns
             # this lock. Reset before admission so shutdown after admission
@@ -167,13 +194,21 @@ class TextAlignmentCoordinator:
                 # is under way, and holds the lease so such an operation waits for
                 # this task to finish rather than swapping/deleting the runtime
                 # mid-compute — across application instances, not just this one.
-                with compute_admission(self._paths.runtime_root), \
+                with compute_admission(self._paths.runtime_root, component_directory=(
+                        "text-alignment-bertalign" if is_bertalign else "text-alignment")), \
                         self._durable_operations.operation():
-                    runner = self._compute_runner_factory(
-                        task_id=uuid.uuid4().hex,
-                        cancel_check=embedding_cancel_requested,
-                        runtime_root=self._paths.runtime_root,
-                    )
+                    if is_bertalign:
+                        runner = build_bertalign_compute_runner(
+                            task_id=uuid.uuid4().hex,
+                            cancel_check=embedding_cancel_requested,
+                            runtime_root=self._paths.runtime_root,
+                        )
+                    else:
+                        runner = self._compute_runner_factory(
+                            task_id=uuid.uuid4().hex,
+                            cancel_check=embedding_cancel_requested,
+                            runtime_root=self._paths.runtime_root,
+                        )
                     # Probe the external runtime *inside* the durable operation
                     # and mutation lock: it spawns a process, so it must be
                     # covered by the shutdown drain (close waits for the active
@@ -183,20 +218,35 @@ class TextAlignmentCoordinator:
                     # NOT by a main-process find_spec — and there is no silent
                     # fall back to in-process computation.
                     runner.probe()
-                    result = generate_alignment(
-                        self._paths.index_path,
-                        document_group_id,
-                        pivot_source_file_id,
-                        target_source_file_id,
-                        force=force,
-                        model_cache_dir=cache_dir,
-                        embedding_model_id=model_id,
-                        alignment_thresholds=thresholds,
-                        write_window=self._write_window,
-                        reviewed_body_ranges=reviewed_body_ranges,
-                        expected_segment_set_ids=expected_segment_set_ids,
-                        compute_runner=runner,
-                    )
+                    if is_bertalign:
+                        result = generate_bertalign_alignment(
+                            self._paths.index_path,
+                            document_group_id,
+                            pivot_source_file_id,
+                            target_source_file_id,
+                            force=force,
+                            model_cache_dir=cache_dir,
+                            cancel_check=embedding_cancel_requested,
+                            write_window=self._write_window,
+                            reviewed_body_ranges=reviewed_body_ranges,
+                            expected_segment_set_ids=expected_segment_set_ids,
+                            compute_runner=runner,
+                        )
+                    else:
+                        result = generate_alignment(
+                            self._paths.index_path,
+                            document_group_id,
+                            pivot_source_file_id,
+                            target_source_file_id,
+                            force=force,
+                            model_cache_dir=cache_dir,
+                            embedding_model_id=model_id,
+                            alignment_thresholds=thresholds,
+                            write_window=self._write_window,
+                            reviewed_body_ranges=reviewed_body_ranges,
+                            expected_segment_set_ids=expected_segment_set_ids,
+                            compute_runner=runner,
+                        )
             except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:
                 # Both mean "the run stopped because the app is shutting down or
                 # the user cancelled" — a cancellation, not a parse/data failure.

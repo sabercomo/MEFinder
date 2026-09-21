@@ -63,3 +63,11 @@ vendor 了 `corelib`（两阶段 DP/搜索/回溯）、`aligner`（调度）、`
 
 在生产库的一致性备份副本上，对真实书对（日文 EPUB ↔ 中文 PDF）用本地 LaBSE + 原版 Bertalign
 断网计算，落库并经产品读取路径读回定位。详见报告。
+
+## 2026-09-21：产品接入续作
+
+事实：补齐独立托管运行时（复用 uv 安装、原子发布、跨进程维护锁、取消及关闭）、固定 revision 的 LaBSE 安装验证、后台任务协调、设置页后端选择。删除开发环境变量旁路，产品生成必须从已安装组件启动。Windows/Linux 指定 CPU torch wheel；未据此声称已完成跨平台真机验收。
+
+事实：修复参数变更误用旧 run、默认阅读路径误选较新 Bertalign run、总览误报算法不可读。缓存身份还包含模型 revision 与上游 commit。人工校正仍按 segment set 共用；Bertalign 无 FastEmbed 段落回退。备份快照保存 Bertalign 原始结果，源文本及分段身份一致时恢复原 ID/链接/页码定位，无需模型；身份变化则明确失败并回滚，避免静默丢结果。
+
+事实与限制见 [产品验收报告](../../reports/bertalign-product-integration-2026-09-21.md)。旧报告的 scratchpad 脚本未入库，不能作为复现入口；本轮提供 `scripts/verify_bertalign_product.py`。本轮不合并主分支、不发版、不自动修改生产库。

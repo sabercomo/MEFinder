@@ -239,6 +239,10 @@ class ManagedAlignmentRuntime:
     """Manage the isolated alignment compute runtime as a local component."""
 
     component_id = COMPONENT_ID
+    component_directory = "text-alignment"
+    worker_flags: tuple[str, ...] = ()
+    required_modules = ("numpy", "fastembed", "onnxruntime")
+    package_index_args: tuple[str, ...] = ()
 
     def __init__(
         self,
@@ -260,7 +264,7 @@ class ManagedAlignmentRuntime:
         self.component_root = (
             component_runtime_root(self.runtime_root)
             / "components"
-            / "text-alignment"
+            / self.component_directory
         )
         self.runtime_dir = self.component_root / _RUNTIME_DIR
         self.models_dir = self.component_root / _MODELS_DIR
@@ -689,6 +693,7 @@ class ManagedAlignmentRuntime:
                     "install",
                     "--python",
                     str(python_path),
+                    *self.package_index_args,
                     *self.manifest.packages,
                 ],
                 cwd=staging,
@@ -754,7 +759,7 @@ class ManagedAlignmentRuntime:
         )
         try:
             self._run_command(
-                [str(python), "-m", module, "--verify", str(control)],
+                [str(python), "-m", module, *self.worker_flags, "--verify", str(control)],
                 cwd=source_root,
                 environment=environment,
                 log_path=root / "validation.log",
@@ -780,7 +785,7 @@ class ManagedAlignmentRuntime:
         if hello.get("protocol") != ALIGNMENT_COMPUTE_PROTOCOL:
             raise ManagedAlignmentRuntimeError("独立运行时协议版本不兼容。")
         capabilities = dict(hello.get("capabilities") or {})
-        missing = [n for n in ("numpy", "fastembed", "onnxruntime") if not capabilities.get(n)]
+        missing = [n for n in self.required_modules if not capabilities.get(n)]
         if missing:
             raise ManagedAlignmentRuntimeError(
                 "独立运行时缺少计算依赖：" + "、".join(missing)

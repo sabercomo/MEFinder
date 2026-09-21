@@ -29,6 +29,7 @@ from .bertalign_backend import (
     BERTALIGN_ALGORITHM_VERSION,
     BERTALIGN_MODEL_HF_NAME,
     BERTALIGN_MODEL_ID,
+    BERTALIGN_MODEL_REVISION,
     BERTALIGN_UPSTREAM_COMMIT,
     BertalignParams,
     align_segments_bertalign,
@@ -37,6 +38,18 @@ from .bertalign_backend import (
 from .persistence.connection import open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import SemanticLink
+
+
+def _bertalign_params_dict(params: BertalignParams) -> Dict[str, object]:
+    """The exact upstream parameters recorded in a run and matched for reuse."""
+    return {
+        "max_align": params.max_align,
+        "top_k": params.top_k,
+        "win": params.win,
+        "skip": params.skip,
+        "margin": params.margin,
+        "len_penalty": params.len_penalty,
+    }
 
 
 def _bertalign_body_ranges_parameter(preparation) -> Dict[str, object]:
@@ -91,18 +104,12 @@ def _generate_bertalign_on_connection(
         "upstream": "bertalign",
         "upstream_commit": BERTALIGN_UPSTREAM_COMMIT,
         "embedding_model_id": BERTALIGN_MODEL_ID,
+        "model_revision": BERTALIGN_MODEL_REVISION,
         "embedding_model_hf_name": BERTALIGN_MODEL_HF_NAME,
         "length_unit": "utf8_byte_length",
         "similarity": "labse_cosine",
         "score_meaning": "algorithmic_similarity_not_calibrated_accuracy",
-        "bertalign_params": {
-            "max_align": params.max_align,
-            "top_k": params.top_k,
-            "win": params.win,
-            "skip": params.skip,
-            "margin": params.margin,
-            "len_penalty": params.len_penalty,
-        },
+        "bertalign_params": _bertalign_params_dict(params),
         "pivot_language": preparation.pivot_language,
         "target_language": preparation.target_language,
         **body_parameters,
@@ -184,6 +191,7 @@ def _generate_bertalign_on_connection(
         "algorithm": BERTALIGN_ALGORITHM,
         "algorithm_version": BERTALIGN_ALGORITHM_VERSION,
         "embedding_model_id": BERTALIGN_MODEL_ID,
+        "model_revision": BERTALIGN_MODEL_REVISION,
         "backend": BERTALIGN_ALGORITHM,
         "status": "completed",
         "reused": False,
@@ -203,6 +211,7 @@ def generate_bertalign_alignment(
     params: BertalignParams | None = None,
     write_window: ta.WriteWindow | None = None,
     compute_runner: Callable[..., Tuple[List[SemanticLink], list]] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> Dict[str, object]:
     """Generate (or reuse) a Bertalign-backend alignment for one version pair."""
 
@@ -253,6 +262,7 @@ def generate_bertalign_alignment(
             )
             if not force:
                 body_parameters = _bertalign_body_ranges_parameter(preparation)
+                current_params = _bertalign_params_dict(params)
                 existing = next(
                     (
                         row
@@ -277,9 +287,14 @@ def generate_bertalign_alignment(
                             "embedding_model_id"
                         )
                         == BERTALIGN_MODEL_ID
+                        and parameters.get("model_revision") == BERTALIGN_MODEL_REVISION
                         and parameters.get("body_ranges") == body_parameters["body_ranges"]
                         and parameters.get("body_range_source")
                         == body_parameters["body_range_source"]
+                        # Bug fix: a change to any upstream parameter (max_align,
+                        # top_k, win, skip, margin, len_penalty) must NOT reuse a
+                        # run computed with different parameters.
+                        and parameters.get("bertalign_params") == current_params
                     ),
                     None,
                 )
@@ -311,6 +326,7 @@ def generate_bertalign_alignment(
                         "algorithm": BERTALIGN_ALGORITHM,
                         "algorithm_version": BERTALIGN_ALGORITHM_VERSION,
                         "embedding_model_id": BERTALIGN_MODEL_ID,
+                        "model_revision": BERTALIGN_MODEL_REVISION,
                         "backend": BERTALIGN_ALGORITHM,
                         "status": "completed",
                         "reused": True,
@@ -334,6 +350,9 @@ def generate_bertalign_alignment(
     )
 
     with transaction_window():
+        if cancel_check is not None and cancel_check():
+            from .embedding_runtime import SemanticAlignmentCancelled
+            raise SemanticAlignmentCancelled("对齐已取消，未发布结果")
         connection = open_writable_index(Path(db_path))
         try:
             connection.execute("BEGIN IMMEDIATE")

@@ -23,6 +23,7 @@ from .managed_alignment_runtime import (
     make_model_downloader,
 )
 from .managed_embedding_models import ManagedEmbeddingModels
+from .bertalign_runtime import ManagedBertalignRuntime
 from .managed_mineru import ManagedMinerU
 from .mineru_api import resolve_mineru_config_path
 
@@ -34,6 +35,7 @@ class ManagedComponents:
     catalog: ComponentCatalog
     mineru: ManagedMinerU
     alignment_runtime: ManagedAlignmentRuntime
+    bertalign_runtime: ManagedBertalignRuntime
     embedding_models: ManagedEmbeddingModels
     registry: Dict[str, object]
 
@@ -58,6 +60,7 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
         models_component=embedding_models,
         is_compute_active=embedding_run_active,
     )
+    bertalign_runtime = ManagedBertalignRuntime(root, is_compute_active=embedding_run_active)
     mineru = ManagedMinerU(
         root,
         resolve_mineru_config_path(root),
@@ -83,11 +86,13 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
         catalog=catalog,
         mineru=mineru,
         alignment_runtime=alignment_runtime,
+        bertalign_runtime=bertalign_runtime,
         embedding_models=embedding_models,
         registry={
             local_ocr.component_id: local_ocr,
             mineru.component_id: mineru,
             embedding_models.component_id: embedding_models,
             alignment_runtime.component_id: alignment_runtime,
+            bertalign_runtime.component_id: bertalign_runtime,
         },
     )

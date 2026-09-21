@@ -365,6 +365,7 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "lib_default_language": library_language,
         "online_auto_match_threshold": online_auto_match,
         "alignment_embedding_model_id": alignment_embedding_model_id,
+        "alignment_backend": (payload.get("alignment_backend", "default") if isinstance(payload, dict) and payload.get("alignment_backend", "default") in ("default", "bertalign") else "default"),
         "alignment_thresholds": alignment_thresholds,
         "last_backup_export": last_backup_export,
     }
@@ -581,6 +582,10 @@ def _save_preferences_locked(
         current["online_auto_match_threshold"] = _normalized_online_auto_match(
             updates["online_auto_match_threshold"]
         )
+    if "alignment_backend" in updates:
+        if updates["alignment_backend"] not in ("default", "bertalign"):
+            raise ValueError("不支持的对齐后端")
+        current["alignment_backend"] = updates["alignment_backend"]
     if "alignment_embedding_model_id" in updates:
         model_id = updates["alignment_embedding_model_id"]
         if model_id not in EMBEDDING_MODELS:

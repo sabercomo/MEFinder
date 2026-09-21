@@ -260,6 +260,11 @@
       var selectedId = results[1].alignment_embedding_model_id;
       var model = (component.models || []).find(function (item) { return item.id === selectedId; });
       var compute = component.compute || null;
+      if (results[1].alignment_backend === 'bertalign') {
+        var bertalign = (component.backends || {}).bertalign;
+        compute = bertalign ? bertalign.compute : {available: false};
+        model = {installed: !!(bertalign && bertalign.has_models)};
+      }
       var available = compute ? compute.available === true : null;
       var state = 'unknown';
       if (available === false) state = 'unavailable';
@@ -1989,6 +1994,9 @@
 
   // 删除文献可能解散或缩小作品：重置加载门，下次进入译本对照页重新拉取。
   window.addEventListener('library_changed', function () { invalidate(); });
+  window.addEventListener('storage', function (event) {
+    if (event.key === 'mefinder-alignment-backend') invalidate();
+  });
 
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.works = {
