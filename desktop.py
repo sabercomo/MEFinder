@@ -6,7 +6,8 @@
 
 打包后从 Windows onedir 目录或 macOS .app Resources 读取初始资源，
 再把可变数据放到对应平台的用户数据目录。
-SQLite 索引约数百 MB，首次加载需等待一段时间，因此先显示加载页，后台加载完成后再切换。
+后端 HTTP 服务在开窗前先拉起（限时等待）：就绪后主窗口直接加载正式页面，
+单次导航、无中间闪烁；极慢冷启动超时则先显示加载页，就绪后再切换。
 服务只绑定 127.0.0.1，端口由系统自动分配。
 日志写入运行时数据目录的 desktop.log（目录不可写时退回系统临时目录）。
 """
@@ -27,6 +28,7 @@ if len(_sys.argv) > 1 and _sys.argv[1] == "alignment-compute-worker":
 
     raise SystemExit(_worker_main(_sys.argv[2:]))
 
+import functools
 import html
 import logging
 import os
@@ -473,12 +475,79 @@ def configure_windows_main_window(window) -> None:
         logging.exception("failed to configure frameless Windows resize border")
 
 
-def create_main_window(webview_module, theme: str):
+class _MainWindowRef:
+    """晚绑定主窗口：让 host 先于窗口构造（后端先启动、窗口携 URL 直开）。
+
+    host 只在文件对话框里用到窗口；窗口创建后立即 bind，HTTP 请求到达时
+    窗口必然已就绪，不存在空窗期。
+    """
+
+    def __init__(self) -> None:
+        self._window = None
+
+    def bind(self, window) -> None:
+        self._window = window
+
+    def __getattr__(self, name: str):
+        window = object.__getattribute__(self, "_window")
+        if window is None:
+            raise RuntimeError("主窗口尚未创建。")
+        return getattr(window, name)
+
+
+def _hex_to_rgb01(value: str) -> tuple[float, float, float]:
+    text = value.lstrip("#")
+    return (
+        int(text[0:2], 16) / 255.0,
+        int(text[2:4], 16) / 255.0,
+        int(text[4:6], 16) / 255.0,
+    )
+
+
+def configure_macos_webview_underlay(window, app_bg: str) -> None:
+    """让 WKWebView 在内容首绘前露出主题底色，而不是默认白。
+
+    pywebview 只给 NSWindow 上背景色；不透明的 WKWebView 盖在它上面，
+    导航/首绘前画的是白色，着色主题下就成了白闪。
+    ``underPageBackgroundColor`` 正是 WKWebView 填这类空隙的公开颜色。
+    找不到视图或设置失败只记日志，绝不拦启动。
+    """
+
+    if sys.platform != "darwin":
+        return
+    try:
+        import AppKit
+
+        content = window.native.contentView()
+        candidates = [content, *(content.subviews() if content is not None else [])]
+        webview_view = next(
+            (
+                view
+                for view in candidates
+                if "WKWebView" in type(view).__name__
+                or type(view).__name__ == "WebKitHost"
+            ),
+            None,
+        )
+        if webview_view is None or not hasattr(
+            webview_view, "setUnderPageBackgroundColor_"
+        ):
+            return
+        red, green, blue = _hex_to_rgb01(app_bg)
+        webview_view.setUnderPageBackgroundColor_(
+            AppKit.NSColor.colorWithSRGBRed_green_blue_alpha_(red, green, blue, 1.0)
+        )
+    except Exception:
+        logging.debug("could not theme the WKWebView underlay", exc_info=True)
+
+
+def create_main_window(
+    webview_module, theme: str, *, url: str | None = None, error=None
+):
     """Create the platform shell and return its optional Windows controller."""
 
     palette = theme_palette(theme)
     options = {
-        "html": loading_html(theme, sys.platform),
         "width": 1500,
         "height": 860,
         "min_size": (960, 640),
@@ -486,6 +555,14 @@ def create_main_window(webview_module, theme: str):
         "text_select": True,
         "background_color": palette["app_bg"],
     }
+    # 就绪后直接以正式页面开窗：单次导航，没有「加载页→换页」的蓝白闪烁。
+    # 只有后端尚未就绪（极慢冷启动）或启动失败时才退回加载页/错误页。
+    if url is not None:
+        options["url"] = url
+    elif error is not None:
+        options["html"] = error_html(error[0], error[1], theme, sys.platform)
+    else:
+        options["html"] = loading_html(theme, sys.platform)
     controller = None
     if sys.platform == "win32":
         from src.me_finder.windows_desktop import WindowsWindowController
@@ -506,6 +583,9 @@ def create_main_window(webview_module, theme: str):
         window.events.before_show += configure_windows_main_window
     elif sys.platform == "darwin":
         window.events.before_show += configure_macos_titlebar
+        window.events.before_show += functools.partial(
+            configure_macos_webview_underlay, app_bg=palette["app_bg"]
+        )
     return window, controller
 
 
@@ -601,24 +681,19 @@ def main() -> None:
     reader_windows = ReaderWindows(
         webview, lambda: theme_palette(read_preferences(preferences_path)["theme"])["app_bg"]
     )
-    window, window_controller = create_main_window(webview, theme)
-    window.expose(reader_windows.open_reader)
-    reader_windows.set_main_window(window)
-    window.events.closed += reader_windows.close_all
-    if sys.platform == "darwin":
-        window.events.closing += pdf_viewer.close
+
     native_theme_setter = None
     if sys.platform == "win32":
         def apply_native_theme(selected_theme: str) -> None:
             pdf_viewer.set_theme(selected_theme)
 
         native_theme_setter = apply_native_theme
-        window.events.closing += pdf_viewer.close
 
     update_service = None
     if sys.platform == "win32":
         from src.me_finder.update_service import UpdateService
 
+        # close_for_update 晚绑定到下方才创建的主窗口;安装启动时窗口必然已存在。
         def close_for_update() -> None:
             threading.Timer(0.8, window.destroy).start()
 
@@ -629,16 +704,16 @@ def main() -> None:
             on_install_started=close_for_update,
         )
 
+    # host 的文件对话框晚绑定到主窗口:后端可以先于窗口启动(见下),窗口
+    # 创建后立即 bind,HTTP 请求到达时窗口必然已就绪。
+    main_window_ref = _MainWindowRef()
     host = PywebviewDesktopHost(
-        window,
+        main_window_ref,
         webview,
         pdf_viewer=pdf_viewer,
         native_theme_setter=native_theme_setter,
         app_data_root=app_data_root,
     )
-
-    def render_error(title: str, detail: str) -> None:
-        window.load_html(error_html(title, detail, theme, sys.platform))
 
     from src.me_finder.web import make_handler
 
@@ -672,18 +747,64 @@ def main() -> None:
         ),
     )
 
-    def start_backend() -> None:
-        def announce(url: str) -> None:
-            reader_windows.set_base_url(url)
-            logging.info("backend ready at %s", url)
+    # 先把后端拉起（限时 2 秒）：就绪后主窗口直接以正式页面开窗，单次导航，
+    # 消除旧流程「加载页（蓝）→换页（白）」的两次中间闪烁。极慢冷启动超时
+    # 则退回加载页，就绪后再换页，长时间等待仍有可见反馈。
+    backend_outcome: dict = {}
 
-        backend.start(
+    def announce(url: str) -> None:
+        reader_windows.set_base_url(url)
+        logging.info("backend ready at %s", url)
+        backend_outcome.setdefault("url", url)
+
+    def record_error(title: str, detail: str) -> None:
+        backend_outcome.setdefault("error", (title, detail))
+
+    starter = threading.Thread(
+        target=lambda: backend.start(
             on_ready=announce,
-            load_main_page=window.load_url,
-            show_error=render_error,
-        )
+            load_main_page=lambda _url: None,
+            show_error=record_error,
+        ),
+        daemon=True,
+    )
+    starter.start()
+    starter.join(2.0)
 
-    webview.start(start_backend, storage_path=webview_storage_path(root, portable))
+    window, window_controller = create_main_window(
+        webview,
+        theme,
+        url=backend_outcome.get("url"),
+        error=backend_outcome.get("error"),
+    )
+    main_window_ref.bind(window)
+    window.expose(reader_windows.open_reader)
+    reader_windows.set_main_window(window)
+    window.events.closed += reader_windows.close_all
+    if sys.platform == "darwin" or sys.platform == "win32":
+        window.events.closing += pdf_viewer.close
+
+    if "url" not in backend_outcome and "error" not in backend_outcome:
+        def load_when_ready() -> None:
+            # load_url 需要浏览器实例已创建：先等窗口显示，再等后端收尾。
+            window.events.shown.wait(10)
+            starter.join()
+            try:
+                url = backend_outcome.get("url")
+                if url is not None:
+                    window.load_url(url)
+                else:
+                    title, detail = backend_outcome.get(
+                        "error", ("后台启动失败", "")
+                    )
+                    window.load_html(error_html(title, detail, theme, sys.platform))
+            except Exception:
+                # 等待期间窗口可能已被用户关闭。
+                logging.debug("late main-page load skipped", exc_info=True)
+
+        threading.Thread(target=load_when_ready, daemon=True).start()
+
+    webview.start(storage_path=webview_storage_path(root, portable))
     backend.stop()
     logging.info("window closed, exiting")
 

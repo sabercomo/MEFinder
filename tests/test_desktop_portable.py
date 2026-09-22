@@ -13,6 +13,15 @@ from tools.create_empty_index import create_empty_index
 from tools.create_portable_zip import create_portable_zip
 
 
+class _Event:
+    def __init__(self) -> None:
+        self.callbacks = []
+
+    def __iadd__(self, callback):
+        self.callbacks.append(callback)
+        return self
+
+
 class DesktopPortableTests(unittest.TestCase):
     def test_windows_main_window_uses_html_titlebar_and_scoped_drag_region(self) -> None:
         class Event:
@@ -76,7 +85,110 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertNotIn("js_api", options)
         self.assertTrue(options["text_select"])
         self.assertEqual(options["min_size"], (960, 640))
-        self.assertEqual(events.before_show.callbacks, [desktop.configure_macos_titlebar])
+        self.assertEqual(events.before_show.callbacks[0], desktop.configure_macos_titlebar)
+        # 第二个回调把 WKWebView 底色设成主题色,首绘前不露白。
+        underlay = events.before_show.callbacks[1]
+        self.assertEqual(underlay.func, desktop.configure_macos_webview_underlay)
+        self.assertEqual(underlay.keywords, {"app_bg": "#F7F7F1"})
+
+    def test_macos_main_window_loads_the_backend_url_directly(self) -> None:
+        """后端就绪后开窗即正式页面：单次导航，没有加载页与换页闪烁。"""
+
+        events = types.SimpleNamespace(before_show=_Event())
+        window = types.SimpleNamespace(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+
+        with mock.patch.object(desktop.sys, "platform", "darwin"):
+            desktop.create_main_window(webview, "frost-blue", url="http://127.0.0.1:52345/")
+
+        options = webview.create_window.call_args.kwargs
+        self.assertEqual(options["url"], "http://127.0.0.1:52345/")
+        self.assertNotIn("html", options)
+
+    def test_main_window_falls_back_to_loading_page_without_ready_backend(self) -> None:
+        events = types.SimpleNamespace(before_show=_Event())
+        window = types.SimpleNamespace(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+
+        with mock.patch.object(desktop.sys, "platform", "darwin"):
+            desktop.create_main_window(webview, "frost-blue")
+
+        options = webview.create_window.call_args.kwargs
+        self.assertNotIn("url", options)
+        self.assertIn("正在加载索引", options["html"])
+
+    def test_main_window_opens_the_error_page_when_backend_fails(self) -> None:
+        events = types.SimpleNamespace(before_show=_Event())
+        window = types.SimpleNamespace(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+
+        with mock.patch.object(desktop.sys, "platform", "darwin"):
+            desktop.create_main_window(
+                webview, "frost-blue", error=("未找到索引数据库", "详情文本")
+            )
+
+        options = webview.create_window.call_args.kwargs
+        self.assertNotIn("url", options)
+        self.assertIn("未找到索引数据库", options["html"])
+        self.assertIn("详情文本", options["html"])
+
+    def test_backend_starts_before_the_window_and_keeps_a_late_fallback(self) -> None:
+        """desktop.py 必须先拉起后端再开窗；超时路径仍要能换页。"""
+
+        source = Path("desktop.py").read_text(encoding="utf-8")
+        self.assertIn("starter.join(2.0)", source)
+        self.assertIn('url=backend_outcome.get("url")', source)
+        self.assertIn('error=backend_outcome.get("error")', source)
+        # 早启动先于窗口创建;兜底换页在窗口显示之后。
+        window_call = source.index("window, window_controller = create_main_window(")
+        self.assertLess(source.index("starter.start()"), window_call)
+        self.assertIn("window.events.shown.wait(10)", source)
+        self.assertIn("window.load_url(url)", source)
+
+    def test_macos_wkwebview_underlay_uses_the_theme_background(self) -> None:
+        class WKWebViewFake:
+            def __init__(self) -> None:
+                self.color = None
+
+            def setUnderPageBackgroundColor_(self, color) -> None:
+                self.color = color
+
+        webview_view = WKWebViewFake()
+
+        class Content:
+            def subviews(self):
+                return [webview_view]
+
+        class Native:
+            def contentView(self):
+                return Content()
+
+        window = types.SimpleNamespace(native=Native())
+        captured = {}
+
+        appkit = types.SimpleNamespace(
+            NSColor=types.SimpleNamespace(
+                colorWithSRGBRed_green_blue_alpha_=(
+                    lambda red, green, blue, alpha: captured.update(
+                        color=(red, green, blue, alpha)
+                    )
+                    or (red, green, blue, alpha)
+                )
+            )
+        )
+        with (
+            mock.patch.object(desktop.sys, "platform", "darwin"),
+            mock.patch.dict(desktop.sys.modules, {"AppKit": appkit}),
+        ):
+            desktop.configure_macos_webview_underlay(window, "#0D1117")
+
+        self.assertEqual(
+            captured["color"], (13 / 255, 17 / 255, 23 / 255, 1.0)
+        )
+        self.assertEqual(webview_view.color, (13 / 255, 17 / 255, 23 / 255, 1.0))
 
     def test_scan_directory_picker_enables_native_multiple_selection(self) -> None:
         host_source = Path("src/me_finder/desktop_host.py").read_text(
