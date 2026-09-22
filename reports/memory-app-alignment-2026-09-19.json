@@ -1,0 +1,344 @@
+{
+  "configuration": {
+    "driver": "me_finder serve + /api/text-alignments",
+    "interval_ms": 20,
+    "rss_metric": "psutil rss (bytes)",
+    "settle": "1 MiB quiescent for 2 s, no gc.collect, no cache eviction"
+  },
+  "environment": {
+    "cpu_model": "Apple M4",
+    "machine": "arm64",
+    "packages": {
+      "fastembed": "0.8.0",
+      "numpy": "2.5.2",
+      "onnxruntime": "1.29.0",
+      "psutil": "7.2.2"
+    },
+    "physical_memory_bytes": 17179869184,
+    "platform": "macOS-15.7.9-arm64-arm-64bit",
+    "python": "3.12.10",
+    "revision": "cf8a7c273410f21c4ced963b436d6cd808a2f919",
+    "ru_maxrss_available": true,
+    "ru_maxrss_unit": "bytes",
+    "tracked_dirty": true
+  },
+  "final": {
+    "backend_mib": 30.3,
+    "live_worker_processes_after_settle": [],
+    "resident_after_last_round_mib": 30.3,
+    "server_exit_code": -15,
+    "worker_mib": 0.0
+  },
+  "idle": {
+    "backend_rss_bytes": 47890432,
+    "tree_rss_bytes": 47890432,
+    "waited_s": 2.11
+  },
+  "measured_at": "2026-09-19T17:55:42+0800",
+  "measured_windows": [
+    "pilot 2026-09-19 17:37-17:40 (HEAD 5af40cf)",
+    "series 2026-09-19 17:44-17:54 (HEAD moved to cf8a7c2 mid-run; backend imported its code before that)",
+    "synthetic smoke 2026-09-19 17:36"
+  ],
+  "outcome": {
+    "status": "ok"
+  },
+  "pilot_pair_a_cold": {
+    "idle_tree_mib": 48.6,
+    "measured_at": "2026-09-19T17:40:32+0800",
+    "peak_backend_mib": 74.6,
+    "peak_tree_mib": 1323.9,
+    "peak_worker_mib": 1249.3,
+    "resident_tree_mib": 63.3,
+    "revision_window": "5af40cf",
+    "task_seconds": 69.79,
+    "worker_curve_note": "pilot saved the per-sample curve: worker 1199 MiB at +15 s -> 1249 MiB at +70 s -> 0 at exit",
+    "worker_peak_trajectory_mib": [
+      1199,
+      1205,
+      1208,
+      1233,
+      1235,
+      1236,
+      1237,
+      1243,
+      1244,
+      1245,
+      1248,
+      1249
+    ]
+  },
+  "pilot_synthetic_smoke": {
+    "purpose": "plumbing check on a synthetic 360x240 pair: worker peak 838.8 MiB, tree peak 894.0 MiB, resident after settle 55.3 MiB, 0 live workers"
+  },
+  "protocol_version": "app-memory-alignment-1",
+  "resident_slope_mib_per_round": -15.3,
+  "resident_tree_mib_series": [
+    62.2,
+    80.2,
+    85.6,
+    58.2,
+    32.3,
+    30.3
+  ],
+  "rounds": [
+    {
+      "counts": {
+        "accepted_link_count": 795,
+        "alignment_link_count": 967,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 92,
+        "pivot_segment_count": 2047,
+        "rejected_link_count": 94,
+        "status": "completed",
+        "target_segment_count": 1901,
+        "unmatched_link_count": 78
+      },
+      "drop_from_peak_tree_bytes": 1115488256,
+      "label": "pair A de/zh 2047x1901 round 1 cold (embeddings computed)",
+      "peak_backend_rss_bytes": 78725120,
+      "peak_tree_rss_bytes": 1180762112,
+      "peak_worker_rss_bytes": 1117618176,
+      "resident_backend_rss_bytes": 65273856,
+      "resident_tree_rss_bytes": 65273856,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.11,
+      "task_seconds": 71.94,
+      "worker_processes": [
+        {
+          "alive_s": 0.03,
+          "peak_rss_bytes": 22183936,
+          "pid": 63922
+        },
+        {
+          "alive_s": 69.88,
+          "peak_rss_bytes": 1117618176,
+          "pid": 63924
+        }
+      ]
+    },
+    {
+      "counts": {
+        "accepted_link_count": 795,
+        "alignment_link_count": 967,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 92,
+        "pivot_segment_count": 2047,
+        "rejected_link_count": 94,
+        "status": "completed",
+        "target_segment_count": 1901,
+        "unmatched_link_count": 78
+      },
+      "drop_from_peak_tree_bytes": 111476736,
+      "label": "pair A de/zh 2047x1901 round 2 warm (vector cache reuse)",
+      "peak_backend_rss_bytes": 84115456,
+      "peak_tree_rss_bytes": 195543040,
+      "peak_worker_rss_bytes": 112197632,
+      "resident_backend_rss_bytes": 84066304,
+      "resident_tree_rss_bytes": 84066304,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.06,
+      "task_seconds": 3.75,
+      "worker_processes": [
+        {
+          "alive_s": 0.03,
+          "peak_rss_bytes": 22757376,
+          "pid": 64286
+        },
+        {
+          "alive_s": 2.24,
+          "peak_rss_bytes": 112197632,
+          "pid": 64287
+        }
+      ]
+    },
+    {
+      "counts": {
+        "accepted_link_count": 1021,
+        "alignment_link_count": 2430,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 157,
+        "pivot_segment_count": 3018,
+        "rejected_link_count": 1407,
+        "status": "completed",
+        "target_segment_count": 3131,
+        "unmatched_link_count": 2
+      },
+      "drop_from_peak_tree_bytes": 1359904768,
+      "label": "性别麻烦 zh-Hans3018xen3131 cross-task 1 cold (embeddings computed)",
+      "peak_backend_rss_bytes": 89767936,
+      "peak_tree_rss_bytes": 1449623552,
+      "peak_worker_rss_bytes": 1360265216,
+      "resident_backend_rss_bytes": 89718784,
+      "resident_tree_rss_bytes": 89718784,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.01,
+      "task_seconds": 110.43,
+      "worker_processes": [
+        {
+          "alive_s": 0.03,
+          "peak_rss_bytes": 23838720,
+          "pid": 64295
+        },
+        {
+          "alive_s": 108.09,
+          "peak_rss_bytes": 1360265216,
+          "pid": 64296
+        }
+      ]
+    },
+    {
+      "counts": {
+        "accepted_link_count": 1234,
+        "alignment_link_count": 1948,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 11,
+        "pivot_segment_count": 3739,
+        "rejected_link_count": 713,
+        "status": "completed",
+        "target_segment_count": 3404,
+        "unmatched_link_count": 1
+      },
+      "drop_from_peak_tree_bytes": 1368604672,
+      "label": "消费社会 zh-Hans3739xfr3404 cross-task 2 cold (embeddings computed)",
+      "peak_backend_rss_bytes": 101335040,
+      "peak_tree_rss_bytes": 1429635072,
+      "peak_worker_rss_bytes": 1328431104,
+      "resident_backend_rss_bytes": 61030400,
+      "resident_tree_rss_bytes": 61030400,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.05,
+      "task_seconds": 166.39,
+      "worker_processes": [
+        {
+          "alive_s": 0.06,
+          "peak_rss_bytes": 23478272,
+          "pid": 65014
+        },
+        {
+          "alive_s": 163.9,
+          "peak_rss_bytes": 1328431104,
+          "pid": 65015
+        }
+      ]
+    },
+    {
+      "counts": {
+        "accepted_link_count": 1298,
+        "alignment_link_count": 1799,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 29,
+        "pivot_segment_count": 3601,
+        "rejected_link_count": 496,
+        "status": "completed",
+        "target_segment_count": 3676,
+        "unmatched_link_count": 5
+      },
+      "drop_from_peak_tree_bytes": 1141080064,
+      "label": "战斗美少女的精神分析 zh-Hans3601xja3676 cross-task 3 cold (embeddings computed)",
+      "peak_backend_rss_bytes": 76972032,
+      "peak_tree_rss_bytes": 1174913024,
+      "peak_worker_rss_bytes": 1107296256,
+      "resident_backend_rss_bytes": 33832960,
+      "resident_tree_rss_bytes": 33832960,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.02,
+      "task_seconds": 126.2,
+      "worker_processes": [
+        {
+          "alive_s": 0.06,
+          "peak_rss_bytes": 23314432,
+          "pid": 65702
+        },
+        {
+          "alive_s": 123.62,
+          "peak_rss_bytes": 1107296256,
+          "pid": 65703
+        }
+      ]
+    },
+    {
+      "counts": {
+        "accepted_link_count": 679,
+        "alignment_link_count": 1221,
+        "embedding_model_id": "minilm-l12-v2",
+        "heading_anchor_count": 128,
+        "pivot_segment_count": 1499,
+        "rejected_link_count": 372,
+        "status": "completed",
+        "target_segment_count": 1743,
+        "unmatched_link_count": 170
+      },
+      "drop_from_peak_tree_bytes": 1240039424,
+      "label": "动物化的后现代 zh-Hans1499xja1743 cross-task 4 cold (embeddings computed)",
+      "peak_backend_rss_bytes": 49233920,
+      "peak_tree_rss_bytes": 1271824384,
+      "peak_worker_rss_bytes": 1222590464,
+      "resident_backend_rss_bytes": 31784960,
+      "resident_tree_rss_bytes": 31784960,
+      "resident_worker_rss_bytes": 0,
+      "settle_timed_out": false,
+      "settle_waited_s": 2.05,
+      "task_seconds": 59.2,
+      "worker_processes": [
+        {
+          "alive_s": 0.09,
+          "peak_rss_bytes": 23953408,
+          "pid": 66287
+        },
+        {
+          "alive_s": 57.33,
+          "peak_rss_bytes": 1222590464,
+          "pid": 66288
+        }
+      ]
+    }
+  ],
+  "system": {
+    "after": {
+      "available_bytes": 5478203392,
+      "compressed_bytes": 0,
+      "swap_used_bytes": 930611200,
+      "total_bytes": 17179869184,
+      "used_bytes": 6344867840,
+      "vm_swapusage": "total = 2048.00M  used = 887.50M  free = 1160.50M  (encrypted)"
+    },
+    "before": {
+      "available_bytes": 5047517184,
+      "compressed_bytes": 0,
+      "swap_used_bytes": 930611200,
+      "total_bytes": 17179869184,
+      "used_bytes": 7257718784,
+      "vm_swapusage": "total = 2048.00M  used = 887.50M  free = 1160.50M  (encrypted)"
+    }
+  },
+  "warmup_search_ms": 2736.0,
+  "workload": {
+    "cross_series_sha256": [
+      "d0a2632542f84370",
+      "5fd50a2b46daed21",
+      "b6bcb1e69f546c9d",
+      "ac181f7180e84292"
+    ],
+    "cross_series_titles": [
+      "性别麻烦 zh-Hans3018xen3131",
+      "消费社会 zh-Hans3739xfr3404",
+      "战斗美少女的精神分析 zh-Hans3601xja3676",
+      "动物化的后现代 zh-Hans1499xja1743"
+    ],
+    "database_bytes": 3471327232,
+    "database_sha256": "22809cc5841ed6f7f1c07ed5d5eaa43021c44c96e748dedcb79495b47c173eeb",
+    "force": true,
+    "kind": "library-snapshot-copy",
+    "model_files_staged": 13,
+    "model_id": "minilm-l12-v2",
+    "pair_a_sha256": "901d81bc51330217",
+    "rounds": 6,
+    "source_sha256": "22809cc5841ed6f7f1c07ed5d5eaa43021c44c96e748dedcb79495b47c173eeb"
+  }
+}

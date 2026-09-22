@@ -98,6 +98,8 @@
 | `memory-alignment-export-2026-09-12` | 三口径不可混用：psutil RSS(逐相位) / ru_maxrss(单调峰值，非泄漏证据) / tracemalloc(Python 堆，ONNX 原生不可见) |
 | `memory-alignment-tracemalloc-2026-09-13` | tracemalloc 外层 embed traced_peak 58.3 MiB，Python 追踪分配~58 MiB 远小于 RSS~1038 MiB。**结论:Python 追踪分配不足以解释 RSS 峰值,原生分配可能贡献较大,但具体归属(是否 ONNX)尚未验证**——tracemalloc 看不到原生分配 |
 
+> **2026-09-19 追加（进程级计算生命周期，不覆写上表结论）**：[`reports/memory-app-alignment-2026-09-19.md`](../../reports/memory-app-alignment-2026-09-19.md) 按当前"每任务一个计算进程"重测**整应用**（外部 psutil 20 ms 采样进程树，驱动走 `me_finder serve` + `/api/text-alignments`，真实快照副本 5 本不同书冷算 + 1 次暖路径）。事实：**冷对齐树峰 1120–1383 MiB，其中 worker 占 1056–1297 MiB，后端进程峰值 ≤96.6 MiB**；任务结束计算进程消失，树驻留回落到 30.3–85.6 MiB（占峰值 94–97%），6 个任务后存活计算进程 0、驻留斜率 −15.3 MiB/轮、末值低于任务前 idle 45.7 MiB；swap 未变。**上文 09-12 的"任务后稳定驻留 571–704 MiB""fresh 路径 +17 MiB/轮"在该两条路径上已无复现窗口（结构性切断，非缓解）**；剩下的唯一内存事实是嵌入推理的瞬时峰值，量级与旧架构相同 → **阶段4（batch16）继续暂缓，其重启理由仍是质量/缓存决策而非内存**。未验证：pywebview 壳与 WebView 进程未计入、Windows/冻结包（本轮计算进程回退主解释器）、≥10 本连续、>1 万段单任务。
+
 ### 4.3 对齐质量
 
 | 报告 | 结论 |
