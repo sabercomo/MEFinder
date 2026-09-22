@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from .alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
@@ -71,6 +72,57 @@ _MODELS_DIR = "models"
 # How long an install/upgrade/uninstall waits for an in-flight compute task
 # before giving up (so a stuck task cannot wedge the operation forever).
 _MAINTENANCE_WAIT_TIMEOUT = 30 * 60
+
+# --- Download robustness + domestic mirrors ------------------------------- #
+# The install pulls three artifacts across international hosts (the uv binary
+# from releases.astral.sh, a managed CPython from GitHub, and the numeric stack
+# from PyPI). On networks where those are slow or unreachable, every download is
+# retried with backoff and resumed from a partial file (HTTP Range), and every
+# one is attempted against a domestic Tsinghua (TUNA) mirror before the official
+# source. Each artifact is still SHA-256 verified, so a stale or wrong mirror can
+# only slow the install down, never publish corrupt bytes. The mirror layer is
+# automatic and has no UI; set ``MEFINDER_ALIGNMENT_MIRROR=off`` to force the
+# official sources only (tests that must not touch the network use this).
+_INSTALLER_USER_AGENT = "MEFinder-alignment-runtime-installer"
+_DOWNLOAD_READ_TIMEOUT = 120  # seconds per read (was a single 30s attempt)
+_DOWNLOAD_MAX_ATTEMPTS = 4  # per candidate URL, on transient network errors
+_DOWNLOAD_BACKOFF_SECONDS = (2.0, 5.0, 15.0)  # between attempts on one URL
+_DOWNLOAD_CHUNK = 1024 * 1024
+
+_TUNA_PYPI_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"
+_TUNA_GITHUB_RELEASE = "https://mirrors.tuna.tsinghua.edu.cn/github-release"
+_TUNA_PYTHON_INSTALL_MIRROR = _TUNA_GITHUB_RELEASE + "/astral-sh/python-build-standalone"
+# Official hosts whose uv download has a known TUNA mirror. A uv URL on any
+# other host (a ``file://`` URL in tests, or a self-hosted manifest) gets no
+# mirror candidate, so the mirror layer never reaches an unrelated endpoint.
+_UV_OFFICIAL_HOSTS = ("releases.astral.sh", "github.com")
+
+
+def _mirrors_enabled() -> bool:
+    """Whether to try domestic mirrors before official sources (default on)."""
+
+    flag = os.environ.get("MEFINDER_ALIGNMENT_MIRROR", "").strip().lower()
+    return flag not in {"off", "0", "false", "no"}
+
+
+def _uv_mirror_url(official_url: str, uv_version: str) -> Optional[str]:
+    """Map an official uv download URL to its TUNA github-release mirror.
+
+    Returns ``None`` when the URL is not http(s) on a known official host, so a
+    ``file://`` test URL or a self-hosted manifest never triggers a request to
+    the mirror.
+    """
+
+    try:
+        parsed = urlsplit(official_url)
+    except ValueError:
+        return None
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in _UV_OFFICIAL_HOSTS:
+        return None
+    asset = PurePosixPath(parsed.path).name
+    if not asset:
+        return None
+    return f"{_TUNA_GITHUB_RELEASE}/astral-sh/uv/{uv_version}/{asset}"
 
 
 
@@ -659,10 +711,10 @@ class ManagedAlignmentRuntime:
                 self._state.total_bytes = 0
                 self._state.downloaded_bytes = 0
                 self._state.progress = None
-            environment = self._install_environment(staging)
             install_log = staging / "install.log"
+            venv_dir = staging / "venv"
             self._set_state("provisioning", message="正在创建独立 Python 环境")
-            self._run_command(
+            self._run_uv_command(
                 [
                     str(uv_path),
                     "venv",
@@ -670,19 +722,20 @@ class ManagedAlignmentRuntime:
                     self.manifest.python,
                     "--managed-python",
                     "--relocatable",
-                    str(staging / "venv"),
+                    str(venv_dir),
                 ],
+                staging=staging,
                 cwd=staging,
-                environment=environment,
                 log_path=install_log,
                 timeout=1800,
+                cleanup=lambda: self._remove_tree(venv_dir),
             )
             python_path = staging / platform_manifest.venv_python
             self._set_state(
                 "provisioning",
                 message=f"正在安装对齐计算依赖（{len(self.manifest.packages)} 个）",
             )
-            self._run_command(
+            self._run_uv_command(
                 [
                     str(uv_path),
                     "pip",
@@ -691,8 +744,8 @@ class ManagedAlignmentRuntime:
                     str(python_path),
                     *self.manifest.packages,
                 ],
+                staging=staging,
                 cwd=staging,
-                environment=environment,
                 log_path=install_log,
                 timeout=3600,
             )
@@ -886,7 +939,7 @@ class ManagedAlignmentRuntime:
         staging.mkdir(parents=True)
         try:
             self._download_file(
-                platform_manifest.uv.url,
+                self._uv_download_candidates(platform_manifest),
                 archive,
                 platform_manifest.uv.size,
                 platform_manifest.uv.sha256,
@@ -924,37 +977,137 @@ class ManagedAlignmentRuntime:
         finally:
             self._remove_tree(staging)
 
+    def _uv_download_candidates(self, platform_manifest: PlatformManifest) -> list[str]:
+        """Ordered uv download URLs: domestic mirror first, official last."""
+
+        official = platform_manifest.uv.url
+        candidates: list[str] = []
+        if _mirrors_enabled():
+            mirror = _uv_mirror_url(official, platform_manifest.uv.version)
+            if mirror:
+                candidates.append(mirror)
+        candidates.append(official)
+        return candidates
+
     def _download_file(
+        self,
+        urls: Sequence[str],
+        target: Path,
+        expected_size: int,
+        expected_sha256: str,
+    ) -> None:
+        """Download ``target`` from the first working URL, retrying with resume.
+
+        ``urls`` is tried in order (domestic mirror first, official last). Each
+        URL is retried with backoff on transient network errors and resumed from
+        the partial file via HTTP Range; a size/SHA-256 mismatch poisons that
+        URL's file and moves on to the next candidate. The artifact is verified
+        before returning, so a wrong mirror can never publish corrupt bytes.
+        """
+
+        errors: list[str] = []
+        with self._lock:
+            self._state.total_bytes = expected_size
+            self._state.downloaded_bytes = 0
+            self._state.progress = None
+        for url in urls:
+            try:
+                self._download_one(url, target, expected_size, expected_sha256)
+                return
+            except _Cancelled:
+                raise
+            except ManagedAlignmentRuntimeError as exc:
+                errors.append(f"{url} → {exc}")
+                self._discard_partial(target)
+                continue
+        detail = "；".join(errors[-3:]) or "无可用下载源"
+        raise ManagedAlignmentRuntimeError(f"uv 下载失败（已尝试镜像与官方源）：{detail}")
+
+    def _download_one(
         self,
         url: str,
         target: Path,
         expected_size: int,
         expected_sha256: str,
     ) -> None:
-        request = Request(url, headers={"User-Agent": "MEFinder-alignment-runtime-installer"})
-        downloaded = 0
-        with self._lock:
-            self._state.total_bytes = expected_size
-            self._state.downloaded_bytes = 0
-        with self.opener(request, timeout=30) as response, target.open("wb") as output:
-            while True:
-                self._raise_if_cancelled()
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
-                output.write(chunk)
-                downloaded += len(chunk)
-                with self._lock:
-                    self._state.downloaded_bytes = downloaded
-                    if expected_size:
-                        self._state.progress = min(downloaded / expected_size, 0.99)
+        last_error: Optional[BaseException] = None
+        for attempt in range(_DOWNLOAD_MAX_ATTEMPTS):
+            self._raise_if_cancelled()
+            if attempt:
+                self._backoff_sleep(attempt)
+            try:
+                self._fetch_once(url, target, expected_size)
+            except _Cancelled:
+                raise
+            except (URLError, TimeoutError, OSError) as exc:
+                # Transient: keep the partial file and resume on the next attempt.
+                last_error = exc
+                continue
+            # Integrity failure raises ManagedAlignmentRuntimeError, which is not
+            # caught here and bubbles up so the caller tries the next candidate
+            # (a bad mirror is not worth retrying on the same URL).
+            self._verify_download(target, expected_size, expected_sha256)
+            return
+        raise ManagedAlignmentRuntimeError(
+            f"下载多次失败：{last_error}" if last_error is not None else "下载失败。"
+        )
+
+    def _fetch_once(self, url: str, target: Path, expected_size: int) -> None:
+        resume_from = target.stat().st_size if target.exists() else 0
+        if expected_size and resume_from >= expected_size:
+            # A partial at or beyond the expected size is unusable for resume.
+            resume_from = 0
+        headers = {"User-Agent": _INSTALLER_USER_AGENT}
+        if resume_from:
+            headers["Range"] = f"bytes={resume_from}-"
+        request = Request(url, headers=headers)
+        with self.opener(request, timeout=_DOWNLOAD_READ_TIMEOUT) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                status = getattr(response, "code", None)
+            if resume_from and status != 206:
+                # Server ignored the Range request (whole body); start over.
+                resume_from = 0
+            downloaded = resume_from
+            with self._lock:
+                self._state.downloaded_bytes = downloaded
+                if expected_size:
+                    self._state.progress = min(downloaded / expected_size, 0.99)
+            with target.open("ab" if resume_from else "wb") as output:
+                while True:
+                    self._raise_if_cancelled()
+                    chunk = response.read(_DOWNLOAD_CHUNK)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    downloaded += len(chunk)
+                    with self._lock:
+                        self._state.downloaded_bytes = downloaded
+                        if expected_size:
+                            self._state.progress = min(downloaded / expected_size, 0.99)
+
+    @staticmethod
+    def _verify_download(target: Path, expected_size: int, expected_sha256: str) -> None:
         if target.stat().st_size != expected_size:
             raise ManagedAlignmentRuntimeError("uv 下载文件大小与清单不一致。")
         digest = hashlib.sha256(target.read_bytes()).hexdigest()
         if digest != expected_sha256:
             raise ManagedAlignmentRuntimeError("uv 下载文件 SHA-256 校验失败。")
 
-    def _install_environment(self, staging: Path) -> Dict[str, str]:
+    @staticmethod
+    def _discard_partial(target: Path) -> None:
+        try:
+            target.unlink()
+        except OSError:
+            pass
+
+    def _backoff_sleep(self, attempt: int) -> None:
+        index = min(attempt - 1, len(_DOWNLOAD_BACKOFF_SECONDS) - 1)
+        # Cancel-aware wait so a retry backoff never delays a cancellation.
+        if self._state.cancel_event.wait(_DOWNLOAD_BACKOFF_SECONDS[index]):
+            raise _Cancelled("操作已取消。")
+
+    def _install_environment(self, staging: Path, *, use_mirror: bool) -> Dict[str, str]:
         environment = os.environ.copy()
         environment.update(
             {
@@ -963,7 +1116,54 @@ class ManagedAlignmentRuntime:
                 "UV_NO_PROGRESS": "1",
             }
         )
+        if use_mirror:
+            # Route uv's own downloads through the domestic mirror: the managed
+            # CPython (github-release mirror) and the numeric stack (PyPI mirror).
+            # ``setdefault`` so an operator-provided value in the real
+            # environment always wins over the built-in mirror.
+            environment.setdefault("UV_PYTHON_INSTALL_MIRROR", _TUNA_PYTHON_INSTALL_MIRROR)
+            environment.setdefault("UV_DEFAULT_INDEX", _TUNA_PYPI_INDEX)
         return environment
+
+    def _run_uv_command(
+        self,
+        command: Sequence[str],
+        *,
+        staging: Path,
+        cwd: Path,
+        log_path: Path,
+        timeout: int,
+        cleanup: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Run a uv step, trying the domestic mirror env before the official one.
+
+        uv has nothing to fall back to on its own, so on a mirror failure we run
+        ``cleanup`` (to clear any partial output) and re-run the same command
+        against the official sources.
+        """
+
+        attempts = [True, False] if _mirrors_enabled() else [False]
+        last_error: Optional[ManagedAlignmentRuntimeError] = None
+        for index, use_mirror in enumerate(attempts):
+            self._raise_if_cancelled()
+            if index and cleanup is not None:
+                cleanup()
+            environment = self._install_environment(staging, use_mirror=use_mirror)
+            try:
+                self._run_command(
+                    list(command),
+                    cwd=cwd,
+                    environment=environment,
+                    log_path=log_path,
+                    timeout=timeout,
+                )
+                return
+            except _Cancelled:
+                raise
+            except ManagedAlignmentRuntimeError as exc:
+                last_error = exc
+                continue
+        raise last_error if last_error is not None else ManagedAlignmentRuntimeError("uv 步骤失败。")
 
     def _run_command(
         self,

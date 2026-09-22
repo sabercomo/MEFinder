@@ -20,17 +20,66 @@ import tarfile
 import tempfile
 import threading
 import time
+import types
 import unittest
 from unittest import mock
 from pathlib import Path
+from urllib.error import URLError
 
 from src.me_finder.alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
+import src.me_finder.managed_alignment_runtime as align_runtime
 from src.me_finder.managed_alignment_runtime import (
     ManagedAlignmentRuntime,
     ManagedAlignmentRuntimeError,
+    _TUNA_PYPI_INDEX,
+    _TUNA_PYTHON_INSTALL_MIRROR,
+    _uv_mirror_url,
     resolve_installed_runtime_launch,
 )
 from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+
+
+class _FakeResponse:
+    """Minimal context-manager HTTP response for the download tests."""
+
+    def __init__(self, body: bytes, *, status: int = 200, cut: int | None = None,
+                 fail: Exception | None = None):
+        self._body = body
+        self._pos = 0
+        self._cut = cut if cut is not None else len(body)
+        self._fail = fail
+        self.status = status
+
+    def read(self, size: int) -> bytes:
+        if self._pos >= self._cut:
+            if self._fail is not None:
+                raise self._fail
+            return b""
+        chunk = self._body[self._pos:min(self._pos + size, self._cut)]
+        self._pos += len(chunk)
+        return chunk
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _ScriptedOpener:
+    """opener(request, timeout=...) driven by a per-URL response factory."""
+
+    def __init__(self, factory):
+        self._factory = factory
+        self.calls: list[tuple[str, str | None]] = []
+
+    def __call__(self, request, timeout=None):
+        rng = request.headers.get("Range")
+        self.calls.append((request.full_url, rng))
+        response = self._factory(request.full_url, rng, len(self.calls))
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def _process_launcher(command, **kwargs):
@@ -562,6 +611,183 @@ class AlignmentWorkerVerifyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 4, result.stderr.decode(errors="replace"))
         self.assertTrue(any(m.get("type") == "error" for m in messages))
         self.assertFalse(any(m.get("type") == "hello" for m in messages))
+
+
+class AlignmentDownloadRobustnessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.target = self.root / "uv.archive"
+        self.payload = b"".join(bytes([i % 256]) for i in range(4096))
+        self.size = len(self.payload)
+        self.sha = hashlib.sha256(self.payload).hexdigest()
+
+    def _manager(self) -> ManagedAlignmentRuntime:
+        # A bare instance is enough for the download seam; the manifest block is
+        # absent (unconfigured), which never touches the download path.
+        manifest = self.root / "empty-manifest.json"
+        manifest.write_text(json.dumps({"schema_version": 1, "platforms": {}}), encoding="utf-8")
+        return ManagedAlignmentRuntime(
+            self.root / "runtime",
+            manifest_path=manifest,
+            platform_key="test-platform",
+        )
+
+    def test_resumes_after_transient_read_timeout(self) -> None:
+        def factory(url, rng, call_index):
+            if rng is None:
+                # First attempt: deliver 1500 bytes, then time out mid-stream.
+                return _FakeResponse(self.payload, cut=1500,
+                                     fail=TimeoutError("The read operation timed out"))
+            start = int(rng.split("=", 1)[1].split("-", 1)[0])
+            return _FakeResponse(self.payload[start:], status=206)
+
+        opener = _ScriptedOpener(factory)
+        manager = self._manager()
+        manager.opener = opener
+        with mock.patch.object(manager, "_backoff_sleep"):
+            manager._download_file(["http://mirror/uv"], self.target, self.size, self.sha)
+
+        self.assertEqual(self.target.read_bytes(), self.payload)
+        # Two calls: the failed first read, then a Range-resumed continuation.
+        self.assertEqual(len(opener.calls), 2)
+        self.assertIsNone(opener.calls[0][1])
+        self.assertEqual(opener.calls[1][1], "bytes=1500-")
+
+    def test_falls_back_from_mirror_to_official(self) -> None:
+        def factory(url, rng, call_index):
+            if "mirror" in url:
+                return URLError("mirror unreachable")
+            return _FakeResponse(self.payload)
+
+        opener = _ScriptedOpener(factory)
+        manager = self._manager()
+        manager.opener = opener
+        with mock.patch.object(manager, "_backoff_sleep"):
+            manager._download_file(
+                ["http://mirror/uv", "http://official/uv"], self.target, self.size, self.sha
+            )
+
+        self.assertEqual(self.target.read_bytes(), self.payload)
+        self.assertTrue(any("mirror" in url for url, _ in opener.calls))
+        self.assertTrue(any("official" in url for url, _ in opener.calls))
+
+    def test_integrity_mismatch_moves_to_next_candidate_without_retry(self) -> None:
+        def factory(url, rng, call_index):
+            if "bad" in url:
+                # Correct length but wrong bytes: SHA-256 must reject it.
+                return _FakeResponse(b"\x00" * self.size)
+            return _FakeResponse(self.payload)
+
+        opener = _ScriptedOpener(factory)
+        manager = self._manager()
+        manager.opener = opener
+        with mock.patch.object(manager, "_backoff_sleep") as sleep:
+            manager._download_file(
+                ["http://bad/uv", "http://good/uv"], self.target, self.size, self.sha
+            )
+
+        self.assertEqual(self.target.read_bytes(), self.payload)
+        # The bad candidate is not retried on the same URL (integrity, not network).
+        bad_calls = [url for url, _ in opener.calls if "bad" in url]
+        self.assertEqual(len(bad_calls), 1)
+        sleep.assert_not_called()
+
+    def test_all_sources_failing_raises_aggregated_error(self) -> None:
+        opener = _ScriptedOpener(lambda url, rng, i: URLError("down"))
+        manager = self._manager()
+        manager.opener = opener
+        with mock.patch.object(manager, "_backoff_sleep"):
+            with self.assertRaises(ManagedAlignmentRuntimeError) as ctx:
+                manager._download_file(
+                    ["http://mirror/uv", "http://official/uv"], self.target, self.size, self.sha
+                )
+        self.assertIn("镜像与官方源", str(ctx.exception))
+
+
+class AlignmentMirrorConfigTests(unittest.TestCase):
+    def test_uv_mirror_url_maps_official_host(self) -> None:
+        official = "https://releases.astral.sh/github/uv/releases/download/0.12.1/uv-x.tar.gz"
+        mirror = _uv_mirror_url(official, "0.12.1")
+        self.assertEqual(
+            mirror,
+            "https://mirrors.tuna.tsinghua.edu.cn/github-release/astral-sh/uv/0.12.1/uv-x.tar.gz",
+        )
+
+    def test_uv_mirror_url_skips_non_official_and_file_urls(self) -> None:
+        self.assertIsNone(_uv_mirror_url("file:///tmp/uv.tar.gz", "0.12.1"))
+        self.assertIsNone(_uv_mirror_url("https://example.com/uv.tar.gz", "0.12.1"))
+
+    def test_candidates_prefer_mirror_then_official_when_enabled(self) -> None:
+        platform = types.SimpleNamespace(
+            uv=types.SimpleNamespace(
+                url="https://releases.astral.sh/github/uv/releases/download/0.12.1/uv.tar.gz",
+                version="0.12.1",
+            )
+        )
+        manager = ManagedAlignmentRuntime.__new__(ManagedAlignmentRuntime)
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MEFINDER_ALIGNMENT_MIRROR", None)
+            candidates = manager._uv_download_candidates(platform)
+        self.assertEqual(len(candidates), 2)
+        self.assertIn("tuna", candidates[0])
+        self.assertEqual(candidates[1], platform.uv.url)
+
+    def test_candidates_official_only_when_mirror_disabled(self) -> None:
+        platform = types.SimpleNamespace(
+            uv=types.SimpleNamespace(
+                url="https://releases.astral.sh/github/uv/releases/download/0.12.1/uv.tar.gz",
+                version="0.12.1",
+            )
+        )
+        manager = ManagedAlignmentRuntime.__new__(ManagedAlignmentRuntime)
+        with mock.patch.dict(os.environ, {"MEFINDER_ALIGNMENT_MIRROR": "off"}):
+            candidates = manager._uv_download_candidates(platform)
+        self.assertEqual(candidates, [platform.uv.url])
+
+    def test_install_environment_sets_mirror_only_when_requested(self) -> None:
+        manager = ManagedAlignmentRuntime.__new__(ManagedAlignmentRuntime)
+        manager.component_root = Path("/tmp/component-root")
+        staging = Path("/tmp/staging")
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("UV_DEFAULT_INDEX", None)
+            os.environ.pop("UV_PYTHON_INSTALL_MIRROR", None)
+            mirror_env = manager._install_environment(staging, use_mirror=True)
+            official_env = manager._install_environment(staging, use_mirror=False)
+        self.assertEqual(mirror_env["UV_DEFAULT_INDEX"], _TUNA_PYPI_INDEX)
+        self.assertEqual(mirror_env["UV_PYTHON_INSTALL_MIRROR"], _TUNA_PYTHON_INSTALL_MIRROR)
+        self.assertNotIn("UV_DEFAULT_INDEX", official_env)
+        self.assertNotIn("UV_PYTHON_INSTALL_MIRROR", official_env)
+
+
+class AlignmentUvStepFallbackTests(unittest.TestCase):
+    def test_uv_step_retries_official_after_mirror_failure(self) -> None:
+        manager = ManagedAlignmentRuntime.__new__(ManagedAlignmentRuntime)
+        manager.component_root = Path("/tmp/component-root")
+        manager._raise_if_cancelled = lambda: None
+        seen_mirror_flags: list[bool] = []
+        cleanup_calls: list[int] = []
+
+        def fake_run(command, *, cwd, environment, log_path, timeout):
+            uses_mirror = "UV_DEFAULT_INDEX" in environment
+            seen_mirror_flags.append(uses_mirror)
+            if uses_mirror:
+                raise ManagedAlignmentRuntimeError("mirror install failed")
+
+        manager._run_command = fake_run
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MEFINDER_ALIGNMENT_MIRROR", None)
+            manager._run_uv_command(
+                ["uv", "pip", "install"],
+                staging=Path("/tmp/staging"),
+                cwd=Path("/tmp/staging"),
+                log_path=Path("/tmp/staging/install.log"),
+                timeout=10,
+                cleanup=lambda: cleanup_calls.append(1),
+            )
+        self.assertEqual(seen_mirror_flags, [True, False])
+        self.assertEqual(cleanup_calls, [1])
 
 
 if __name__ == "__main__":
