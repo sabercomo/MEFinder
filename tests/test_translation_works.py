@@ -3,6 +3,7 @@ reader review writes and moving books between works."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import tempfile
@@ -143,7 +144,7 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
     def test_corrected_body_detection_marks_detected_run_stale(self) -> None:
         run = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         model_id = self._model_id()
-        with sqlite3.connect(str(self.db)) as connection:
+        with contextlib.closing(sqlite3.connect(str(self.db))) as connection:
             parameters = json.loads(connection.execute(
                 "SELECT parameters_json FROM alignment_runs WHERE alignment_run_id=?",
                 (run["alignment_run_id"],),
@@ -156,6 +157,7 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
                 "UPDATE alignment_runs SET parameters_json=? WHERE alignment_run_id=?",
                 (json.dumps(parameters), run["alignment_run_id"]),
             )
+            connection.commit()
         translation_works._DETECTED_BOUNDS_CACHE.clear()
         pair = self._pair(
             translation_works.alignment_overview(self.db, active_model_id=model_id),
@@ -164,12 +166,13 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
         self.assertEqual(pair["stale_reason"], "body_range_changed")
 
         # Reviewed ranges are the user's decision, never second-guessed.
-        with sqlite3.connect(str(self.db)) as connection:
+        with contextlib.closing(sqlite3.connect(str(self.db))) as connection:
             parameters["body_range_source"] = "reviewed"
             connection.execute(
                 "UPDATE alignment_runs SET parameters_json=? WHERE alignment_run_id=?",
                 (json.dumps(parameters), run["alignment_run_id"]),
             )
+            connection.commit()
         pair = self._pair(
             translation_works.alignment_overview(self.db, active_model_id=model_id),
             "pdf-de", "pdf-zh",
