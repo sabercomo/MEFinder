@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import tempfile
@@ -338,7 +339,7 @@ class BodyRangeReviewTests(unittest.TestCase):
         sets = {side["side"]: side["segment_set_id"] for side in overview["sides"]}
         ranges = {side["side"]: [side["body_start_index"], side["body_end_index"] + 1]
                   for side in overview["sides"]}
-        with sqlite3.connect(self.db) as connection:
+        with contextlib.closing(sqlite3.connect(str(self.db))) as connection:
             payload = json.loads(connection.execute(
                 "SELECT payload_json FROM pdf_pages WHERE pdf_page_index=2"
             ).fetchone()[0])
@@ -347,6 +348,7 @@ class BodyRangeReviewTests(unittest.TestCase):
                 "UPDATE pdf_pages SET payload_json=? WHERE pdf_page_index=2",
                 (json.dumps(payload, ensure_ascii=False),),
             )
+            connection.commit()
         with mock.patch("src.me_finder.alignment_kernel.embed_text_sequences") as embed:
             with self.assertRaisesRegex(InvalidAlignmentRequest, "重新加载"):
                 generate_alignment(
@@ -354,7 +356,7 @@ class BodyRangeReviewTests(unittest.TestCase):
                     reviewed_body_ranges=ranges, expected_segment_set_ids=sets,
                 )
             embed.assert_not_called()
-        with sqlite3.connect(self.db) as connection:
+        with contextlib.closing(sqlite3.connect(str(self.db))) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM alignment_runs").fetchone()[0], 0)
         self.assertEqual(self._overview()["range_source"], "detected")
 
