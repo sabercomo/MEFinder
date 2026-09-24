@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -14,6 +13,7 @@ from .database import (
     paragraph_from_database_row,
     paragraph_payload_for_storage,
 )
+from .persistence.connection import connect_index
 from .pdf_page_mapping import (
     PageMapper,
     mapping_gutter_x,
@@ -76,8 +76,7 @@ def apply_mapping_to_database(
         raise ValueError("没有可应用的自动页码区间。")
     _backup_database(database_path)
     mapper = PageMapper(cleaned)
-    connection = sqlite3.connect(str(database_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(database_path, write=True)
     page_updates = 0
     paragraph_updates = 0
     try:

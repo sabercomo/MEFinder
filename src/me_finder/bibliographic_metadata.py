@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import json
-import sqlite3
 import unicodedata
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
@@ -58,6 +57,7 @@ from .bibliographic_values import (
     canonical_metadata as canonical_metadata,
     is_valid_bibliographic_value as is_valid_bibliographic_value,
 )
+from .persistence.connection import connect_index
 from .persistence.paragraph_payload import paragraph_payload_for_storage
 
 
@@ -551,7 +551,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
     """Update one document's catalog/search metadata without rebuilding text indexes."""
 
     canonical = _canonical_metadata(metadata)
-    connection = sqlite3.connect(str(database_path))
+    connection = connect_index(database_path, write=True, row_factory=None)
     counts = {"sources": 0, "volumes": 0, "works": 0, "paragraphs": 0}
     try:
         connection.execute("BEGIN IMMEDIATE")

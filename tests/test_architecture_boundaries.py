@@ -13,11 +13,8 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE = {
     "application/document_heading_enrichment.py": 1,
-    "bibliographic_metadata.py": 1,
     "data_location.py": 3,
     "database.py": 7,
-    "large_document/job_ledger.py": 1,
-    "runtime_page_mapping.py": 1,
 }
 
 SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
