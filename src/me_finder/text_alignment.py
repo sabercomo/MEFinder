@@ -27,7 +27,7 @@ from .embedding_models import (
     embedding_model_config,
 )
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
-from .persistence.connection import open_writable_index, table_exists
+from .persistence.connection import connect_index, open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .alignment_regions import alignment_body_bounds
 from .alignment_kernel import align_segment_sequences
@@ -1256,8 +1256,7 @@ def _segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str
 
 def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, object]:
     source_id = _validate_source_id(source_file_id)
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     try:
         source = connection.execute(
             "SELECT source_type, payload_json FROM source_files WHERE source_file_id = ?",
@@ -2177,8 +2176,7 @@ def locate_alignment(
     if end_page < start_page or (end_page == start_page and last_offset <= first_offset):
         raise InvalidAlignmentRequest("选区范围无效。")
 
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     try:
         source = _source_row(connection, source_id)
         source_kind = _source_kind(source)

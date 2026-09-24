@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .document_group_metadata import canonical_version_label, member_display_name
-from .persistence.connection import open_writable_index, table_exists
+from .persistence.connection import connect_index, open_writable_index, table_exists
 from .persistence.schema_installers import install_document_group_schema
 from .persistence.index_schema import DEFAULT_DATABASE_PATH
 
@@ -647,8 +647,7 @@ def list_document_groups(
     if not path.exists():
         return []
     ensure_document_group_schema(path)
-    connection = sqlite3.connect(str(path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(path))
     try:
         if not table_exists(connection, "document_groups"):
             return []
@@ -738,8 +737,7 @@ def read_document_group_snapshot(db_path: Path) -> Dict[str, list]:
         if stream.read(16) != b"SQLite format 3\x00":
             return snapshot
     ensure_document_group_schema(path)
-    connection = sqlite3.connect(str(path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(path))
     try:
         if not table_exists(connection, "document_groups"):
             return snapshot
@@ -880,7 +878,7 @@ def resolve_document_group_source_ids(
     path = Path(db_path)
     if not path.exists():
         raise DocumentGroupNotFound("作品组不存在。")
-    connection = sqlite3.connect(str(path))
+    connection = connect_index(str(path), row_factory=None)
     try:
         if not table_exists(connection, "document_groups"):
             raise DocumentGroupNotFound("作品组不存在。")
@@ -913,7 +911,7 @@ def document_group_for_source(
     path = Path(db_path)
     if not source_id or not path.exists():
         return None
-    connection = sqlite3.connect(str(path))
+    connection = connect_index(str(path), row_factory=None)
     try:
         if not table_exists(connection, "document_group_members"):
             return None

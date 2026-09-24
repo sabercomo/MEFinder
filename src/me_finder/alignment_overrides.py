@@ -14,7 +14,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
 
-from .persistence.connection import open_writable_index, table_exists
+from .persistence.connection import connect_index, open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .text_alignment import (
     AlignmentNotFound,
@@ -57,8 +57,7 @@ def resolve_override_context(
     target_ids = [str(value) for value in target_segment_ids]
     if not source_ids or (not target_ids and not allow_empty_target):
         raise InvalidAlignmentRequest("源和目标 Segment 都不能为空。")
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     try:
         _source_row(connection, source_id)
         _source_row(connection, target_id)
@@ -375,8 +374,7 @@ def list_overrides(
         filters.append("status = ?")
         parameters.append(status_value)
     bounded_limit = max(1, min(int(limit), 200))
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     try:
         if not table_exists(connection, "alignment_manual_overrides"):
             return {"total": 0, "overrides": []}

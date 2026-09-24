@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Mapping
 
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID
-from .persistence.connection import open_writable_index, table_exists
+from .persistence.connection import connect_index, open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import EmbeddingProvider
 from .text_alignment import (
@@ -31,8 +31,7 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
     with path.open("rb") as stream:
         if stream.read(16) != b"SQLite format 3\x00":
             return {"alignment_pairs": []}
-    connection = sqlite3.connect(str(path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(path))
     try:
         if not table_exists(connection, "alignment_runs"):
             return {"alignment_pairs": []}

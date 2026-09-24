@@ -21,7 +21,7 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_regions import alignment_body_bounds
 from .page_display import build_page_display
-from .persistence.connection import open_writable_index
+from .persistence.connection import connect_index, open_writable_index
 from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import _document_heading_positions
 from .text_alignment import (
@@ -322,8 +322,7 @@ def read_body_range_segments(
         None if pdf_page is None
         else _validate_nonnegative_integer("pdf_page", pdf_page)
     )
-    connection = sqlite3.connect(str(Path(db_path)))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(Path(db_path)))
     try:
         owner = connection.execute(
             "SELECT source_file_id FROM segment_sets WHERE segment_set_id = ?",

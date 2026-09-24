@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
+from .persistence.connection import connect_index
 from .import_config_store import (
     import_config_lock,
     load_import_config,
@@ -25,7 +26,7 @@ def indexed_word_source_count(database_path: Path) -> int:
     if not database_path.exists():
         return 0
     try:
-        connection = sqlite3.connect(str(database_path))
+        connection = connect_index(str(database_path), row_factory=None)
     except sqlite3.Error:
         return 0
     try:

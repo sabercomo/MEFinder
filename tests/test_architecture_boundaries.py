@@ -12,23 +12,12 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
 # 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE = {
-    "alignment_body_range.py": 1,
-    "alignment_overrides.py": 2,
-    "alignment_snapshots.py": 1,
     "application/document_heading_enrichment.py": 1,
     "bibliographic_metadata.py": 1,
     "data_location.py": 3,
     "database.py": 7,
-    "document_deletion.py": 1,
-    "document_export_service.py": 1,
-    "document_groups.py": 4,
-    "index_publisher.py": 1,
-    "indexer.py": 1,
     "large_document/job_ledger.py": 1,
-    "parser_statistics.py": 1,
     "runtime_page_mapping.py": 1,
-    "text_alignment.py": 2,
-    "translation_works.py": 1,
 }
 
 SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {

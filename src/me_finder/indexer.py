@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
+from .persistence.connection import connect_index
 from . import __version__
 from .database import ANCHOR_SPEC_VERSION, DEFAULT_DATABASE_PATH, build_database, load_database_index
 from .extractors import (
@@ -82,10 +83,8 @@ def _existing_source_inventory(
     if not path.is_file():
         return {"word": {}, "pdf": {}}, None
     try:
-        connection = sqlite3.connect(
-            path.resolve().as_uri() + "?mode=ro",
-            uri=True,
-            timeout=1.0,
+        connection = connect_index(
+            path, row_factory=None, busy_timeout_ms=1000, readonly_uri=True
         )
         try:
             rows = connection.execute(

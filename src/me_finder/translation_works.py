@@ -23,7 +23,7 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
-from .persistence.connection import open_writable_index, table_exists
+from .persistence.connection import connect_index, open_writable_index, table_exists
 from .persistence.schema_installers import (
     install_document_group_schema,
     install_text_alignment_schema,
@@ -58,8 +58,7 @@ MAX_CANDIDATE_RADIUS = 5
 
 
 def _read_connection(db_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     return connection
 
 
