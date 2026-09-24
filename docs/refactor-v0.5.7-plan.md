@@ -1,0 +1,254 @@
+# MEFinder 前后端架构重构计划(草案)
+
+2026-09-25:待审批方案,尚未实施。版本号 v0.5.7 为暂定,以实际发版为准。
+
+2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
+
+本文件是给**新会话**用的执行计划。先读"开场 prompt",再按阶段推进。所有数字是 2026-09-25 在 `codex/v0.5.6-integration` 工作区测得的基线,**动手前必须用第 6 节的命令复测**,以复测值为准。
+
+---
+
+## 0. 开场 prompt(复制到新会话)
+
+```text
+按 docs/refactor-v0.5.7-plan.md 执行架构重构。
+
+要求:
+1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
+2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
+3. 从"阶段 A"开始,一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
+5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
+6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
+```
+
+---
+
+## 1. 目标与不做的事
+
+**目标**:在不推倒重写的前提下,收口四类问题——DB 连接策略分散、HTTP 分发多轨、组合根过重、前端请求与 DOM 构造无统一出口。
+
+**明确不做**:
+
+- 不换 FastAPI / 不上 async / 不引 ORM / 不引 DI 容器(边界测试已禁止)。
+- 前端不引框架、不引构建步骤。
+- 本轮不切 SQLite WAL:`database.py` 依赖"临时库 + 原子替换文件"发布,WAL 的 `-wal/-shm` 与之冲突,需单独议题 + `reports/` 实证。
+
+---
+
+## 2. 前置条件
+
+1. 0.5.6(Zotero 同步)已提交。它的改动覆盖 `web_http.py` / `http_routes.py` / `migrations.py` / `schema_installers.py` 等,先重构必冲突。
+2. 全量测试在当前 `main`(或集成分支)全绿。
+3. 本计划涉及大面积重构,按 AGENTS.md §2.2 开 `refactor/*` 分支,各阶段验证后合入。
+
+---
+
+## 3. 现状基线(2026-09-25 实测)
+
+### 3.1 后端
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| `src/me_finder` 模块数 / 行数 | 183 / 约 74.7k | |
+| 内部 import 环 | 0 | 已有 `test_no_new_import_cycles_appear` |
+| `sqlite3.connect` 调用点 | 31(约 20 个模块) | 仅 2 处走 `persistence/connection.py` |
+| persistence 外含 `.execute(` 的文件 | 27 | 最多:`database.py` 67、`document_groups.py` 65、`text_alignment.py` 52、`large_document/job_ledger.py` 36、`translation_works.py` 21 |
+| `_table_exists` 定义 | 4 份 | `document_groups` / `text_alignment` / `schema_installers` / `migrations` |
+| `web_http.py` 内 `parsed.path` 分支 | 31 | 另有 `_POST_ROUTE_TABLE`、controller 路由、shell 路由三套分发 |
+| `web_runtime.py` 直接内部依赖 | 63 | `ApplicationRuntime` 28 个字段,几乎全是 `object` |
+| 自起线程的模块 | 约 14 | `managed_mineru` 5、`managed_alignment_runtime` 5、`native_document_open` 5、`alignment_compute` 4、`local_ocr_installer` 4 … |
+| `except Exception` | 148 | |
+
+**连接策略不一致(事实)**:`busy_timeout=30000` 只在 `persistence/connection.py` 与 `database.py` 部分路径设置,其余用 Python 默认 5 秒;`PRAGMA foreign_keys = ON` 只在 `open_writable_index` 与 `database.py` 部分写路径开启,`document_groups.py`、`alignment_overrides.py` 等写入未开。
+
+**与既有文档的出入**:`docs/refactor-v0.5.0.md` 写"SQL 已收进 persistence",实测不成立(见上表)。执行本计划时在该文件以日期行追加更正,不改旧结论。
+
+**已有的好模式(照抄)**:`persistence/zotero_sync_store.py`、`persistence/document_read_repository.py`(SQL 收口);`zotero_sync_assembly.py`、`managed_component_assembly.py`(按域装配);controller 返回 `(status, dict)`、不碰传输。
+
+### 3.2 前端
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| `static/js/*.js` 总行数 | 约 14.1k | 最大:`35-works` 2007、`60-settings` 1954、`80-import` 1514、`70-vision` 1394、`30-library` 1179 |
+| `static/reader.js` | 4301 行、约 167 个函数、1 个共享可变 `state` | 已禁 `innerHTML`;公共面 `MEFinderReader` 已冻结;详见阶段 D |
+| `fetch(` 调用 | 约 105,分布 14 个文件 | `70-vision` 25、`60-settings` 25、`80-import` 21;无统一客户端,`35-works` 与 `62-zotero` 各有私有 `requestJSON`/`getJSON` |
+| 使用 `innerHTML` 的 JS 文件 | 10 | 字符串拼接 HTML |
+| `index.html` 内联事件属性 | 182 | `onclick=` / `onchange=` / `oninput=` |
+
+**安全隐患(事实 + 推断)**:动态 HTML 里有 `onclick="fn(event,'` + `esc(id)` + `')"` 形式(如 `20-search.js` 的分组选项)。HTML 实体先解码再进 JS,`esc()` 挡不住单引号。**推断**:目前这些 id 由后端生成,实际利用面低;但同文件已有 `data-value` + `this.dataset.value` 的安全写法,应统一到后者。
+
+### 3.3 复测更正(2026-09-25,macOS `.venv-macos312-arm64`,HEAD `771f917`)
+
+事实(按 §6 命令与 AST 扫描复测):
+
+| 指标 | 原值 | 复测值 |
+|---|---|---|
+| 全量 unittest | — | 2534 通过 / 23 跳过;ruff `src tests scripts` 零告警 |
+| persistence 外 `sqlite3.connect` | 31(约 20 个模块) | 30(17 个模块);A2 清单漏了 `application/document_heading_enrichment.py`、`large_document/job_ledger.py` |
+| `fetch(` 分布文件数 | 14 | 13(总数 105 一致) |
+| `index.html` 内联事件(click/change/input) | 182 | 205(`771f917` 的 Zotero 设置页新增;推断,未逐条核对) |
+| 自起线程 | 约 14 模块、如 `managed_mineru` 5 | §6 命令只得 10 个模块、每个 1 行;表中数字与命令口径不一致,C3 开工前重定统计口径 |
+
+补充事实:persistence 外含 `.execute(` 的 27 个文件中有 5 个在 `application/`(`import_orchestrator`、`literature_verification_service`、`parallel_passage_service`、`script_search`、`document_heading_enrichment`),现有边界测试只禁 application import persistence,未禁直接写 SQL;A0 棘轮先冻结现状。
+
+---
+
+## 4. 分阶段计划
+
+每步一个提交,提交信息按 AGENTS.md §2.1。每步结束:全量 unittest 全绿、ruff `F` 零新增、需要时更新前端指纹/预算。
+
+### 阶段 A — 后端 DB 连接收口(最先做,不影响前端)
+
+**A0 守卫测试(棘轮)**
+- 在 `tests/test_architecture_boundaries.py` 新增:
+  - persistence 外 `sqlite3.connect` 调用点白名单 = 当前清单,**只许删不许增**;
+  - persistence 外含 `.execute(` 的文件白名单,同上。
+- 提交:`test(arch): 新增 DB 连接与 SQL 散落棘轮基线`
+
+**A1 外键实证(先于改行为)**
+- 对真实用户库(先备份)与开发库跑 `PRAGMA foreign_key_check`,结果写进 `reports/`。
+- 有违例:停下,报告给用户,先设计数据修复迁移(走 `migrations.py` + `user_version`),再进 A2。
+
+**A2 统一连接入口**
+- `persistence/connection.py` 增加上下文管理器:`open_read(path)`、`open_write(path, *, immediate=False)`、`open_readonly_snapshot(path)`(URI `mode=ro`);统一 `row_factory`、`busy_timeout=30000`,写连接统一 `foreign_keys=ON`。保留现有 `open_readonly_index` / `open_writable_index`。
+- `table_exists` 下沉到 persistence,删除 4 份私有副本。
+- 按机械程度迁移调用点:`document_groups` → `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `translation_works` / `runtime_page_mapping` / `parser_statistics` → `text_alignment` → `bibliographic_metadata` / `document_export_service` / `document_deletion` / `indexer` / `index_publisher` → `application/document_heading_enrichment` / `large_document/job_ledger`(复测补漏) → `data_location` → `database.py`。
+- 每迁一批把 A0 的白名单删掉对应条目。
+- 验收:persistence 外 `sqlite3.connect` = 0。
+- 注意:`database.py` 的临时库构建与 `ATTACH`、`data_location` 的 `backup()` 属特殊连接,可提供专用 helper,不要硬塞通用入口。
+
+### 阶段 B — HTTP 契约统一(唯一需要前后端联动的阶段,同一版本完成)
+
+**B1 前端统一请求客户端(先做)**
+- 新增 `static/js/07-api.js`:`apiGet(url, opts)`、`apiPost(url, payload, opts)`、`apiUpload(...)`;统一 `cache: 'no-store'`、JSON 解析、`!resp.ok || data.error` → 抛带 `status`/`code`/`message` 的错误。
+- 把约 105 处 `fetch(` 迁过去;删除 `35-works` / `62-zotero` 的私有 helper。上传与 Range 等特殊请求可保留直接 `fetch`,但须集中在 `07-api.js`。
+- 新增前端守卫:`07-api.js` 之外禁止 `fetch(`(棘轮)。
+- 同步:全局符号预算、`test_frontend_assets.py` 指纹(命令见 AGENTS.md §3.6)。
+
+**B2 后端单一路由注册表**
+- 在 `http_routes.py` 引入 `Route` 数据类:`method`、`path`、`handler`、`body`(`json` / `raw` / `none`)、`mutates_data_root: bool`、可选 `payload_model`。
+- `RAW_BODY_POST_PATHS`、`DATA_ROOT_MUTATING_POST_PATHS` 改为由路由属性推导,删除手写集合。
+- 把 `web_http.py` 的 31 处 `parsed.path` 分支迁出:`/api/import`、`/api/import-upload/*`、`/api/import-local`(含读偏好、校验扫描目录这段业务逻辑)进导入 controller;`/api/search` 进搜索 controller;其余同理。
+- `web_http.py` 只保留:可信来源/Host 校验、Content-Type 门、读/排空请求体(Windows 断连修复保持原样)、分发、Range 流式、关闭中 503。目标 ≤ 300 行,更新 `test_web_boundary_stays_split_by_responsibility` 的行数上限。
+- 新增测试:由注册表导出路由清单,与 `docs/contracts/` 当前版本契约比对。
+- 验收:`test_http_api_contract` 及上传/排空相关测试**不改断言**通过。
+
+**B3 统一入参校验**
+- 新增轻量 `parse_payload(Model, payload)`(dataclass + 字段类型/必填校验),失败抛 `PayloadError` → 400。错误体保持 `{"error": "中文消息"}`,可增 `code`,前端 `07-api.js` 已能透传。
+- 从 `DocumentGroupController` 开始逐个 controller 迁移,把 `payload_model` 登记到 `Route`。
+- 不引 pydantic。
+
+契约若有任何可见变化(新增 `code` 字段等),按 `docs/backend-contract-change-checklist.md` 出新版 `docs/contracts/vX.Y.Z-http-api.json`。
+
+### 阶段 C — 可并行,穿插功能迭代分批做
+
+**后端 C1 SQL 进仓储**(照 `zotero_sync_store.py`)
+1. `document_groups` → `persistence/document_group_store.py`
+2. `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `persistence/alignment_store.py`
+3. `translation_works`、`runtime_page_mapping`、`bibliographic_metadata` 写库部分
+4. `text_alignment.py` 拆:`alignment_segmentation.py`(`segment_*` 纯函数)、`alignment_generation.py`(`generate_alignment` 编排)、SQL 进 `alignment_store`
+5. `database.py` 拆:`persistence/fts_index.py`、`persistence/index_build.py`、`persistence/source_replace.py`;`database.py` 暂留兼容转发
+- 顺带处理 `docs/refactor-v0.5.0.md` 记录的残留环根因(`bibliographic_metadata` 顶层依赖 `database.paragraph_payload_for_storage`)。
+- 纯搬迁,对齐/检索 golden 与 `tests/fixtures/search_pipeline_golden.json` 不得变化。每批收紧 A0 白名单。
+
+**后端 C2 组合根拆分**
+- `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
+- `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
+- 验收:`web_runtime.py` 直接内部依赖 ≤ 20;行数上限同步收紧。
+
+**后端 C3 后台任务统一**
+- `tasks/` 下提供 `BackgroundTasks`:具名注册、取消、关闭时 join,接入 `close_runtime` / `DurableOperationGate`。
+- 迁移约 14 个模块的裸 `threading.Thread`;沿途审 `except Exception`:至少 `logging.exception`,不静默吞。
+
+**前端 C4 事件委托**
+- 引入 `data-action="xxx"` + 根节点委托分发,替换 `index.html` 的 182 个内联事件与动态 HTML 里的 `onclick=` 字符串;优先修 `onclick="fn('` + `esc(...)` + `')"` 形式。
+- 随之收缩全局符号预算(内联事件不再需要全局函数)。
+- 守卫:`index.html` 内联事件数、各文件 `innerHTML` 数,棘轮只降不升。
+
+**前端 C5 DOM 构造与拆文件**
+- 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
+- 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。
+
+### 阶段 D — `reader.js` 拆分(阶段 B1 之后;可与阶段 C 并行)
+
+**现状(2026-09-25 实测)**
+
+- 单个 IIFE,约 167 个函数共用一个可变 `state` 对象(第 70 行起,约 80 个字段),内部任何函数都能读写任意字段。
+- 公共面已经很小、很好:`global.MEFinderReader = Object.freeze({open, openForSearchResult, close, goTo, restore, copyCitation, configure, destroy, isOpen, getState, codePointToUtf16Index, alignmentJobs})`。**拆分期间此公共面必须逐字不变。**
+- 已无 `innerHTML`,DOM 走 `createButton` / `createIcon` / `createDropdown` 等辅助函数;`ensureDom`(约 400 行)一次性搭整棵阅读器 DOM。
+- 自带 `readJSON` / `postJSON`,端点集中在 `DEFAULTS`(约 20 个)。
+- 对齐任务轮询(`watchAlignmentJob` / `subscribeAlignmentJob` / `pollAlignmentJob`)是**全应用唯一的任务监听**,作品页通过 `MEFinderReader.alignmentJobs` 订阅——它其实不属于阅读器。
+- 装配:`web_assets.py` 把 `reader.js` 整文件替换进 `//__READER_JS__` 占位(主窗口与独立阅读窗口两处)。
+- 测试:`test_structured_reader_frontend.py`、`test_reader_comparison_state.py` 等直接读 `reader.js` 源码(字符串断言 + node 执行)。
+
+**按职责的自然切分(函数行号区间,供定位)**
+
+| 模块 | 内容 | 约在 |
+|---|---|---|
+| `00-core` | `DEFAULTS`、`state`、码点/UTF-16 换算、锚点解析、`notify`/`setAlert` | 1–290 |
+| `05-dom` | `createButton`/`createIcon`/`createDropdown`、`ensureDom` | 290–770 |
+| `10-citation` | 引用区间、选区捕获、剪贴板、引用预取 | 766–850、2655–2930 |
+| `20-work-context` | 作品/版本/可对照目标、目录、跳章、工具栏与菜单 | 848–1410、1128–1200 |
+| `30-alignment-jobs` | 任务启动/取消/轮询/订阅 | 1606–1775 |
+| `40-comparison` | 对照阅读:版本选择、链接窗口、高亮、跟随滚动 | 1412–1606、1861–2600 |
+| `45-review` | 对齐待复核弹层、纠正保存/暂缓 | 2047–2190 |
+| `50-deeplink` | 深链解析/写回/历史,阅读位置保存 | 1775–1860、2925–3130 |
+| `60-window` | 虚拟窗口:observer、`shiftWindow`、`loadRange`/`loadWindow`、裁剪 | 3130–3300、3681–3880 |
+| `70-render` | 高亮合并、`renderItem`/`renderWindow` | 3293–3680、3878–3933 |
+| `90-lifecycle` | `configure`/`openReader`/`goTo`/`close`/`destroy`、公共面、`popstate` | 3933–4301 |
+
+**步骤**
+
+- **D0 守卫先行**:新增测试钉住 `MEFinderReader` 公共面的键集合与 `alignmentJobs` 子键;新增测试辅助函数 `reader_js_source()`,返回"装配后的阅读器 JS"(即 `web_assets` 实际拼入的内容),把所有直接 `read_text("reader.js")` 的测试改用它。这一步不动 `reader.js` 本身。
+- **D1 请求改走 `07-api.js`**:`readJSON`/`postJSON` 换成 B1 的统一客户端;独立阅读窗口(`reader-window.html`)同样装配 `07-api.js`。端点仍留在 `DEFAULTS`。
+- **D2 抽出对齐任务监听**:`30-alignment-jobs` 迁到 `static/js/` 下独立模块(如 `36-alignment-jobs.js`),暴露 `MEFinderAlignmentJobs`;`MEFinderReader.alignmentJobs` 暂保留为转发别名,作品页改订阅新入口后再评估删除。保留"全应用只有一处轮询"的现有测试断言。
+- **D3 物理拆文件**:`static/reader/NN-*.js`,每个文件 `(function (R) { ... }(global.__MEFinderReaderInternal))` 往一个私有命名空间注册;`90-lifecycle` 最后冻结公共面并 `delete` 私有命名空间。`web_assets.py` 按文件名顺序拼接后再替换 `//__READER_JS__`,装配结果仍是一段脚本,**不引构建工具、不引 ES module**。一次只搬一个模块,每搬一个跑全量测试。
+- **D4 收拢 `state`**:在拆好的模块边界上,把 `state` 按域分组(`state.window`、`state.comparison`、`state.citation`、`state.deepLink`…),跨域写入改为调用所属模块的函数。这是唯一改代码形状(而不只是搬位置)的一步,放最后,且只在 D3 全绿后开始。
+- 守卫:沿用"阅读器禁 `innerHTML`",扩展到 `static/reader/` 全目录;为每个 reader 文件设行数上限(建议 ≤ 800)与全局符号 = 0(除 `90-lifecycle` 的 `MEFinderReader`)。
+
+**验收**
+
+- `MEFinderReader` 公共面与行为不变;对照阅读、深链恢复、引用复制、独立阅读窗口、对齐任务订阅的现有测试不改断言通过。
+- `reader.js` 单文件消失或只剩兼容壳;单文件 ≤ 800 行。
+- 手测清单(浏览器 + 桌面壳各一次):打开搜索结果 → 滚动加载前后窗口 → 选区复制引用 → 打开对照 → 点击链接高亮 → 复核弹层 → 深链刷新恢复 → 新窗口打开 → 回主窗口。
+
+---
+
+## 5. 风险与对策
+
+| 风险 | 对策 |
+|---|---|
+| 开外键后历史数据写入失败 | A1 先出 `foreign_key_check` 报告;有违例先迁移修复 |
+| 搬迁 SQL 时改变事务边界(`BEGIN IMMEDIATE` 位置) | 仓储函数接收连接而非自开连接;事务由调用方持有,保持原边界 |
+| HTTP 重构破坏 Windows 上传断连修复 / Range | 这些路径的测试断言不许改;B2 完成后做一次 Windows 打包冒烟 |
+| 前端改动频繁触发指纹/预算基线 | 每步末尾统一更新一次,提交正文注明 |
+| 与功能迭代冲突 | 阶段 A、B 独占窗口;阶段 C 按模块小批,避开正在开发的模块 |
+| 拆 `reader.js` 后测试仍读旧单文件、或断言落到错误片段 | D0 先把测试切到"装配后源码"辅助函数,再动代码 |
+| 阅读器模块间拼接顺序出错导致运行时未定义 | 私有命名空间注册 + `90-lifecycle` 启动时断言所需模块已注册;D3 每搬一个模块跑全量测试 + 桌面壳冒烟 |
+| GBK locale 下测试读 golden 失败 | Windows 本机跑门禁前 `$env:PYTHONUTF8="1"`(AGENTS.md §3.6) |
+
+---
+
+## 6. 基线复测命令(仓库根执行,Git Bash / macOS)
+
+```bash
+# persistence 外的 sqlite3.connect 调用点
+grep -rn --include='*.py' --exclude-dir=__pycache__ "sqlite3.connect" src/me_finder | grep -v "src/me_finder/persistence/"
+
+# persistence 外含 .execute( 的文件
+grep -rl --include='*.py' --exclude-dir=__pycache__ "\.execute(" src/me_finder | grep -v "/persistence/" | wc -l
+
+# web_http.py 内按路径分支
+grep -c "parsed.path" src/me_finder/web_http.py
+
+# 自起线程
+grep -rn --include='*.py' --exclude-dir=__pycache__ -E "threading.Thread\(|ThreadPoolExecutor" src/me_finder | cut -d: -f1 | sort | uniq -c
+
+# 前端 fetch / innerHTML / 内联事件
+grep -c "fetch(" src/me_finder/static/js/*.js | grep -v ":0$"
+grep -c "innerHTML" src/me_finder/static/js/*.js | grep -v ":0$"
+grep -oE "on(click|change|input)=" src/me_finder/templates/index.html | wc -l
+```
+
+全量测试与 lint 命令以 AGENTS.md §3.6 为准。
