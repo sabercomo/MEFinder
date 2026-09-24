@@ -52,3 +52,8 @@
 3. `persistence/` 不得出现 `from ..` 上行 import（`test_architecture_boundaries` 守卫）。
 4. 新增/删除 HTTP 路由必须同步 `docs/contracts/*.json`（`test_http_api_contract` 守卫，路由字典现在 web_runtime.py 里）。
 5. 新包裹的前端文件：唯一 `// module:` 首行标记 + 显式 `global.*` 导出 + 浏览器冒烟。
+
+## 更正(2026-09-25)
+
+- 首段"SQL 已收进 persistence"不成立(事实,v0.5.7 重构复测):当时 persistence 之外仍有 30 处 `sqlite3.connect`(17 个模块)、27 个文件直接执行 SQL,见 `docs/refactor-v0.5.7-plan.md` §3.3。
+- v0.5.7 阶段 A 已把 persistence 外的 `sqlite3.connect` 清零(连接一律走 `persistence/connection.py`);直接执行 SQL 的文件由 27 降到 26,其余由 `test_architecture_boundaries` 棘轮冻结、只降不升。
