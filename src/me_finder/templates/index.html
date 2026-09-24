@@ -484,6 +484,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="settings-nav-group plat-desktop" role="presentation">阅读</div>
           <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" onclick="showSettingsCategory('text-alignment-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
+          <div class="settings-nav-group" role="presentation">来源</div>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="zotero-settings" onclick="showSettingsCategory('zotero-settings');MEFinder.zotero.open()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h12L6 19h12"/></svg><span>Zotero</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
@@ -627,6 +629,64 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </section>
               </div>
             <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p>
+            </div>
+          </section>
+          <section class="settings-section zotero-settings" id="zotero-settings" role="tabpanel">
+            <div class="settings-section-head">
+              <span class="settings-section-heading-copy"><span class="settings-section-title">Zotero</span><span class="settings-section-note">从 Zotero 分类导入文献，增删与题录以 Zotero 为准。MEFinder 只读取，不会改动你的 Zotero 库</span></span>
+            </div>
+            <div class="settings-collapse-body" id="zotero-settings-body">
+            <div class="settings-subhead"><span class="settings-section-title">连接</span></div>
+            <div class="settings-choice-row zotero-connection-row">
+              <span class="settings-choice-copy"><strong>Zotero 本机接口</strong><small id="zotero-connection-note">127.0.0.1:23119 · 我的文库</small></span>
+              <span class="zotero-row-controls">
+                <span class="zotero-state" id="zotero-connection-state" role="status" aria-live="polite">检测中</span>
+                <button class="action-btn" type="button" id="zotero-recheck" onclick="MEFinder.zotero.recheck()">重新检测</button>
+              </span>
+            </div>
+            <p class="zotero-hint" id="zotero-connection-hint" hidden></p>
+            <label class="setting-switch-row">
+              <span class="setting-switch-copy"><strong>同步 Zotero 分类</strong><small>关闭后不再导入或移除，已导入的文献保留</small></span>
+              <input type="checkbox" id="zotero-sync-enabled" class="setting-switch-input" role="switch" onchange="MEFinder.zotero.setEnabled(this.checked)">
+              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="zotero-sync-enabled-state" aria-hidden="true">关闭</span>
+            </label>
+            <div class="zotero-body" id="zotero-body">
+              <div class="settings-subhead"><span class="settings-section-title">同步的分类</span></div>
+              <div class="zotero-tree" id="zotero-tree" role="tree" aria-label="我的文库"></div>
+              <p class="zotero-tree-foot" id="zotero-tree-foot"></p>
+              <div class="settings-subhead"><span class="settings-section-title">解析</span></div>
+              <div class="settings-choice-row">
+                <span class="settings-choice-copy"><strong>PDF 解析方式</strong><small>跟随「导入 → PDF 解析方式」。EPUB 与 Word 走文本通道，不经过 MinerU</small></span>
+                <span class="zotero-row-controls">
+                  <span class="zotero-value" id="zotero-parse-mode">自动选择</span>
+                  <button class="action-btn zotero-quiet-btn" type="button" onclick="navigateTo('import')">修改</button>
+                </span>
+              </div>
+              <div class="settings-subhead"><span class="settings-section-title">以 Zotero 为准</span></div>
+              <dl class="zotero-rules">
+                <dt>分类里新增条目</dt><dd>导入并解析</dd>
+                <dt>题录有改动</dt><dd>覆盖 MEFinder 题录，不重新解析</dd>
+                <dt>更换 PDF 附件</dt><dd>重新解析</dd>
+                <dt>条目删除、移出所选分类或取消勾选</dt><dd class="zotero-rule-warn">从 MEFinder 移除，对齐记录一并删除</dd>
+              </dl>
+              <div class="settings-subhead"><span class="settings-section-title">同步</span></div>
+              <div class="settings-choice-row">
+                <span class="settings-choice-copy"><strong>自动同步</strong><small>只拉取有变化的条目</small></span>
+                <span class="app-select settings-choice-select" id="zotero-frequency-select">
+                  <button class="app-select-trigger" id="zotero-frequency-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="自动同步" onclick="toggleSearchSelect(event,'zotero-frequency-select')"><span class="app-select-value" id="zotero-frequency-label">启动 MEFinder 时</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                  <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="自动同步">
+                    <button class="app-select-option" type="button" data-zotero-frequency="manual" onclick="MEFinder.zotero.setFrequency('manual')">仅手动</button>
+                    <button class="app-select-option is-selected" type="button" data-zotero-frequency="launch" onclick="MEFinder.zotero.setFrequency('launch')">启动 MEFinder 时</button>
+                    <button class="app-select-option" type="button" data-zotero-frequency="interval" onclick="MEFinder.zotero.setFrequency('interval')">启动时及每 30 分钟</button>
+                  </span>
+                </span>
+              </div>
+              <div class="settings-choice-row zotero-sync-row">
+                <span class="settings-choice-copy"><strong>立即同步</strong><small id="zotero-sync-note">还没有同步过</small><span class="zotero-progress" id="zotero-progress" hidden><span></span></span></span>
+                <button class="action-btn primary" type="button" id="zotero-sync-button" onclick="MEFinder.zotero.sync()">立即同步</button>
+              </div>
+              <div class="zotero-log" id="zotero-log" aria-live="polite" hidden></div>
+            </div>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">

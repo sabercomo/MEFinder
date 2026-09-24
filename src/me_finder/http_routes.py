@@ -123,34 +123,35 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
 
 
 def assemble_bibliography_routes(bibliographic_metadata_controller) -> RoutePair:
+    bib = bibliographic_metadata_controller
     get_routes = {
         "/api/bibliographic-metadata": (
-            lambda params: bibliographic_metadata_controller.metadata(
-                (params.get("source_id") or [None])[0]
-            )
+            lambda params: bib.metadata((params.get("source_id") or [None])[0])
         ),
     }
     post_routes = {
-        "/api/bibliographic-metadata/batch-detect": (
-            bibliographic_metadata_controller.batch_detect
-        ),
-        "/api/bibliographic-metadata/parse-cnki-citation": (
-            bibliographic_metadata_controller.parse_cnki_citation
-        ),
-        "/api/bibliographic-metadata/lookup-cnki": (
-            bibliographic_metadata_controller.lookup_cnki
-        ),
-        "/api/bibliographic-metadata/cnki-candidate": (
-            bibliographic_metadata_controller.cnki_candidate
-        ),
-        "/api/bibliographic-metadata/lookup-google-books": (
-            bibliographic_metadata_controller.lookup_google_books
-        ),
-        "/api/bibliographic-metadata/lookup-crossref": (
-            bibliographic_metadata_controller.lookup_crossref
-        ),
-        "/api/bibliographic-metadata/detect": bibliographic_metadata_controller.detect,
-        "/api/bibliographic-metadata/save": bibliographic_metadata_controller.save,
+        "/api/bibliographic-metadata/batch-detect": bib.batch_detect,
+        "/api/bibliographic-metadata/parse-cnki-citation": bib.parse_cnki_citation,
+        "/api/bibliographic-metadata/lookup-cnki": bib.lookup_cnki,
+        "/api/bibliographic-metadata/cnki-candidate": bib.cnki_candidate,
+        "/api/bibliographic-metadata/lookup-google-books": bib.lookup_google_books,
+        "/api/bibliographic-metadata/lookup-crossref": bib.lookup_crossref,
+        "/api/bibliographic-metadata/detect": bib.detect,
+        "/api/bibliographic-metadata/save": bib.save,
+    }
+    return get_routes, post_routes
+
+
+def assemble_source_routes(zotero_sync_controller) -> RoutePair:
+    """来源：从 Zotero 分类同步文献（只读本机 Local API）。"""
+
+    get_routes = {
+        "/api/zotero/overview": zotero_sync_controller.overview,
+        "/api/zotero/status": zotero_sync_controller.status,
+    }
+    post_routes = {
+        "/api/zotero/preview": zotero_sync_controller.preview,
+        "/api/zotero/sync": zotero_sync_controller.sync,
     }
     return get_routes, post_routes
 

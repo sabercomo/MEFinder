@@ -92,6 +92,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 "assemble_preference_routes",
                 "assemble_reader_routes",
                 "assemble_shell_routes",
+                "assemble_source_routes",
             },
         )
         self.assertFalse(

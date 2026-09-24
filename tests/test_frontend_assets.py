@@ -321,6 +321,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
             "static/js/80-import.js": 20,
+            # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
+            # 命名空间 MEFinder 本身），不新增直接全局命令。
+            "static/js/62-zotero.js": 1,
         }
         for relative, budget in budgets.items():
             with self.subTest(asset=relative):
@@ -518,10 +521,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   关闭阅读器把刚写出的位置交回宿主。
     # 0.5.5 本地 MinerU 接口自适应：检测连接的提示带上握手到的接口代数与版本。
     # 0.5.5 托管 MinerU：补「检查新版本」入口与安装目标版本来源说明。
+    # 0.5.6 Zotero 来源同步：设置目录新增「来源 → Zotero」（index.html 分区 +
+    #   62-zotero.js 分类树 / 立即同步明细 + 30-settings.css .zotero-*），
+    #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
     BASELINE_SHA256 = (
-        "e51c13bdd608be9348f878fc93d471ebb01bd6d0f0eedc48ac95657fa8dcca96"
+        "beb7c85c8e3deb3ae6f764b5f5c0ec834bf110b7810f55879a6a06af39316618"
     )
-    BASELINE_BYTES = 1232915
+    BASELINE_BYTES = 1262983
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

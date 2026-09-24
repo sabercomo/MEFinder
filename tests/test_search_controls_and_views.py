@@ -715,6 +715,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "appearance-card",
             "pdf-reader-settings",
             "text-alignment-settings",
+            "zotero-settings",
             "software-update-settings",
             "macos-update-settings",
             "data-location-settings",

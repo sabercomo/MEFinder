@@ -75,6 +75,7 @@ from .http_routes import (
     assemble_preference_routes,
     assemble_reader_routes,
     assemble_shell_routes,
+    assemble_source_routes,
 )
 from .journal_metadata_lookup import (
     fetch_cnki_candidate,
@@ -88,6 +89,7 @@ from .large_document.mineru_accounts import (
 from .library_query_controller import LibraryQueryController
 from .lifecycle import DurableOperationGate
 from .macos_update import check_macos_update
+from .zotero_sync_assembly import assemble_zotero_sync
 from .managed_component_assembly import assemble_managed_components
 from .mineru_api import (
     MinerUError,
@@ -187,6 +189,7 @@ class ApplicationRuntime:
     component_catalog: object
     managed_mineru: object
     document_lifecycle_controller: object
+    zotero_sync: object = None
 
 
 def build_application_runtime(
@@ -568,23 +571,19 @@ def build_application_runtime(
     archive_get_routes, archive_post_routes = assemble_archive_routes(
         archive_transfer_controller
     )
+    zotero_sync, zotero_sync_controller = assemble_zotero_sync(
+        context.paths, index_runtime=index_runtime, durable_operations=durable_operations,
+        document_imports=document_imports, import_orchestrator=import_orchestrator,
+        deletion_coordinator=deletion_coordinator, metadata_coordinator=metadata_coordinator,
+    )
+    source_get_routes, source_post_routes = assemble_source_routes(zotero_sync_controller)
     controller_get_routes = (
-        library_get_routes
-        | preference_get_routes
-        | parser_get_routes
-        | bibliography_get_routes
-        | import_get_routes
-        | reader_get_routes
-        | archive_get_routes
+        library_get_routes | preference_get_routes | parser_get_routes | bibliography_get_routes
+        | import_get_routes | reader_get_routes | archive_get_routes | source_get_routes
     )
     controller_post_routes = (
-        library_post_routes
-        | preference_post_routes
-        | parser_post_routes
-        | bibliography_post_routes
-        | import_post_routes
-        | reader_post_routes
-        | archive_post_routes
+        library_post_routes | preference_post_routes | parser_post_routes | bibliography_post_routes
+        | import_post_routes | reader_post_routes | archive_post_routes | source_post_routes
     )
 
     desktop_shell_controller = DesktopShellController(
@@ -641,6 +640,7 @@ def build_application_runtime(
         from .embedding_runtime import request_embedding_cancel
 
         request_embedding_cancel()
+        zotero_sync.stop()
         managed.embedding_models.begin_shutdown()
         managed.alignment_runtime.begin_shutdown()
         durable_operations.begin_shutdown()
@@ -688,7 +688,9 @@ def build_application_runtime(
         return True
 
 
+    zotero_sync.start_scheduler()
     return ApplicationRuntime(
+        zotero_sync=zotero_sync,
         index_path=index_path,
         root=root,
         index_runtime=index_runtime,

@@ -2131,3 +2131,159 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #data-location-settings .data-location-copy small,
 #data-location-settings .data-location-pending small,
 #data-location-settings .data-location-warning { color: var(--text-secondary); }
+
+/* Hallmark · component: Zotero source sync settings · genre: utilitarian · theme: existing MEFinder
+ * structure: flat settings ledger + collection tree · pre-emit critique: P5 H4 E4 S5 R5 V4
+ * contrast: pass (text/semantic tokens only) · slop: pass · chrome: pass · tokens: pass · responsive: pass
+ * 状态只用文字（DESIGN.md §6）：已同步 / 待同步 / 同步时移除 各用语义色文字，不套色块、不加徽章。 */
+.zotero-settings .setting-switch-row { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 12px; }
+.zotero-row-controls { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.zotero-state { color: var(--text-tertiary); font-size: 13px; white-space: nowrap; }
+.zotero-state.is-ok { color: var(--success); }
+.zotero-state.is-warn { color: var(--warning); }
+.zotero-state.is-accent { color: var(--accent-text); }
+.zotero-state.is-busy { color: var(--text-secondary); }
+.zotero-value { color: var(--text-primary); font-size: 14px; font-weight: 500; }
+.zotero-quiet-btn { border-color: transparent; background: none; box-shadow: none; color: var(--accent-text); }
+.zotero-quiet-btn:hover { background: var(--surface-hover); }
+.zotero-hint {
+  max-width: 860px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.zotero-hint[hidden] { display: none; }
+.zotero-body { transition: opacity var(--transition-fast); }
+.zotero-body.is-dim { opacity: .45; pointer-events: none; }
+.zotero-tree { border-bottom: 1px solid var(--border-subtle); }
+.zotero-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding-left: calc(var(--zotero-depth, 0) * 32px);
+  border-top: 1px solid var(--border-subtle);
+}
+.zotero-fold, .zotero-fold-spacer { flex: 0 0 22px; width: 22px; height: 22px; }
+.zotero-fold {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.zotero-fold:hover { background: var(--surface-hover); }
+.zotero-fold svg { transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+.zotero-fold.is-open svg { transform: rotate(90deg); }
+.zotero-check {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.zotero-check:focus-visible { outline: none; }
+.zotero-check:focus-visible .zotero-box { box-shadow: var(--focus-ring); }
+.zotero-box {
+  display: grid;
+  flex: 0 0 18px;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border-control);
+  border-radius: var(--radius-xs);
+  background: var(--surface-primary);
+  color: var(--accent-contrast);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.zotero-box.is-on { border-color: var(--accent); background: var(--accent); }
+.zotero-name { overflow: hidden; color: var(--text-primary); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.zotero-name.is-parent { font-weight: 500; }
+.zotero-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 13px; }
+.zotero-empty { margin: 0; padding: 18px 0; color: var(--text-tertiary); font-size: 13.5px; }
+.zotero-tree-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+.zotero-rules {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  max-width: 760px;
+  margin: 0;
+}
+.zotero-rules dt, .zotero-rules dd {
+  margin: 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px;
+}
+.zotero-rules dt { padding-right: 16px; color: var(--text-secondary); }
+.zotero-rules dd { color: var(--text-primary); }
+.zotero-rules dd.zotero-rule-warn { color: var(--warning); }
+.zotero-rules dt:last-of-type, .zotero-rules dd:last-of-type { border-bottom: 0; }
+.zotero-progress {
+  position: relative;
+  display: block;
+  width: 220px;
+  height: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+.zotero-progress[hidden] { display: none; }
+.zotero-progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: zotero-progress 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes zotero-progress { from { transform: translateX(-100%); } to { transform: translateX(280%); } }
+.zotero-log { max-width: 860px; margin-top: 4px; }
+.zotero-log[hidden] { display: none; }
+.zotero-log-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.zotero-log-kind { color: var(--text-tertiary); font-size: 13px; }
+.zotero-log-copy { min-width: 0; }
+.zotero-log-title { display: block; overflow: hidden; font-size: 14.5px; text-overflow: ellipsis; white-space: nowrap; }
+.zotero-log-meta { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: 13px; }
+.zotero-log-row > .zotero-state { white-space: normal; text-align: right; }
+@media (max-width: 760px) {
+  .zotero-connection-row, .zotero-sync-row { grid-template-columns: 1fr; }
+  .zotero-rules { grid-template-columns: 1fr; }
+  .zotero-rules dt { padding-bottom: 2px; border-bottom: 0; }
+  .zotero-log-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .zotero-log-kind { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zotero-progress > span { animation: none; width: 100%; opacity: .5; }
+  .zotero-fold svg, .zotero-box, .zotero-body { transition: none; }
+}

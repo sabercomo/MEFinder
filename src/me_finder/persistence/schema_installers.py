@@ -315,3 +315,95 @@ def install_translation_workspace_schema(connection: sqlite3.Connection) -> bool
         )
         changed = True
     return changed
+
+
+def install_zotero_sync_schema(connection: sqlite3.Connection) -> bool:
+    """Install the v8 tables that link Zotero items to MEFinder documents.
+
+    Zotero stays the source of truth for collections, items and files; these
+    tables only remember what MEFinder last saw so a sync can diff against it.
+
+    * ``zotero_items`` — one row per top-level Zotero item in scope: its local
+      API version, a fingerprint of the bibliographic fields, the collection
+      keys Zotero reported and which fingerprint was last written into the
+      MEFinder metadata.
+    * ``zotero_attachments`` — one row per PDF/EPUB attachment. Each attachment
+      is its own MEFinder document; ``parent_item_key`` records the item.
+      ``origin`` separates documents the sync imported from documents that were
+      already in the library and were only linked by content hash.
+    * ``zotero_sync_state`` — per-library bookkeeping (server id, last result,
+      the attachment version index used for incremental reads).
+
+    No foreign key points at ``source_files``: when a linked document goes
+    missing the row must survive so the next sync can notice and repair it.
+    """
+
+    changed = False
+    if not _table_exists(connection, "zotero_items"):
+        connection.execute(
+            """
+            CREATE TABLE zotero_items (
+                library_id TEXT NOT NULL,
+                item_key TEXT NOT NULL,
+                item_version INTEGER,
+                fingerprint TEXT NOT NULL,
+                data_json TEXT NOT NULL,
+                collections_json TEXT NOT NULL,
+                metadata_fingerprint_applied TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(library_id, item_key)
+            )
+            """
+        )
+        changed = True
+    if not _table_exists(connection, "zotero_attachments"):
+        connection.execute(
+            """
+            CREATE TABLE zotero_attachments (
+                library_id TEXT NOT NULL,
+                attachment_key TEXT NOT NULL,
+                parent_item_key TEXT NOT NULL,
+                attachment_version INTEGER,
+                link_mode TEXT NOT NULL,
+                content_type TEXT,
+                file_name TEXT,
+                file_signature TEXT,
+                file_sha256 TEXT,
+                source_file_id TEXT,
+                origin TEXT NOT NULL DEFAULT 'imported'
+                    CHECK(origin IN ('imported', 'linked_existing')),
+                status TEXT NOT NULL
+                    CHECK(status IN ('pending', 'linked', 'unavailable', 'failed')),
+                import_job_id TEXT,
+                replaces_source_file_id TEXT,
+                status_message TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(library_id, attachment_key)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_zotero_attachments_source "
+            "ON zotero_attachments(source_file_id)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_zotero_attachments_parent "
+            "ON zotero_attachments(library_id, parent_item_key)"
+        )
+        changed = True
+    if not _table_exists(connection, "zotero_sync_state"):
+        connection.execute(
+            """
+            CREATE TABLE zotero_sync_state (
+                library_id TEXT PRIMARY KEY,
+                server_id TEXT,
+                synced_collections_json TEXT NOT NULL DEFAULT '[]',
+                attachment_index_json TEXT NOT NULL DEFAULT '{}',
+                last_attempt_at TEXT,
+                last_success_at TEXT,
+                last_result_json TEXT
+            )
+            """
+        )
+        changed = True
+    return changed

@@ -134,6 +134,10 @@ class PreferencePersistenceTests(unittest.TestCase):
             "alignment_thresholds": default_alignment_threshold_settings(),
             # 没导出过备份时为 None——界面据此说「还没有导出过备份」，不编日期
             "last_backup_export": None,
+            # 0.5.6 Zotero 来源同步：默认关闭、未选分类、启动时同步
+            "zotero_sync_enabled": False,
+            "zotero_sync_collections": [],
+            "zotero_sync_frequency": "launch",
         }
 
     def test_alignment_embedding_model_and_thresholds_round_trip(self) -> None:
@@ -665,6 +669,7 @@ class ThemeMarkupTests(unittest.TestCase):
         sections = {
             "pdf-reader-settings": "pdf-reader-body",
             "text-alignment-settings": "embedding-model-body",
+            "zotero-settings": "zotero-settings-body",
             "mineru-api-settings": "mineru-api-body",
             "local-ocr-settings": "local-ocr-body",
             "statistics-settings": "statistics-settings-body",

@@ -31,7 +31,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 7
+                connection.execute("PRAGMA user_version").fetchone()[0], 8
             )
             tables = {
                 row[0]
@@ -46,6 +46,10 @@ class PersistenceMigrationTests(unittest.TestCase):
         self.assertIn("segment_sets", tables)
         self.assertIn("alignment_runs", tables)
         self.assertIn("text_segment_paragraph_spans", tables)
+        # v8：Zotero 来源同步的关联表
+        self.assertIn("zotero_items", tables)
+        self.assertIn("zotero_attachments", tables)
+        self.assertIn("zotero_sync_state", tables)
 
     def test_v4_database_with_existing_segment_sets_gets_v5_table(self) -> None:
         connection = sqlite3.connect(str(self.database_path))
@@ -66,7 +70,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 7
+                connection.execute("PRAGMA user_version").fetchone()[0], 8
             )
             columns = [
                 row[1]
@@ -114,7 +118,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 7
+                connection.execute("PRAGMA user_version").fetchone()[0], 8
             )
             columns = [
                 row[1]
