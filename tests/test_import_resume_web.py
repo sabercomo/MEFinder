@@ -28,7 +28,7 @@ from src.me_finder.web import make_handler
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "http_routes.py")
+    for name in ("web.py", "web_runtime.py", "http_routes.py", "upload_import_controller.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -144,7 +144,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_resume_requires_an_explicit_api_call_before_queueing(self) -> None:
         self.assertIn('"/api/import-resumable":', WEB_SOURCE)
-        self.assertIn('"/api/import-resume": import_job_controller.resume', WEB_SOURCE)
+        self.assertIn('"/api/import-resume": mutating(import_job_controller.resume)', WEB_SOURCE)
         resume_start = ORCHESTRATOR_SOURCE.index("def resume_import_job(")
         resume_end = ORCHESTRATOR_SOURCE.index(
             "def dismiss_import_job(", resume_start
@@ -244,7 +244,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         )
         self.assertIn("jobs=self", ORCHESTRATOR_SOURCE)
         self.assertIn(
-            '"/api/import-resume-dismiss": import_job_controller.dismiss',
+            '"/api/import-resume-dismiss": mutating(import_job_controller.dismiss)',
             WEB_SOURCE,
         )
         self.assertIn("function removeImport(id, options)", APP_SOURCE)
@@ -266,7 +266,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_interrupted_vision_job_can_switch_to_mineru_without_upload(self) -> None:
         self.assertIn(
-            '"/api/import-retry-mineru": import_job_controller.retry_with_mineru',
+            '"/api/import-retry-mineru": mutating(import_job_controller.retry_with_mineru)',
             WEB_SOURCE,
         )
         self.assertIn("force_mineru=True", IMPORT_JOB_CONTROLLER_SOURCE)
@@ -344,7 +344,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_document_removal_blocks_running_parser_and_clears_old_jobs(self) -> None:
         self.assertIn(
-            '"/api/documents/remove": document_lifecycle_controller.remove',
+            '"/api/documents/remove": mutating(document_lifecycle_controller.remove)',
             WEB_SOURCE,
         )
         self.assertIn(

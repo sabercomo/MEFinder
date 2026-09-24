@@ -204,7 +204,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom) and node.level
         }
-        self.assertEqual(internal_modules, {"application", "http_range"})
+        self.assertEqual(internal_modules, {"application", "http_range", "http_route_table"})
 
     def test_document_query_application_service_contains_no_sql(self) -> None:
         source = (

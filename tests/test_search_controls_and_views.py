@@ -9,7 +9,7 @@ from src.me_finder.web import HTML
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "http_routes.py", "web_http.py")
+    for name in ("web.py", "web_runtime.py", "http_routes.py", "web_http.py", "upload_import_controller.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -355,7 +355,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("'parsed_result'", HTML)
         self.assertIn("pdf_parse_mode: selectedPdfParseMode()", HTML)
         self.assertIn("vision_provider_id: selectedVisionProviderId()", HTML)
-        self.assertIn('self.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
+        self.assertIn('request.headers.get("X-PDF-Parse-Mode", "auto")', WEB_SOURCE)
         self.assertIn('payload.get("pdf_parse_mode", "auto")', WEB_SOURCE)
         self.assertIn('"mineru-local"', DOCUMENT_IMPORT_COORDINATOR_SOURCE)
         self.assertIn('profile["mineru_local"] = True', DOCUMENT_IMPORT_COORDINATOR_SOURCE)

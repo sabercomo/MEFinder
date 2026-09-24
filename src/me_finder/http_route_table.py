@@ -13,12 +13,32 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import BinaryIO, Literal
 
 BodyKind = Literal["json", "raw"]
 Method = Literal["GET", "POST"]
 RouteMap = dict[str, Callable[..., tuple[int, object]]]
 RoutePair = tuple[RouteMap, RouteMap]
+
+# 知网相关请求体上限:引用文字解析超限时先读掉请求体再回 413(保持原行为)。
+CNKI_CITATION_BODY = dict(
+    max_body_bytes=32 * 1024,
+    oversize_error="知网引用文字过大，请只粘贴一条引文。",
+    drain_oversize=True,
+)
+CNKI_LOOKUP_BODY = dict(max_body_bytes=32 * 1024, oversize_error="知网题录请求内容过大。")
+
+
+@dataclass(frozen=True)
+class RawRequest:
+    """What a raw-body POST handler may see of the HTTP request.
+
+    ``drain`` consumes an unread body; call it before replying early.
+    """
+
+    headers: Mapping[str, str]
+    stream: BinaryIO
+    drain: Callable[[], None]
 
 
 @dataclass(frozen=True)
@@ -50,6 +70,12 @@ def route(handler: Callable[..., tuple[int, object]], **policy) -> _DeclaredHand
     """Declare transport policy for ``handler`` where its path is declared."""
 
     return _DeclaredHandler(handler, RoutePolicy(**policy))
+
+
+def mutating(handler: Callable[..., tuple[int, object]]) -> _DeclaredHandler:
+    """Shorthand: this POST changes the data root, so it takes admission."""
+
+    return route(handler, mutates_data_root=True)
 
 
 @dataclass(frozen=True)

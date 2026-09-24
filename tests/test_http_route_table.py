@@ -47,5 +47,88 @@ class RouteTableTests(unittest.TestCase):
             RouteTable.from_maps(get_maps=[{"/api/x": route(lambda _p: (200, {}), body="raw")}])
 
 
+# 2026-09-25 前 web_http.py 手写维护的两份集合，原样钉在这里：由路由声明推导出的
+# 集合必须与之逐项相等（v0.5.7 B2b 行为不变的证据）。以后有意增删时同步改这里。
+LEGACY_RAW_BODY_POST_PATHS = frozenset({"/api/import", "/api/import-upload/chunk"})
+LEGACY_DATA_ROOT_MUTATING_POST_PATHS = frozenset(
+    {
+        "/api/preferences", "/api/mineru-accounts", "/api/mineru-accounts/service",
+        "/api/mineru-config", "/api/mineru-local", "/api/mineru-local/component",
+        "/api/local-ocr", "/api/local-ocr/component", "/api/text-alignment/models",
+        "/api/vision-providers", "/api/general-model", "/api/import",
+        "/api/import-upload/start", "/api/import-upload/chunk", "/api/import-upload/cancel",
+        "/api/import-upload/finish", "/api/mineru-reparse", "/api/import-retry-mineru",
+        "/api/import-retry-mineru-local", "/api/import-retry", "/api/import-resume",
+        "/api/import-resume-dismiss", "/api/bibliographic-metadata/batch-detect",
+        "/api/export-directory/choose", "/api/backup/export", "/api/document/export",
+        "/api/backup/import", "/api/import-local", "/api/calibration",
+        "/api/bibliographic-metadata/save", "/api/auto-page-mapping/apply",
+        "/api/auto-page-mapping/accept", "/api/documents/remove", "/api/documents/remove-batch",
+        "/api/document-groups/create", "/api/document-groups/rename",
+        "/api/document-groups/delete", "/api/document-groups/add-member",
+        "/api/document-groups/remove-member", "/api/document-groups/set-base",
+        "/api/document-groups/version-label",
+    }
+)
+LEGACY_BODY_LIMITS = {
+    "/api/document/citation": (16 * 1024, False),
+    "/api/bibliographic-metadata/parse-cnki-citation": (32 * 1024, True),
+    "/api/bibliographic-metadata/lookup-cnki": (32 * 1024, False),
+    "/api/bibliographic-metadata/cnki-candidate": (32 * 1024, False),
+    "/api/bibliographic-metadata/open-cnki": (32 * 1024, False),
+    "/api/import-upload/start": (64 * 1024, False),
+    "/api/import-upload/finish": (64 * 1024, False),
+    "/api/import-upload/cancel": (64 * 1024, False),
+}
+
+
+class AssembledRouteTableTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from src.me_finder.app_context import AppContext
+        from src.me_finder.database import build_database
+        from src.me_finder.web import make_handler
+
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name) / "runtime"
+        index_path = root / "data" / "index.sqlite3"
+        (root / "config").mkdir(parents=True)
+        build_database({"metadata": {}}, index_path)
+        (root / "config" / "preferences.json").write_text(json.dumps({}), encoding="utf-8")
+        cls.handler = make_handler(index_path, app_context=AppContext.create(root, index_path=index_path))
+        cls.table = cls.handler.route_table
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.handler.close_runtime()
+        cls._tmp.cleanup()
+
+    def test_derived_policy_sets_equal_the_legacy_hand_written_sets(self) -> None:
+        self.assertEqual(self.table.raw_body_post_paths, LEGACY_RAW_BODY_POST_PATHS)
+        self.assertEqual(
+            self.table.data_root_mutating_post_paths, LEGACY_DATA_ROOT_MUTATING_POST_PATHS
+        )
+
+    def test_body_limits_are_declared_on_their_routes(self) -> None:
+        declared = {}
+        for path in self.table.paths("POST"):
+            policy = self.table.get("POST", path).policy
+            if policy.max_body_bytes is not None:
+                declared[path] = (policy.max_body_bytes, policy.drain_oversize)
+        self.assertEqual(declared, LEGACY_BODY_LIMITS)
+
+    def test_only_document_pages_keeps_blank_query_values(self) -> None:
+        keep_blank = {
+            path
+            for path in self.table.paths("GET")
+            if self.table.get("GET", path).policy.keep_blank_query
+        }
+        self.assertEqual(keep_blank, {"/api/document/pages"})
+
+
 if __name__ == "__main__":
     unittest.main()

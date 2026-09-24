@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_PATH = ROOT / "src" / "me_finder" / "web.py"
 # Route literals live in domain assembly functions; web_runtime merges them.
 ROUTES_PATH = ROOT / "src" / "me_finder" / "http_routes.py"
+UPLOAD_ROUTES_PATH = ROOT / "src" / "me_finder" / "upload_import_controller.py"
 HTTP_PATH = ROOT / "src" / "me_finder" / "web_http.py"
 CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.5.6-http-api.json"
 WRITE_CONTRACT_PATH = (
@@ -56,21 +57,9 @@ class HTTPAPIContractTests(unittest.TestCase):
         )
         post_routes = _dictionary_keys(
             ROUTES_PATH, {"post_routes"}
-        )
+        ) | _dictionary_keys(UPLOAD_ROUTES_PATH, {"post_routes"})
         self.assertEqual(get_routes | {"/api/calibration"}, GET_API_ROUTES)
-        self.assertEqual(
-            post_routes
-            | {
-                "/api/import",
-                "/api/import-local",
-                "/api/import-upload/cancel",
-                "/api/import-upload/chunk",
-                "/api/import-upload/finish",
-                "/api/import-upload/start",
-                "/api/search",
-            },
-            POST_API_ROUTES,
-        )
+        self.assertEqual(post_routes | {"/api/search"}, POST_API_ROUTES)
 
     def test_every_http_transport_api_literal_is_documented(self) -> None:
         source = HTTP_PATH.read_text(encoding="utf-8")
