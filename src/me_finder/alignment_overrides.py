@@ -14,7 +14,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
 
-from .persistence.connection import open_writable_index
+from .persistence.connection import open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .text_alignment import (
     AlignmentNotFound,
@@ -26,7 +26,6 @@ from .text_alignment import (
     _segment_key,
     _segment_set_id_for_source,
     _source_row,
-    _table_exists,
     _validate_source_id,
 )
 
@@ -216,7 +215,7 @@ def confirm_override(
         connection = open_writable_index(Path(db_path))
         try:
             connection.execute("BEGIN IMMEDIATE")
-            if not _table_exists(connection, "alignment_manual_overrides"):
+            if not table_exists(connection, "alignment_manual_overrides"):
                 raise AlignmentNotFound("对齐修正提议不存在。")
             row = connection.execute(
                 "SELECT * FROM alignment_manual_overrides WHERE override_id = ?",
@@ -317,7 +316,7 @@ def revoke_override(
         connection = open_writable_index(Path(db_path))
         try:
             connection.execute("BEGIN IMMEDIATE")
-            if not _table_exists(connection, "alignment_manual_overrides"):
+            if not table_exists(connection, "alignment_manual_overrides"):
                 raise AlignmentNotFound("对齐修正提议不存在。")
             row = connection.execute(
                 "SELECT status, source_file_id, target_source_file_id "
@@ -379,7 +378,7 @@ def list_overrides(
     connection = sqlite3.connect(str(db_path))
     connection.row_factory = sqlite3.Row
     try:
-        if not _table_exists(connection, "alignment_manual_overrides"):
+        if not table_exists(connection, "alignment_manual_overrides"):
             return {"total": 0, "overrides": []}
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
         rows = connection.execute(

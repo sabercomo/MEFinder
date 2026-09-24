@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Mapping
 
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID
-from .persistence.connection import open_writable_index
+from .persistence.connection import open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .semantic_alignment import EmbeddingProvider
 from .text_alignment import (
@@ -21,7 +21,6 @@ from .text_alignment import (
     _default_alignment_model_cache,
     _generate_alignment_on_connection,
     _json_object,
-    _table_exists,
 )
 
 
@@ -35,7 +34,7 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
     try:
-        if not _table_exists(connection, "alignment_runs"):
+        if not table_exists(connection, "alignment_runs"):
             return {"alignment_pairs": []}
         return {
             "alignment_pairs": [

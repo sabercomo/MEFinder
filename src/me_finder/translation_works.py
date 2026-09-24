@@ -23,7 +23,7 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
-from .persistence.connection import open_writable_index
+from .persistence.connection import open_writable_index, table_exists
 from .persistence.schema_installers import (
     install_document_group_schema,
     install_text_alignment_schema,
@@ -46,7 +46,6 @@ from .text_alignment import (
     _segment_set_id_for_source,
     _source_kind,
     _source_row,
-    _table_exists,
     _validate_nonnegative_integer,
     _validate_source_id,
     confirmed_overrides_for_pair,
@@ -105,7 +104,7 @@ def read_reading_position(db_path: Path, document_group_id: object) -> Dict[str,
         raise InvalidAlignmentRequest("document_group_id 必填。")
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_group_reading_positions"):
+        if not table_exists(connection, "document_group_reading_positions"):
             return {"document_group_id": group_id, "position": None}
         row = connection.execute(
             "SELECT left_source_file_id, right_source_file_id, item_index, "
@@ -190,7 +189,7 @@ def suggestion_key(source_file_ids: Sequence[str]) -> str:
 def list_suggestion_dismissals(db_path: Path) -> Dict[str, object]:
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_group_suggestion_dismissals"):
+        if not table_exists(connection, "document_group_suggestion_dismissals"):
             return {"dismissals": []}
         rows = connection.execute(
             "SELECT source_file_ids_json FROM document_group_suggestion_dismissals "
@@ -422,9 +421,9 @@ def alignment_overview(
             raise InvalidAlignmentRequest("target_id 需要一个不同的 source_id。")
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_groups"):
+        if not table_exists(connection, "document_groups"):
             return {"works": []}
-        has_runs = _table_exists(connection, "alignment_runs")
+        has_runs = table_exists(connection, "alignment_runs")
         works: List[Dict[str, object]] = []
         group_query = "SELECT document_group_id, base_source_file_id FROM document_groups"
         if source_id:
@@ -447,7 +446,7 @@ def alignment_overview(
             languages: Dict[str, str] = {}
             pairs: List[Dict[str, object]] = []
             for member_id in member_ids:
-                if not _table_exists(connection, "segment_sets"):
+                if not table_exists(connection, "segment_sets"):
                     break
                 row = connection.execute(
                     "SELECT language_code FROM segment_sets WHERE source_file_id = ? "
@@ -705,7 +704,7 @@ def alignment_link_window(
         )
         overrides = corrections[0]
         deferred: set[str] = set()
-        if _table_exists(connection, "alignment_review_deferrals"):
+        if table_exists(connection, "alignment_review_deferrals"):
             deferred = {
                 str(row[0])
                 for row in connection.execute(

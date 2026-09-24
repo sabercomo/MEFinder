@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .document_group_metadata import canonical_version_label, member_display_name
-from .persistence.connection import open_writable_index
+from .persistence.connection import open_writable_index, table_exists
 from .persistence.schema_installers import install_document_group_schema
 from .persistence.index_schema import DEFAULT_DATABASE_PATH
 
@@ -29,15 +29,6 @@ TITLE_MAX_LENGTH = 200
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
-    return (
-        connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-        ).fetchone()
-        is not None
-    )
 
 
 def ensure_document_group_schema(db_path: Path = DEFAULT_DATABASE_PATH) -> bool:
@@ -659,7 +650,7 @@ def list_document_groups(
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
     try:
-        if not _table_exists(connection, "document_groups"):
+        if not table_exists(connection, "document_groups"):
             return []
         groups = connection.execute(
             "SELECT document_group_id, title, base_source_file_id, created_at, "
@@ -686,7 +677,7 @@ def list_document_groups(
                 }
                 for row in alignment_rows
             ]
-            has_audit = _table_exists(connection, "audit_issues")
+            has_audit = table_exists(connection, "audit_issues")
             members = connection.execute(
                 "SELECT m.source_file_id AS source_file_id, m.version_label AS "
                 "version_label, m.member_order AS member_order, "
@@ -750,7 +741,7 @@ def read_document_group_snapshot(db_path: Path) -> Dict[str, list]:
     connection = sqlite3.connect(str(path))
     connection.row_factory = sqlite3.Row
     try:
-        if not _table_exists(connection, "document_groups"):
+        if not table_exists(connection, "document_groups"):
             return snapshot
         snapshot["document_groups"] = [
             {
@@ -765,7 +756,7 @@ def read_document_group_snapshot(db_path: Path) -> Dict[str, list]:
                 "created_at, updated_at FROM document_groups"
             )
         ]
-        if _table_exists(connection, "document_group_members"):
+        if table_exists(connection, "document_group_members"):
             snapshot["document_group_members"] = [
                 {
                     "document_group_id": row["document_group_id"],
@@ -891,7 +882,7 @@ def resolve_document_group_source_ids(
         raise DocumentGroupNotFound("作品组不存在。")
     connection = sqlite3.connect(str(path))
     try:
-        if not _table_exists(connection, "document_groups"):
+        if not table_exists(connection, "document_groups"):
             raise DocumentGroupNotFound("作品组不存在。")
         if (
             connection.execute(
@@ -901,7 +892,7 @@ def resolve_document_group_source_ids(
             is None
         ):
             raise DocumentGroupNotFound("作品组不存在。")
-        if not _table_exists(connection, "document_group_members"):
+        if not table_exists(connection, "document_group_members"):
             return []
         rows = connection.execute(
             "SELECT source_file_id FROM document_group_members "
@@ -924,7 +915,7 @@ def document_group_for_source(
         return None
     connection = sqlite3.connect(str(path))
     try:
-        if not _table_exists(connection, "document_group_members"):
+        if not table_exists(connection, "document_group_members"):
             return None
         row = connection.execute(
             "SELECT document_group_id FROM document_group_members "

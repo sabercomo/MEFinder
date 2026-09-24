@@ -99,6 +99,19 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "persistence/connection.py。迁走调用点后请同步下调本文件的基线。",
         )
 
+    def test_table_exists_helper_has_single_definition(self) -> None:
+        definitions = []
+        for path in sorted(PACKAGE.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.FunctionDef) and node.name in {
+                    "table_exists",
+                    "_table_exists",
+                }:
+                    definitions.append(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(definitions, ["persistence/connection.py"])
+
     def test_sql_execute_files_outside_persistence_only_shrink(self) -> None:
         _connects, executes = _sqlite_usage_outside_persistence()
         self.assertEqual(

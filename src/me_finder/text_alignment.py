@@ -27,7 +27,7 @@ from .embedding_models import (
     embedding_model_config,
 )
 from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
-from .persistence.connection import open_writable_index
+from .persistence.connection import open_writable_index, table_exists
 from .persistence.schema_installers import install_text_alignment_schema
 from .alignment_regions import alignment_body_bounds
 from .alignment_kernel import align_segment_sequences
@@ -178,12 +178,6 @@ class AlignmentPreparation:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
-    return connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", (name,)
-    ).fetchone() is not None
 
 
 def _json_object(value: object) -> Dict[str, object]:
@@ -1275,7 +1269,7 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
             _source_kind(source)
         except InvalidAlignmentRequest:
             return {"source_file_id": source_id, "targets": []}
-        if not _table_exists(connection, "alignment_runs"):
+        if not table_exists(connection, "alignment_runs"):
             return {"source_file_id": source_id, "targets": []}
         group = connection.execute(
             "SELECT g.document_group_id, g.base_source_file_id "
@@ -2097,7 +2091,7 @@ def confirmed_overrides_for_pair(
     onto segments the current alignment no longer uses. Most recent first.
     """
 
-    if not _table_exists(connection, "alignment_manual_overrides"):
+    if not table_exists(connection, "alignment_manual_overrides"):
         return {}
     overrides: Dict[str, Dict[str, object]] = {}
     for row in connection.execute(
