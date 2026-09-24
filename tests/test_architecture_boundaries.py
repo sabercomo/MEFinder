@@ -112,7 +112,12 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web.py": 700,
             "web_runtime.py": 725,
             "http_routes.py": 260,
-            "web_http.py": 800,
+            # v0.5.7 B2：导入/上传/搜索/校准移出，分发只查 RouteTable（原 763 行）。
+            "web_http.py": 405,
+            "http_route_table.py": 200,
+            "upload_import_controller.py": 220,
+            "search_controller.py": 100,
+            "calibration_config_controller.py": 60,
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
             # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
@@ -204,7 +209,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom) and node.level
         }
-        self.assertEqual(internal_modules, {"application", "http_range", "http_route_table"})
+        # 传输层只认路由表与 Range 解析;搜索等用例已移入 controller(v0.5.7 B2c)。
+        self.assertEqual(internal_modules, {"http_range", "http_route_table"})
 
     def test_document_query_application_service_contains_no_sql(self) -> None:
         source = (

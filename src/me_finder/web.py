@@ -41,6 +41,11 @@ from .native_document_open import (  # noqa: F401 - re-exported for compatibilit
 )
 from .http_route_table import RouteTable
 from .upload_import_controller import UploadImportController, assemble_upload_import_routes
+from .search_controller import SearchController, assemble_search_routes
+from .calibration_config_controller import (
+    CalibrationConfigController,
+    assemble_calibration_config_routes,
+)
 from .import_config_store import load_import_config
 from .chunked_upload import ChunkedUploadError
 from .web_assets import (
@@ -156,31 +161,37 @@ def make_handler(
             vision_api_error=VisionAPIError,
         )
     )
+    _search_get_routes, search_post_routes = assemble_search_routes(
+        SearchController(
+            index_runtime=runtime.index_runtime,
+            index_path=runtime.index_path,
+            resolve_document_group_source_ids=resolve_document_group_source_ids,
+            document_group_not_found_error=DocumentGroupNotFound,
+        )
+    )
+    calibration_get_routes, _calibration_post_routes = assemble_calibration_config_routes(
+        CalibrationConfigController(root=runtime.root, load_import_config=load_import_config)
+    )
     Handler = make_http_handler(
         WebHTTPContext(
-            index_path=runtime.index_path,
             root=runtime.root,
             index_runtime=runtime.index_runtime,
             data_root_admission=runtime.data_root_admission,
             routes=RouteTable.from_maps(
-                get_maps=[runtime.controller_get_routes],
+                get_maps=[runtime.controller_get_routes, calibration_get_routes],
                 parameterless_get_maps=[runtime.shell_get_routes],
                 post_maps=[
                     runtime.controller_post_routes,
                     runtime.shell_post_routes,
                     upload_post_routes,
+                    search_post_routes,
                 ],
             ),
             render_html=render_html,
             package_dir=_PACKAGE_DIR,
             read_preferences=read_preferences,
             resolve_preferences_path=resolve_preferences_path,
-            load_import_config=load_import_config,
-            resolve_document_group_source_ids=(
-                resolve_document_group_source_ids
-            ),
             data_root_admission_error=DataRootAdmissionError,
-            document_group_not_found_error=DocumentGroupNotFound,
         )
     )
     Handler.begin_shutdown = staticmethod(runtime.begin_shutdown)

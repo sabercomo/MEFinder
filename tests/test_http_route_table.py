@@ -121,6 +121,20 @@ class AssembledRouteTableTests(unittest.TestCase):
                 declared[path] = (policy.max_body_bytes, policy.drain_oversize)
         self.assertEqual(declared, LEGACY_BODY_LIMITS)
 
+    def test_assembled_routes_equal_the_current_http_contract(self) -> None:
+        """由注册表导出的路由清单必须与 docs/contracts 当前版本契约逐条相等。"""
+
+        import json
+        from pathlib import Path
+
+        contracts = sorted(
+            (Path(__file__).resolve().parents[1] / "docs" / "contracts").glob("v*-http-api.json"),
+            key=lambda item: tuple(int(part) for part in item.name[1:].split("-")[0].split(".")),
+        )
+        contract = json.loads(contracts[-1].read_text(encoding="utf-8"))
+        self.assertEqual(sorted(self.table.paths("GET")), contract["get"])
+        self.assertEqual(sorted(self.table.paths("POST")), contract["post"])
+
     def test_only_document_pages_keeps_blank_query_values(self) -> None:
         keep_blank = {
             path

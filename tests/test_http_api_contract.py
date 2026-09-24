@@ -17,7 +17,15 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_PATH = ROOT / "src" / "me_finder" / "web.py"
 # Route literals live in domain assembly functions; web_runtime merges them.
 ROUTES_PATH = ROOT / "src" / "me_finder" / "http_routes.py"
-UPLOAD_ROUTES_PATH = ROOT / "src" / "me_finder" / "upload_import_controller.py"
+# 原先写在 web_http 里的特殊处理路由，B2 后各自在 controller 模块里声明。
+EXTRA_ROUTE_PATHS = tuple(
+    ROOT / "src" / "me_finder" / name
+    for name in (
+        "upload_import_controller.py",
+        "search_controller.py",
+        "calibration_config_controller.py",
+    )
+)
 HTTP_PATH = ROOT / "src" / "me_finder" / "web_http.py"
 CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.5.6-http-api.json"
 WRITE_CONTRACT_PATH = (
@@ -44,6 +52,30 @@ def _dictionary_keys(source_path: Path, names: set[str]) -> set[str]:
     return routes
 
 
+def _dictionary_literal_keys(source_path: Path) -> tuple[set[str], set[str]]:
+    """``return {get...}, {post...}`` / ``post_routes = {...}`` keys of an assembly."""
+
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    get_keys: set[str] = set()
+    post_keys = _dictionary_keys(source_path, {"post_routes"})
+    assemblies = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("assemble_")
+    ]
+    for node in (inner for fn in assemblies for inner in ast.walk(fn)):
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Tuple):
+            first, second = (node.value.elts + [None, None])[:2]
+            for target, value in ((get_keys, first), (post_keys, second)):
+                if isinstance(value, ast.Dict):
+                    target.update(
+                        key.value
+                        for key in value.keys
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                    )
+    return get_keys, post_keys
+
+
 class HTTPAPIContractTests(unittest.TestCase):
     def test_json_contract_matches_python_contract(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -52,14 +84,13 @@ class HTTPAPIContractTests(unittest.TestCase):
         self.assertEqual(contract["post"], sorted(POST_API_ROUTES))
 
     def test_route_tables_and_special_handlers_are_frozen(self) -> None:
-        get_routes = _dictionary_keys(
-            ROUTES_PATH, {"get_routes"}
-        )
-        post_routes = _dictionary_keys(
-            ROUTES_PATH, {"post_routes"}
-        ) | _dictionary_keys(UPLOAD_ROUTES_PATH, {"post_routes"})
-        self.assertEqual(get_routes | {"/api/calibration"}, GET_API_ROUTES)
-        self.assertEqual(post_routes | {"/api/search"}, POST_API_ROUTES)
+        get_routes = _dictionary_keys(ROUTES_PATH, {"get_routes"})
+        post_routes = _dictionary_keys(ROUTES_PATH, {"post_routes"})
+        for path in EXTRA_ROUTE_PATHS:
+            get_routes |= _dictionary_literal_keys(path)[0]
+            post_routes |= _dictionary_literal_keys(path)[1]
+        self.assertEqual(get_routes, GET_API_ROUTES)
+        self.assertEqual(post_routes, POST_API_ROUTES)
 
     def test_every_http_transport_api_literal_is_documented(self) -> None:
         source = HTTP_PATH.read_text(encoding="utf-8")

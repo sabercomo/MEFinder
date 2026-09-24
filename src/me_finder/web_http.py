@@ -1,35 +1,34 @@
 """HTTP transport for the local MEFinder web application.
 
 The application composition root lives in :mod:`me_finder.web`.  This module
-owns request parsing, trust checks, response serialization and source streaming,
-and receives the already-built application services through one explicit
-context object.
+owns trust checks (Host / Origin / request target), the Content-Type gate,
+reading or draining request bodies, dispatch through the single
+``http_route_table.RouteTable``, source Range streaming and the shutdown 503.
+Every ``/api`` handler lives behind the route table; none is special-cased here.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import re
-import sqlite3
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .application import SearchRequest
 from .http_range import InvalidByteRange, parse_byte_range
 from .http_route_table import RawRequest
 
 
 MAX_JSON_REQUEST_BYTES = 1024 * 1024
 SOURCE_STREAM_CHUNK_BYTES = 1024 * 1024
+
+
 @dataclass(frozen=True)
 class WebHTTPContext:
     """Application services and adapters used by the HTTP boundary."""
 
-    index_path: Path
     root: Path
     index_runtime: Any
     data_root_admission: Any
@@ -39,16 +38,12 @@ class WebHTTPContext:
     package_dir: Path
     read_preferences: Callable[[Path], Mapping[str, object]]
     resolve_preferences_path: Callable[[Path], Path]
-    load_import_config: Callable[[Path], Mapping[str, object]]
-    resolve_document_group_source_ids: Callable[[object, Path], list[str]]
     data_root_admission_error: type[Exception]
-    document_group_not_found_error: type[Exception]
 
 
 def make_http_handler(context: WebHTTPContext):
     """Build a request handler over an already-composed application runtime."""
 
-    index_path = context.index_path
     root = context.root
     index_runtime = context.index_runtime
     data_root_admission = context.data_root_admission
@@ -57,18 +52,10 @@ def make_http_handler(context: WebHTTPContext):
     _PACKAGE_DIR = context.package_dir
     read_preferences = context.read_preferences
     resolve_preferences_path = context.resolve_preferences_path
-    load_import_config = context.load_import_config
-    resolve_document_group_source_ids = (
-        context.resolve_document_group_source_ids
-    )
     data_root_admission_error = context.data_root_admission_error
-    document_group_not_found_error = context.document_group_not_found_error
 
     class Handler(BaseHTTPRequestHandler):
         route_table = routes
-        _POST_ROUTE_TABLE = {
-            "/api/search": "_post_search",
-        }
 
         def _send(
             self,
@@ -214,64 +201,6 @@ def make_http_handler(context: WebHTTPContext):
             )
             return True
 
-        def _post_search(self, payload: object) -> None:
-            try:
-                # Resolve a document_group_id scope to member source_file_ids at the
-                # transport boundary; SearchService / search.py never see DocumentGroups.
-                if isinstance(payload, dict) and str(
-                    payload.get("document_group_id") or ""
-                ).strip():
-                    if str(payload.get("source_file_id") or "").strip():
-                        raise ValueError(
-                            "source_file_id 与 document_group_id 不能同时指定。"
-                        )
-                    member_ids = resolve_document_group_source_ids(
-                        payload["document_group_id"], index_path
-                    )
-                    payload = dict(payload)
-                    payload.pop("document_group_id", None)
-                    payload["source_file_ids"] = member_ids
-                request = SearchRequest.from_payload(payload)
-            except document_group_not_found_error as exc:
-                self._send_json({"error": str(exc)}, status=404)
-                return
-            except ValueError as exc:
-                self._send_json({"error": str(exc)}, status=400)
-                return
-            try:
-                result = index_runtime.search(request)
-            except sqlite3.OperationalError as exc:
-                # A read that sat out the full busy_timeout on a concurrent
-                # writer's lock surfaces here as "database is locked" (or
-                # "busy"). Map that to a distinct, retriable 503 — never swallow
-                # it into an empty result that would falsely read as "no hits".
-                # Any other operational error is a real fault and must not be
-                # masked as a transient, so it propagates to the 500 handler.
-                message = str(exc).lower()
-                if "locked" in message or "busy" in message:
-                    self._send_json(
-                        {
-                            "error": "索引正忙（写入未在超时内完成），请稍候重试。",
-                            "retriable": True,
-                        },
-                        status=503,
-                    )
-                    return
-                # A non-lock operational error is a real fault: surface it as a
-                # logged 500, not a dropped connection and not an empty result.
-                logging.exception("search query failed")
-                self._send_json(
-                    {"error": "搜索失败，请查看 desktop.log。"}, status=500
-                )
-                return
-            if result is None:
-                self._send_json(
-                    {"error": "索引正在重建，请稍候再搜索。"},
-                    status=503,
-                )
-                return
-            self._send_json(result)
-
         def do_GET(self) -> None:
             if self._reject_untrusted_request():
                 return
@@ -298,20 +227,6 @@ def make_http_handler(context: WebHTTPContext):
                     self._send(200, icon_path.read_bytes(), "image/svg+xml")
                 else:
                     self._send(404, b"not found", "text/plain; charset=utf-8")
-                return
-            if parsed.path == "/api/calibration":
-                config_path = root / "config" / "pdf_imports.json"
-                if not config_path.exists():
-                    self._send_json({"documents": []})
-                    return
-                config = load_import_config(config_path)
-                params = parse_qs(parsed.query)
-                sid = (params.get("source_id") or [None])[0]
-                if sid:
-                    doc = next((d for d in config.get("documents", []) if d.get("source_file_id") == sid), None)
-                    self._send_json(doc or {"error": "not found"})
-                else:
-                    self._send_json(config)
                 return
             if parsed.path.startswith("/source/"):
                 self._send_source(parsed.path)
@@ -370,7 +285,6 @@ def make_http_handler(context: WebHTTPContext):
                 self._send_json({"error": str(exc)}, status=409)
 
         def _do_POST(self, api_route) -> None:
-            parsed = urlparse(self.path)
             if index_runtime.closing:
                 self._discard_small_request_body()
                 self._send_json({"error": "应用正在关闭。"}, status=503)
@@ -402,10 +316,6 @@ def make_http_handler(context: WebHTTPContext):
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send_json({"error": "请求格式无效。"}, status=400)
-                return
-            route_method = self._POST_ROUTE_TABLE.get(parsed.path)
-            if route_method is not None:
-                getattr(self, route_method)(payload)
                 return
             if api_route is not None:
                 status, response = api_route.handler(payload)
