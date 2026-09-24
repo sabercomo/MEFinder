@@ -8,8 +8,106 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "me_finder"
 
+# 棘轮基线(2026-09-25,v0.5.7 重构 A0):persistence 之外的 SQLite 散落点。
+# 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
+# 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
+SQLITE_CONNECT_OUTSIDE_PERSISTENCE = {
+    "alignment_body_range.py": 1,
+    "alignment_overrides.py": 2,
+    "alignment_snapshots.py": 1,
+    "application/document_heading_enrichment.py": 1,
+    "bibliographic_metadata.py": 1,
+    "data_location.py": 3,
+    "database.py": 7,
+    "document_deletion.py": 1,
+    "document_export_service.py": 1,
+    "document_groups.py": 4,
+    "index_publisher.py": 1,
+    "indexer.py": 1,
+    "large_document/job_ledger.py": 1,
+    "parser_statistics.py": 1,
+    "runtime_page_mapping.py": 1,
+    "text_alignment.py": 2,
+    "translation_works.py": 1,
+}
+
+SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
+    "alignment_body_range.py",
+    "alignment_overrides.py",
+    "alignment_snapshots.py",
+    "application/document_heading_enrichment.py",
+    "application/import_orchestrator.py",
+    "application/literature_verification_service.py",
+    "application/parallel_passage_service.py",
+    "application/script_search.py",
+    "bibliographic_metadata.py",
+    "data_location.py",
+    "database.py",
+    "document_deletion.py",
+    "document_export_service.py",
+    "document_groups.py",
+    "document_outline.py",
+    "edition_folio_anchors.py",
+    "index_publisher.py",
+    "indexer.py",
+    "large_document/job_ledger.py",
+    "parser_statistics.py",
+    "runtime_page_mapping.py",
+    "search.py",
+    "search_assembly.py",
+    "search_recall.py",
+    "structured_reader.py",
+    "text_alignment.py",
+    "translation_works.py",
+}
+
+
+def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
+    """Return ``sqlite3.connect`` counts and ``.execute*`` files per module."""
+
+    connects: dict[str, int] = {}
+    executes: set[str] = set()
+    for path in sorted(PACKAGE.rglob("*.py")):
+        relative = path.relative_to(PACKAGE)
+        if "__pycache__" in relative.parts or relative.parts[0] == "persistence":
+            continue
+        name = relative.as_posix()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or not isinstance(
+                node.func, ast.Attribute
+            ):
+                continue
+            func = node.func
+            if (
+                func.attr == "connect"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "sqlite3"
+            ):
+                connects[name] = connects.get(name, 0) + 1
+            if func.attr in {"execute", "executemany", "executescript"}:
+                executes.add(name)
+    return connects, executes
+
 
 class ArchitectureBoundaryTests(unittest.TestCase):
+    def test_sqlite_connect_outside_persistence_only_shrinks(self) -> None:
+        connects, _executes = _sqlite_usage_outside_persistence()
+        self.assertEqual(
+            connects,
+            SQLITE_CONNECT_OUTSIDE_PERSISTENCE,
+            "persistence 之外不得新增 sqlite3.connect;连接请走 "
+            "persistence/connection.py。迁走调用点后请同步下调本文件的基线。",
+        )
+
+    def test_sql_execute_files_outside_persistence_only_shrink(self) -> None:
+        _connects, executes = _sqlite_usage_outside_persistence()
+        self.assertEqual(
+            executes,
+            SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE,
+            "persistence 之外不得新增执行 SQL 的模块;SQL 请收进 persistence 仓储。"
+            "某文件清零后请从本文件基线删掉它。",
+        )
+
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
         # web.py is now only the HTTP composition root + platform PDF openers;
         # service wiring lives in web_runtime.py and domain route assembly in
