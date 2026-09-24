@@ -136,6 +136,8 @@
 - 新增测试:由注册表导出路由清单,与 `docs/contracts/` 当前版本契约比对。
 - 验收:`test_http_api_contract` 及上传/排空相关测试**不改断言**通过。
 
+2026-09-25(进展):B1、B2 已完成(`7550755` `7b23e8d` `abfc4bb` `f5febf3`)。前端 105 处 `fetch(` 收口到 `07-api.js`;后端 `http_route_table.RouteTable` 为唯一注册表,原始请求体/数据目录名单与请求体上限由路由声明推导,旧手写集合钉在 `tests/test_http_route_table.py` 证明逐项相等;`web_http.py` 763 → 401 行(未到 ≤300 目标:剩余均为计划明确保留的信任校验、读体/排空、Range 流式)。B3 暂停待用户决定:字段类型/必填校验会拒绝现在被宽松接受的输入(如数字标题)并改变部分错误文案,属行为变化。
+
 **B3 统一入参校验**
 - 新增轻量 `parse_payload(Model, payload)`(dataclass + 字段类型/必填校验),失败抛 `PayloadError` → 400。错误体保持 `{"error": "中文消息"}`,可增 `code`,前端 `07-api.js` 已能透传。
 - 从 `DocumentGroupController` 开始逐个 controller 迁移,把 `payload_model` 登记到 `Route`。
