@@ -376,7 +376,7 @@
     try { localStorage.setItem('meFinderTheme', activeBuiltinFallback()); } catch (_) {}
     if (appearanceSaveTimer) clearTimeout(appearanceSaveTimer);
     appearanceSaveTimer = setTimeout(function() {
-      fetch('/api/preferences', {
+      MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appearance: serializeAppearance(), theme: activeBuiltinFallback() })
@@ -538,7 +538,7 @@
     settingsStore.citationStylesSaving = true;
     setCitationStyleControlsDisabled(true);
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({citation_styles: enabledCitationStyles})
@@ -664,7 +664,7 @@
       message: '正在检查 GitHub Releases 中适用于当前 Mac 的 DMG…'
     });
     try {
-      var resp = await fetch('/api/macos-update', {cache: 'no-store'});
+      var resp = await MEFinderApi.fetch('/api/macos-update', {cache: 'no-store'});
       var state = await resp.json();
       if (!resp.ok && state.status !== 'unsupported') {
         throw new Error(state.message || '检查更新失败');
@@ -711,7 +711,7 @@
     var badge = document.getElementById('data-location-status');
     if (badge) { badge.className = 'settings-status'; badge.textContent = '读取中…'; }
     try {
-      var resp = await fetch('/api/data-location', {cache: 'no-store'});
+      var resp = await MEFinderApi.fetch('/api/data-location', {cache: 'no-store'});
       var data = await resp.json();
       if (resp.status === 404 || data.available === false) {
         delete document.documentElement.dataset.dataLocationAvailable;
@@ -762,7 +762,7 @@
     buttons.forEach(function(item) { item.disabled = true; });
     button.textContent = '选择并检查…';
     try {
-      var resp = await fetch('/api/data-location/choose', {
+      var resp = await MEFinderApi.fetch('/api/data-location/choose', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mode: mode})
       });
@@ -794,7 +794,7 @@
     buttons.forEach(function(item) { item.disabled = true; });
     button.textContent = existing ? '正在切换…' : '正在迁移…';
     try {
-      var resp = await fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate', {
+      var resp = await MEFinderApi.fetch(existing ? '/api/data-location/switch' : '/api/data-location/migrate', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({target_path: settingsStore.pendingDataLocation})
       });
@@ -834,7 +834,7 @@
     settingsStore.alignmentEmbeddingModelSaving = true;
     renderAlignmentEmbeddingModel();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({alignment_embedding_model_id: modelId})
@@ -995,7 +995,7 @@
     var revision = (settingsStore.alignmentModelLoadRevision || 0) + 1;
     settingsStore.alignmentModelLoadRevision = revision;
     try {
-      var resp = await fetch('/api/text-alignment/models');
+      var resp = await MEFinderApi.fetch('/api/text-alignment/models');
       var data = await resp.json();
       if (revision !== settingsStore.alignmentModelLoadRevision) return;
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
@@ -1016,7 +1016,7 @@
       button.textContent = '正在启动…';
     }
     try {
-      var resp = await fetch('/api/text-alignment/models', {
+      var resp = await MEFinderApi.fetch('/api/text-alignment/models', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({model_id: modelId, action: 'download'})
@@ -1045,7 +1045,7 @@
     })) return;
     if (button) { button.disabled = true; button.textContent = '删除中…'; }
     try {
-      var resp = await fetch('/api/text-alignment/models', {
+      var resp = await MEFinderApi.fetch('/api/text-alignment/models', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({model_id: modelId, action: 'delete'})
@@ -1205,7 +1205,7 @@
     var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
     settingsStore.alignmentRuntimeLoadRevision = revision;
     try {
-      var resp = await fetch('/api/text-alignment/runtime', {cache: 'no-store'});
+      var resp = await MEFinderApi.fetch('/api/text-alignment/runtime', {cache: 'no-store'});
       var data = await resp.json();
       if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
       // 成功响应就是 summary，其顶层 error 是「上次操作失败」的业务字段（渲染时呈现），
@@ -1244,7 +1244,7 @@
     settingsStore.alignmentRuntimePollTimer = null;
     if (button) { button.disabled = true; }
     try {
-      var resp = await fetch('/api/text-alignment/runtime', {
+      var resp = await MEFinderApi.fetch('/api/text-alignment/runtime', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: action})
@@ -1361,7 +1361,7 @@
     setPdfOpenModeControlsDisabled(true);
     renderPdfOpenMode();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({pdf_open_mode: mode})
@@ -1435,7 +1435,7 @@
     settingsStore.scriptFoldingSaving = true;
     renderScriptFolding();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({script_folding: settingsStore.scriptFoldingEnabled})
       });
@@ -1465,7 +1465,7 @@
     renderReaderLineMode();
     renderAlignmentEmbeddingModel();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({reader_line_mode: mode})
@@ -1499,7 +1499,7 @@
     setDocumentExportModeControlsDisabled(true);
     renderDocumentExportMode();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({document_export_mode: mode})
@@ -1543,7 +1543,7 @@
     }
     settingsStore.preferencesLoadPromise = (async function() {
       try {
-        var resp = await fetch('/api/preferences');
+        var resp = await MEFinderApi.fetch('/api/preferences');
         var data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
         applyPreferencesData(data, requestedThemeRevision);
@@ -1622,7 +1622,7 @@
   async function loadUpdateStatus() {
     if (desktopShell !== 'win32') return null;
     try {
-      var resp = await fetch('/api/update/status');
+      var resp = await MEFinderApi.fetch('/api/update/status');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       renderUpdateState(data);
@@ -1637,7 +1637,7 @@
     if (desktopShell !== 'win32') return;
     renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'checking', message:'正在检查 GitHub Releases…'}));
     try {
-      var resp = await fetch('/api/update/check', {
+      var resp = await MEFinderApi.fetch('/api/update/check', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({auto_download: automatic === true})
@@ -1656,7 +1656,7 @@
     if (settingsStore.updateState.status === 'available') {
       renderUpdateState(Object.assign({}, settingsStore.updateState, {status:'downloading', message:'正在下载并校验更新…'}));
       try {
-        var downloadResp = await fetch('/api/update/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+        var downloadResp = await MEFinderApi.fetch('/api/update/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
         var downloadData = await downloadResp.json();
         if (!downloadResp.ok || downloadData.error) throw new Error(downloadData.error || '下载失败');
         renderUpdateState(downloadData);
@@ -1681,7 +1681,7 @@
       status:'installing', install_token:null, message:'正在重新校验安装包并启动安装程序…'
     }));
     try {
-      var installResp = await fetch('/api/update/install', {
+      var installResp = await MEFinderApi.fetch('/api/update/install', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({confirm_token:installToken})
@@ -1699,7 +1699,7 @@
     var previous = settingsStore.autoUpdateEnabled;
     settingsStore.autoUpdateEnabled = enabled === true;
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({auto_update:settingsStore.autoUpdateEnabled})
       });
@@ -1762,7 +1762,7 @@
     if (button && button.disabled) return;
     if (button) button.disabled = true;
     try {
-      var resp = await fetch('/api/scan-directories/choose', {
+      var resp = await MEFinderApi.fetch('/api/scan-directories/choose', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: '{}'
@@ -1820,7 +1820,7 @@
   }
 
   async function persistScanDirectories() {
-    var resp = await fetch('/api/preferences', {
+    var resp = await MEFinderApi.fetch('/api/preferences', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({scan_directories: settingsStore.scanDirectories})
@@ -1866,7 +1866,7 @@
   function persistDisplayPreference(key, value) {
     var payload = {};
     payload[key] = value;
-    fetch('/api/preferences', {
+    MEFinderApi.fetch('/api/preferences', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload)

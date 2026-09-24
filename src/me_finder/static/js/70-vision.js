@@ -180,7 +180,7 @@
     var status = document.getElementById('local-ocr-status');
     if (status && !parserStore.localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
     try {
-      var response = await fetch('/api/local-ocr');
+      var response = await MEFinderApi.fetch('/api/local-ocr');
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
@@ -230,7 +230,7 @@
     button.textContent = '保存中…';
     if (hint) hint.textContent = '';
     try {
-      var response = await fetch('/api/local-ocr', {
+      var response = await MEFinderApi.fetch('/api/local-ocr', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(localOCRPayload())
@@ -254,7 +254,7 @@
     )) return;
     if (button) button.disabled = true;
     try {
-      var response = await fetch('/api/local-ocr/component', {
+      var response = await MEFinderApi.fetch('/api/local-ocr/component', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({provider_id:providerId, action:action})
@@ -276,7 +276,7 @@
     button.textContent = '测试中…';
     if (fields.hint) fields.hint.textContent = '正在启动 CLI…';
     try {
-      var response = await fetch('/api/local-ocr/test', {
+      var response = await MEFinderApi.fetch('/api/local-ocr/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({provider_id: providerId, python_path: payload.python_path, script_path: payload.script_path})
@@ -298,7 +298,7 @@
     status.className = 'settings-status';
     status.textContent = '读取中…';
     try {
-      var resp = await fetch('/api/mineru-accounts');
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.mineruAccounts = Array.isArray(data.accounts) ? data.accounts : [];
@@ -503,7 +503,7 @@
     if (button) { button.disabled = true; button.textContent = '检查中…'; }
     if (hint) hint.textContent = '正在查询可用版本…';
     try {
-      var response = await fetch('/api/mineru-local/component', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'check-updates'})
@@ -519,7 +519,7 @@
 
   async function loadManagedMineruStatus() {
     try {
-      var response = await fetch('/api/mineru-local/component');
+      var response = await MEFinderApi.fetch('/api/mineru-local/component');
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderManagedMineru(data);
@@ -540,7 +540,7 @@
     )) return;
     if (button) button.disabled = true;
     try {
-      var response = await fetch('/api/mineru-local/component', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({profile:profile, action:action})
@@ -590,7 +590,7 @@
     button.textContent = '保存中…';
     if (hint) hint.textContent = '';
     try {
-      var response = await fetch('/api/mineru-local', {
+      var response = await MEFinderApi.fetch('/api/mineru-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(mineruLocalPayload())
@@ -625,7 +625,7 @@
     button.textContent = '检测中…';
     if (hint) hint.textContent = '正在连接本地服务…';
     try {
-      var response = await fetch('/api/mineru-local/test', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(mineruLocalPayload())
@@ -746,7 +746,7 @@
 
   async function openMineruTokenPage() {
     try {
-      var resp = await fetch('/api/open-mineru-token', {
+      var resp = await MEFinderApi.fetch('/api/open-mineru-token', {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
       });
       var data = await resp.json();
@@ -928,7 +928,7 @@
       status.textContent = '刷新中…';
     }
     try {
-      var response = await fetch('/api/parser-statistics');
+      var response = await MEFinderApi.fetch('/api/parser-statistics');
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.parserStatistics = data || {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
@@ -975,7 +975,7 @@
       if (hint) hint.textContent = '正在导出…';
       var payload = {};
       if (outputDirectory) payload.output_dir = outputDirectory;
-      var resp = await fetch('/api/backup/export', {
+      var resp = await MEFinderApi.fetch('/api/backup/export', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
@@ -1001,7 +1001,7 @@
     if (button && button.disabled) return;
     if (button) { button.disabled = true; button.textContent = '正在选择…'; }
     try {
-      var chooseResp = await fetch('/api/backup/import/choose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+      var chooseResp = await MEFinderApi.fetch('/api/backup/import/choose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
       var chosen = await chooseResp.json();
       if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
       if (chosen.cancelled) return;
@@ -1010,7 +1010,7 @@
         {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
       )) return;
       if (button) button.textContent = '正在导入…';
-      var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: chosen.path})});
+      var resp = await MEFinderApi.fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: chosen.path})});
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
       showToast('已恢复备份，正在重建索引…');
@@ -1023,7 +1023,7 @@
   }
 
   function pollBackupRestore(jobId) {
-    fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         if (data.status === 'completed') {
@@ -1075,7 +1075,7 @@
     saveButton.disabled = true;
     saveButton.textContent = '保存中…';
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
@@ -1104,7 +1104,7 @@
     button.disabled = true;
     button.textContent = '保存中…';
     try {
-      var resp = await fetch('/api/mineru-accounts/service', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts/service', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({api_base: apiBase})
@@ -1132,7 +1132,7 @@
     item.enabled = !!input.checked;
     renderMineruAccountList();
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -1163,7 +1163,7 @@
       {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
     )) return;
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'delete_account', account_id: accountId})
@@ -1187,7 +1187,7 @@
     if (button) { button.disabled = true; }
     if (status) { status.className = 'settings-status'; status.textContent = '测试连接中…'; }
     try {
-      var resp = await fetch('/api/mineru-accounts/test', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({account_id: accountId})
@@ -1264,7 +1264,7 @@
 
   async function loadGeneralModelConfig() {
     try {
-      var response = await fetch('/api/general-model');
+      var response = await MEFinderApi.fetch('/api/general-model');
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderGeneralModel(data);
@@ -1279,7 +1279,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'settings-hint'; hint.textContent = '保存中…'; }
     try {
-      var response = await fetch('/api/general-model', {
+      var response = await MEFinderApi.fetch('/api/general-model', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())
@@ -1303,7 +1303,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'settings-hint'; hint.textContent = '连接中…'; }
     try {
-      var response = await fetch('/api/general-model/test', {
+      var response = await MEFinderApi.fetch('/api/general-model/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())
@@ -1324,7 +1324,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'vision-model-hint'; hint.textContent = '读取模型列表…'; }
     try {
-      var response = await fetch('/api/general-model/models', {
+      var response = await MEFinderApi.fetch('/api/general-model/models', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())

@@ -59,7 +59,8 @@ const context = {document: {readyState: 'loading', documentElement: {dataset: {}
 };
 context.window=context;
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+// 16-reader-host.js 经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 let route;
 context.MEFinderReader={configure(options){route=options.openExternal;}};
 events.DOMContentLoaded[0]();

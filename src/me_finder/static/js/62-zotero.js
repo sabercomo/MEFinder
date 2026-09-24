@@ -54,11 +54,9 @@
     return icon;
   }
 
-  async function getJSON(url, options) {
-    var resp = await fetch(url, options);
-    var data = await resp.json();
-    if (!resp.ok || (data && data.error)) throw new Error((data && data.error) || '请求失败');
-    return data;
+  // 统一请求出口（07-api.js）的本地转发。
+  function getJSON(url, options) {
+    return MEFinderApi.requestJSON(url, options);
   }
 
   async function savePreferences(updates) {

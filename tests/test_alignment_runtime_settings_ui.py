@@ -49,7 +49,8 @@ const context = {
   }
 };
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+// 被测文件经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 const settle = async()=>{for(let i=0;i<15;i++) await Promise.resolve();};
 const enter = async()=>{context.showSettingsCategory('text-alignment-settings');await settle();};
 const poll = async()=>{const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());await settle();};

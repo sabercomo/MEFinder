@@ -56,7 +56,7 @@
   async function runBatchMetadataDetection() {
     var button = document.getElementById('batch-metadata-btn');
     try {
-      var resp = await fetch('/api/bibliographic-metadata/batch-detect', {
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/batch-detect', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: '{}'
@@ -79,7 +79,7 @@
   }
 
   function pollBatchMetadata(jobId, button) {
-    fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         if (data.status === 'completed') {
@@ -231,7 +231,7 @@
     var sourceId = src.source_file_id;
     var source = batchLookupSourceFor(meta);
     var info = _BATCH_SOURCE_META[source];
-    var resp = await fetch(info.endpoint, {
+    var resp = await MEFinderApi.fetch(info.endpoint, {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:batchQueryFor(source, meta)})
     });
     var data = await resp.json();
@@ -263,7 +263,7 @@
     var evidence = candidate.evidence || {};
     if (source === 'cnki' && candidate.record_url) {
       try {
-        var resp = await fetch('/api/bibliographic-metadata/cnki-candidate', {
+        var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/cnki-candidate', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body:JSON.stringify({candidate:{record_url:candidate.record_url}})
         });
@@ -295,7 +295,7 @@
     });
     if (!filledAny) return false;
     payload.metadata_evidence = evidenceOut;
-    var saveResp = await fetch('/api/bibliographic-metadata/save', {
+    var saveResp = await MEFinderApi.fetch('/api/bibliographic-metadata/save', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({source_id:sourceId, metadata:payload})
     });
@@ -379,7 +379,7 @@
     button.disabled = true;
     statusEl.textContent = '正在扫描 ' + settingsStore.scanDirectories.length + ' 个目录…';
     try {
-      var resp = await fetch('/api/scan-directories');
+      var resp = await MEFinderApi.fetch('/api/scan-directories');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '扫描失败');
       scanEntries = data.entries || [];
@@ -757,7 +757,7 @@
     var button = document.getElementById('scan-import-btn');
     button.disabled = true;
     try {
-      var resp = await fetch('/api/import-local', {
+      var resp = await MEFinderApi.fetch('/api/import-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -842,7 +842,7 @@
     settingsStore.pdfParseModeSaving = true;
     renderPdfParseMode();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({pdf_parse_mode: mode})
@@ -1081,7 +1081,7 @@
       q.uploadId = null;
       for (var uploadIndex = 0; uploadIndex < activeUploadIds.length; uploadIndex += 1) {
         try {
-          await fetch('/api/import-upload/cancel', {
+          await MEFinderApi.fetch('/api/import-upload/cancel', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({upload_id: activeUploadIds[uploadIndex]})
@@ -1093,7 +1093,7 @@
     }
     if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
       try {
-        var resp = await fetch('/api/import-resume-dismiss', {
+        var resp = await MEFinderApi.fetch('/api/import-resume-dismiss', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({job_id: q.jobId})
@@ -1116,7 +1116,7 @@
   var IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES = 4 * 1024 * 1024;
 
   async function uploadImportFile(q, importKind, progressLabel) {
-    var startResp = await fetch('/api/import-upload/start', {
+    var startResp = await MEFinderApi.fetch('/api/import-upload/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1141,7 +1141,7 @@
       while (offset < totalSize) {
         var end = Math.min(offset + chunkSize, totalSize);
         var uploadChunk = q.file.slice(offset, end);
-        var chunkResp = await fetch('/api/import-upload/chunk', {
+        var chunkResp = await MEFinderApi.fetch('/api/import-upload/chunk', {
           method: 'POST',
           headers: {
             'Content-Type': q.file.type || 'application/octet-stream',
@@ -1160,7 +1160,7 @@
       }
     } catch (error) {
       try {
-        await fetch('/api/import-upload/cancel', {
+        await MEFinderApi.fetch('/api/import-upload/cancel', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({upload_id: uploadId})
@@ -1185,7 +1185,7 @@
     try {
       uploadId = await uploadImportFile(q, q.importKind || 'document', '正在读取文件…');
       q.uploadId = uploadId;
-      var resp = await fetch('/api/import-upload/finish', {
+      var resp = await MEFinderApi.fetch('/api/import-upload/finish', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({upload_id: uploadId})
@@ -1215,7 +1215,7 @@
       var pendingUploadIds = [uploadId].filter(Boolean);
       for (var pendingIndex = 0; pendingIndex < pendingUploadIds.length; pendingIndex += 1) {
         try {
-          await fetch('/api/import-upload/cancel', {
+          await MEFinderApi.fetch('/api/import-upload/cancel', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({upload_id: pendingUploadIds[pendingIndex]})
@@ -1234,7 +1234,7 @@
   function pollImportJob(id) {
     var q = importStore.queue.find(function(item) { return item.id === id; });
     if (!q || !q.jobId) return;
-    fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
+    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -1296,7 +1296,7 @@
 
   async function loadResumableImports() {
     try {
-      var resp = await fetch('/api/import-resumable');
+      var resp = await MEFinderApi.fetch('/api/import-resumable');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取恢复任务失败');
       (data.jobs || []).forEach(function(job) {
@@ -1347,7 +1347,7 @@
           {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
         )) return;
     try {
-      var resp = await fetch('/api/import-resume', {
+      var resp = await MEFinderApi.fetch('/api/import-resume', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})
@@ -1382,7 +1382,7 @@
       {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
     )) return;
     try {
-      var resp = await fetch('/api/import-retry', {
+      var resp = await MEFinderApi.fetch('/api/import-retry', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId, provider_id: providerId})
@@ -1414,7 +1414,7 @@
       {title:'改用 MinerU？', confirmText:'改用 MinerU'}
     )) return;
     try {
-      var resp = await fetch('/api/import-retry-mineru', {
+      var resp = await MEFinderApi.fetch('/api/import-retry-mineru', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})
@@ -1446,7 +1446,7 @@
       {title:'切换到本地部署？', confirmText:'切换到本地部署'}
     )) return;
     try {
-      var response = await fetch('/api/import-retry-mineru-local', {
+      var response = await MEFinderApi.fetch('/api/import-retry-mineru-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})

@@ -49,7 +49,7 @@
       return;
     }
     try {
-      var resp = await fetch('/api/calibration?source_id=' + encodeURIComponent(sourceId));
+      var resp = await MEFinderApi.fetch('/api/calibration?source_id=' + encodeURIComponent(sourceId));
       calSelectedDoc = await resp.json();
       if (calSelectedDoc.error) {
         showToast('文献未找到');
@@ -85,7 +85,7 @@
     panel.innerHTML = '<div class="auto-detect-title">正在检测页码与页面布局…</div><div class="auto-detect-note">正在读取页面尺寸、左右内容分布、中缝、页码位置、PDF 标签、数字书签和现有 MinerU 结果</div>';
     if (button) button.disabled = true;
     try {
-      var resp = await fetch('/api/auto-page-mapping/detect', {
+      var resp = await MEFinderApi.fetch('/api/auto-page-mapping/detect', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({source_id:sourceId, dry_run:true})
@@ -172,7 +172,7 @@
     }
     try {
       showToast('正在应用自动映射…');
-      var resp = await fetch('/api/auto-page-mapping/apply', {
+      var resp = await MEFinderApi.fetch('/api/auto-page-mapping/apply', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({source_id:sourceId,segments:segments,auto_mapping:calAutoResult,replace_manual:replaceManual})
       });
@@ -411,7 +411,7 @@
     });
     try {
       hint.textContent = '正在保存并重建索引，请稍候…';
-      var resp = await fetch('/api/calibration', {
+      var resp = await MEFinderApi.fetch('/api/calibration', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({source_id: sourceId, segments: cleanSegs})
@@ -557,7 +557,7 @@
     // 一次请求一个事务：逐份删除会为每份文献整份复制索引数据库。
     removeRequestController = typeof AbortController === 'function' ? new AbortController() : null;
     try {
-      var resp = await fetch('/api/documents/remove-batch', {
+      var resp = await MEFinderApi.fetch('/api/documents/remove-batch', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         signal: removeRequestController ? removeRequestController.signal : undefined,

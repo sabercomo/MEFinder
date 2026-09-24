@@ -1,7 +1,7 @@
 /* ═══ Load index metadata ═══ */
 async function loadMeta() {
   try {
-    const resp = await fetch('/api/index-meta');
+    const resp = await MEFinderApi.fetch('/api/index-meta');
     const meta = await resp.json();
     document.getElementById('index-count').textContent =
       '索引 ' + (meta.eligible_paragraph_count || 0).toLocaleString() + ' 条';

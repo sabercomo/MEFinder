@@ -22,7 +22,8 @@ const context = {
   showToast(message) {messages.push(message);}
 };
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+// 被测文件经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 (async () => {
   const first = context.setScriptFolding(false);
   assert.equal(input.disabled, true); assert.equal(input.checked, false);

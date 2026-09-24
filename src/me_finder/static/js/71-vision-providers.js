@@ -340,7 +340,7 @@
     }
     setVisionModelHint('正在读取接口可用模型…', 'is-loading');
     try {
-      var resp = await fetch('/api/vision-providers/models', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers/models', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({provider: provider})
@@ -760,7 +760,7 @@
       status.textContent = '读取中…';
     }
     try {
-      var resp = await fetch('/api/vision-providers');
+      var resp = await MEFinderApi.fetch('/api/vision-providers');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.visionConfig = data;
@@ -879,7 +879,7 @@
     var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === providerId; });
     if (!provider) return;
     try {
-      var resp = await fetch('/api/vision-providers', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -938,7 +938,7 @@
     }
     if (hint) hint.textContent = '正在保存…';
     try {
-      var resp = await fetch('/api/vision-providers', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'save_provider', provider: provider})
@@ -963,7 +963,7 @@
       {title:'删除解析接口？', confirmText:'删除', tone:'danger'}
     )) return;
     try {
-      var resp = await fetch('/api/vision-providers', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'delete_provider', provider_id: providerId})
@@ -992,7 +992,7 @@
     )) return;
     showToast('正在测试 ' + provider.name + '…');
     try {
-      var resp = await fetch('/api/vision-providers/test', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({provider_id: providerId})
@@ -1021,7 +1021,7 @@
     }
     if (toggle) toggle.disabled = true;
     try {
-      var resp = await fetch('/api/vision-providers', {
+      var resp = await MEFinderApi.fetch('/api/vision-providers', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({

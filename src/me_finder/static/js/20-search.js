@@ -149,7 +149,7 @@
     if (force) invalidateLibraryCatalog();
     if (searchStore.libraryCatalog) return Promise.resolve(searchStore.libraryCatalog);
     if (searchStore.libraryCatalogPromise) return searchStore.libraryCatalogPromise;
-    searchStore.libraryCatalogPromise = fetch('/api/library?view=summary').then(function(response) {
+    searchStore.libraryCatalogPromise = MEFinderApi.fetch('/api/library?view=summary').then(function(response) {
       return response.json().then(function(data) {
         if (!response.ok || data.error) throw new Error(data.error || '文献库加载失败');
         searchStore.libraryCatalog = data;
@@ -294,7 +294,7 @@
     showEmptyDetail();
 
     try {
-      const resp = await fetch('/api/search', {
+      const resp = await MEFinderApi.fetch('/api/search', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(Object.assign(
@@ -627,7 +627,7 @@
 
 
   function persistSelectedCitationStyle() {
-    fetch('/api/preferences', {
+    MEFinderApi.fetch('/api/preferences', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({citation_style: citationStyle})
@@ -705,7 +705,7 @@
   async function openSource(sourceId, page) {
     if (!sourceId) return;
     try {
-      const resp = await fetch('/api/open-source', {
+      const resp = await MEFinderApi.fetch('/api/open-source', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({source_id: sourceId, page: page})

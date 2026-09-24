@@ -1579,8 +1579,10 @@ def _vision_eval(tail):
     js_dir = ROOT / "src" / "me_finder" / "static" / "js"
     runtime = js_dir / "70-vision.js"
     providers = js_dir / "71-vision-providers.js"
-    expr = "(function(){%s\n%s\n%s\n%s})()" % (
+    api = js_dir / "07-api.js"  # 两个模块经统一请求出口发请求
+    expr = "(function(){%s\n%s\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
+        api.read_text(encoding="utf-8"),
         runtime.read_text(encoding="utf-8"),
         providers.read_text(encoding="utf-8"),
         tail,

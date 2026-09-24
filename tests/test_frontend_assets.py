@@ -300,6 +300,24 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         missing = sorted(n for n in referenced - builtins if n not in defined)
         self.assertEqual(missing, [], f"内联处理器引用了不存在的函数：{missing}")
 
+    def test_http_requests_go_through_the_api_module(self):
+        """前端请求只能经 07-api.js 发出（v0.5.7 B1 棘轮，只降不升）。
+
+        reader-window.js 是独立阅读窗口的宿主脚本，不装配 static/js/，暂留 1 处，
+        待阶段 D1 接入 07-api.js 后清零；reader.js 走可注入的 fetchFunction。
+        """
+
+        bare_fetch = re.compile(r"(?<![\w.$])fetch\(")
+        allowed = {"static/js/07-api.js": 1, "static/reader-window.js": 1}
+        counts = {}
+        for relative in sorted(
+            set(_split_js_assets()) | {"static/reader.js", "static/reader-window.js"}
+        ):
+            found = len(bare_fetch.findall(_read(relative)))
+            if found:
+                counts[relative] = found
+        self.assertEqual(counts, allowed, "请改用 MEFinderApi.fetch / getJSON / postJSON")
+
     def test_large_domain_modules_keep_bounded_global_command_surfaces(self):
         """大型领域模块必须留在 IIFE；直接全局命令不得重新无界增长。"""
 
@@ -524,10 +542,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 Zotero 来源同步：设置目录新增「来源 → Zotero」（index.html 分区 +
     #   62-zotero.js 分类树 / 立即同步明细 + 30-settings.css .zotero-*），
     #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
+    # 0.5.7 重构 B1：新增 07-api.js 统一请求出口，105 处 fetch( 改为
+    #   MEFinderApi.fetch(；35-works / 62-zotero 私有 JSON helper 改为转发。
     BASELINE_SHA256 = (
-        "beb7c85c8e3deb3ae6f764b5f5c0ec834bf110b7810f55879a6a06af39316618"
+        "116fe158bcd93eb1ca81cf0cb4cd3bbb8955e8eeca4ba47a47172923f61bd805"
     )
-    BASELINE_BYTES = 1262983
+    BASELINE_BYTES = 1265570
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

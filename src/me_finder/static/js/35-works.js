@@ -83,25 +83,13 @@
     return el('button', attrs, label);
   }
 
-  async function requestJSON(url, options) {
-    var response = await fetch(url, options);
-    var data = {};
-    try { data = await response.json(); } catch (_) { data = {}; }
-    if (!response.ok || data.error) {
-      var error = new Error(data.error || '请求失败');
-      error.status = response.status;
-      error.payload = data;
-      throw error;
-    }
-    return data;
+  // 统一请求出口（07-api.js）的本地转发：名字保留，供函数体白盒测试注入替身。
+  function requestJSON(url, options) {
+    return MEFinderApi.requestJSON(url, options);
   }
 
   function postJSON(url, payload) {
-    return requestJSON(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify(payload || {})
-    });
+    return MEFinderApi.postJSON(url, payload);
   }
 
   function toastWithAction(message, actionLabel, action, onExpire) {

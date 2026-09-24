@@ -31,7 +31,7 @@
 
   async function chooseDesktopExportDirectory() {
     if (desktopShell !== 'macos' && desktopShell !== 'win32') return undefined;
-    var response = await fetch('/api/export-directory/choose', {
+    var response = await MEFinderApi.fetch('/api/export-directory/choose', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: '{}'

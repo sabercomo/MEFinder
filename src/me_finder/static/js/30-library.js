@@ -31,7 +31,7 @@
   // 作品（作品组）列表供检索范围与文献行的作品链接使用；管理在「译本对照」页。
   async function loadDocumentGroups() {
     try {
-      var response = await fetch('/api/document-groups');
+      var response = await MEFinderApi.fetch('/api/document-groups');
       var data = await response.json();
       libraryStore.documentGroups = (response.ok && !data.error && Array.isArray(data.document_groups))
         ? data.document_groups : [];
@@ -103,7 +103,7 @@
   function ensureLibraryDetail(sourceId) {
     if (!sourceId || libraryStore.detailLoaded[sourceId]) return Promise.resolve();
     if (libraryStore.detailPending[sourceId]) return libraryStore.detailPending[sourceId];
-    var request = fetch('/api/library/document?source_id=' + encodeURIComponent(sourceId)).then(function(response) {
+    var request = MEFinderApi.fetch('/api/library/document?source_id=' + encodeURIComponent(sourceId)).then(function(response) {
       return response.json().then(function(data) {
         if (!response.ok || data.error) throw new Error(data.error || '文献详情读取失败');
         applyLibraryDetail(sourceId, data);
@@ -823,7 +823,7 @@
       include_source_pdf: settingsStore.currentDocumentExportMode === 'with_pdf'
     };
     if (outputDirectory) payload.output_dir = outputDirectory;
-    var response = await fetch('/api/document/export', {
+    var response = await MEFinderApi.fetch('/api/document/export', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -928,7 +928,7 @@
     var payload = {source_id: sourceId};
     if (pageSelection) payload.page_selection = pageSelection;
     if (outputDirectory) payload.output_dir = outputDirectory;
-    var response = await fetch('/api/document/export-markdown', {
+    var response = await MEFinderApi.fetch('/api/document/export-markdown', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -955,7 +955,7 @@
   async function requestLibraryDocumentEpubExport(sourceId, outputDirectory) {
     var payload = {source_id: sourceId};
     if (outputDirectory) payload.output_dir = outputDirectory;
-    var response = await fetch('/api/document/export-epub', {
+    var response = await MEFinderApi.fetch('/api/document/export-epub', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)

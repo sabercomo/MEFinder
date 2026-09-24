@@ -580,7 +580,7 @@
     renderCandidates(config, sourceId);
     setLookupStatus(config, config.loadingMessage, false);
     try {
-      var resp = await fetch(config.endpoint, {
+      var resp = await MEFinderApi.fetch(config.endpoint, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({metadata: metadata})
       });
       var data = await resp.json();
@@ -676,7 +676,7 @@
     if (!candidate || !candidate.record_url) return;
     setLookupStatus(CNKI_LOOKUP,'正在读取知网完整题录…', false);
     try {
-      var resp = await fetch('/api/bibliographic-metadata/cnki-candidate', {
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/cnki-candidate', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({candidate:{record_url:candidate.record_url}})
       });
@@ -707,7 +707,7 @@
       return;
     }
     try {
-      var resp = await fetch('/api/bibliographic-metadata/open-cnki', {
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/open-cnki', {
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})
       });
       var data = await resp.json();
@@ -740,7 +740,7 @@
       result.textContent = '正在识别…';
     }
     try {
-      var resp = await fetch('/api/bibliographic-metadata/parse-cnki-citation', {
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/parse-cnki-citation', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({citation_text:citationText})
@@ -781,7 +781,7 @@
     )) return;
     try {
       showToast('正在识别封面、书名页、CIP 与版权页…');
-      var resp = await fetch('/api/bibliographic-metadata/detect', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,force:!!force})});
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/detect', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,force:!!force})});
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '识别失败');
       var src = libraryStore.sources.find(function(item){return item.source_file_id === sourceId;});
@@ -798,7 +798,7 @@
 
   async function saveBibliographicMetadata(sourceId) {
     try {
-      var resp = await fetch('/api/bibliographic-metadata/save', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,metadata:collectBibliographicForm()})});
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/save', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:sourceId,metadata:collectBibliographicForm()})});
       var data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || '保存失败');
       showToast('书目信息已保存并立即生效', 'success');
@@ -898,7 +898,7 @@
       if (queue) queue.scrollIntoView({behavior: 'smooth', block: 'start'});
     });
     try {
-      var resp = await fetch('/api/mineru-reparse', {
+      var resp = await MEFinderApi.fetch('/api/mineru-reparse', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({source_id: sourceId})
@@ -937,7 +937,7 @@
     if (!sourceId) return;
     try {
       showToast('正在接受自动映射…');
-      var resp = await fetch('/api/auto-page-mapping/accept', {
+      var resp = await MEFinderApi.fetch('/api/auto-page-mapping/accept', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({source_id: sourceId})
