@@ -89,7 +89,7 @@ class MCPDocumentationTests(unittest.TestCase):
 
     def test_readme_states_document_package_integrity_boundaries(self) -> None:
         self.assertIn("已入库 PDF", self.readme)
-        self.assertIn("当前版本不导出 Word", self.readme)
+        self.assertIn("当前版本只导出 PDF 文献，批量操作会跳过 Word 与 EPUB", self.readme)
         self.assertIn("未做数字签名", self.readme)
         self.assertNotIn("被改动过的文档包在入库前就会被拒绝", self.readme)
 
