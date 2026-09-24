@@ -1,18 +1,15 @@
 """HTTP route assembly grouped by existing product domains.
 
 Each function receives the controllers owned by one domain and returns that
-domain's GET and POST maps.  The application composition root merges the maps
-explicitly; there is no dependency container or runtime route registry.
+domain's GET and POST maps; transport policy is declared inline via ``route``.
+The HTTP composition root merges the maps into ``http_route_table.RouteTable``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-
-Route = Callable[..., tuple[int, object]]
-RouteMap = dict[str, Route]
-RoutePair = tuple[RouteMap, RouteMap]
+from .http_route_table import RoutePair, route
 
 
 def assemble_library_routes(
@@ -181,7 +178,7 @@ def assemble_reader_routes(
 ) -> RoutePair:
     works = translation_work_controller
     get_routes = {
-        "/api/document/pages": structured_reader_controller.pages,
+        "/api/document/pages": route(structured_reader_controller.pages, keep_blank_query=True),
         "/api/document/outline": structured_reader_controller.outline,
         "/api/text-alignments/targets": text_alignment_controller.targets,
         "/api/text-alignments/status": text_alignment_controller.status,

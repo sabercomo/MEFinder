@@ -39,6 +39,7 @@ from .native_document_open import (  # noqa: F401 - re-exported for compatibilit
     open_pdf_in_adobe,  # noqa: F401
     open_pdf_with_platform,
 )
+from .http_route_table import RouteTable
 from .import_config_store import load_import_config
 from .chunked_upload import ChunkedUploadError
 from .web_assets import (
@@ -149,10 +150,11 @@ def make_handler(
             index_runtime=runtime.index_runtime,
             data_root_admission=runtime.data_root_admission,
             document_imports=runtime.document_imports,
-            controller_get_routes=runtime.controller_get_routes,
-            controller_post_routes=runtime.controller_post_routes,
-            shell_get_routes=runtime.shell_get_routes,
-            shell_post_routes=runtime.shell_post_routes,
+            routes=RouteTable.from_maps(
+                get_maps=[runtime.controller_get_routes],
+                parameterless_get_maps=[runtime.shell_get_routes],
+                post_maps=[runtime.controller_post_routes, runtime.shell_post_routes],
+            ),
             render_html=render_html,
             package_dir=_PACKAGE_DIR,
             read_preferences=read_preferences,

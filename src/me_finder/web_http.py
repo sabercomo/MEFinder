@@ -86,10 +86,8 @@ class WebHTTPContext:
     index_runtime: Any
     data_root_admission: Any
     document_imports: Any
-    controller_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    controller_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    shell_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    shell_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
+    # http_route_table.RouteTable: the single (method, path) -> Route registry.
+    routes: Any
     render_html: Callable[..., str]
     package_dir: Path
     read_preferences: Callable[[Path], Mapping[str, object]]
@@ -112,10 +110,7 @@ def make_http_handler(context: WebHTTPContext):
     index_runtime = context.index_runtime
     data_root_admission = context.data_root_admission
     document_imports = context.document_imports
-    controller_get_routes = context.controller_get_routes
-    controller_post_routes = context.controller_post_routes
-    shell_get_routes = context.shell_get_routes
-    shell_post_routes = context.shell_post_routes
+    routes = context.routes
     render_html = context.render_html
     _PACKAGE_DIR = context.package_dir
     read_preferences = context.read_preferences
@@ -132,6 +127,7 @@ def make_http_handler(context: WebHTTPContext):
     vision_api_error = context.vision_api_error
 
     class Handler(BaseHTTPRequestHandler):
+        route_table = routes
         _POST_ROUTE_TABLE = {
             "/api/search": "_post_search",
         }
@@ -342,18 +338,13 @@ def make_http_handler(context: WebHTTPContext):
             if self._reject_untrusted_request():
                 return
             parsed = urlparse(self.path)
-            controller_route = controller_get_routes.get(parsed.path)
-            if controller_route is not None:
+            api_route = routes.get("GET", parsed.path)
+            if api_route is not None:
                 params = parse_qs(
                     parsed.query,
-                    keep_blank_values=(parsed.path == "/api/document/pages"),
+                    keep_blank_values=api_route.policy.keep_blank_query,
                 )
-                status, payload = controller_route(params)
-                self._send_json(payload, status=status)
-                return
-            shell_route = shell_get_routes.get(parsed.path)
-            if shell_route is not None:
-                status, payload = shell_route()
+                status, payload = api_route.handler(params)
                 self._send_json(payload, status=status)
                 return
             if parsed.path in {"/", "/index.html", "/reader", "/reader/", "/reader-window"}:
@@ -623,14 +614,9 @@ def make_http_handler(context: WebHTTPContext):
             if route_method is not None:
                 getattr(self, route_method)(payload)
                 return
-            controller_route = controller_post_routes.get(parsed.path)
-            if controller_route is not None:
-                status, response = controller_route(payload)
-                self._send_json(response, status=status)
-                return
-            shell_route = shell_post_routes.get(parsed.path)
-            if shell_route is not None:
-                status, response = shell_route(payload)
+            api_route = routes.get("POST", parsed.path)
+            if api_route is not None:
+                status, response = api_route.handler(payload)
                 self._send_json(response, status=status)
                 return
             if parsed.path == "/api/import-local":
