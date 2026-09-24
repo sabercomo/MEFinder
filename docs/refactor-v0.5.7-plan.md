@@ -92,6 +92,8 @@
 
 补充事实:persistence 外含 `.execute(` 的 27 个文件中有 5 个在 `application/`(`import_orchestrator`、`literature_verification_service`、`parallel_passage_service`、`script_search`、`document_heading_enrichment`),现有边界测试只禁 application import persistence,未禁直接写 SQL;A0 棘轮先冻结现状。
 
+2026-09-25(A1 实证):真实库与开发库 `foreign_key_check` 均 0 违例;`document_groups` 写入经 `open_writable_index` 已开外键,§3.1 所述不成立。统一 `busy_timeout=30000` 会改读路径等待时长,属行为变化,A2 默认保留各点现值。详见 `reports/foreign-key-audit-2026-09-25.md`。
+
 ---
 
 ## 4. 分阶段计划
