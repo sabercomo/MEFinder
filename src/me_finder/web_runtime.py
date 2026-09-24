@@ -124,7 +124,7 @@ from .pdf_parser_adapters import (
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
 )
-from .persistence import SQLiteDocumentReadRepository
+from .persistence import SQLiteDocumentHeadingStore, SQLiteDocumentReadRepository
 from .preferences import (
     read_preferences,
     resolve_preferences_path,
@@ -360,7 +360,7 @@ def build_application_runtime(
         runtime_root=root,
         document_output_dir=app_data_directory / "exports",
         prepare_document_export=DocumentHeadingEnrichment(
-            database_path=index_path,
+            store=SQLiteDocumentHeadingStore(index_path),
             runtime_root=root,
             durable_operations=durable_operations,
             index_runtime=index_runtime,

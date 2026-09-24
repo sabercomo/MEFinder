@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder import database as dbmod
+from src.me_finder.persistence import SQLiteDocumentHeadingStore
 from src.me_finder.application.document_heading_enrichment import ensure_document_headings
 from src.me_finder.document_heading import DOCUMENT_HEADING_VERSION
 
@@ -94,7 +95,7 @@ class LazyEnrichmentTests(unittest.TestCase):
         # before
         self.assertFalse(any(b.get("document_heading_level") for b in self._blocks(sid)))
         # first enrich
-        prof = ensure_document_headings(database_path=self.db, runtime_root=self.root, source_file_id=sid)
+        prof = ensure_document_headings(store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid)
         self.assertEqual(prof["version"], DOCUMENT_HEADING_VERSION)
         self.assertEqual(prof["status"], "complete")
         self.assertEqual(prof["sources"], ["mineru_v2"])
@@ -104,7 +105,7 @@ class LazyEnrichmentTests(unittest.TestCase):
         # raw text untouched
         self.assertEqual(blocks[0]["text"], "标题甲")
         # idempotent: second call does not rewrite (enriched_at stable)
-        prof2 = ensure_document_headings(database_path=self.db, runtime_root=self.root, source_file_id=sid)
+        prof2 = ensure_document_headings(store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid)
         self.assertEqual(prof["enriched_at"], prof2["enriched_at"])
 
     def test_no_pdf_no_v2_is_unavailable_and_non_fatal(self) -> None:
@@ -116,7 +117,7 @@ class LazyEnrichmentTests(unittest.TestCase):
                         "result_dir": str(self.root / "does-not-exist"),
                         "local_page_idx": 0, "pdf_page_index": 0, "mineru_type": "text"}],
         }])
-        prof = ensure_document_headings(database_path=self.db, runtime_root=self.root, source_file_id=sid)
+        prof = ensure_document_headings(store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid)
         self.assertEqual(prof["status"], "unavailable")
         self.assertFalse(any(b.get("document_heading_level") for b in self._blocks(sid)))
 
@@ -128,7 +129,7 @@ class LazyEnrichmentTests(unittest.TestCase):
             "blocks": [{"text": "甲", "bbox": [1, 1, 2, 2], "result_dir": str(rd),
                         "local_page_idx": 0, "pdf_page_index": 0, "mineru_type": "text"}],
         }])
-        first = ensure_document_headings(database_path=self.db, runtime_root=self.root, source_file_id=sid)
+        first = ensure_document_headings(store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid)
         # tamper a block to prove the skip path does not re-run/rewrite
         import sqlite3
         con = sqlite3.connect(str(self.db))
@@ -137,7 +138,7 @@ class LazyEnrichmentTests(unittest.TestCase):
         con.execute("UPDATE pdf_pages SET payload_json=? WHERE source_file_id=? AND pdf_page_index=0",
                     (json.dumps(pg, ensure_ascii=False), sid))
         con.commit(); con.close()
-        again = ensure_document_headings(database_path=self.db, runtime_root=self.root, source_file_id=sid)
+        again = ensure_document_headings(store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid)
         self.assertEqual(first["enriched_at"], again["enriched_at"])  # skipped
         self.assertEqual(self._blocks(sid)[0].get("sentinel"), "kept")  # not overwritten
 
@@ -166,7 +167,7 @@ class LazyEnrichmentTests(unittest.TestCase):
         ):
             # Must not raise UnicodeEncodeError.
             prof = ensure_document_headings(
-                database_path=self.db, runtime_root=self.root, source_file_id=sid
+                store=SQLiteDocumentHeadingStore(self.db), runtime_root=self.root, source_file_id=sid
             )
         self.assertEqual(prof["version"], DOCUMENT_HEADING_VERSION)
         # Stored payload round-trips as valid UTF-8 with no surrogates left.

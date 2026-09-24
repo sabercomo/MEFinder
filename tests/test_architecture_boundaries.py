@@ -12,7 +12,6 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
 # 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE = {
-    "application/document_heading_enrichment.py": 1,
     "data_location.py": 3,
     "database.py": 7,
 }
@@ -21,7 +20,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "alignment_body_range.py",
     "alignment_overrides.py",
     "alignment_snapshots.py",
-    "application/document_heading_enrichment.py",
     "application/import_orchestrator.py",
     "application/literature_verification_service.py",
     "application/parallel_passage_service.py",
@@ -248,9 +246,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         for path in sorted((PACKAGE / "application").glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.ImportFrom)
-                    and (node.module or "").endswith("persistence")
+                # 连 persistence 子模块(如 persistence.connection)也不许直接
+                # import:SQL 适配器一律由组合根(web_runtime)注入。
+                if isinstance(node, ast.ImportFrom) and (
+                    (node.module or "").endswith("persistence")
+                    or (node.module or "").split(".")[0] == "persistence"
                 ):
                     violations.append(path.name)
         self.assertEqual(violations, [])
