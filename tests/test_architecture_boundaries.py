@@ -11,10 +11,8 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 棘轮基线(2026-09-25,v0.5.7 重构 A0):persistence 之外的 SQLite 散落点。
 # 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
 # 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
-SQLITE_CONNECT_OUTSIDE_PERSISTENCE = {
-    "data_location.py": 3,
-    "database.py": 7,
-}
+# 2026-09-25 A2 完成:connect 已清零,连接一律走 persistence/connection.py。
+SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 
 SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "alignment_body_range.py",

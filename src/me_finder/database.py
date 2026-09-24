@@ -24,7 +24,12 @@ from typing import (
     Sequence,
 )
 
-from .persistence.connection import open_readonly_index
+from .persistence.connection import (
+    PROJECT_BUSY_TIMEOUT_MS,
+    connect_index,
+    open_build_target,
+    open_readonly_index,
+)
 from .persistence.paragraph_payload import (
     PARAGRAPH_PAYLOAD_OMITTED_FIELDS as PARAGRAPH_PAYLOAD_OMITTED_FIELDS,
     PARAGRAPH_SELECT_COLUMNS as PARAGRAPH_SELECT_COLUMNS,
@@ -190,9 +195,10 @@ def ensure_database_search_index(db_path: Path) -> bool:
 
     db_path = Path(db_path)
     with _FTS_INSTALL_LOCK:
-        connection = sqlite3.connect(str(db_path))
+        connection = connect_index(
+            db_path, row_factory=None, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS
+        )
         try:
-            connection.execute("PRAGMA busy_timeout = 30000")
             fts_ready = database_has_fts5_search_index(connection)
             sparse_payload = _database_uses_sparse_paragraph_payload(connection)
             user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -215,9 +221,13 @@ def ensure_database_search_index(db_path: Path) -> bool:
         if fts_ready:
             return True
 
-        connection = sqlite3.connect(str(db_path))
+        connection = connect_index(
+            db_path,
+            write=True,
+            row_factory=None,
+            busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS,
+        )
         try:
-            connection.execute("PRAGMA busy_timeout = 30000")
             connection.execute("BEGIN IMMEDIATE")
             installed = _install_fts5_search_index(connection, rebuild=True)
             if installed:
@@ -255,7 +265,7 @@ def optimize_database_storage(db_path: Path) -> bool:
         f".{db_path.name}.optimize-{os.getpid()}-{threading.get_ident()}.tmp"
     )
     temp_path.unlink(missing_ok=True)
-    connection = sqlite3.connect(str(temp_path))
+    connection = open_build_target(temp_path)
     try:
         connection.executescript(SCHEMA)
         connection.execute("ATTACH DATABASE ? AS legacy", (str(db_path),))
@@ -708,7 +718,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     )
     if temp_path.exists():
         temp_path.unlink()
-    connection = sqlite3.connect(str(temp_path))
+    connection = open_build_target(temp_path)
     fts_installed = False
     try:
         connection.executescript(SCHEMA)
@@ -953,7 +963,7 @@ def _load_payload_rows(connection: sqlite3.Connection, table: str, order_by: str
 def load_database_index(db_path: Path) -> Dict[str, object]:
     """Load the small metadata/catalog portion used by the Web UI."""
 
-    connection = sqlite3.connect(str(db_path))
+    connection = connect_index(db_path, row_factory=None)
     try:
         metadata = {str(row[0]): json.loads(row[1]) for row in connection.execute("SELECT key, value_json FROM metadata")}
         result = {
@@ -983,9 +993,8 @@ def replace_source_in_database(
     source_id = str(source["source_file_id"])
     db_path = Path(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
-    connection = sqlite3.connect(str(db_path))
+    connection = connect_index(db_path, write=True, row_factory=None)
     try:
-        connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         old_volume_ids = [
             str(row[0])
@@ -1245,10 +1254,9 @@ def delete_sources_from_database(
         raise ValueError("source_file_id is required")
     db_path = Path(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
-    connection = sqlite3.connect(str(db_path))
+    connection = connect_index(db_path, write=True, row_factory=None)
     deleted: Dict[str, Dict[str, int]] = {}
     try:
-        connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("BEGIN IMMEDIATE")
         for source_file_id in ids:
             deleted[source_file_id] = _delete_one_source(connection, source_file_id)

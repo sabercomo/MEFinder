@@ -11,7 +11,8 @@ the lock and integrity policy lives in one place:
   tuples pass ``row_factory=None``.
 
 Bulk builders that write into a fresh temporary file (``build_database``,
-storage optimisation) and file-level backups keep their own connections.
+storage optimisation) use ``open_build_target``; file-level copies use
+``backup_readonly_into``.  Both are deliberately outside the live-index policy.
 """
 
 from __future__ import annotations
@@ -146,6 +147,37 @@ def open_writable_index(db_path: Path) -> sqlite3.Connection:
     """Open a transactional index connection with the project lock policy."""
 
     return connect_index(db_path, write=True, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS)
+
+
+def open_build_target(db_path: Path | str) -> sqlite3.Connection:
+    """Open a plain connection for bulk-building a fresh temporary database.
+
+    Deliberately policy-free (tuple rows, default timeout, ``foreign_keys``
+    off): builders such as ``build_database`` and storage optimisation insert
+    whole tables in an order that is not foreign-key safe, then publish the
+    finished file by atomic replace.  Never use this on the live index.
+    """
+
+    return sqlite3.connect(str(db_path))
+
+
+def backup_readonly_into(source: Path | str, destination: Path | str) -> str:
+    """Copy ``source`` (opened ``mode=ro``) into ``destination`` online.
+
+    Returns the destination's ``PRAGMA integrity_check`` result (``"ok"`` when
+    healthy) so the caller decides how to report a failed copy.
+    """
+
+    Path(destination).parent.mkdir(parents=True, exist_ok=True)
+    source_connection = connect_index(source, row_factory=None, readonly_uri=True)
+    destination_connection = sqlite3.connect(str(destination))
+    try:
+        source_connection.backup(destination_connection)
+        row = destination_connection.execute("PRAGMA integrity_check").fetchone()
+        return str(row[0]) if row else ""
+    finally:
+        destination_connection.close()
+        source_connection.close()
 
 
 def table_exists(connection: sqlite3.Connection, name: str) -> bool:

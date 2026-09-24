@@ -7,7 +7,9 @@ from pathlib import Path
 
 from src.me_finder.persistence.connection import (
     PROJECT_BUSY_TIMEOUT_MS,
+    backup_readonly_into,
     connect_index,
+    open_build_target,
     open_read,
     open_readonly_index,
     open_readonly_snapshot,
@@ -96,6 +98,22 @@ class PersistenceConnectionPolicyTests(unittest.TestCase):
             self.assertEqual(_pragma(connection, "busy_timeout"), 30000)
         finally:
             connection.close()
+
+    def test_build_target_stays_policy_free(self) -> None:
+        connection = open_build_target(Path(self._tmp.name) / "build.tmp")
+        try:
+            self.assertEqual(_pragma(connection, "foreign_keys"), 0)
+            self.assertIsNone(connection.row_factory)
+        finally:
+            connection.close()
+
+    def test_backup_readonly_into_copies_and_reports_integrity(self) -> None:
+        destination = Path(self._tmp.name) / "copy" / "index.sqlite3"
+        self.assertEqual(backup_readonly_into(self.db, destination), "ok")
+        with open_read(destination) as connection:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM child").fetchone()[0], 1
+            )
 
     def test_table_exists(self) -> None:
         with open_read(self.db) as connection:

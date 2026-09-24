@@ -106,6 +106,7 @@ def inspect_existing_data_root(selected_folder: str | Path) -> dict[str, object]
     """Validate an existing library read-only without importing or copying files."""
     # Keep path discovery lightweight for the MCP service; load SQLite only on inspection.
     import sqlite3
+    from .persistence.connection import connect_index
     from .persistence.index_schema import DATABASE_SCHEMA_VERSION
 
     target = Path(selected_folder).expanduser()
@@ -116,7 +117,7 @@ def inspect_existing_data_root(selected_folder: str | Path) -> dict[str, object]
     if not database.is_file():
         raise DataLocationError("这里没有已有资料库。请选择包含 runtime/data/index.sqlite3 的文件夹，并确认云盘文件已下载到本机。")
     try:
-        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as connection:
+        with closing(connect_index(database, row_factory=None, readonly_uri=True)) as connection:
             if connection.execute("PRAGMA user_version").fetchone()[0] > DATABASE_SCHEMA_VERSION:
                 raise DataLocationError("资料库来自更新版本的 MEFinder，请先升级应用。")
             tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -172,19 +173,10 @@ def _validate_migration_paths(current_root: Path, target_root: Path) -> None:
 
 
 def _copy_sqlite_database(source: Path, destination: Path) -> None:
-    import sqlite3
+    from .persistence.connection import backup_readonly_into
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    source_connection = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
-    destination_connection = sqlite3.connect(destination)
-    try:
-        source_connection.backup(destination_connection)
-        integrity = destination_connection.execute("PRAGMA integrity_check").fetchone()
-        if not integrity or str(integrity[0]).lower() != "ok":
-            raise DataLocationError("迁移后的索引数据库校验失败。")
-    finally:
-        destination_connection.close()
-        source_connection.close()
+    if backup_readonly_into(source, destination).lower() != "ok":
+        raise DataLocationError("迁移后的索引数据库校验失败。")
 
 
 def _write_root_marker(marker: Path, target_root: Path) -> None:
