@@ -76,6 +76,12 @@
 - `overview()` 的 `unsynced_count` 不再把「失败 / 待补提交」的条目算作已同步，分类栏会显示「待同步 N 篇」。
 - 测试：`test_submission_is_throttled_to_the_import_queue_capacity`、`test_collection_with_deferred_attachments_is_not_labelled_synced`、`test_queue_failed_attachment_is_reimported_and_labelled_apart`、`test_free_slots_reports_how_much_work_submit_accepts`；`test_failed_parse_with_resumable_job_is_not_reimported` 守住真解析失败不自动重导。
 
+**2026-09-25 补充（复核上述修复）**：上述修复里「排队已满，稍后自动重试」并不成立——被挡下的行只在下一次同步时补（启动档要等下次启动，手动档永远不补），而已落成 `queue_failed` 的行只在手动同步时重导，且重导会新建任务，导入页留下一条重复的失败任务。真实库此刻仍有 14 条 `queue_failed`（另 1 条是 OneDrive 占用 `import_jobs/*.json` 改名触发的 `WinError 5`，属真失败，不在此列）。补修：
+
+- 新增 `resume_job` 端口（接 `import_orchestrator.resume_import_job`，即导入页「继续导入」）。`queue_failed` 的任务由调度器每个 tick 按队列剩余容量**续跑原任务**，不新建任务、不需 Zotero 在线、不触发整趟同步；同步开始前也先续跑一次。有续跑端口时 `_apply` 不再重导这类任务。
+- 节流留下的行（`pending` 且无 `import_job_id`）由调度器在队列有空位、且距上次同步 ≥ 5 分钟时补跑一趟 `backfill` 同步（任何频率档都跑，它是被截断的那趟同步的延续）；`backfill` 不重试真解析失败。
+- 测试：`test_queue_rejected_job_is_resumed_in_place_once_the_queue_has_room`、`test_backfill_is_due_only_for_throttled_attachments_with_room`；原 `test_queue_failed_attachment_is_reimported_and_labelled_apart` 改为守住「无续跑端口时的重导兜底」。
+
 **与上一节 09-25 真机记录的关系**：那次「49 篇在导入队列里解析完成」写的是开发库副本，且未统计单批提交是否被拒；本节是真实库单趟同步的实测，两者不冲突——副本环境槽位释放更快，掩盖了溢出。
 
 ## 未做 / 后续

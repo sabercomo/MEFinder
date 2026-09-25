@@ -39,6 +39,9 @@ ATTACHMENT_FORMATS = {"application/pdf": "pdf", "application/epub+zip": "epub"}
 FILE_LINK_MODES = frozenset({"imported_file", "imported_url", "linked_file"})
 FREQUENCIES = ("manual", "launch", "interval")
 INTERVAL_SECONDS = 30 * 60
+# Attachments the queue could not take are pushed again by the scheduler once
+# it has room, at most this often, even when the user syncs by hand.
+BACKFILL_SECONDS = 5 * 60
 IMPORT_BATCH = 50
 QUEUE_FULL_TEXT = "排队已满，稍后自动重试"
 _ITEM_FIELDS = (
@@ -506,6 +509,9 @@ class ZoteroSyncPorts:
     # How many imports the in-process queue would take right now; ``None``
     # means the capacity is unknown and every attachment is submitted at once.
     import_capacity: Callable[[], Optional[int]] = lambda: None
+    # Re-enters an existing import job into the queue ("继续导入"); ``None``
+    # means queue rejections are re-imported by the next sync instead.
+    resume_job: Optional[Callable[[str], object]] = None
 
 
 ClientFactory = Callable[[Optional[str]], ZoteroLocalClient]
@@ -698,6 +704,7 @@ class ZoteroSyncService:
                 self._finish("idle", "Zotero 同步未开启")
                 return self.status()
             self._resolve_pending(self._store.read())
+            self._resume_queue_rejected(self._store.read())
             stored = self._store.read()
             # The probe pins the client to the current Zotero-Server-ID, so a
             # database switch in the middle of this run fails with 412.
@@ -803,7 +810,10 @@ class ZoteroSyncService:
                 # quota worth resuming from the import page. A job rejected at
                 # the queue parsed nothing, so there is nothing to preserve and
                 # skipping it would strand the row on "没有变化".
-                if job is not None and str(job.get("failure_stage") or "") != "queue":
+                if job is not None and (
+                    str(job.get("failure_stage") or "") != "queue"
+                    or self._ports.resume_job is not None
+                ):
                     continue
             row: Dict[str, object] = {**previous}
             for name in ("attachment_key", "parent_item_key", "attachment_version", "link_mode", "content_type", "file_name", "file_signature"):
@@ -996,6 +1006,55 @@ class ZoteroSyncService:
         finally:
             self._run_lock.release()
 
+    def resume_queue_rejected(self) -> int:
+        """Put jobs the import queue turned away back in line; safe to call any time."""
+
+        if not self._run_lock.acquire(blocking=False):
+            return 0
+        try:
+            return self._resume_queue_rejected(self._store.read())
+        finally:
+            self._run_lock.release()
+
+    def _resume_queue_rejected(self, stored: StoredZoteroState) -> int:
+        # Resuming keeps the job, its copied file and any finished pages, so
+        # it needs neither Zotero nor a full sync, and never duplicates a job.
+        if self._ports.resume_job is None:
+            return 0
+        updated: List[Dict[str, object]] = []
+        for row in stored.attachments.values():
+            job_id = str(row.get("import_job_id") or "")
+            if row.get("status") not in {"pending", "failed"} or not job_id:
+                continue
+            job = self._ports.job_status(job_id) or {}
+            if job.get("status") not in _JOB_FAILED or str(job.get("failure_stage") or "") != "queue":
+                continue
+            room = self._ports.import_capacity()
+            if room is not None and room < 1:
+                break
+            try:
+                self._ports.resume_job(job_id)
+            except Exception:  # noqa: BLE001 - still rejected; the next tick tries again
+                logging.info("zotero import %s still waiting for the queue", job_id)
+                break
+            updated.append({**row, "status": "pending", "status_message": None})
+        if updated:
+            self._store.write(attachments=updated)
+        return len(updated)
+
+    def _backfill_due(self) -> bool:
+        """Whether a sync left attachments outside a queue that now has room."""
+
+        if self._clock() - self._last_run_started < BACKFILL_SECONDS:
+            return False
+        if not any(
+            row.get("status") == "pending" and not row.get("import_job_id")
+            for row in self._store.read().attachments.values()
+        ):
+            return False
+        room = self._ports.import_capacity()
+        return room is None or room >= 1
+
     def _resolve_pending(self, stored: StoredZoteroState) -> int:
         waiting = {key: row for key, row in stored.attachments.items() if row.get("status") in {"pending", "failed"}}
         if not waiting:
@@ -1072,7 +1131,11 @@ class ZoteroSyncService:
                         continue
                     if frequency == "interval" and self._clock() - self._last_run_started >= INTERVAL_SECONDS:
                         self._run_guarded("interval")
+                    elif self._backfill_due():
+                        # Finishes a run the queue cut short; failures stay put.
+                        self._run_guarded("backfill")
                     else:
+                        self.resume_queue_rejected()
                         self.resolve_pending()
                 except Exception:  # noqa: BLE001 - the loop must survive
                     logging.exception("zotero scheduler tick failed")

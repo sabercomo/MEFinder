@@ -46,6 +46,7 @@ class FakeLibrary:
         self.metadata: List[tuple] = []
         self.pending_files: Dict[str, Path] = {}
         self.capacity = None
+        self.resumed: List[str] = []
         self._counter = 0
 
     def add_source(self, path: Path, *, metadata_source: str = "manual") -> str:
@@ -65,6 +66,16 @@ class FakeLibrary:
             self.pending_files[job_id] = Path(path)
             jobs.append({"path": str(path), "job_id": job_id, "source_file_id": "x"})
         return {"ok": True, "jobs": jobs, "errors": []}
+
+    def resume_job(self, job_id):
+        if self.capacity is not None:
+            if self.capacity < 1:
+                raise RuntimeError("导入任务暂时无法进入处理队列")
+            self.capacity -= 1
+        self.resumed.append(job_id)
+        self.jobs[job_id].update(status="processing", phase="parsing", failure_stage=None)
+        self.pending_files[job_id] = self.imported[int(job_id.split("-")[1]) - 1]
+        return self.jobs[job_id]
 
     def finish_jobs(self) -> None:
         for job_id, path in list(self.pending_files.items()):
@@ -103,7 +114,7 @@ class ZoteroSyncTestCase(unittest.TestCase):
         self.fake.stop()
         self.temp.cleanup()
 
-    def _service(self) -> ZoteroSyncService:
+    def _service(self, *, resumable: bool = True) -> ZoteroSyncService:
         return ZoteroSyncService(
             self.store,
             ZoteroSyncPorts(
@@ -115,6 +126,7 @@ class ZoteroSyncTestCase(unittest.TestCase):
                 apply_metadata=self.library.apply_metadata,
                 hash_file=_sha,
                 import_capacity=lambda: self.library.capacity,
+                resume_job=self.library.resume_job if resumable else None,
             ),
             client_factory=lambda server_id: ZoteroLocalClient(self.base_url, timeout=3, server_id=server_id),
         )
@@ -529,9 +541,75 @@ class SyncFlowTests(ZoteroSyncTestCase):
         big = next(row for row in self.service.overview()["collections"] if row["key"] == "BIG")
         self.assertEqual(big["unsynced_count"], 0)
 
-    def test_queue_failed_attachment_is_reimported_and_labelled_apart(self) -> None:
-        """从没进过队列的任务没有解析进度可保留，手动同步必须重导并说清是排队问题。"""
+    def reject_at_queue(self, key: str) -> str:
+        job_id = self.rows()[key]["import_job_id"]
+        self.library.jobs[job_id].update(
+            status="failed",
+            phase="queue_failed",
+            failure_stage="queue",
+            message="导入任务暂时无法进入处理队列。",
+        )
+        del self.library.pending_files[job_id]
+        self.service.resolve_pending()
+        self.assertEqual(self.rows()[key]["status"], "failed")
+        return job_id
 
+    def test_queue_rejected_job_is_resumed_in_place_once_the_queue_has_room(self) -> None:
+        """排队被拒的任务由后台续跑原任务（导入页不留重复失败项），真解析失败不动。"""
+
+        self.basic_library()
+        self.select("CAP")
+        self.service.run_sync()
+        queued = self.reject_at_queue("ATT1")
+        parse_failed = self.rows()["ATT2"]["import_job_id"]
+        self.library.jobs[parse_failed].update(status="failed", failure_stage="parse", message="MinerU 解析失败")
+        del self.library.pending_files[parse_failed]
+        self.service.resolve_pending()
+        imported = len(self.library.imported)
+
+        self.library.capacity = 0
+        self.assertEqual(self.service.resume_queue_rejected(), 0)
+        self.assertEqual(self.rows()["ATT1"]["status"], "failed")
+
+        self.library.capacity = 5
+        self.assertEqual(self.service.resume_queue_rejected(), 1)
+        self.assertEqual(self.library.resumed, [queued])
+        self.assertEqual(self.rows()["ATT1"]["status"], "pending")
+        self.assertEqual(self.rows()["ATT2"]["status"], "failed")
+
+        # Even a manual sync does not import the resumed file a second time.
+        self.service.run_sync("manual")
+        self.assertEqual(len(self.library.imported), imported)
+        self.library.finish_jobs()
+        self.service.resolve_pending()
+        self.assertEqual(self.rows()["ATT1"]["status"], "linked")
+
+    def test_backfill_is_due_only_for_throttled_attachments_with_room(self) -> None:
+        """节流留下的条目在队列腾位后由调度器补交，手动同步档也不会永远停在"排队已满"。"""
+
+        now = [1000.0]
+        self.service = ZoteroSyncService(
+            self.store, self.service._ports, client_factory=self.service._client_factory, clock=lambda: now[0]
+        )
+        self.four_pdf_collection()
+        self.library.capacity = 2
+        self.service.run_sync()
+        self.assertFalse(self.service._backfill_due())  # just ran
+        now[0] += 10 * 60
+        self.library.capacity = 0
+        self.assertFalse(self.service._backfill_due())  # still no room
+        self.library.capacity = 3
+        self.assertTrue(self.service._backfill_due())
+        self.service.run_sync("backfill")
+        self.assertEqual(len(self.library.imported), 4)
+        now[0] += 10 * 60
+        self.assertFalse(self.service._backfill_due())  # nothing left behind
+
+    def test_queue_failed_attachment_is_reimported_and_labelled_apart(self) -> None:
+        """没有续跑端口时，排队被拒的任务由手动同步重导，并说清是排队问题。"""
+
+        self.service.stop()
+        self.service = self._service(resumable=False)
         self.basic_library()
         self.select("HEGEL")
         self.service.run_sync()
