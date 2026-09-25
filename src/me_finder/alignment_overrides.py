@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Dict, Mapping, Sequence
 
 from .persistence.alignment_store import (
+    alignment_read_connection,
     confirm_pending_override,
     insert_pending_override,
     load_override,
-    override_read_connection,
     override_write_transaction,
     read_override_rows,
     revoke_expired_override,
@@ -64,7 +64,7 @@ def resolve_override_context(
     target_ids = [str(value) for value in target_segment_ids]
     if not source_ids or (not target_ids and not allow_empty_target):
         raise InvalidAlignmentRequest("源和目标 Segment 都不能为空。")
-    with override_read_connection(db_path) as connection:
+    with alignment_read_connection(db_path) as connection:
         _source_row(connection, source_id)
         _source_row(connection, target_id)
         route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)

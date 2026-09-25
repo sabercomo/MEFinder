@@ -21,8 +21,16 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_regions import alignment_body_bounds
 from .page_display import build_page_display
-from .persistence.connection import connect_index, open_writable_index
-from .persistence.schema_installers import install_text_alignment_schema
+from .persistence.alignment_store import (
+    alignment_read_connection,
+    body_range_write_transaction,
+    first_segment_on_pdf_page,
+    paragraph_anchor_rows,
+    pdf_anchor_rows,
+    read_segment_window,
+    segment_count,
+    segment_set_owner,
+)
 from .semantic_alignment import _document_heading_positions
 from .text_alignment import (
     InvalidAlignmentRequest,
@@ -81,23 +89,10 @@ def _pdf_page_anchors(
 ) -> Dict[str, Dict[str, object]]:
     if not segment_ids:
         return {}
-    placeholders = ",".join("?" for _ in segment_ids)
-    pages: Dict[str, int] = {
-        str(row["segment_id"]): int(row["page_index"])
-        for row in connection.execute(
-            "SELECT segment_id, MIN(pdf_page_index) AS page_index "
-            f"FROM text_segment_spans WHERE source_file_id = ? AND segment_id IN ({placeholders}) "
-            "GROUP BY segment_id",
-            (source_id, *segment_ids),
-        )
-    }
+    pages, page_rows = pdf_anchor_rows(connection, source_id, segment_ids)
     anchors: Dict[int, Dict[str, object]] = {}
     for page_index in sorted(set(pages.values())):
-        row = connection.execute(
-            "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? "
-            "AND pdf_page_index = ? ORDER BY row_id LIMIT 1",
-            (source_id, page_index),
-        ).fetchone()
+        row = page_rows[page_index]
         fields = _json_object(row["payload_json"]) if row is not None else {}
         fields.update({"source_type": "pdf", "pdf_page_index": page_index})
         display = build_page_display(fields)
@@ -118,23 +113,10 @@ def _paragraph_anchors(
 ) -> Dict[str, Dict[str, object]]:
     if not segment_ids:
         return {}
-    placeholders = ",".join("?" for _ in segment_ids)
-    positions: Dict[str, int] = {
-        str(row["segment_id"]): int(row["paragraph_index"])
-        for row in connection.execute(
-            "SELECT segment_id, MIN(paragraph_index) AS paragraph_index "
-            "FROM text_segment_paragraph_spans WHERE source_file_id = ? "
-            f"AND segment_id IN ({placeholders}) GROUP BY segment_id",
-            (source_id, *segment_ids),
-        )
-    }
+    positions, paragraph_rows = paragraph_anchor_rows(connection, source_id, segment_ids)
     anchors: Dict[int, Dict[str, object]] = {}
     for paragraph_index in sorted(set(positions.values())):
-        row = connection.execute(
-            "SELECT page_display, page_source_type, payload_json FROM paragraphs "
-            "WHERE source_file_id = ? AND paragraph_index = ? ORDER BY rowid LIMIT 1",
-            (source_id, paragraph_index),
-        ).fetchone()
+        row = paragraph_rows[paragraph_index]
         fields = _json_object(row["payload_json"]) if row is not None else {}
         if row is not None:
             fields.update(
@@ -234,10 +216,7 @@ def read_pair_body_ranges(
     target_id = _validate_source_id(target_source_file_id)
     transaction_window = write_window or nullcontext
     with transaction_window():
-        connection = open_writable_index(Path(db_path))
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            install_text_alignment_schema(connection)
+        with body_range_write_transaction(db_path) as connection:
             _require_pair(connection, group_id, pivot_id, target_id)
             sides: List[Dict[str, object]] = []
             prepared = []
@@ -284,12 +263,6 @@ def read_pair_body_ranges(
                         ),
                     }
                 )
-            connection.commit()
-        except (OSError, sqlite3.Error, RuntimeError, ValueError):
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
     return {
         "document_group_id": group_id,
         "range_source": "reviewed" if reviewed is not None else "detected",
@@ -322,42 +295,24 @@ def read_body_range_segments(
         None if pdf_page is None
         else _validate_nonnegative_integer("pdf_page", pdf_page)
     )
-    connection = connect_index(str(Path(db_path)))
-    try:
-        owner = connection.execute(
-            "SELECT source_file_id FROM segment_sets WHERE segment_set_id = ?",
-            (set_id,),
-        ).fetchone()
-        if owner is None or str(owner["source_file_id"]) != source_id:
+    with alignment_read_connection(db_path) as connection:
+        if segment_set_owner(connection, set_id) != source_id:
             raise InvalidAlignmentRequest("Segment 集与文献不匹配，请重新打开正文范围")
         source_kind = _source_kind(_source_row(connection, source_id))
-        total = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM text_segments WHERE segment_set_id = ?",
-                (set_id,),
-            ).fetchone()[0]
-        )
+        total = segment_count(connection, set_id)
         if total == 0:
             raise InvalidAlignmentRequest("文献没有可用于对齐的 Segment。")
         if page_number is not None:
             if source_kind != "pdf":
                 raise InvalidAlignmentRequest("只有 PDF 文献可以按页跳转")
-            located = connection.execute(
-                "SELECT MIN(s.order_index) AS order_index FROM text_segment_spans p "
-                "JOIN text_segments s ON s.segment_id = p.segment_id "
-                "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
-                "AND p.pdf_page_index = ?",
-                (set_id, source_id, max(page_number - 1, 0)),
-            ).fetchone()
-            if located is None or located["order_index"] is None:
+            located = first_segment_on_pdf_page(
+                connection, set_id, source_id, max(page_number - 1, 0)
+            )
+            if located is None:
                 raise InvalidAlignmentRequest("这一页没有可选文本，请换一页")
-            requested_start = int(located["order_index"])
+            requested_start = located
         offset = max(0, min(requested_start, total - 1))
-        rows = connection.execute(
-            "SELECT segment_id, order_index, text_raw FROM text_segments "
-            "WHERE segment_set_id = ? AND order_index >= ? ORDER BY order_index LIMIT ?",
-            (set_id, offset, window),
-        ).fetchall()
+        rows = read_segment_window(connection, set_id, offset, window)
         anchors = _anchors(
             connection,
             source_id,
@@ -373,8 +328,6 @@ def read_body_range_segments(
             )
             for row in rows
         ]
-    finally:
-        connection.close()
     return {
         "source_file_id": source_id,
         "segment_set_id": set_id,

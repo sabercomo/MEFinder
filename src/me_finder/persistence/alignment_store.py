@@ -11,15 +11,15 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from .connection import connect_index, open_writable_index, table_exists
 from .schema_installers import install_text_alignment_schema
 
 
 @contextmanager
-def override_read_connection(db_path: Path) -> Iterator[sqlite3.Connection]:
-    """Keep one read connection open during route and segment validation."""
+def alignment_read_connection(db_path: Path) -> Iterator[sqlite3.Connection]:
+    """Keep one read connection open during alignment validation and display."""
 
     connection = connect_index(str(db_path))
     try:
@@ -246,3 +246,120 @@ def alignment_recipe_replace_transaction(db_path: Path) -> Iterator[sqlite3.Conn
         raise
     finally:
         connection.close()
+
+
+@contextmanager
+def body_range_write_transaction(db_path: Path) -> Iterator[sqlite3.Connection]:
+    """Publish segment sets created while reviewing both books in one transaction."""
+
+    connection = open_writable_index(Path(db_path))
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        install_text_alignment_schema(connection)
+        yield connection
+        connection.commit()
+    except (OSError, sqlite3.Error, RuntimeError, ValueError):
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def pdf_anchor_rows(
+    connection: sqlite3.Connection, source_id: str, segment_ids: Sequence[str]
+) -> tuple[dict[str, int], dict[int, sqlite3.Row | None]]:
+    """Return segment-to-physical-page links and their stored page payloads."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    pages = {
+        str(row["segment_id"]): int(row["page_index"])
+        for row in connection.execute(
+            "SELECT segment_id, MIN(pdf_page_index) AS page_index "
+            f"FROM text_segment_spans WHERE source_file_id = ? AND segment_id IN ({placeholders}) "
+            "GROUP BY segment_id",
+            (source_id, *segment_ids),
+        )
+    }
+    page_rows = {
+        page_index: connection.execute(
+            "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? "
+            "AND pdf_page_index = ? ORDER BY row_id LIMIT 1",
+            (source_id, page_index),
+        ).fetchone()
+        for page_index in sorted(set(pages.values()))
+    }
+    return pages, page_rows
+
+
+def paragraph_anchor_rows(
+    connection: sqlite3.Connection, source_id: str, segment_ids: Sequence[str]
+) -> tuple[dict[str, int], dict[int, sqlite3.Row | None]]:
+    """Return segment-to-paragraph links and their stored publisher-page fields."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    positions = {
+        str(row["segment_id"]): int(row["paragraph_index"])
+        for row in connection.execute(
+            "SELECT segment_id, MIN(paragraph_index) AS paragraph_index "
+            "FROM text_segment_paragraph_spans WHERE source_file_id = ? "
+            f"AND segment_id IN ({placeholders}) GROUP BY segment_id",
+            (source_id, *segment_ids),
+        )
+    }
+    paragraph_rows = {
+        paragraph_index: connection.execute(
+            "SELECT page_display, page_source_type, payload_json FROM paragraphs "
+            "WHERE source_file_id = ? AND paragraph_index = ? ORDER BY rowid LIMIT 1",
+            (source_id, paragraph_index),
+        ).fetchone()
+        for paragraph_index in sorted(set(positions.values()))
+    }
+    return positions, paragraph_rows
+
+
+def segment_set_owner(connection: sqlite3.Connection, segment_set_id: str) -> str | None:
+    """Return the SourceFile owning one segment set."""
+
+    row = connection.execute(
+        "SELECT source_file_id FROM segment_sets WHERE segment_set_id = ?",
+        (segment_set_id,),
+    ).fetchone()
+    return str(row["source_file_id"]) if row is not None else None
+
+
+def segment_count(connection: sqlite3.Connection, segment_set_id: str) -> int:
+    """Count segments in an indexed set."""
+
+    return int(
+        connection.execute(
+            "SELECT COUNT(*) FROM text_segments WHERE segment_set_id = ?",
+            (segment_set_id,),
+        ).fetchone()[0]
+    )
+
+
+def first_segment_on_pdf_page(
+    connection: sqlite3.Connection, segment_set_id: str, source_id: str, page_index: int
+) -> int | None:
+    """Find the first indexed segment on one physical PDF page."""
+
+    row = connection.execute(
+        "SELECT MIN(s.order_index) AS order_index FROM text_segment_spans p "
+        "JOIN text_segments s ON s.segment_id = p.segment_id "
+        "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
+        "AND p.pdf_page_index = ?",
+        (segment_set_id, source_id, page_index),
+    ).fetchone()
+    return int(row["order_index"]) if row is not None and row["order_index"] is not None else None
+
+
+def read_segment_window(
+    connection: sqlite3.Connection, segment_set_id: str, offset: int, limit: int
+) -> list[sqlite3.Row]:
+    """Read one ordered window of already-indexed segments."""
+
+    return connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? AND order_index >= ? ORDER BY order_index LIMIT ?",
+        (segment_set_id, offset, limit),
+    ).fetchall()
