@@ -189,3 +189,60 @@ def read_override_rows(
         ).fetchall()
     finally:
         connection.close()
+
+
+def read_alignment_recipe_rows(db_path: Path) -> list[sqlite3.Row]:
+    """Read completed recipe rows from an existing index."""
+
+    connection = connect_index(str(db_path))
+    try:
+        if not table_exists(connection, "alignment_runs"):
+            return []
+        return connection.execute(
+            "SELECT document_group_id, pivot_source_file_id, "
+            "target_source_file_id, algorithm, algorithm_version, "
+            "parameters_json "
+            "FROM alignment_runs WHERE status = 'completed' "
+            "ORDER BY document_group_id, pivot_source_file_id, target_source_file_id"
+        ).fetchall()
+    finally:
+        connection.close()
+
+
+def alignment_database_file(connection: sqlite3.Connection) -> str:
+    """Return the attached main index file for its model-cache location."""
+
+    return str(connection.execute("PRAGMA database_list").fetchone()[2])
+
+
+def recipe_sources_and_group_exist(
+    connection: sqlite3.Connection, group_id: str, pivot_id: str, target_id: str
+) -> bool:
+    """Check whether both source files and their group survived a rebuild."""
+
+    present = connection.execute(
+        "SELECT COUNT(*) FROM source_files WHERE source_file_id IN (?, ?)",
+        (pivot_id, target_id),
+    ).fetchone()[0]
+    group_present = connection.execute(
+        "SELECT 1 FROM document_groups WHERE document_group_id = ?", (group_id,)
+    ).fetchone()
+    return present == 2 and group_present is not None
+
+
+@contextmanager
+def alignment_recipe_replace_transaction(db_path: Path) -> Iterator[sqlite3.Connection]:
+    """Replace recipes in one immediate transaction, including regeneration."""
+
+    connection = open_writable_index(Path(db_path))
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        install_text_alignment_schema(connection)
+        connection.execute("DELETE FROM alignment_runs")
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

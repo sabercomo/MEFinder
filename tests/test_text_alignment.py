@@ -1123,6 +1123,17 @@ class TextAlignmentTests(unittest.TestCase):
         restored = read_alignment_recipe_snapshot(self.db)["alignment_pairs"]
         self.assertEqual(restored[0]["algorithm_version"], "22")
 
+    def test_recipe_replacement_failure_preserves_existing_run(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
+        snapshot = read_alignment_recipe_snapshot(self.db)
+        with mock.patch(
+            "src.me_finder.alignment_snapshots._generate_alignment_on_connection",
+            side_effect=RuntimeError("generation failed"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "generation failed"):
+                replace_alignment_recipe_snapshot(snapshot, self.db)
+        self.assertEqual(read_alignment_recipe_snapshot(self.db), snapshot)
+
     def test_version16_recipe_is_restored_using_current_algorithm(self) -> None:
         generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         with closing(sqlite3.connect(str(self.db))) as connection:

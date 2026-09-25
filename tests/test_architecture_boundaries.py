@@ -16,7 +16,6 @@ SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 
 SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "alignment_body_range.py",
-    "alignment_snapshots.py",
     "application/import_orchestrator.py",
     "application/literature_verification_service.py",
     "application/parallel_passage_service.py",
