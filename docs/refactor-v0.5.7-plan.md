@@ -1,10 +1,10 @@
-# MEFinder 前后端架构重构计划(草案)
+# MEFinder 前后端架构重构计划
 
-2026-09-25:待审批方案,尚未实施。版本号 v0.5.7 为暂定,以实际发版为准。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状;下一实施步骤为 C1 的作品组仓储迁移。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
-本文件是给**新会话**用的执行计划。先读"开场 prompt",再按阶段推进。所有数字是 2026-09-25 在 `codex/v0.5.6-integration` 工作区测得的基线,**动手前必须用第 6 节的命令复测**,以复测值为准。
+本文件是给**新会话**用的执行计划。先读"开场 prompt",再按阶段推进。§3 保留重构前基线与复测更正,不是当前代码状态;已完成项以 Git 与各阶段进展为准。动手前复测本步骤相关指标,不要从 A 重新执行。
 
 ---
 
@@ -16,11 +16,22 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从"阶段 A"开始,一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(本次决策后的下一步是 C1.1 作品组仓储),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
+7. 技术取舍由执行者负责,不再要求用户选择超时秒数、校验模型或拆文件方式。已定取舍见 §0.1;如果候选方案会改行为,优先保留原行为并继续独立步骤。只有确实无法兼容且阻塞目标的产品取舍才带具体影响与推荐方案请用户决定。
 ```
+
+### 0.1 当前技术决策(2026-09-25)
+
+用户表示不懂技术,委托代理判断。以下是本次代理据此作出的技术决策,取代此前“B3/超时待用户决定”的停点;阶段结束汇报的约定保留。
+
+- **B3 严格入参校验移出本轮**:保留现有 controller 的校验、类型转换、状态码与错误文案。本轮不引入 `parse_payload` 或新 `code` 字段。输入校验本身可以在保持行为的前提下重构;但原 B3 的“字段类型/必填校验”会收紧兼容范围,不应混在结构整理里。以后有具体缺陷时单独立项并更新契约。
+- **数据库等待时间保持现状,不再待确认**:各调用点原来等 5 秒或 30 秒就维持原值。等待更久不能消除锁竞争,现有外键审计也没有证明统一 30 秒的必要性;后续如有真实超时故障,先记录锁等待与用户响应时间再决定。
+- **接受 B2 的职责拆分结果**:`web_http.py` 当前 401 行,现有守卫上限 405 行保留。原 ≤300 行目标不再作为本轮门禁,不为行数再拆传输细节;路由唯一、业务移出、信任校验/上传排空/Range 行为不变仍是门禁。
+- **下一步选 C1.1,不同时启动 C/D**:只迁 `document_groups` 的 SQL 到 `persistence/document_group_store.py`,保持事务边界、调用接口、返回结果与删除语义;迁完后 SQL 散落白名单删除该文件,现有作品组/对齐回归断言与全量测试必须通过。其余 C/D 步骤仍按原计划分批推进,本次决策不代表它们已经实施。
+- **C3 先调查生命周期再设计共用管理器**:统计线程创建点、取消方式、退出等待与进程回收的实际差异,不能只为消除裸 `Thread` 就强行套同一接口。暂不改变现有线程行为,具体迁移范围由调查结果决定。
 
 ---
 
@@ -113,7 +124,7 @@
 - 有违例:停下,报告给用户,先设计数据修复迁移(走 `migrations.py` + `user_version`),再进 A2。
 
 **A2 统一连接入口**
-- `persistence/connection.py` 增加上下文管理器:`open_read(path)`、`open_write(path, *, immediate=False)`、`open_readonly_snapshot(path)`(URI `mode=ro`);统一 `row_factory`、`busy_timeout=30000`,写连接统一 `foreign_keys=ON`。保留现有 `open_readonly_index` / `open_writable_index`。
+- `persistence/connection.py` 增加上下文管理器:`open_read(path)`、`open_write(path, *, immediate=False)`、`open_readonly_snapshot(path)`(URI `mode=ro`);集中连接策略,逐点保留原 `row_factory` 与等待时间(5 秒或 30 秒),写连接统一 `foreign_keys=ON`。保留现有 `open_readonly_index` / `open_writable_index`。
 - `table_exists` 下沉到 persistence,删除 4 份私有副本。
 - 按机械程度迁移调用点:`document_groups` → `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `translation_works` / `runtime_page_mapping` / `parser_statistics` → `text_alignment` → `bibliographic_metadata` / `document_export_service` / `document_deletion` / `indexer` / `index_publisher` → `application/document_heading_enrichment` / `large_document/job_ledger`(复测补漏) → `data_location` → `database.py`。
 - 每迁一批把 A0 的白名单删掉对应条目。
@@ -132,13 +143,15 @@
 - 在 `http_routes.py` 引入 `Route` 数据类:`method`、`path`、`handler`、`body`(`json` / `raw` / `none`)、`mutates_data_root: bool`、可选 `payload_model`。
 - `RAW_BODY_POST_PATHS`、`DATA_ROOT_MUTATING_POST_PATHS` 改为由路由属性推导,删除手写集合。
 - 把 `web_http.py` 的 31 处 `parsed.path` 分支迁出:`/api/import`、`/api/import-upload/*`、`/api/import-local`(含读偏好、校验扫描目录这段业务逻辑)进导入 controller;`/api/search` 进搜索 controller;其余同理。
-- `web_http.py` 只保留:可信来源/Host 校验、Content-Type 门、读/排空请求体(Windows 断连修复保持原样)、分发、Range 流式、关闭中 503。目标 ≤ 300 行,更新 `test_web_boundary_stays_split_by_responsibility` 的行数上限。
+- `web_http.py` 只保留:可信来源/Host 校验、Content-Type 门、读/排空请求体(Windows 断连修复保持原样)、分发、Range 流式、关闭中 503。按 §0.1 接受现有 401 行结果,保留 `test_web_boundary_stays_split_by_responsibility` 的 405 行上限。
 - 新增测试:由注册表导出路由清单,与 `docs/contracts/` 当前版本契约比对。
 - 验收:`test_http_api_contract` 及上传/排空相关测试**不改断言**通过。
 
 2026-09-25(进展):B1、B2 已完成(`7550755` `7b23e8d` `abfc4bb` `f5febf3`)。前端 105 处 `fetch(` 收口到 `07-api.js`;后端 `http_route_table.RouteTable` 为唯一注册表,原始请求体/数据目录名单与请求体上限由路由声明推导,旧手写集合钉在 `tests/test_http_route_table.py` 证明逐项相等;`web_http.py` 763 → 401 行(未到 ≤300 目标:剩余均为计划明确保留的信任校验、读体/排空、Range 流式)。B3 暂停待用户决定:字段类型/必填校验会拒绝现在被宽松接受的输入(如数字标题)并改变部分错误文案,属行为变化。
 
-**B3 统一入参校验**
+2026-09-25(技术决策):上述“B3 暂停待用户决定”已由 §0.1 取代。B3 移出本轮,保留现有输入兼容行为;阶段 B 按 B1/B2 收尾。Windows 自动测试通过不等于 Windows 打包/桌面冒烟通过,后者仍未验收。
+
+**B3 统一入参校验(移出本轮,以下保留原提案供后续议题参考)**
 - 新增轻量 `parse_payload(Model, payload)`(dataclass + 字段类型/必填校验),失败抛 `PayloadError` → 400。错误体保持 `{"error": "中文消息"}`,可增 `code`,前端 `07-api.js` 已能透传。
 - 从 `DocumentGroupController` 开始逐个 controller 迁移,把 `payload_model` 登记到 `Route`。
 - 不引 pydantic。
@@ -162,11 +175,12 @@
 - 验收:`web_runtime.py` 直接内部依赖 ≤ 20;行数上限同步收紧。
 
 **后端 C3 后台任务统一**
+- 先按 §0.1 盘点实际线程生命周期,再确定以下抽象是否适合;不得先写通用管理器再强迁全部模块。
 - `tasks/` 下提供 `BackgroundTasks`:具名注册、取消、关闭时 join,接入 `close_runtime` / `DurableOperationGate`。
 - 迁移约 14 个模块的裸 `threading.Thread`;沿途审 `except Exception`:至少 `logging.exception`,不静默吞。
 
 **前端 C4 事件委托**
-- 引入 `data-action="xxx"` + 根节点委托分发,替换 `index.html` 的 182 个内联事件与动态 HTML 里的 `onclick=` 字符串;优先修 `onclick="fn('` + `esc(...)` + `')"` 形式。
+- 引入 `data-action="xxx"` + 根节点委托分发,替换 `index.html` 的 205 个内联事件(§3.3 复测基线)与动态 HTML 里的 `onclick=` 字符串;优先修 `onclick="fn('` + `esc(...)` + `')"` 形式。
 - 随之收缩全局符号预算(内联事件不再需要全局函数)。
 - 守卫:`index.html` 内联事件数、各文件 `innerHTML` 数,棘轮只降不升。
 
