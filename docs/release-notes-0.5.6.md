@@ -1,6 +1,6 @@
 # 文献原句定位器 v0.5.6（迭代中）
 
-> 2026-09-25：**迭代中，未发布**。主题是「Zotero 来源同步」：可在「设置 → 来源 → Zotero」勾选 Zotero 分类，把其中的 PDF / EPUB 交给 MEFinder 自己的管线解析入库。本机门禁通过（全量 unittest 2542 例，18 例环境跳过、其余通过；`ruff check src tests` 零告警）；已在用户本机 Zotero 9.0.6 与 10.0.4 上验证读取、增量、删除 / 改题录，并在真实库上跑过 50 篇「耶吉」分类的同步（该库已被写入）。真机暴露并修掉两个缺陷：一次同步打满有界导入队列（`docs/issues/zotero-source-sync.md`）、MCP 侧车停在被遗弃的旧数据根（`docs/issues/existing-library-location.md`）。未打包、未发版。
+> 2026-09-25：**迭代中，未发布**。主题是「Zotero 来源同步」：可在「设置 → 来源 → Zotero」勾选 Zotero 分类，把其中的 PDF / EPUB 交给 MEFinder 自己的管线解析入库。本机门禁通过（全量 unittest 2542 例，18 例环境跳过、其余通过；`ruff check src tests` 零告警）；已在用户本机 Zotero 9.0.6 与 10.0.4 上验证读取、增量、删除 / 改题录，并在真实库上跑过 50 篇「耶吉」分类的同步（该库已被写入）。真机暴露并修掉两个缺陷：一次同步打满有界导入队列（`docs/issues/zotero-source-sync.md`）、MCP 侧车停在被遗弃的旧数据根（`docs/issues/existing-library-location.md`）。未发版；2026-09-25 17:35 按 `26b3309` 重打了本机便携包 `MEFinder-v0.5.6-windows-portable.zip`（94,114,686 字节，SHA-256 `ab53c7df9295d41ce641fee37511f6c994718918b92b66f9988db52a744a6abd`，打包门禁全量测试通过），并实测新侧车在无 `LOCALAPPDATA` 时读到真实库；`release` 下 14:33 的安装包早于两处修复，未重打，不可用。
 
 ## 更新内容
 
