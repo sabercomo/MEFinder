@@ -1,6 +1,6 @@
 # MEFinder 前后端架构重构计划
 
-2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1、C1.2、C1.3 已完成,下一步 C1.4。版本号 v0.5.7 为暂定,尚未发布。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1—C1.4 已完成,下一步 C1.5。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
@@ -18,7 +18,7 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从当前未完成步骤继续(当前为 C1.4 `text_alignment.py` 的计算/SQL 分层),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(当前为 C1.5 `database.py` 拆分),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
@@ -188,6 +188,8 @@
 2026-09-25(C1.4a 进展):PDF/EPUB 纯分段类型、规则与 `segment_*` 函数进入 `alignment_segmentation.py`,`text_alignment.py` 保留导入面。迁移的 10 个函数/类型 AST 相同;原文件 2371→2054 行,行数守卫收紧到 2060,新模块上限 350。下一批再分生成编排和 SQL,此时 C1.4 尚未完成。
 
 2026-09-25(C1.4b 进展):对齐准备、生成、发布流程进入 `alignment_generation.py`,原模块保留旧导入面;生成阶段使用的 SQL 与两段立即事务进入 `persistence/alignment_store.py`。生成模块无直接 `.execute`,`text_alignment.py` 降至约 1207 行。既有测试中对计算函数的替身改指向新定义模块;定位/读取 SQL 仍在 `text_alignment.py`,下一批继续收口,C1.4 尚未完成。
+
+2026-09-25(C1.4c 完成):作品组目标、选区、定位、候选段与人工确认读取 SQL 全部进入 `persistence/alignment_store.py`;`text_alignment.py` 只保留路由判断、回退与展示数据装配,没有直接 `.execute`,`alignment_generation.py` 也没有。原模块 953 行,行数守卫收紧到 960;SQL 散落文件 20→19。C1.4 完成,下一步 C1.5。
 
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。

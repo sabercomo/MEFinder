@@ -33,7 +33,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "search_assembly.py",
     "search_recall.py",
     "structured_reader.py",
-    "text_alignment.py",
     "translation_works.py",
 }
 
@@ -130,7 +129,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
             # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
-            "text_alignment.py": 1210,
+            "text_alignment.py": 960,
             "alignment_generation.py": 820,
             "alignment_segmentation.py": 350,
             "alignment_snapshots.py": 150,

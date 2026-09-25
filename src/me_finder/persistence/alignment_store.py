@@ -11,7 +11,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Sequence
+from typing import Iterator, List, Sequence
 
 from .connection import connect_index, open_writable_index, table_exists
 from .schema_installers import install_text_alignment_schema
@@ -652,3 +652,467 @@ def completed_run_status_counts(
             (run_id,),
         )
     }
+
+
+def selection_pdf_segment_ids(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    source_id: str,
+    start_page: int,
+    end_page: int,
+    start_offset: int,
+    end_offset: int,
+) -> List[str]:
+    if start_page == end_page:
+        rows = connection.execute(
+            "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+            "JOIN text_segment_spans p ON p.segment_id = s.segment_id "
+            "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
+            "AND p.pdf_page_index = ? AND p.page_char_end > ? "
+            "AND p.page_char_start < ? ORDER BY s.order_index",
+            (
+                segment_set_id,
+                source_id,
+                start_page,
+                start_offset,
+                end_offset,
+            ),
+        ).fetchall()
+        return [str(row["segment_id"]) for row in rows]
+    rows = connection.execute(
+        "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+        "JOIN text_segment_spans p ON p.segment_id = s.segment_id "
+        "WHERE s.segment_set_id = ? AND p.source_file_id = ? AND ("
+        "(p.pdf_page_index = ? AND p.page_char_end > ?) OR "
+        "(p.pdf_page_index > ? AND p.pdf_page_index < ?) OR "
+        "(p.pdf_page_index = ? AND p.page_char_start < ?)) "
+        "ORDER BY s.order_index",
+        (
+            segment_set_id,
+            source_id,
+            start_page,
+            start_offset,
+            start_page,
+            end_page,
+            end_page,
+            end_offset,
+        ),
+    ).fetchall()
+    return [str(row["segment_id"]) for row in rows]
+
+
+def selection_paragraph_segment_ids(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    source_id: str,
+    start_paragraph: int,
+    end_paragraph: int,
+    start_offset: int,
+    end_offset: int,
+) -> List[str]:
+    if start_paragraph == end_paragraph:
+        rows = connection.execute(
+            "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+            "JOIN text_segment_paragraph_spans p ON p.segment_id = s.segment_id "
+            "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
+            "AND p.paragraph_index = ? AND p.paragraph_char_end > ? "
+            "AND p.paragraph_char_start < ? ORDER BY s.order_index",
+            (
+                segment_set_id,
+                source_id,
+                start_paragraph,
+                start_offset,
+                end_offset,
+            ),
+        ).fetchall()
+        return [str(row["segment_id"]) for row in rows]
+    rows = connection.execute(
+        "SELECT DISTINCT s.segment_id, s.order_index FROM text_segments s "
+        "JOIN text_segment_paragraph_spans p ON p.segment_id = s.segment_id "
+        "WHERE s.segment_set_id = ? AND p.source_file_id = ? AND ("
+        "(p.paragraph_index = ? AND p.paragraph_char_end > ?) OR "
+        "(p.paragraph_index > ? AND p.paragraph_index < ?) OR "
+        "(p.paragraph_index = ? AND p.paragraph_char_start < ?)) "
+        "ORDER BY s.order_index",
+        (
+            segment_set_id,
+            source_id,
+            start_paragraph,
+            start_offset,
+            start_paragraph,
+            end_paragraph,
+            end_paragraph,
+            end_offset,
+        ),
+    ).fetchall()
+    return [str(row["segment_id"]) for row in rows]
+
+
+def latest_pair_run(
+    connection: sqlite3.Connection,
+    document_group_id: str,
+    left_source_id: str,
+    right_source_id: str,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM alignment_runs WHERE document_group_id = ? "
+        "AND status = 'completed' AND "
+        "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
+        "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
+        "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
+        (
+            document_group_id,
+            left_source_id,
+            right_source_id,
+            right_source_id,
+            left_source_id,
+        ),
+    ).fetchone()
+
+
+def target_source_row(connection: sqlite3.Connection, source_id: str) -> sqlite3.Row | None:
+    """Read the source fields needed to list alignment targets."""
+
+    return connection.execute(
+        "SELECT source_type, payload_json FROM source_files WHERE source_file_id = ?",
+        (source_id,),
+    ).fetchone()
+
+
+def target_group_for_source(
+    connection: sqlite3.Connection, source_id: str
+) -> sqlite3.Row | None:
+    """Find the group and pivot containing a source."""
+
+    return connection.execute(
+        "SELECT g.document_group_id, g.base_source_file_id "
+        "FROM document_group_members m JOIN document_groups g "
+        "ON g.document_group_id = m.document_group_id "
+        "WHERE m.source_file_id = ?",
+        (source_id,),
+    ).fetchone()
+
+
+def target_group_members(
+    connection: sqlite3.Connection, group_id: str
+) -> list[sqlite3.Row]:
+    """Read ordered source metadata for a group's target list."""
+
+    return connection.execute(
+        "SELECT m.source_file_id, m.version_label, s.source_type, "
+        "s.file_name, s.payload_json "
+        "FROM document_group_members m JOIN source_files s "
+        "ON s.source_file_id = m.source_file_id "
+        "WHERE m.document_group_id = ? ORDER BY m.member_order",
+        (group_id,),
+    ).fetchall()
+
+
+def body_selected_orders(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read the order of each selected segment for body-range validation."""
+
+    return connection.execute(
+        "SELECT order_index FROM text_segments WHERE segment_id IN ("
+        + ",".join("?" for _ in segment_ids) + ")",
+        tuple(segment_ids),
+    ).fetchall()
+
+
+def body_segment_texts(
+    connection: sqlite3.Connection, segment_set_id: str
+) -> list[sqlite3.Row]:
+    """Read the text sequence used to recheck a detected body range."""
+
+    return connection.execute(
+        "SELECT text_raw FROM text_segments WHERE segment_set_id=? ORDER BY order_index",
+        (segment_set_id,),
+    ).fetchall()
+
+
+def links_for_segments(
+    connection: sqlite3.Connection,
+    run_id: str,
+    side: str,
+    segment_ids: Sequence[str],
+) -> list[sqlite3.Row]:
+    """Read alignment links touching the selected source segments."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT DISTINCT l.alignment_link_id, l.order_index, l.review_status "
+        "FROM alignment_links l JOIN alignment_link_members m "
+        "ON m.alignment_link_id = l.alignment_link_id "
+        f"WHERE l.alignment_run_id = ? AND m.side = ? AND m.segment_id IN ({placeholders}) "
+        "ORDER BY l.order_index",
+        (run_id, side, *segment_ids),
+    ).fetchall()
+
+
+def link_members_for_links(
+    connection: sqlite3.Connection, link_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read the ordered members of selected alignment links."""
+
+    placeholders = ",".join("?" for _ in link_ids)
+    return connection.execute(
+        "SELECT m.alignment_link_id, m.side, m.segment_id, s.order_index "
+        "FROM alignment_link_members m "
+        "JOIN text_segments s ON s.segment_id = m.segment_id "
+        f"WHERE m.alignment_link_id IN ({placeholders}) "
+        "ORDER BY m.alignment_link_id, s.order_index",
+        link_ids,
+    ).fetchall()
+
+
+def selected_segment_orders(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read selected segment orders for semantic paragraph fallback."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT order_index FROM text_segments "
+        f"WHERE segment_id IN ({placeholders}) ORDER BY order_index",
+        tuple(segment_ids),
+    ).fetchall()
+
+
+def semantic_segment_rows(
+    connection: sqlite3.Connection, segment_set_id: str
+) -> list[sqlite3.Row]:
+    """Read a full segment sequence for semantic paragraph fallback."""
+
+    return connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? ORDER BY order_index",
+        (segment_set_id,),
+    ).fetchall()
+
+
+def selected_segment_first_order(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> sqlite3.Row | None:
+    """Find the first selected order for paragraph-anchor fallback."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT MIN(order_index) AS first_order FROM text_segments "
+        f"WHERE segment_id IN ({placeholders})",
+        tuple(segment_ids),
+    ).fetchone()
+
+
+def paragraph_anchor_segment(
+    connection: sqlite3.Connection, segment_set_id: str, order_index: int
+) -> sqlite3.Row | None:
+    """Read the segment at a matched paragraph heading anchor."""
+
+    return connection.execute(
+        "SELECT segment_id FROM text_segments WHERE segment_set_id = ? "
+        "AND order_index = ?",
+        (segment_set_id, order_index),
+    ).fetchone()
+
+
+def ordered_segments_in_set(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    segment_ids: Sequence[str],
+) -> List[sqlite3.Row]:
+    unique_ids = list(dict.fromkeys(str(segment_id) for segment_id in segment_ids))
+    if not unique_ids:
+        return []
+    placeholders = ",".join("?" for _ in unique_ids)
+    return connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        f"WHERE segment_set_id = ? AND segment_id IN ({placeholders}) "
+        "ORDER BY order_index",
+        (segment_set_id, *unique_ids),
+    ).fetchall()
+
+
+def candidate_aligned_rows(
+    connection: sqlite3.Connection, segment_set_id: str, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read the aligned segment positions anchoring a candidate window."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT segment_id, order_index FROM text_segments "
+        f"WHERE segment_set_id = ? AND segment_id IN ({placeholders}) "
+        "ORDER BY order_index",
+        (segment_set_id, *segment_ids),
+    ).fetchall()
+
+
+def candidate_window_rows(
+    connection: sqlite3.Connection, segment_set_id: str, start: int, end: int
+) -> list[sqlite3.Row]:
+    """Read candidates and one neighboring segment on each side."""
+
+    return connection.execute(
+        "SELECT segment_id, order_index, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? AND order_index BETWEEN ? AND ? "
+        "ORDER BY order_index",
+        (segment_set_id, start, end),
+    ).fetchall()
+
+
+def candidate_pdf_spans(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read precise PDF spans for the candidate segments."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT p.segment_id, p.pdf_page_index, p.page_char_start, "
+        "p.page_char_end, s.order_index, p.span_order "
+        "FROM text_segment_spans p JOIN text_segments s "
+        "ON s.segment_id = p.segment_id "
+        f"WHERE p.segment_id IN ({placeholders}) "
+        "ORDER BY s.order_index, p.span_order",
+        segment_ids,
+    ).fetchall()
+
+
+def candidate_page_rows(
+    connection: sqlite3.Connection, source_id: str, page_indices: Sequence[int]
+) -> list[sqlite3.Row]:
+    """Read PDF page payloads used to materialize candidate spans."""
+
+    placeholders = ",".join("?" for _ in page_indices)
+    return connection.execute(
+        "SELECT pdf_page_index, payload_json FROM pdf_pages "
+        f"WHERE source_file_id = ? AND pdf_page_index IN ({placeholders})",
+        (source_id, *page_indices),
+    ).fetchall()
+
+
+def candidate_paragraph_spans(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read precise EPUB paragraph spans for the candidate segments."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT p.segment_id, p.paragraph_id, p.paragraph_index, "
+        "p.paragraph_char_start, p.paragraph_char_end, s.order_index, "
+        "p.span_order FROM text_segment_paragraph_spans p "
+        "JOIN text_segments s ON s.segment_id = p.segment_id "
+        f"WHERE p.segment_id IN ({placeholders}) "
+        "ORDER BY s.order_index, p.span_order",
+        segment_ids,
+    ).fetchall()
+
+
+def candidate_paragraph_rows(
+    connection: sqlite3.Connection, source_id: str, paragraph_indices: Sequence[int]
+) -> list[sqlite3.Row]:
+    """Read EPUB paragraph payloads used to materialize candidate spans."""
+
+    placeholders = ",".join("?" for _ in paragraph_indices)
+    return connection.execute(
+        "SELECT paragraph_id, paragraph_index, text_raw, payload_json "
+        "FROM paragraphs WHERE source_file_id = ? "
+        f"AND paragraph_index IN ({placeholders})",
+        (source_id, *paragraph_indices),
+    ).fetchall()
+
+
+def direct_alignment_run(
+    connection: sqlite3.Connection, source_id: str, target_id: str
+) -> sqlite3.Row | None:
+    """Find the latest completed direct alignment for two sources."""
+
+    return connection.execute(
+        "SELECT * FROM alignment_runs WHERE status = 'completed' AND "
+        "((pivot_source_file_id = ? AND target_source_file_id = ?) OR "
+        "(pivot_source_file_id = ? AND target_source_file_id = ?)) "
+        "ORDER BY completed_at DESC, rowid DESC LIMIT 1",
+        (source_id, target_id, target_id, source_id),
+    ).fetchone()
+
+
+def route_group_for_pair(
+    connection: sqlite3.Connection, source_id: str, target_id: str
+) -> sqlite3.Row | None:
+    """Find the shared document group and pivot for a non-direct route."""
+
+    return connection.execute(
+        "SELECT g.document_group_id, g.base_source_file_id "
+        "FROM document_groups g "
+        "JOIN document_group_members source_member "
+        "ON source_member.document_group_id = g.document_group_id "
+        "JOIN document_group_members target_member "
+        "ON target_member.document_group_id = g.document_group_id "
+        "WHERE source_member.source_file_id = ? "
+        "AND target_member.source_file_id = ?",
+        (source_id, target_id),
+    ).fetchone()
+
+
+def confirmed_override_rows(
+    connection: sqlite3.Connection,
+    source_id: str,
+    target_id: str,
+    source_set_id: str,
+    target_set_id: str,
+) -> list[sqlite3.Row]:
+    """Read confirmed corrections, newest first, for a specific segment-set pair."""
+
+    return connection.execute(
+        "SELECT override_id, source_segment_key, source_segment_ids_json, "
+        "target_segment_ids_json, evidence_json FROM alignment_manual_overrides "
+        "WHERE source_file_id = ? AND target_source_file_id = ? "
+        "AND source_segment_set_id = ? AND target_segment_set_id = ? "
+        "AND status = 'confirmed' ORDER BY confirmed_at DESC, override_id",
+        (source_id, target_id, source_set_id, target_set_id),
+    ).fetchall()
+
+
+def endpoint_paragraph_rows(
+    connection: sqlite3.Connection, source_id: str, paragraph_indices: Sequence[int]
+) -> list[sqlite3.Row]:
+    """Read selected EPUB paragraphs before validating selection offsets."""
+
+    placeholders = ",".join("?" for _ in paragraph_indices)
+    return connection.execute(
+        "SELECT paragraph_index, text_raw FROM paragraphs "
+        f"WHERE source_file_id = ? AND paragraph_index IN ({placeholders})",
+        (source_id, *paragraph_indices),
+    ).fetchall()
+
+
+def target_pdf_spans(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read the final PDF spans for located target segments."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT p.pdf_page_index, p.page_char_start, p.page_char_end, "
+        "s.order_index, p.span_order FROM text_segment_spans p "
+        "JOIN text_segments s ON s.segment_id = p.segment_id "
+        f"WHERE p.segment_id IN ({placeholders}) "
+        "ORDER BY s.order_index, p.span_order",
+        segment_ids,
+    ).fetchall()
+
+
+def target_paragraph_spans(
+    connection: sqlite3.Connection, segment_ids: Sequence[str]
+) -> list[sqlite3.Row]:
+    """Read the final EPUB spans for located target segments."""
+
+    placeholders = ",".join("?" for _ in segment_ids)
+    return connection.execute(
+        "SELECT p.paragraph_id, p.paragraph_index, "
+        "p.paragraph_char_start, p.paragraph_char_end, "
+        "s.order_index, p.span_order FROM text_segment_paragraph_spans p "
+        "JOIN text_segments s ON s.segment_id = p.segment_id "
+        f"WHERE p.segment_id IN ({placeholders}) "
+        "ORDER BY s.order_index, p.span_order",
+        segment_ids,
+    ).fetchall()
