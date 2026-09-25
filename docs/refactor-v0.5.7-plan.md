@@ -185,6 +185,8 @@
 
 2026-09-25(C1.3c 进展):`bibliographic_metadata.py` 更新来源、卷、作品、段落的 SQL 与立即事务进入 `persistence/bibliographic_metadata_store.py`;题录归一、payload 变换及更新顺序留在原层。补测卷更新失败时来源更新回滚;SQL 散落文件 21→20。`bibliographic_metadata` 对 `database.py` 的旧环依赖已在此前的 `paragraph_payload` 下沉时消除,本批无需重复修改。C1.3 三批完成,下一步 C1.4。
 
+2026-09-25(C1.4a 进展):PDF/EPUB 纯分段类型、规则与 `segment_*` 函数进入 `alignment_segmentation.py`,`text_alignment.py` 保留导入面。迁移的 10 个函数/类型 AST 相同;原文件 2371→2054 行,行数守卫收紧到 2060,新模块上限 350。下一批再分生成编排和 SQL,此时 C1.4 尚未完成。
+
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
