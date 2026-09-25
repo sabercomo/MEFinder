@@ -15,19 +15,15 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Mapping
+from typing import Callable, Mapping
 
 from . import __version__, translation_works
 from .app_context import AppContext
 from .alignment_assembly import assemble_alignment
-from .application.document_group_coordinator import DocumentGroupCoordinator
-from .application.document_query_service import (
-    DocumentQueryError,
-)
 from .data_location import migrate_data_root
 from .desktop_shell_controller import DesktopShellController
-from .document_group_controller import DocumentGroupController
 from .import_assembly import assemble_import
+from .library_assembly import assemble_library
 from .http_routes import (
     assemble_archive_routes,
     assemble_bibliography_routes,
@@ -39,12 +35,10 @@ from .http_routes import (
     assemble_shell_routes,
     assemble_source_routes,
 )
-from .library_query_controller import LibraryQueryController
 from .macos_update import check_macos_update
 from .zotero_sync_assembly import assemble_zotero_sync
 from .managed_component_assembly import assemble_managed_components
 from .mineru_api import (
-    MinerUError,
     load_mineru_config,
     mineru_config_summary,
     normalize_mineru_token,
@@ -150,44 +144,21 @@ def build_application_runtime(
     bibliographic_metadata_controller = imports.bibliographic_metadata_controller
     page_mapping_controller = imports.page_mapping_controller
     document_lifecycle_controller = imports.document_lifecycle_controller
-    document_group_coordinator = DocumentGroupCoordinator(
-        context.paths,
-        index_runtime,
-        durable_operations,
+    library = assemble_library(
+        context,
+        imports,
+        open_pdf_with_platform=open_pdf_with_platform,
+        open_path_with_default_app=open_path_with_default_app,
+        native_pdf_opener=native_pdf_opener,
     )
-    document_group_controller = DocumentGroupController(
-        document_group_coordinator
-    )
+    document_group_controller = library.document_group_controller
     alignment = assemble_alignment(context, imports)
     text_alignment_controller = alignment.text_alignment_controller
     translation_work_controller = alignment.translation_work_controller
     structured_reader_controller = alignment.structured_reader_controller
 
-    def open_source_file(source_id: str, page: object = None) -> Dict[str, object]:
-        try:
-            target = document_queries.source_path(source_id)
-        except DocumentQueryError as exc:
-            # DesktopShellController preserves the existing 400 response for
-            # user-facing source lookup failures by handling MinerUError.
-            raise MinerUError(str(exc)) from exc
-        suffix = target.suffix.lower()
-        if suffix == ".pdf":
-            return open_pdf_with_platform(
-                target,
-                page,
-                preferences_path=resolve_preferences_path(root),
-                native_pdf_opener=native_pdf_opener,
-            )
-        open_path_with_default_app(target)
-        return {"ok": True, "app": "system_default", "page_jump": False, "file": target.name}
-
-    library_query_controller = LibraryQueryController(
-        document_queries,
-        index_runtime,
-        additional_active_source_ids=(
-            page_mapping_coordinator.active_source_ids
-        ),
-    )
+    library_query_controller = library.library_query_controller
+    open_source_file = library.open_source_file
     preferences_controller = PreferencesController(
         resolve_preferences_path(root),
         index_runtime,
