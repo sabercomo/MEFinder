@@ -102,10 +102,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         # down — when a file hits its cap, move a real responsibility out.
         limits = {
             "web.py": 700,
-            "web_runtime.py": 410,
+            "web_runtime.py": 280,
             "import_assembly.py": 290,
             "alignment_assembly.py": 85,
             "library_assembly.py": 85,
+            "settings_assembly.py": 195,
             "http_routes.py": 260,
             # v0.5.7 B2：导入/上传/搜索/校准移出，分发只查 RouteTable（原 763 行）。
             "web_http.py": 405,
@@ -182,7 +183,21 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             if isinstance(node, ast.ImportFrom) and node.level
         }
         # C2 is staged by domain; each extraction tightens this cap toward 20.
-        self.assertLessEqual(len(modules), 19)
+        self.assertLessEqual(len(modules), 12)
+
+    def test_application_runtime_fields_have_concrete_types(self) -> None:
+        tree = ast.parse((PACKAGE / "web_runtime.py").read_text(encoding="utf-8"))
+        runtime = next(
+            node for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "ApplicationRuntime"
+        )
+        untyped = [
+            node.target.id for node in runtime.body
+            if isinstance(node, ast.AnnAssign)
+            and isinstance(node.annotation, ast.Name)
+            and node.annotation.id == "object"
+        ]
+        self.assertEqual(untyped, [])
 
     def test_http_routes_are_assembled_by_product_domain_without_container(self) -> None:
         source = (PACKAGE / "http_routes.py").read_text(encoding="utf-8")

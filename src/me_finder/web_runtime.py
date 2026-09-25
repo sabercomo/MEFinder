@@ -1,29 +1,21 @@
-"""Application composition root: build every service, controller and route table.
-
-Split out of :mod:`me_finder.web` so the HTTP composition root stays a thin
-adapter.  :func:`build_application_runtime` constructs the whole application
-runtime once, in a single scope (so the existing late-bound wiring lambdas keep
-working unchanged), and returns an immutable :class:`ApplicationRuntime`.
-Platform/OS helpers (native choosers, PDF openers) are injected by the caller so
-this module carries no desktop-specific code.
-"""
+"""Compose domain assemblies, route tables, and runtime lifecycle hooks."""
 
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from . import __version__, translation_works
+from . import alignment_assembly, import_assembly, translation_works
 from .app_context import AppContext
 from .alignment_assembly import assemble_alignment
-from .data_location import migrate_data_root
-from .desktop_shell_controller import DesktopShellController
 from .import_assembly import assemble_import
 from .library_assembly import assemble_library
+from .component_catalog import ComponentCatalog
+from .managed_mineru import ManagedMinerU
+from .settings_assembly import assemble_desktop_shell, assemble_settings
 from .http_routes import (
     assemble_archive_routes,
     assemble_bibliography_routes,
@@ -35,39 +27,8 @@ from .http_routes import (
     assemble_shell_routes,
     assemble_source_routes,
 )
-from .macos_update import check_macos_update
 from .zotero_sync_assembly import assemble_zotero_sync
-from .managed_component_assembly import assemble_managed_components
-from .mineru_api import (
-    load_mineru_config,
-    mineru_config_summary,
-    normalize_mineru_token,
-    read_mineru_config_data,
-    resolve_mineru_config_path,
-    save_mineru_config,
-    test_mineru_connection,
-    test_mineru_credential,
-)
-from .parser_settings_controller import ParserSettingsController
-from .parser_statistics import build_parser_statistics
-from .pdf_import_service import (
-    scan_directories_for_documents,
-)
-from .preferences import (
-    read_preferences,
-    resolve_preferences_path,
-    save_preferences,
-)
-from .preferences_controller import PreferencesController
-from .vision_api import (
-    delete_vision_provider,
-    discover_vision_models,
-    resolve_vision_config_path,
-    save_vision_policy,
-    save_vision_provider,
-    test_vision_provider,
-    vision_config_summary,
-)
+from .zotero_sync import ZoteroSyncService
 
 @dataclass(frozen=True)
 class ApplicationRuntime:
@@ -75,32 +36,32 @@ class ApplicationRuntime:
 
     index_path: Path
     root: Path
-    index_runtime: object
-    data_root_admission: object
-    document_imports: object
-    controller_get_routes: Mapping[str, object]
-    controller_post_routes: Mapping[str, object]
-    shell_get_routes: Mapping[str, object]
-    shell_post_routes: Mapping[str, object]
+    index_runtime: import_assembly.IndexRuntime
+    data_root_admission: import_assembly.DataRootAdmissionGate
+    document_imports: import_assembly.DocumentImportCoordinator
+    controller_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
+    controller_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
+    shell_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
+    shell_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
     begin_shutdown: Callable[[], None]
     close_runtime: Callable[..., bool]
     wait_for_durable_operations: Callable[..., bool]
     submit_background_task: Callable[..., object]
-    import_orchestrator: object
-    import_job_controller: object
-    structured_reader_controller: object
-    archive_transfer_controller: object
-    document_queries: object
-    backup_coordinator: object
-    deletion_coordinator: object
-    metadata_coordinator: object
-    page_mapping_coordinator: object
-    bibliographic_metadata_controller: object
-    page_mapping_controller: object
-    component_catalog: object
-    managed_mineru: object
-    document_lifecycle_controller: object
-    zotero_sync: object = None
+    import_orchestrator: import_assembly.ImportOrchestrator
+    import_job_controller: import_assembly.ImportJobController
+    structured_reader_controller: alignment_assembly.StructuredReaderController
+    archive_transfer_controller: import_assembly.ArchiveTransferController
+    document_queries: import_assembly.DocumentQueryService
+    backup_coordinator: import_assembly.BackupCoordinator
+    deletion_coordinator: import_assembly.DocumentDeletionCoordinator
+    metadata_coordinator: import_assembly.BibliographicMetadataCoordinator
+    page_mapping_coordinator: import_assembly.PageMappingCoordinator
+    bibliographic_metadata_controller: import_assembly.BibliographicMetadataController
+    page_mapping_controller: import_assembly.PageMappingController
+    component_catalog: ComponentCatalog
+    managed_mineru: ManagedMinerU
+    document_lifecycle_controller: import_assembly.DocumentLifecycleController
+    zotero_sync: ZoteroSyncService
 
 
 def build_application_runtime(
@@ -124,14 +85,11 @@ def build_application_runtime(
 
     index_path = context.paths.index_path
     root = context.paths.runtime_root
-    app_data_root = context.paths.app_data_root
-    default_app_data_root = context.paths.default_app_data_root
     imports = assemble_import(context)
     index_runtime = imports.index_runtime
     import_task_queue = imports.import_task_queue
     data_root_admission = imports.data_root_admission
     durable_operations = imports.durable_operations
-    mineru_account_service = imports.mineru_account_service
     document_queries = imports.document_queries
     import_orchestrator = imports.import_orchestrator
     document_imports = imports.document_imports
@@ -158,75 +116,14 @@ def build_application_runtime(
     structured_reader_controller = alignment.structured_reader_controller
 
     library_query_controller = library.library_query_controller
-    open_source_file = library.open_source_file
-    preferences_controller = PreferencesController(
-        resolve_preferences_path(root),
-        index_runtime,
-        native_theme_setter=native_theme_setter,
-        read=lambda path: read_preferences(path),
-        save=lambda payload, path: save_preferences(payload, path),
-        scan_directories=(
-            lambda directories, imported_names: scan_directories_for_documents(
-                directories,
-                imported_names,
-            )
-        ),
+    settings = assemble_settings(
+        context, imports, native_theme_setter=native_theme_setter,
     )
-    managed = assemble_managed_components(root)
+    preferences_controller = settings.preferences_controller
+    parser_settings_controller = settings.parser_settings_controller
+    managed = settings.managed
     component_catalog = managed.catalog
     managed_mineru = managed.mineru
-    parser_settings_controller = ParserSettingsController(
-        context.paths,
-        mineru_account_service,
-        test_mineru_credential=(
-            lambda *args, **kwargs: test_mineru_credential(*args, **kwargs)
-        ),
-        test_mineru_connection=(
-            lambda *args, **kwargs: test_mineru_connection(*args, **kwargs)
-        ),
-        discover_vision_models=(
-            lambda *args, **kwargs: discover_vision_models(*args, **kwargs)
-        ),
-        test_vision_provider=(
-            lambda *args, **kwargs: test_vision_provider(*args, **kwargs)
-        ),
-        resolve_mineru_config=(
-            lambda runtime_root: resolve_mineru_config_path(runtime_root)
-        ),
-        read_mineru_config=(
-            lambda path: read_mineru_config_data(path)
-        ),
-        load_mineru=lambda path: load_mineru_config(path),
-        normalize_mineru=lambda token: normalize_mineru_token(token),
-        summarize_mineru=lambda path: mineru_config_summary(path),
-        save_mineru=(
-            lambda payload, path: save_mineru_config(payload, path)
-        ),
-        build_statistics=(
-            lambda database_path, **kwargs: build_parser_statistics(
-                database_path,
-                **kwargs,
-            )
-        ),
-        resolve_vision_config=(
-            lambda runtime_root: resolve_vision_config_path(runtime_root)
-        ),
-        summarize_vision=lambda path: vision_config_summary(path),
-        save_vision=(
-            lambda payload, path: save_vision_provider(payload, path)
-        ),
-        delete_vision=(
-            lambda provider_id, path: delete_vision_provider(
-                provider_id,
-                path,
-            )
-        ),
-        save_vision_fallback=(
-            lambda payload, path: save_vision_policy(payload, path)
-        ),
-        managed_components=managed.registry,
-    )
-    parser_settings_controller.migrate_legacy_mineru_account()
     library_get_routes, library_post_routes = assemble_library_routes(
         library_query_controller,
         document_group_controller,
@@ -269,44 +166,18 @@ def build_application_runtime(
         | import_post_routes | reader_post_routes | archive_post_routes | source_post_routes
     )
 
-    desktop_shell_controller = DesktopShellController(
-        current_version=__version__,
-        desktop_shell=os.environ.get("ME_FINDER_DESKTOP_SHELL", ""),
-        check_macos_update=lambda current_version: check_macos_update(
-            current_version
-        ),
-        open_source=lambda source_id, page: open_source_file(source_id, page),
-        open_cnki=lambda value: open_external_cnki_url(value),
-        durable_operations=durable_operations,
-        data_root_migration=data_root_admission.migration,
-        has_active_uploads=document_imports.has_active_uploads,
-        has_active_jobs=import_orchestrator.has_active_jobs,
-        runtime_mutation=index_runtime.mutation,
-        migrate_data_root=lambda current_root, target_root, default_root: (
-            index_runtime.run_when_ready(
-                lambda _database_path: migrate_data_root(
-                    current_root,
-                    target_root,
-                    default_root,
-                )
-            )
-        ),
+    desktop_shell_controller, _open_mineru_token_route = assemble_desktop_shell(
+        context,
+        imports,
+        library,
         update_service=update_service,
         native_directory_chooser=native_directory_chooser,
         native_export_directory_chooser=native_export_directory_chooser,
         native_scan_directory_chooser=native_scan_directory_chooser,
         native_backup_file_chooser=native_backup_file_chooser,
-        app_data_root=app_data_root,
-        default_app_data_root=default_app_data_root,
+        open_external_cnki_url=open_external_cnki_url,
+        open_mineru_token_page=open_mineru_token_page,
     )
-    def _open_mineru_token_route():
-        try:
-            open_mineru_token_page()
-            return (200, {"ok": True})
-        except Exception:  # noqa: BLE001 - surface a friendly toast, log details
-            logging.exception("打开 MinerU Token 页面失败")
-            return (500, {"ok": False, "error": "打开 MinerU 失败，请手动访问。"})
-
     shell_get_routes, shell_post_routes = assemble_shell_routes(
         desktop_shell_controller,
         _open_mineru_token_route,

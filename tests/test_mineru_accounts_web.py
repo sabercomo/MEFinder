@@ -266,7 +266,7 @@ class MinerUAccountsWebTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
                 with patch(
-                    "src.me_finder.web_runtime.test_mineru_credential",
+                    "src.me_finder.settings_assembly.test_mineru_credential",
                     return_value={"ok": True, "latency_ms": 12},
                 ) as test_credential:
                     status, payload = self._request(

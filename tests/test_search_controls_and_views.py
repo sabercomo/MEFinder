@@ -9,7 +9,7 @@ from src.me_finder.web import HTML
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "import_assembly.py", "http_routes.py", "web_http.py", "upload_import_controller.py")
+    for name in ("web.py", "web_runtime.py", "import_assembly.py", "settings_assembly.py", "http_routes.py", "web_http.py", "upload_import_controller.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"

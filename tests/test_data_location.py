@@ -354,7 +354,7 @@ class DataLocationTests(unittest.TestCase):
             metadata_thread = threading.Thread(target=metadata_request)
             try:
                 with patch(
-                    "src.me_finder.web_runtime.migrate_data_root",
+                    "src.me_finder.settings_assembly.migrate_data_root",
                     side_effect=blocked_migration,
                 ), patch(
                     "src.me_finder.import_assembly.update_metadata_in_database",
@@ -531,7 +531,7 @@ class DataLocationTests(unittest.TestCase):
                     {"path": str(backup_path)},
                 )
                 self.assertEqual(status, 200)
-                with patch("src.me_finder.web_runtime.migrate_data_root") as migrate:
+                with patch("src.me_finder.settings_assembly.migrate_data_root") as migrate:
                     status, response = _request_json(
                         server,
                         "POST",
@@ -589,7 +589,7 @@ class DataLocationTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
 
-                with patch("src.me_finder.web_runtime.migrate_data_root") as migrate:
+                with patch("src.me_finder.settings_assembly.migrate_data_root") as migrate:
                     status, response = _request_json(
                         server,
                         "POST",
@@ -615,7 +615,7 @@ class DataLocationTests(unittest.TestCase):
                     "restart_required": True,
                 }
                 with patch(
-                    "src.me_finder.web_runtime.migrate_data_root",
+                    "src.me_finder.settings_assembly.migrate_data_root",
                     return_value=migration_result,
                 ) as migrate:
                     status, response = _request_json(
