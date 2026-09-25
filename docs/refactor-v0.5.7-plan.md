@@ -1,6 +1,6 @@
 # MEFinder 前后端架构重构计划
 
-2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1、C1.2 已完成,下一步 C1.3。版本号 v0.5.7 为暂定,尚未发布。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1、C1.2 已完成;C1.3 的 `runtime_page_mapping` 已收口,下一步继续同阶段其余模块。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
@@ -16,7 +16,7 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从当前未完成步骤继续(当前为 C1.3 `translation_works`、`runtime_page_mapping`、`bibliographic_metadata` 的写库收口),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(当前为 C1.3 `translation_works`、`bibliographic_metadata` 的写库收口),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
@@ -176,6 +176,8 @@
 2026-09-25(C1.2b 进展):`alignment_snapshots.py` 的配方读取、存在性查询与整体替换事务收进同一仓储;原层仍决定配方兼容与调用对齐计算。新增失败回滚测试,守住“恢复途中出错时保留原对齐”;SQL 散落文件 24→23。C1.2 最后一批为 `alignment_body_range.py`。
 
 2026-09-25(C1.2c 进展):`alignment_body_range.py` 的段落/页面锚点查询、分段窗口查询与可写审阅事务收进 `persistence/alignment_store.py`;正文范围判断、出版方页码展示和异常文案仍在原层。SQL 散落文件 23→22,C1.2 三批均已完成。下一步 C1.3 按模块分批推进。
+
+2026-09-25(C1.3a 进展):`runtime_page_mapping.py` 的 PDF 页面、段落、来源和映射写库操作进入 `persistence/page_mapping_store.py`;映射计算和备份时序仍在原层。补测段落更新失败时页面改动整体回滚;SQL 散落文件 22→21。C1.3 尚未完成,下一批处理 `translation_works.py`,再处理 `bibliographic_metadata.py`。
 
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。

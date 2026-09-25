@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.me_finder.database import SCHEMA
 from src.me_finder.bibliographic_metadata import manual_metadata, update_metadata_in_database
@@ -122,6 +123,28 @@ class RuntimePageMappingTests(unittest.TestCase):
                 search_result["results"][0]["citation_formats"]["gb"],
                 "南希·弗雷泽. 食人资本主义[M]. 蓝江, 译. 上海: 上海人民出版社, 2023: 1-2.",
             )
+
+            with mock.patch(
+                "src.me_finder.runtime_page_mapping._apply_paragraph_mapping",
+                side_effect=RuntimeError("paragraph update failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "paragraph update failed"):
+                    apply_mapping_to_database(
+                        database,
+                        "pdf-test",
+                        [{**segment, "citation_page_start": "20"}],
+                    )
+            connection = sqlite3.connect(str(database))
+            try:
+                pages_after_failure = [
+                    json.loads(row[0])
+                    for row in connection.execute(
+                        "SELECT payload_json FROM pdf_pages ORDER BY pdf_page_index"
+                    )
+                ]
+            finally:
+                connection.close()
+            self.assertEqual([page["citation_page"] for page in pages_after_failure], ["1", "2"])
 
     def test_auto_segments_keep_detected_method(self) -> None:
         cleaned = normalize_auto_segments(

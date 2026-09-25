@@ -8,12 +8,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .database import (
-    PARAGRAPH_SELECT_COLUMNS,
+from .persistence.paragraph_payload import (
     paragraph_from_database_row,
     paragraph_payload_for_storage,
 )
-from .persistence.connection import connect_index
+from .persistence.page_mapping_store import (
+    page_mapping_transaction,
+    paragraph_rows,
+    pdf_page_rows,
+    source_payload_json,
+    write_page_mapping,
+    write_paragraph,
+    write_pdf_page,
+    write_source_payload,
+)
 from .pdf_page_mapping import (
     PageMapper,
     mapping_gutter_x,
@@ -76,29 +84,19 @@ def apply_mapping_to_database(
         raise ValueError("没有可应用的自动页码区间。")
     _backup_database(database_path)
     mapper = PageMapper(cleaned)
-    connection = connect_index(database_path, write=True)
     page_updates = 0
     paragraph_updates = 0
-    try:
-        connection.execute("BEGIN IMMEDIATE")
+    with page_mapping_transaction(database_path) as connection:
         pages_by_index: Dict[int, Dict[str, object]] = {}
-        page_rows = connection.execute(
-            "SELECT row_id, pdf_page_index, payload_json FROM pdf_pages WHERE source_file_id = ?",
-            (source_file_id,),
-        ).fetchall()
-        for row_id, page_idx_value, payload_json in page_rows:
+        for row_id, page_idx_value, payload_json in pdf_page_rows(connection, source_file_id):
             page = json.loads(payload_json)
             page_idx = int(page_idx_value)
             _apply_page_mapping(page, page_idx, mapper, cleaned)
             pages_by_index[page_idx] = page
-            connection.execute("UPDATE pdf_pages SET payload_json = ? WHERE row_id = ?", (_json(page), row_id))
+            write_pdf_page(connection, row_id, _json(page))
             page_updates += 1
 
-        paragraph_rows = connection.execute(
-            f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE p.source_file_id = ?",
-            (source_file_id,),
-        ).fetchall()
-        for row in paragraph_rows:
+        for row in paragraph_rows(connection, source_file_id):
             paragraph = paragraph_from_database_row(row)
             paragraph_id = str(row["paragraph_id"])
             start_idx = int(paragraph.get("pdf_page_start_index") or 0)
@@ -106,30 +104,17 @@ def apply_mapping_to_database(
             start_page = pages_by_index.get(start_idx, {})
             end_page = pages_by_index.get(end_idx, {})
             _apply_paragraph_mapping(paragraph, start_idx, end_idx, start_page, end_page)
-            connection.execute(
-                """
-                UPDATE paragraphs
-                   SET page_display = ?, page_source_type = ?, page_confidence = ?,
-                       citation_page_start = ?, citation_page_end = ?, payload_json = ?
-                 WHERE paragraph_id = ?
-                """,
-                (
-                    paragraph.get("page_display"),
-                    paragraph.get("page_source_type"),
-                    paragraph.get("page_confidence"),
-                    paragraph.get("citation_page_start"),
-                    paragraph.get("citation_page_end"),
-                    _json(paragraph_payload_for_storage(paragraph)),
-                    paragraph_id,
-                ),
+            write_paragraph(
+                connection,
+                paragraph_id,
+                paragraph,
+                _json(paragraph_payload_for_storage(paragraph)),
             )
             paragraph_updates += 1
 
-        source_row = connection.execute(
-            "SELECT payload_json FROM source_files WHERE source_file_id = ?", (source_file_id,)
-        ).fetchone()
-        if source_row:
-            source = json.loads(source_row[0])
+        source_json = source_payload_json(connection, source_file_id)
+        if source_json is not None:
+            source = json.loads(source_json)
             profile = source.setdefault("pdf_profile", {})
             profile["mapping_status"] = mapping_status
             if auto_mapping is not None:
@@ -139,10 +124,7 @@ def apply_mapping_to_database(
                 stored_mapping["applied_segment_count"] = len(cleaned)
                 profile["auto_page_mapping"] = stored_mapping
                 profile["mapping_failure_reasons"] = stored_mapping.get("failure_reasons", [])
-            connection.execute(
-                "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
-                (_json(source), source_file_id),
-            )
+            write_source_payload(connection, source_file_id, _json(source))
 
         mapping_payload = {
             "mapping_id": f"MAP-{source_file_id}",
@@ -155,25 +137,7 @@ def apply_mapping_to_database(
             "validated_by": "auto_mapping_ui",
             "mapping_status": mapping_status,
         }
-        existing = connection.execute(
-            "SELECT row_id FROM pdf_page_mappings WHERE source_file_id = ? LIMIT 1", (source_file_id,)
-        ).fetchone()
-        if existing:
-            connection.execute(
-                "UPDATE pdf_page_mappings SET payload_json = ? WHERE source_file_id = ?",
-                (_json(mapping_payload), source_file_id),
-            )
-        else:
-            connection.execute(
-                "INSERT INTO pdf_page_mappings(source_file_id, pdf_page_index, payload_json) VALUES (?, NULL, ?)",
-                (source_file_id, _json(mapping_payload)),
-            )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+        write_page_mapping(connection, source_file_id, _json(mapping_payload))
     return {"pages": page_updates, "paragraphs": paragraph_updates, "segments": len(cleaned)}
 
 

@@ -30,7 +30,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "indexer.py",
     "large_document/job_ledger.py",
     "parser_statistics.py",
-    "runtime_page_mapping.py",
     "search.py",
     "search_assembly.py",
     "search_recall.py",
