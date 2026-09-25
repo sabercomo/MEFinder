@@ -195,6 +195,8 @@
 
 2026-09-25(C1.5b 进展):整库重建时的 schema/元数据/来源写入及其后的卷、作品、段落、页码锚点写入进入 `persistence/index_build.py`;`database.py` 仍按原顺序读取备份快照、还原作品组、填库、还原对齐配方与 Zotero 关联、发布临时库。原模块 1146→953 行,行数守卫收紧到 960;优化和来源替换 SQL 尚待迁移,C1.5 尚未完成。
 
+2026-09-25(C1.5c 进展):单来源替换、批量删除及旧版页码锚点清理的 SQL/事务进入 `persistence/source_replace.py`;`database.py` 保留入参处理、UTF-8 清理及先备份再写入的顺序。原模块降至约 617 行,SQL 散落文件仍为 19,优化/目录读取 SQL 尚待迁移,C1.5 尚未完成。
+
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
