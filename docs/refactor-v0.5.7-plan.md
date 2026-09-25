@@ -191,6 +191,8 @@
 
 2026-09-25(C1.4c 完成):作品组目标、选区、定位、候选段与人工确认读取 SQL 全部进入 `persistence/alignment_store.py`;`text_alignment.py` 只保留路由判断、回退与展示数据装配,没有直接 `.execute`,`alignment_generation.py` 也没有。原模块 953 行,行数守卫收紧到 960;SQL 散落文件 20→19。C1.4 完成,下一步 C1.5。
 
+2026-09-25(C1.5a 进展):FTS5/trigram 对象检查、安装和增量升级 SQL 进入 `persistence/fts_index.py`;`database.py` 保留 `ensure_database_search_index` 兼容入口,由它把既有整库优化流程作为回调传入,避免 persistence 上行依赖。数据库构建/来源替换仍在原模块,SQL 散落文件暂为 19,C1.5 尚未完成。
+
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
