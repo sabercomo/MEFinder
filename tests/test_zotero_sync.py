@@ -45,6 +45,7 @@ class FakeLibrary:
         self.removed: List[List[str]] = []
         self.metadata: List[tuple] = []
         self.pending_files: Dict[str, Path] = {}
+        self.capacity = None
         self._counter = 0
 
     def add_source(self, path: Path, *, metadata_source: str = "manual") -> str:
@@ -57,6 +58,8 @@ class FakeLibrary:
         for path in paths:
             self._counter += 1
             job_id = f"job-{self._counter}"
+            if self.capacity is not None:
+                self.capacity -= 1
             self.imported.append(Path(path))
             self.jobs[job_id] = {"job_id": job_id, "status": "processing", "message": "正在解析"}
             self.pending_files[job_id] = Path(path)
@@ -111,6 +114,7 @@ class ZoteroSyncTestCase(unittest.TestCase):
                 remove_documents=self.library.remove_documents,
                 apply_metadata=self.library.apply_metadata,
                 hash_file=_sha,
+                import_capacity=lambda: self.library.capacity,
             ),
             client_factory=lambda server_id: ZoteroLocalClient(self.base_url, timeout=3, server_id=server_id),
         )
@@ -473,6 +477,84 @@ class SyncFlowTests(ZoteroSyncTestCase):
         # Automatic syncs never retry failures.
         self.library.jobs.clear()
         self.service.run_sync("interval")
+        self.assertEqual(len(self.library.imported), imported + 1)
+
+    def four_pdf_collection(self) -> None:
+        self.fake.add_collection("BIG", "耶吉")
+        for index in range(4):
+            self.fake.add_item(f"I{index}", f"论文 {index}", ["BIG"])
+            self.fake.add_attachment(f"A{index}", f"I{index}", self.file(f"paper{index}.pdf", f"body {index}"))
+        self.select("BIG")
+
+    def test_submission_is_throttled_to_the_import_queue_capacity(self) -> None:
+        """队列只剩 2 个位置时只提交 2 篇；其余留待下次同步，不算解析失败。"""
+
+        self.four_pdf_collection()
+        self.library.capacity = 2
+        self.service.run_sync()
+        self.assertEqual(len(self.library.imported), 2)
+        rows = self.rows()
+        deferred = sorted(
+            key for key, row in rows.items()
+            if row.get("status") == "pending" and not row.get("import_job_id")
+        )
+        self.assertEqual(len(deferred), 2)
+        for key in deferred:
+            self.assertIn("排队已满", str(rows[key].get("status_message")))
+        self.assertFalse([key for key, row in rows.items() if row.get("status") == "failed"])
+
+        # The queue drains; the next sync picks the rest up instead of losing them.
+        self.library.capacity = None
+        self.service.run_sync("manual")
+        self.assertEqual(len(self.library.imported), 4)
+        self.library.finish_jobs()
+        self.service.resolve_pending()
+        self.assertCountEqual(
+            {row.get("status") for row in self.rows().values()}, {"linked"}
+        )
+
+    def test_collection_with_deferred_attachments_is_not_labelled_synced(self) -> None:
+        """被节流挡在队列外的条目必须露在"待同步 N 篇"里，不然整栏看着像已完成。"""
+
+        self.four_pdf_collection()
+        self.library.capacity = 2
+        self.service.run_sync()
+        big = next(row for row in self.service.overview()["collections"] if row["key"] == "BIG")
+        self.assertEqual(big["unsynced_count"], 2)
+
+        self.library.capacity = None
+        self.service.run_sync("manual")
+        self.library.finish_jobs()
+        self.service.resolve_pending()
+        big = next(row for row in self.service.overview()["collections"] if row["key"] == "BIG")
+        self.assertEqual(big["unsynced_count"], 0)
+
+    def test_queue_failed_attachment_is_reimported_and_labelled_apart(self) -> None:
+        """从没进过队列的任务没有解析进度可保留，手动同步必须重导并说清是排队问题。"""
+
+        self.basic_library()
+        self.select("HEGEL")
+        self.service.run_sync()
+        job_id = self.rows()["ATT2"]["import_job_id"]
+        self.library.jobs[job_id].update(
+            status="failed",
+            phase="queue_failed",
+            failure_stage="queue",
+            message="导入任务暂时无法进入处理队列。",
+        )
+        del self.library.pending_files[job_id]
+        self.service.resolve_pending()
+        self.assertEqual(self.rows()["ATT2"]["status"], "failed")
+
+        labelled = next(
+            row for row in self.service.status()["rows"]
+            if "精神现象学" in str(row.get("title"))
+        )
+        self.assertIn("排队已满", str(labelled["status_text"]))
+        self.assertNotIn("解析失败", str(labelled["status_text"]))
+
+        imported = len(self.library.imported)
+        self.service.run_sync("manual")
         self.assertEqual(len(self.library.imported), imported + 1)
 
     def test_linked_file_attachments_are_supported(self) -> None:

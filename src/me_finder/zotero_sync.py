@@ -40,6 +40,7 @@ FILE_LINK_MODES = frozenset({"imported_file", "imported_url", "linked_file"})
 FREQUENCIES = ("manual", "launch", "interval")
 INTERVAL_SECONDS = 30 * 60
 IMPORT_BATCH = 50
+QUEUE_FULL_TEXT = "排队已满，稍后自动重试"
 _ITEM_FIELDS = (
     "itemType", "title", "creators", "date", "publisher", "place",
     "publicationTitle", "volume", "issue", "pages", "DOI", "ISBN", "ISSN",
@@ -421,6 +422,10 @@ def plan_sync(
         source_id = row.get("source_file_id")
         if status == "unavailable" or (status == "failed" and retry_failed):
             plan.retry_attachments.append(key)
+        elif status == "pending" and not row.get("import_job_id"):
+            # A previous run sized itself to the import queue and left this one
+            # out; it never became a job, so the next sync owns it.
+            plan.retry_attachments.append(key)
         elif status == "linked" and source_id and source_id not in sources:
             # Deleted in MEFinder or lost in a rebuild, still in Zotero:
             # Zotero wins, bring it back.
@@ -498,6 +503,9 @@ class ZoteroSyncPorts:
     apply_metadata: Callable[[str, Mapping[str, object]], object]
     hash_file: Callable[[Path], str]
     parse_mode_label: Callable[[], str] = lambda: ""
+    # How many imports the in-process queue would take right now; ``None``
+    # means the capacity is unknown and every attachment is submitted at once.
+    import_capacity: Callable[[], Optional[int]] = lambda: None
 
 
 ClientFactory = Callable[[Optional[str]], ZoteroLocalClient]
@@ -555,7 +563,10 @@ class ZoteroSyncService:
             if job.get("status") in _JOB_DONE:
                 row.update(status_text="已导入", tone="ok")
             elif job.get("status") in _JOB_FAILED:
-                row.update(status_text="解析失败，可在导入页重试", tone="warn")
+                if str(job.get("failure_stage") or "") == "queue":
+                    row.update(status_text=QUEUE_FULL_TEXT, tone="warn")
+                else:
+                    row.update(status_text="解析失败，可在导入页重试", tone="warn")
             elif job.get("message"):
                 row["status_text"] = str(job["message"]).rstrip("。…")
         counts: Dict[str, int] = {"linked": 0, "pending": 0, "unavailable": 0, "failed": 0}
@@ -600,9 +611,19 @@ class ZoteroSyncService:
             for row in stored.attachments.values()
             if row.get("status") in {"linked", "pending"}
         }
+        # An attachment that failed, or that throttling left without a job, still
+        # needs another sync push; counting it as known would hide it behind
+        # "已同步".
+        awaiting = {
+            str(row.get("parent_item_key")) for row in stored.attachments.values()
+            if row.get("status") == "failed"
+            or (row.get("status") == "pending" and not row.get("import_job_id"))
+        }
         linked: Dict[str, int] = {}
         known: Dict[str, int] = {}
         for key, item in stored.items.items():
+            if key in awaiting:
+                continue
             for collection in json.loads(str(item.get("collections_json") or "[]")):
                 known[collection] = known.get(collection, 0) + 1
                 if key in documented:
@@ -706,7 +727,7 @@ class ZoteroSyncService:
                     "last_success_at": _now(),
                 }
             )
-            labels = (("added", "新增"), ("linked", "关联"), ("metadata", "题录更新"), ("reparsed", "重新解析"), ("removed", "移除"), ("unavailable", "附件不可用"))
+            labels = (("added", "新增"), ("linked", "关联"), ("metadata", "题录更新"), ("reparsed", "重新解析"), ("removed", "移除"), ("unavailable", "附件不可用"), ("deferred", "排队等待"))
             summary = "，".join(f"{label} {result[key]}" for key, label in labels if result.get(key)) or "没有变化"
             self._finish("done", summary, result)
             return self.status()
@@ -741,7 +762,7 @@ class ZoteroSyncService:
     ) -> Dict[str, int]:
         sources = self._sources()
         plan = plan_sync(snapshot, stored, sources, retry_failed=retry_failed)
-        result = dict.fromkeys(("added", "linked", "metadata", "reparsed", "removed", "unavailable"), 0)
+        result = dict.fromkeys(("added", "linked", "metadata", "reparsed", "removed", "unavailable", "deferred"), 0)
         names = {row["key"]: row["name"] for row in collection_tree(snapshot.collections)}
         rows: Dict[str, Dict[str, object]] = {key: dict(row) for key, row in stored.attachments.items()}
         metadata_items: Set[str] = set(plan.metadata_items)
@@ -776,10 +797,14 @@ class ZoteroSyncService:
             record = snapshot.attachments[key]
             previous = rows.get(key) or {}
             job_id = str(previous.get("import_job_id") or "")
-            if previous.get("status") == "failed" and job_id and self._ports.job_status(job_id):
-                # The failed job is still in the import queue: resuming it there
-                # reuses finished pages and MinerU quota; re-importing would not.
-                continue
+            if previous.get("status") == "failed" and job_id:
+                job = self._ports.job_status(job_id)
+                # A job that is still in the queue has finished pages and MinerU
+                # quota worth resuming from the import page. A job rejected at
+                # the queue parsed nothing, so there is nothing to preserve and
+                # skipping it would strand the row on "没有变化".
+                if job is not None and str(job.get("failure_stage") or "") != "queue":
+                    continue
             row: Dict[str, object] = {**previous}
             for name in ("attachment_key", "parent_item_key", "attachment_version", "link_mode", "content_type", "file_name", "file_signature"):
                 row[name] = record.get(name)
@@ -837,8 +862,16 @@ class ZoteroSyncService:
                 queued.add(digest)
                 imports.append((key, path))
 
-        for start in range(0, len(imports), IMPORT_BATCH):
-            batch = imports[start:start + IMPORT_BATCH]
+        deferred: List[Tuple[str, Path]] = []
+        cursor = 0
+        while cursor < len(imports):
+            room = self._ports.import_capacity()
+            if room is not None and room < 1:
+                deferred = imports[cursor:]
+                break
+            limit = IMPORT_BATCH if room is None else min(IMPORT_BATCH, int(room))
+            batch = imports[cursor:cursor + limit]
+            cursor += len(batch)
             try:
                 response = self._ports.import_files([path for _key, path in batch])
             except Exception as exc:  # noqa: BLE001 - one failed batch must not stop the rest
@@ -860,6 +893,23 @@ class ZoteroSyncService:
                     message = str((errors.get(str(path)) or {}).get("error") or "导入失败")
                     rows[key].update(status="failed", status_message=message)
                     self._row(action=action, title=title_of(str(record["parent_item_key"])), meta=meta_of(record, ""), status_text=message, tone="warn")
+
+        # The import queue is bounded, so a batch larger than its free slots
+        # would come back as a queue rejection. Those attachments stay pending
+        # with no job and the next sync picks them up.
+        for key, _path in deferred:
+            record = snapshot.attachments[key]
+            rows[key]["import_job_id"] = None
+            rows[key]["status_message"] = QUEUE_FULL_TEXT
+            result["deferred"] += 1
+            route = self._ports.parse_mode_label() if record.get("format") == "pdf" else "文本通道"
+            self._row(
+                action="重新解析" if rows[key].get("reparse") else "新增",
+                title=title_of(str(record["parent_item_key"])),
+                meta=meta_of(record, route),
+                status_text=QUEUE_FULL_TEXT,
+                tone="warn",
+            )
         for row in rows.values():
             row.pop("reparse", None)
 

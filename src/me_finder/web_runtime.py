@@ -575,6 +575,7 @@ def build_application_runtime(
         context.paths, index_runtime=index_runtime, durable_operations=durable_operations,
         document_imports=document_imports, import_orchestrator=import_orchestrator,
         deletion_coordinator=deletion_coordinator, metadata_coordinator=metadata_coordinator,
+        import_capacity=lambda: import_task_queue.free_slots,
     )
     source_get_routes, source_post_routes = assemble_source_routes(zotero_sync_controller)
     controller_get_routes = (

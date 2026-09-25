@@ -59,6 +59,25 @@
 
 - Zotero 10.0.4 真机改动（用户操作）：删除 1 条、改 1 条年份。增量读取只拉改动条目（`itemKey=9YRNYZXD`）和连带变化的 1 个附件，其余 48 条未重读；同步结果「题录更新 1，移除 1」：删除条目的文献从 MEFinder 移除，年份 2023 → 2022 写入题录且未重新解析，未触发任何导入。预览「同步时移除 N 篇」只反映勾选变化，Zotero 端删除要同步读到后才出现，这是设计边界。
 
+## 真机回归：一次同步打满导入队列（2026-09-25，用户真实库「耶吉」50 篇）
+
+**事实**（读 `runtime/data/index.sqlite3` 的 `zotero_attachments` 与 `config/pdf_imports.json`）：
+
+- 15:11:52 一次同步提交 50 篇，14 篇的任务在 15:11:53 全部落到 `status=failed / phase=queue_failed / failure_stage=queue / can_resume=true`，报文只有一条：「导入任务暂时无法进入处理队列。文件和任务进度已安全保留，可点击"继续导入"重试。」
+- 同期 `parser_jobs.sqlite3` 里 `mineru-cloud / vlm` 任务连续 `validated`，队列在 4 分钟内把 `linked` 从 8 推到 16、`pending` 从 28 降到 20 —— 解析链路本身没有故障，失败全部发生在提交环节。
+- 根因：`ImportTaskQueue` 有界（`worker_count=2`、`max_pending_tasks=32`，`import_queue.py:23`），一个任务从入队到解析结束全程占位，在途上限约 34；而 `IMPORT_BATCH = 50` 一次全推，超出部分被 `submit()` 拒。50 − 34 ≈ 14，与实测吻合。
+- 二次伤害：`zotero_sync.py` 把任何 `_JOB_FAILED` 一律显示成「解析失败，可在导入页重试」；且 `_apply` 对「failed 且 job 仍在」的行直接跳过，于是这 14 篇既不自动补、再点「立即同步」也只得到「没有变化」，分类栏仍显示「已同步」。
+
+**修复**：
+
+- `ImportTaskQueue.free_slots` 暴露剩余容量，经 `zotero_sync_assembly` 的 `import_capacity` 端口注入；`_apply` 按剩余容量分批提交，装不下的行保持 `pending` 且不带 `import_job_id`，不再产生 `queue_failed`。
+- 被挡下的行由 `plan_sync` 计入 `retry_attachments`，下一次同步（启动 / 间隔 / 手动）继续提交；同步摘要新增「排队等待 N」。
+- `status()` 按 `failure_stage == "queue"` 拆出「排队已满，稍后自动重试」，与真解析失败分开；`_apply` 不再跳过队列拒绝的任务（它没有解析进度可保留），真解析失败仍交给导入页续传。
+- `overview()` 的 `unsynced_count` 不再把「失败 / 待补提交」的条目算作已同步，分类栏会显示「待同步 N 篇」。
+- 测试：`test_submission_is_throttled_to_the_import_queue_capacity`、`test_collection_with_deferred_attachments_is_not_labelled_synced`、`test_queue_failed_attachment_is_reimported_and_labelled_apart`、`test_free_slots_reports_how_much_work_submit_accepts`；`test_failed_parse_with_resumable_job_is_not_reimported` 守住真解析失败不自动重导。
+
+**与上一节 09-25 真机记录的关系**：那次「49 篇在导入队列里解析完成」写的是开发库副本，且未统计单批提交是否被拒；本节是真实库单趟同步的实测，两者不冲突——副本环境槽位释放更快，掩盖了溢出。
+
 ## 未做 / 后续
 
 - 群组文库不在本版范围，只做「我的文库」（`users/0`）。

@@ -71,6 +71,7 @@ def assemble_zotero_sync(
     import_orchestrator,
     deletion_coordinator,
     metadata_coordinator,
+    import_capacity: Callable[[], Optional[int]] = lambda: None,
 ) -> Tuple[ZoteroSyncService, "ZoteroSyncController"]:
     """Build the sync service and its HTTP controller."""
 
@@ -128,6 +129,7 @@ def assemble_zotero_sync(
             apply_metadata=apply_metadata,
             hash_file=lambda path: sha256_file(Path(path)),
             parse_mode_label=lambda: PARSE_MODE_LABELS.get(parse_mode(), ""),
+            import_capacity=import_capacity,
         ),
     )
     return service, ZoteroSyncController(service, parse_mode)
