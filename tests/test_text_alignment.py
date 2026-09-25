@@ -682,7 +682,7 @@ class TextAlignmentTests(unittest.TestCase):
             SemanticLink(1, 2, 2, 2, 2.2, 0.0, "unmatched"),
         ]
         with mock.patch(
-            "src.me_finder.text_alignment.align_segment_sequences",
+            "src.me_finder.alignment_generation.align_segment_sequences",
             return_value=(links, []),
         ):
             generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
@@ -924,7 +924,7 @@ class TextAlignmentTests(unittest.TestCase):
     def test_unchanged_completed_pair_is_reused_without_recomputing(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         with mock.patch(
-            "src.me_finder.text_alignment.align_segment_sequences",
+            "src.me_finder.alignment_generation.align_segment_sequences",
             side_effect=AssertionError("cached pair should not be recomputed"),
         ):
             second = generate_alignment(

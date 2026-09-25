@@ -130,7 +130,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
             # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
-            "text_alignment.py": 2060,
+            "text_alignment.py": 1210,
+            "alignment_generation.py": 820,
             "alignment_segmentation.py": 350,
             "alignment_snapshots.py": 150,
             "alignment_overrides.py": 425,

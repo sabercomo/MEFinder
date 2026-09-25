@@ -1,4 +1,4 @@
-"""SQLite operations for manual alignment corrections.
+"""SQLite operations for alignment generation and manual corrections.
 
 The caller owns route and segment validation. This store keeps the proposal,
 confirmation, and revocation SQL on the same connection and transaction as
@@ -363,3 +363,292 @@ def read_segment_window(
         "WHERE segment_set_id = ? AND order_index >= ? ORDER BY order_index LIMIT ?",
         (segment_set_id, offset, limit),
     ).fetchall()
+
+
+@contextmanager
+def generation_write_transaction(
+    db_path: Path, *, install_schema: bool = False
+) -> Iterator[sqlite3.Connection]:
+    """Keep each preparation or publication phase in its original transaction."""
+
+    connection = open_writable_index(Path(db_path))
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        if install_schema:
+            install_text_alignment_schema(connection)
+        yield connection
+        connection.commit()
+    except (OSError, sqlite3.Error, RuntimeError, ValueError):
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def generation_source_row(connection: sqlite3.Connection, source_id: str) -> sqlite3.Row | None:
+    """Read a source's fields needed for alignment."""
+
+    return connection.execute(
+        "SELECT source_file_id, source_type, file_name, payload_json "
+        "FROM source_files WHERE source_file_id = ?",
+        (source_id,),
+    ).fetchone()
+
+
+def generation_page_rows(connection: sqlite3.Connection, source_id: str) -> list[sqlite3.Row]:
+    """Read ordered PDF page payloads for segmentation."""
+
+    return connection.execute(
+        "SELECT pdf_page_index, payload_json FROM pdf_pages "
+        "WHERE source_file_id = ? ORDER BY pdf_page_index, row_id",
+        (source_id,),
+    ).fetchall()
+
+
+def generation_paragraph_rows(
+    connection: sqlite3.Connection, source_id: str
+) -> list[sqlite3.Row]:
+    """Read ordered EPUB paragraph payloads for segmentation."""
+
+    return connection.execute(
+        "SELECT paragraph_id, paragraph_index, text_raw, payload_json "
+        "FROM paragraphs WHERE source_file_id = ? ORDER BY paragraph_index, rowid",
+        (source_id,),
+    ).fetchall()
+
+
+def existing_segment_set(
+    connection: sqlite3.Connection,
+    source_id: str,
+    text_hash: str,
+    segmenter: str,
+    version: str,
+) -> sqlite3.Row | None:
+    """Find a reusable segment set for the exact source text and version."""
+
+    return connection.execute(
+        "SELECT segment_set_id FROM segment_sets WHERE source_file_id = ? "
+        "AND source_text_hash = ? AND segmenter = ? AND segmenter_version = ?",
+        (source_id, text_hash, segmenter, version),
+    ).fetchone()
+
+
+def segment_rows(connection: sqlite3.Connection, segment_set_id: str) -> list[sqlite3.Row]:
+    """Read segment ids and text in original order."""
+
+    return connection.execute(
+        "SELECT segment_id, text_raw FROM text_segments "
+        "WHERE segment_set_id = ? ORDER BY order_index",
+        (segment_set_id,),
+    ).fetchall()
+
+
+def insert_segment_set(
+    connection: sqlite3.Connection,
+    segment_set_id: str,
+    source_id: str,
+    text_hash: str,
+    segmenter: str,
+    version: str,
+    language_code: str,
+    timestamp: str,
+) -> None:
+    """Create the set identity before inserting its segments."""
+
+    connection.execute(
+        "INSERT INTO segment_sets(segment_set_id, source_file_id, "
+        "source_text_hash, segmenter, segmenter_version, language_code, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (segment_set_id, source_id, text_hash, segmenter, version, language_code, timestamp),
+    )
+
+
+def insert_segment_rows(
+    connection: sqlite3.Connection,
+    segments: Sequence[tuple[object, ...]],
+    page_spans: Sequence[tuple[object, ...]],
+    paragraph_spans: Sequence[tuple[object, ...]],
+) -> None:
+    """Store segments and exact source spans on the same connection."""
+
+    connection.executemany(
+        "INSERT INTO text_segments(segment_id, segment_set_id, order_index, text_raw) "
+        "VALUES (?, ?, ?, ?)",
+        segments,
+    )
+    if page_spans:
+        connection.executemany(
+            "INSERT INTO text_segment_spans(segment_id, source_file_id, "
+            "pdf_page_index, page_char_start, page_char_end, span_order) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            page_spans,
+        )
+    if paragraph_spans:
+        connection.executemany(
+            "INSERT INTO text_segment_paragraph_spans(segment_id, source_file_id, "
+            "paragraph_id, paragraph_index, paragraph_char_start, "
+            "paragraph_char_end, span_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            paragraph_spans,
+        )
+
+
+def previous_segment_set_id(
+    connection: sqlite3.Connection,
+    source_id: str,
+    segmenter: str,
+    current_segment_set_id: str,
+    version: str,
+) -> str | None:
+    """Find the latest previous-version set for vector reuse."""
+
+    row = connection.execute(
+        "SELECT segment_set_id FROM segment_sets "
+        "WHERE source_file_id = ? AND segmenter = ? "
+        "AND segment_set_id <> ? AND segmenter_version <> ? "
+        "ORDER BY created_at DESC LIMIT 1",
+        (source_id, segmenter, current_segment_set_id, version),
+    ).fetchone()
+    return str(row["segment_set_id"]) if row is not None else None
+
+
+def segment_text_rows(connection: sqlite3.Connection, segment_set_id: str) -> list[sqlite3.Row]:
+    """Read reusable text from a previous segment set."""
+
+    return connection.execute(
+        "SELECT text_raw FROM text_segments WHERE segment_set_id = ? "
+        "ORDER BY order_index",
+        (segment_set_id,),
+    ).fetchall()
+
+
+def generation_segment_language(
+    connection: sqlite3.Connection, segment_set_id: str
+) -> sqlite3.Row | None:
+    """Read the language stored with a segment set."""
+
+    return connection.execute(
+        "SELECT language_code FROM segment_sets WHERE segment_set_id = ?",
+        (segment_set_id,),
+    ).fetchone()
+
+
+def generation_group_exists(connection: sqlite3.Connection, group_id: str) -> bool:
+    """Whether the requested document group exists."""
+
+    return connection.execute(
+        "SELECT 1 FROM document_groups WHERE document_group_id = ?", (group_id,)
+    ).fetchone() is not None
+
+
+def generation_group_members(connection: sqlite3.Connection, group_id: str) -> set[str]:
+    """Return source ids belonging to the requested group."""
+
+    return {
+        str(row["source_file_id"])
+        for row in connection.execute(
+            "SELECT source_file_id FROM document_group_members "
+            "WHERE document_group_id = ?",
+            (group_id,),
+        )
+    }
+
+
+def supersede_completed_runs(
+    connection: sqlite3.Connection, group_id: str, pivot_id: str, target_id: str
+) -> None:
+    """Retire the previous completed pair before inserting its replacement."""
+
+    connection.execute(
+        "UPDATE alignment_runs SET status = 'superseded' "
+        "WHERE document_group_id = ? AND pivot_source_file_id = ? "
+        "AND target_source_file_id = ? AND status = 'completed'",
+        (group_id, pivot_id, target_id),
+    )
+
+
+def insert_alignment_run(connection: sqlite3.Connection, values: tuple[object, ...]) -> None:
+    """Store one completed alignment run and its parameters."""
+
+    connection.execute(
+        "INSERT INTO alignment_runs(alignment_run_id, document_group_id, "
+        "pivot_source_file_id, target_source_file_id, pivot_segment_set_id, "
+        "target_segment_set_id, algorithm, algorithm_version, parameters_json, "
+        "status, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        values,
+    )
+
+
+def insert_alignment_links(
+    connection: sqlite3.Connection,
+    links: Sequence[tuple[object, ...]],
+    members: Sequence[tuple[object, ...]],
+) -> None:
+    """Store links and their ordered segment membership."""
+
+    connection.executemany(
+        "INSERT INTO alignment_links(alignment_link_id, alignment_run_id, "
+        "order_index, cost, confidence, anchor_key, review_status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        links,
+    )
+    connection.executemany(
+        "INSERT INTO alignment_link_members(alignment_link_id, side, "
+        "segment_id, member_order) VALUES (?, ?, ?, ?)",
+        members,
+    )
+
+
+def reviewed_body_parameters(
+    connection: sqlite3.Connection, pivot_set_id: str, target_set_id: str
+) -> str | None:
+    """Load parameters from the latest reviewed body-range run."""
+
+    row = connection.execute(
+        "SELECT parameters_json FROM alignment_runs WHERE pivot_segment_set_id=? "
+        "AND target_segment_set_id=? AND json_extract(parameters_json,'$.body_range_source')='reviewed' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (pivot_set_id, target_set_id),
+    ).fetchone()
+    return str(row[0]) if row is not None else None
+
+
+def completed_run_candidates(
+    connection: sqlite3.Connection,
+    group_id: str,
+    pivot_id: str,
+    target_id: str,
+    pivot_set_id: str,
+    target_set_id: str,
+    algorithm: str,
+    version: str,
+) -> list[sqlite3.Row]:
+    """Load completed pair runs eligible for exact-configuration reuse."""
+
+    return connection.execute(
+        "SELECT alignment_run_id, parameters_json FROM alignment_runs "
+        "WHERE document_group_id = ? AND pivot_source_file_id = ? "
+        "AND target_source_file_id = ? AND pivot_segment_set_id = ? "
+        "AND target_segment_set_id = ? AND algorithm = ? "
+        "AND algorithm_version = ? AND status = 'completed' "
+        "AND NOT EXISTS (SELECT 1 FROM alignment_links l "
+        "WHERE l.alignment_run_id = alignment_runs.alignment_run_id "
+        "AND l.confidence IS NULL) "
+        "ORDER BY completed_at DESC, rowid DESC",
+        (group_id, pivot_id, target_id, pivot_set_id, target_set_id, algorithm, version),
+    ).fetchall()
+
+
+def completed_run_status_counts(
+    connection: sqlite3.Connection, run_id: str
+) -> dict[str, int]:
+    """Count stored review statuses for a reused pair run."""
+
+    return {
+        str(row["review_status"]): int(row["link_count"])
+        for row in connection.execute(
+            "SELECT review_status, COUNT(*) AS link_count "
+            "FROM alignment_links WHERE alignment_run_id = ? "
+            "GROUP BY review_status",
+            (run_id,),
+        )
+    }

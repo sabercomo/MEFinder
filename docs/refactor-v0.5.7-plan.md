@@ -187,6 +187,8 @@
 
 2026-09-25(C1.4a 进展):PDF/EPUB 纯分段类型、规则与 `segment_*` 函数进入 `alignment_segmentation.py`,`text_alignment.py` 保留导入面。迁移的 10 个函数/类型 AST 相同;原文件 2371→2054 行,行数守卫收紧到 2060,新模块上限 350。下一批再分生成编排和 SQL,此时 C1.4 尚未完成。
 
+2026-09-25(C1.4b 进展):对齐准备、生成、发布流程进入 `alignment_generation.py`,原模块保留旧导入面;生成阶段使用的 SQL 与两段立即事务进入 `persistence/alignment_store.py`。生成模块无直接 `.execute`,`text_alignment.py` 降至约 1207 行。既有测试中对计算函数的替身改指向新定义模块;定位/读取 SQL 仍在 `text_alignment.py`,下一批继续收口,C1.4 尚未完成。
+
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
