@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -161,6 +162,20 @@ else:
                 return engine
             time.sleep(0.02)
         self.fail("installer operation did not finish")
+
+    def test_close_cancels_and_joins_active_worker(self) -> None:
+        installer = self._installer()
+        release = threading.Event()
+        state = installer._states["ndlocr-lite"]
+        state.operation = "install"
+        state.thread = threading.Thread(target=release.wait, daemon=True)
+        state.thread.start()
+        thread = state.thread
+        self.assertFalse(installer.close(timeout=0))
+        self.assertTrue(state.cancel_event.is_set())
+        release.set()
+        self.assertTrue(installer.close(timeout=1))
+        self.assertFalse(thread.is_alive())
 
     def test_release_manifest_freezes_all_four_platforms(self) -> None:
         for key, onnxruntime in (

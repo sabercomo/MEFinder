@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import logging
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from . import alignment_assembly, import_assembly, translation_works
+from . import alignment_assembly, import_assembly
 from .app_context import AppContext
 from .alignment_assembly import assemble_alignment
 from .import_assembly import assemble_import
@@ -29,6 +27,7 @@ from .http_routes import (
 )
 from .zotero_sync_assembly import assemble_zotero_sync
 from .zotero_sync import ZoteroSyncService
+from .tasks.runtime_lifecycle import RuntimeLifecycle
 
 @dataclass(frozen=True)
 class ApplicationRuntime:
@@ -184,66 +183,8 @@ def build_application_runtime(
     )
 
 
-    def begin_shutdown() -> None:
-        """Reject new writes and stop accepting background work."""
-
-        # A translation alignment runs its multi-minute embedding inside a
-        # durable operation; shutdown waits for that operation to drain. Signal
-        # the embedding loop to stop at its next batch so the wait returns in
-        # seconds instead of blocking the whole app close on a full-book run.
-        from .embedding_runtime import request_embedding_cancel
-
-        request_embedding_cancel()
-        zotero_sync.stop()
-        managed.embedding_models.begin_shutdown()
-        managed.alignment_runtime.begin_shutdown()
-        durable_operations.begin_shutdown()
-        index_runtime.begin_shutdown()
-        import_task_queue.shutdown(wait=False)
-
-    def close_runtime(timeout: float = 2.0) -> bool:
-        """Release the SQLite handle this handler holds open.
-
-        The desktop app keeps its index open until the process exits, but a
-        caller that outlives one handler -- notably a test using a temporary
-        directory -- must be able to let go of the file.  Windows refuses to
-        delete a database that still has an open connection.
-        """
-
-        begin_shutdown()
-        document_imports.close()
-        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
-        durable_stopped = durable_operations.wait(timeout=timeout)
-        if not durable_stopped:
-            logging.warning(
-                "durable mutations are still committing; runtime engine kept open"
-            )
-            return False
-        remaining = (
-            None if deadline is None else max(0.0, deadline - time.monotonic())
-        )
-        workers_stopped = import_task_queue.shutdown(wait=True, timeout=remaining)
-        if not workers_stopped:
-            # Keep the engine alive for the accepted task.  A long-lived caller
-            # can retry close_runtime after it checkpoints; a desktop process
-            # releases all handles immediately when it exits.
-            logging.warning(
-                "background imports are still stopping; runtime engine kept open"
-            )
-            return False
-        managed_mineru.close()
-        # Cancel and reap any in-flight alignment-runtime install/verify process
-        # before reporting shutdown complete, so nothing is left behind.
-        if not managed.embedding_models.close(timeout=remaining):
-            return False
-        if not managed.alignment_runtime.close(timeout=remaining):
-            return False
-        index_runtime.close()
-        return True
-
-
-    zotero_sync.start_scheduler()
-    translation_works.start_body_bounds_warm_up(index_path)
+    lifecycle = RuntimeLifecycle(imports, managed, zotero_sync)
+    lifecycle.start(index_path)
     return ApplicationRuntime(
         zotero_sync=zotero_sync,
         index_path=index_path,
@@ -255,8 +196,8 @@ def build_application_runtime(
         controller_post_routes=controller_post_routes,
         shell_get_routes=shell_get_routes,
         shell_post_routes=shell_post_routes,
-        begin_shutdown=begin_shutdown,
-        close_runtime=close_runtime,
+        begin_shutdown=lifecycle.begin_shutdown,
+        close_runtime=lifecycle.close_runtime,
         wait_for_durable_operations=durable_operations.wait,
         submit_background_task=import_task_queue.submit,
         import_orchestrator=import_orchestrator,

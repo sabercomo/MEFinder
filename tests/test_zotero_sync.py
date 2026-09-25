@@ -10,9 +10,11 @@ import hashlib
 import json
 import sqlite3
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from typing import Dict, List
+from unittest import mock
 
 from src.me_finder.persistence.zotero_sync_store import (
     ZoteroSyncStore,
@@ -150,6 +152,27 @@ class ZoteroSyncTestCase(unittest.TestCase):
 
     def rows(self) -> Dict[str, Dict]:
         return self.store.read().attachments
+
+
+class ZoteroLifecycleTests(ZoteroSyncTestCase):
+    def test_close_waits_for_manual_sync_before_releasing_database(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        def sync(_trigger: str) -> None:
+            started.set()
+            release.wait()
+
+        with mock.patch.object(self.service, "run_sync", side_effect=sync):
+            self.assertTrue(self.service.start_sync()["started"])
+            self.assertTrue(started.wait(1))
+            self.assertFalse(self.service.close(timeout=0))
+            release.set()
+            self.assertTrue(self.service.close(timeout=1))
+
+    def test_close_joins_sleeping_scheduler(self) -> None:
+        self.service.start_scheduler(startup_delay=60)
+        self.assertTrue(self.service.close(timeout=1))
 
 
 class LocalClientTests(ZoteroSyncTestCase):

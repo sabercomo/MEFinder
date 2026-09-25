@@ -321,6 +321,22 @@ class LocalOCRInstaller:
         self._start_operation(provider_id, action)
         return self.summary()
 
+    def close(self, timeout: float | None = 30) -> bool:
+        """Cancel installation and wait for worker file handles to close."""
+
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        with self._state_lock:
+            active = [state for state in self._states.values() if state.operation is not None]
+            threads = [state.thread for state in active if state.thread is not None]
+            processes = [state.process for state in active if state.process is not None]
+            for state in active:
+                state.cancel_event.set()
+        for process in processes:
+            self._stop_process(process)
+        for thread in threads:
+            thread.join(None if deadline is None else max(0.0, deadline - time.monotonic()))
+        return all(not thread.is_alive() for thread in threads)
+
     def _start_operation(self, provider_id: str, action: str) -> None:
         with self._state_lock:
             state = self._states[provider_id]

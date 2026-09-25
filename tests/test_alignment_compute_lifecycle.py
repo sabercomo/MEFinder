@@ -6,6 +6,7 @@ import contextlib
 import sqlite3
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -34,6 +35,41 @@ else:
 
 
 class ComputeLifecycleTests(unittest.TestCase):
+    def test_runtime_close_waits_for_in_flight_zotero_sync(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_fixture(root, documents=2, paragraphs=20, alignment_paragraphs=8)
+            database = root / "data" / "index.sqlite3"
+            with mock.patch(
+                "src.me_finder.tasks.runtime_lifecycle.translation_works.start_body_bounds_warm_up"
+            ):
+                runtime = build_application_runtime(
+                    AppContext.create(root, index_path=database),
+                    open_pdf_with_platform=lambda *args: None,
+                    open_path_with_default_app=lambda *args: None,
+                    open_external_cnki_url=lambda *args: None,
+                    open_mineru_token_page=lambda *args: None,
+                )
+            started = threading.Event()
+            release = threading.Event()
+
+            def sync(_trigger):
+                started.set()
+                release.wait()
+
+            try:
+                with mock.patch.object(runtime.zotero_sync, "run_sync", side_effect=sync):
+                    self.assertTrue(runtime.zotero_sync.start_sync()["started"])
+                    self.assertTrue(started.wait(1))
+                    with self.assertLogs(level="WARNING") as warnings:
+                        self.assertFalse(runtime.close_runtime(timeout=0.5))
+                    self.assertIn("zotero sync is still stopping", "\n".join(warnings.output))
+                    release.set()
+                    self.assertTrue(runtime.close_runtime(timeout=5))
+            finally:
+                release.set()
+                runtime.close_runtime(timeout=5)
+
     def test_runtime_close_reaps_probe_and_compute_before_reporting_success(self):
         self.addCleanup(embedding_runtime.begin_embedding_run)
         for phase in ("probe", "compute"):

@@ -652,14 +652,25 @@ class ManagedMinerU:
         if log is not None:
             log.close()
 
-    def close(self) -> None:
+    def close(self, timeout: float | None = 30) -> bool:
+        """Cancel operations and wait for worker file handles to close."""
+
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
         with self._lock:
-            for state in self._states.values():
-                if state.operation is not None:
-                    state.cancel_event.set()
-                    if state.process is not None:
-                        self._stop_process(state.process)
+            active = [state for state in self._states.values() if state.operation is not None]
+            threads = [state.thread for state in active if state.thread is not None]
+            processes = [state.process for state in active if state.process is not None]
+            for state in active:
+                state.cancel_event.set()
+        for process in processes:
+            self._stop_process(process)
         self.stop()
+        for thread in threads:
+            thread.join(None if deadline is None else max(0.0, deadline - time.monotonic()))
+        stopped = all(not thread.is_alive() for thread in threads)
+        if stopped:
+            self.stop()
+        return stopped
 
     def _start_operation(self, profile_id: str, action: str) -> None:
         installed = self._installed(profile_id)

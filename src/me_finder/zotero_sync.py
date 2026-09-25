@@ -15,6 +15,7 @@ item count — pauses the sync without removing anything.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, 
 
 from .bibliographic_metadata import metadata_missing_fields
 from .persistence.zotero_sync_store import StoredZoteroState, ZoteroSyncStore
+from .tasks.background_tasks import BackgroundTasks
 from .zotero_local_api import (
     ZoteroIncomplete,
     ZoteroLocalClient,
@@ -541,6 +543,8 @@ class ZoteroSyncService:
         self._status: Dict[str, object] = {"phase": "idle", "rows": []}
         self._stop = threading.Event()
         self._scheduler: Optional[threading.Thread] = None
+        self._tasks = BackgroundTasks()
+        self._task_ids = itertools.count()
         self._last_run_started = 0.0
 
     def _settings(self) -> Tuple[bool, List[str], str]:
@@ -664,7 +668,10 @@ class ZoteroSyncService:
     def start_sync(self, trigger: str = "manual") -> Dict[str, object]:
         if self._run_lock.locked():
             return {"ok": True, "started": False, "already_running": True}
-        threading.Thread(target=self._run_guarded, args=(trigger,), name="zotero-sync", daemon=True).start()
+        self._tasks.start(
+            f"zotero-sync-{next(self._task_ids)}",
+            lambda _cancel: self._run_guarded(trigger),
+        )
         return {"ok": True, "started": True, "already_running": False}
 
     def _run_guarded(self, trigger: str) -> None:
@@ -1115,7 +1122,7 @@ class ZoteroSyncService:
         if self._scheduler is not None:
             return
 
-        def loop() -> None:
+        def loop(_cancel: threading.Event) -> None:
             if self._stop.wait(startup_delay):
                 return
             try:
@@ -1140,8 +1147,14 @@ class ZoteroSyncService:
                 except Exception:  # noqa: BLE001 - the loop must survive
                     logging.exception("zotero scheduler tick failed")
 
-        self._scheduler = threading.Thread(target=loop, name="zotero-sync-scheduler", daemon=True)
-        self._scheduler.start()
+        self._scheduler = self._tasks.start("zotero-sync-scheduler", loop)
 
     def stop(self) -> None:
         self._stop.set()
+        self._tasks.begin_shutdown()
+
+    def close(self, timeout: float | None = None) -> bool:
+        """Stop scheduling and wait for syncs before their database is closed."""
+
+        self.stop()
+        return self._tasks.close(timeout)

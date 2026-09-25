@@ -28,6 +28,7 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
 from .persistence.connection import connect_index, table_exists
+from .tasks.background_tasks import BackgroundTasks
 from .persistence.translation_work_store import (
     clear_review_deferral_row,
     defer_review_row,
@@ -288,7 +289,9 @@ def _write_bounds_cache(cache_path: Path, fingerprint: str, bounds: Mapping[str,
             temporary.unlink()
 
 
-def warm_detected_body_bounds(db_path: Path) -> int:
+def warm_detected_body_bounds(
+    db_path: Path, cancel_event: threading.Event | None = None
+) -> int:
     """Fill the detected-bounds cache for every completed detected-range run.
 
     The overview checks each run's stored body range against current detection
@@ -320,6 +323,8 @@ def warm_detected_body_bounds(db_path: Path) -> int:
         stored = _read_bounds_cache(cache_path, fingerprint) if fingerprint else {}
         detected = 0
         for set_id in wanted:
+            if cancel_event is not None and cancel_event.is_set():
+                return detected
             if set_id in _DETECTED_BOUNDS_CACHE:
                 continue
             if set_id in stored:
@@ -335,20 +340,18 @@ def warm_detected_body_bounds(db_path: Path) -> int:
         connection.close()
 
 
-def start_body_bounds_warm_up(db_path: Path) -> threading.Thread:
-    """Run :func:`warm_detected_body_bounds` on a daemon thread; never raises."""
+def start_body_bounds_warm_up(db_path: Path, tasks: BackgroundTasks) -> threading.Thread:
+    """Run detected-bounds warm-up as a runtime-owned background task."""
 
-    def run() -> None:
+    def run(cancel: threading.Event) -> None:
         try:
-            warmed = warm_detected_body_bounds(db_path)
+            warmed = warm_detected_body_bounds(db_path, cancel)
             if warmed:
                 logging.info("detected body ranges for %d segment sets", warmed)
         except Exception:  # noqa: BLE001 - the overview detects on demand instead
-            logging.warning("body-range warm-up failed", exc_info=True)
+            logging.exception("body-range warm-up failed")
 
-    thread = threading.Thread(target=run, name="alignment-overview-warm-up", daemon=True)
-    thread.start()
-    return thread
+    return tasks.start("alignment-overview-warm-up", run)
 
 
 def _body_range_changed(

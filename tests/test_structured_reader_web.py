@@ -439,7 +439,7 @@ class StructuredReaderWebTests(unittest.TestCase):
             with patch(
                 "src.me_finder.alignment_assembly.get_document_window",
                 side_effect=sqlite3.DatabaseError("database is locked"),
-            ), patch("src.me_finder.web_runtime.logging.exception") as logged:
+            ), patch("src.me_finder.alignment_assembly.logging.exception") as logged:
                 failed_status, failed = self._get_json(
                     base_url,
                     "/api/document/pages?source_id=pdf-http",
@@ -449,7 +449,7 @@ class StructuredReaderWebTests(unittest.TestCase):
                 side_effect=sqlite3.DatabaseError(
                     "/private/library/index.sqlite3 is locked"
                 ),
-            ), patch("src.me_finder.web_runtime.logging.exception") as citation_logged:
+            ), patch("src.me_finder.alignment_assembly.logging.exception") as citation_logged:
                 citation_failed_status, citation_failed = self._post_json(
                     base_url,
                     "/api/document/citation",

@@ -33,6 +33,7 @@ _DESKTOP_SHELLS = {"macos", "win32", "linux"}
 class ManagedComponents:
     catalog: ComponentCatalog
     mineru: ManagedMinerU
+    local_ocr: LocalOCRInstaller
     alignment_runtime: ManagedAlignmentRuntime
     embedding_models: ManagedEmbeddingModels
     registry: Dict[str, object]
@@ -82,6 +83,7 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
     return ManagedComponents(
         catalog=catalog,
         mineru=mineru,
+        local_ocr=local_ocr,
         alignment_runtime=alignment_runtime,
         embedding_models=embedding_models,
         registry={

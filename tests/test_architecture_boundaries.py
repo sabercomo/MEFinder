@@ -35,6 +35,21 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "translation_works.py",
 }
 
+# C3: direct thread creation must have an explicit lifecycle owner. Startup
+# warm-up and Zotero sync moved to tasks/background_tasks.py.
+THREAD_CREATION_OWNERS = {
+    "component_catalog.py",
+    "desktop_backend.py",
+    "import_queue.py",
+    "local_ocr_installer.py",
+    "managed_alignment_runtime.py",
+    "managed_embedding_models.py",
+    "managed_mineru.py",
+    "onefile_cleanup.py",
+    "tasks/background_tasks.py",
+    "text_alignment_controller.py",
+}
+
 
 def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
     """Return ``sqlite3.connect`` counts and ``.execute*`` files per module."""
@@ -64,6 +79,21 @@ def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
+    def test_thread_creation_has_an_explicit_owner(self) -> None:
+        owners = set()
+        for path in PACKAGE.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "Thread"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "threading"
+                ):
+                    owners.add(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(owners, THREAD_CREATION_OWNERS)
+
     def test_sqlite_connect_outside_persistence_only_shrinks(self) -> None:
         connects, _executes = _sqlite_usage_outside_persistence()
         self.assertEqual(

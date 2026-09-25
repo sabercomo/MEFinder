@@ -237,6 +237,16 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
         sqlite3.connect(str(empty)).close()
         self.assertEqual(translation_works.warm_detected_body_bounds(empty), 0)
 
+    def test_cancelled_warm_up_skips_detection(self) -> None:
+        import threading
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        cancel = threading.Event()
+        cancel.set()
+        with mock.patch.object(translation_works, "_detected_body_bounds") as detect:
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db, cancel), 0)
+        detect.assert_not_called()
+
 
 class TranslationWorkLinkWindowTests(_ThreeVersionWork):
     def test_window_returns_links_with_spans_on_both_sides(self) -> None:
