@@ -1,6 +1,6 @@
 # MEFinder 前后端架构重构计划
 
-2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状;下一实施步骤为 C1 的作品组仓储迁移。版本号 v0.5.7 为暂定,尚未发布。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1 作品组仓储迁移完成,下一实施步骤为 C1.2。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
@@ -16,7 +16,7 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从当前未完成步骤继续(本次决策后的下一步是 C1.1 作品组仓储),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(当前为 C1.2 对齐覆盖/快照/正文范围的 SQL 收口),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
@@ -30,7 +30,7 @@
 - **B3 严格入参校验移出本轮**:保留现有 controller 的校验、类型转换、状态码与错误文案。本轮不引入 `parse_payload` 或新 `code` 字段。输入校验本身可以在保持行为的前提下重构;但原 B3 的“字段类型/必填校验”会收紧兼容范围,不应混在结构整理里。以后有具体缺陷时单独立项并更新契约。
 - **数据库等待时间保持现状,不再待确认**:各调用点原来等 5 秒或 30 秒就维持原值。等待更久不能消除锁竞争,现有外键审计也没有证明统一 30 秒的必要性;后续如有真实超时故障,先记录锁等待与用户响应时间再决定。
 - **接受 B2 的职责拆分结果**:`web_http.py` 当前 401 行,现有守卫上限 405 行保留。原 ≤300 行目标不再作为本轮门禁,不为行数再拆传输细节;路由唯一、业务移出、信任校验/上传排空/Range 行为不变仍是门禁。
-- **下一步选 C1.1,不同时启动 C/D**:只迁 `document_groups` 的 SQL 到 `persistence/document_group_store.py`,保持事务边界、调用接口、返回结果与删除语义;迁完后 SQL 散落白名单删除该文件,现有作品组/对齐回归断言与全量测试必须通过。其余 C/D 步骤仍按原计划分批推进,本次决策不代表它们已经实施。
+- **C1.1 作品组仓储迁移已完成**: `document_groups` 的 SQL 收进 `persistence/document_group_store.py`,原模块保留兼容入口;纯版本名称逻辑随仓储依赖移入 persistence 并保留原导入路径。事务边界、调用接口、返回结果与删除语义保持;SQL 散落白名单删除该文件。下一步 C1.2,不同时启动 C/D 其他步骤。
 - **C3 先调查生命周期再设计共用管理器**:统计线程创建点、取消方式、退出等待与进程回收的实际差异,不能只为消除裸 `Thread` 就强行套同一接口。暂不改变现有线程行为,具体迁移范围由调查结果决定。
 
 ---
@@ -168,6 +168,8 @@
 5. `database.py` 拆:`persistence/fts_index.py`、`persistence/index_build.py`、`persistence/source_replace.py`;`database.py` 暂留兼容转发
 - 顺带处理 `docs/refactor-v0.5.0.md` 记录的残留环根因(`bibliographic_metadata` 顶层依赖 `database.paragraph_payload_for_storage`)。
 - 纯搬迁,对齐/检索 golden 与 `tests/fixtures/search_pipeline_golden.json` 不得变化。每批收紧 A0 白名单。
+
+2026-09-25(C1.1 进展):作品组读写、事务、快照恢复与成员展示代码迁入 `persistence/document_group_store.py`;`document_groups.py` 保留原导入面。`document_group_metadata.py` 同样保留兼容导入面,persistence 内部使用本层的纯函数实现。棘轮从 26 个 SQL 散落文件收紧到 25 个。提交与全量门禁以本步骤结果为准。
 
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。

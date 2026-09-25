@@ -27,7 +27,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "database.py",
     "document_deletion.py",
     "document_export_service.py",
-    "document_groups.py",
     "document_outline.py",
     "edition_folio_anchors.py",
     "index_publisher.py",
