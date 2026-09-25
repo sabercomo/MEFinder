@@ -524,8 +524,10 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 Zotero 来源同步：设置目录新增「来源 → Zotero」（index.html 分区 +
     #   62-zotero.js 分类树 / 立即同步明细 + 30-settings.css .zotero-*），
     #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
+    # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
+    #   注入装配文档；字节数不变，仅摘要变化）。
     BASELINE_SHA256 = (
-        "beb7c85c8e3deb3ae6f764b5f5c0ec834bf110b7810f55879a6a06af39316618"
+        "16dd02e8c0e51286bfad6dcad6a5dcf153b6a44490d251dcd61763cb60b0e7fc"
     )
     BASELINE_BYTES = 1262983
 
