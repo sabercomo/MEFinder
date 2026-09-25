@@ -357,7 +357,7 @@ class DataLocationTests(unittest.TestCase):
                     "src.me_finder.web_runtime.migrate_data_root",
                     side_effect=blocked_migration,
                 ), patch(
-                    "src.me_finder.web_runtime.update_metadata_in_database",
+                    "src.me_finder.import_assembly.update_metadata_in_database",
                     side_effect=observed_metadata_write,
                 ):
                     server_thread.start()

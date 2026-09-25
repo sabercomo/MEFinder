@@ -206,6 +206,8 @@
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
 - 验收:`web_runtime.py` 直接内部依赖 ≤ 20;行数上限同步收紧。
 
+2026-09-26(C2a 进展):导入、索引、备份、来源删除与题录更新的实例装配按原顺序进入 `import_assembly.py`;`web_runtime.py` 保留调用与跨域接线,直接内部依赖 64→28、行数 723→约 486。依赖/行数棘轮逐批收紧,旧测试替身改指向真实定义模块。C2 尚未完成。
+
 **后端 C3 后台任务统一**
 - 先按 §0.1 盘点实际线程生命周期,再确定以下抽象是否适合;不得先写通用管理器再强迁全部模块。
 - `tasks/` 下提供 `BackgroundTasks`:具名注册、取消、关闭时 join,接入 `close_runtime` / `DurableOperationGate`。

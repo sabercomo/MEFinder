@@ -28,7 +28,7 @@ from src.me_finder.web import make_handler
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "http_routes.py", "upload_import_controller.py")
+    for name in ("web.py", "web_runtime.py", "import_assembly.py", "http_routes.py", "upload_import_controller.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -773,7 +773,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "native_text",
                         "pdf_page_count": 1,
@@ -821,7 +821,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "native_text",
                         "pdf_page_count": 1,
@@ -926,19 +926,19 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "broken_text",
                         "pdf_page_count": 1,
                     },
                 ), patch(
-                    "src.me_finder.web_runtime.parse_pdf_with_mineru",
+                    "src.me_finder.import_assembly.parse_pdf_with_mineru",
                     return_value=None,
                 ) as mineru, patch(
-                    "src.me_finder.web_runtime.extract_pdf_source",
+                    "src.me_finder.import_assembly.extract_pdf_source",
                     side_effect=fake_pdf_extraction,
                 ), patch(
-                    "src.me_finder.web_runtime.replace_source_in_database",
+                    "src.me_finder.import_assembly.replace_source_in_database",
                     side_effect=flaky_replace,
                 ):
                     handler, server = self._runtime(root)

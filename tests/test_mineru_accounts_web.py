@@ -168,7 +168,7 @@ class MinerUAccountsWebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             with patch(
-                "src.me_finder.web_runtime.MinerUAccountService.list_accounts",
+                "src.me_finder.import_assembly.MinerUAccountService.list_accounts",
                 side_effect=OSError("account config unavailable"),
             ):
                 with self._runtime(root) as (server, _handler):

@@ -157,13 +157,13 @@ class ChunkedUploadHTTPTests(unittest.TestCase):
             handler = None
             with (
                 patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "scanned",
                         "pdf_page_count": 1,
                     },
                 ),
-                patch("src.me_finder.web_runtime.ImportTaskQueue.submit", return_value=None),
+                patch("src.me_finder.import_assembly.ImportTaskQueue.submit", return_value=None),
             ):
                 try:
                     os.chdir(root)

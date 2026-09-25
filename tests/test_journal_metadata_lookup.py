@@ -288,8 +288,8 @@ class CNKILookupAPITests(unittest.TestCase):
             "evidence": {},
         }
         with self._server() as base_url, patch(
-            "src.me_finder.web_runtime.lookup_cnki_journal", return_value=lookup_result
-        ), patch("src.me_finder.web_runtime.fetch_cnki_candidate", return_value=detail_result):
+            "src.me_finder.import_assembly.lookup_cnki_journal", return_value=lookup_result
+        ), patch("src.me_finder.import_assembly.fetch_cnki_candidate", return_value=detail_result):
             lookup_status, lookup = self._post(
                 base_url,
                 "/api/bibliographic-metadata/lookup-cnki",
@@ -314,7 +314,7 @@ class CNKILookupAPITests(unittest.TestCase):
             open_url="https://oversea.cnki.net/kns8s/search?kw=x",
         )
         with self._server() as base_url, patch(
-            "src.me_finder.web_runtime.lookup_cnki_journal", side_effect=failure
+            "src.me_finder.import_assembly.lookup_cnki_journal", side_effect=failure
         ):
             status, payload = self._post(
                 base_url,
@@ -358,7 +358,7 @@ class CNKILookupAPITests(unittest.TestCase):
 
         first_result: dict[str, object] = {}
         with self._server() as base_url, patch(
-            "src.me_finder.web_runtime.lookup_cnki_journal", side_effect=slow_lookup
+            "src.me_finder.import_assembly.lookup_cnki_journal", side_effect=slow_lookup
         ):
             def first_request() -> None:
                 first_result["value"] = self._post(
