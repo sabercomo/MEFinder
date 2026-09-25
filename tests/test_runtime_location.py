@@ -54,6 +54,72 @@ class RuntimeLocationTests(unittest.TestCase):
                     selected_root.resolve() / "runtime",
                 )
 
+    def test_installed_windows_follows_relocation_pointer_inside_selected_data_root(self) -> None:
+        """A bundle pointer may itself be relocated; follow that second hop."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bundle_root = base / "app"
+            selected_root = base / "selected" / "MEFinder"
+            relocated_root = base / "relocated" / "MEFinder"
+            bundle_root.mkdir()
+            selected_root.mkdir(parents=True)
+            (bundle_root / "data_root.txt").write_text(
+                str(selected_root),
+                encoding="utf-8",
+            )
+            (selected_root / "data_root.txt").write_text(
+                str(relocated_root),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(runtime_location.os.environ, {}, clear=True),
+                mock.patch.object(runtime_location.sys, "platform", "win32"),
+                mock.patch.object(runtime_location.sys, "frozen", True, create=True),
+            ):
+                self.assertEqual(
+                    runtime_location.local_app_data_root(bundle_root=bundle_root),
+                    relocated_root.resolve(),
+                )
+                self.assertEqual(
+                    runtime_location.runtime_root(bundle_root),
+                    relocated_root.resolve() / "runtime",
+                )
+
+    def test_installed_windows_follows_relocation_when_local_app_data_has_no_marker(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            bundle_root = base / "app"
+            selected_root = base / "selected" / "MEFinder"
+            relocated_root = base / "relocated" / "MEFinder"
+            local_app_data = base / "LocalAppData"
+            bundle_root.mkdir()
+            selected_root.mkdir(parents=True)
+            (local_app_data / "MEFinder").mkdir(parents=True)
+            (bundle_root / "data_root.txt").write_text(
+                str(selected_root),
+                encoding="utf-8",
+            )
+            (selected_root / "data_root.txt").write_text(
+                str(relocated_root),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch.dict(
+                    runtime_location.os.environ,
+                    {"LOCALAPPDATA": str(local_app_data)},
+                    clear=True,
+                ),
+                mock.patch.object(runtime_location.sys, "platform", "win32"),
+                mock.patch.object(runtime_location.sys, "frozen", True, create=True),
+            ):
+                self.assertEqual(
+                    runtime_location.local_app_data_root(bundle_root=bundle_root),
+                    relocated_root.resolve(),
+                )
+
     def test_frozen_macos_resolves_bundle_resources_and_application_support(self) -> None:
         executable = "/Applications/MEFinder.app/Contents/MacOS/MEFinder"
         home = Path("/Users/example")
