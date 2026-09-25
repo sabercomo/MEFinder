@@ -19,15 +19,14 @@ from typing import Callable, Dict, Mapping
 
 from . import __version__, translation_works
 from .app_context import AppContext
+from .alignment_assembly import assemble_alignment
 from .application.document_group_coordinator import DocumentGroupCoordinator
 from .application.document_query_service import (
     DocumentQueryError,
 )
-from .application.text_alignment_coordinator import TextAlignmentCoordinator
 from .data_location import migrate_data_root
 from .desktop_shell_controller import DesktopShellController
 from .document_group_controller import DocumentGroupController
-from .translation_work_controller import TranslationWorkController
 from .import_assembly import assemble_import
 from .http_routes import (
     assemble_archive_routes,
@@ -66,20 +65,6 @@ from .preferences import (
     save_preferences,
 )
 from .preferences_controller import PreferencesController
-from .structured_reader import (
-    get_document_citation,
-    get_document_window,
-)
-from .structured_reader_controller import StructuredReaderController
-from .alignment_body_range import (
-    read_body_range_segments,
-    read_pair_body_ranges,
-)
-from .text_alignment import (
-    list_alignment_targets,
-    locate_alignment,
-)
-from .text_alignment_controller import TextAlignmentController
 from .vision_api import (
     delete_vision_provider,
     discover_vision_models,
@@ -173,47 +158,10 @@ def build_application_runtime(
     document_group_controller = DocumentGroupController(
         document_group_coordinator
     )
-    text_alignment_coordinator = TextAlignmentCoordinator(
-        context.paths,
-        index_runtime,
-        durable_operations,
-    )
-    text_alignment_controller = TextAlignmentController(
-        text_alignment_coordinator,
-        index_runtime.run_when_ready,
-        list_targets=(
-            lambda *args, **kwargs: list_alignment_targets(*args, **kwargs)
-        ),
-        locate=(
-            lambda *args, **kwargs: locate_alignment(*args, **kwargs)
-        ),
-        read_body_ranges=(
-            lambda *args, **kwargs: read_pair_body_ranges(*args, **kwargs)
-        ),
-        read_body_range_segments=(
-            lambda *args, **kwargs: read_body_range_segments(*args, **kwargs)
-        ),
-        log_exception=lambda message: logging.exception(message),
-    )
-    translation_work_controller = TranslationWorkController(
-        index_runtime.run_when_ready,
-        active_model_id=lambda: str(
-            read_preferences(resolve_preferences_path(root))[
-                "alignment_embedding_model_id"
-            ]
-        ),
-        log_exception=lambda message: logging.exception(message),
-    )
-    structured_reader_controller = StructuredReaderController(
-        index_runtime.run_when_ready,
-        get_window=(
-            lambda *args, **kwargs: get_document_window(*args, **kwargs)
-        ),
-        get_citation=(
-            lambda *args, **kwargs: get_document_citation(*args, **kwargs)
-        ),
-        log_exception=lambda message: logging.exception(message),
-    )
+    alignment = assemble_alignment(context, imports)
+    text_alignment_controller = alignment.text_alignment_controller
+    translation_work_controller = alignment.translation_work_controller
+    structured_reader_controller = alignment.structured_reader_controller
 
     def open_source_file(source_id: str, page: object = None) -> Dict[str, object]:
         try:
