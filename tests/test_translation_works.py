@@ -440,6 +440,27 @@ class TranslationWorkStorageTests(_ThreeVersionWork):
         with self.assertRaises(InvalidAlignmentRequest):
             translation_works.dismiss_suggestion(self.db, ["pdf-de"])
 
+    def test_reading_position_write_failure_keeps_previous_position(self) -> None:
+        translation_works.save_reading_position(
+            self.db, "work-one", "pdf-zh", "pdf-de", 3, 17
+        )
+        write_row = translation_works.save_reading_position_row
+
+        def fail_after_write(*args):
+            write_row(*args)
+            raise RuntimeError("position write failed")
+
+        with mock.patch.object(
+            translation_works, "save_reading_position_row", side_effect=fail_after_write
+        ):
+            with self.assertRaisesRegex(RuntimeError, "position write failed"):
+                translation_works.save_reading_position(
+                    self.db, "work-one", "pdf-zh", None, 4, 0
+                )
+        position = translation_works.read_reading_position(self.db, "work-one")["position"]
+        self.assertEqual(position["right_source_file_id"], "pdf-de")
+        self.assertEqual(position["item_index"], 3)
+
 
 class MoveMembersTests(_ThreeVersionWork):
     def test_new_work_takes_first_as_base_and_empties_are_deleted(self) -> None:

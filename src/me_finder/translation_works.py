@@ -23,11 +23,13 @@ from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
-from .persistence.connection import connect_index, open_writable_index, table_exists
-from .persistence.schema_installers import (
-    install_document_group_schema,
-    install_text_alignment_schema,
-    install_translation_workspace_schema,
+from .persistence.connection import connect_index, table_exists
+from .persistence.translation_work_store import (
+    clear_review_deferral_row,
+    defer_review_row,
+    dismiss_suggestion_row,
+    save_reading_position_row,
+    workspace_write_transaction,
 )
 from .text_alignment import (
     ALIGNMENT_ALGORITHM,
@@ -65,20 +67,8 @@ def _read_connection(db_path: Path) -> sqlite3.Connection:
 def _write(db_path: Path, write_window: WriteWindow | None, operation):
     transaction_window = write_window or nullcontext
     with transaction_window():
-        connection = open_writable_index(Path(db_path))
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            install_document_group_schema(connection)
-            install_text_alignment_schema(connection)
-            install_translation_workspace_schema(connection)
-            result = operation(connection)
-            connection.commit()
-            return result
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        with workspace_write_transaction(db_path) as connection:
+            return operation(connection)
 
 
 def _clean_ids(values: object, *, name: str, allow_empty: bool = False) -> List[str]:
@@ -155,16 +145,8 @@ def save_reading_position(
         }
         if left_id not in members or (right_id is not None and right_id not in members):
             raise InvalidAlignmentRequest("阅读位置中的版本不属于该作品。")
-        connection.execute(
-            "INSERT INTO document_group_reading_positions(document_group_id, "
-            "left_source_file_id, right_source_file_id, item_index, char_offset, "
-            "updated_at) VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(document_group_id) DO UPDATE SET "
-            "left_source_file_id = excluded.left_source_file_id, "
-            "right_source_file_id = excluded.right_source_file_id, "
-            "item_index = excluded.item_index, char_offset = excluded.char_offset, "
-            "updated_at = excluded.updated_at",
-            (group_id, left_id, right_id, index, offset, timestamp),
+        save_reading_position_row(
+            connection, group_id, left_id, right_id, index, offset, timestamp
         )
         return {
             "document_group_id": group_id,
@@ -216,11 +198,7 @@ def dismiss_suggestion(
     key = suggestion_key(ids)
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
-        connection.execute(
-            "INSERT OR IGNORE INTO document_group_suggestion_dismissals("
-            "suggestion_key, source_file_ids_json, created_at) VALUES (?, ?, ?)",
-            (key, json.dumps(ids, ensure_ascii=False), _now()),
-        )
+        dismiss_suggestion_row(connection, key, json.dumps(ids, ensure_ascii=False), _now())
         return {"source_file_ids": ids}
 
     return _write(db_path, write_window, operation)
@@ -962,12 +940,7 @@ def defer_review(
         source_set_id, key = _deferral_context(
             connection, source_id, target_id, source_ids
         )
-        connection.execute(
-            "INSERT OR IGNORE INTO alignment_review_deferrals(source_file_id, "
-            "target_source_file_id, source_segment_set_id, source_segment_key, "
-            "created_at) VALUES (?, ?, ?, ?, ?)",
-            (source_id, target_id, source_set_id, key, _now()),
-        )
+        defer_review_row(connection, source_id, target_id, source_set_id, key, _now())
         return {"deferred": True}
 
     try:
@@ -989,11 +962,6 @@ def _clear_deferral(
         source_set_id, key = _deferral_context(
             connection, source_id, target_id, source_ids
         )
-        connection.execute(
-            "DELETE FROM alignment_review_deferrals WHERE source_file_id = ? "
-            "AND target_source_file_id = ? AND source_segment_set_id = ? "
-            "AND source_segment_key = ?",
-            (source_id, target_id, source_set_id, key),
-        )
+        clear_review_deferral_row(connection, source_id, target_id, source_set_id, key)
 
     _write(db_path, write_window, operation)
