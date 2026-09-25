@@ -1,6 +1,6 @@
 # MEFinder 前后端架构重构计划
 
-2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1 作品组仓储迁移完成,下一实施步骤为 C1.2。版本号 v0.5.7 为暂定,尚未发布。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1 及 C1.2 的人工校正部分完成,下一步是对齐配方快照。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
@@ -16,7 +16,7 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从当前未完成步骤继续(当前为 C1.2 对齐覆盖/快照/正文范围的 SQL 收口),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(当前为 C1.2 对齐配方快照,其后为正文范围的 SQL 收口),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
@@ -170,6 +170,8 @@
 - 纯搬迁,对齐/检索 golden 与 `tests/fixtures/search_pipeline_golden.json` 不得变化。每批收紧 A0 白名单。
 
 2026-09-25(C1.1 进展):作品组读写、事务、快照恢复与成员展示代码迁入 `persistence/document_group_store.py`;`document_groups.py` 保留原导入面。`document_group_metadata.py` 同样保留兼容导入面,persistence 内部使用本层的纯函数实现。棘轮从 26 个 SQL 散落文件收紧到 25 个。提交与全量门禁以本步骤结果为准。
+
+2026-09-25(C1.2a 进展):`alignment_overrides.py` 的人工校正读写、事务与列表查询进入 `persistence/alignment_store.py`;原层保留路由/分段校验与错误文案。补测“过期提议报错后撤销状态仍入库”,SQL 散落文件 25→24。C1.2 尚未完成,下一批处理 `alignment_snapshots.py`,再处理 `alignment_body_range.py`。
 
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
