@@ -1,6 +1,6 @@
 # 文献原句定位器 v0.5.6（迭代中）
 
-> 2026-09-24：**迭代中，未发布**。主题是「Zotero 来源同步」：可在「设置 → 来源 → Zotero」勾选 Zotero 分类，把其中的 PDF / EPUB 交给 MEFinder 自己的管线解析入库。本机门禁通过（全量 unittest 2534 通过 / 23 跳过，tracked 代码 Ruff F 零告警）；已在用户本机 Zotero 9.0.6 与 10.0.4 上验证读取、增量、50 篇真实同步及删除 / 改题录（写入开发库副本，未碰真实库），见 `docs/issues/zotero-source-sync.md`。未打包、未发版。
+> 2026-09-25：**迭代中，未发布**。主题是「Zotero 来源同步」：可在「设置 → 来源 → Zotero」勾选 Zotero 分类，把其中的 PDF / EPUB 交给 MEFinder 自己的管线解析入库。本机门禁通过（全量 unittest 2542 例，18 例环境跳过、其余通过；`ruff check src tests` 零告警）；已在用户本机 Zotero 9.0.6 与 10.0.4 上验证读取、增量、删除 / 改题录，并在真实库上跑过 50 篇「耶吉」分类的同步（该库已被写入）。真机暴露并修掉两个缺陷：一次同步打满有界导入队列（`docs/issues/zotero-source-sync.md`）、MCP 侧车停在被遗弃的旧数据根（`docs/issues/existing-library-location.md`）。未发版；2026-09-25 17:35 按 `26b3309` 重打了本机便携包 `MEFinder-v0.5.6-windows-portable.zip`（94,114,686 字节，SHA-256 `ab53c7df9295d41ce641fee37511f6c994718918b92b66f9988db52a744a6abd`，打包门禁全量测试通过），并实测新侧车在无 `LOCALAPPDATA` 时读到真实库；`release` 下 14:33 的安装包早于两处修复，未重打，不可用。
 
 ## 更新内容
 
@@ -13,7 +13,8 @@
 - 解析方式跟随「导入 → PDF 解析方式」；导入、断点续传、MinerU 额度与失败重试与手动导入是同一条管线。
 - 每个 PDF / EPUB 附件单独成为一篇文献并记录所属条目；与文库里已有文件内容相同的直接关联，不重复解析；Zotero 链接到外部的文件同样支持。
 - 防误删：Zotero 没开、接口没开、请求失败、分页没读全、所选分类找不到或列表与 Zotero 计数矛盾时，一律暂停同步、不移除任何文献；附件文件缺失标「附件不可用」，不当作删除；同步前就在文库里的文献只解除关联、不删除。
-- 连接状态显示 Zotero 真实版本；失败任务仍在导入队列时同步不会重复导入，交给导入页续传。
+- 连接状态显示 Zotero 真实版本；解析失败且任务仍可续传时同步不重复导入，交给导入页续传；被导入队列拒收的任务在队列腾位后自动「继续导入」原任务，不重复建任务。
+- 提交量按导入队列剩余容量分批：一次同步几十篇不会打满队列，被挡下的条目标「排队已满，稍后自动重试」并计入「待同步 N 篇」，队列腾位后后台自动补交（任何同步频率档都会补完）。
 - 本版只支持「我的文库」，群组文库不在范围内。
 
 ### 数据与接口
@@ -22,6 +23,10 @@
 - 偏好新增 `zotero_sync_enabled`（默认关闭）、`zotero_sync_collections`、`zotero_sync_frequency`（默认启动时）。
 - 新接口 `GET /api/zotero/overview`、`GET /api/zotero/status`、`POST /api/zotero/preview`、`POST /api/zotero/sync`；契约见 `docs/contracts/v0.5.6-http-api.json`。
 - 设计决策与防误删策略见 `docs/issues/zotero-source-sync.md`。
+
+### MCP 侧车数据根
+
+- 修复侧车读到被遗弃的旧库：安装包内的 `data_root.txt` 指向的目录本身可能已再次改址，解析时对它再跟一跳指针，与稳定位置指针同一语义。此前在环境缺少 `LOCALAPPDATA` 时（Qoder 以空 `env` 启动侧车即如此），侧车会停在旧快照库上，桌面端却正常——表现为「新导入的文献没进 MCP 检索索引」，实际是整批文献对 MCP 不可见。见 `docs/issues/existing-library-location.md`。
 
 ## 尚未完成
 

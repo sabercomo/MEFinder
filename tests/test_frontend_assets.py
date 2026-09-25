@@ -544,8 +544,10 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
     # 0.5.7 重构 B1：新增 07-api.js 统一请求出口，105 处 fetch( 改为
     #   MEFinderApi.fetch(；35-works / 62-zotero 私有 JSON helper 改为转发。
+    # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
+    #   注入装配文档；字节数不变，仅摘要变化）。
     BASELINE_SHA256 = (
-        "116fe158bcd93eb1ca81cf0cb4cd3bbb8955e8eeca4ba47a47172923f61bd805"
+        "0cfdbf2ed0a44b87eb6e196ecf86647f7794039899a27012710df35a7a6b21e0"
     )
     BASELINE_BYTES = 1265570
 

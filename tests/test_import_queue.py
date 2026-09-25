@@ -88,6 +88,29 @@ class ImportTaskQueueTests(unittest.TestCase):
         self.assertTrue(queued_finished.wait(timeout=2))
         self.assertTrue(task_queue.shutdown(timeout=2))
 
+    def test_free_slots_reports_how_much_work_submit_accepts(self) -> None:
+        task_queue = ImportTaskQueue(worker_count=1, max_pending_tasks=2)
+        busy = threading.Event()
+        release = threading.Event()
+
+        def blocking_task() -> None:
+            busy.set()
+            release.wait(timeout=5)
+
+        task_queue.submit(blocking_task)
+        self.assertTrue(busy.wait(timeout=2))
+        self.assertEqual(task_queue.free_slots, 2)
+
+        task_queue.submit(blocking_task)
+        task_queue.submit(blocking_task)
+        self.assertEqual(task_queue.free_slots, 0)
+        with self.assertRaises(ImportQueueFullError):
+            task_queue.submit(blocking_task)
+
+        release.set()
+        self.assertTrue(task_queue.shutdown(timeout=5))
+        self.assertEqual(task_queue.free_slots, 0)
+
     def test_shutdown_rejects_new_work_and_is_idempotent(self) -> None:
         task_queue = ImportTaskQueue(worker_count=1)
 
