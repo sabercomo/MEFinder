@@ -526,10 +526,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
+    # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     BASELINE_SHA256 = (
-        "16dd02e8c0e51286bfad6dcad6a5dcf153b6a44490d251dcd61763cb60b0e7fc"
+        "20e64d81ede9b1dc108c2a941ce2755bef62d01690b514631c3641d7dd55cbdd"
     )
-    BASELINE_BYTES = 1262983
+    BASELINE_BYTES = 1263355
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

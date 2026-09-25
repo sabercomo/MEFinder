@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Mapping
 
-from . import __version__
+from . import __version__, translation_works
 from .app_context import AppContext
 from .application.backup_coordinator import BackupCoordinator
 from .application.bibliographic_metadata_coordinator import BibliographicMetadataCoordinator
@@ -690,6 +690,7 @@ def build_application_runtime(
 
 
     zotero_sync.start_scheduler()
+    translation_works.start_body_bounds_warm_up(index_path)
     return ApplicationRuntime(
         zotero_sync=zotero_sync,
         index_path=index_path,

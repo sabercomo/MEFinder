@@ -15,8 +15,12 @@ that correspondence is correct, and callers must not present it as accuracy.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sqlite3
-from contextlib import nullcontext
+import sys
+import threading
+from contextlib import nullcontext, suppress
 from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
@@ -253,6 +257,122 @@ def _detected_body_bounds(
             _DETECTED_BOUNDS_CACHE.clear()
         _DETECTED_BOUNDS_CACHE[segment_set_id] = bounds
     return bounds
+
+
+BODY_BOUNDS_CACHE_FILE = "alignment-body-bounds-cache.json"
+
+
+def _detector_fingerprint() -> str | None:
+    """Identify the running detection code; ``None`` disables the disk cache.
+
+    A frozen build cannot read its own sources, so the executable's size and
+    mtime stand in: every rebuild invalidates the cache, which keeps the
+    staleness check honest when detection changes. Source checkouts always
+    detect afresh.
+    """
+
+    if not getattr(sys, "frozen", False):
+        return None
+    try:
+        info = os.stat(sys.executable)
+    except OSError:
+        return None
+    return f"{sys.executable}|{info.st_size}|{info.st_mtime_ns}"
+
+
+def _read_bounds_cache(cache_path: Path, fingerprint: str) -> Dict[str, Tuple[int, int]]:
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("fingerprint") != fingerprint:
+        return {}
+    bounds = payload.get("bounds")
+    if not isinstance(bounds, dict):
+        return {}
+    return {
+        str(key): (int(value[0]), int(value[1]))
+        for key, value in bounds.items()
+        if isinstance(value, list) and len(value) == 2
+        and all(isinstance(item, int) for item in value)
+    }
+
+
+def _write_bounds_cache(cache_path: Path, fingerprint: str, bounds: Mapping[str, Tuple[int, int]]) -> None:
+    temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps({"fingerprint": fingerprint, "bounds": {key: list(value) for key, value in sorted(bounds.items())}}),
+            encoding="utf-8",
+        )
+        temporary.replace(cache_path)
+    except OSError:
+        logging.warning("could not save body-range cache %s", cache_path, exc_info=True)
+        with suppress(OSError):
+            temporary.unlink()
+
+
+def warm_detected_body_bounds(db_path: Path) -> int:
+    """Fill the detected-bounds cache for every completed detected-range run.
+
+    The overview checks each run's stored body range against current detection
+    while it holds the index lock, and detection scans every paragraph of a
+    version: cold, that took ~5 s on a 20-version library and queued the library
+    summary behind it. Segment sets are immutable, so bounds persisted by this
+    build (see :func:`_detector_fingerprint`) are exactly what the overview
+    would compute; only sets missing from the file are detected. Returns how
+    many sets were detected rather than read back.
+    """
+
+    path = Path(db_path)
+    if not path.is_file():
+        return 0
+    connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+    try:
+        if not _table_exists(connection, "alignment_runs"):
+            return 0
+        set_ids: set[str] = set()
+        for pivot_set, target_set, parameters_json in connection.execute(
+            "SELECT pivot_segment_set_id, target_segment_set_id, parameters_json "
+            "FROM alignment_runs WHERE status = 'completed'"
+        ):
+            if _json_object(parameters_json).get("body_range_source") == "detected":
+                set_ids.update(str(value) for value in (pivot_set, target_set) if value)
+        wanted = sorted(set_ids)[:_DETECTED_BOUNDS_CACHE_LIMIT]
+        fingerprint = _detector_fingerprint()
+        cache_path = path.with_name(BODY_BOUNDS_CACHE_FILE)
+        stored = _read_bounds_cache(cache_path, fingerprint) if fingerprint else {}
+        detected = 0
+        for set_id in wanted:
+            if set_id in _DETECTED_BOUNDS_CACHE:
+                continue
+            if set_id in stored:
+                _DETECTED_BOUNDS_CACHE[set_id] = stored[set_id]
+                continue
+            _detected_body_bounds(connection, set_id)
+            detected += 1
+        current = {set_id: _DETECTED_BOUNDS_CACHE[set_id] for set_id in wanted if set_id in _DETECTED_BOUNDS_CACHE}
+        if fingerprint and current != stored:
+            _write_bounds_cache(cache_path, fingerprint, current)
+        return detected
+    finally:
+        connection.close()
+
+
+def start_body_bounds_warm_up(db_path: Path) -> threading.Thread:
+    """Run :func:`warm_detected_body_bounds` on a daemon thread; never raises."""
+
+    def run() -> None:
+        try:
+            warmed = warm_detected_body_bounds(db_path)
+            if warmed:
+                logging.info("detected body ranges for %d segment sets", warmed)
+        except Exception:  # noqa: BLE001 - the overview detects on demand instead
+            logging.warning("body-range warm-up failed", exc_info=True)
+
+    thread = threading.Thread(target=run, name="alignment-overview-warm-up", daemon=True)
+    thread.start()
+    return thread
 
 
 def _body_range_changed(
