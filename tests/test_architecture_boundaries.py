@@ -114,8 +114,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
             # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
-            "database.py": 1150,
+            "database.py": 960,
             "persistence/fts_index.py": 195,
+            "persistence/index_build.py": 450,
             "persistence/paragraph_payload.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,

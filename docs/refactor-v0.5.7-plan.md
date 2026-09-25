@@ -193,6 +193,8 @@
 
 2026-09-25(C1.5a 进展):FTS5/trigram 对象检查、安装和增量升级 SQL 进入 `persistence/fts_index.py`;`database.py` 保留 `ensure_database_search_index` 兼容入口,由它把既有整库优化流程作为回调传入,避免 persistence 上行依赖。数据库构建/来源替换仍在原模块,SQL 散落文件暂为 19,C1.5 尚未完成。
 
+2026-09-25(C1.5b 进展):整库重建时的 schema/元数据/来源写入及其后的卷、作品、段落、页码锚点写入进入 `persistence/index_build.py`;`database.py` 仍按原顺序读取备份快照、还原作品组、填库、还原对齐配方与 Zotero 关联、发布临时库。原模块 1146→953 行,行数守卫收紧到 960;优化和来源替换 SQL 尚待迁移,C1.5 尚未完成。
+
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
 - `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
