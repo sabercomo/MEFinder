@@ -57,7 +57,17 @@ from .bibliographic_values import (
     canonical_metadata as canonical_metadata,
     is_valid_bibliographic_value as is_valid_bibliographic_value,
 )
-from .persistence.connection import connect_index
+from .persistence.bibliographic_metadata_store import (
+    metadata_write_transaction,
+    paragraph_payload_rows,
+    source_payload_json,
+    volume_payload_rows,
+    work_payload_rows,
+    write_paragraph_payload,
+    write_source_payload,
+    write_volume_payload,
+    write_work_payload,
+)
 from .persistence.paragraph_payload import paragraph_payload_for_storage
 
 
@@ -551,76 +561,54 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
     """Update one document's catalog/search metadata without rebuilding text indexes."""
 
     canonical = _canonical_metadata(metadata)
-    connection = connect_index(database_path, write=True, row_factory=None)
     counts = {"sources": 0, "volumes": 0, "works": 0, "paragraphs": 0}
-    try:
-        connection.execute("BEGIN IMMEDIATE")
-        source_row = connection.execute(
-            "SELECT payload_json FROM source_files WHERE source_file_id = ?", (source_file_id,)
-        ).fetchone()
-        if not source_row:
+    with metadata_write_transaction(database_path) as connection:
+        source_json = source_payload_json(connection, source_file_id)
+        if source_json is None:
             raise ValueError("文献不存在。")
-        source = json.loads(source_row[0])
+        source = json.loads(source_json)
         source["bibliographic_metadata"] = canonical
         for key, value in canonical.items():
             if value not in (None, ""):
                 source[key] = value
             elif key in METADATA_FIELDS:
                 source.pop(key, None)
-        connection.execute(
-            "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
-            (_json(source), source_file_id),
-        )
+        write_source_payload(connection, source_file_id, _json(source))
         counts["sources"] = 1
 
         title = str(canonical.get("title") or source.get("display_title") or "")
         author = canonical.get("author")
         year = canonical.get("publish_year")
-        for row_id, payload_json in connection.execute(
-            "SELECT rowid, payload_json FROM volumes WHERE source_file_id = ?", (source_file_id,)
-        ).fetchall():
+        for row_id, payload_json in volume_payload_rows(connection, source_file_id):
             volume = json.loads(payload_json)
             if title:
                 volume["display_title"] = title
-            connection.execute(
-                "UPDATE volumes SET display_title = ?, payload_json = ? WHERE rowid = ?",
-                (title or volume.get("display_title"), _json(volume), row_id),
+            write_volume_payload(
+                connection, row_id, title or volume.get("display_title"), _json(volume)
             )
             counts["volumes"] += 1
-        for row_id, payload_json in connection.execute(
-            "SELECT rowid, payload_json FROM works WHERE payload_json LIKE ?", (f'%"source_file_id":"{source_file_id}"%',)
-        ).fetchall():
+        for row_id, payload_json in work_payload_rows(connection, source_file_id):
             work = json.loads(payload_json)
             if title:
                 work["title"] = title
                 work["document_title"] = title
             work["author_label"] = author
             work["date_label"] = year
-            connection.execute(
-                "UPDATE works SET title = ?, payload_json = ? WHERE rowid = ?",
-                (title or work.get("title"), _json(work), row_id),
+            write_work_payload(
+                connection, row_id, title or work.get("title"), _json(work)
             )
             counts["works"] += 1
-        for paragraph_id, payload_json in connection.execute(
-            "SELECT paragraph_id, payload_json FROM paragraphs WHERE source_file_id = ?", (source_file_id,)
-        ).fetchall():
+        for paragraph_id, payload_json in paragraph_payload_rows(connection, source_file_id):
             paragraph = json.loads(payload_json)
             if title:
                 paragraph["document_title"] = title
                 paragraph["work_title"] = title
                 paragraph["volume_display"] = title
             paragraph["author_label"] = author
-            connection.execute(
-                "UPDATE paragraphs SET payload_json = ? WHERE paragraph_id = ?",
-                (_json(paragraph_payload_for_storage(paragraph)), paragraph_id),
+            write_paragraph_payload(
+                connection, paragraph_id, _json(paragraph_payload_for_storage(paragraph))
             )
             counts["paragraphs"] += 1
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
     return counts
 
 

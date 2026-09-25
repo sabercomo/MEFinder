@@ -19,7 +19,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "application/literature_verification_service.py",
     "application/parallel_passage_service.py",
     "application/script_search.py",
-    "bibliographic_metadata.py",
     "data_location.py",
     "database.py",
     "document_deletion.py",

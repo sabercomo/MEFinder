@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -1492,6 +1493,48 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(detected["metadata_source"], "automatic_recognition")
         self.assertNotEqual(detected["metadata_source"], "manual")
         self.assertEqual(existing, {"title": "食人资本主义", "author": "南希·弗雷泽"})
+
+    def test_metadata_update_failure_rolls_back_source_change(self) -> None:
+        source_id = "pdf-metadata-rollback"
+        index = {
+            "metadata": {},
+            "source_files": [
+                {
+                    "source_file_id": source_id,
+                    "source_type": "pdf",
+                    "title": "旧标题",
+                    "bibliographic_metadata": {"title": "旧标题"},
+                }
+            ],
+            "volumes": [
+                {
+                    "volume_id": "VOL-ROLLBACK",
+                    "source_file_id": source_id,
+                    "source_type": "pdf",
+                    "display_title": "旧标题",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "index.sqlite3"
+            build_database(index, database_path)
+            with patch(
+                "src.me_finder.bibliographic_metadata.write_volume_payload",
+                side_effect=RuntimeError("volume update failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "volume update failed"):
+                    update_metadata_in_database(
+                        database_path, source_id, {"title": "新标题"}
+                    )
+            connection = sqlite3.connect(str(database_path))
+            try:
+                source_json = connection.execute(
+                    "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+                    (source_id,),
+                ).fetchone()[0]
+            finally:
+                connection.close()
+        self.assertEqual(json.loads(source_json)["bibliographic_metadata"]["title"], "旧标题")
 
     def test_chinese_metadata_round_trip_database_search_and_citation(self) -> None:
         metadata = {
