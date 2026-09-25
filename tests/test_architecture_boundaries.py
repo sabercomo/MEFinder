@@ -20,7 +20,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "application/parallel_passage_service.py",
     "application/script_search.py",
     "data_location.py",
-    "database.py",
     "document_deletion.py",
     "document_export_service.py",
     "document_outline.py",
@@ -114,10 +113,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
             # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
-            "database.py": 620,
+            "database.py": 470,
             "persistence/fts_index.py": 195,
-            "persistence/index_build.py": 450,
-            "persistence/source_replace.py": 570,
+            "persistence/index_build.py": 265,
+            "persistence/storage_optimization.py": 170,
+            "persistence/source_replace.py": 380,
             "persistence/paragraph_payload.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,

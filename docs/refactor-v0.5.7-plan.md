@@ -1,10 +1,12 @@
 # MEFinder 前后端架构重构计划
 
-2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1—C1.4 已完成,下一步 C1.5。版本号 v0.5.7 为暂定,尚未发布。
+2026-09-25:阶段 A、B1/B2 已实施;B3 移出本轮,数据库等待时间保持现状。C1.1—C1.5 已完成,下一步 C2。版本号 v0.5.7 为暂定,尚未发布。
 
 2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
 
 2026-09-25(0.5.6 后续合入):从 `origin/codex/v0.5.6-integration` 的 `685d5f1` 合入 0.5.6 后续五提交(含 Zotero 队列续跑、MCP 数据根二级指针与版本号 0.5.6)。`web_runtime.py` 的队列容量接线与本轮架构变更自动合并;前端装配指纹按两边变更后的实际 HTML 重测。0.5.6 分支的发布说明仍属 0.5.6,本轮未发布 0.5.7。
+
+2026-09-25(Windows 修复合入):再次合入 `origin/codex/v0.5.6-integration` 的 `58a4ac0`(译本对照后台预热与构建缓存);新增只读连接改走 `persistence.connection.connect_index`,并重测前端装配指纹。合并后 macOS 全量 unittest 2573 通过、23 跳过。
 
 本文件是给**新会话**用的执行计划。先读"开场 prompt",再按阶段推进。§3 保留重构前基线与复测更正,不是当前代码状态;已完成项以 Git 与各阶段进展为准。动手前复测本步骤相关指标,不要从 A 重新执行。
 
@@ -18,7 +20,7 @@
 要求:
 1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
 2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
-3. 从当前未完成步骤继续(当前为 C1.5 `database.py` 拆分),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+3. 从当前未完成步骤继续(当前为 C2 `web_runtime.py` 组合根拆分),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
 4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
 5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
 6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
@@ -167,7 +169,7 @@
 2. `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `persistence/alignment_store.py`
 3. `translation_works`、`runtime_page_mapping`、`bibliographic_metadata` 写库部分
 4. `text_alignment.py` 拆:`alignment_segmentation.py`(`segment_*` 纯函数)、`alignment_generation.py`(`generate_alignment` 编排)、SQL 进 `alignment_store`
-5. `database.py` 拆:`persistence/fts_index.py`、`persistence/index_build.py`、`persistence/source_replace.py`;`database.py` 暂留兼容转发
+5. `database.py` 拆:`persistence/fts_index.py`、`persistence/index_build.py`、`persistence/source_replace.py`、`persistence/storage_optimization.py`;`database.py` 暂留兼容转发
 - 顺带处理 `docs/refactor-v0.5.0.md` 记录的残留环根因(`bibliographic_metadata` 顶层依赖 `database.paragraph_payload_for_storage`)。
 - 纯搬迁,对齐/检索 golden 与 `tests/fixtures/search_pipeline_golden.json` 不得变化。每批收紧 A0 白名单。
 
@@ -196,6 +198,8 @@
 2026-09-25(C1.5b 进展):整库重建时的 schema/元数据/来源写入及其后的卷、作品、段落、页码锚点写入进入 `persistence/index_build.py`;`database.py` 仍按原顺序读取备份快照、还原作品组、填库、还原对齐配方与 Zotero 关联、发布临时库。原模块 1146→953 行,行数守卫收紧到 960;优化和来源替换 SQL 尚待迁移,C1.5 尚未完成。
 
 2026-09-25(C1.5c 进展):单来源替换、批量删除及旧版页码锚点清理的 SQL/事务进入 `persistence/source_replace.py`;`database.py` 保留入参处理、UTF-8 清理及先备份再写入的顺序。原模块降至约 617 行,SQL 散落文件仍为 19,优化/目录读取 SQL 尚待迁移,C1.5 尚未完成。
+
+2026-09-25(C1.5d 完成):目录元数据读取 SQL 进入 `persistence/index_build.py`;旧库稀疏化、FTS 完整性检查与临时库替换前的 SQL 进入 `persistence/storage_optimization.py`,文件替换与备份轮转仍由 `database.py` 回调。`fts_index.py` 行数守卫不放宽。`database.py` 不再直接执行 SQL,行数 466,SQL 散落文件 19→18;后端 C1 完成,下一步 C2。
 
 **后端 C2 组合根拆分**
 - `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。

@@ -5,10 +5,32 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional, Sequence
 
+from .connection import connect_index
 from .index_schema import ANCHOR_SPEC_VERSION, DATABASE_SCHEMA_VERSION, SCHEMA
 from .paragraph_payload import paragraph_payload_for_storage
+
+
+def _load_payload_rows(connection: sqlite3.Connection, table: str, order_by: str = "rowid") -> list[Dict[str, object]]:
+    return [json.loads(row[0]) for row in connection.execute(f"SELECT payload_json FROM {table} ORDER BY {order_by}")]
+
+
+def load_database_index(db_path: Path) -> Dict[str, object]:
+    """Load the small metadata/catalog portion used by the Web UI."""
+
+    connection = connect_index(db_path, row_factory=None)
+    try:
+        metadata = {str(row[0]): json.loads(row[1]) for row in connection.execute("SELECT key, value_json FROM metadata")}
+        return {
+            "metadata": metadata,
+            "source_files": _load_payload_rows(connection, "source_files", "source_file_id"),
+            "volumes": _load_payload_rows(connection, "volumes", "volume_id"),
+            "works": _load_payload_rows(connection, "works", "rowid"),
+        }
+    finally:
+        connection.close()
 
 
 def _json(value: object) -> str:
