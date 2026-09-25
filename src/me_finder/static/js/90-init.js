@@ -90,8 +90,6 @@ MEFinder.imports.setupScanResultDragSelection();
 renderScanDirectories();
 loadMeta();
 loadPreferences();
-// 只读作品与对齐状态，详细统计在展示版本对时按需读取，无需延迟首屏。
-MEFinder.works.load();
 MEFinder.imports.loadResumableImports();
 MEFinder.library.syncViewButtons();
 // 搜索、文献库与作品页共用摘要请求；这里仅初始化搜索下拉。
@@ -102,3 +100,10 @@ const requestedInitialPage = new URLSearchParams(window.location.search).get('pa
 const initialPage = requestedInitialPage === 'calibration' ? 'library' : requestedInitialPage;
 if (['search','library','import','settings'].indexOf(initialPage) >= 0) navigateTo(initialPage);
 if (currentPage === 'search') document.getElementById('query').focus();
+// 作品状态在首屏摘要回来、浏览器空闲后再预取：总览持有索引锁，冷启动时核对
+// 各版本正文范围要数秒，先发会让文献库排在它后面。进入「译本对照」仍立即加载。
+(searchStore.libraryCatalogPromise || Promise.resolve()).catch(function () {}).then(function () {
+  (window.requestIdleCallback || function (run) { return setTimeout(run, 0); })(function () {
+    MEFinder.works.load().catch(function () {});
+  }, {timeout: 2000});
+});

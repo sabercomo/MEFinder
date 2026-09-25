@@ -546,10 +546,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   MEFinderApi.fetch(；35-works / 62-zotero 私有 JSON helper 改为转发。
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
+    # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     BASELINE_SHA256 = (
-        "0cfdbf2ed0a44b87eb6e196ecf86647f7794039899a27012710df35a7a6b21e0"
+        "f41253a8a137440824e470a0ec018f9c77338078f11f01621acd605762d4626b"
     )
-    BASELINE_BYTES = 1265570
+    BASELINE_BYTES = 1265942
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

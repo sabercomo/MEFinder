@@ -180,6 +180,64 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
         self.assertIsNone(pair["stale_reason"])
 
 
+    def test_warm_up_precomputes_detected_bounds_for_the_overview(self) -> None:
+        """冷启动预热后，总览持锁期间不再逐版本重识别正文范围。"""
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 0)
+        with mock.patch.object(
+            translation_works, "alignment_body_bounds", side_effect=AssertionError("cold detection")
+        ):
+            pair = self._pair(
+                translation_works.alignment_overview(
+                    self.db, active_model_id=self._model_id(), include_statistics=False
+                ),
+                "pdf-de", "pdf-zh",
+            )
+        self.assertIsNone(pair["stale_reason"])
+
+    def test_warm_up_persists_bounds_per_build_and_redetects_after_a_rebuild(self) -> None:
+        """同一构建的下次启动直接读盘，不再逐版本识别；换了构建（识别代码可能变了）必须重算。"""
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        cache = self.db.with_name(translation_works.BODY_BOUNDS_CACHE_FILE)
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value="build-1"):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+            self.assertTrue(cache.is_file())
+            translation_works._DETECTED_BOUNDS_CACHE.clear()  # next launch
+            with mock.patch.object(
+                translation_works, "alignment_body_bounds", side_effect=AssertionError("cold detection")
+            ):
+                self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 0)
+                pair = self._pair(
+                    translation_works.alignment_overview(
+                        self.db, active_model_id=self._model_id(), include_statistics=False
+                    ),
+                    "pdf-de", "pdf-zh",
+                )
+            self.assertIsNone(pair["stale_reason"])
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value="build-2"):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertIn("build-2", cache.read_text(encoding="utf-8"))
+
+    def test_source_checkout_never_writes_the_bounds_cache(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value=None):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertFalse(self.db.with_name(translation_works.BODY_BOUNDS_CACHE_FILE).exists())
+
+    def test_warm_up_tolerates_missing_database_and_tables(self) -> None:
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db.parent / "absent.sqlite3"), 0)
+        empty = self.db.parent / "empty.sqlite3"
+        sqlite3.connect(str(empty)).close()
+        self.assertEqual(translation_works.warm_detected_body_bounds(empty), 0)
+
+
 class TranslationWorkLinkWindowTests(_ThreeVersionWork):
     def test_window_returns_links_with_spans_on_both_sides(self) -> None:
         generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")

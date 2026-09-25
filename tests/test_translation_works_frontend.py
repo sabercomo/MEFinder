@@ -248,9 +248,15 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         self.assertTrue(literals)
         self.assertEqual([text for text in literals if text.endswith("。")], [])
 
-    def test_startup_loads_lightweight_status_without_a_fixed_delay(self) -> None:
-        self.assertRegex(INIT_JS, re.compile(r"^MEFinder\.works\.load\(\);", re.MULTILINE))
+    def test_startup_prefetches_works_after_the_library_summary_without_a_fixed_delay(self) -> None:
+        # The overview holds the index lock; sent first, it queued the library
+        # summary for seconds on a cold start (2026-09-25, 5.5 s vs 0.36 s).
+        self.assertNotRegex(INIT_JS, re.compile(r"^MEFinder\.works\.load\(\);", re.MULTILINE))
         self.assertNotIn("setTimeout(function () { MEFinder.works.load();", INIT_JS)
+        prefetch = INIT_JS.index("MEFinder.works.load()")
+        self.assertLess(INIT_JS.index("navigateTo(initialPage)"), prefetch)
+        self.assertLess(INIT_JS.index("searchStore.libraryCatalogPromise"), prefetch)
+        self.assertIn("requestIdleCallback", INIT_JS)
         overview = _function_body(WORKS_JS, "async function loadGroupsAndOverview()")
         self.assertIn("requestJSON('/api/translation-works/overview?include_statistics=0')", overview)
         library = _function_body(LIBRARY_JS, "async function loadLibrary(force)")
