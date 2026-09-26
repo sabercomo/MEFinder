@@ -724,16 +724,17 @@ function statusStatButton(status, label, value, variant, icon, activeFilter, han
 
 // 书目补全来源菜单。原在 40-bibliography.js，纯字符串。
 function bibSourceMenuHTML(sid, active) {
+  var sourceId = esc(sid);
   function item(source, label, note) {
-    return '<button class="bib-menu-item' + (active === source ? ' active' : '') + '" type="button" role="menuitem" onclick="bibSetSource(event,\'' + sid + '\',\'' + source + '\')">' + label
+    return '<button class="bib-menu-item' + (active === source ? ' active' : '') + '" type="button" role="menuitem" data-action="bibSetSource" data-source-id="' + sourceId + '" data-source="' + source + '">' + label
       + (note ? '<span class="bib-menu-note">' + note + '</span>' : '') + '</button>';
   }
   return item('auto', '智能补全', '推荐')
     + item('cnki', '知网补全', '中文')
     + item('crossref', 'Crossref 补全', '外文')
     + '<div class="bib-menu-sep"></div>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'paste\',\'' + sid + '\')">粘贴引文</button>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'opencnki\',\'' + sid + '\')">打开知网检索</button>';
+    + '<button class="bib-menu-item" type="button" role="menuitem" data-action="bibMenuAction" data-menu-action="paste" data-source-id="' + sourceId + '">粘贴引文</button>'
+    + '<button class="bib-menu-item" type="button" role="menuitem" data-action="bibMenuAction" data-menu-action="opencnki" data-source-id="' + sourceId + '">打开知网检索</button>';
 }
 
 // 抽屉信息行。原在 40-bibliography.js，仅依赖 esc。

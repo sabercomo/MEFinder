@@ -350,7 +350,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
-            "static/js/40-bibliography.js": 22,
+            "static/js/40-bibliography.js": 20,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
@@ -563,11 +563,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4 第一步：候选卡动作改为事件委托，增加 08-actions.js。
+    # 0.5.7 C4：候选卡与书目来源菜单动作改为事件委托。
     BASELINE_SHA256 = (
-        "167cfa9332273848017408a4a15ee8b309fd6c2828ed2e339fedf55f6740c358"
+        "514d740f4e95911ea941b0f588014222838fe8d98710ec68e30a3a6ffa402e35"
     )
-    BASELINE_BYTES = 1267123
+    BASELINE_BYTES = 1267474
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

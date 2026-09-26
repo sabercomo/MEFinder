@@ -420,7 +420,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 无用的「识别依据」已整体删除（页码识别依据属校准，保留）。
         self.assertNotIn("function showBibliographicEvidence(", HTML)
         self.assertNotIn(">识别依据</button>", HTML)
-        self.assertNotIn("bibMenuAction(event,'evidence'", HTML)
+        self.assertNotIn('data-menu-action="evidence"', HTML)
         self.assertIn("bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src)", HTML)
         self.assertIn('id="bib-host"', HTML)
         # 编辑态页脚显式保存 + 取消，保存文案区分于校准保存。

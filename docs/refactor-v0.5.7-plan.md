@@ -228,6 +228,8 @@
 
 2026-09-26(C4 第一步):新增 `08-actions.js` 注册式点击委托;联网书目候选卡的五种按钮改用 `data-action`、`data-source-id`、`data-index`,不再把文献 ID 拼进 JavaScript。`40-bibliography.js` 对应五个直接全局入口撤销,预算 27→22。守卫固定模板 `onclick/onchange/oninput` 上限 205 和各 JS 文件 `innerHTML` 上限;此步尚未触碰模板 205 处或其余动态 HTML,下一步继续迁移带文献 ID 的动态事件。
 
+2026-09-26(C4 第二步):书目来源菜单的五个选项也改用 `data-action` 与原始文献 ID 的转义属性;渲染入口不再提前转义 ID,菜单重绘沿用同一口径。撤销 `bibSetSource`、`bibMenuAction` 两个直接全局入口,书目模块预算 22→20;`06-pure.js` 的 `onclick=` 源码出现数 12→9。模板 205 处仍未迁,下一步继续其他动态入口。
+
 **前端 C5 DOM 构造与拆文件**
 - 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
 - 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。

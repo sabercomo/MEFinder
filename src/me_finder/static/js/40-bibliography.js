@@ -134,7 +134,7 @@
         + '<button class="action-btn primary bib-main" id="bib-primary-btn" type="button" onclick="bibRunLookup(\'' + sid + '\')">' + esc(bibPrimaryLabel(lookupSource)) + '</button>'
         + '<button class="action-btn primary bib-caret" type="button" aria-label="选择补全方式" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-source-menu\')">' + chevronSvg + '</button>'
         + '</span>'
-        + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(sid, lookupSource) + '</span>'
+        + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(src.source_file_id, lookupSource) + '</span>'
         + '</span>'
         + (canDetect ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>' : '')
         + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
@@ -1012,8 +1012,12 @@
   global.exitBibEdit = exitBibEdit;
   global.bibEditAndRun = bibEditAndRun;
   global.bibRunLookup = bibRunLookup;
-  global.bibSetSource = bibSetSource;
-  global.bibMenuAction = bibMenuAction;
+  MEFinderActions.register('bibSetSource', function(event, button) {
+    bibSetSource(event, button.dataset.sourceId, button.dataset.source);
+  });
+  MEFinderActions.register('bibMenuAction', function(event, button) {
+    bibMenuAction(event, button.dataset.menuAction, button.dataset.sourceId);
+  });
   global.bibToggleMenu = bibToggleMenu;
   global.bibCloseMenus = bibCloseMenus;
   global.setBibliographicType = setBibliographicType;

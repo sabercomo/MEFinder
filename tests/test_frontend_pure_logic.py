@@ -1162,17 +1162,22 @@ class BibSourceMenuHTMLTests(unittest.TestCase):
 
     def test_active_source_is_marked(self):
         html = _call("bibSourceMenuHTML", "sid-1", "cnki")
-        self.assertIn('onclick="bibSetSource(event,\'sid-1\',\'cnki\')"', html)
+        self.assertIn('data-action="bibSetSource" data-source-id="sid-1" data-source="cnki"', html)
         # 当前来源那一项带 active。
-        cnki_at = html.index("'cnki')")
+        cnki_at = html.index('data-source="cnki"')
         head = html.rfind("<button", 0, cnki_at)
         self.assertIn("active", html[head:cnki_at])
 
     def test_menu_has_auto_and_paste_actions(self):
         html = _call("bibSourceMenuHTML", "sid-1", "cnki")
         self.assertIn(">智能补全", html)
-        self.assertIn("bibMenuAction(event,'paste','sid-1')", html)
-        self.assertIn("bibMenuAction(event,'opencnki','sid-1')", html)
+        self.assertIn('data-action="bibMenuAction" data-menu-action="paste" data-source-id="sid-1"', html)
+        self.assertIn('data-action="bibMenuAction" data-menu-action="opencnki" data-source-id="sid-1"', html)
+
+    def test_source_id_stays_data_with_quotes_and_html_characters(self):
+        html = _call("bibSourceMenuHTML", "a'\"<b>&", "auto")
+        self.assertEqual(html.count('data-source-id="a&#39;&quot;&lt;b&gt;&amp;"'), 5)
+        self.assertNotIn("onclick=", html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
@@ -1479,7 +1484,7 @@ process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
 """
 
 _FRONTEND_STORE_STUB = r"""
-var MEFinderActions = {register: function() {}};
+var MEFinderActions = {actions: {}, register: function(name, callback) { this.actions[name] = callback; }};
 var searchStore = {documentId:'', groupId:'', sourceFiles:[], libraryCatalog:null};
 var libraryStore = {
   sources:[], volumes:[], volumeBySource:new Map(), works:[], stats:null,
@@ -1553,6 +1558,25 @@ def _bib_eval(tail):
         tail,
     )
     return _module_eval(expr)
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过书目菜单事件测试")
+class BibMenuDelegationTests(unittest.TestCase):
+    def test_paste_action_receives_event_and_opens_panel(self):
+        result = _bib_eval("""
+var panel = {hidden: true};
+var stopped = 0;
+var document = {
+  querySelectorAll: function() { return []; },
+  getElementById: function(id) { return id === 'bib-citation-panel' ? panel : null; }
+};
+MEFinderActions.actions.bibMenuAction(
+  {stopPropagation: function() { stopped++; }},
+  {dataset: {menuAction: 'paste', sourceId: "a'\\\"<b>&"}}
+);
+return {panelOpen: !panel.hidden, stopped: stopped};
+""")
+        self.assertEqual(result, {"panelOpen": True, "stopped": 1})
 
 
 def _import_eval(tail):
