@@ -17,6 +17,7 @@
   <nav class="top-nav" aria-label="页内导航">
     <a href="#features">功能</a>
     <a href="#modules">模块</a>
+    <a href="#mcp">AI 助手</a>
     <a href="#limits">边界</a>
   </nav>
   <a class="btn btn-primary btn-sm top-cta" href="#get">下载</a>
@@ -157,6 +158,62 @@
     <figure class="shot"><div class="frame"><img src="assets/70-settings.png" width="2880" height="1800" loading="lazy" alt="设置页，左侧目录按译本对齐、来源、解析、引用、应用分组，右侧是 Zotero 连接状态"></div><figcaption>设置页的目录分组，就是上面这张表在界面里的样子。</figcaption></figure>
   </section>
 
+  <!-- ============ MCP · 接上 AI 助手 ============ -->
+  <section class="mcp" id="mcp" aria-labelledby="mcp-h">
+    <p class="eyebrow">AI 助手</p>
+    <h2 class="sec-h2" id="mcp-h">接上 Agent，让它自己回原文查</h2>
+    <p class="sec-p">MEFinder 自带一个本地 MCP 服务，Windows 与 macOS 的发布包里都有 <code>MEFinderMCP</code>，不用装 Python。Claude Code、Codex 这类桌面 Agent 连上它，就能直接调用 13 个工具读你的文献库。桌面端不用开着，MCP 进程本身也不联网。</p>
+    <p class="sec-p">库里存的已经是解析好的页级文本、页码映射和题录。Agent 调工具拿到的是带文献 ID、页码锚点与字符区间的结构化结果，核完能直接指回原页。把 PDF 原样交给 Agent 读，每次都要现场解析一遍，扫描件还得先过 OCR。</p>
+
+    <div class="mcp-uses">
+      <article class="use">
+        <h3>论文定稿前核对引文</h3>
+        <p>把正文里的引文一段段交给 Agent，它用 <code>verify_quotes</code> 批量回原文比对，逐条给 verified（逐字命中）、approximate（疑似错引）、not_found（没找到）。疑似错引的那几条再用 <code>diff_quote</code> 跟最接近的原句逐字符对齐，多哪几个字、漏哪几个字、改了哪个字都标出来。</p>
+        <pre class="use-cmd"><code>请用 mefinder 的 verify_quotes 批量核对下面这五条引文，逐条告诉我是否逐字命中。</code></pre>
+      </article>
+      <article class="use">
+        <h3>笔记里的引用准不准</h3>
+        <p>读你的 Obsidian 笔记靠的是 Agent 自己的文件权限，MEFinder 不碰笔记。它管另一半：笔记里每条引文在书里有没有对应的原句、页码对不对、上下文有没有被截歪。核对结果按笔记里的顺序列回来，你只管决定哪几条要改。</p>
+        <pre class="use-cmd"><code>读我 vault 里这篇笔记，把其中所有引文逐条交给 mefinder 核对，指出与原句不一致的和页码对不上的。</code></pre>
+      </article>
+    </div>
+
+    <table class="spec mcp-tools">
+      <caption class="visually-hidden">MEFinder MCP 的 13 个工具按用途分组</caption>
+      <thead><tr><th scope="col">用途</th><th scope="col">工具与产出</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">定位与阅读</th><td><code>list_documents</code> 列出已入库文献并拿到稳定 ID · <code>locate_quote</code> 定位原句，返回上下文、匹配方式与页码状态 · <code>read_document_window</code> 从命中处读有界窗口，看前后页与相邻段落</td></tr>
+        <tr><th scope="row">核对</th><td><code>verify_quotes</code> 一次批量核对多条引文 · <code>diff_quote</code> 把疑似错引与原句逐字符对齐，标注增、漏、改</td></tr>
+        <tr><th scope="row">检索</th><td><code>search_passages</code> 只记得大意时按相关性召回段落。相关性检索，命中等于内容相关，逐字核对还要再走 <code>locate_quote</code></td></tr>
+        <tr><th scope="row">译本对照</th><td><code>find_parallel_passages</code> 给一句中文，返回其他译本的多个候选与前后文；Agent 比较跨语言语义、专名和引文结构之后才确认，证据不唯一就报歧义</td></tr>
+        <tr><th scope="row">题录</th><td><code>read_bibliographic_pages</code> 读取版权页与 CIP 页候选 · <code>read_bibliographic_metadata</code> 列出现有字段的已填、存疑、缺失</td></tr>
+        <tr><th scope="row">对齐修正</th><td><code>propose_alignment_correction</code> 记录待确认的修正提议 · <code>confirm_alignment_correction</code> 经你同意才生效 · <code>revoke_alignment_correction</code> 随时撤销 · <code>list_alignment_corrections</code> 复核已有修正</td></tr>
+      </tbody>
+    </table>
+    <p class="mcp-note">13 个工具里 10 个只读。3 个写操作只用于对齐修正，且必须你明确确认之后 Agent 才能调用。工具本身不做问答、总结或翻译。</p>
+
+    <h3 class="mcp-h3">再往前一点，可以这样用</h3>
+    <dl class="mcp-plays">
+      <dt>整批入库，让 Agent 自己读</dt>
+      <dd>要写的专题先全部导进来。Agent 通过工具拿到带页码锚点和字符区间的结果，读书笔记、综述材料都从库里取，不用再往对话里扔导出的文本。一本几百页的书，它按需取有界窗口，用不着把整本塞进上下文。</dd>
+      <dt>从 Zotero 迁过来，跟着 Zotero 走</dt>
+      <dd>在「设置 → 来源 → Zotero」勾选分类，MEFinder 走 Zotero 7 自带的本机只读接口，把其中的 PDF 与 EPUB 按自己的解析管线入库；增删和题录以 Zotero 为准，含茉莉花插件抓取的知网题录，同时不读 Zotero 的全文索引、不改你的 Zotero 库。<b class="mcp-soon">0.5.6 迭代中</b>，v0.5.5 的发布包里还没有这个开关。</dd>
+      <dt>扫描件按版面选解析档</dt>
+      <dd>默认「自动选择」，文字层不可靠时自动转 MinerU。图表密、版面复杂的书直接选「强制 MinerU」更稳。日文扫描件与繁体竖排古籍可以装本机离线 OCR（NDL 引擎，装好后全程离线）；现代中文扫描件不在本机 OCR 的覆盖范围内，那类仍然要走在线解析。</dd>
+      <dt>让 Agent 读书、做笔记</dt>
+      <dd>一本一本读下来，产出带出处的笔记。MEFinder 给的是原句、上下文和页码，笔记由 Agent 写——它写得对不对，还得回到书里核。</dd>
+    </dl>
+
+    <h3 class="mcp-h3">配置就一条命令</h3>
+    <p class="mcp-note">下面用的是 Windows 绿色版的示例路径，换成你机器上的位置即可：安装版通常在 <code>C:\Users\&lt;你的用户名&gt;\AppData\Local\Programs\MEFinder\MEFinderMCP.exe</code>，macOS 在 <code>/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP</code>。Codex 也可以走设置里的表单，类型选 STDIO。</p>
+    <div class="mcp-setup">
+      <div class="mcp-cmd"><span class="mcp-cmd-label">Claude Code</span><pre><code>claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
+      <div class="mcp-cmd"><span class="mcp-cmd-label">Codex</span><pre><code>codex mcp add mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
+    </div>
+    <p class="mcp-note">图文步骤、WorkBuddy 与 ZCode 的接法，以及最常见的配置错误都在 <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置教程</a> 里。配好之后在 Agent 里问一句「请只使用 mefinder，列出当前已经导入的文献」，能列出你库里的书就算通了。</p>
+    <p class="mcp-note mcp-warn">还有一条要说清楚：MCP 进程不访问网络，可工具返回的原文和上下文会进入 AI 客户端的对话记录与模型上下文。未公开发表的文献、别人的手稿，接之前先想清楚这一点。</p>
+  </section>
+
   <!-- ============ 边界与数据 · 全页唯一的染色断带 ============ -->
   <section class="limits" id="limits">
     <p class="eyebrow">边界</p>
@@ -190,7 +247,7 @@
         <tr><th scope="row">macOS · Intel</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.dmg" data-asset="macos-x86_64.dmg">dmg</a> · <a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.zip" data-asset="macos-x86_64.zip">zip</a></td><td class="num" data-size="macos-x86_64.dmg">99.0 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/tag/v0.5.5" data-rel-tag>随附 sidecar</a></td></tr>
       </tbody>
     </table>
-    <p class="get-also">装好后先看这两处：<a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a> 讲怎么建库和导入；<a href="https://github.com/sabercomo/MEFinder/blob/main/MCP_CLIENT_SETUP.md">MCP 配置</a> 讲怎么让 AI 助手读你的库。</p>
+    <p class="get-also">装好后先看这两处：<a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a> 讲怎么建库和导入；<a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置</a> 讲怎么让 AI 助手读你的库。</p>
   </section>
 
   <section class="origin">
@@ -215,7 +272,7 @@
       <a href="https://github.com/sabercomo/MEFinder/releases">历史版本</a>
       <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/RELEASE_NOTES.md">更新日志</a>
       <a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a>
-      <a href="https://github.com/sabercomo/MEFinder/blob/main/MCP_CLIENT_SETUP.md">MCP 配置</a>
+      <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置</a>
       <a href="https://github.com/sabercomo/MEFinder/issues">提交 Issue</a>
       <a href="https://github.com/sabercomo/MEFinder">GitHub 仓库</a>
       <a href="https://github.com/sabercomo/MEFinder/blob/main/LICENSE">AGPL-3.0</a>

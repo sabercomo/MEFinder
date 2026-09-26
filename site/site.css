@@ -108,6 +108,7 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
 .top-nav a {
   padding: 0.4em 0.8em; border-radius: var(--radius-md);
   font-size: var(--text-sm); color: var(--color-ink-2); text-decoration: none;
+  white-space: nowrap;
   transition: background var(--dur-toggle) var(--ease-out), color var(--dur-toggle) var(--ease-out);
 }
 .top-nav a:hover { background: var(--color-surface-hover); color: var(--color-ink); }
@@ -371,6 +372,75 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
 
 .shot { margin-top: var(--space-2xl); }
 
+/* ───────────── mcp · 接上 AI 助手 ───────────── */
+
+.mcp {
+  padding-block: var(--space-2xl) var(--space-3xl);
+  border-top: 1px solid var(--color-rule-2);
+}
+.mcp .sec-p { margin-bottom: var(--space-md); }
+
+.mcp-uses {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-lg) var(--space-xl);
+  margin-block: var(--space-xl) var(--space-2xl);
+}
+.use { display: grid; align-content: start; gap: var(--space-2xs); min-width: 0; }
+.use h3 { margin: 0; font-size: var(--text-xl); line-height: var(--leading-tight); letter-spacing: -0.01em; }
+.use p { margin: 0; max-width: var(--measure); font-size: var(--text-sm); line-height: 1.8; color: var(--color-ink-2); }
+.use-cmd {
+  margin: var(--space-xs) 0 0; padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface-2); border: 1px solid var(--color-rule);
+  border-left: 3px solid var(--color-hit-rule); border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.use-cmd code {
+  display: block; background: none; border: 0; padding: 0;
+  font-size: var(--text-sm); line-height: 1.7; color: var(--color-ink); white-space: pre;
+}
+
+.mcp-tools { margin-bottom: var(--space-md); }
+.mcp-tools tbody th { width: 7.5rem; }
+.mcp-note {
+  max-width: var(--measure); margin: 0 0 var(--space-2xl);
+  font-size: var(--text-sm); line-height: 1.8; color: var(--color-ink-3);
+  overflow-wrap: anywhere;
+}
+.mcp-note code { overflow-wrap: anywhere; }
+
+.mcp-h3 {
+  margin: var(--space-2xl) 0 var(--space-md);
+  font-size: var(--text-2xl); line-height: var(--leading-tight); letter-spacing: -0.015em;
+}
+.mcp-plays { margin: 0; display: grid; gap: var(--space-lg); }
+.mcp-plays dt {
+  padding-inline-start: var(--space-md); border-left: 3px solid var(--color-rule-2);
+  font-size: var(--text-lg); font-weight: 700; line-height: 1.5;
+}
+.mcp-plays dd {
+  margin: var(--space-3xs) 0 0 var(--space-md); max-width: var(--measure);
+  font-size: var(--text-sm); line-height: 1.85; color: var(--color-ink-2);
+}
+.mcp-soon {
+  display: inline-block; margin-inline-end: var(--space-2xs); padding: 0.1em 0.55em;
+  border-radius: var(--radius-pill); background: var(--color-accent-soft);
+  color: var(--color-accent-text); font-size: var(--text-xs); font-weight: 650;
+}
+
+.mcp-setup {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: var(--space-md); margin-bottom: var(--space-xl);
+}
+.mcp-cmd { display: grid; align-content: start; gap: var(--space-3xs); min-width: 0; }
+.mcp-cmd-label { font-size: var(--text-xs); font-weight: 650; letter-spacing: 0.08em; color: var(--color-ink-3); }
+.mcp-cmd pre {
+  margin: 0; padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface-2); border: 1px solid var(--color-rule); border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.mcp-cmd code { background: none; border: 0; padding: 0; font-size: var(--text-sm); white-space: pre; }
+.mcp-warn { margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--color-rule-2); color: var(--color-ink-2); }
+
 /* ───────────── limits · the one ink band ───────────── */
 
 .limits {
@@ -462,7 +532,9 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
 
 @media (max-width: 40rem) {
   .hero { padding-block: var(--space-xl) var(--space-2xl); }
-  .features, .modules, .get, .limits, .origin { padding-block: var(--space-2xl); }
+  .features, .modules, .mcp, .get, .limits, .origin { padding-block: var(--space-2xl); }
+  .mcp-h3 { margin-top: var(--space-xl); }
+  .mcp-plays dd { margin-inline-start: var(--space-sm); }
   .plate { padding-block: var(--space-lg) var(--space-xl); }
   .plate-cap { grid-template-columns: minmax(0, 1fr); grid-template-areas: "num" "title" "text"; gap: var(--space-2xs); }
   .frame::before { display: none; }
