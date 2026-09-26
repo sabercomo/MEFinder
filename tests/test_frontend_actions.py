@@ -14,6 +14,33 @@ NODE = shutil.which("node")
 
 @unittest.skipUnless(NODE, "node 不可用，跳过事件委托测试")
 class DelegatedActionTests(unittest.TestCase):
+    def test_library_facets_keep_unsaved_edit_guard(self):
+        script = r"""
+const calls = [];
+global.MEFinder = {bibliography: {
+  async guardLeaveDetail() { calls.push('guard'); return false; }
+}};
+global.MEFinderActions = {actions: {}, register(name, callback) {
+  this.actions[name] = callback;
+}};
+require(process.argv[1]);
+let stopped = 0;
+const event = {stopImmediatePropagation() { stopped++; }};
+(async () => {
+  await MEFinderActions.actions.setLibraryFacet(event, {
+    dataset: {kind: 'lang', value: "a'\"<b>&"}
+  });
+  await MEFinderActions.actions.removeLibraryFacet(event, {
+    dataset: {kind: 'lang'}
+  });
+  if (stopped !== 2 || JSON.stringify(calls) !== JSON.stringify(['guard', 'guard'])) {
+    throw new Error(JSON.stringify({stopped, calls}));
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+        subprocess.run([NODE, "-e", script, str(LIBRARY_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
     def test_library_nested_controls_do_not_open_entry(self):
         script = r"""
 global.libraryStore = {

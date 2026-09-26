@@ -224,7 +224,7 @@
     var chips = document.getElementById('library-filter-chips');
     if (chips) {
       chips.innerHTML = active.map(function(a){
-        return '<button class="library-filter-chip" type="button" title="移除筛选：' + esc(a.label) + '" aria-label="移除筛选：' + esc(a.label) + '" onclick="removeLibFacet(event,\'' + a.kind + '\')">'
+        return '<button class="library-filter-chip" type="button" title="移除筛选：' + esc(a.label) + '" aria-label="移除筛选：' + esc(a.label) + '" data-action="removeLibraryFacet" data-kind="' + esc(a.kind) + '">'
           + '<span>' + esc(a.label) + '</span>'
           + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
       }).join('');
@@ -235,14 +235,14 @@
     var el = document.getElementById(containerId);
     if (!el) return;
     el.innerHTML = options.map(function(o){
-      return '<button class="filter-opt' + (o.v === active ? ' is-on' : '') + '" type="button" role="option" aria-selected="' + (o.v === active) + '" data-value="' + o.v + '" onclick="setLibFacet(event,\'' + kind + '\',\'' + o.v + '\')">'
+      return '<button class="filter-opt' + (o.v === active ? ' is-on' : '') + '" type="button" role="option" aria-selected="' + (o.v === active) + '" data-action="setLibraryFacet" data-kind="' + esc(kind) + '" data-value="' + esc(o.v) + '">'
         + '<span>' + esc(o.label) + '</span><span class="filter-opt-n">' + o.n + '</span></button>';
     }).join('');
   }
 
   // 选中某个分面：立即生效并重绘（弹层保持打开，可连续多选，Notion 式）。
   async function setLibFacet(event, kind, value) {
-    if (event) event.stopPropagation();
+    if (event) event.stopImmediatePropagation();
     if (!await global.MEFinder.bibliography.guardLeaveDetail()) return;
     if (kind === 'doctype') libraryStore.documentTypeFilter = value;
     else if (kind === 'lang') libraryStore.languageFilter = value;
@@ -256,7 +256,7 @@
 
   // 移除单个生效筛选（点 chip 的 ✕），把该分面复位到「全部」。
   async function removeLibFacet(event, kind) {
-    if (event) event.stopPropagation();
+    if (event) event.stopImmediatePropagation();
     if (!await global.MEFinder.bibliography.guardLeaveDetail()) return;
     if (kind === 'doctype') libraryStore.documentTypeFilter = 'all';
     else if (kind === 'lang') libraryStore.languageFilter = 'all';
@@ -1166,11 +1166,15 @@
     event.stopImmediatePropagation();
     MEFinder.works.open(target.dataset.workId);
   });
+  MEFinderActions.register('setLibraryFacet', function(event, target) {
+    return setLibFacet(event, target.dataset.kind, target.dataset.value);
+  });
+  MEFinderActions.register('removeLibraryFacet', function(event, target) {
+    return removeLibFacet(event, target.dataset.kind);
+  });
 
   // 浏览器公共面：动态内联处理器只能通过这些命令入口访问本模块。
   global.openVersionSelect = openVersionSelect;
-  global.setLibFacet = setLibFacet;
-  global.removeLibFacet = removeLibFacet;
   global.toggleLibrarySortDirection = toggleLibrarySortDirection;
   global.applyLibStatusFilter = applyLibStatusFilter;
   global.setLibDefaultLanguage = setLibDefaultLanguage;
