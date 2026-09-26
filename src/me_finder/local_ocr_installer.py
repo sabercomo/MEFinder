@@ -56,6 +56,40 @@ _BINARY_SIZE_MULTIPLIERS = {
     "MiB": 1024 * 1024,
     "GiB": 1024 * 1024 * 1024,
 }
+# Windows Defender / the search indexer briefly lock freshly written runtime
+# files, which makes renaming their parent directory fail with WinError 5/32/33.
+_PUBLISH_REPLACE_ATTEMPTS = 10
+_PUBLISH_REPLACE_INITIAL_DELAY_SECONDS = 0.1
+_PUBLISH_REPLACE_MAX_DELAY_SECONDS = 1.0
+
+
+def _is_transient_replace_error(exc: OSError) -> bool:
+    return isinstance(exc, PermissionError) or getattr(
+        exc, "winerror", None
+    ) in {5, 32, 33}
+
+
+def _replace_with_retry(
+    source: Path,
+    target: Path,
+    attempts: int = _PUBLISH_REPLACE_ATTEMPTS,
+) -> None:
+    """Rename ``source`` to ``target``, retrying short-lived sharing locks."""
+
+    attempts = max(1, int(attempts))
+    for attempt in range(attempts):
+        try:
+            source.replace(target)
+            return
+        except OSError as exc:
+            if not _is_transient_replace_error(exc) or attempt + 1 >= attempts:
+                raise
+            time.sleep(
+                min(
+                    _PUBLISH_REPLACE_INITIAL_DELAY_SECONDS * (2**attempt),
+                    _PUBLISH_REPLACE_MAX_DELAY_SECONDS,
+                )
+            )
 
 
 class LocalOCRInstallerError(RuntimeError):
@@ -581,8 +615,8 @@ class LocalOCRInstaller:
             published = False
             try:
                 if final.exists():
-                    final.replace(previous)
-                staging.replace(final)
+                    _replace_with_retry(final, previous)
+                _replace_with_retry(staging, final)
                 published = True
                 final_python = final / self.platform.venv_python
                 final_script = final / "source" / engine.script_path
@@ -596,7 +630,7 @@ class LocalOCRInstaller:
                 if published:
                     self._remove_tree(final)
                 if previous.exists():
-                    previous.replace(final)
+                    _replace_with_retry(previous, final)
                 raise
             self._remove_tree(previous)
         finally:
