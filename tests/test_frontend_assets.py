@@ -82,6 +82,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             name = Path(relative).name
             self.assertLessEqual(_read(relative).count("innerHTML"),
                                  inner_html_baseline.get(name, 0), name)
+        dynamic_inline_baseline = {"06-pure.js": 9, "40-bibliography.js": 4}
+        for name, ceiling in dynamic_inline_baseline.items():
+            self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
 
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
@@ -350,7 +353,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
-            "static/js/40-bibliography.js": 20,
+            "static/js/40-bibliography.js": 12,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
@@ -563,11 +566,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：候选卡与书目来源菜单动作改为事件委托。
+    # 0.5.7 C4：候选卡、书目菜单与详情动作改为事件委托。
     BASELINE_SHA256 = (
-        "514d740f4e95911ea941b0f588014222838fe8d98710ec68e30a3a6ffa402e35"
+        "68c194a40e343a5c881a59dd2ef03f772ae5d05d9f68d69c5113233357745445"
     )
-    BASELINE_BYTES = 1267474
+    BASELINE_BYTES = 1268895
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

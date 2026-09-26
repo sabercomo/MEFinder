@@ -83,7 +83,7 @@
       return '<div class="bibliographic-field' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '" data-metadata-field="' + esc(metadataField) + '"><label for="bib-' + id + '">' + label + (isMissing ? ' · 缺少' : '') + '</label><input id="bib-' + id + '" value="' + esc(value || '') + '"></div>';
     }
     function typeButton(value, label) {
-      return '<button class="seg-btn' + (editorDocType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" onclick="setBibliographicType(\'' + esc(src.source_file_id) + '\',\'' + value + '\')">' + label + '</button>';
+      return '<button class="seg-btn' + (editorDocType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" data-action="setBibliographicType" data-source-id="' + esc(src.source_file_id) + '">' + label + '</button>';
     }
     var fieldsHTML;
     if (docType === 'thesis') {
@@ -131,20 +131,20 @@
       toolbarHTML = '<div class="bib-toolbar">'
         + '<span class="bib-menu-wrap">'
         + '<span class="bib-split">'
-        + '<button class="action-btn primary bib-main" id="bib-primary-btn" type="button" onclick="bibRunLookup(\'' + sid + '\')">' + esc(bibPrimaryLabel(lookupSource)) + '</button>'
+        + '<button class="action-btn primary bib-main" id="bib-primary-btn" type="button" data-action="bibRunLookup" data-source-id="' + sid + '">' + esc(bibPrimaryLabel(lookupSource)) + '</button>'
         + '<button class="action-btn primary bib-caret" type="button" aria-label="选择补全方式" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-source-menu\')">' + chevronSvg + '</button>'
         + '</span>'
         + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(src.source_file_id, lookupSource) + '</span>'
         + '</span>'
-        + (canDetect ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>' : '')
-        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
+        + (canDetect ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="false">自动识别</button>' : '')
+        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="true">重新识别</button>' : '')
         + '</div>';
     } else {
       // 图书 / 学位论文：维持原有平铺工具条，不改交互。
       toolbarHTML = '<div class="bib-toolbar">'
-        + (isBook ? '<button class="action-btn primary" type="button" onclick="lookupGoogleBooks(\'' + sid + '\')">查图书信息</button>' : '')
-        + (canDetect ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',false)">自动识别</button>' : '')
-        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" onclick="detectBibliographicMetadata(\'' + sid + '\',true)">重新识别</button>' : '')
+        + (isBook ? '<button class="action-btn primary" type="button" data-action="lookupGoogleBooks" data-source-id="' + sid + '">查图书信息</button>' : '')
+        + (canDetect ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="false">自动识别</button>' : '')
+        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="true">重新识别</button>' : '')
         + '</div>';
     }
     var lookupResultsHTML = isJournal
@@ -174,8 +174,8 @@
       + lookupResultsHTML
       + citationPanelHTML
       + '<div class="bib-footer"><span class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</span>'
-      + '<span class="bib-footer-actions"><button class="action-btn" type="button" onclick="exitBibEdit(\'' + sid + '\')">取消</button>'
-      + '<button class="action-btn primary" onclick="saveBibliographicMetadata(\'' + sid + '\')">保存书目信息</button></span></div>'
+      + '<span class="bib-footer-actions"><button class="action-btn" type="button" data-action="exitBibEdit" data-source-id="' + sid + '">取消</button>'
+      + '<button class="action-btn primary" data-action="saveBibliographicMetadata" data-source-id="' + sid + '">保存书目信息</button></span></div>'
       + '</div>';
   }
 
@@ -192,10 +192,8 @@
       var isMissing = missing.indexOf(fieldKey) >= 0;
       var text = String(value == null ? '' : value).trim();
       var focusId = fieldKey.replace(/_/g, '-');  // 输入框 id 用连字符
-      var edit = 'enterBibEdit(\'' + sid + '\',\'' + focusId + '\')';
       return '<div class="bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '"'
-        + ' role="button" tabindex="0" title="点击编辑" onclick="' + edit + '"'
-        + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + edit + ';}">'
+        + ' role="button" tabindex="0" title="点击编辑" data-action="enterBibEdit" data-source-id="' + sid + '" data-focus-field="' + focusId + '">'
         + '<span class="bib-read-label">' + label + '</span>'
         + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
     }
@@ -222,8 +220,8 @@
     // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
     // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
     var confirmed = isBibliographicTypeConfirmed(meta);
-    var primaryBtn = confirmed ? bibReadPrimaryButton(docType, sid)
-      : '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'detect\')">自动识别</button>';
+    var primaryBtn = confirmed ? bibReadPrimaryButton(docType, src.source_file_id)
+      : '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="detect">自动识别</button>';
     var missingBadge = confirmed
       ? bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
       : '';
@@ -241,12 +239,13 @@
 
   // 查看态头部的主补全按钮：期刊→补全期刊信息，图书→查图书信息，学位→自动识别。
   // 点它先进编辑态再执行（补全/识别本就是编辑动作，回填目标是编辑态的输入框）。
-  function bibReadPrimaryButton(docType, sid) {
+  function bibReadPrimaryButton(docType, sourceId) {
+    var sid = esc(sourceId);
     if (docType === 'journal_article')
-      return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'lookup\')">补全期刊信息</button>';
+      return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="lookup">补全期刊信息</button>';
     if (docType === 'book' || docType === 'translated_book')
-      return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'books\')">查图书信息</button>';
-    return '<button class="action-btn sm primary" type="button" onclick="bibEditAndRun(\'' + sid + '\',\'detect\')">自动识别</button>';
+      return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="books">查图书信息</button>';
+    return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="detect">自动识别</button>';
   }
 
   // 书目区渲染分发：查看态 / 编辑态，共用稳定宿主 #bib-host。
@@ -1007,11 +1006,19 @@
     lookupFields: bibliographicLookupFields
   };
 
-  // 浏览器公共面：仅保留动态内联处理器实际调用的符号。
-  global.enterBibEdit = enterBibEdit;
-  global.exitBibEdit = exitBibEdit;
-  global.bibEditAndRun = bibEditAndRun;
-  global.bibRunLookup = bibRunLookup;
+  // 书目详情通过 data-action 委托，不把文献 ID 拼进内联事件代码。
+  MEFinderActions.register('enterBibEdit', function(event, target) {
+    enterBibEdit(target.dataset.sourceId, target.dataset.focusField);
+  });
+  MEFinderActions.register('exitBibEdit', function(event, button) {
+    exitBibEdit(button.dataset.sourceId);
+  });
+  MEFinderActions.register('bibEditAndRun', function(event, button) {
+    bibEditAndRun(button.dataset.sourceId, button.dataset.runMode);
+  });
+  MEFinderActions.register('bibRunLookup', function(event, button) {
+    bibRunLookup(button.dataset.sourceId);
+  });
   MEFinderActions.register('bibSetSource', function(event, button) {
     bibSetSource(event, button.dataset.sourceId, button.dataset.source);
   });
@@ -1020,11 +1027,15 @@
   });
   global.bibToggleMenu = bibToggleMenu;
   global.bibCloseMenus = bibCloseMenus;
-  global.setBibliographicType = setBibliographicType;
+  MEFinderActions.register('setBibliographicType', function(event, button) {
+    setBibliographicType(button.dataset.sourceId, button.dataset.doctype);
+  });
   MEFinderActions.register('applyCnkiSearchCandidate', function(event, button) {
     applyCnkiSearchCandidate(button.dataset.sourceId, Number(button.dataset.index));
   });
-  global.lookupGoogleBooks = lookupGoogleBooks;
+  MEFinderActions.register('lookupGoogleBooks', function(event, button) {
+    lookupGoogleBooks(button.dataset.sourceId);
+  });
   MEFinderActions.register('applyBookCandidate', function(event, button) {
     applyBookCandidate(button.dataset.sourceId, Number(button.dataset.index));
   });
@@ -1040,8 +1051,12 @@
   });
   global.parseCnkiCitationText = parseCnkiCitationText;
   global.pickBibLanguage = pickBibLanguage;
-  global.detectBibliographicMetadata = detectBibliographicMetadata;
-  global.saveBibliographicMetadata = saveBibliographicMetadata;
+  MEFinderActions.register('detectBibliographicMetadata', function(event, button) {
+    detectBibliographicMetadata(button.dataset.sourceId, button.dataset.overwrite === 'true');
+  });
+  MEFinderActions.register('saveBibliographicMetadata', function(event, button) {
+    saveBibliographicMetadata(button.dataset.sourceId);
+  });
   global.returnToSearch = returnToSearch;
   global.requestCloseLibDrawer = requestCloseLibDrawer;
   global.toggleDrawerSection = toggleDrawerSection;

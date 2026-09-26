@@ -416,7 +416,8 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("function enterBibEdit(sourceId, focusFieldId)", HTML)
         self.assertIn("function exitBibEdit(sourceId)", HTML)
         # 查看态点任意字段即进入编辑并聚焦该字段——无独立「编辑」按钮。
-        self.assertIn('role="button" tabindex="0" title="点击编辑" onclick="', HTML)
+        self.assertIn('role="button" tabindex="0" title="点击编辑" data-action="enterBibEdit"', HTML)
+        self.assertIn("event.target.closest('[data-action][role=\"button\"]')", HTML)
         # 无用的「识别依据」已整体删除（页码识别依据属校准，保留）。
         self.assertNotIn("function showBibliographicEvidence(", HTML)
         self.assertNotIn(">识别依据</button>", HTML)

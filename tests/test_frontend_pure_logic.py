@@ -1579,6 +1579,40 @@ return {panelOpen: !panel.hidden, stopped: stopped};
         self.assertEqual(result, {"panelOpen": True, "stopped": 1})
 
 
+@unittest.skipUnless(NODE, "node 不可用，跳过书目详情事件测试")
+class BibliographicDetailDelegationTests(unittest.TestCase):
+    def test_detail_actions_are_registered(self):
+        names = _bib_eval("return Object.keys(MEFinderActions.actions);")
+        for name in ("enterBibEdit", "exitBibEdit", "bibEditAndRun", "bibRunLookup",
+                     "setBibliographicType", "lookupGoogleBooks",
+                     "detectBibliographicMetadata", "saveBibliographicMetadata"):
+            self.assertIn(name, names)
+
+    def test_special_source_id_is_data_in_read_and_edit_views(self):
+        source_id = "a'\"<b>&"
+        for edit in (False, True):
+            html = _bib_eval("""
+var src = {source_file_id: %s, source_type: 'pdf',
+  bibliographic_metadata: {document_type: 'journal_article'}};
+MEFinder.bibliography.setEditMode(src.source_file_id, %s);
+return MEFinder.bibliography.renderSection(src);
+""" % (json.dumps(source_id), "true" if edit else "false"))
+            self.assertIn('data-source-id="a&#39;&quot;&lt;b&gt;&amp;"', html)
+            self.assertNotIn("onclick=\"enterBibEdit", html)
+            self.assertNotIn("onclick=\"bibEditAndRun", html)
+            if edit:
+                for name in ("setBibliographicType", "bibRunLookup",
+                             "lookupGoogleBooks", "detectBibliographicMetadata",
+                             "exitBibEdit", "saveBibliographicMetadata"):
+                    self.assertNotIn('onclick="' + name, html)
+                self.assertIn('data-action="saveBibliographicMetadata"', html)
+                self.assertIn('data-action="setBibliographicType"', html)
+                self.assertIn('data-overwrite="false"', html)
+            else:
+                self.assertIn('data-action="enterBibEdit"', html)
+                self.assertIn('data-focus-field="title"', html)
+
+
 def _import_eval(tail):
     """在 06-pure.js + 80-import.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
 

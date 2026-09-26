@@ -7,8 +7,19 @@
   }
 
   document.addEventListener('click', function(event) {
+    if (!event.target.closest) return;
     const target = event.target.closest('[data-action]');
     if (target && actions[target.dataset.action]) {
+      actions[target.dataset.action](event, target);
+    }
+  });
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (!event.target.closest) return;
+    const target = event.target.closest('[data-action][role="button"]');
+    if (target && actions[target.dataset.action]) {
+      event.preventDefault();
       actions[target.dataset.action](event, target);
     }
   });

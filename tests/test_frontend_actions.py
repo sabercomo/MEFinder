@@ -32,8 +32,34 @@ const child = {closest(selector) {
 }};
 listener({target: child, marker: 'click'});
 listener({target: {closest() {return null;}}, marker: 'ignored'});
+listener({target: document, marker: 'document'});
 if (JSON.stringify(calls) !== JSON.stringify([['click', "a'\"<b>&", '2']])) {
   throw new Error(JSON.stringify(calls));
+}
+"""
+        subprocess.run([NODE, "-e", script, str(ACTIONS_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
+    def test_role_button_supports_enter_and_space(self):
+        script = r"""
+const fs = require('fs');
+const listeners = {};
+global.document = {addEventListener(type, callback) { listeners[type] = callback; }};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const calls = [];
+MEFinderActions.register('enterBibEdit', (event, button) => calls.push(button.dataset.focusField));
+const row = {dataset: {action: 'enterBibEdit', focusField: 'title'}, role: 'button'};
+const child = {closest(selector) {
+  if (selector !== '[data-action][role="button"]') throw new Error(selector);
+  return row;
+}};
+let prevented = 0;
+for (const key of ['Enter', ' ', 'Escape']) {
+  listeners.keydown({target: child, key, preventDefault() { prevented++; }});
+}
+listeners.keydown({target: document, key: 'Enter', preventDefault() { prevented++; }});
+if (JSON.stringify(calls) !== JSON.stringify(['title', 'title']) || prevented !== 2) {
+  throw new Error(JSON.stringify({calls, prevented}));
 }
 """
         subprocess.run([NODE, "-e", script, str(ACTIONS_JS)], check=True,
