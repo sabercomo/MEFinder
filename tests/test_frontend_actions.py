@@ -8,11 +8,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIONS_JS = ROOT / "src/me_finder/static/js/08-actions.js"
+LIBRARY_JS = ROOT / "src/me_finder/static/js/30-library.js"
 NODE = shutil.which("node")
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过事件委托测试")
 class DelegatedActionTests(unittest.TestCase):
+    def test_library_entry_click_is_registered_and_preserves_suppression(self):
+        script = r"""
+global.libraryStore = {suppressSelectionClick: true};
+global.MEFinderActions = {actions: {}, register(name, callback) {
+  this.actions[name] = callback;
+}};
+require(process.argv[1]);
+let prevented = 0;
+let stopped = 0;
+MEFinderActions.actions.openLibraryEntry({
+  preventDefault() { prevented++; },
+  stopImmediatePropagation() { stopped++; }
+}, {dataset: {id: "a'\"<b>&"}});
+if (prevented !== 1 || stopped !== 1) {
+  throw new Error(JSON.stringify({prevented, stopped}));
+}
+"""
+        subprocess.run([NODE, "-e", script, str(LIBRARY_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
     def test_click_uses_nearest_action_and_passes_original_event(self):
         script = r"""
 const fs = require('fs');

@@ -82,9 +82,16 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             name = Path(relative).name
             self.assertLessEqual(_read(relative).count("innerHTML"),
                                  inner_html_baseline.get(name, 0), name)
-        dynamic_inline_baseline = {"06-pure.js": 9, "40-bibliography.js": 0}
+        dynamic_inline_baseline = {"06-pure.js": 9, "30-library.js": 19,
+                                   "40-bibliography.js": 0}
         for name, ceiling in dynamic_inline_baseline.items():
             self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
+
+    def test_library_entries_use_delegated_click(self):
+        library = _read("static/js/30-library.js")
+        self.assertEqual(library.count('data-action="openLibraryEntry"'), 2)
+        self.assertNotIn('onclick="handleLibraryEntryClick(', library)
+        self.assertNotIn('global.handleLibraryEntryClick =', library)
 
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
@@ -349,7 +356,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
             # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
             # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
-            "static/js/30-library.js": 21,
+            "static/js/30-library.js": 20,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
@@ -566,11 +573,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：书目模块动态 onclick 清零，语言下拉也走事件委托。
+    # 0.5.7 C4：文献库卡片/行点击改为委托事件，移除直接全局入口。
     BASELINE_SHA256 = (
-        "f5882c89453c195d399dcb0850703f13ea3275dcd976bb21fec92601c2c90a19"
+        "d6dc7aaa2819f8cba8995fb53fbaf7e147243608441528b8427618fb584afdf0"
     )
-    BASELINE_BYTES = 1269376
+    BASELINE_BYTES = 1269368
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

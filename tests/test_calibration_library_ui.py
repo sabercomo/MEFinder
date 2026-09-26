@@ -548,7 +548,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
         # L-11
         self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
-        self.assertIn('" tabindex="0" role="option" data-id="', HTML)
+        self.assertIn('" tabindex="0" role="option" data-action="openLibraryEntry" data-id="', HTML)
         self.assertIn("function handleLibraryListKeydown(event)", HTML)
         self.assertIn("function setupLibraryKeyboardNav()", HTML)
         self.assertIn("MEFinder.library.setupKeyboardNav();", HTML)

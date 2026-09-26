@@ -543,7 +543,7 @@
   function handleLibraryEntryClick(event, sourceId) {
     if (libraryStore.suppressSelectionClick) {
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
       return;
     }
     // Clicking the row/card body always opens details; the checkbox is the only
@@ -648,7 +648,7 @@
     if (libraryStore.viewMode === 'grid') {
       var imported = formatCalDate(src.imported_at || src.last_modified);
       var secondary = !isPdf ? ((vol && vol.corpus_title) || '') : '';
-      return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+      return '<article class="library-card library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-action="openLibraryEntry" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '">'
         + '<div class="library-card-top"><div class="library-card-badges"><span class="type-badge ' + typeCls + '">' + typeLabel + '</span>' + statusChip + (wordStructure ? '<span class="library-card-status">' + esc(wordStructure) + '</span>' : '') + (secondary ? '<span class="library-card-status">' + esc(secondary) + '</span>' : '') + '</div>' + selectionControl + '</div>'
         + '<div class="library-card-title">' + thesisIcon + esc(title) + '</div><div class="library-card-author">' + esc(author) + '</div>'
         + (workLink ? '<div class="library-card-work">' + workLink + '</div>' : '')
@@ -657,7 +657,7 @@
         + '<div class="library-card-mapping">' + esc(isPdf ? (src.mapping_summary || '尚未建立引用页码映射') : ((vol && vol.version_info) || typeLabel + ' 文献')) + '</div>'
         + '<div class="library-card-footer"><span class="library-card-action">查看详情</span><span class="library-card-date">' + esc(imported === '未知' ? '日期未知' : imported + ' 导入') + '</span></div></article>';
     }
-    return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '" onclick="handleLibraryEntryClick(event,\'' + esc(src.source_file_id) + '\')">'
+    return '<div class="library-row library-entry' + (isSelected ? ' selected' : '') + (isDeleteSelected ? ' delete-selected' : '') + '" tabindex="0" role="option" data-action="openLibraryEntry" data-id="' + esc(src.source_file_id) + '" data-delete-selectable="' + (isDeleteSelectable ? '1' : '0') + '" aria-selected="' + (isDeleteSelected ? 'true' : 'false') + '">'
       + selectionControl
       + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
       + '<span class="library-row-title">' + thesisIcon + esc(title) + '</span>'
@@ -1155,6 +1155,10 @@
     updateEntry: updateLibraryEntry
   };
 
+  MEFinderActions.register('openLibraryEntry', function(event, target) {
+    handleLibraryEntryClick(event, target.dataset.id);
+  });
+
   // 浏览器公共面：动态内联处理器只能通过这些命令入口访问本模块。
   global.openVersionSelect = openVersionSelect;
   global.setLibFacet = setLibFacet;
@@ -1169,7 +1173,6 @@
   global.clearLibrarySelection = clearLibrarySelection;
   global.toggleLibraryDeleteSelection = toggleLibraryDeleteSelection;
   global.toggleSelectVisibleLibraryDocuments = toggleSelectVisibleLibraryDocuments;
-  global.handleLibraryEntryClick = handleLibraryEntryClick;
   global.exportLibraryDocument = exportLibraryDocument;
   global.exportLibraryDocumentMarkdown = exportLibraryDocumentMarkdown;
   global.exportLibraryDocumentEpub = exportLibraryDocumentEpub;
