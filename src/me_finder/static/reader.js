@@ -13,7 +13,6 @@
     alignmentTargetsEndpoint: '/api/text-alignments/targets',
     alignmentLocateEndpoint: '/api/text-alignments/locate',
     alignmentStartEndpoint: '/api/text-alignments/start',
-    alignmentStatusEndpoint: '/api/text-alignments/status',
     alignmentCancelEndpoint: '/api/text-alignments/cancel',
     alignmentModelsEndpoint: '/api/text-alignment/models',
     preferencesEndpoint: '/api/preferences',
@@ -37,7 +36,6 @@
     alignmentTargetsEndpoint: DEFAULTS.alignmentTargetsEndpoint,
     alignmentLocateEndpoint: DEFAULTS.alignmentLocateEndpoint,
     alignmentStartEndpoint: DEFAULTS.alignmentStartEndpoint,
-    alignmentStatusEndpoint: DEFAULTS.alignmentStatusEndpoint,
     alignmentCancelEndpoint: DEFAULTS.alignmentCancelEndpoint,
     alignmentModelsEndpoint: DEFAULTS.alignmentModelsEndpoint,
     preferencesEndpoint: DEFAULTS.preferencesEndpoint,
@@ -1012,7 +1010,7 @@
   }
 
   function pairInfo(a, b) {
-    var running = runningAlignmentJob();
+    var running = alignmentJobs.running();
     if (running && running.groupId === state.work.groupId && running.key === pairKey(a, b)) {
       return {status: 'running'};
     }
@@ -1094,7 +1092,7 @@
       var running = results[2];
       if (running && running.running && running.document_group_id === work.groupId) {
         // 页面刷新或任务由别处发起：认领它，不改已有认领者的归属。
-        watchAlignmentJob(running.job_id, {
+        alignmentJobs.watch(running.job_id, {
           origin: 'reader',
           groupId: work.groupId,
           key: pairKey(running.pivot_source_file_id, running.target_source_file_id)
@@ -1617,7 +1615,7 @@
         target_source_file_id: targetId,
         force: !!force
       });
-      watchAlignmentJob(payload.job_id, {
+      alignmentJobs.watch(payload.job_id, {
         origin: 'reader', groupId: groupId, key: pairKey(pivotId, targetId)
       });
       refreshComparisonAfterStatusChange();
@@ -1648,75 +1646,12 @@
     }
   }
 
-  /* ── 对齐任务：后端只跑一个，前端只监听一份 ───────────────────── */
-  // 后端一次只有一个对齐任务（单 job_id）。阅读器和作品页都要知道它何时结束，
-  // 所以监听只有这一份：谁先认领就由谁记下 origin，结束后广播给所有订阅者，
-  // 结局提示只由发起方给出——两份监听会让同一个任务弹两次提示、刷两次视图。
-  var JOB_POLL_MS = 1500;
-  var jobWatch = {jobId: '', meta: null, subscribers: []};
+  /* ── 对齐任务：监听在 MEFinderAlignmentJobs，阅读器只处理结局 ─────── */
+  // 同一窗口只有一份任务监听（15-alignment-jobs.js），阅读器和作品页都只认领与订阅；
+  // 结局提示只由发起方给出。阅读器关闭不停止本窗口的任务监听。
+  var alignmentJobs = global.MEFinderAlignmentJobs;
 
-  function subscribeAlignmentJob(handler) {
-    if (typeof handler !== 'function') return function () {};
-    jobWatch.subscribers.push(handler);
-    return function () {
-      var index = jobWatch.subscribers.indexOf(handler);
-      if (index >= 0) jobWatch.subscribers.splice(index, 1);
-    };
-  }
-
-  // 已在监听的任务不改归属：后认领者只是共享同一份监听。
-  function watchAlignmentJob(jobId, meta) {
-    if (!jobId || jobWatch.jobId === jobId) return;
-    jobWatch.jobId = String(jobId);
-    jobWatch.meta = meta || {};
-    pollAlignmentJob(jobWatch.jobId);
-  }
-
-  function runningAlignmentJob() {
-    if (!jobWatch.jobId) return null;
-    var running = {jobId: jobWatch.jobId};
-    Object.keys(jobWatch.meta || {}).forEach(function (name) {
-      running[name] = jobWatch.meta[name];
-    });
-    return running;
-  }
-
-  async function pollAlignmentJob(jobId) {
-    // 后台生成期间每 ~1.5s 查询一次任务状态，直到非 202（完成、失败或取消）。
-    while (jobWatch.jobId === jobId) {
-      await new Promise(function (resolve) { global.setTimeout(resolve, JOB_POLL_MS); });
-      if (jobWatch.jobId !== jobId) return;
-      var response;
-      try {
-        response = await fetchFunction()(
-          config.alignmentStatusEndpoint + '?job_id=' + encodeURIComponent(jobId),
-          {headers: {'Accept': 'application/json'}}
-        );
-      } catch (_error) {
-        continue;
-      }
-      if (response.status === 202) continue;
-      var payload = {};
-      try { payload = await response.json(); } catch (_error) { payload = {}; }
-      if (jobWatch.jobId !== jobId) return;
-      var event = {
-        jobId: jobId,
-        meta: jobWatch.meta || {},
-        outcome: response.ok && payload.ok ? 'ok'
-          : payload.cancelled ? 'cancelled'
-            : response.status === 404 ? 'unknown' : 'failed',
-        error: payload.error || ''
-      };
-      jobWatch.jobId = '';
-      jobWatch.meta = null;
-      jobWatch.subscribers.slice().forEach(function (handler) {
-        try { handler(event); } catch (_error) { /* 一个订阅者出错不拖垮其他订阅者。*/ }
-      });
-      return;
-    }
-  }
-
-  subscribeAlignmentJob(function (event) {
+  alignmentJobs.subscribe(function (event) {
     Promise.resolve(applyAlignmentJobEnd(event)).catch(function () { /* 刷新失败不打断阅读。*/ });
   });
 
@@ -3942,7 +3877,10 @@
     ].forEach(function (name) {
       if (typeof options[name] === 'function') config[name] = options[name];
     });
-    if (typeof options.fetch === 'function') config.fetch = options.fetch;
+    if (typeof options.fetch === 'function') {
+      config.fetch = options.fetch;
+      alignmentJobs.configure({fetch: options.fetch});
+    }
     if (typeof options.notify === 'function') config.notify = options.notify;
     if (options.notify === null) config.notify = null;
     config.batchSize = clampInteger(options.batchSize, config.batchSize, 5, 100);
@@ -4259,11 +4197,11 @@
   });
 
   global.MEFinderReader = Object.freeze({
-    // 对齐任务的唯一监听：作品页订阅它，不再自己轮询同一个任务。
+    // 兼容入口：转发到 MEFinderAlignmentJobs，新代码直接用服务。
     alignmentJobs: Object.freeze({
-      watch: watchAlignmentJob,
-      subscribe: subscribeAlignmentJob,
-      running: runningAlignmentJob
+      watch: alignmentJobs.watch,
+      subscribe: alignmentJobs.subscribe,
+      running: alignmentJobs.running
     }),
     open: openReader,
     openForSearchResult: openForSearchResult,

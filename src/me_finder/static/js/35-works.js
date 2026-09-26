@@ -844,17 +844,10 @@
     }
   }
 
-  // 对齐任务只有一个监听器，由 reader.js 持有（index.html 与独立阅读窗口都装它）。
+  // 对齐任务只有一个监听器 MEFinderAlignmentJobs（15-alignment-jobs.js）。
   // 作品页只认领任务并订阅结局：两份轮询会让同一个任务弹两次提示、刷两次视图。
-  function alignmentJobs() {
-    var reader = global.MEFinderReader;
-    return reader && reader.alignmentJobs ? reader.alignmentJobs : null;
-  }
-
   function watchAlignmentJob(jobId, origin, groupId, pivotId, targetId) {
-    var jobs = alignmentJobs();
-    if (!jobs) return;
-    jobs.watch(jobId, {
+    global.MEFinderAlignmentJobs.watch(jobId, {
       origin: origin,
       groupId: groupId || '',
       key: pivotId && targetId ? pairKey(pivotId, targetId) : ''
@@ -1592,7 +1585,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     if (!global.MEFinderReader) return;
-    global.MEFinderReader.alignmentJobs.subscribe(function (event) {
+    global.MEFinderAlignmentJobs.subscribe(function (event) {
       onAlignmentJobEnd(event).catch(function () { /* 刷新失败不影响任务结局。*/ });
     });
     global.MEFinderReader.configure({

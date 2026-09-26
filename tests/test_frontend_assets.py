@@ -659,10 +659,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 书目编辑器切换文献类型时，可见字段按编辑值整值回填（修书名被原值覆盖）。
     # 0.5.7 D1：07-api.js 新增 withFetch 可注入客户端；reader.js 的 JSON 请求
     #   改走统一客户端，原始状态请求默认出口改为 MEFinderApi.fetch。
+    # 0.5.7 D2：对齐任务监听迁到 15-alignment-jobs.js（MEFinderAlignmentJobs），
+    #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
     BASELINE_SHA256 = (
-        "039d08ffffd3163270759fadb67bf2e974681d417e7462a87f9ea1663e1433c9"
+        "749a2449c3900507742d283f8bd9c1626d9bd30931427541ab49d0a68fbad155"
     )
-    BASELINE_BYTES = 1314785
+    BASELINE_BYTES = 1315767
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

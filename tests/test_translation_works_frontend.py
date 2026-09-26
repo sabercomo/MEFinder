@@ -112,10 +112,10 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         # 队列中逐个任务不弹提示，结束时汇总一次。
         watch = _function_body(WORKS_JS, "async function onAlignmentJobEnd(event)")
         self.assertLess(watch.index("advanceRealignQueue(event.outcome"), watch.index("对齐已生成"))
-        # 任务监听只有一份（在 reader.js 里），作品页只认领并订阅，不再自己轮询。
+        # 任务监听只有一份（15-alignment-jobs.js），作品页只认领并订阅，不再自己轮询。
         self.assertNotIn("/api/text-alignments/status", WORKS_JS)
-        self.assertIn("global.MEFinderReader.alignmentJobs.subscribe(", WORKS_JS)
-        self.assertIn("jobs.watch(jobId, {", WORKS_JS)
+        self.assertIn("global.MEFinderAlignmentJobs.subscribe(", WORKS_JS)
+        self.assertIn("global.MEFinderAlignmentJobs.watch(jobId, {", WORKS_JS)
         # 提示只由发起方给出，阅读器发起的任务由阅读器报告。
         self.assertIn("event.meta.origin === 'works'", watch)
         # 关闭阅读器：直接采用交回的位置，不清空缓存、不用定时器重查。

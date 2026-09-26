@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-from tests.reader_source import reader_js_source
+from tests.reader_source import reader_runtime_source
 
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
@@ -101,6 +101,6 @@ events.DOMContentLoaded[0]();
         result = subprocess.run(
             [shutil.which("node"), "-e", script,
              str(root / "src/me_finder/static/js/16-reader-host.js")],
-            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _load_asset
-from tests.reader_source import reader_js_source, reader_runtime_source
+from tests.reader_source import alignment_jobs_source, reader_js_source, reader_runtime_source
 
 
 class ReaderPublicContractTests(unittest.TestCase):
@@ -17,13 +17,17 @@ class ReaderPublicContractTests(unittest.TestCase):
         self.assertNotIn("//__READER_JS__", HTML)
         self.assertNotIn("//__READER_JS__", READER_WINDOW_HTML)
 
-    def test_both_windows_load_the_request_module_before_the_reader(self) -> None:
+    def test_both_windows_load_api_then_job_service_then_reader(self) -> None:
         api = _load_asset("static/js/07-api.js")
+        jobs = alignment_jobs_source()
         reader = reader_js_source()
         for html in (HTML, READER_WINDOW_HTML):
             self.assertEqual(html.count(api), 1)
-            self.assertLess(html.index(api), html.index(reader))
+            self.assertEqual(html.count(jobs), 1)
+            self.assertLess(html.index(api), html.index(jobs))
+            self.assertLess(html.index(jobs), html.index(reader))
         self.assertNotIn("//__API_JS__", READER_WINDOW_HTML)
+        self.assertNotIn("//__ALIGNMENT_JOBS_JS__", READER_WINDOW_HTML)
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_reader_requests_use_the_shared_client_unless_fetch_is_injected(self) -> None:
@@ -66,7 +70,8 @@ const reader = context.MEFinderReader;
 """
         result = subprocess.run(
             [shutil.which("node"), "-e", script],
-            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+            input=alignment_jobs_source() + reader_js_source(),
+            capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -272,6 +277,45 @@ const unsubscribe = reader.alignmentJobs.subscribe(event=>events.push(event));
         result = subprocess.run(
             [shutil.which("node"), "-e", script],
             input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_job_service_runs_without_reader_or_works_page(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const urls = [];
+const replies = [{status:202, ok:true, payload:{}}, {status:200, ok:true, payload:{ok:true}}];
+const context = {
+  setTimeout(resolve){resolve();},
+  MEFinderApi: {fetch: async url => { urls.push(url); const r = replies.shift(); return {status:r.status, ok:r.ok, json:async()=>r.payload}; }}
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const jobs = context.MEFinderAlignmentJobs;
+assert.equal(Object.isFrozen(jobs), true);
+assert.deepEqual(Object.keys(jobs).sort(), ['configure','running','subscribe','watch']);
+assert.equal(context.MEFinderReader, undefined);
+const events = [];
+const stop = jobs.subscribe(event => events.push(event));
+jobs.subscribe(() => { throw new Error('bad subscriber'); });
+(async()=>{
+  jobs.watch('J9', {origin:'works', groupId:'G', key:'A|B'});
+  assert.deepEqual({...jobs.running()}, {jobId:'J9', origin:'works', groupId:'G', key:'A|B'});
+  for (let i=0;i<5 && !events.length;i++) await new Promise(setImmediate);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].outcome, 'ok');
+  assert.deepEqual(urls, ['/api/text-alignments/status?job_id=J9', '/api/text-alignments/status?job_id=J9']);
+  assert.equal(jobs.running(), null);
+  stop();
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=alignment_jobs_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

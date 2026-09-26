@@ -199,7 +199,6 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("'对齐模型已更换，以下是旧结果'", notice)
         self.assertIn("function startComparisonAlignment(force)", READER_JS)
         self.assertIn("config.alignmentStartEndpoint", READER_JS)
-        self.assertIn("config.alignmentStatusEndpoint", READER_JS)
         applied = READER_JS[READER_JS.index("async function applyAlignmentJobEnd(event)"):]
         applied = applied[:applied.index("  /* ── 新窗口")]
         self.assertIn("await loadAlignmentTargets(sourceId)", applied)
@@ -400,9 +399,13 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("function alignmentTargetDisplayLabel(target)", READER_JS)
         self.assertIn(".mef-reader-alignment-action", READER_CSS)
         self.assertIn("'/api/text-alignments/start'", APP_JS)
-        # 任务状态轮询只在 reader.js 里一份；作品页订阅它，不自己查询。
-        self.assertIn("config.alignmentStatusEndpoint + '?job_id='", READER_JS)
-        self.assertNotIn("/api/text-alignments/status", APP_JS)
+        # 任务状态轮询只在 15-alignment-jobs.js 里一份；阅读器与作品页都只订阅，不自己查询。
+        status_owners = sorted(
+            path.name for path in (ROOT / "src" / "me_finder" / "static" / "js").glob("*.js")
+            if "/api/text-alignments/status" in path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(status_owners, ["15-alignment-jobs.js"])
+        self.assertNotIn("/api/text-alignments/status", READER_JS)
         comparison_start = READER_JS.index("function renderComparisonWindow()")
         comparison_end = READER_JS.index("async function loadComparisonWindow", comparison_start)
         comparison_body = READER_JS[comparison_start:comparison_end]

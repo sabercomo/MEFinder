@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-from tests.reader_source import reader_js_source
+from tests.reader_source import alignment_jobs_source, reader_js_source
 
 READER = reader_js_source()
 
@@ -28,12 +28,15 @@ const loadAvailability=async()=>{},renderToolbar=()=>{};
 })();
 """)
 
-    def run_js(self, functions, script):
+    def run_js(self, functions, script, prelude=""):
         bodies = []
         for start, end in functions:
             offset = READER.index(start)
             bodies.append(READER[offset:READER.index(end, offset)])
-        program = "const assert = require('assert/strict');\n" + "\n".join(bodies) + "\n" + script
+        program = (
+            "const assert = require('assert/strict');\n" + prelude + "\n"
+            + "\n".join(bodies) + "\n" + script
+        )
         result = subprocess.run(
             [shutil.which("node"), "-e", program],
             capture_output=True, text=True, timeout=15,
@@ -60,7 +63,12 @@ finish(false);
 setImmediate(() => assert.deepEqual(shown, []));
 """.replace("REPLACEMENT", json.dumps(replacement)))
 
-    JOB_WATCH = ("  /* ── 对齐任务：后端只跑一个", "  /* ── 新窗口")
+    JOB_WATCH = ("  /* ── 对齐任务：监听在 MEFinderAlignmentJobs", "  /* ── 新窗口")
+    # 阅读器片段读 global.MEFinderAlignmentJobs：先把真实任务服务装进受控的 global。
+    JOB_SERVICE_PRELUDE = (
+        "const global={setTimeout:resolve=>resolve()};\n"
+        "new Function('window', " + json.dumps(alignment_jobs_source()) + ")(global);"
+    )
 
     def test_finished_job_does_not_invalidate_the_next_books_context(self):
         self.run_js([
@@ -102,9 +110,8 @@ const state = {open:true, sourceId:'A', work:{groupId:'G'},
   items:new Map([[0,{}]]),
   elements:{pending:{hidden:true}},comparison:{open:true,targetSourceId:'B',lastSourceRange:'old'},
   links:old,linkRequestSerial:0};
-const config={alignmentStatusEndpoint:'/status',linksEndpoint:'/links'};
-const global={setTimeout:resolve=>resolve()};
-const fetchFunction=()=>async()=>({status:200,ok:true,json:async()=>({ok:true})});
+const config={linksEndpoint:'/links'};
+global.MEFinderAlignmentJobs.configure({fetch:async()=>({status:200,ok:true,json:async()=>({ok:true})})});
 const pairKey=(a,b)=>[a,b].sort().join('|');
 let notices=0;
 const notify=()=>{notices++;}, setAlert=()=>{}, loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
@@ -113,7 +120,7 @@ let reads=0, relocated=0;
 const readJSON=async()=>{reads++;return {links:[]};};
 const openComparisonWith=()=>{relocated++;loadLinkWindow();};
 (async()=>{
- watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
+ global.MEFinderAlignmentJobs.watch('J',{origin:'reader',groupId:'G',key:'A|B'});
  await new Promise(resolve=>setImmediate(resolve));
  await new Promise(resolve=>setImmediate(resolve));
  loadLinkWindow();
@@ -122,9 +129,9 @@ const openComparisonWith=()=>{relocated++;loadLinkWindow();};
  assert.equal(relocated,1);
  // 发起方是阅读器，结局提示由阅读器给出，且只给一次。
  assert.equal(notices,1);
- assert.equal(runningAlignmentJob(),null);
+ assert.equal(global.MEFinderAlignmentJobs.running(),null);
 })();
-""")
+""", prelude=self.JOB_SERVICE_PRELUDE)
 
     def test_deep_link_carries_the_comparison_pane(self) -> None:
         """会话记录包含右栏：刷新或重开独立窗口后对照不会丢。"""
