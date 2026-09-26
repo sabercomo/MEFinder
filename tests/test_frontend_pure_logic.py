@@ -1190,6 +1190,91 @@ def _bib_eval(tail):
     return _module_eval(expr)
 
 
+# 最小 DOM 桩：只实现候选卡构造用到的接口，并按插入顺序序列化为 HTML，
+# 以便 C5 的节点构造与 C4 golden 字符串逐字比对。
+_FAKE_DOM = r"""
+function __escText(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function __escAttr(s) { return __escText(s).replace(/"/g, '&quot;'); }
+function __element(tag) {
+  var attrs = [];
+  var node = {tag: tag, children: [], dataset: {},
+    setAttribute: function(name, value) {
+      attrs = attrs.filter(function(pair) { return pair[0] !== name; });
+      attrs.push([name, String(value)]);
+    },
+    appendChild: function(child) {
+      if (child && child.fragment) child.children.forEach(function(c) { node.children.push(c); });
+      else node.children.push(child);
+      return child;
+    },
+    get outerHTML() {
+      var parts = [];
+      if (this.className) parts.push('class="' + __escAttr(this.className) + '"');
+      if (this.type) parts.push('type="' + __escAttr(this.type) + '"');
+      attrs.forEach(function(pair) { parts.push(pair[0] + '="' + __escAttr(pair[1]) + '"'); });
+      Object.keys(this.dataset).forEach(function(key) {
+        parts.push('data-' + key.replace(/[A-Z]/g, function(c) { return '-' + c.toLowerCase(); })
+          + '="' + __escAttr(node.dataset[key]) + '"');
+      });
+      var inner = this.children.map(function(c) { return c.text != null ? __escText(c.text) : c.outerHTML; }).join('');
+      if (this.textContent != null && !this.children.length) inner = __escText(this.textContent);
+      else if (this.textContent != null) inner = __escText(this.textContent) + inner;
+      return '<' + tag + (parts.length ? ' ' + parts.join(' ') : '') + '>' + inner + '</' + tag + '>';
+    }};
+  return node;
+}
+var document = {
+  createElement: __element,
+  createElementNS: function(_ns, tag) { return __element(tag); },
+  createTextNode: function(text) { return {text: String(text)}; },
+  createDocumentFragment: function() {
+    var fragment = {fragment: true, children: [], appendChild: function(c) { this.children.push(c); return c; }};
+    return fragment;
+  },
+  querySelectorAll: function() { return []; },
+  getElementById: function() { return null; }
+};
+function __fragmentHTML(fragment) { return fragment.children.map(function(c) { return c.outerHTML; }).join(''); }
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过候选卡 DOM golden 测试")
+class CandidateCardDomGoldenTests(unittest.TestCase):
+    """C5 把候选卡改为节点构造后，渲染结果仍须与 C4 golden 逐字一致。
+
+    覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、ISBN/DOI 后缀、
+    标题与详情兜底，以及知网三按钮与图书/Crossref 单按钮的差异。
+    """
+
+    FIXTURE = ROOT / "tests" / "fixtures" / "candidate_cards_golden.json"
+
+    def test_cards_match_pre_refactor_golden(self):
+        fixture = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
+        tail = _FAKE_DOM + (
+            "var sid = %s; var cs = %s; var out = {};"
+            "var configs = module.exports.lookupConfigs;"
+            "[['cnki', configs.CNKI_LOOKUP], ['book', configs.BOOK_LOOKUP],"
+            " ['crossref', configs.CROSSREF_LOOKUP]].forEach(function(pair) {"
+            "  pair[1].stateMap[sid] = {candidates: cs};"
+            "  out[pair[0]] = __fragmentHTML(pair[1].listNode(sid));"
+            "});"
+            "return out;"
+        ) % (json.dumps(fixture["sourceId"]), json.dumps(fixture["candidates"]))
+        got = _bib_eval(tail)
+        for key in ("cnki", "book", "crossref"):
+            self.assertEqual(got[key], fixture["expected"][key],
+                             f"{key} 候选卡 DOM 渲染与 C4 golden 不一致")
+
+    def test_candidate_text_is_not_parsed_as_html(self):
+        tail = _FAKE_DOM + (
+            "var cfg = module.exports.lookupConfigs.CNKI_LOOKUP;"
+            "cfg.stateMap['s'] = {candidates: [{metadata: {title: '<img src=x>&'}, match: {}}]};"
+            "var card = cfg.listNode('s').children[0];"
+            "return card.children[0].children[0].textContent;"
+        )
+        self.assertEqual(_bib_eval(tail), "<img src=x>&")
+
+
 @unittest.skipUnless(NODE, "node 不可用，跳过书目菜单事件测试")
 class BibMenuDelegationTests(unittest.TestCase):
     def test_paste_action_receives_event_and_opens_panel(self):

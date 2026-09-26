@@ -653,9 +653,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     # 0.5.7 C5：toast 与设置页改用 DOM 构造。
     BASELINE_SHA256 = (
-        "3e458fad6f687159c6aff5507154748ce47425dfeb41c92751d16f718aa7afc2"
+        "1dfaee3e73a38ec52ad549162a686813ce13930e68fdb77abb993a0ee2e8bc5f"
     )
-    BASELINE_BYTES = 1313370
+    BASELINE_BYTES = 1314052
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

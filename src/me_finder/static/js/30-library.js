@@ -298,7 +298,10 @@
         chip.dataset.action = 'removeLibraryFacet';
         chip.dataset.kind = a.kind;
         chip.appendChild(libraryNode('span', null, a.label));
-        chip.appendChild(librarySvg([['path', {d:'M5 5l10 10M15 5L5 15'}]], null, '0 0 20 20'));
+        var remove = librarySvg([['path', {d:'M5 5l10 10M15 5L5 15'}]], null, '0 0 20 20');
+        remove.setAttribute('stroke-width', '2');
+        remove.removeAttribute('stroke-linejoin');
+        chip.appendChild(remove);
         chips.appendChild(chip);
       });
     }

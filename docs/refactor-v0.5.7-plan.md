@@ -258,6 +258,8 @@
 
 2026-09-26(C5 完成):检索、文献库、书目、校准、解析服务与导入队列的运行时 HTML 拼接改为 DOM 节点和文本节点构造;`static/js/*.js` 的 `innerHTML` 全部清零,原 `06-pure.js` 中已无调用者的 HTML 字符串工厂同步删除。检索命中保留后端字符区间并按 Unicode 码点构造 `<mark>`,避免把来源文本解析为标签。`35-works.js` 的范围选择、`60-settings.js` 的数据位置/更新/对齐模型、`70-vision.js` 的统计与备份、`80-import.js` 的知网批量补全各移入独立编号模块;拼装仍按文件名排序。对应静态守卫和装配指纹已更新;全量测试结果以本次提交门禁为准。
 
+2026-09-26(C5 审阅):以 `157257d`(C5 前)与 `fd275cd` 两个干净检出各起一个服务,喂同一份合成库(DOCX/EPUB 标题含引号与 `&<>`、MCP 夹具 PDF/Word)与同一组接口桩,逐区域比对渲染出的 DOM。文献库列表/卡片/抽屉、书目读写态与类型切换、检索结果/详情/页码详情、校准分段与双开页、自动检测成功/失败/报错、设置各分区、解析统计(含 MinerU 账号归属)、导入页与视觉 API 菜单均逐项一致,或仅有无害差异(补 `type="button"`、`aria-hidden`、属性改为属性值同义的 DOM 属性)。发现并修复六处还原偏差:MinerU 账号归属的页数单位落到 `<b>` 外(flex 行里会变成独立项,多出间距)、「查看识别依据」首条未用证据未换行、检索详情移动端返回按钮多了 `action-btn` 样式、检索范围与视觉 API 选项对勾笔画 2→1.8、文献库筛选 chip 的 × 笔画 2→1.8、视觉 API 搜索图标笔画 1.7→1.8;补 `tests/test_c5_dom_fidelity.py`(对未修代码 5 项失败)。C5 删除了 46 个针对已删字符串工厂的测试且未补 DOM 等价测试,本次恢复候选卡 golden 比对(`CandidateCardDomGoldenTests`,仍用 `candidate_cards_golden.json`);其余区域由上述页面级比对核对,未另建常驻测试。同时确认:检索高亮与后端 `match_offset_unit=unicode_codepoint` 一致,比旧版按 UTF-16 截断更准确;失败原因与导入提示改为文本节点后不再把 `<...>` 当标签渲染。
+
 2026-09-26(C5 校准回归修复):检查校准页时发现 `updateSpreadPanel` 仍按旧的 `onclick` 属性查找阅读方向按钮;C4 已将按钮迁为 `data-direction`,故切换后高亮不会刷新。选择器同步改为 `data-direction`,补回归守卫。
 
 2026-09-26(C4 审阅修复):复查 C4 委托语义时发现,`08-actions.js` 的根节点 Enter/空格委托会命中导入拖放区(`role="button"` + `data-action`);拖放区自带键盘监听已 `preventDefault` 并 `click()`,于是键盘选择文件会连开两次文件框。根委托改为跳过已被元素处理(`defaultPrevented`)的按键,书目查看态行的键盘编辑不受影响;补 `test_role_button_skips_keys_already_handled_by_element`。同时核对:模板 105 个动作所调函数在页面中均可解析;嵌套动作仅弹窗遮罩一类(自判 `event.target`)与导入视觉 API 外层 `stopPropagation`,语义不变;动态 `data-*` 属性均经 `esc()`。

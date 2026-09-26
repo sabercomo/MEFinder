@@ -32,7 +32,11 @@
       content.appendChild(searchNode('span', 'document-option-meta', meta));
       button.appendChild(content);
     } else button.appendChild(searchNode('span', null, title));
-    if (selected) button.appendChild(searchSvg(['m5 10 3 3 7-7']));
+    if (selected) {
+      var check = searchSvg(['m5 10 3 3 7-7']);
+      check.setAttribute('stroke-width', '2');
+      button.appendChild(check);
+    }
     return button;
   }
   /* ═══ Mode segmented control ═══ */
@@ -540,7 +544,7 @@
     var card = searchNode('div', 'detail-card');
     var mobileToolbar = searchNode('div', 'detail-mobile-toolbar');
     var back = detailAction('', 'showSearchResultsList');
-    back.classList.add('detail-back-button');
+    back.className = 'detail-back-button';
     back.appendChild(searchSvg(['m12 5-5 5 5 5', 'M7 10h8']));
     back.appendChild(searchNode('span', null, '返回结果列表'));
     mobileToolbar.appendChild(back);

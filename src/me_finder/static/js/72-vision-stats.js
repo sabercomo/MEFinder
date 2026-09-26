@@ -80,7 +80,8 @@
       identity.appendChild(statsNode('strong', null, item.display_name || item.account_id));
       identity.appendChild(statsNode('small', null, Number(item.parsed_book_count || 0).toLocaleString() + ' 本文献'));
       summary.appendChild(identity);
-      statsCount(summary, item.parsed_page_count, '页');
+      // 账号行的页数整体加粗（「N 页」同在一个 <b> 内），与书表的「<b>N</b> 页」不同。
+      summary.appendChild(statsNode('b', null, Number(item.parsed_page_count || 0).toLocaleString() + ' 页'));
       var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       [['viewBox', '0 0 20 20'], ['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '1.8'],
         ['stroke-linecap', 'round'], ['aria-hidden', 'true']].forEach(function(attribute) { svg.setAttribute(attribute[0], attribute[1]); });
@@ -96,7 +97,7 @@
         name.appendChild(statsNode('strong', null, book.source_file_name || book.document_id || '未命名文献'));
         name.appendChild(statsNode('small', null, '原书页 ' + mineruPageRangesLabel(book.page_ranges)));
         row.appendChild(name);
-        statsCount(row, book.parsed_page_count, '页');
+        row.appendChild(statsNode('b', null, Number(book.parsed_page_count || 0).toLocaleString() + ' 页'));
         books.appendChild(row);
       });
       details.appendChild(books);

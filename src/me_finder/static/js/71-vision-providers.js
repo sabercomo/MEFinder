@@ -433,7 +433,11 @@
     label.appendChild(providerNode('span', 'import-vision-opt-name', provider.name + ' · ' + (provider.model || '未选择模型')));
     label.appendChild(providerNode('span', 'import-vision-opt-model', visionHostLabel(provider.api_base)));
     button.appendChild(label);
-    if (selected) button.appendChild(providerSvg(['m5 10 3 3 7-7'], 'app-select-check'));
+    if (selected) {
+      var check = providerSvg(['m5 10 3 3 7-7'], 'app-select-check');
+      check.setAttribute('stroke-width', '2');
+      button.appendChild(check);
+    }
     return button;
   }
 
@@ -527,6 +531,8 @@
     if (providers.length > 8) {
       var search = providerNode('div', 'import-vision-search-wrap');
       var icon = providerSvg(['m13 13 4 4']);
+      icon.setAttribute('stroke-width', '1.7');
+      icon.removeAttribute('stroke-linejoin');
       var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', '8.5'); circle.setAttribute('cy', '8.5'); circle.setAttribute('r', '5.5');
       icon.insertBefore(circle, icon.firstChild);

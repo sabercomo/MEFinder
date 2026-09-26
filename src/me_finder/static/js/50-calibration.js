@@ -671,8 +671,9 @@
       var unused = calibrationNode('div', 'auto-detect-note', '未使用的证据：');
       unused.style.marginTop = '8px';
       panel.appendChild(unused);
-      autoFailureReasons(failures).split('\n').forEach(function(label, index) {
-        if (index) unused.appendChild(document.createElement('br'));
+      // 标题与每条原因各占一行（首条原因前也要换行）。
+      autoFailureReasons(failures).split('\n').forEach(function(label) {
+        unused.appendChild(document.createElement('br'));
         unused.appendChild(document.createTextNode(label));
       });
     }
