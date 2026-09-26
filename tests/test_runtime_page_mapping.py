@@ -178,8 +178,8 @@ class RuntimePageMappingTests(unittest.TestCase):
         self.assertIn("获取完整题录", HTML)
         self.assertIn("打开知网检索", HTML)
         self.assertIn("data.query_notice", HTML)
-        self.assertIn("field('doi','doi','DOI'", HTML)
-        self.assertIn("field('issn','issn','ISSN'", HTML)
+        self.assertIn("['doi','doi','DOI'", HTML)
+        self.assertIn("['issn','issn','ISSN'", HTML)
         self.assertIn("if (!existing)", HTML)
 
 

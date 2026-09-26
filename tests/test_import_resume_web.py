@@ -205,8 +205,8 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             APP_SOURCE,
         )
         # 每条任务右上角的 × 和逐项继续入口必须继续存在。
-        self.assertIn('class="import-item-remove" data-action="removeImport"', APP_SOURCE)
-        self.assertIn('data-action="resumeImport" data-id="', APP_SOURCE)
+        self.assertIn("remove.dataset.action = 'removeImport'", APP_SOURCE)
+        self.assertIn("'resumeImport', q.id, true", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
     def test_resume_revalidates_identity_and_prevents_duplicate_workers(self) -> None:

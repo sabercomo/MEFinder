@@ -153,7 +153,7 @@ class LibraryFirstScreenLoadingTests(unittest.TestCase):
     def test_library_list_renders_in_batches_and_debounces_filtering(self) -> None:
         self.assertIn("const LIBRARY_RENDER_BATCH = 50;", HTML)
         self.assertIn("function appendLibraryEntries(sources, start, token)", HTML)
-        self.assertIn("function libraryEntryHTML(src)", HTML)
+        self.assertIn("function libraryEntryNode(src)", HTML)
         self.assertIn("if (token !== libraryStore.renderToken) return;", HTML)
         self.assertIn(
             "if (libraryStore.filterTimer) clearTimeout(libraryStore.filterTimer);",

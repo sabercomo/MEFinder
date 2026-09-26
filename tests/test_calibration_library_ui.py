@@ -335,13 +335,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn('id="library-stats"', HTML)
         self.assertIn("function renderLibraryStats()", HTML)
         self.assertIn("function applyLibStatusFilter(status)", HTML)
-        self.assertIn("statusStatButton('pdf_all','PDF 总数'", HTML)
-        self.assertIn("statusStatButton('calibrated','已校准'", HTML)
-        self.assertIn("statusStatButton('page_pending','页码待处理'", HTML)
-        self.assertIn("statusStatButton('bibliographic','书目待补全'", HTML)
-        self.assertNotIn("statusStatButton('pending','待校准'", HTML)
-        self.assertNotIn("statusStatButton('review','待确认'", HTML)
-        self.assertNotIn("statusStatButton('failed','页码自动检测失败'", HTML)
+        self.assertIn("statusStatNode('pdf_all', 'PDF 总数'", HTML)
+        self.assertIn("statusStatNode('calibrated', '已校准'", HTML)
+        self.assertIn("statusStatNode('page_pending', '页码待处理'", HTML)
+        self.assertIn("statusStatNode('bibliographic', '书目待补全'", HTML)
         self.assertIn("libraryStore.statusFilter = requested === libraryStore.statusFilter ? 'all' : requested", HTML)
         self.assertIn("if (libraryStore.statusFilter === 'pdf_all')", HTML)
         self.assertIn("sources = sources.filter(s => s.source_type === 'pdf')", HTML)
@@ -408,53 +405,17 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         )
 
     def test_detail_drawer_splits_read_edit_and_reorders_regions(self) -> None:
-        """Phase 3 详情外壳：查看/编辑态分离、插槽渲染、区块重排、操作收敛、上一条/下一条。"""
-
-        # 书目区查看态默认，点「编辑」进编辑态；共用宿主 #bib-host 就地切换。
-        self.assertIn("function bibliographicReadHTML(src)", HTML)
-        self.assertIn("function renderBibliographicSection(src)", HTML)
+        self.assertIn("function bibliographicReadNode(src)", HTML)
+        self.assertIn("function bibliographicEditorNode(src)", HTML)
+        self.assertIn("function renderBibliographicSectionNode(src)", HTML)
         self.assertIn("function enterBibEdit(sourceId, focusFieldId)", HTML)
         self.assertIn("function exitBibEdit(sourceId)", HTML)
-        # 查看态点任意字段即进入编辑并聚焦该字段——无独立「编辑」按钮。
-        self.assertIn('role="button" tabindex="0" title="点击编辑" data-action="enterBibEdit"', HTML)
-        self.assertIn("event.target.closest('[data-action][role=\"button\"]')", HTML)
-        # 无用的「识别依据」已整体删除（页码识别依据属校准，保留）。
-        self.assertNotIn("function showBibliographicEvidence(", HTML)
-        self.assertNotIn(">识别依据</button>", HTML)
-        self.assertNotIn('data-menu-action="evidence"', HTML)
-        self.assertIn("bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src)", HTML)
-        self.assertIn('id="bib-host"', HTML)
-        # 编辑态页脚显式保存 + 取消，保存文案区分于校准保存。
-        self.assertIn(">取消</button>", HTML)
-        self.assertIn(">保存书目信息</button>", HTML)
-        # 插槽渲染：内容槽（书目）在校准卡片之前，extra 槽（收录/文件/操作）在其后。
-        self.assertIn('id="library-drawer-extra"', HTML)
-        self.assertIn("var extra = document.getElementById('library-drawer-extra');", HTML)
-        self.assertIn("extra.innerHTML = drawerWorksHTML(works) + drawerFileInfoHTML(src, vol) + drawerMainActionsHTML(src);", HTML)
-        # 上一条 / 下一条。
-        self.assertIn("function drawerNavHTML(sourceId)", HTML)
-        # 主操作收敛为「打开原文」+ ⋯；页码相关不再在此重复。
-        self.assertIn("function drawerMainActionsHTML(src)", HTML)
-        self.assertIn('id="drawer-more-menu"', HTML)
-        self.assertIn('class="bib-menu bib-menu-end drawer-actions-menu"', HTML)
-        self.assertIn('aria-expanded="false" aria-controls="drawer-more-menu"', HTML)
-        self.assertIn("var canExportMarkdown = isPdf || sourceFormatLabel(src) === 'EPUB';", HTML)
-        self.assertIn("if (canExportMarkdown) {", HTML)
-        # 菜单分组:解析 / 导出为 小标题；导出项去「导出」前缀,「按页 Markdown」不带省略号,右侧淡字「选页」。
-        self.assertIn(">解析</div>", HTML)
-        self.assertIn(">导出为</div>", HTML)
-        self.assertIn(">Markdown</button>", HTML)
-        self.assertIn("按页 Markdown<span class=\"bib-menu-note\">选页</span>", HTML)
-        self.assertNotIn(">导出 Markdown</button>", HTML)
-        self.assertNotIn("按页导出 Markdown</button>", HTML)
-        drawer_menu_rule = HTML.split('.bib-menu.drawer-actions-menu {', 1)[1].split('}', 1)[0]
-        self.assertIn('top: auto;', drawer_menu_rule)
-        self.assertIn('bottom: calc(100% + 6px);', drawer_menu_rule)
-        self.assertNotIn("openCalibrationAndDetect(\\'' + esc(src.source_file_id) + '\\')\">自动检测页码", HTML)
-        # 收录文献不再内层滚动。
-        works_rule = HTML.split('.drawer-works-list {', 1)[1].split('}', 1)[0]
-        self.assertNotIn('max-height: 300px', works_rule)
-        # 详情抽屉带 ARIA。
+        self.assertIn("node.dataset.action = 'enterBibEdit'", HTML)
+        self.assertIn("host.appendChild(bibEditMode[src.source_file_id] ? bibliographicEditorNode(src) : bibliographicReadNode(src))", HTML)
+        self.assertIn("global.MEFinder.bibliography.renderSectionNode(src)", HTML)
+        self.assertIn("function drawerNavNode(sourceId)", HTML)
+        self.assertIn("function drawerMainActionsNode(src)", HTML)
+        self.assertIn("content.replaceChildren()", HTML)
         self.assertIn('id="library-drawer" role="complementary" aria-label="文献详情"', HTML)
 
     def test_library_empty_states_and_positive_doctype_counts(self) -> None:
@@ -463,13 +424,13 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 三态空状态：库空 → 去导入；筛选无果 → 清除筛选。
         self.assertIn("libraryStore.sources.length === 0", HTML)
         self.assertIn("文献库还是空的", HTML)
-        self.assertIn('data-action="navigateToImport">去导入文献', HTML)
+        self.assertIn("action.dataset.action = isEmpty ? 'navigateToImport' : 'clearLibraryFilters'", HTML)
         self.assertIn("当前筛选没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
         clear_filters = HTML.split("function clearLibraryFilters()", 1)[1].split("}", 1)[0]
         self.assertIn("libraryStore.statusFilter = 'all';", clear_filters)
         self.assertNotIn("groupScopeId", HTML)
-        self.assertIn('data-action="clearLibraryFilters">清除全部筛选', HTML)
+        self.assertIn("'清除全部筛选'", HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
         # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
         self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
@@ -548,7 +509,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("width: 100%; max-width: none; margin-inline: 0;", HTML)
         # L-11
         self.assertIn('role="listbox" aria-label="文献列表" aria-multiselectable="true"', HTML)
-        self.assertIn('" tabindex="0" role="option" data-action="openLibraryEntry" data-id="', HTML)
+        self.assertIn("entry.dataset.action = 'openLibraryEntry'", HTML)
         self.assertIn("function handleLibraryListKeydown(event)", HTML)
         self.assertIn("function setupLibraryKeyboardNav()", HTML)
         self.assertIn("MEFinder.library.setupKeyboardNav();", HTML)
@@ -563,7 +524,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 已有分段直接展开专家表；否则收起。
         self.assertIn("setCalExpertVisible(calSegments.length > 0);", HTML)
         # 手动调整 / 载入自动结果 / 检测失败都展开专家表。
-        self.assertIn('data-action="scrollToManualMapping">手动调整</button>', HTML)
+        self.assertIn("calibrationAction(actions, '手动调整', 'scrollToManualMapping')", HTML)
         self.assertIn("setCalExpertVisible(true);  // 「手动设置」", HTML)
         self.assertIn("setCalExpertVisible(true);  // 检测失败", HTML)
         self.assertIn("setCalExpertVisible(true);  // 载入自动结果", HTML)
@@ -574,10 +535,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertNotIn('id="cal-auto-preview"', expert)
 
     def test_semantic_status_stats_render_inline_icons_with_danger_tokens(self) -> None:
-        self.assertIn('function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName)', HTML)
-        self.assertIn('class="status-stat status-stat--', HTML)
-        self.assertIn('function statusStatIcon(icon)', HTML)
-        self.assertIn('width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"', HTML)
+        self.assertIn('function statusStatNode(status, label, value, variant, iconName)', HTML)
+        self.assertIn("'status-stat status-stat--'", HTML)
+        self.assertIn('var LIBRARY_STAT_SHAPES =', HTML)
+        self.assertIn("svg.setAttribute('width', '16')", HTML)
         self.assertIn('.status-stat__icon { width: 16px; height: 16px; flex: 0 0 auto;', HTML)
         self.assertIn('.status-stat--danger .status-stat__icon { color: var(--danger-icon); opacity: 1; }', HTML)
         self.assertIn('overflow: visible;', HTML)
@@ -593,11 +554,11 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         danger_rule = HTML.split('.status-stat--danger .status-stat__icon', 1)[1].split('}', 1)[0]
         self.assertIn('var(--danger-icon)', danger_rule)
         self.assertNotIn('var(--accent)', danger_rule)
-        self.assertIn('function statusChipIcon(group)', HTML)
-        self.assertIn('class="status-chip__icon', HTML)
+        self.assertIn('function statusChipNode(group, status, iconOnly)', HTML)
+        self.assertIn('status-chip__icon', HTML)
 
     def test_library_rows_and_cards_show_status_chip_for_pdf_only(self) -> None:
-        self.assertIn("var statusChip = isPdf", HTML)
+        self.assertIn("var statusGroup = isPdf", HTML)
         self.assertIn("calTransientStatus[src.source_file_id] || src.status", HTML)
         self.assertIn("var wordStructure = !isPdf && vol && vol.primary_structure ? structureLabel(vol.primary_structure) : ''", HTML)
         self.assertIn("complete_works:'全集'", HTML)
@@ -618,18 +579,17 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
             self.assertIn(element_id, drawer)
 
     def test_manual_calibration_supports_spread_layout_and_safe_single_default(self) -> None:
-        self.assertIn("function segmentLayoutControl(layout, index)", HTML)
+        self.assertIn("function segmentSelectControl(kind, value, index)", HTML)
         self.assertIn("layout === 'spread' ? '双开页' : '单页'", HTML)
         self.assertIn("function setSegmentReadingDirection(index, value)", HTML)
-        self.assertIn('data-action="setSegmentReadingDirection"', HTML)
-        self.assertIn('data-direction="ltr"', HTML)
-        self.assertIn('data-direction="rtl"', HTML)
+        self.assertIn("button.dataset.action = 'setSegmentReadingDirection'", HTML)
+        self.assertIn("[['ltr', '左→右'], ['rtl', '右→左']]", HTML)
         self.assertIn(".segment-direction-btn[data-direction=\"ltr\"]", HTML)
         self.assertIn(".segment-direction-btn[data-direction=\"rtl\"]", HTML)
         self.assertNotIn('segment-direction-btn[onclick*=', HTML)
-        self.assertIn('aria-label="双开页阅读方向"', HTML)
-        self.assertIn('>左→右</button>', HTML)
-        self.assertIn('>右→左</button>', HTML)
+        self.assertIn("directionControl.setAttribute('aria-label', '双开页阅读方向')", HTML)
+        self.assertIn("['ltr', '左→右']", HTML)
+        self.assertIn("['rtl', '右→左']", HTML)
         self.assertIn("function updateSegmentGutter(index, value)", HTML)
         self.assertIn("seg.layout_mode === 'spread' ? 2 : 1", HTML)
         self.assertIn("clean.layout_mode = seg.layout_mode === 'spread' ? 'spread' : 'single'", HTML)

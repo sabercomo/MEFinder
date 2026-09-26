@@ -1,6 +1,40 @@
 /* IIFE 包裹：私有化实现，仅下方公共面挂到全局（#7 前端全局作用域收敛）。
    模式同 reader.js；IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 20-search.js
+  function searchNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+
+  function searchSvg(paths, viewBox) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    [['viewBox', viewBox || '0 0 20 20'], ['fill', 'none'], ['stroke', 'currentColor'],
+      ['stroke-width', '1.8'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'],
+      ['aria-hidden', 'true']].forEach(function(attribute) { svg.setAttribute(attribute[0], attribute[1]); });
+    paths.forEach(function(d) {
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  function searchScopeOption(title, meta, selected, action, idField, id) {
+    var button = searchNode('button', 'app-select-option' + (selected ? ' is-selected' : ''));
+    button.type = 'button';
+    button.dataset.action = action;
+    if (idField) button.dataset[idField] = id;
+    if (meta) {
+      var content = searchNode('span', 'document-option-main');
+      content.appendChild(searchNode('span', 'document-option-title', title));
+      content.appendChild(searchNode('span', 'document-option-meta', meta));
+      button.appendChild(content);
+    } else button.appendChild(searchNode('span', null, title));
+    if (selected) button.appendChild(searchSvg(['m5 10 3 3 7-7']));
+    return button;
+  }
   /* ═══ Mode segmented control ═══ */
   function setMode(btn) {
     searchStore.currentMode = btn.dataset.mode;
@@ -170,7 +204,7 @@
   async function ensureSearchDocuments(force) {
     if (searchStore.documentsLoaded && !force) return;
     var options = document.getElementById('document-options');
-    if (options) options.innerHTML = '<div class="document-options-empty">正在读取文献库…</div>';
+    if (options) options.replaceChildren(searchNode('div', 'document-options-empty', '正在读取文献库…'));
     try {
       var data = await fetchLibraryCatalog(force);
       searchStore.sourceFiles = data.items || [];
@@ -180,7 +214,7 @@
       searchStore.documentsLoaded = true;
     } catch (error) {
       searchStore.documentsLoaded = false;
-      if (options) options.innerHTML = '<div class="document-options-empty">文献列表读取失败</div>';
+      if (options) options.replaceChildren(searchNode('div', 'document-options-empty', '文献列表读取失败'));
     }
   }
 
@@ -201,7 +235,7 @@
     var options = document.getElementById('document-options');
     if (!options) return;
     if (!searchStore.documentsLoaded) {
-      options.innerHTML = '<div class="document-options-empty">打开菜单后读取文献列表</div>';
+      options.replaceChildren(searchNode('div', 'document-options-empty', '打开菜单后读取文献列表'));
       return;
     }
     var queryInput = document.getElementById('document-filter-query');
@@ -214,27 +248,27 @@
     }).sort(function(a, b) {
       return calPinyinCollator.compare(searchDocumentView(a).title, searchDocumentView(b).title);
     });
-    var check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
     var noScope = !searchStore.documentId && !searchStore.groupId;
-    var allOption = '<button class="app-select-option' + (noScope ? ' is-selected' : '') + '" type="button" data-action="selectSearchScopeAll"><span>全部文献</span>' + (noScope ? check : '') + '</button>';
-    var groupsHtml = '';
+    options.replaceChildren(searchScopeOption('全部文献', '', noScope, 'selectSearchScopeAll'));
     if (typeof libraryStore.documentGroups !== 'undefined' && libraryStore.documentGroups.length) {
-      groupsHtml = '<div class="document-options-head">作品</div>' + libraryStore.documentGroups.map(function(group) {
+      options.appendChild(searchNode('div', 'document-options-head', '作品'));
+      libraryStore.documentGroups.forEach(function(group) {
         var selected = group.document_group_id === searchStore.groupId;
         var count = (group.members || []).length;
-        return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-action="selectSearchGroup" data-group-id="' + esc(group.document_group_id) + '"><span class="document-option-main"><span class="document-option-title">' + esc(group.title) + '</span><span class="document-option-meta">' + count + ' 个版本</span></span>' + (selected ? check : '') + '</button>';
-      }).join('');
+        options.appendChild(searchScopeOption(group.title, count + ' 个版本', selected, 'selectSearchGroup', 'groupId', group.document_group_id));
+      });
     }
-    if (!sources.length && !groupsHtml) {
-      options.innerHTML = allOption + '<div class="document-options-empty">没有符合条件的文献</div>';
+    if (!sources.length && !(libraryStore.documentGroups || []).length) {
+      options.appendChild(searchNode('div', 'document-options-empty', '没有符合条件的文献'));
       return;
     }
-    var singleHead = sources.length ? '<div class="document-options-head">单篇文献</div>' : '';
-    options.innerHTML = allOption + groupsHtml + singleHead + sources.map(function(source) {
+    if (sources.length) options.appendChild(searchNode('div', 'document-options-head', '单篇文献'));
+    sources.forEach(function(source) {
       var view = searchDocumentView(source);
       var selected = !searchStore.groupId && source.source_file_id === searchStore.documentId;
-      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-value="' + esc(source.source_file_id) + '" data-action="selectSearchDocument"><span class="document-option-main"><span class="document-option-title">' + esc(view.title) + '</span><span class="document-option-meta">' + esc([view.sourceType, view.author].filter(Boolean).join(' · ')) + '</span></span>' + (selected ? check : '') + '</button>';
-    }).join('');
+      options.appendChild(searchScopeOption(view.title, [view.sourceType, view.author].filter(Boolean).join(' · '),
+        selected, 'selectSearchDocument', 'value', source.source_file_id));
+    });
   }
 
   function selectSearchDocument(event, sourceId) {
@@ -289,7 +323,7 @@
     const listEl = document.getElementById('results-list');
     statusEl.style.display = 'block';
     statusEl.textContent = '检索中…';
-    listEl.innerHTML = '';
+    listEl.replaceChildren();
     searchStore.selectedIndex = -1;
     showEmptyDetail();
 
@@ -315,11 +349,15 @@
       }
 
       if (searchStore.results.length === 0) {
-        listEl.innerHTML = '<div class="empty-state" style="min-height:200px"><div class="empty-state-text">未找到匹配结果</div><div class="empty-state-hint">尝试更短的引文或切换为模糊检索</div></div>';
+        var empty = searchNode('div', 'empty-state');
+        empty.style.minHeight = '200px';
+        empty.appendChild(searchNode('div', 'empty-state-text', '未找到匹配结果'));
+        empty.appendChild(searchNode('div', 'empty-state-hint', '尝试更短的引文或切换为模糊检索'));
+        listEl.replaceChildren(empty);
         return;
       }
 
-      listEl.innerHTML = searchStore.results.map((item, i) => resultRowHTML(item, i)).join('');
+      listEl.replaceChildren(...searchStore.results.map((item, i) => resultRowNode(item, i)));
       selectResult(0, false);
     } catch (err) {
       if (seq !== searchStore.sequence) return;
@@ -327,29 +365,40 @@
     }
   }
 
-  function resultRowHTML(item, index) {
+  function appendHighlighted(host, item, limit) {
+    var characters = Array.from(String(item.paragraph_text || ''));
+    var visible = limit == null ? characters : characters.slice(0, limit);
+    var start = item.highlighted_html ? Number(item.match_start || 0) : visible.length;
+    var end = item.highlighted_html ? Number(item.match_end || 0) : visible.length;
+    start = Math.max(0, Math.min(start, visible.length));
+    end = Math.max(start, Math.min(end, visible.length));
+    host.appendChild(document.createTextNode(visible.slice(0, start).join('')));
+    if (end > start) host.appendChild(searchNode('mark', null, visible.slice(start, end).join('')));
+    host.appendChild(document.createTextNode(visible.slice(end).join('') + (limit != null && characters.length > limit ? '…' : '')));
+  }
+
+  function resultRowNode(item, index) {
     const score = Math.round(item.match_score * 100);
     const typeLabel = matchTypeLabel(item.match_type);
-    const title = esc(item.document_title || item.work_title || item.volume_display || '');
-    const author = item.author_label ? esc(item.author_label) : '';
-    const vol = item.volume_display ? esc(item.volume_display) : '';
-    const page = esc(formatCitationPageLabel(item));
     const sourceIcon = sourceFormatLabel(item);
-    const snippet = item.highlighted_html ? truncateHTML(item.highlighted_html, 100) : esc(truncate(item.paragraph_text || '', 100));
-    return '<div class="result-row" data-index="' + index + '" data-action="selectSearchResult">'
-      + '<div class="result-row-head">'
-      + '<span class="result-score">' + score + '%</span>'
-      + '<span class="result-match-type">' + typeLabel + '</span>'
-      + '<span class="result-title">' + title + '</span>'
-      + '</div>'
-      + '<div class="result-meta">'
-      + (author ? '<span>' + author + '</span>' : '')
-      + (vol ? '<span>' + vol + '</span>' : '')
-      + '<span>' + page + '</span>'
-      + '<span>' + sourceIcon + '</span>'
-      + '</div>'
-      + '<div class="result-snippet">' + snippet + '</div>'
-      + '</div>';
+    var row = searchNode('div', 'result-row');
+    row.dataset.index = String(index);
+    row.dataset.action = 'selectSearchResult';
+    var head = searchNode('div', 'result-row-head');
+    head.appendChild(searchNode('span', 'result-score', score + '%'));
+    head.appendChild(searchNode('span', 'result-match-type', typeLabel));
+    head.appendChild(searchNode('span', 'result-title', item.document_title || item.work_title || item.volume_display || ''));
+    row.appendChild(head);
+    var meta = searchNode('div', 'result-meta');
+    if (item.author_label) meta.appendChild(searchNode('span', null, item.author_label));
+    if (item.volume_display) meta.appendChild(searchNode('span', null, item.volume_display));
+    meta.appendChild(searchNode('span', null, formatCitationPageLabel(item)));
+    meta.appendChild(searchNode('span', null, sourceIcon));
+    row.appendChild(meta);
+    var snippet = searchNode('div', 'result-snippet');
+    appendHighlighted(snippet, item, 100);
+    row.appendChild(snippet);
+    return row;
   }
 
   function searchResultsArea() {
@@ -438,70 +487,135 @@
     }
   }
 
+  function detailContextNode(items, side) {
+    var fullText = detailContextText(items);
+    if (!fullText) return null;
+    var label = side === 'before' ? '上文' : '下文';
+    var contentId = 'detail-context-' + side;
+    var truncated = Array.from(fullText).length > DETAIL_CONTEXT_PREVIEW_CHARS;
+    var section = searchNode('section', 'detail-context-section detail-context-' + side);
+    var heading = searchNode('div', 'detail-context-heading');
+    heading.appendChild(searchNode('span', 'detail-context-label', label));
+    var toggle = searchNode('button', 'detail-context-toggle', '展开');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-label', '展开' + label);
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', contentId);
+    toggle.dataset.contextLabel = label;
+    toggle.dataset.characterTruncated = truncated ? 'true' : 'false';
+    toggle.hidden = !truncated;
+    toggle.dataset.action = 'toggleDetailContext';
+    heading.appendChild(toggle);
+    section.appendChild(heading);
+    var content = searchNode('div', 'detail-context');
+    content.id = contentId;
+    content.setAttribute('role', 'region');
+    content.setAttribute('aria-label', label);
+    content.appendChild(searchNode('span', 'detail-context-preview', detailContextPreview(fullText, side)));
+    var expanded = searchNode('span', 'detail-context-full', fullText);
+    expanded.hidden = true;
+    content.appendChild(expanded);
+    section.appendChild(content);
+    return section;
+  }
+
+  function detailPageRow(parent, label, value) {
+    var row = searchNode('div', 'page-detail-row');
+    row.appendChild(searchNode('span', 'page-detail-label', label));
+    row.appendChild(searchNode('span', null, value));
+    parent.appendChild(row);
+  }
+
+  function detailAction(label, action, primary) {
+    var button = searchNode('button', 'action-btn' + (primary ? ' primary' : ''), label);
+    button.type = 'button';
+    button.dataset.action = action;
+    return button;
+  }
+
   function showDetail(item) {
     const panel = document.getElementById('detail-panel');
-    const title = esc(item.document_title || item.work_title || item.volume_display || '');
-    const author = item.author_label ? esc(item.author_label) : '';
     const pageLabel = formatCitationPageLabel(item);
-    const page = esc(pageLabel);
     const sourceLabel = sourceFormatLabel(item);
-
-    const contextBefore = detailContextHTML(item.context_before, 'before');
-    const contextAfter = detailContextHTML(item.context_after, 'after');
-
-    let pageDetail = '';
+    var card = searchNode('div', 'detail-card');
+    var mobileToolbar = searchNode('div', 'detail-mobile-toolbar');
+    var back = detailAction('', 'showSearchResultsList');
+    back.classList.add('detail-back-button');
+    back.appendChild(searchSvg(['m12 5-5 5 5 5', 'M7 10h8']));
+    back.appendChild(searchNode('span', null, '返回结果列表'));
+    mobileToolbar.appendChild(back);
+    card.appendChild(mobileToolbar);
+    var scroll = searchNode('div', 'detail-scroll');
+    var header = searchNode('div', 'detail-header');
+    header.appendChild(searchNode('div', 'detail-title', item.document_title || item.work_title || item.volume_display || ''));
+    if (item.author_label) header.appendChild(searchNode('div', 'detail-author', item.author_label));
+    var pills = searchNode('div', 'detail-pills');
+    pills.appendChild(searchNode('span', 'detail-pill', sourceLabel));
+    if (item.volume_display) pills.appendChild(searchNode('span', 'detail-pill', item.volume_display));
+    pills.appendChild(searchNode('span', 'detail-pill', pageLabel));
+    header.appendChild(pills);
     if (item.source_type === 'pdf') {
-      pageDetail = '<div class="page-detail-toggle" data-action="togglePageDetail">页码详情 ▸</div>'
-        + '<div class="page-detail-body">'
-        + pdRow('引用页码', pageLabel)
-        + pdRow('PDF 页码标签', item.pdf_page_start_label || '无')
-        + pdRow('PDF 物理页', item.pdf_page_start_index != null ? 'PDF 第 ' + (item.pdf_page_start_index + 1) + ' 页' : '—')
-        + (item.layout_mode === 'spread' ? pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision)) : '')
-        + pdRow('映射方式', mappingMethodLabel(item.page_mapping_method))
-        + (item.mapping_confidence_level ? pdRow('映射置信度', mappingConfidenceLabel(item.mapping_confidence_level, item.page_mapping_confidence)) : '')
-        + (item.page_scope ? pdRow('页码范围', pageScopeLabel(item.page_scope)) : '')
-        + (item.mapping_evidence ? pdRow('映射依据', mappingEvidenceSummary(item.mapping_evidence)) : '')
-        + (item.is_cross_page ? pdRow('跨页命中', '是') : '')
-        + '</div>';
+      var pageToggle = searchNode('div', 'page-detail-toggle', '页码详情 ▸');
+      pageToggle.dataset.action = 'togglePageDetail';
+      header.appendChild(pageToggle);
+      var pageDetail = searchNode('div', 'page-detail-body');
+      detailPageRow(pageDetail, '引用页码', pageLabel);
+      detailPageRow(pageDetail, 'PDF 页码标签', item.pdf_page_start_label || '无');
+      detailPageRow(pageDetail, 'PDF 物理页', item.pdf_page_start_index != null ? 'PDF 第 ' + (item.pdf_page_start_index + 1) + ' 页' : '—');
+      if (item.layout_mode === 'spread') detailPageRow(pageDetail, '双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision));
+      detailPageRow(pageDetail, '映射方式', mappingMethodLabel(item.page_mapping_method));
+      if (item.mapping_confidence_level) detailPageRow(pageDetail, '映射置信度', mappingConfidenceLabel(item.mapping_confidence_level, item.page_mapping_confidence));
+      if (item.page_scope) detailPageRow(pageDetail, '页码范围', pageScopeLabel(item.page_scope));
+      if (item.mapping_evidence) detailPageRow(pageDetail, '映射依据', mappingEvidenceSummary(item.mapping_evidence));
+      if (item.is_cross_page) detailPageRow(pageDetail, '跨页命中', '是');
+      header.appendChild(pageDetail);
     }
-
-    const citationStyleLabel = citationStyleDisplayLabel(citationStyle);
-    const detailMenuChevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
-
-    panel.innerHTML = '<div class="detail-card">'
-      + '<div class="detail-mobile-toolbar">'
-      + '<button class="detail-back-button" type="button" data-action="showSearchResultsList"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-5 5 5 5"/><path d="M7 10h8"/></svg><span>返回结果列表</span></button>'
-      + '</div>'
-      + '<div class="detail-scroll">'
-      + '<div class="detail-header">'
-      + '<div class="detail-title">' + title + '</div>'
-      + (author ? '<div class="detail-author">' + author + '</div>' : '')
-      + '<div class="detail-pills">'
-      + '<span class="detail-pill">' + sourceLabel + '</span>'
-      + (item.volume_display ? '<span class="detail-pill">' + esc(item.volume_display) + '</span>' : '')
-      + '<span class="detail-pill">' + page + '</span>'
-      + '</div>'
-      + pageDetail
-      + citationAvailabilityMarkup(item)
-      + '</div>'
-      + '<div class="detail-body">'
-      + contextBefore
-      + '<div class="detail-hit">' + (item.highlighted_html || esc(item.paragraph_text || '')) + '</div>'
-      + contextAfter
-      + '</div>'
-      + '</div>'
-      + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
-      + '<span class="app-select detail-format-control" id="detail-format-control">'
-      + '<button class="action-btn app-select-trigger detail-format-trigger" type="button" aria-label="选择出处格式" aria-haspopup="menu" aria-expanded="false" data-action="toggleDetailFormatSelect"><span id="detail-citation-style-label">' + citationStyleLabel + '</span>' + detailMenuChevron + '</button>'
-      + '<span class="app-select-menu detail-format-menu" role="menu" aria-label="出处格式">'
-      + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
-      + '</span>'
-      + '</span>'
-      + '<button class="action-btn" type="button" data-action="copySelectedCitation">复制出处</button>'
-      + (item.source_file_id ? '<button class="action-btn" type="button" data-action="openSelectedStructuredReader">查看结构化文本</button>' : '')
-      + (item.source_file_id ? '<button class="action-btn primary" type="button" data-action="openSearchSource" data-source-id="' + esc(item.source_file_id) + '" data-pdf-page="' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : '') + '">打开原文</button>' : '')
-      + '</div>'
-      + '</div>';
+    header.appendChild(citationAvailabilityNode(item));
+    scroll.appendChild(header);
+    var body = searchNode('div', 'detail-body');
+    var before = detailContextNode(item.context_before, 'before');
+    if (before) body.appendChild(before);
+    var hit = searchNode('div', 'detail-hit');
+    appendHighlighted(hit, item);
+    body.appendChild(hit);
+    var after = detailContextNode(item.context_after, 'after');
+    if (after) body.appendChild(after);
+    scroll.appendChild(body);
+    card.appendChild(scroll);
+    var actions = searchNode('div', 'detail-actions');
+    actions.setAttribute('role', 'toolbar');
+    actions.setAttribute('aria-label', '检索结果操作');
+    var format = searchNode('span', 'app-select detail-format-control');
+    format.id = 'detail-format-control';
+    var trigger = detailAction('', 'toggleDetailFormatSelect');
+    trigger.className = 'action-btn app-select-trigger detail-format-trigger';
+    trigger.setAttribute('aria-label', '选择出处格式');
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    var styleLabel = searchNode('span', null, citationStyleDisplayLabel(citationStyle));
+    styleLabel.id = 'detail-citation-style-label';
+    trigger.appendChild(styleLabel);
+    trigger.appendChild(searchSvg(['m6 8 4 4 4-4']));
+    format.appendChild(trigger);
+    var formatMenu = searchNode('span', 'app-select-menu detail-format-menu');
+    formatMenu.setAttribute('role', 'menu');
+    formatMenu.setAttribute('aria-label', '出处格式');
+    var choices = searchNode('span', 'detail-citation-style-options');
+    choices.id = 'citation-style-control';
+    choices.appendChild(citationStyleMenuNode());
+    formatMenu.appendChild(choices);
+    format.appendChild(formatMenu);
+    actions.appendChild(format);
+    actions.appendChild(detailAction('复制出处', 'copySelectedCitation'));
+    if (item.source_file_id) {
+      actions.appendChild(detailAction('查看结构化文本', 'openSelectedStructuredReader'));
+      var open = detailAction('打开原文', 'openSearchSource', true);
+      open.dataset.sourceId = item.source_file_id;
+      open.dataset.pdfPage = item.pdf_page_start_index != null ? String(item.pdf_page_start_index + 1) : '';
+      actions.appendChild(open);
+    }
+    card.appendChild(actions);
+    panel.replaceChildren(card);
 
     observeDetailContextLayout(panel);
     requestAnimationFrame(function() {
@@ -531,7 +645,25 @@
       detailContextResizeObserver = null;
     }
     showSearchResultsList();
-    document.getElementById('detail-panel').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"><rect x="8" y="6" width="32" height="36" rx="3"/><line x1="16" y1="16" x2="32" y2="16"/><line x1="16" y1="22" x2="32" y2="22"/><line x1="16" y1="28" x2="28" y2="28"/></svg></div><div class="empty-state-text">选择一条结果查看详情</div></div>';
+    var empty = searchNode('div', 'empty-state');
+    var icon = searchNode('div', 'empty-state-icon');
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    [['width', '48'], ['height', '48'], ['viewBox', '0 0 48 48'], ['fill', 'none'],
+      ['stroke', 'currentColor'], ['stroke-width', '1.5'], ['opacity', '0.35']].forEach(function(attribute) {
+      svg.setAttribute(attribute[0], attribute[1]);
+    });
+    [['rect', {x: '8', y: '6', width: '32', height: '36', rx: '3'}],
+      ['line', {x1: '16', y1: '16', x2: '32', y2: '16'}],
+      ['line', {x1: '16', y1: '22', x2: '32', y2: '22'}],
+      ['line', {x1: '16', y1: '28', x2: '28', y2: '28'}]].forEach(function(shape) {
+      var node = document.createElementNS('http://www.w3.org/2000/svg', shape[0]);
+      Object.keys(shape[1]).forEach(function(key) { node.setAttribute(key, shape[1][key]); });
+      svg.appendChild(node);
+    });
+    icon.appendChild(svg);
+    empty.appendChild(icon);
+    empty.appendChild(searchNode('div', 'empty-state-text', '选择一条结果查看详情'));
+    document.getElementById('detail-panel').replaceChildren(empty);
   }
 
   /* ═══ Page detail toggle ═══ */
@@ -579,29 +711,6 @@
 
   /* ═══ Helpers ═══ */
 
-  function truncateHTML(html, maxText) {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    if ((div.textContent || '').length <= maxText) return html;
-    // 按可见字符截断，同时保留高亮标签（服务端只产出扁平的 <mark> 包裹）。
-    let remaining = maxText;
-    let out = '';
-    for (const node of div.childNodes) {
-      if (remaining <= 0) break;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const slice = node.nodeValue.slice(0, remaining);
-        out += esc(slice);
-        remaining -= slice.length;
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = node.tagName.toLowerCase();
-        const slice = (node.textContent || '').slice(0, remaining);
-        out += '<' + tag + '>' + esc(slice) + '</' + tag + '>';
-        remaining -= slice.length;
-      }
-    }
-    return out + '…';
-  }
-
   // mappingMethodLabel / mappingStatusLabel / mappingConfidenceLabel / pageScopeLabel /
   // logicalPageSideLabel / mappingEvidenceSummary / autoMappingSegmentText /
   // firstPageValue 已抽到 06-pure.js（纯逻辑，可单测）。
@@ -637,13 +746,18 @@
     });
   }
 
-  function citationStyleMenuMarkup() {
-    return CITATION_STYLE_OPTIONS.filter(function(option) {
+  function citationStyleMenuNode() {
+    var fragment = document.createDocumentFragment();
+    CITATION_STYLE_OPTIONS.filter(function(option) {
       return enabledCitationStyles.indexOf(option.id) >= 0;
-    }).map(function(option) {
-      return '<button class="app-select-option' + (citationStyle === option.id ? ' is-selected' : '')
-        + '" type="button" data-value="' + esc(option.id) + '" data-action="selectCitationStyle">' + option.label + '</button>';
-    }).join('');
+    }).forEach(function(option) {
+      var button = searchNode('button', 'app-select-option' + (citationStyle === option.id ? ' is-selected' : ''), option.label);
+      button.type = 'button';
+      button.dataset.value = option.id;
+      button.dataset.action = 'selectCitationStyle';
+      fragment.appendChild(button);
+    });
+    return fragment;
   }
 
   function selectCitationStyle(event, style) {
@@ -668,12 +782,21 @@
     return formats[citationStyle + '_status'] === 'complete';
   }
 
-  function citationAvailabilityMarkup(item) {
-    const hidden = citationIsComplete(item) ? ' hidden' : '';
-    return '<div class="detail-citation-status" id="detail-citation-status" role="status"' + hidden + '>'
-      + '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.25"/><path d="M10 14h.01"/></svg>'
-      + '<span><strong>出处信息不完整</strong><span>暂不可生成完整引文；仍可查看正文和打开原文。</span></span>'
-      + '</div>';
+  function citationAvailabilityNode(item) {
+    var status = searchNode('div', 'detail-citation-status');
+    status.id = 'detail-citation-status';
+    status.setAttribute('role', 'status');
+    status.hidden = citationIsComplete(item);
+    var icon = searchSvg(['M10 6.5v4.25', 'M10 14h.01']);
+    var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '10'); circle.setAttribute('cy', '10'); circle.setAttribute('r', '7.5');
+    icon.insertBefore(circle, icon.firstChild);
+    status.appendChild(icon);
+    var copy = document.createElement('span');
+    copy.appendChild(searchNode('strong', null, '出处信息不完整'));
+    copy.appendChild(searchNode('span', null, '暂不可生成完整引文；仍可查看正文和打开原文。'));
+    status.appendChild(copy);
+    return status;
   }
 
   function updateDetailCitationAvailability() {

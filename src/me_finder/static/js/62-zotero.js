@@ -1,7 +1,7 @@
 /* 设置 → 来源 → Zotero：连接状态、分类树、自动同步与立即同步明细。
    分类以 Zotero 为准：这里只保存用户勾选的分类 key；勾父分类等于勾全部子分类。
    同步本身在后端（/api/zotero/*），前端只展示后端能确认的状态。DOM 一律用
-   createElement 构造，Zotero 返回的标题不经 innerHTML。 */
+   createElement 构造，Zotero 返回的标题只写入文本节点。 */
 (function (global) {  // module: 62-zotero.js
   var FREQUENCY_LABELS = { manual: '仅手动', launch: '启动 MEFinder 时', interval: '启动时及每 30 分钟' };
   var CONNECTION_NOTES = {

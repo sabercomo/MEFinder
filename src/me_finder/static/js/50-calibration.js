@@ -37,6 +37,46 @@
     if (expert) expert.style.display = show ? 'block' : 'none';
   }
 
+  function calibrationNode(tag, className, content) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (content != null) node.textContent = String(content);
+    return node;
+  }
+
+  function calibrationNote(panel, content, extraClass) {
+    panel.appendChild(calibrationNode('div', 'auto-detect-note' + (extraClass ? ' ' + extraClass : ''), content));
+  }
+
+  function calibrationAction(panel, label, action, primary) {
+    var button = calibrationNode('button', 'action-btn' + (primary ? ' primary' : ''), label);
+    button.dataset.action = action;
+    panel.appendChild(button);
+  }
+
+  function calibrationFailureNotes(panel, reasons) {
+    var note = calibrationNode('div', 'auto-detect-note');
+    autoFailureReasons(reasons).split('\n').forEach(function(label, index) {
+      if (index) note.appendChild(document.createElement('br'));
+      note.appendChild(document.createTextNode(label));
+    });
+    panel.appendChild(note);
+  }
+
+  function calibrationSvg(shapes, viewBox) {
+    var namespace = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(namespace, 'svg');
+    [['viewBox', viewBox || '0 0 24 24'], ['fill', 'none'], ['stroke', 'currentColor'],
+      ['stroke-width', '1.8'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'],
+      ['aria-hidden', 'true']].forEach(function(attribute) { svg.setAttribute(attribute[0], attribute[1]); });
+    shapes.forEach(function(shape) {
+      var child = document.createElementNS(namespace, shape[0]);
+      Object.keys(shape[1]).forEach(function(name) { child.setAttribute(name, shape[1][name]); });
+      svg.appendChild(child);
+    });
+    return svg;
+  }
+
   async function loadCalibrationDoc(sourceId) {
     sourceId = sourceId || calSelectedSourceId;
     var editor = document.getElementById('cal-editor');
@@ -57,8 +97,15 @@
       }
       var mapping = calSelectedDoc.page_mapping || {};
       calSegments = (mapping.segments || []).map(function(s) { return Object.assign({}, s); });
-      document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" data-action="runAutoDetection">自动检测页码</button><button class="action-btn" data-action="scrollToManualMapping">手动调整</button><button class="action-btn" data-action="showCalibrationEvidence">查看识别依据</button>'
-        + '<span class="detail-pill" style="margin-left:auto">' + (mapping.validated_by ? '已验证' : '未验证') + '</span>';
+      var actions = document.getElementById('cal-detail-actions');
+      actions.replaceChildren();
+      calibrationAction(actions, '自动检测页码', 'runAutoDetection', true);
+      actions.firstElementChild.id = 'cal-auto-detect-btn';
+      calibrationAction(actions, '手动调整', 'scrollToManualMapping');
+      calibrationAction(actions, '查看识别依据', 'showCalibrationEvidence');
+      var pill = calibrationNode('span', 'detail-pill', mapping.validated_by ? '已验证' : '未验证');
+      pill.style.marginLeft = 'auto';
+      actions.appendChild(pill);
       editor.style.display = 'block';
       calAutoResult = null;
       document.getElementById('cal-auto-preview').style.display = 'none';
@@ -82,7 +129,8 @@
     var panel = document.getElementById('cal-auto-preview');
     var button = document.getElementById('cal-auto-detect-btn');
     panel.style.display = 'block';
-    panel.innerHTML = '<div class="auto-detect-title">正在检测页码与页面布局…</div><div class="auto-detect-note">正在读取页面尺寸、左右内容分布、中缝、页码位置、PDF 标签、数字书签和现有 MinerU 结果</div>';
+    panel.replaceChildren(calibrationNode('div', 'auto-detect-title', '正在检测页码与页面布局…'));
+    calibrationNote(panel, '正在读取页面尺寸、左右内容分布、中缝、页码位置、PDF 标签、数字书签和现有 MinerU 结果');
     if (button) button.disabled = true;
     try {
       var resp = await MEFinderApi.fetch('/api/auto-page-mapping/detect', {
@@ -100,7 +148,8 @@
     } catch(e) {
       calAutoResult = null;
       calTransientStatus[sourceId] = 'auto_mapping_failed';
-      panel.innerHTML = '<div class="auto-detect-title">页码自动检测失败</div><div class="auto-detect-note">' + esc(e.message) + '</div>';
+      panel.replaceChildren(calibrationNode('div', 'auto-detect-title', '页码自动检测失败'));
+      calibrationNote(panel, e.message);
     } finally {
       if (button) button.disabled = false;
       global.MEFinder.library.updateEntry(sourceId);
@@ -110,50 +159,59 @@
   function renderAutoDetectionResult(result) {
     var panel = document.getElementById('cal-auto-preview');
     var segments = (result.selected_segments || []).filter(function(s) { return s && s.confidence_level !== 'low'; });
-    var html = '<div class="auto-detect-title">检测完成</div>';
+    panel.replaceChildren(calibrationNode('div', 'auto-detect-title', '检测完成'));
     var layout = result.layout_detection || {};
     if (layout.layout_mode === 'spread') {
       var layoutEvidence = layout.evidence || {};
-      html += '<div class="auto-detect-note auto-detect-layout">页面布局：双开页 · '
+      calibrationNote(panel, '页面布局：双开页 · '
         + (layout.reading_direction === 'rtl' ? '右→左' : '左→右')
         + ' · 中缝 ' + Math.round(Number(layout.gutter_x || 0.5) * 100) + '%'
-        + ' · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence)
-        + '</div>';
-      html += '<div class="auto-detect-note">布局依据：' + Number(layoutEvidence.split_pages || 0) + ' 个双栏页面；'
+        + ' · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence), 'auto-detect-layout');
+      calibrationNote(panel, '布局依据：' + Number(layoutEvidence.split_pages || 0) + ' 个双栏页面；'
         + Number(layoutEvidence.paired_page_numbers || 0) + ' 页检测到成对页码；双页序列支持 '
-        + Number(layoutEvidence.stride_two_support || 0) + ' 页</div>';
+        + Number(layoutEvidence.stride_two_support || 0) + ' 页');
     } else if (layout.layout_mode === 'single') {
-      html += '<div class="auto-detect-note">页面布局：单页 · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence) + '</div>';
+      calibrationNote(panel, '页面布局：单页 · ' + mappingConfidenceLabel(layout.confidence_level, layout.confidence));
     }
     if (result.manual_mapping_present) {
-      html += '<div class="auto-detect-note auto-detect-warning">当前文献已有人工页码映射。以下结果仅为预览，不会自动覆盖</div>';
+      calibrationNote(panel, '当前文献已有人工页码映射。以下结果仅为预览，不会自动覆盖', 'auto-detect-warning');
     }
     if (!segments.length) {
-      html += '<div class="auto-detect-note">未能自动识别可靠页码区间</div>';
-      html += '<div class="auto-detect-note">' + autoFailureReasons(result.failure_reasons || []) + '</div>';
-      html += '<div class="auto-detect-actions"><button class="action-btn" data-action="cancelAutoDetection">关闭</button></div>';
-      panel.innerHTML = html;
+      calibrationNote(panel, '未能自动识别可靠页码区间');
+      calibrationFailureNotes(panel, result.failure_reasons || []);
+      var closeActions = calibrationNode('div', 'auto-detect-actions');
+      calibrationAction(closeActions, '关闭', 'cancelAutoDetection');
+      panel.appendChild(closeActions);
       setCalExpertVisible(true);  // 检测失败：展开专家表让用户手动设置
       return;
     }
-    html += '<div class="auto-detect-note">识别到 ' + segments.length + ' 个页码区间，当前仍是预览状态</div>';
-    html += '<div class="auto-segment-list">' + segments.map(function(seg, index) {
+    calibrationNote(panel, '识别到 ' + segments.length + ' 个页码区间，当前仍是预览状态');
+    var list = calibrationNode('div', 'auto-segment-list');
+    segments.forEach(function(seg, index) {
       var evidence = seg.mapping_evidence || {};
-      return '<div class="auto-segment-row"><div class="auto-segment-main">' + (index + 1) + '. ' + esc(autoMappingSegmentText(seg)) + '</div>'
-        + '<div class="auto-segment-evidence">依据：' + esc(mappingMethodLabel(seg.method))
+      var row = calibrationNode('div', 'auto-segment-row');
+      row.appendChild(calibrationNode('div', 'auto-segment-main', (index + 1) + '. ' + autoMappingSegmentText(seg)));
+      row.appendChild(calibrationNode('div', 'auto-segment-evidence', '依据：' + mappingMethodLabel(seg.method)
         + (evidence.inferred_offset != null ? '；稳定 offset = ' + evidence.inferred_offset : '')
         + (evidence.observed_page_numbers != null ? '；观察到 ' + evidence.observed_page_numbers + ' 个候选' : '')
-        + (evidence.sequence_consistency != null ? '；序列一致性 ' + Math.round(Number(evidence.sequence_consistency) * 100) + '%' : '')
-        + '</div></div>';
-    }).join('') + '</div>';
-    html += '<details style="margin-top:10px"><summary class="auto-detect-note">查看检测依据</summary><div class="auto-detect-note" style="margin-top:6px">'
-      + 'PDF 标签 ' + Number((result.evidence_counts || {}).pdf_page_labels || 0) + ' 个；数字书签 ' + Number((result.evidence_counts || {}).numeric_bookmarks || 0)
-      + ' 个；MinerU 候选 ' + Number((result.evidence_counts || {}).mineru_candidates || 0) + ' 个；页边候选 ' + Number((result.evidence_counts || {}).native_edge_candidates || 0) + ' 个</div></details>';
-    html += '<div class="auto-detect-actions">'
-      + '<button class="action-btn primary" data-action="applyAutoDetection">' + (result.manual_mapping_present ? '用自动结果替换人工映射' : '应用自动映射') + '</button>'
-      + '<button class="action-btn" data-action="editAutoDetectionResult">编辑后应用</button>'
-      + '<button class="action-btn" data-action="cancelAutoDetection">取消</button></div>';
-    panel.innerHTML = html;
+        + (evidence.sequence_consistency != null ? '；序列一致性 ' + Math.round(Number(evidence.sequence_consistency) * 100) + '%' : '')));
+      list.appendChild(row);
+    });
+    panel.appendChild(list);
+    var details = calibrationNode('details');
+    details.style.marginTop = '10px';
+    details.appendChild(calibrationNode('summary', 'auto-detect-note', '查看检测依据'));
+    var evidenceNote = calibrationNode('div', 'auto-detect-note',
+      'PDF 标签 ' + Number((result.evidence_counts || {}).pdf_page_labels || 0) + ' 个；数字书签 ' + Number((result.evidence_counts || {}).numeric_bookmarks || 0)
+      + ' 个；MinerU 候选 ' + Number((result.evidence_counts || {}).mineru_candidates || 0) + ' 个；页边候选 ' + Number((result.evidence_counts || {}).native_edge_candidates || 0) + ' 个');
+    evidenceNote.style.marginTop = '6px';
+    details.appendChild(evidenceNote);
+    panel.appendChild(details);
+    var actions = calibrationNode('div', 'auto-detect-actions');
+    calibrationAction(actions, result.manual_mapping_present ? '用自动结果替换人工映射' : '应用自动映射', 'applyAutoDetection', true);
+    calibrationAction(actions, '编辑后应用', 'editAutoDetectionResult');
+    calibrationAction(actions, '取消', 'cancelAutoDetection');
+    panel.appendChild(actions);
   }
 
 
@@ -262,7 +320,7 @@
     document.getElementById('spread-badge-right-' + index).textContent = leftFirst ? '2' : '1';
     document.getElementById('spread-page-left-' + index).textContent = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
     document.getElementById('spread-page-right-' + index).textContent = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
-    document.getElementById('spread-summary-' + index).innerHTML = spreadSummaryHtml(seg);
+    renderSpreadSummary(document.getElementById('spread-summary-' + index), seg);
     var ltrBtn = diagram.parentNode.querySelector('.segment-direction-btn[data-direction="ltr"]');
     var rtlBtn = diagram.parentNode.querySelector('.segment-direction-btn[data-direction="rtl"]');
     if (ltrBtn && rtlBtn) {
@@ -273,34 +331,189 @@
     }
   }
 
+  function renderSpreadSummary(host, seg) {
+    var firstPdf = seg.pdf_page_start != null ? seg.pdf_page_start + 1 : 1;
+    var pair = spreadCitationPair(seg);
+    var icon = calibrationSvg([
+      ['path', {d: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z'}],
+      ['circle', {cx: '12', cy: '12', r: '3'}]
+    ]);
+    icon.setAttribute('width', '14');
+    icon.setAttribute('height', '14');
+    host.replaceChildren(icon, document.createTextNode(' PDF 第 ' + firstPdf + ' 页 → '));
+    if (!pair.mapped) {
+      host.appendChild(document.createTextNode('该分段未设引用页码，仅按双开切分'));
+      return;
+    }
+    host.appendChild(document.createTextNode('左半页 '));
+    host.appendChild(calibrationNode('b', null, '引文 ' + pair.left + ' 页'));
+    host.appendChild(document.createTextNode('，右半页 '));
+    host.appendChild(calibrationNode('b', null, '引文 ' + pair.right + ' 页'));
+  }
+
+  function segmentSelectControl(kind, value, index) {
+    var isLayout = kind === 'layout';
+    var id = 'segment-' + (isLayout ? 'layout' : 'style') + '-select-' + index;
+    var values = isLayout ? ['single', 'spread'] : ['arabic', 'roman_lower', 'roman_upper', 'none'];
+    var label = isLayout ? segmentLayoutLabel : segmentNumberStyleLabel;
+    var control = calibrationNode('div', 'app-select segment-' + (isLayout ? 'layout' : 'style') + '-select');
+    control.id = id;
+    var trigger = calibrationNode('button', 'app-select-trigger');
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.dataset.action = 'toggleSegmentSelect';
+    trigger.dataset.selectId = id;
+    trigger.appendChild(calibrationNode('span', 'app-select-value', label(value)));
+    trigger.appendChild(calibrationSvg([['path', {d: 'm6 8 4 4 4-4'}]], '0 0 20 20'));
+    control.appendChild(trigger);
+    var menu = calibrationNode('div', 'app-select-menu');
+    menu.setAttribute('role', 'listbox');
+    values.forEach(function(option) {
+      var button = calibrationNode('button', 'app-select-option' + (option === value ? ' is-selected' : ''), label(option));
+      button.type = 'button';
+      button.dataset.value = option;
+      button.dataset.index = String(index);
+      button.dataset.action = isLayout ? 'setSegmentLayout' : 'setSegmentNumberStyle';
+      menu.appendChild(button);
+    });
+    control.appendChild(menu);
+    return control;
+  }
+
+  function segmentInputCell(index, field, value, type, className, placeholder) {
+    var cell = document.createElement('td');
+    var input = calibrationNode('input', className);
+    input.type = type;
+    if (type === 'number') input.min = '1';
+    input.value = value == null ? '' : String(value);
+    if (placeholder) input.placeholder = placeholder;
+    input.dataset.actionChange = 'updateCalSeg';
+    input.dataset.index = String(index);
+    input.dataset.field = field;
+    cell.appendChild(input);
+    return cell;
+  }
+
+  function spreadPanelRow(seg, index) {
+    var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
+    var gutter = spreadGutterPercent(seg);
+    var pair = spreadCitationPair(seg);
+    var row = calibrationNode('tr', 'segment-spread-row');
+    var cell = document.createElement('td');
+    cell.colSpan = 7;
+    var panel = calibrationNode('div', 'segment-spread-panel');
+    var main = calibrationNode('div', 'spread-panel-main');
+    var diagram = calibrationNode('div', 'spread-diagram');
+    diagram.id = 'spread-diagram-' + index;
+    [['left', gutter, direction !== 'rtl' ? '1' : '2', pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射'],
+      ['right', 100 - gutter, direction !== 'rtl' ? '2' : '1', pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射']].forEach(function(halfData) {
+      var side = halfData[0];
+      var half = calibrationNode('div', 'spread-half ' + side);
+      half.id = 'spread-half-' + side + '-' + index;
+      half.style.width = halfData[1] + '%';
+      var badge = calibrationNode('span', 'spread-badge' + (side === 'right' ? ' alt' : ''), halfData[2]);
+      badge.id = 'spread-badge-' + side + '-' + index;
+      half.appendChild(badge);
+      half.appendChild(calibrationNode('span', 'spread-half-name', side === 'left' ? '左半页' : '右半页'));
+      var page = calibrationNode('span', 'spread-half-page', halfData[3]);
+      page.id = 'spread-page-' + side + '-' + index;
+      half.appendChild(page);
+      diagram.appendChild(half);
+    });
+    var line = calibrationNode('div', 'spread-gutter-line');
+    line.id = 'spread-gutter-line-' + index;
+    line.style.left = gutter + '%';
+    diagram.appendChild(line);
+    main.appendChild(diagram);
+    var controls = calibrationNode('div', 'spread-controls');
+    var directionField = calibrationNode('div', 'spread-field');
+    directionField.appendChild(calibrationNode('span', 'spread-field-label', '阅读方向'));
+    var directionControl = calibrationNode('div', 'segment-direction-control');
+    directionControl.setAttribute('role', 'group');
+    directionControl.setAttribute('aria-label', '双开页阅读方向');
+    [['ltr', '左→右'], ['rtl', '右→左']].forEach(function(option) {
+      var active = direction === option[0];
+      var button = calibrationNode('button', 'segment-direction-btn' + (active ? ' is-active' : ''), option[1]);
+      button.type = 'button';
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      button.dataset.action = 'setSegmentReadingDirection';
+      button.dataset.index = String(index);
+      button.dataset.direction = option[0];
+      directionControl.appendChild(button);
+    });
+    directionField.appendChild(directionControl);
+    controls.appendChild(directionField);
+    var gutterField = calibrationNode('div', 'spread-field');
+    var gutterHead = calibrationNode('div', 'spread-field-row');
+    gutterHead.appendChild(calibrationNode('span', 'spread-field-label', '中缝位置'));
+    var output = calibrationNode('span', 'spread-gutter-out', gutter + '%');
+    output.id = 'spread-gutter-out-' + index;
+    gutterHead.appendChild(output);
+    gutterField.appendChild(gutterHead);
+    var range = calibrationNode('input', 'spread-gutter-range');
+    range.type = 'range';
+    range.min = '30'; range.max = '70'; range.step = '1'; range.value = String(gutter);
+    range.setAttribute('aria-label', '中缝横向位置');
+    range.dataset.actionInput = 'updateSegmentGutter';
+    range.dataset.index = String(index);
+    gutterField.appendChild(range);
+    controls.appendChild(gutterField);
+    main.appendChild(controls);
+    panel.appendChild(main);
+    var summary = calibrationNode('div', 'spread-summary');
+    summary.id = 'spread-summary-' + index;
+    renderSpreadSummary(summary, seg);
+    panel.appendChild(summary);
+    cell.appendChild(panel);
+    row.appendChild(cell);
+    return row;
+  }
+
   function renderCalSegments() {
     var body = document.getElementById('cal-segments-body');
     var noSeg = document.getElementById('cal-no-segments');
     if (calSegments.length === 0) {
-      body.innerHTML = '';
+      body.replaceChildren();
       noSeg.style.display = 'block';
       document.querySelector('.segment-table-wrap').style.display = 'none';
       return;
     }
     noSeg.style.display = 'none';
     document.querySelector('.segment-table-wrap').style.display = 'block';
-    body.innerHTML = calSegments.map(function(seg, i) {
+    body.replaceChildren();
+    calSegments.forEach(function(seg, i) {
       var citStart = seg.citation_page_start != null ? seg.citation_page_start : '';
       if (seg.citation === null && !citStart) citStart = '';
       var style = seg.number_style || 'arabic';
       var layout = seg.layout_mode === 'spread' ? 'spread' : 'single';
       var label = seg.label || seg.evidence || '';
-      return '<tr>'
-        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_start != null ? seg.pdf_page_start + 1 : '') + '" data-action-change="updateCalSeg" data-index="' + i + '" data-field="pdf_page_start"></td>'
-        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_end != null ? seg.pdf_page_end + 1 : '') + '" data-action-change="updateCalSeg" data-index="' + i + '" data-field="pdf_page_end"></td>'
-        + '<td><input class="seg-input narrow" type="text" value="' + esc(String(citStart)) + '" placeholder="留空=不映射" data-action-change="updateCalSeg" data-index="' + i + '" data-field="citation_page_start"></td>'
-        + '<td>' + segmentLayoutControl(layout, i) + '</td>'
-        + '<td>' + segmentNumberStyleControl(style, i) + '</td>'
-        + '<td><input class="seg-input" type="text" value="' + esc(label) + '" placeholder="序言、正文或附录" data-action-change="updateCalSeg" data-index="' + i + '" data-field="label"></td>'
-        + '<td><button class="seg-remove" data-action="removeCalSegment" data-index="' + i + '" title="删除分段" aria-label="删除分段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></td>'
-        + '</tr>'
-        + segmentSpreadPanelRow(seg, i);
-    }).join('');
+      var row = document.createElement('tr');
+      row.appendChild(segmentInputCell(i, 'pdf_page_start', seg.pdf_page_start != null ? seg.pdf_page_start + 1 : '', 'number', 'seg-input narrow'));
+      row.appendChild(segmentInputCell(i, 'pdf_page_end', seg.pdf_page_end != null ? seg.pdf_page_end + 1 : '', 'number', 'seg-input narrow'));
+      row.appendChild(segmentInputCell(i, 'citation_page_start', citStart, 'text', 'seg-input narrow', '留空=不映射'));
+      var layoutCell = document.createElement('td');
+      layoutCell.appendChild(segmentSelectControl('layout', layout, i));
+      row.appendChild(layoutCell);
+      var styleCell = document.createElement('td');
+      styleCell.appendChild(segmentSelectControl('style', style, i));
+      row.appendChild(styleCell);
+      row.appendChild(segmentInputCell(i, 'label', label, 'text', 'seg-input', '序言、正文或附录'));
+      var removeCell = document.createElement('td');
+      var removeButton = calibrationNode('button', 'seg-remove');
+      removeButton.dataset.action = 'removeCalSegment';
+      removeButton.dataset.index = String(i);
+      removeButton.title = '删除分段';
+      removeButton.setAttribute('aria-label', '删除分段');
+      removeButton.appendChild(calibrationSvg([
+        ['path', {d: 'M4 7h16'}], ['path', {d: 'M9 7V4h6v3'}],
+        ['path', {d: 'm7 7 1 13h8l1-13'}], ['path', {d: 'M10 11v5M14 11v5'}]
+      ]));
+      removeCell.appendChild(removeButton);
+      row.appendChild(removeCell);
+      body.appendChild(row);
+      if (layout === 'spread') body.appendChild(spreadPanelRow(seg, i));
+    });
   }
 
   function updateCalSeg(index, field, value) {
@@ -445,14 +658,25 @@
     var panel = document.getElementById('cal-auto-preview');
     var evidence = item.mapping_evidence || [];
     var failures = item.failure_reasons || [];
-    var html = '<div class="auto-detect-title">自动映射依据</div>';
-    if (item.mapping_summary) html += '<div class="auto-detect-note">当前映射：' + esc(item.mapping_summary) + '</div>';
-    html += '<div class="auto-detect-note">映射方式：' + esc(mappingMethodLabel(item.mapping_method)) + '</div>';
-    if (item.mapping_confidence) html += '<div class="auto-detect-note">置信度：' + Math.round(Number(item.mapping_confidence) * 100) + '%</div>';
-    if (evidence.length) html += '<div class="auto-detect-note" style="margin-top:8px">已保存 ' + evidence.length + ' 组序列、位置或结构证据</div>';
-    if (failures.length) html += '<div class="auto-detect-note" style="margin-top:8px">未使用的证据：<br>' + autoFailureReasons(failures) + '</div>';
-    if (!item.mapping_summary && !evidence.length && !failures.length) html += '<div class="auto-detect-note">当前没有可显示的自动识别依据</div>';
-    panel.innerHTML = html;
+    panel.replaceChildren(calibrationNode('div', 'auto-detect-title', '自动映射依据'));
+    if (item.mapping_summary) calibrationNote(panel, '当前映射：' + item.mapping_summary);
+    calibrationNote(panel, '映射方式：' + mappingMethodLabel(item.mapping_method));
+    if (item.mapping_confidence) calibrationNote(panel, '置信度：' + Math.round(Number(item.mapping_confidence) * 100) + '%');
+    if (evidence.length) {
+      var saved = calibrationNode('div', 'auto-detect-note', '已保存 ' + evidence.length + ' 组序列、位置或结构证据');
+      saved.style.marginTop = '8px';
+      panel.appendChild(saved);
+    }
+    if (failures.length) {
+      var unused = calibrationNode('div', 'auto-detect-note', '未使用的证据：');
+      unused.style.marginTop = '8px';
+      panel.appendChild(unused);
+      autoFailureReasons(failures).split('\n').forEach(function(label, index) {
+        if (index) unused.appendChild(document.createElement('br'));
+        unused.appendChild(document.createTextNode(label));
+      });
+    }
+    if (!item.mapping_summary && !evidence.length && !failures.length) calibrationNote(panel, '当前没有可显示的自动识别依据');
     panel.style.display = 'block';
     panel.scrollIntoView({behavior:'smooth', block:'center'});
   }

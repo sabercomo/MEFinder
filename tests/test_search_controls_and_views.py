@@ -91,12 +91,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="library-sort-dir"', HTML)
         self.assertIn('data-action="templateClick039"', HTML)
         self.assertIn("function toggleLibrarySortDirection()", HTML)
-        self.assertIn("setLibrarySortOption(event,'field','title')", HTML)
-        self.assertIn("setLibrarySortOption(event,'field','source_type')", HTML)
-        self.assertIn("setLibrarySortOption(event,'field','status')", HTML)
+        self.assertIn("function setLibrarySortOption(event, control, value)", HTML)
+        self.assertIn("'source_type'", HTML)
         self.assertIn("function librarySortProjection(source)", HTML)
         self.assertIn("localStorage.setItem('meFinderLibrarySortField'", HTML)
-        self.assertIn('id="citation-style-control"', HTML)
+        self.assertIn("choices.id = 'citation-style-control'", HTML)
         self.assertIn('segment-style-select', HTML)
 
     def test_search_detail_context_is_compact_expandable_and_actions_are_docked(self) -> None:
@@ -104,11 +103,11 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("const characters = Array.from(String(text || ''))", HTML)
         self.assertIn("characters.slice(-DETAIL_CONTEXT_PREVIEW_CHARS)", HTML)
         self.assertIn("characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS)", HTML)
-        self.assertIn("const label = isBefore ? '上文' : '下文'", HTML)
-        self.assertIn('class="detail-context-toggle" type="button"', HTML)
-        self.assertIn('aria-expanded="false" aria-controls="', HTML)
-        self.assertIn('data-character-truncated="', HTML)
-        self.assertIn("(characterTruncated ? '' : ' hidden')", HTML)
+        self.assertIn("var label = side === 'before' ? '上文' : '下文'", HTML)
+        self.assertIn("searchNode('button', 'detail-context-toggle'", HTML)
+        self.assertIn("toggle.setAttribute('aria-expanded', 'false')", HTML)
+        self.assertIn("toggle.dataset.characterTruncated = truncated ? 'true' : 'false'", HTML)
+        self.assertIn("toggle.hidden = !truncated", HTML)
         self.assertIn("function refreshDetailContextToggles(panel)", HTML)
         self.assertIn("preview.scrollHeight > preview.clientHeight + 1", HTML)
         self.assertIn("function observeDetailContextLayout(panel)", HTML)
@@ -126,8 +125,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         detail_end = HTML.index("function showEmptyDetail()", detail_start)
         detail_source = HTML[detail_start:detail_end]
         self.assertLess(
-            detail_source.index('<div class="detail-scroll">'),
-            detail_source.index('<div class="detail-actions"'),
+            detail_source.index("card.appendChild(scroll)"),
+            detail_source.index("card.appendChild(actions)"),
         )
         self.assertIn("panel.querySelector('.detail-scroll')", detail_source)
         self.assertNotIn("document.querySelector('.results-detail-pane')", detail_source)
@@ -139,21 +138,21 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
         self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
-        primary_open_action = '<button class="action-btn primary" type="button" data-action="openSearchSource"'
+        primary_open_action = "detailAction('打开原文', 'openSearchSource', true)"
         self.assertIn(primary_open_action, detail_source)
-        self.assertIn('id="detail-format-control"', detail_source)
-        self.assertIn('aria-label="选择出处格式"', detail_source)
-        self.assertIn('aria-haspopup="menu"', detail_source)
-        self.assertIn('role="menu" aria-label="出处格式"', detail_source)
-        format_control = detail_source.index('id="detail-format-control"')
-        copy_action = detail_source.index('data-action="copySelectedCitation">复制出处</button>')
-        structured_action = detail_source.index('data-action="openSelectedStructuredReader">查看结构化文本</button>')
+        self.assertIn("format.id = 'detail-format-control'", detail_source)
+        self.assertIn("trigger.setAttribute('aria-label', '选择出处格式')", detail_source)
+        self.assertIn("trigger.setAttribute('aria-haspopup', 'menu')", detail_source)
+        self.assertIn("formatMenu.setAttribute('role', 'menu')", detail_source)
+        format_control = detail_source.index("format.id = 'detail-format-control'")
+        copy_action = detail_source.index("detailAction('复制出处', 'copySelectedCitation')")
+        structured_action = detail_source.index("detailAction('查看结构化文本', 'openSelectedStructuredReader')")
         open_action = detail_source.index(primary_open_action)
         self.assertLess(format_control, copy_action)
         self.assertLess(copy_action, structured_action)
         self.assertLess(structured_action, open_action)
-        self.assertIn('id="citation-style-control"', detail_source)
-        self.assertIn("citationStyleMenuMarkup()", detail_source)
+        self.assertIn("choices.id = 'citation-style-control'", detail_source)
+        self.assertIn("citationStyleMenuNode()", detail_source)
         self.assertNotIn('id="detail-copy-control"', detail_source)
         self.assertNotIn("复制原文", detail_source)
         self.assertNotIn("复制原文与出处", detail_source)
@@ -162,7 +161,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn("补全书目信息", detail_source)
         self.assertIn("function logicalPageSideLabel(side, precision)", HTML)
         self.assertIn(
-            "pdRow('双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
+            "detailPageRow(pageDetail, '双开位置', logicalPageSideLabel(item.logical_page_side, item.spread_hit_precision))",
             detail_source,
         )
         self.assertNotIn("function runSearchDetailAction(event, action)", HTML)
@@ -198,7 +197,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("area.classList.add('is-detail-open')", HTML)
         self.assertIn("function showSearchResultsList()", HTML)
         self.assertIn("area.classList.remove('is-detail-open')", HTML)
-        self.assertIn('data-action="showSearchResultsList"', HTML)
+        self.assertIn("detailAction('', 'showSearchResultsList')", HTML)
         self.assertIn("返回结果列表", HTML)
         self.assertIn("@media (max-width: 959px)", HTML)
         self.assertIn(".results-area.is-detail-open > .results-list-pane { display: none; }", HTML)
@@ -208,7 +207,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertRegex(HTML, r"\.detail-mobile-toolbar\s*\{\s*display:\s*none")
 
-        row_start = HTML.index("function resultRowHTML(item, index)")
+        row_start = HTML.index("function resultRowNode(item, index)")
         row_end = HTML.index("function searchResultsArea()", row_start)
         row_source = HTML[row_start:row_end]
         self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
@@ -230,20 +229,20 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         detail_start = HTML.index("function showDetail(item)")
         detail_end = HTML.index("function showEmptyDetail()", detail_start)
         detail_source = HTML[detail_start:detail_end]
-        self.assertIn("citationAvailabilityMarkup(item)", detail_source)
+        self.assertIn("citationAvailabilityNode(item)", detail_source)
         self.assertLess(
-            detail_source.index("citationAvailabilityMarkup(item)"),
-            detail_source.index('<div class="detail-body">'),
+            detail_source.index("citationAvailabilityNode(item)"),
+            detail_source.index("var body = searchNode('div', 'detail-body')"),
         )
 
-        availability_start = HTML.index("function citationAvailabilityMarkup(item)")
+        availability_start = HTML.index("function citationAvailabilityNode(item)")
         availability_end = HTML.index("function updateDetailCitationAvailability()", availability_start)
         availability_source = HTML[availability_start:availability_end]
         self.assertIn("citationIsComplete(item)", availability_source)
         self.assertNotIn("_status']", availability_source)
         self.assertIn("出处信息不完整", availability_source)
         self.assertIn("暂不可生成完整引文；仍可查看正文和打开原文。", availability_source)
-        self.assertIn("role=\"status\"", availability_source)
+        self.assertIn("status.setAttribute('role', 'status')", availability_source)
         self.assertIn("status.hidden = citationIsComplete(item)", HTML)
         self.assertIn("updateDetailCitationAvailability();", HTML)
         self.assertIn(".detail-citation-status[hidden] { display: none !important; }", HTML)
@@ -794,7 +793,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("loadLocalCitationStyles() || DEFAULT_CITATION_STYLES.slice()", HTML)
         self.assertIn("saveLocalCitationStyles(enabledCitationStyles)", HTML)
         self.assertIn("body: JSON.stringify({citation_style: citationStyle})", HTML)
-        self.assertIn("function citationStyleMenuMarkup()", HTML)
+        self.assertIn("function citationStyleMenuNode()", HTML)
         self.assertIn("function setCitationStyleEnabled(style, checked)", HTML)
         for style in ("chinese", "gb", "chicago", "apa", "mla"):
             self.assertIn(f'name="citation-format" value="{style}"', HTML)
@@ -822,15 +821,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
 
     def test_drawer_file_info_collapses_and_editor_is_type_aware(self) -> None:
-        self.assertIn('id="drawer-file-info"', HTML)
+        self.assertIn("collapse.id = 'drawer-file-info'", HTML)
         self.assertIn("function toggleDrawerSection(event, sectionId)", HTML)
-        self.assertIn('<div class="drawer-collapse-body" style="display:none">', HTML)
-        self.assertIn('id="bib-doctype-control"', HTML)
+        self.assertIn("libraryNode('div', 'drawer-collapse-body')", HTML)
+        self.assertIn("types.id = 'bib-doctype-control'", HTML)
         for label in ("著作", "期刊论文", "学位论文"):
             self.assertIn(label, HTML)
         self.assertNotIn("typeButton('book','图书')", HTML)
         self.assertNotIn("typeButton('translated_book','译著')", HTML)
-        self.assertIn("function bibliographicEditorDocType(docType)", HTML)
+        self.assertIn("function bibliographicEditorNode(src)", HTML)
         self.assertIn("docType === 'journal_article' || docType === 'thesis'", HTML)
         self.assertIn("function setBibliographicType(sourceId, docType)", HTML)
         self.assertIn("'出版刊物'", HTML)
@@ -841,7 +840,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("editorDocType === 'journal_article' || editorDocType === 'thesis'", HTML)
         self.assertIn("['author','title','journal_name','publish_year','issue']", HTML)
         self.assertIn("['author','title','publisher','publish_year']", HTML)
-        self.assertIn("field('publisher','publisher','学校'", HTML)
+        self.assertIn("['publisher','publisher','学校'", HTML)
         self.assertIn("docType === 'thesis' && field === 'publisher' ? '学校'", HTML)
 
     def test_import_runs_bibliographic_recognition_and_missing_markers_ignore_isbn(self) -> None:
@@ -870,7 +869,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="library-view-grid"', HTML)
         self.assertIn("localStorage.setItem('meFinderLibraryView', libraryStore.viewMode)", HTML)
         self.assertIn('library-view-grid', HTML)
-        self.assertIn('class="library-card library-entry', HTML)
+        self.assertIn("'library-card' : 'library-row') + ' library-entry'", HTML)
 
     def test_calibration_lives_inside_library_drawer_not_a_page(self) -> None:
         self.assertNotIn('id="page-calibration"', HTML)

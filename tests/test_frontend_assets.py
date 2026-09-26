@@ -73,10 +73,11 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 0
         )
         inner_html_baseline = {
-            "20-search.js": 11, "25-toast.js": 0, "30-library.js": 10,
-            "40-bibliography.js": 5, "50-calibration.js": 9,
-            "60-settings.js": 0, "62-zotero.js": 1, "70-vision.js": 10,
-            "71-vision-providers.js": 11, "80-import.js": 5,
+            "20-search.js": 0, "25-toast.js": 0, "30-library.js": 0,
+            "40-bibliography.js": 0, "50-calibration.js": 0,
+            "60-settings.js": 0, "62-zotero.js": 0, "64-settings-model.js": 0, "70-vision.js": 0,
+            "71-vision-providers.js": 0, "72-vision-stats.js": 0,
+            "79-import-batch.js": 0, "80-import.js": 0,
         }
         for relative in _split_js_assets():
             name = Path(relative).name
@@ -116,21 +117,21 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
 
     def test_library_entries_use_delegated_click(self):
         library = _read("static/js/30-library.js")
-        self.assertEqual(library.count('data-action="openLibraryEntry"'), 2)
+        self.assertIn("entry.dataset.action = 'openLibraryEntry'", library)
         self.assertNotIn('onclick="handleLibraryEntryClick(', library)
         self.assertNotIn('global.handleLibraryEntryClick =', library)
 
     def test_library_nested_controls_use_delegated_click(self):
         library = _read("static/js/30-library.js")
-        self.assertIn('data-action="toggleLibraryEntrySelection"', library)
-        self.assertIn('data-action="openLibraryWork"', library)
+        self.assertIn("check.dataset.action = 'toggleLibraryEntrySelection'", library)
+        self.assertIn("link.dataset.action = 'openLibraryWork'", library)
         self.assertNotIn('onclick="event.stopPropagation();', library)
         self.assertNotIn('global.toggleLibraryDeleteSelection =', library)
 
     def test_library_facets_use_delegated_click(self):
         library = _read("static/js/30-library.js")
-        self.assertIn('data-action="setLibraryFacet"', library)
-        self.assertIn('data-action="removeLibraryFacet"', library)
+        self.assertIn("button.dataset.action = 'setLibraryFacet'", library)
+        self.assertIn("chip.dataset.action = 'removeLibraryFacet'", library)
         self.assertNotIn('onclick="setLibFacet(', library)
         self.assertNotIn('onclick="removeLibFacet(', library)
         self.assertNotIn('global.setLibFacet =', library)
@@ -140,8 +141,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         pure = _read("static/js/06-pure.js")
         self.assertNotRegex(pure, r"\bon(?:click|change|input)\s*=")
         self.assertIn("button.dataset.action = 'selectThemeChoice'", _read("static/js/60-settings.js"))
-        self.assertIn('data-action-input="updateSegmentGutter"', pure)
-        self.assertIn('data-action-change="handleScanCheckChange"', pure)
+        self.assertIn("range.dataset.actionInput = 'updateSegmentGutter'", _read("static/js/50-calibration.js"))
+        self.assertIn("checkbox.dataset.actionChange = 'handleScanCheckChange'", _read("static/js/80-import.js"))
         owners = {
             "selectThemeChoice": "60-settings.js",
             "setSegmentReadingDirection": "50-calibration.js",
@@ -160,8 +161,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_search_markup_has_no_inline_events(self):
         search = _read("static/js/20-search.js")
         self.assertNotRegex(search, r"\bon(?:click|change|input)\s*=")
-        self.assertIn('data-action="selectSearchGroup"', search)
-        self.assertIn('data-action="openSearchSource"', search)
+        self.assertIn("searchScopeOption(group.title, count + ' 个版本', selected, 'selectSearchGroup'", search)
+        self.assertIn("detailAction('打开原文', 'openSearchSource'", search)
 
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
@@ -429,11 +430,18 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/30-library.js": 13,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
+            "static/js/36-works-range.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
             "static/js/40-bibliography.js": 10,
+            "static/js/60-settings.js": 26,
+            "static/js/61-settings-data.js": 3,
+            "static/js/63-settings-update.js": 5,
+            "static/js/64-settings-model.js": 7,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 23,
             "static/js/71-vision-providers.js": 10,
+            "static/js/72-vision-stats.js": 4,
+            "static/js/79-import-batch.js": 6,
             "static/js/80-import.js": 13,
             # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
             # 命名空间 MEFinder 本身），不新增直接全局命令。
@@ -645,9 +653,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     # 0.5.7 C5：toast 与设置页改用 DOM 构造。
     BASELINE_SHA256 = (
-        "efc1a9d42003a37df9de300afcb1f13be8ae2d1e0ba17b64910dd24463a6c662"
+        "3e458fad6f687159c6aff5507154748ce47425dfeb41c92751d16f718aa7afc2"
     )
-    BASELINE_BYTES = 1298692
+    BASELINE_BYTES = 1313370
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

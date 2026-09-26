@@ -1,6 +1,50 @@
 /* IIFE 包裹：书目状态与实现保持私有，仅导出动态事件入口和命名模块 API。
    node 白盒测试走 module.exports；IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 40-bibliography.js
+  function bibNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+
+  function bibSvg(paths, className) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    if (className) svg.setAttribute('class', className);
+    [['viewBox','0 0 20 20'], ['fill','none'], ['stroke','currentColor'], ['stroke-width','1.8'],
+      ['stroke-linecap','round'], ['stroke-linejoin','round'], ['aria-hidden','true']].forEach(function(pair) {
+      svg.setAttribute(pair[0], pair[1]);
+    });
+    paths.forEach(function(d) {
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  function bibAction(label, name, sourceId, primary, small) {
+    var button = bibNode('button', 'action-btn' + (small ? ' sm' : '') + (primary ? ' primary' : ''), label);
+    button.type = 'button';
+    button.dataset.action = name;
+    button.dataset.sourceId = sourceId;
+    return button;
+  }
+
+  function bibMissingBadge(meta) {
+    var text = bibliographicMissingText(meta);
+    if (!text) return null;
+    var badge = bibNode('span', 'bibliographic-missing');
+    badge.title = 'ISBN、ISSN 与 DOI 不计入引文必需字段';
+    var icon = bibSvg(['M12 7.5v5.5', 'M12 16.5h.01']);
+    icon.setAttribute('viewBox', '0 0 24 24');
+    var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx','12'); circle.setAttribute('cy','12'); circle.setAttribute('r','9');
+    icon.insertBefore(circle, icon.firstChild);
+    badge.appendChild(icon);
+    badge.appendChild(bibNode('span', null, text));
+    return badge;
+  }
   // bibliographicFieldLabels / bibliographicDocType / bibliographicEditorDocType /
   // bibliographicMissingFields 已抽到 06-pure.js（纯逻辑，可单测）。
 
@@ -33,26 +77,46 @@
   // 编辑态语言选择：复用 app 自定义下拉（.app-select），主题化、箭头内嵌，
   // 用 fixed 定位菜单（openVersionSelect）避免被抽屉滚动容器裁切；
   // 首项「自动识别」＝清除人工覆盖，并把自动判定的语言标出来。隐藏 input 承载取值。
-  function bibLanguageFieldHTML(src, full) {
+  function bibLanguageFieldNode(src, full) {
     var manual = String((src && src.language_code_manual) || '');
     var autoLabel = bibLanguageLabel(src && src.language_code_auto) || '未识别语言';
     var autoOptLabel = '自动识别（' + autoLabel + '）';
-    var currentLabel = manual ? bibLanguageLabel(manual) : autoOptLabel;
-    var chevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
-    function opt(code, label, selected) {
-      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" role="option"'
-        + ' data-action="pickBibLanguage" data-code="' + esc(code) + '" data-label="' + esc(label) + '">' + esc(label) + '</button>';
-    }
-    var options = opt('', autoOptLabel, !manual)
-      + BIB_LANGUAGE_OPTIONS.map(function(o){ return opt(o[0], o[1], o[0] === manual); }).join('');
-    return '<div class="bibliographic-field' + (full ? ' full' : '') + '" data-metadata-field="language">'
-      + '<label for="bib-language-trigger">语言</label>'
-      + '<input type="hidden" id="bib-language" value="' + esc(manual) + '">'
-      + '<div class="app-select bib-language-select" id="bib-language-select">'
-      + '<button class="app-select-trigger" id="bib-language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="openBibLanguageSelect" data-select-id="bib-language-select">'
-      + '<span class="app-select-value" id="bib-language-value">' + esc(currentLabel) + '</span>' + chevron + '</button>'
-      + '<div class="app-select-menu bib-language-menu" role="listbox">' + options + '</div>'
-      + '</div></div>';
+    var field = bibNode('div', 'bibliographic-field' + (full ? ' full' : ''));
+    field.dataset.metadataField = 'language';
+    var label = bibNode('label', null, '语言');
+    label.htmlFor = 'bib-language-trigger';
+    field.appendChild(label);
+    var hidden = document.createElement('input');
+    hidden.type = 'hidden'; hidden.id = 'bib-language'; hidden.value = manual;
+    field.appendChild(hidden);
+    var select = bibNode('div', 'app-select bib-language-select');
+    select.id = 'bib-language-select';
+    var trigger = bibNode('button', 'app-select-trigger');
+    trigger.id = 'bib-language-trigger'; trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.dataset.action = 'openBibLanguageSelect';
+    trigger.dataset.selectId = select.id;
+    var value = bibNode('span', 'app-select-value', manual ? bibLanguageLabel(manual) : autoOptLabel);
+    value.id = 'bib-language-value';
+    trigger.appendChild(value);
+    trigger.appendChild(bibSvg(['m6 8 4 4 4-4']));
+    select.appendChild(trigger);
+    var menu = bibNode('div', 'app-select-menu bib-language-menu');
+    menu.setAttribute('role', 'listbox');
+    [['', autoOptLabel]].concat(BIB_LANGUAGE_OPTIONS).forEach(function(option) {
+      var code = option[0], text = option[1];
+      var button = bibNode('button', 'app-select-option' + (code === manual ? ' is-selected' : ''), text);
+      button.type = 'button';
+      button.setAttribute('role', 'option');
+      button.dataset.action = 'pickBibLanguage';
+      button.dataset.code = code;
+      button.dataset.label = text;
+      menu.appendChild(button);
+    });
+    select.appendChild(menu);
+    field.appendChild(select);
+    return field;
   }
 
   // 选语言：写隐藏 input（供 collectBibliographicForm 读取）+ 更新触发器文案与选中态。
@@ -73,186 +137,242 @@
     return out;
   }
 
-  function bibliographicEditorHTML(src) {
+  function bibliographicEditorNode(src) {
     var meta = sourceBibliographicMetadata(src);
     var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
     var editorDocType = bibliographicEditorDocType(docType);
-    var missing = bibliographicMissingFields(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}));
-    function field(id, metadataField, label, value, full) {
-      var isMissing = missing.indexOf(metadataField) >= 0;
-      return '<div class="bibliographic-field' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '" data-metadata-field="' + esc(metadataField) + '"><label for="bib-' + id + '">' + label + (isMissing ? ' · 缺少' : '') + '</label><input id="bib-' + id + '" value="' + esc(value || '') + '"></div>';
-    }
-    function typeButton(value, label) {
-      return '<button class="seg-btn' + (editorDocType === value ? ' active' : '') + '" type="button" data-doctype="' + value + '" data-action="setBibliographicType" data-source-id="' + esc(src.source_file_id) + '">' + label + '</button>';
-    }
-    var fieldsHTML;
-    if (docType === 'thesis') {
-      fieldsHTML = field('author','author','作者',meta.author,false)
-        + field('title','title','篇名',meta.title,true)
-        + field('publisher','publisher','学校',meta.publisher,false)
-        + field('publish-year','publish_year','年份',meta.publish_year,false)
-        + bibLanguageFieldHTML(src, true);
-    } else if (docType === 'journal_article') {
-      fieldsHTML = field('title','title','标题（篇名）',meta.title,true)
-        + field('author','author','作者',meta.author,false)
-        + field('journal-name','journal_name','出版刊物',meta.journal_name,false)
-        + field('volume','volume','卷次',meta.volume,false)
-        + field('issue','issue','期号',meta.issue,false)
-        + field('publish-year','publish_year','时间（年份）',meta.publish_year,false)
-        + field('page-range','page_range','页码（起止页）',meta.page_range,false)
-        + field('doi','doi','DOI',meta.doi,false)
-        + field('issn','issn','ISSN',meta.issn,false)
-        + bibLanguageFieldHTML(src, true);
-    } else {
-      // 书名整宽（与查看态一致），令 ISBN 与「语言」自然落成同一行的左右半边。
-      fieldsHTML = field('author','author','作者',meta.author,false) + field('country','country','国别',meta.country,false)
-        + field('title','title','书名',meta.title,true) + field('translator','translator','译者',meta.translator,false)
-        + field('publish-place','publish_place','出版地',meta.publish_place,false)
-        + field('publisher','publisher','出版社',meta.publisher,false) + field('publish-year','publish_year','出版年份',meta.publish_year,false)
-        + field('isbn','isbn','ISBN',meta.isbn,false)
-        + bibLanguageFieldHTML(src, false);
-    }
-    var sid = esc(src.source_file_id);
+    var missingMeta = Object.assign({}, meta, {document_type: docType,
+      metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null});
+    var missing = bibliographicMissingFields(missingMeta);
+    var sid = src.source_file_id;
     var isJournal = docType === 'journal_article';
     var isBook = docType === 'book' || docType === 'translated_book';
-    // 「自动识别 / 重新识别」读 PDF 页面，仅 PDF 适用；EPUB 已从 OPF 填好，走「查图书信息」+ 手动。
     var canDetect = src.source_type === 'pdf';
-    // 一条紧凑工具条：主操作收敛成一个 split 按钮（点主体走当前生效源，▼ 换源），
-    // 「自动识别」独立次按钮，识别依据/重新识别等低频动作收进 ⋯ 菜单。
-    // 主按钮默认按文献语言智能选源（中文→知网、外文→Crossref/图书目录）；
-    // 手动选过某个源后主按钮临时改写成该源名，任务导向且路径透明。
-    var toolbarHTML;
-    if (isJournal) {
-      var lookupSource = bibLookupSource[src.source_file_id] || 'auto';
-      var chevronSvg = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-      // 主操作用 split（点主体走当前生效源、▾ 换源）；「自动识别」独立次按钮；
-      // 「重新识别」（覆盖人工）只在有人工数据可覆盖时平铺出来，与图书工具条一致，
-      // 不再为单个低频项塞一个 ⋯ 菜单。
-      toolbarHTML = '<div class="bib-toolbar">'
-        + '<span class="bib-menu-wrap">'
-        + '<span class="bib-split">'
-        + '<button class="action-btn primary bib-main" id="bib-primary-btn" type="button" data-action="bibRunLookup" data-source-id="' + sid + '">' + esc(bibPrimaryLabel(lookupSource)) + '</button>'
-        + '<button class="action-btn primary bib-caret" type="button" aria-label="选择补全方式" aria-haspopup="true" data-action="bibToggleMenu" data-menu-id="bib-source-menu">' + chevronSvg + '</button>'
-        + '</span>'
-        + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(src.source_file_id, lookupSource) + '</span>'
-        + '</span>'
-        + (canDetect ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="false">自动识别</button>' : '')
-        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="true">重新识别</button>' : '')
-        + '</div>';
-    } else {
-      // 图书 / 学位论文：维持原有平铺工具条，不改交互。
-      toolbarHTML = '<div class="bib-toolbar">'
-        + (isBook ? '<button class="action-btn primary" type="button" data-action="lookupGoogleBooks" data-source-id="' + sid + '">查图书信息</button>' : '')
-        + (canDetect ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="false">自动识别</button>' : '')
-        + (canDetect && meta.metadata_source === 'manual' ? '<button class="action-btn" type="button" data-action="detectBibliographicMetadata" data-source-id="' + sid + '" data-overwrite="true">重新识别</button>' : '')
-        + '</div>';
+    var editor = bibNode('div');
+    editor.id = 'bibliographic-editor';
+    editor.appendChild(bibNode('div', 'drawer-section-title', '书目信息'));
+    var types = bibNode('div', 'segmented-control bibliographic-type-control');
+    types.id = 'bib-doctype-control';
+    types.setAttribute('role', 'group');
+    types.setAttribute('aria-label', '文献类型');
+    [['book','著作'], ['journal_article','期刊论文'], ['thesis','学位论文']].forEach(function(type) {
+      var button = bibNode('button', 'seg-btn' + (editorDocType === type[0] ? ' active' : ''), type[1]);
+      button.type = 'button';
+      button.dataset.doctype = type[0];
+      button.dataset.action = 'setBibliographicType';
+      button.dataset.sourceId = sid;
+      types.appendChild(button);
+    });
+    editor.appendChild(types);
+    var badge = bibMissingBadge(missingMeta);
+    if (badge) editor.appendChild(badge);
+    var grid = bibNode('div', 'bibliographic-grid');
+    function field(id, key, label, full) {
+      var isMissing = missing.indexOf(key) >= 0;
+      var node = bibNode('div', 'bibliographic-field' + (full ? ' full' : '') + (isMissing ? ' is-missing' : ''));
+      node.dataset.metadataField = key;
+      var labelNode = bibNode('label', null, label + (isMissing ? ' · 缺少' : ''));
+      labelNode.htmlFor = 'bib-' + id;
+      node.appendChild(labelNode);
+      var input = document.createElement('input');
+      input.id = 'bib-' + id;
+      input.value = String(meta[key] || '');
+      node.appendChild(input);
+      grid.appendChild(node);
     }
-    var lookupResultsHTML = isJournal
-      ? '<div id="cnki-lookup-status" class="cnki-citation-result" role="status" aria-live="polite"></div>'
-        + '<div id="cnki-candidate-list" class="cnki-candidate-list">' + cnkiCandidateListHTML(src.source_file_id) + '</div>'
-        + '<div id="crossref-lookup-status" class="cnki-citation-result" role="status" aria-live="polite"></div>'
-        + '<div id="crossref-candidate-list" class="cnki-candidate-list">' + crossrefCandidateListHTML(src.source_file_id) + '</div>'
-      : (isBook
-        ? '<div id="book-lookup-status" class="cnki-citation-result" role="status" aria-live="polite"></div>'
-          + '<div id="book-candidate-list" class="cnki-candidate-list">' + bookCandidateListHTML(src.source_file_id) + '</div>'
-        : '');
-    var citationPanelHTML = isJournal
-      ? '<div id="bib-citation-panel" class="bib-citation-panel" hidden>'
-        + '<textarea id="bib-cnki-citation" maxlength="8000" rows="3" placeholder="粘贴知网 GB/T 7714 引文，如：作者.篇名[J].刊名,2020,49(04):15-27." data-action-paste="parseCnkiCitationTextAfterPaste"></textarea>'
-        + '<div class="cnki-citation-actions"><button class="action-btn" type="button" data-action="parseCnkiCitationText">从引用文字补全</button><span id="bib-cnki-citation-result" class="cnki-citation-result" role="status" aria-live="polite"></span></div>'
-        + '</div>'
-      : '';
-    return '<div id="bibliographic-editor">'
-      + '<div class="drawer-section-title">书目信息</div>'
-      + '<div class="segmented-control bibliographic-type-control" id="bib-doctype-control" role="group" aria-label="文献类型">'
-      + typeButton('book','著作') + typeButton('journal_article','期刊论文') + typeButton('thesis','学位论文')
-      + '</div>'
-      + bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
-      + '<div class="bibliographic-grid">'
-      + fieldsHTML + '</div>'
-      + toolbarHTML
-      + lookupResultsHTML
-      + citationPanelHTML
-      + '<div class="bib-footer"><span class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</span>'
-      + '<span class="bib-footer-actions"><button class="action-btn" type="button" data-action="exitBibEdit" data-source-id="' + sid + '">取消</button>'
-      + '<button class="action-btn primary" data-action="saveBibliographicMetadata" data-source-id="' + sid + '">保存书目信息</button></span></div>'
-      + '</div>';
+    var fields = docType === 'thesis'
+      ? [['author','author','作者',false], ['title','title','篇名',true], ['publisher','publisher','学校',false], ['publish-year','publish_year','年份',false]]
+      : isJournal
+        ? [['title','title','标题（篇名）',true], ['author','author','作者',false], ['journal-name','journal_name','出版刊物',false],
+          ['volume','volume','卷次',false], ['issue','issue','期号',false], ['publish-year','publish_year','时间（年份）',false],
+          ['page-range','page_range','页码（起止页）',false], ['doi','doi','DOI',false], ['issn','issn','ISSN',false]]
+        : [['author','author','作者',false], ['country','country','国别',false], ['title','title','书名',true],
+          ['translator','translator','译者',false], ['publish-place','publish_place','出版地',false],
+          ['publisher','publisher','出版社',false], ['publish-year','publish_year','出版年份',false], ['isbn','isbn','ISBN',false]];
+    fields.forEach(function(spec) { field(spec[0], spec[1], spec[2], spec[3]); });
+    grid.appendChild(bibLanguageFieldNode(src, docType === 'thesis' || isJournal));
+    editor.appendChild(grid);
+    var toolbar = bibNode('div', 'bib-toolbar');
+    if (isJournal) {
+      var lookupSource = bibLookupSource[sid] || 'auto';
+      var wrap = bibNode('span', 'bib-menu-wrap');
+      var split = bibNode('span', 'bib-split');
+      var primary = bibAction(bibPrimaryLabel(lookupSource), 'bibRunLookup', sid, true);
+      primary.classList.add('bib-main'); primary.id = 'bib-primary-btn';
+      split.appendChild(primary);
+      var caret = bibNode('button', 'action-btn primary bib-caret');
+      caret.type = 'button';
+      caret.setAttribute('aria-label', '选择补全方式');
+      caret.setAttribute('aria-haspopup', 'true');
+      caret.dataset.action = 'bibToggleMenu';
+      caret.dataset.menuId = 'bib-source-menu';
+      var arrow = bibSvg(['M6 9l6 6 6-6']);
+      arrow.setAttribute('viewBox', '0 0 24 24'); arrow.setAttribute('width','14'); arrow.setAttribute('height','14');
+      arrow.setAttribute('stroke-width','2');
+      caret.appendChild(arrow);
+      split.appendChild(caret);
+      wrap.appendChild(split);
+      var sourceMenu = bibNode('span', 'bib-menu');
+      sourceMenu.id = 'bib-source-menu';
+      sourceMenu.setAttribute('role', 'menu');
+      sourceMenu.appendChild(bibSourceMenuNode(sid, lookupSource));
+      wrap.appendChild(sourceMenu);
+      toolbar.appendChild(wrap);
+    } else if (isBook) toolbar.appendChild(bibAction('查图书信息', 'lookupGoogleBooks', sid, true));
+    if (canDetect) {
+      var detect = bibAction('自动识别', 'detectBibliographicMetadata', sid);
+      detect.dataset.overwrite = 'false';
+      toolbar.appendChild(detect);
+      if (meta.metadata_source === 'manual') {
+        var redetect = bibAction('重新识别', 'detectBibliographicMetadata', sid);
+        redetect.dataset.overwrite = 'true';
+        toolbar.appendChild(redetect);
+      }
+    }
+    editor.appendChild(toolbar);
+    function lookupArea(prefix, config) {
+      var status = bibNode('div', 'cnki-citation-result');
+      status.id = prefix + '-lookup-status';
+      status.setAttribute('role','status'); status.setAttribute('aria-live','polite');
+      editor.appendChild(status);
+      var list = bibNode('div', 'cnki-candidate-list');
+      list.id = prefix + '-candidate-list';
+      list.appendChild(candidateListNode(config, sid));
+      editor.appendChild(list);
+    }
+    if (isJournal) {
+      lookupArea('cnki', CNKI_CARD_CONFIG);
+      lookupArea('crossref', CROSSREF_CARD_CONFIG);
+    } else if (isBook) lookupArea('book', BOOK_CARD_CONFIG);
+    if (isJournal) {
+      var citation = bibNode('div', 'bib-citation-panel');
+      citation.id = 'bib-citation-panel'; citation.hidden = true;
+      var textarea = document.createElement('textarea');
+      textarea.id = 'bib-cnki-citation'; textarea.maxLength = 8000; textarea.rows = 3;
+      textarea.placeholder = '粘贴知网 GB/T 7714 引文，如：作者.篇名[J].刊名,2020,49(04):15-27.';
+      textarea.dataset.actionPaste = 'parseCnkiCitationTextAfterPaste';
+      citation.appendChild(textarea);
+      var citationActions = bibNode('div', 'cnki-citation-actions');
+      var parse = bibNode('button', 'action-btn', '从引用文字补全');
+      parse.type = 'button'; parse.dataset.action = 'parseCnkiCitationText';
+      citationActions.appendChild(parse);
+      var result = bibNode('span', 'cnki-citation-result');
+      result.id = 'bib-cnki-citation-result'; result.setAttribute('role','status'); result.setAttribute('aria-live','polite');
+      citationActions.appendChild(result);
+      citation.appendChild(citationActions);
+      editor.appendChild(citation);
+    }
+    var footer = bibNode('div', 'bib-footer');
+    footer.appendChild(bibNode('span', 'bibliographic-meta', '状态：' + metadataStatusLabel(meta.metadata_status) + ' · 来源：' + metadataSourceLabel(meta.metadata_source)));
+    var footerActions = bibNode('span', 'bib-footer-actions');
+    footerActions.appendChild(bibAction('取消', 'exitBibEdit', sid));
+    footerActions.appendChild(bibAction('保存书目信息', 'saveBibliographicMetadata', sid, true));
+    footer.appendChild(footerActions);
+    editor.appendChild(footer);
+    return editor;
   }
 
   // 查看态：书目字段渲染成 label:value 只读行，缺失字段显示「—」并标黄。
   // 直接点任意字段即进入编辑态并聚焦该字段（无需额外「编辑」按钮）；头部只留
   // 按类型的主补全动作。与编辑态共用宿主 #bib-host，就地整块替换。
-  function bibliographicReadHTML(src) {
+  function bibliographicReadNode(src) {
     var meta = sourceBibliographicMetadata(src);
     var docType = bibEditorTypeOverride[src.source_file_id] || bibliographicDocType(meta);
-    var missing = bibliographicMissingFields(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}));
-    var sid = esc(src.source_file_id);
-    var warnSvg = '<svg class="bib-read-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/></svg>';
+    var missingMeta = Object.assign({}, meta, {document_type: docType,
+      metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null});
+    var missing = bibliographicMissingFields(missingMeta);
+    var sid = src.source_file_id;
+    var langLabel = bibLanguageLabel(src.language_code) || '未识别语言';
+    var read = bibNode('div', 'bib-read');
+    var head = bibNode('div', 'bib-section-head');
+    head.appendChild(bibNode('span', 'drawer-section-title', '书目信息'));
+    var tools = bibNode('span', 'bib-section-tools');
+    var confirmed = isBibliographicTypeConfirmed(meta);
+    tools.appendChild(bibReadPrimaryButtonNode(confirmed ? docType : 'thesis', sid));
+    head.appendChild(tools);
+    read.appendChild(head);
+    if (!confirmed) read.appendChild(bibNode('div', 'bib-unconfirmed',
+      '尚未识别文献类型，点「自动识别」或任意字段手动选择类型并填写'));
+    if (confirmed) { var badge = bibMissingBadge(missingMeta); if (badge) read.appendChild(badge); }
+    var grid = bibNode('div', 'bib-read-grid');
     function row(label, fieldKey, value, full) {
       var isMissing = missing.indexOf(fieldKey) >= 0;
-      var text = String(value == null ? '' : value).trim();
-      var focusId = fieldKey.replace(/_/g, '-');  // 输入框 id 用连字符
-      return '<div class="bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : '') + '"'
-        + ' role="button" tabindex="0" title="点击编辑" data-action="enterBibEdit" data-source-id="' + sid + '" data-focus-field="' + focusId + '">'
-        + '<span class="bib-read-label">' + label + '</span>'
-        + '<span class="bib-read-value">' + (text ? esc(text) : '—') + (isMissing ? ' ' + warnSvg : '') + '</span></div>';
+      var node = bibNode('div', 'bib-read-row' + (full ? ' full' : '') + (isMissing ? ' is-missing' : ''));
+      node.setAttribute('role', 'button'); node.tabIndex = 0; node.title = '点击编辑';
+      node.dataset.action = 'enterBibEdit'; node.dataset.sourceId = sid;
+      node.dataset.focusField = fieldKey.replace(/_/g, '-');
+      node.appendChild(bibNode('span', 'bib-read-label', label));
+      var valueNode = bibNode('span', 'bib-read-value', String(value == null ? '' : value).trim() || '—');
+      if (isMissing) {
+        valueNode.appendChild(document.createTextNode(' '));
+        var warning = bibSvg(['M12 3 2.8 20h18.4L12 3Z', 'M12 9v5', 'M12 17.5h.01'], 'bib-read-warn');
+        warning.setAttribute('viewBox', '0 0 24 24'); warning.setAttribute('stroke-width', '1.9');
+        valueNode.appendChild(warning);
+      }
+      node.appendChild(valueNode);
+      grid.appendChild(node);
     }
-    var langLabel = bibLanguageLabel(src.language_code) || '未识别语言';
-    var rows;
-    if (docType === 'thesis') {
-      rows = row('作者','author',meta.author) + row('篇名','title',meta.title,true)
-        + row('学校','publisher',meta.publisher) + row('年份','publish_year',meta.publish_year)
-        + row('语言','language',langLabel,true);
-    } else if (docType === 'journal_article') {
-      rows = row('篇名','title',meta.title,true) + row('作者','author',meta.author)
-        + row('出版刊物','journal_name',meta.journal_name) + row('卷次','volume',meta.volume)
-        + row('期号','issue',meta.issue) + row('年份','publish_year',meta.publish_year)
-        + row('页码','page_range',meta.page_range) + row('DOI','doi',meta.doi) + row('ISSN','issn',meta.issn)
-        + row('语言','language',langLabel,true);
-    } else {
-      // ISBN 与「语言」各占半边同一行（书名整宽保证成对）。
-      rows = row('作者','author',meta.author) + row('国别','country',meta.country)
-        + row('书名','title',meta.title,true) + row('译者','translator',meta.translator)
-        + row('出版地','publish_place',meta.publish_place) + row('出版社','publisher',meta.publisher)
-        + row('出版年份','publish_year',meta.publish_year)
-        + row('ISBN','isbn',meta.isbn) + row('语言','language',langLabel);
-    }
-    // 类型未确认（从未识别过）：不伪装成「著作」红标缺字段，改用一句提示引导，
-    // 主按钮固定为「自动识别」；已确认才显示缺失徽标并按类型给主补全按钮（L-05）。
-    var confirmed = isBibliographicTypeConfirmed(meta);
-    var primaryBtn = confirmed ? bibReadPrimaryButton(docType, src.source_file_id)
-      : '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="detect">自动识别</button>';
-    var missingBadge = confirmed
-      ? bibliographicMissingBadge(Object.assign({}, meta, {document_type: docType, metadata_missing_fields: docType === bibliographicDocType(meta) ? meta.metadata_missing_fields : null}))
-      : '';
-    var unconfirmedHint = confirmed ? ''
-      : '<div class="bib-unconfirmed">尚未识别文献类型，点「自动识别」或任意字段手动选择类型并填写</div>';
-    return '<div class="bib-read">'
-      + '<div class="bib-section-head"><span class="drawer-section-title">书目信息</span>'
-      + '<span class="bib-section-tools">' + primaryBtn + '</span></div>'
-      + unconfirmedHint
-      + missingBadge
-      + '<div class="bib-read-grid">' + rows + '</div>'
-      + '<div class="bibliographic-meta">状态：' + esc(metadataStatusLabel(meta.metadata_status)) + ' · 来源：' + esc(metadataSourceLabel(meta.metadata_source)) + '</div>'
-      + '</div>';
+    var fields = docType === 'thesis'
+      ? [['作者','author',meta.author], ['篇名','title',meta.title,true], ['学校','publisher',meta.publisher],
+        ['年份','publish_year',meta.publish_year], ['语言','language',langLabel,true]]
+      : docType === 'journal_article'
+        ? [['篇名','title',meta.title,true], ['作者','author',meta.author], ['出版刊物','journal_name',meta.journal_name],
+          ['卷次','volume',meta.volume], ['期号','issue',meta.issue], ['年份','publish_year',meta.publish_year],
+          ['页码','page_range',meta.page_range], ['DOI','doi',meta.doi], ['ISSN','issn',meta.issn], ['语言','language',langLabel,true]]
+        : [['作者','author',meta.author], ['国别','country',meta.country], ['书名','title',meta.title,true],
+          ['译者','translator',meta.translator], ['出版地','publish_place',meta.publish_place],
+          ['出版社','publisher',meta.publisher], ['出版年份','publish_year',meta.publish_year],
+          ['ISBN','isbn',meta.isbn], ['语言','language',langLabel]];
+    fields.forEach(function(spec) { row(spec[0], spec[1], spec[2], spec[3]); });
+    read.appendChild(grid);
+    read.appendChild(bibNode('div', 'bibliographic-meta', '状态：' + metadataStatusLabel(meta.metadata_status)
+      + ' · 来源：' + metadataSourceLabel(meta.metadata_source)));
+    return read;
   }
 
   // 查看态头部的主补全按钮：期刊→补全期刊信息，图书→查图书信息，学位→自动识别。
   // 点它先进编辑态再执行（补全/识别本就是编辑动作，回填目标是编辑态的输入框）。
-  function bibReadPrimaryButton(docType, sourceId) {
-    var sid = esc(sourceId);
-    if (docType === 'journal_article')
-      return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="lookup">补全期刊信息</button>';
-    if (docType === 'book' || docType === 'translated_book')
-      return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="books">查图书信息</button>';
-    return '<button class="action-btn sm primary" type="button" data-action="bibEditAndRun" data-source-id="' + sid + '" data-run-mode="detect">自动识别</button>';
+  function bibReadPrimaryButtonNode(docType, sourceId) {
+    var mode = docType === 'journal_article' ? 'lookup'
+      : docType === 'book' || docType === 'translated_book' ? 'books' : 'detect';
+    var button = bibAction(mode === 'lookup' ? '补全期刊信息' : mode === 'books' ? '查图书信息' : '自动识别',
+      'bibEditAndRun', sourceId, true, true);
+    button.dataset.runMode = mode;
+    return button;
+  }
+
+  function bibSourceMenuNode(sourceId, active) {
+    var fragment = document.createDocumentFragment();
+    function item(source, label, note) {
+      var button = bibNode('button', 'bib-menu-item' + (active === source ? ' active' : ''), label);
+      button.type = 'button'; button.setAttribute('role', 'menuitem');
+      button.dataset.action = 'bibSetSource';
+      button.dataset.sourceId = sourceId;
+      button.dataset.source = source;
+      if (note) button.appendChild(bibNode('span', 'bib-menu-note', note));
+      fragment.appendChild(button);
+    }
+    item('auto', '智能补全', '推荐');
+    item('cnki', '知网补全', '中文');
+    item('crossref', 'Crossref 补全', '外文');
+    fragment.appendChild(bibNode('div', 'bib-menu-sep'));
+    [['paste','粘贴引文'], ['opencnki','打开知网检索']].forEach(function(action) {
+      var button = bibNode('button', 'bib-menu-item', action[1]);
+      button.type = 'button'; button.setAttribute('role','menuitem');
+      button.dataset.action = 'bibMenuAction';
+      button.dataset.menuAction = action[0];
+      button.dataset.sourceId = sourceId;
+      fragment.appendChild(button);
+    });
+    return fragment;
   }
 
   // 书目区渲染分发：查看态 / 编辑态，共用稳定宿主 #bib-host。
-  function renderBibliographicSection(src) {
-    return '<div id="bib-host">'
-      + (bibEditMode[src.source_file_id] ? bibliographicEditorHTML(src) : bibliographicReadHTML(src))
-      + '</div>';
+  function renderBibliographicSectionNode(src) {
+    var host = bibNode('div');
+    host.id = 'bib-host';
+    host.appendChild(bibEditMode[src.source_file_id] ? bibliographicEditorNode(src) : bibliographicReadNode(src));
+    return host;
   }
 
   function enterBibEdit(sourceId, focusFieldId) {
@@ -260,7 +380,7 @@
     var host = document.getElementById('bib-host');
     if (!src || !host) return;
     bibEditMode[sourceId] = true;
-    host.innerHTML = bibliographicEditorHTML(src);
+    host.replaceChildren(bibliographicEditorNode(src));
     // 点某字段进来的聚焦该字段；否则聚焦第一个。
     var target = (focusFieldId && host.querySelector('#bib-' + focusFieldId)) || host.querySelector('.bibliographic-field input');
     if (target) target.focus();
@@ -276,7 +396,7 @@
     delete bibliographicPendingEvidence[sourceId];
     if (!src || !host) return;
     bibFieldCache[sourceId] = bibFieldCacheFromMeta(sourceBibliographicMetadata(src));
-    host.innerHTML = bibliographicReadHTML(src);
+    host.replaceChildren(bibliographicReadNode(src));
   }
 
   // 查看态点主补全/识别：先进编辑态（渲染出输入框），再运行对应动作。
@@ -326,7 +446,7 @@
     var btn = document.getElementById('bib-primary-btn');
     if (btn) btn.textContent = bibPrimaryLabel(source);
     var menu = document.getElementById('bib-source-menu');
-    if (menu) menu.innerHTML = bibSourceMenuHTML(sid, source);
+    if (menu) menu.replaceChildren(...bibSourceMenuNode(sid, source).childNodes);
     bibDispatchSource(sid, bibEffectiveSource(sid));
   }
 
@@ -373,9 +493,7 @@
     var src = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
     var editor = document.getElementById('bibliographic-editor');
     if (!src || !editor) return;
-    var template = document.createElement('template');
-    template.innerHTML = bibliographicEditorHTML(src).trim();
-    editor.replaceWith(template.content.firstElementChild);
+    editor.replaceWith(bibliographicEditorNode(src));
     // 切换字段集时保留已填写的公共字段。
     Object.keys(current).forEach(function(key) {
       if (key === 'document_type' || !current[key]) return;
@@ -487,21 +605,51 @@
 
   // bibliographicValuesEquivalent 已抽到 06-pure.js（纯逻辑，可单测）。
 
-  function cnkiCandidateListHTML(sourceId) {
-    var state = cnkiLookupState[sourceId] || {};
-    var candidates = Array.isArray(state.candidates) ? state.candidates : [];
-    if (!candidates.length) return '';
-    return candidates.map(function(candidate, index) {
-      return candidateCardHTML(sourceId, candidate, index, CNKI_CARD_CONFIG);
-    }).join('');
+  function candidateListNode(config, sourceId) {
+    var state = config === CNKI_CARD_CONFIG ? cnkiLookupState
+      : config === BOOK_CARD_CONFIG ? bookLookupState : crossrefLookupState;
+    var candidates = ((state[sourceId] || {}).candidates) || [];
+    var fragment = document.createDocumentFragment();
+    candidates.forEach(function(candidate, index) {
+      var meta = candidate.metadata || {};
+      var match = candidate.match || {};
+      var levelLabel = match.level === 'high' ? '高匹配' : match.level === 'medium' ? '需核对' : '低匹配';
+      var detail = [meta.author, meta[config.detailMidField], candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
+      var card = bibNode('div', 'cnki-candidate ' + (match.level || 'low'));
+      var main = bibNode('div', 'cnki-candidate-main');
+      main.appendChild(bibNode('div', 'cnki-candidate-title', meta.title || config.titleFallback));
+      var detailNode = bibNode('div', 'cnki-candidate-detail', detail || config.detailFallback);
+      if (config.detailExtra && meta[config.detailExtra.field]) {
+        detailNode.appendChild(document.createTextNode(' · ' + config.detailExtra.label + ' ' + meta[config.detailExtra.field]));
+      }
+      main.appendChild(detailNode);
+      var matchNode = bibNode('div', 'cnki-candidate-match');
+      matchNode.appendChild(bibNode('span', null, levelLabel + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '')));
+      if ((match.reasons || []).length) matchNode.appendChild(bibNode('span', null, match.reasons.join('、')));
+      if ((match.conflicts || []).length) matchNode.appendChild(bibNode('span', 'has-warning', '冲突：' + match.conflicts.join('、')));
+      main.appendChild(matchNode);
+      card.appendChild(main);
+      var actions = bibNode('div', 'cnki-candidate-actions');
+      config.actions.forEach(function(action) {
+        var button = bibNode('button', 'action-btn' + (action.primary ? ' primary' : ''), action.label);
+        button.type = 'button'; button.dataset.action = action.handler;
+        button.dataset.sourceId = sourceId; button.dataset.index = String(index);
+        actions.appendChild(button);
+      });
+      card.appendChild(actions);
+      fragment.appendChild(card);
+    });
+    return fragment;
   }
+
+  function cnkiCandidateListNode(sourceId) { return candidateListNode(CNKI_CARD_CONFIG, sourceId); }
 
   // 三套联网补全共用的通用渲染 / 状态函数（原 render*/set*LookupStatus 六个函数已合并）。
   // 差异只有宿主元素 id 与对应的候选列表函数，全部收进下面三个 *_LOOKUP 配置对象；
   // 每个函数只操作 config 指定的宿主，期刊场景下 CNKI 与 Crossref 两组宿主互不影响。
   function renderCandidates(config, sourceId) {
     var host = document.getElementById(config.listElId);
-    if (host) host.innerHTML = config.listHTML(sourceId);
+    if (host) host.replaceChildren(config.listNode(sourceId));
   }
 
   function setLookupStatus(config, message, warning) {
@@ -511,10 +659,10 @@
     status.classList.toggle('has-warning', !!warning);
   }
 
-  // listHTML 引用的三个候选列表函数为函数声明，已提升，const 初始化时可用。
+  // 三个候选列表构造函数由配置引用，函数声明已提升。
   const CNKI_LOOKUP = {
     stateMap: cnkiLookupState, endpoint: '/api/bibliographic-metadata/lookup-cnki',
-    listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listHTML: cnkiCandidateListHTML,
+    listElId: 'cnki-candidate-list', statusElId: 'cnki-lookup-status', listNode: cnkiCandidateListNode,
     loadingMessage: '正在查询知网…', defaultError: '知网查询失败',
     buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, journal_name: form.journal_name, doi: form.doi, issn: form.issn}; },
     validate: function (metadata) { return (!metadata.title && !metadata.doi) ? '请先填写篇名或 DOI' : null; },
@@ -533,7 +681,7 @@
   };
   const BOOK_LOOKUP = {
     stateMap: bookLookupState, endpoint: '/api/bibliographic-metadata/lookup-google-books',
-    listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listHTML: bookCandidateListHTML,
+    listElId: 'book-candidate-list', statusElId: 'book-lookup-status', listNode: bookCandidateListNode,
     loadingMessage: '正在查询图书目录…', defaultError: '图书查询失败',
     buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, isbn: form.isbn}; },
     validate: function (metadata) { return (!metadata.isbn && !metadata.title) ? '请先填写 ISBN 或书名' : null; },
@@ -549,7 +697,7 @@
   };
   const CROSSREF_LOOKUP = {
     stateMap: crossrefLookupState, endpoint: '/api/bibliographic-metadata/lookup-crossref',
-    listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listHTML: crossrefCandidateListHTML,
+    listElId: 'crossref-candidate-list', statusElId: 'crossref-lookup-status', listNode: crossrefCandidateListNode,
     loadingMessage: '正在查询 Crossref…', defaultError: 'Crossref 查询失败',
     buildRequest: function (form) { return {title: form.title, author: form.author, publish_year: form.publish_year, doi: form.doi}; },
     validate: function (metadata) { return (!metadata.doi && !metadata.title) ? '请先填写 DOI 或篇名' : null; },
@@ -623,13 +771,7 @@
     isbn:{id:'isbn',label:'ISBN'}
   };
 
-  function bookCandidateListHTML(sourceId) {
-    var candidates = ((bookLookupState[sourceId] || {}).candidates) || [];
-    if (!candidates.length) return '';
-    return candidates.map(function(candidate, index) {
-      return candidateCardHTML(sourceId, candidate, index, BOOK_CARD_CONFIG);
-    }).join('');
-  }
+  function bookCandidateListNode(sourceId) { return candidateListNode(BOOK_CARD_CONFIG, sourceId); }
 
   async function lookupGoogleBooks(sourceId) {
     return runLookup(BOOK_LOOKUP, sourceId);
@@ -649,13 +791,7 @@
   /* ═══ Crossref 外文期刊论文补全 ═══
    * DOI 直连最准，无 DOI 用篇名+作者搜；干净 JSON，一次返回完整题录。
    * 期刊字段与知网一致，复用 applyBibliographicLookupMetadata 只补空字段。 */
-  function crossrefCandidateListHTML(sourceId) {
-    var candidates = ((crossrefLookupState[sourceId] || {}).candidates) || [];
-    if (!candidates.length) return '';
-    return candidates.map(function(candidate, index) {
-      return candidateCardHTML(sourceId, candidate, index, CROSSREF_CARD_CONFIG);
-    }).join('');
-  }
+  function crossrefCandidateListNode(sourceId) { return candidateListNode(CROSSREF_CARD_CONFIG, sourceId); }
 
   async function lookupCrossref(sourceId) {
     return runLookup(CROSSREF_LOOKUP, sourceId);
@@ -999,7 +1135,7 @@
     cacheFields: function (sourceId, metadata) {
       bibFieldCache[sourceId] = bibFieldCacheFromMeta(metadata);
     },
-    renderSection: renderBibliographicSection,
+    renderSectionNode: renderBibliographicSectionNode,
     markDirty: function () { bibEditorDirty = true; },
     guardLeaveDetail: guardLeaveDetail,
     closeDrawer: closeLibDrawer,

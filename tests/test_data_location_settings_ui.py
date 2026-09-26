@@ -54,7 +54,7 @@ const reply = (body, ok=true) => finish({ok, status: ok ? 200 : 400, json: async
   assert.equal(node('data-location-status').textContent, '重启后生效');
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
-        source = Path(__file__).resolve().parents[1] / 'src/me_finder/static/js/60-settings.js'
+        source = Path(__file__).resolve().parents[1] / 'src/me_finder/static/js/61-settings-data.js'
         result = subprocess.run([shutil.which('node'), '-e', script, str(source)],
                                 capture_output=True, text=True, encoding='utf-8', timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

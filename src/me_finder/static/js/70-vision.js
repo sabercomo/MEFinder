@@ -3,6 +3,12 @@
    IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 70-vision.js
   /* ═══ MinerU API settings ═══ */
+  function visionNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
   function localOCREngineFields(providerId) {
     var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
     return {
@@ -660,8 +666,8 @@
     if (!list) return;
     var count = document.getElementById('mineru-account-count');
     if (count) count.textContent = parserStore.mineruAccounts.length.toLocaleString() + ' 个账号';
-    if (!parserStore.mineruAccounts.length) { list.innerHTML = ''; return; }
-    list.innerHTML = parserStore.mineruAccounts.map(function(item) {
+    list.replaceChildren();
+    parserStore.mineruAccounts.forEach(function(item) {
       var healthy = item.health_status === 'healthy' || !item.health_status;
       var probe = parserStore.mineruProbeResults[item.account_id];
       var state = !item.configured ? '缺少 Token'
@@ -672,25 +678,43 @@
         : '尚未检测';
       var stateClass = probe === 'ok' ? 'ready'
         : (probe === 'failed' || !item.configured || !healthy) ? 'warning' : '';
-      var facts = (item.configured ? '密钥已保存' : '未填写 Token')
-        + ' · <span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span>'
-        + ' · ' + (item.expires_at ? '到期 ' + esc(item.expires_at.replace(/-/g, '/')) : '到期日未设置');
       var aside = item.enabled ? '解析记录可在「解析统计」中查看' : '停用期间不分配新的解析任务';
-      return '<div class="mineru-account-row">'
-        + '<div class="mineru-account-main">'
-        + '<div class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + facts + '</small></div>'
-        + '<label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '">'
-        + '<input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '')
-        + 'data-action-change="toggleMineruAccountEnabled"><span class="ui-switch-track" aria-hidden="true"></span>'
-        + '<span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label>'
-        + '<span class="mineru-account-switch-text">' + (item.enabled ? '开启' : '关闭') + '</span>'
-        + '</div>'
-        + '<div class="mineru-account-actions">'
-        + '<span class="mineru-account-aside">' + aside + '</span>'
-        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" data-action="testMineruConnection">检测连接</button>'
-        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" data-action="selectMineruAccount">编辑</button>'
-        + '</div></div>';
-    }).join('');
+      var row = visionNode('div', 'mineru-account-row');
+      var main = visionNode('div', 'mineru-account-main');
+      var copy = visionNode('div', 'mineru-account-copy');
+      copy.appendChild(visionNode('strong', null, item.display_name));
+      var facts = visionNode('small', null, (item.configured ? '密钥已保存' : '未填写 Token') + ' · ');
+      facts.appendChild(visionNode('span', 'mineru-account-state ' + stateClass, state));
+      facts.appendChild(document.createTextNode(' · ' + (item.expires_at ? '到期 ' + item.expires_at.replace(/-/g, '/') : '到期日未设置')));
+      copy.appendChild(facts);
+      main.appendChild(copy);
+      var switchLabel = visionNode('label', 'ui-switch mineru-row-switch');
+      switchLabel.title = item.enabled ? '停用账号' : '启用账号';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.accountId = item.account_id;
+      input.checked = !!item.enabled;
+      input.dataset.actionChange = 'toggleMineruAccountEnabled';
+      switchLabel.appendChild(input);
+      var track = visionNode('span', 'ui-switch-track');
+      track.setAttribute('aria-hidden', 'true');
+      switchLabel.appendChild(track);
+      switchLabel.appendChild(visionNode('span', 'visually-hidden', (item.enabled ? '停用' : '启用') + ' ' + item.display_name));
+      main.appendChild(switchLabel);
+      main.appendChild(visionNode('span', 'mineru-account-switch-text', item.enabled ? '开启' : '关闭'));
+      row.appendChild(main);
+      var actions = visionNode('div', 'mineru-account-actions');
+      actions.appendChild(visionNode('span', 'mineru-account-aside', aside));
+      [['检测连接', 'testMineruConnection', 'action-btn quiet'], ['编辑', 'selectMineruAccount', 'action-btn']].forEach(function(action) {
+        var button = visionNode('button', action[2], action[0]);
+        button.type = 'button';
+        button.dataset.accountId = item.account_id;
+        button.dataset.action = action[1];
+        actions.appendChild(button);
+      });
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
   }
 
   function startEditMineruService() {
@@ -799,248 +823,6 @@
     if (!error) return;
     error.textContent = message;
     error.hidden = false;
-  }
-
-  function mineruPageRangesLabel(ranges) {
-    if (!Array.isArray(ranges) || !ranges.length) return '—';
-    return ranges.map(function(range) {
-      if (!Array.isArray(range) || range.length < 2) return '';
-      return Number(range[0]).toLocaleString() + '–' + Number(range[1]).toLocaleString();
-    }).filter(Boolean).join('、');
-  }
-
-  function parserDateLabel(value) {
-    if (!value) return '—';
-    var date = new Date(value);
-    if (Number.isNaN(date.getTime())) return esc(String(value));
-    return date.toLocaleDateString('zh-CN', {year:'numeric', month:'2-digit', day:'2-digit'});
-  }
-
-  function renderParserProviderBooks(provider) {
-    var rows = (Array.isArray(provider.books) ? provider.books : []).map(function(book) {
-      var model = book.model ? esc(book.model) : '—';
-      return '<tr><td data-label="文献"><span class="parser-book-title"><strong>' + esc(book.title || book.file_name || '未命名文献') + '</strong><small>' + esc(book.file_name || book.source_file_id || '') + '</small></span></td><td data-label="模型">' + model + '</td><td data-label="完成日期">' + parserDateLabel(book.completed_at) + '</td><td data-label="页数"><b>' + Number(book.parsed_page_count || 0).toLocaleString() + '</b> 页</td></tr>';
-    }).join('');
-    return '<div class="parser-detail-label">解析文献</div><div class="parser-book-table-scroll"><table class="parser-book-table"><thead><tr><th>文献</th><th>模型</th><th>完成日期</th><th>页数</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-  }
-
-  function renderMineruCredentialAttribution(credentials) {
-    if (!Array.isArray(credentials) || !credentials.length) return '<div class="parser-credential-empty">这些 MinerU 文献没有可匹配的本地账号归属记录</div>';
-    return '<div class="parser-detail-label mineru-attribution-label">MinerU 账号归属 <small>本地记录，不是官网用量或计费数据</small></div><div class="parser-credential-list">' + credentials.map(function(item) {
-      var bookRows = (Array.isArray(item.books) ? item.books : []).map(function(book) {
-        return '<div class="parser-credential-book"><span><strong>' + esc(book.source_file_name || book.document_id || '未命名文献') + '</strong><small>原书页 ' + esc(mineruPageRangesLabel(book.page_ranges)) + '</small></span><b>' + Number(book.parsed_page_count || 0).toLocaleString() + ' 页</b></div>';
-      }).join('');
-      return '<details class="parser-credential-account"><summary><span><strong>' + esc(item.display_name || item.account_id) + '</strong><small>' + Number(item.parsed_book_count || 0).toLocaleString() + ' 本文献</small></span><b>' + Number(item.parsed_page_count || 0).toLocaleString() + ' 页</b><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-credential-books">' + bookRows + '</div></details>';
-    }).join('') + '</div>';
-  }
-
-  // 解析服务在构成条上的档位：按数据外流程度排，色跟服务走而不是跟 local/api
-  // 二分走——新增一个本地服务不会把已有颜色重排。未知解析器不占档位，走中性色。
-  var PARSER_CHART_STEPS = {
-    'pymupdf': 1,
-    'simple-pdf-text': 1,
-    'mineru-local': 2,
-    'ndlocr-lite': 3,
-    'ndlkotenocr-lite': 3,
-    'mineru-cloud': 4,
-    'openai-compatible': 5,
-    'qwen-ocr': 5
-  };
-
-  function parserChartStep(provider) {
-    var mapped = PARSER_CHART_STEPS[provider.provider_id];
-    if (mapped) return mapped;
-    if (!provider.provider_id || provider.provider_id === 'unknown-parser') return 6;
-    // 没登记过的解析器按本地/在线落到同类的末档，不新造颜色。
-    return provider.provider_kind === 'local' ? 3 : 5;
-  }
-
-  function parserChartStepClass(provider) {
-    var step = parserChartStep(provider);
-    return step > 5 ? 'step-other' : 'step-' + step;
-  }
-
-  function renderParserStatistics() {
-    var total = parserStore.parserStatistics.total || {};
-    document.getElementById('parser-stat-books').textContent = Number(total.parsed_book_count || 0).toLocaleString();
-    document.getElementById('parser-stat-pages').textContent = Number(total.parsed_page_count || 0).toLocaleString();
-    document.getElementById('parser-stat-providers').textContent = Number(total.provider_count || 0).toLocaleString();
-    var list = document.getElementById('parser-provider-list');
-    var overview = document.getElementById('parser-share-overview');
-    var providers = Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : [];
-    if (!providers.length) {
-      overview.innerHTML = '';
-      list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
-      return;
-    }
-    var totalPages = providers.reduce(function(sum, item) {
-      return sum + Number(item.parsed_page_count || 0);
-    }, 0);
-    // 段序必须等于色阶序，相邻色对才是校验过的那几对；同档位的服务按页数降序。
-    var orderedProviders = providers.slice().sort(function(a, b) {
-      var stepDelta = parserChartStep(a) - parserChartStep(b);
-      if (stepDelta) return stepDelta;
-      return Number(b.parsed_page_count || 0) - Number(a.parsed_page_count || 0);
-    });
-    // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
-    var shareOf = function(provider) {
-      var pageCount = Number(provider.parsed_page_count || 0);
-      var share = totalPages > 0 ? pageCount / totalPages : 0;
-      var percent = totalPages > 0 ? Math.round(share * 100) : null;
-      return {
-        pageCount: pageCount,
-        share: share,
-        label: percent === null ? '—' : (percent === 0 && pageCount > 0 ? '<1%' : percent + '%')
-      };
-    };
-    // 占比是部分-整体关系：顶部一根 100% 构成条 + 图例说明各段，
-    // 行内不再重复画条，避免被误读成加载进度。
-    if (totalPages > 0) {
-      var segments = orderedProviders.map(function(provider) {
-        return '<span class="parser-share-seg ' + parserChartStepClass(provider) + '" style="width:' + (shareOf(provider).share * 100).toFixed(1) + '%"></span>';
-      }).join('');
-      var legendRows = orderedProviders.map(function(provider) {
-        var kind = provider.provider_kind === 'local' ? '本地' : 'API';
-        return '<div><i class="parser-share-dot ' + parserChartStepClass(provider) + '" aria-hidden="true"></i><span class="parser-share-name">' + esc(provider.provider_name || provider.provider_id) + '</span><small>' + kind + '</small><b>' + shareOf(provider).label + '</b><small class="parser-share-pages">' + shareOf(provider).pageCount.toLocaleString() + ' 页</small></div>';
-      }).join('');
-      var breakdownLabel = orderedProviders.map(function(provider) {
-        return (provider.provider_name || provider.provider_id) + '占' + shareOf(provider).label;
-      }).join('，');
-      overview.innerHTML = '<div class="parser-share-stack"><div class="parser-share-bar" role="img" aria-label="按解析服务构成：' + esc(breakdownLabel) + '">' + segments + '</div><div class="parser-share-cap">全库已解析 ' + totalPages.toLocaleString() + ' 页，按解析服务构成</div></div><div class="parser-share-legend">' + legendRows + '</div>';
-    } else {
-      overview.innerHTML = '';
-    }
-    list.innerHTML = orderedProviders.map(function(provider) {
-      var isMineru = provider.provider_id === 'mineru-cloud' || provider.provider_id === 'mineru-local';
-      var isCloudMineru = provider.provider_id === 'mineru-cloud';
-      var kind = provider.provider_kind === 'local' ? '本地' : 'API';
-      var details = renderParserProviderBooks(provider);
-      if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
-      var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
-      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
-    }).join('');
-  }
-
-  async function loadParserStatistics() {
-    var status = document.getElementById('parser-statistics-status');
-    if (status) {
-      status.className = 'settings-status';
-      status.textContent = '刷新中…';
-    }
-    try {
-      var response = await MEFinderApi.fetch('/api/parser-statistics');
-      var data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || '读取失败');
-      parserStore.parserStatistics = data || {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
-      renderParserStatistics();
-      global.MEFinder.visionProviders.render();
-      if (status) {
-        status.className = 'settings-status ready';
-        status.textContent = '已刷新';
-      }
-    } catch (error) {
-      if (status) {
-        status.className = 'settings-status warning';
-        status.textContent = '读取失败';
-      }
-      showToast('读取本地解析统计失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
-    }
-  }
-
-  function loadMineruStatistics() {
-    return loadParserStatistics();
-  }
-
-  function renderLastBackupExport(record) {
-    var node = document.getElementById('backup-last-export');
-    if (!node) return;
-    if (!record || !record.exported_at) {
-      node.textContent = '还没有导出过备份';
-      return;
-    }
-    var when = new Date(Number(record.exported_at) * 1000);
-    var stamp = when.getFullYear() + '-' + String(when.getMonth() + 1).padStart(2, '0')
-      + '-' + String(when.getDate()).padStart(2, '0') + ' '
-      + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
-    var name = record.file_name || record.path || '';
-    node.textContent = '上次导出：' + stamp + (name ? ' · ' + name : '');
-    node.title = record.path || '';
-  }
-
-  async function exportBackup() {
-    var hint = document.getElementById('backup-export-hint');
-    try {
-      var outputDirectory = await chooseDesktopExportDirectory();
-      if (outputDirectory === null) return;
-      if (hint) hint.textContent = '正在导出…';
-      var payload = {};
-      if (outputDirectory) payload.output_dir = outputDirectory;
-      var resp = await MEFinderApi.fetch('/api/backup/export', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
-      if (hint) hint.textContent = '已导出到：' + data.path;
-      renderLastBackupExport({
-        path: data.path,
-        file_name: String(data.path || '').split(/[\\/]/).pop(),
-        exported_at: data.exported_at,
-        size_bytes: data.size_bytes
-      });
-      showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
-    } catch (e) {
-      if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
-      showToast('导出备份失败：' + e.message);
-    }
-  }
-
-  async function importBackup() {
-    var button = document.getElementById('backup-import-choose');
-    if (button && button.disabled) return;
-    if (button) { button.disabled = true; button.textContent = '正在选择…'; }
-    try {
-      var chooseResp = await MEFinderApi.fetch('/api/backup/import/choose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
-      var chosen = await chooseResp.json();
-      if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
-      if (chosen.cancelled) return;
-      if (!await showAppConfirm(
-        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息',
-        {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
-      )) return;
-      if (button) button.textContent = '正在导入…';
-      var resp = await MEFinderApi.fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: chosen.path})});
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
-      showToast('已恢复备份，正在重建索引…');
-      pollBackupRestore(data.job_id);
-    } catch (e) {
-      showToast('导入备份失败：' + e.message);
-    } finally {
-      if (button) { button.disabled = false; button.textContent = '选择备份并恢复'; }
-    }
-  }
-
-  function pollBackupRestore(jobId) {
-    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
-      .then(function(resp) { return resp.json(); })
-      .then(function(data) {
-        if (data.status === 'completed') {
-          showToast(data.message || '备份已恢复');
-          invalidateLibraryCatalog();
-          // 备份恢复整体替换索引库，作品与对齐数据一并失效。
-          if (global.MEFinder && global.MEFinder.works) global.MEFinder.works.invalidate();
-          loadMeta();
-          return;
-        }
-        if (data.status === 'failed' || data.error) {
-          showToast('恢复失败：' + (data.message || data.error || '未知错误'));
-          return;
-        }
-        setTimeout(function() { pollBackupRestore(jobId); }, 2000);
-      })
-      .catch(function() { setTimeout(function() { pollBackupRestore(jobId); }, 4000); });
   }
 
   function toggleMineruSecret(inputId, buttonId) {
@@ -1182,8 +964,6 @@
   async function testMineruConnection(accountId, button) {
     if (!accountId) return;
     var status = document.getElementById('mineru-config-status');
-    // Button may be an icon or a text button — preserve its content.
-    var buttonHTML = button ? button.innerHTML : null;
     if (button) { button.disabled = true; }
     if (status) { status.className = 'settings-status'; status.textContent = '测试连接中…'; }
     try {
@@ -1203,7 +983,7 @@
       renderMineruAccountList();
       showToast('MinerU 连接失败：' + e.message, 'danger');
     } finally {
-      if (button) { button.disabled = false; if (buttonHTML !== null) button.innerHTML = buttonHTML; }
+      if (button) button.disabled = false;
     }
   }
 
@@ -1334,7 +1114,7 @@
       var models = (data.models || []).map(function(m) { return typeof m === 'string' ? m : (m && m.id) || ''; }).filter(Boolean);
       var list = document.getElementById('general-model-model-list');
       if (list) {
-        list.innerHTML = '';
+        list.replaceChildren();
         models.forEach(function(id) { var opt = document.createElement('option'); opt.value = id; list.appendChild(opt); });
       }
       if (hint) { hint.className = 'vision-model-hint'; hint.textContent = models.length ? ('读到 ' + models.length + ' 个模型，点击输入框选择') : '未读到模型，请手动输入型号'; }
@@ -1347,7 +1127,7 @@
 
   var parserRuntimeAPI = {
     // 走命名空间而不是再加全局：70-vision.js 的全局命令面有预算上限。
-    renderLastBackupExport: renderLastBackupExport,
+    renderLastBackupExport: function(record) { global.MEFinder.parserStats.renderLastBackupExport(record); },
     startEditMineruService: startEditMineruService,
     cancelEditMineruService: cancelEditMineruService,
     loadGeneralModelConfig: loadGeneralModelConfig,
@@ -1383,9 +1163,6 @@
   global.startAddMineruAccount = startAddMineruAccount;
   global.deleteMineruAccount = deleteMineruAccount;
   global.closeMineruAccountDialog = closeMineruAccountDialog;
-  global.loadParserStatistics = loadParserStatistics;
-  global.exportBackup = exportBackup;
-  global.importBackup = importBackup;
   global.toggleMineruSecret = toggleMineruSecret;
   global.saveMineruConfig = saveMineruConfig;
   global.saveMineruServiceAddress = saveMineruServiceAddress;
