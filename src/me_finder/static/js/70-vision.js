@@ -681,14 +681,14 @@
         + '<div class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + facts + '</small></div>'
         + '<label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '">'
         + '<input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '')
-        + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span>'
+        + 'data-action-change="toggleMineruAccountEnabled"><span class="ui-switch-track" aria-hidden="true"></span>'
         + '<span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label>'
         + '<span class="mineru-account-switch-text">' + (item.enabled ? '开启' : '关闭') + '</span>'
         + '</div>'
         + '<div class="mineru-account-actions">'
         + '<span class="mineru-account-aside">' + aside + '</span>'
-        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">检测连接</button>'
-        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button>'
+        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" data-action="testMineruConnection">检测连接</button>'
+        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" data-action="selectMineruAccount">编辑</button>'
         + '</div></div>';
     }).join('');
   }
@@ -1357,6 +1357,16 @@
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.parserRuntime = parserRuntimeAPI;
 
+  MEFinderActions.register('toggleMineruAccountEnabled', function(event, target) {
+    toggleMineruAccountEnabled(target);
+  });
+  MEFinderActions.register('testMineruConnection', function(event, target) {
+    testMineruConnection(target.dataset.accountId, target);
+  });
+  MEFinderActions.register('selectMineruAccount', function(event, target) {
+    selectMineruAccount(target.dataset.accountId);
+  });
+
   // 内联处理器仍需浏览器全局可见；模块间调用统一走 MEFinder.parserRuntime。
   global.saveGeneralModel = saveGeneralModel;
   global.testGeneralModel = testGeneralModel;
@@ -1371,8 +1381,6 @@
   global.testMineruLocalConnection = testMineruLocalConnection;
   global.openMineruTokenPage = openMineruTokenPage;
   global.startAddMineruAccount = startAddMineruAccount;
-  global.selectMineruAccount = selectMineruAccount;
-  global.toggleMineruAccountEnabled = toggleMineruAccountEnabled;
   global.deleteMineruAccount = deleteMineruAccount;
   global.closeMineruAccountDialog = closeMineruAccountDialog;
   global.loadParserStatistics = loadParserStatistics;

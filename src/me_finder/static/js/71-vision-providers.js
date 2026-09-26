@@ -404,7 +404,7 @@
     var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
     list.innerHTML = providers.map(function(provider) {
       var selected = provider.id === current;
-      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportRecoveryProvider(event,\'' + esc(provider.id) + '\')">'
+      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" data-action="selectImportRecoveryProvider">'
         + visionAvatarHtml(provider, 'vision-avatar-sm')
         + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
         + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
@@ -488,11 +488,11 @@
     var check = '<svg class="app-select-check" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
     var search = providers.length > 8
       ? '<div class="import-vision-search-wrap"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>'
-        + '<input class="import-vision-search" id="import-vision-provider-filter" type="search" autocomplete="off" aria-label="搜索 API 或模型" placeholder="搜索 API、模型或 endpoint…" value="' + esc(importVisionProviderQuery) + '" oninput="filterImportVisionProviders(this.value)" onkeydown="importVisionSearchKeydown(event)"></div>'
+        + '<input class="import-vision-search" id="import-vision-provider-filter" type="search" autocomplete="off" aria-label="搜索 API 或模型" placeholder="搜索 API、模型或 endpoint…" value="' + esc(importVisionProviderQuery) + '" data-action-input="filterImportVisionProviders" data-action-keydown="importVisionSearchKeydown"></div>'
       : '';
     var options = filtered.map(function(provider) {
       var selected = provider.id === current;
-      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" onclick="selectImportVisionProvider(event,\'' + esc(provider.id) + '\')" onkeydown="importVisionOptionKeydown(event)">'
+      return '<button class="app-select-option import-vision-option' + (selected ? ' is-selected' : '') + '" type="button" role="option" aria-selected="' + selected + '" data-value="' + esc(provider.id) + '" data-action="selectImportVisionProvider" data-action-keydown="importVisionOptionKeydown">'
         + visionAvatarHtml(provider, 'vision-avatar-sm')
         + '<span class="import-vision-opt"><span class="import-vision-opt-name">' + esc(provider.name) + ' · ' + esc(provider.model || '未选择模型') + '</span>'
         + '<span class="import-vision-opt-model">' + esc(visionHostLabel(provider.api_base)) + '</span></span>'
@@ -722,15 +722,15 @@
             + ' · ' + (provider.has_api_key ? '密钥已保存' : '未填写密钥')
             + ' · <span class="vision-provider-state' + badge.cls + '">' + badge.label + '</span></small></div>'
             + '<label class="ui-switch mineru-row-switch" title="' + (provider.enabled ? '停用这个接口' : '启用这个接口') + '">'
-            + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' onchange="quickToggleVisionProvider(\'' + provider.id + '\', this.checked)">'
+            + '<input type="checkbox"' + (provider.enabled ? ' checked' : '') + ' data-action-change="quickToggleVisionProvider" data-provider-id="' + esc(provider.id) + '">'
             + '<span class="ui-switch-track" aria-hidden="true"></span><span class="visually-hidden">'
             + (provider.enabled ? '停用' : '启用') + ' ' + esc(provider.name) + '</span></label>'
             + '<span class="mineru-account-switch-text">' + (provider.enabled ? '开启' : '关闭') + '</span>'
             + '</div>'
             + '<div class="mineru-account-actions">'
             + '<code class="mineru-account-aside">' + esc(provider.api_base) + '</code>'
-            + '<button class="action-btn quiet" type="button" onclick="testVisionProvider(\'' + provider.id + '\')">检测连接</button>'
-            + '<button class="action-btn" type="button" onclick="editVisionProvider(\'' + provider.id + '\')">编辑</button>'
+            + '<button class="action-btn quiet" type="button" data-action="testVisionProvider" data-provider-id="' + esc(provider.id) + '">检测连接</button>'
+            + '<button class="action-btn" type="button" data-action="editVisionProvider" data-provider-id="' + esc(provider.id) + '">编辑</button>'
             + '</div></div>';
         }).join('');
         list.innerHTML = rows;
@@ -1078,22 +1078,39 @@
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.visionProviders = visionProvidersAPI;
 
+  MEFinderActions.registerInline('selectImportRecoveryProvider', function(event, target) {
+    selectImportRecoveryProvider(event, target.dataset.value);
+  });
+  MEFinderActions.registerInline('selectImportVisionProvider', function(event, target) {
+    selectImportVisionProvider(event, target.dataset.value);
+  });
+  MEFinderActions.register('filterImportVisionProviders', function(event, target) {
+    filterImportVisionProviders(target.value);
+  });
+  MEFinderActions.registerInline('importVisionSearchKeydown', function(event) {
+    importVisionSearchKeydown(event);
+  });
+  MEFinderActions.registerInline('importVisionOptionKeydown', function(event) {
+    importVisionOptionKeydown(event);
+  });
+  MEFinderActions.register('quickToggleVisionProvider', function(event, target) {
+    quickToggleVisionProvider(target.dataset.providerId, target.checked);
+  });
+  MEFinderActions.register('testVisionProvider', function(event, target) {
+    testVisionProvider(target.dataset.providerId);
+  });
+  MEFinderActions.register('editVisionProvider', function(event, target) {
+    editVisionProvider(target.dataset.providerId);
+  });
+
   // 模板与动态 HTML 的内联处理器必须保持浏览器全局可见。
   global.toggleVisionBaseList = toggleVisionBaseList;
   global.fetchVisionModels = fetchVisionModels;
-  global.selectImportRecoveryProvider = selectImportRecoveryProvider;
   global.toggleImportRecoveryProvider = toggleImportRecoveryProvider;
   global.toggleImportVisionProvider = toggleImportVisionProvider;
-  global.selectImportVisionProvider = selectImportVisionProvider;
-  global.filterImportVisionProviders = filterImportVisionProviders;
-  global.importVisionSearchKeydown = importVisionSearchKeydown;
-  global.importVisionOptionKeydown = importVisionOptionKeydown;
   global.importVisionTriggerKeydown = importVisionTriggerKeydown;
   global.startAddVisionProvider = startAddVisionProvider;
-  global.quickToggleVisionProvider = quickToggleVisionProvider;
   global.deleteVisionProvider = deleteVisionProvider;
-  global.testVisionProvider = testVisionProvider;
-  global.editVisionProvider = editVisionProvider;
   global.saveVisionProvider = saveVisionProvider;
   global.setVisionAutoFallback = setVisionAutoFallback;
 

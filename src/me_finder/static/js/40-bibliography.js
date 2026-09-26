@@ -158,7 +158,7 @@
         : '');
     var citationPanelHTML = isJournal
       ? '<div id="bib-citation-panel" class="bib-citation-panel" hidden>'
-        + '<textarea id="bib-cnki-citation" maxlength="8000" rows="3" placeholder="粘贴知网 GB/T 7714 引文，如：作者.篇名[J].刊名,2020,49(04):15-27." onpaste="window.setTimeout(parseCnkiCitationText,0)"></textarea>'
+        + '<textarea id="bib-cnki-citation" maxlength="8000" rows="3" placeholder="粘贴知网 GB/T 7714 引文，如：作者.篇名[J].刊名,2020,49(04):15-27." data-action-paste="parseCnkiCitationTextAfterPaste"></textarea>'
         + '<div class="cnki-citation-actions"><button class="action-btn" type="button" data-action="parseCnkiCitationText">从引用文字补全</button><span id="bib-cnki-citation-result" class="cnki-citation-result" role="status" aria-live="polite"></span></div>'
         + '</div>'
       : '';
@@ -1055,9 +1055,11 @@
   MEFinderActions.register('openCnkiCandidate', function(event, button) {
     openCnkiCandidate(button.dataset.sourceId, Number(button.dataset.index));
   });
-  global.parseCnkiCitationText = parseCnkiCitationText;
   MEFinderActions.register('parseCnkiCitationText', function() {
     parseCnkiCitationText();
+  });
+  MEFinderActions.register('parseCnkiCitationTextAfterPaste', function() {
+    window.setTimeout(parseCnkiCitationText, 0);
   });
   MEFinderActions.register('pickBibLanguage', function(event, button) {
     pickBibLanguage(event, button.dataset.code, button.dataset.label, button);

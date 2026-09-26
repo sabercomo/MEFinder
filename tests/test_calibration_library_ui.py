@@ -463,13 +463,13 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 三态空状态：库空 → 去导入；筛选无果 → 清除筛选。
         self.assertIn("libraryStore.sources.length === 0", HTML)
         self.assertIn("文献库还是空的", HTML)
-        self.assertIn('onclick="navigateTo(\\\'import\\\')">去导入文献', HTML)
+        self.assertIn('data-action="navigateToImport">去导入文献', HTML)
         self.assertIn("当前筛选没有匹配文献", HTML)
         self.assertIn("function clearLibraryFilters()", HTML)
         clear_filters = HTML.split("function clearLibraryFilters()", 1)[1].split("}", 1)[0]
         self.assertIn("libraryStore.statusFilter = 'all';", clear_filters)
         self.assertNotIn("groupScopeId", HTML)
-        self.assertIn('onclick="clearLibraryFilters()">清除全部筛选', HTML)
+        self.assertIn('data-action="clearLibraryFilters">清除全部筛选', HTML)
         self.assertNotIn(">未找到匹配文献</div></div>';", HTML)
         # 著作正向计数（不再用减法），未识别只在有未识别文献时单列一档。
         self.assertIn("isBibliographicTypeConfirmed(sourceBibliographicMetadata(s)) && libraryDocType(s) === 'book'", HTML)
@@ -563,7 +563,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         # 已有分段直接展开专家表；否则收起。
         self.assertIn("setCalExpertVisible(calSegments.length > 0);", HTML)
         # 手动调整 / 载入自动结果 / 检测失败都展开专家表。
-        self.assertIn('onclick="scrollToManualMapping()">手动调整</button>', HTML)
+        self.assertIn('data-action="scrollToManualMapping">手动调整</button>', HTML)
         self.assertIn("setCalExpertVisible(true);  // 「手动设置」", HTML)
         self.assertIn("setCalExpertVisible(true);  // 检测失败", HTML)
         self.assertIn("setCalExpertVisible(true);  // 载入自动结果", HTML)

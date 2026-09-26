@@ -336,7 +336,7 @@ const vm = require('node:vm');
 const requests = [];
 const context = {
   module: {exports: {}},
-  MEFinderActions: {register() {}},
+  MEFinderActions: {register() {}, registerInline() {}},
   settingsStore: {},
   fetch: async (url, options) => {
     requests.push({url, payload: JSON.parse(options.body)});

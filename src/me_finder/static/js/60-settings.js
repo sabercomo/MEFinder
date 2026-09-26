@@ -1733,7 +1733,7 @@
       return '<div class="scan-dir-row" title="' + esc(dir) + '">'
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
         + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
-        + '<button class="scan-dir-remove" type="button" aria-label="移除目录" onclick="removeScanDirectory(' + index + ')">移除</button>'
+        + '<button class="scan-dir-remove" type="button" aria-label="移除目录" data-action="removeScanDirectory" data-index="' + index + '">移除</button>'
         + '</div>';
     }).join('');
   }
@@ -1914,6 +1914,9 @@
   MEFinderActions.register('selectThemeChoice', function(event, target) {
     selectThemeChoice(target.dataset.themeChoice);
   });
+  MEFinderActions.register('removeScanDirectory', function(event, target) {
+    removeScanDirectory(Number(target.dataset.index));
+  });
 
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
   global.setAppearanceMode = setAppearanceMode;
@@ -1951,7 +1954,6 @@
   global.setupScanDirectoryControls = setupScanDirectoryControls;
   global.chooseScanDirectory = chooseScanDirectory;
   global.addScanDirectory = addScanDirectory;
-  global.removeScanDirectory = removeScanDirectory;
   global.markSettingsSectionDirty = markSettingsSectionDirty;
   global.persistDisplayPreference = persistDisplayPreference;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

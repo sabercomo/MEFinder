@@ -82,11 +82,11 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             name = Path(relative).name
             self.assertLessEqual(_read(relative).count("innerHTML"),
                                  inner_html_baseline.get(name, 0), name)
-        dynamic_inline_baseline = {"06-pure.js": 0, "20-search.js": 0,
-                                   "30-library.js": 15,
-                                   "40-bibliography.js": 0}
-        for name, ceiling in dynamic_inline_baseline.items():
-            self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
+        inline_attribute = re.compile(
+            r"(?<![.\w])on(?:click|change|input|paste|keydown|submit|cancel|dblclick)\s*="
+        )
+        for relative in _split_js_assets():
+            self.assertNotRegex(_read(relative), inline_attribute, relative)
 
     def test_template_has_no_inline_events(self):
         template = _read("templates/index.html")
@@ -100,6 +100,19 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             _read("static/js/09-template-actions.js"),
         ))
         self.assertEqual(names, registered)
+
+    def test_generated_action_names_are_registered_once(self):
+        sources = [_read(relative) for relative in _split_js_assets()]
+        names = set(re.findall(
+            r'data-action(?:-[a-z]+)?="([A-Za-z][A-Za-z0-9]*)"',
+            "\n".join(sources),
+        ))
+        registered = re.findall(
+            r"MEFinderActions\.register(?:Inline)?\('([A-Za-z][A-Za-z0-9]*)'",
+            "\n".join(sources),
+        )
+        self.assertEqual(names - set(registered), set())
+        self.assertEqual(len(registered), len(set(registered)))
 
     def test_library_entries_use_delegated_click(self):
         library = _read("static/js/30-library.js")
@@ -413,15 +426,15 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
             # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
             # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
-            "static/js/30-library.js": 16,
+            "static/js/30-library.js": 13,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
-            "static/js/40-bibliography.js": 11,
+            "static/js/40-bibliography.js": 10,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
-            "static/js/70-vision.js": 25,
-            "static/js/71-vision-providers.js": 18,
-            "static/js/80-import.js": 19,
+            "static/js/70-vision.js": 23,
+            "static/js/71-vision-providers.js": 10,
+            "static/js/80-import.js": 13,
             # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
             # 命名空间 MEFinder 本身），不新增直接全局命令。
             "static/js/62-zotero.js": 1,
@@ -630,11 +643,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：检索模块的动态事件也已迁入委托。
+    # 0.5.7 C4：模板及动态生成的内联事件全部迁入委托。
     BASELINE_SHA256 = (
-        "76429744a6e4c1a2d3f04dd379b767f196a32a1a139ec98c05956ae289c043aa"
+        "2800dc582c885bb9625cdd04614189c82160d04226e2619e19facd3d3687f4a6"
     )
-    BASELINE_BYTES = 1292828
+    BASELINE_BYTES = 1297187
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -567,8 +567,8 @@
     if (sources.length === 0) {
       // 三态空状态：库为空 → 引导导入；有数据但筛选无果 → 清除筛选（L-13）。
       listEl.innerHTML = libraryStore.sources.length === 0
-        ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF、DOCX 或 EPUB 后即可检索、核对页码与上下文</div><button class="action-btn primary" style="margin-top:14px" onclick="navigateTo(\'import\')">去导入文献</button></div>'
-        : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" onclick="clearLibraryFilters()">清除全部筛选</button></div>';
+        ? '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">文献库还是空的</div><div class="empty-state-hint">导入 PDF、DOCX 或 EPUB 后即可检索、核对页码与上下文</div><button class="action-btn primary" style="margin-top:14px" data-action="navigateToImport">去导入文献</button></div>'
+        : '<div class="empty-state" style="min-height:220px"><div class="empty-state-text">当前筛选没有匹配文献</div><div class="empty-state-hint">换个筛选条件，或清除全部筛选</div><button class="action-btn" style="margin-top:14px" data-action="clearLibraryFilters">清除全部筛选</button></div>';
       updateLibraryDeleteControls();
       return;
     }
@@ -686,7 +686,7 @@
     var nextId = idx < list.length - 1 ? list[idx + 1].source_file_id : '';
     function btn(id, label, arrow) {
       return '<button class="drawer-nav-btn" type="button" aria-label="' + label + '"'
-        + (id ? ' onclick="selectLibDoc(\'' + esc(id) + '\')"' : ' disabled') + '>' + arrow + '</button>';
+        + (id ? ' data-action="selectLibDoc" data-source-id="' + esc(id) + '"' : ' disabled') + '>' + arrow + '</button>';
     }
     return '<div class="drawer-nav">' + btn(prevId, '上一条文献', '‹')
       + '<span class="drawer-nav-pos" aria-live="polite">' + (idx + 1) + ' / ' + list.length + '</span>'
@@ -744,7 +744,7 @@
     if (src.last_modified) info += drawerInfoRow('修改日期', src.last_modified.split('T')[0]);
     if (vol && vol.version_info) info += drawerInfoRow('版本', vol.version_info);
     return '<div class="drawer-collapse" id="drawer-file-info">'
-      + '<button class="cal-collapse-head" type="button" aria-expanded="false" onclick="toggleDrawerSection(event,\'drawer-file-info\')">'
+      + '<button class="cal-collapse-head" type="button" aria-expanded="false" data-action="toggleDrawerFileInfo">'
       + '<span class="drawer-section-title">文件信息</span>'
       + '<span class="cal-collapse-summary">' + esc(formatFileSize(src.size_bytes) + (src.source_type === 'pdf' && src.pdf_profile && src.pdf_profile.pdf_page_count ? ' · ' + src.pdf_profile.pdf_page_count + ' 页' : '')) + '</span>'
       + '<svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>'
@@ -767,23 +767,23 @@
     if (isPdf) {
       var ocrLabel = src.parser_type === 'mineru_structured' ? '重新 OCR' : 'MinerU 在线解析';
       var ocrRunning = calTransientStatus[src.source_file_id] === 'mapping';
-      parseItems += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' onclick="bibCloseMenus();submitMineruReparse(\'' + sid + '\')">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
+      parseItems += '<button class="bib-menu-item" type="button" role="menuitem"' + (ocrRunning ? ' disabled' : '') + ' data-action="submitDrawerMineruReparse" data-source-id="' + sid + '">' + (ocrRunning ? '正在解析…' : ocrLabel) + '</button>';
       var am = src.pdf_profile && src.pdf_profile.auto_page_mapping;
-      if (am && am.applied_segments && am.applied_segments.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();acceptAutoMapping(\'' + sid + '\')">接受自动映射</button>';
-      if (am && am.exception_pages && am.exception_pages.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();showAutoMappingExceptions(\'' + sid + '\')">检查异常</button>';
+      if (am && am.applied_segments && am.applied_segments.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="acceptDrawerAutoMapping" data-source-id="' + sid + '">接受自动映射</button>';
+      if (am && am.exception_pages && am.exception_pages.length) parseItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="showDrawerAutoMappingExceptions" data-source-id="' + sid + '">检查异常</button>';
     }
 
     // 导出组:统一「导出为」小标题,项内不再重复「导出」前缀。
     var exportItems = '';
     if (isPdf) {
-      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocument(\'' + sid + '\')">MEFinder 文档包</button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="exportLibraryDocument" data-source-id="' + sid + '">MEFinder 文档包</button>';
     }
     if (canExportMarkdown) {
-      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentMarkdown(\'' + sid + '\')">Markdown</button>';
-      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();MEFinder.library.pageExport.open(\'' + sid + '\')">按页 Markdown<span class="bib-menu-note">选页</span></button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="exportLibraryDocumentMarkdown" data-source-id="' + sid + '">Markdown</button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="openMarkdownPageExport" data-source-id="' + sid + '">按页 Markdown<span class="bib-menu-note">选页</span></button>';
     }
     if (isPdf) {
-      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibCloseMenus();exportLibraryDocumentEpub(\'' + sid + '\')">EPUB</button>';
+      exportItems += '<button class="bib-menu-item" type="button" role="menuitem" data-action="exportLibraryDocumentEpub" data-source-id="' + sid + '">EPUB</button>';
     }
 
     if (parseItems) items += '<div class="bib-menu-head">解析</div>' + parseItems;
@@ -792,12 +792,12 @@
       items += '<div class="bib-menu-head">导出为</div>' + exportItems;
     }
     if (parseItems || exportItems) items += '<div class="bib-menu-sep"></div>';
-    items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" onclick="bibCloseMenus();openRemoveDocumentModal(\'' + sid + '\')">从文献库移除</button>';
+    items += '<button class="bib-menu-item bib-menu-item-danger" type="button" role="menuitem" data-action="openRemoveDocumentModal" data-source-id="' + sid + '">从文献库移除</button>';
     return '<div class="drawer-actions">'
-      + (src.source_file_id ? '<button class="action-btn primary" onclick="openSource(\'' + sid + '\', null)">打开原文</button>' : '')
-      + (src.source_file_id ? '<button class="action-btn" type="button" title="在阅读器中阅读结构化正文" onclick="MEFinder.works.readFromLibrary(\'' + sid + '\')">阅读</button>' : '')
+      + (src.source_file_id ? '<button class="action-btn primary" data-action="openLibrarySource" data-source-id="' + sid + '">打开原文</button>' : '')
+      + (src.source_file_id ? '<button class="action-btn" type="button" title="在阅读器中阅读结构化正文" data-action="readLibrarySource" data-source-id="' + sid + '">阅读</button>' : '')
       + '<span class="drawer-actions-spacer"></span>'
-      + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" aria-expanded="false" aria-controls="drawer-more-menu" onclick="bibToggleMenu(event,\'drawer-more-menu\')">' + moreSvg + '</button>'
+      + '<span class="bib-menu-wrap"><button class="action-btn bib-caret-only" type="button" aria-label="更多操作" aria-haspopup="true" aria-expanded="false" aria-controls="drawer-more-menu" data-action="toggleDrawerMoreMenu">' + moreSvg + '</button>'
       + '<span class="bib-menu bib-menu-end drawer-actions-menu" id="drawer-more-menu" role="menu">' + items + '</span></span>'
       + '</div>';
   }
@@ -1175,6 +1175,43 @@
   MEFinderActions.register('applyLibStatusFilter', function(event, target) {
     return applyLibStatusFilter(target.dataset.status);
   });
+  MEFinderActions.register('navigateToImport', function() { navigateTo('import'); });
+  MEFinderActions.register('clearLibraryFilters', function() { clearLibraryFilters(); });
+  MEFinderActions.register('selectLibDoc', function(event, target) { selectLibDoc(target.dataset.sourceId); });
+  MEFinderActions.registerInline('toggleDrawerFileInfo', function(event) { toggleDrawerSection(event, 'drawer-file-info'); });
+  MEFinderActions.register('submitDrawerMineruReparse', function(event, target) {
+    bibCloseMenus(); submitMineruReparse(target.dataset.sourceId);
+  });
+  MEFinderActions.register('acceptDrawerAutoMapping', function(event, target) {
+    bibCloseMenus(); acceptAutoMapping(target.dataset.sourceId);
+  });
+  MEFinderActions.register('showDrawerAutoMappingExceptions', function(event, target) {
+    bibCloseMenus(); showAutoMappingExceptions(target.dataset.sourceId);
+  });
+  MEFinderActions.register('exportLibraryDocument', function(event, target) {
+    bibCloseMenus(); exportLibraryDocument(target.dataset.sourceId);
+  });
+  MEFinderActions.register('exportLibraryDocumentMarkdown', function(event, target) {
+    bibCloseMenus(); exportLibraryDocumentMarkdown(target.dataset.sourceId);
+  });
+  MEFinderActions.register('openMarkdownPageExport', function(event, target) {
+    bibCloseMenus(); openMarkdownPageExport(target.dataset.sourceId);
+  });
+  MEFinderActions.register('exportLibraryDocumentEpub', function(event, target) {
+    bibCloseMenus(); exportLibraryDocumentEpub(target.dataset.sourceId);
+  });
+  MEFinderActions.register('openRemoveDocumentModal', function(event, target) {
+    bibCloseMenus(); openRemoveDocumentModal(target.dataset.sourceId);
+  });
+  MEFinderActions.register('openLibrarySource', function(event, target) {
+    openSource(target.dataset.sourceId, null);
+  });
+  MEFinderActions.register('readLibrarySource', function(event, target) {
+    MEFinder.works.readFromLibrary(target.dataset.sourceId);
+  });
+  MEFinderActions.registerInline('toggleDrawerMoreMenu', function(event) {
+    bibToggleMenu(event, 'drawer-more-menu');
+  });
 
   // 浏览器公共面：动态内联处理器只能通过这些命令入口访问本模块。
   global.openVersionSelect = openVersionSelect;
@@ -1186,9 +1223,6 @@
   global.setLibrarySortOption = setLibrarySortOption;
   global.clearLibrarySelection = clearLibrarySelection;
   global.toggleSelectVisibleLibraryDocuments = toggleSelectVisibleLibraryDocuments;
-  global.exportLibraryDocument = exportLibraryDocument;
-  global.exportLibraryDocumentMarkdown = exportLibraryDocumentMarkdown;
-  global.exportLibraryDocumentEpub = exportLibraryDocumentEpub;
   global.exportSelectedLibraryDocuments = exportSelectedLibraryDocuments;
   global.selectLibDoc = selectLibDoc;
   global.toggleDrawerCalibration = toggleDrawerCalibration;

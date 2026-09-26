@@ -57,7 +57,7 @@
       }
       var mapping = calSelectedDoc.page_mapping || {};
       calSegments = (mapping.segments || []).map(function(s) { return Object.assign({}, s); });
-      document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" onclick="runAutoDetection()">自动检测页码</button><button class="action-btn" onclick="scrollToManualMapping()">手动调整</button><button class="action-btn" onclick="showCalibrationEvidence()">查看识别依据</button>'
+      document.getElementById('cal-detail-actions').innerHTML = '<button class="action-btn primary" id="cal-auto-detect-btn" data-action="runAutoDetection">自动检测页码</button><button class="action-btn" data-action="scrollToManualMapping">手动调整</button><button class="action-btn" data-action="showCalibrationEvidence">查看识别依据</button>'
         + '<span class="detail-pill" style="margin-left:auto">' + (mapping.validated_by ? '已验证' : '未验证') + '</span>';
       editor.style.display = 'block';
       calAutoResult = null;
@@ -131,7 +131,7 @@
     if (!segments.length) {
       html += '<div class="auto-detect-note">未能自动识别可靠页码区间</div>';
       html += '<div class="auto-detect-note">' + autoFailureReasons(result.failure_reasons || []) + '</div>';
-      html += '<div class="auto-detect-actions"><button class="action-btn" onclick="cancelAutoDetection()">关闭</button></div>';
+      html += '<div class="auto-detect-actions"><button class="action-btn" data-action="cancelAutoDetection">关闭</button></div>';
       panel.innerHTML = html;
       setCalExpertVisible(true);  // 检测失败：展开专家表让用户手动设置
       return;
@@ -150,9 +150,9 @@
       + 'PDF 标签 ' + Number((result.evidence_counts || {}).pdf_page_labels || 0) + ' 个；数字书签 ' + Number((result.evidence_counts || {}).numeric_bookmarks || 0)
       + ' 个；MinerU 候选 ' + Number((result.evidence_counts || {}).mineru_candidates || 0) + ' 个；页边候选 ' + Number((result.evidence_counts || {}).native_edge_candidates || 0) + ' 个</div></details>';
     html += '<div class="auto-detect-actions">'
-      + '<button class="action-btn primary" onclick="applyAutoDetection()">' + (result.manual_mapping_present ? '用自动结果替换人工映射' : '应用自动映射') + '</button>'
-      + '<button class="action-btn" onclick="editAutoDetectionResult()">编辑后应用</button>'
-      + '<button class="action-btn" onclick="cancelAutoDetection()">取消</button></div>';
+      + '<button class="action-btn primary" data-action="applyAutoDetection">' + (result.manual_mapping_present ? '用自动结果替换人工映射' : '应用自动映射') + '</button>'
+      + '<button class="action-btn" data-action="editAutoDetectionResult">编辑后应用</button>'
+      + '<button class="action-btn" data-action="cancelAutoDetection">取消</button></div>';
     panel.innerHTML = html;
   }
 
@@ -291,13 +291,13 @@
       var layout = seg.layout_mode === 'spread' ? 'spread' : 'single';
       var label = seg.label || seg.evidence || '';
       return '<tr>'
-        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_start != null ? seg.pdf_page_start + 1 : '') + '" onchange="updateCalSeg(' + i + ',\'pdf_page_start\',this.value)"></td>'
-        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_end != null ? seg.pdf_page_end + 1 : '') + '" onchange="updateCalSeg(' + i + ',\'pdf_page_end\',this.value)"></td>'
-        + '<td><input class="seg-input narrow" type="text" value="' + esc(String(citStart)) + '" placeholder="留空=不映射" onchange="updateCalSeg(' + i + ',\'citation_page_start\',this.value)"></td>'
+        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_start != null ? seg.pdf_page_start + 1 : '') + '" data-action-change="updateCalSeg" data-index="' + i + '" data-field="pdf_page_start"></td>'
+        + '<td><input class="seg-input narrow" type="number" min="1" value="' + (seg.pdf_page_end != null ? seg.pdf_page_end + 1 : '') + '" data-action-change="updateCalSeg" data-index="' + i + '" data-field="pdf_page_end"></td>'
+        + '<td><input class="seg-input narrow" type="text" value="' + esc(String(citStart)) + '" placeholder="留空=不映射" data-action-change="updateCalSeg" data-index="' + i + '" data-field="citation_page_start"></td>'
         + '<td>' + segmentLayoutControl(layout, i) + '</td>'
         + '<td>' + segmentNumberStyleControl(style, i) + '</td>'
-        + '<td><input class="seg-input" type="text" value="' + esc(label) + '" placeholder="序言、正文或附录" onchange="updateCalSeg(' + i + ',\'label\',this.value)"></td>'
-        + '<td><button class="seg-remove" onclick="removeCalSegment(' + i + ')" title="删除分段" aria-label="删除分段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></td>'
+        + '<td><input class="seg-input" type="text" value="' + esc(label) + '" placeholder="序言、正文或附录" data-action-change="updateCalSeg" data-index="' + i + '" data-field="label"></td>'
+        + '<td><button class="seg-remove" data-action="removeCalSegment" data-index="' + i + '" title="删除分段" aria-label="删除分段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 13h8l1-13"/><path d="M10 11v5M14 11v5"/></svg></button></td>'
         + '</tr>'
         + segmentSpreadPanelRow(seg, i);
     }).join('');
@@ -670,21 +670,26 @@
   MEFinderActions.register('updateSegmentGutter', function(event, target) {
     updateSegmentGutter(Number(target.dataset.index), target.value);
   });
+  MEFinderActions.register('runAutoDetection', function() { runAutoDetection(); });
+  MEFinderActions.register('scrollToManualMapping', function() { scrollToManualMapping(); });
+  MEFinderActions.register('showCalibrationEvidence', function() { showCalibrationEvidence(); });
+  MEFinderActions.register('cancelAutoDetection', function() { cancelAutoDetection(); });
+  MEFinderActions.register('applyAutoDetection', function() { applyAutoDetection(); });
+  MEFinderActions.register('editAutoDetectionResult', function() { editAutoDetectionResult(); });
+  MEFinderActions.register('updateCalSeg', function(event, target) {
+    updateCalSeg(Number(target.dataset.index), target.dataset.field, target.value);
+  });
+  MEFinderActions.register('removeCalSegment', function(event, target) {
+    removeCalSegment(Number(target.dataset.index));
+  });
 
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与模板动作访问。
   global.calPinyinCollator = calPinyinCollator;
   global.calibrationSortText = calibrationSortText;
   global.loadCalibrationDoc = loadCalibrationDoc;
   global.runAutoDetection = runAutoDetection;
-  global.applyAutoDetection = applyAutoDetection;
-  global.editAutoDetectionResult = editAutoDetectionResult;
-  global.cancelAutoDetection = cancelAutoDetection;
   global.addCalSegment = addCalSegment;
-  global.updateCalSeg = updateCalSeg;
-  global.removeCalSegment = removeCalSegment;
   global.updateCalPreview = updateCalPreview;
-  global.scrollToManualMapping = scrollToManualMapping;
-  global.showCalibrationEvidence = showCalibrationEvidence;
   global.saveCalibration = saveCalibration;
   global.openRemoveDocumentModal = openRemoveDocumentModal;
   global.openRemoveSelectedDocumentsModal = openRemoveSelectedDocumentsModal;

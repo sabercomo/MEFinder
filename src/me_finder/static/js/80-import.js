@@ -330,8 +330,8 @@
         + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
         + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
         + '<div class="cnki-candidate-actions">'
-        + '<button class="action-btn" type="button" onclick="openCnkiBatchRecord(' + i + ')">打开记录</button>'
-        + '<button class="action-btn primary" type="button" onclick="resolveCnkiBatchChoice({action:\'select\',index:' + i + '})">选择这条</button>'
+        + '<button class="action-btn" type="button" data-action="openCnkiBatchRecord" data-index="' + i + '">打开记录</button>'
+        + '<button class="action-btn primary" type="button" data-action="selectCnkiBatchChoice" data-index="' + i + '">选择这条</button>'
         + '</div></div>';
     }).join('');
     backdrop.classList.add('open');
@@ -941,41 +941,41 @@
       var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : q.status === 'paused' ? ' paused' : '';
       var retryHTML = '';
       var localMineruButton = q.status === 'error' && q.canRetryLocalMineru
-        ? '<button class="action-btn" type="button" onclick="retryImportWithLocalMinerU(\'' + q.id + '\')">切换到本地部署</button>'
+        ? '<button class="action-btn" type="button" data-action="retryImportWithLocalMinerU" data-id="' + esc(q.id) + '">切换到本地部署</button>'
         : '';
       if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
-        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
-          + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
+        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" data-action="resumeImport" data-id="'
+          + esc(q.id) + '">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
         if (q.type === 'pdf' && q.route === 'vision' && q.failureStage !== 'index') {
-          retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
-            + q.id + '\')">改用 MinerU（免费）</button>';
+          retryHTML += '<button class="action-btn" type="button" data-action="retryImportWithMinerU" data-id="'
+            + esc(q.id) + '">改用 MinerU（免费）</button>';
         }
         if (q.status === 'error' && retryProvider) {
-          retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
-            + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
+          retryHTML += '<button class="action-btn" type="button" data-action="retryImportWithVision" data-id="'
+            + esc(q.id) + '">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
         }
         retryHTML += localMineruButton;
-        retryHTML += '<button class="action-btn" type="button" onclick="openVisionSettings()">解析设置</button></div>';
+        retryHTML += '<button class="action-btn" type="button" data-action="openVisionSettings">解析设置</button></div>';
       } else if (q.status === 'error' && retryProvider) {
-        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
-          + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
+        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" data-action="retryImportWithVision" data-id="'
+          + esc(q.id) + '">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
           + (q.type === 'pdf' && q.route === 'vision'
-            ? '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
-              + q.id + '\')">改用 MinerU（免费）</button>' : '')
+            ? '<button class="action-btn" type="button" data-action="retryImportWithMinerU" data-id="'
+              + esc(q.id) + '">改用 MinerU（免费）</button>' : '')
           + localMineruButton
-          + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
+          + '<button class="action-btn" type="button" data-action="openVisionSettings">切换设置</button></div>';
       } else if (q.status === 'error'
           && (q.canRetryLocalMineru || q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
         retryHTML = '<div class="import-item-retry">' + localMineruButton
-          + '<button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
+          + '<button class="action-btn" type="button" data-action="openVisionSettings">配置其他解析 API</button></div>';
       }
-      return '<div class="import-item" data-id="' + q.id + '">'
+      return '<div class="import-item" data-id="' + esc(q.id) + '">'
         + '<div class="import-item-header">'
         + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
         + '<span class="import-item-name">' + esc(q.name) + '</span>'
         + importRouteBadge(q)
         + '<span class="import-item-size">' + formatFileSize(q.size) + '</span>'
-        + '<button class="import-item-remove" onclick="removeImport(\'' + q.id + '\')" title="移除">&times;</button>'
+        + '<button class="import-item-remove" data-action="removeImport" data-id="' + esc(q.id) + '" title="移除">&times;</button>'
         + '</div>'
         + '<div class="import-steps">' + stepsHTML + '</div>'
         + '<div class="import-item-status' + statusCls + '">' + esc(q.message) + '</div>'
@@ -1494,12 +1494,33 @@
   MEFinderActions.register('handleScanCheckChange', function(event, target) {
     handleScanCheckChange(target);
   });
+  MEFinderActions.register('openCnkiBatchRecord', function(event, target) {
+    openCnkiBatchRecord(Number(target.dataset.index));
+  });
+  MEFinderActions.register('selectCnkiBatchChoice', function(event, target) {
+    resolveCnkiBatchChoice({action: 'select', index: Number(target.dataset.index)});
+  });
+  MEFinderActions.register('retryImportWithLocalMinerU', function(event, target) {
+    retryImportWithLocalMinerU(target.dataset.id);
+  });
+  MEFinderActions.register('resumeImport', function(event, target) {
+    resumeImport(target.dataset.id);
+  });
+  MEFinderActions.register('retryImportWithMinerU', function(event, target) {
+    retryImportWithMinerU(target.dataset.id);
+  });
+  MEFinderActions.register('retryImportWithVision', function(event, target) {
+    retryImportWithVision(target.dataset.id);
+  });
+  MEFinderActions.register('openVisionSettings', function() { openVisionSettings(); });
+  MEFinderActions.register('removeImport', function(event, target) {
+    removeImport(target.dataset.id);
+  });
 
   // 浏览器公共面：动态内联处理器调用的命令入口。
   global.runBatchMetadataDetection = runBatchMetadataDetection;
   global.runCnkiBatchButton = runCnkiBatchButton;
   global.setOnlineAutoMatchThreshold = setOnlineAutoMatchThreshold;
-  global.openCnkiBatchRecord = openCnkiBatchRecord;
   global.openCnkiBatchCurrentRecord = openCnkiBatchCurrentRecord;
   global.resolveCnkiBatchChoice = resolveCnkiBatchChoice;
   global.cnkiBatchBackdropClick = cnkiBatchBackdropClick;
@@ -1509,9 +1530,4 @@
   global.handleFileSelect = handleFileSelect;
   global.resumeAllImports = resumeAllImports;
   global.cancelAllImports = cancelAllImports;
-  global.removeImport = removeImport;
-  global.resumeImport = resumeImport;
-  global.retryImportWithVision = retryImportWithVision;
-  global.retryImportWithMinerU = retryImportWithMinerU;
-  global.retryImportWithLocalMinerU = retryImportWithLocalMinerU;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

@@ -1485,7 +1485,7 @@ process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
 """
 
 _FRONTEND_STORE_STUB = r"""
-var MEFinderActions = {actions: {}, register: function(name, callback) { this.actions[name] = callback; }};
+var MEFinderActions = {actions: {}, register: function(name, callback) { this.actions[name] = callback; }, registerInline: function(name, callback) { this.register(name, callback); }};
 var searchStore = {documentId:'', groupId:'', sourceFiles:[], libraryCatalog:null};
 var libraryStore = {
   sources:[], volumes:[], volumeBySource:new Map(), works:[], stats:null,

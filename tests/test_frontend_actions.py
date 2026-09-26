@@ -45,7 +45,7 @@ global.MEFinder = {bibliography: {
 }};
 global.MEFinderActions = {actions: {}, register(name, callback) {
   this.actions[name] = callback;
-}};
+}, registerInline(name, callback) { this.register(name, callback); }};
 require(process.argv[1]);
 let stopped = 0;
 const event = {stopImmediatePropagation() { stopped++; }};
@@ -78,7 +78,7 @@ global.MEFinder = {works: {
 }};
 global.MEFinderActions = {actions: {}, register(name, callback) {
   this.actions[name] = callback;
-}};
+}, registerInline(name, callback) { this.register(name, callback); }};
 require(process.argv[1]);
 let stopped = 0;
 const event = {stopImmediatePropagation() { stopped++; }};
@@ -104,7 +104,7 @@ if (JSON.stringify(opened) !== JSON.stringify([id]) || stopped !== 3) {
 global.libraryStore = {suppressSelectionClick: true};
 global.MEFinderActions = {actions: {}, register(name, callback) {
   this.actions[name] = callback;
-}};
+}, registerInline(name, callback) { this.register(name, callback); }};
 require(process.argv[1]);
 let prevented = 0;
 let stopped = 0;
