@@ -36,6 +36,7 @@ else:
 
 class ComputeLifecycleTests(unittest.TestCase):
     def test_runtime_close_waits_for_in_flight_zotero_sync(self):
+        self.addCleanup(embedding_runtime.begin_embedding_run)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             create_fixture(root, documents=2, paragraphs=20, alignment_paragraphs=8)
