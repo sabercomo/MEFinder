@@ -1,0 +1,119 @@
+/* Hallmark · tokens · source: src/me_finder/static/css/00-themes.css (frost-blue)
+ * DESIGN.md §4 locks these values as hex; token names are reused verbatim so the
+ * landing page and the desktop app cannot drift apart. No mid-render colour values
+ * are permitted outside this block. */
+
+:root {
+  /* Paper & surfaces — inherited from the app */
+  --color-paper: #FFFFFF;            /* white page: the app screenshots carry a #F5F8FC chrome, so a tinted page erases their edge */
+  --color-rail: #F1F5FA;           /* --sidebar-bg */
+  --color-surface: #FFFFFF;        /* --surface-primary */
+  --color-surface-2: #F8FAFD;      /* --surface-secondary */
+  --color-surface-hover: #F1F5FA;  /* --surface-hover */
+  --color-surface-selected: #EAF3FF; /* --surface-selected */
+
+  /* Ink */
+  --color-ink: #172033;            /* --text-primary */
+  --color-ink-2: #414D61;          /* --text-secondary */
+  --color-ink-3: #667085;          /* --text-tertiary */
+  --color-ink-quiet: #98A2B3;      /* --text-decorative */
+
+  /* Rules */
+  --color-rule: #EDF1F6;           /* --border-subtle */
+  --color-rule-2: #DDE5EF;         /* --border-default */
+  --color-rule-3: #C8D4E2;         /* --border-strong */
+  --color-rule-control: #828CA0;   /* --border-control */
+  --color-rule-active: #69A5F5;    /* --calibration-card-border */
+
+  /* Accent — used at <5% of any viewport */
+  --color-accent: #0F62E6;         /* --accent-fill */
+  --color-accent-hover: #0B54C9;   /* --accent-hover */
+  --color-accent-soft: #EAF3FF;    /* --accent-soft */
+  --color-accent-ink: #FFFFFF;     /* --accent-contrast */
+  --color-accent-text: #0B5EC7;    /* --accent-text */
+
+  /* The product's own hit marker — this is the brand, not a decoration */
+  --color-hit: #D99000;            /* --highlight */
+  --color-hit-block: #FFF8E6;      /* --match-block-bg */
+  --color-hit-inline: #FFE7A8;     /* --match-inline-bg */
+  --color-hit-rule: #E9B644;       /* --match-inline-border */
+  --color-hit-ink: #30240A;        /* --match-inline-text */
+
+  /* Ink band — the one dark section (limits); derived from --text-primary */
+  --color-band: #172033;
+  --color-band-2: #1E2A40;
+  --color-band-rule: #2E3B55;
+  --color-on-band: #F4F7FB;
+  --color-on-band-2: #B9C4D6;
+  --color-on-band-hit: #F2C35B;
+
+  --shadow-card: 0 2px 8px rgba(23, 32, 51, 0.035);
+  --shadow-frame: 0 1px 2px rgba(23, 32, 51, 0.05), 0 18px 40px -18px rgba(23, 32, 51, 0.22);
+  --shadow-demo: 0 1px 2px rgba(23, 32, 51, 0.04), 0 24px 60px -24px rgba(15, 98, 230, 0.28);
+  --shadow-lift: 0 5px 14px rgba(23, 32, 51, 0.07);
+  --focus-ring: 0 0 0 3px rgba(22, 119, 255, 0.14);
+
+  /* Type — platform system fonts only (DESIGN.md §4). Display and body share one
+   * stack; hierarchy comes from size, weight and space, not from a second face. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI",
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "Cascadia Mono", ui-monospace, SFMono-Regular, Consolas,
+    "Liberation Mono", monospace;
+
+  --text-display: clamp(2.3rem, 1.4rem + 3.4vw, 3.9rem);
+  --text-stage: clamp(1.5rem, 1.1rem + 1.5vw, 2.15rem);
+  --text-2xl: clamp(1.25rem, 1.05rem + 0.8vw, 1.6rem);
+  --text-xl: 1.22rem;
+  --text-lg: 1.06rem;
+  --text-md: 0.975rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.78rem;
+
+  --leading-prose: 1.85;
+  --leading-tight: 1.25;
+
+  /* Spacing — 4pt scale */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2.25rem;
+  --space-xl: 3.5rem;
+  --space-2xl: 5.5rem;
+  --space-3xl: 8rem;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Motion — DESIGN.md §7: short, light, interruptible. No scroll reveals. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-press: 120ms;
+  --dur-toggle: 160ms;
+  --dur-layer: 220ms;
+
+  /* Page geometry — sections self-cap: gutter below --content-max, centred above */
+  --page-gutter: clamp(1.25rem, 5vw, 4.5rem);
+  --content-max: 80rem;
+  --plate-inset: 58rem;
+  --measure: 62ch;
+
+  /* Marquee display — capped by typography.md (≤ 6rem); the 8-char headline line
+   * sets the fluid rate so it never overflows at 320 px. CJK display needs more
+   * air than Latin tight-leading, hence 1.18. No negative tracking: design.md §4
+   * forbids mechanically applying Latin tracking habits to Chinese display type. */
+  --text-marquee: clamp(2rem, 8.6vw, 6rem);
+  --leading-marquee: 1.18;
+  --rule-thick: 2px;
+
+  /* Named z-index scale */
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}

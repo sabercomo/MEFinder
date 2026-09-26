@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文献原句定位器 MEFinder — 找回原句，也核对引文</title>
+<meta name="description" content="文献原句定位器（MEFinder）：本地优先的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。把记得的片段交给它，它在你自己的文献库里找回原句，带你回到上下文和出版方页码。">
+<link rel="icon" href="assets/app_icon_256.png">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="top">
+  <a class="top-mark" href="./"><img src="assets/app_icon_256.png" width="28" height="28" alt="">文献原句定位器<span class="top-ver">MEFinder v<span data-rel="current">0.5.6</span></span></a>
+  <nav class="top-nav" aria-label="页内导航">
+    <a href="#features">功能</a>
+    <a href="#modules">模块</a>
+    <a href="#limits">边界</a>
+  </nav>
+  <a class="btn btn-primary btn-sm top-cta" href="#get">下载</a>
+</header>
+
+<main id="main">
+
+  <section class="hero" id="try" aria-labelledby="hero-h">
+    <div class="hero-copy">
+      <p class="eyebrow">PDF · Word · EPUB 本地文献原句检索</p>
+      <h1 class="hero-h1" id="hero-h">记得那句话，<br><span class="hl">想不起在哪本书</span>。</h1>
+      <p class="band-def">文献原句定位器（MEFinder）是一款本地优先的文献原句检索、页码定位与引文辅助工具。</p>
+      <p class="lede">完整句子、残缺片段、带着错字的记忆都可以交给它。它在你自己的文献库里找回原文，附上上下文和出版方页码，再把出处排成你要的格式。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" id="cta-dl" href="https://github.com/sabercomo/MEFinder/releases/latest">下载 MEFinder</a>
+        <a class="btn btn-quiet btn-lg" href="https://github.com/sabercomo/MEFinder"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.15.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.05-.13-.36-.99.08-2.07 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.08.13 1.94.08 2.07.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>源码</a>
+      </div>
+      <p class="hero-meta">v<span data-rel="released">0.5.5</span>（<span data-rel="date">2026-09-24</span> 发布）· Windows 与 macOS · AGPL-3.0 · <a href="#get">其他平台</a> · <a href="https://github.com/sabercomo/MEFinder/releases">更新日志</a></p>
+    </div>
+
+    <!-- the real thing: a working search over four embedded passages -->
+    <figure class="demo" id="demo">
+      <figcaption class="demo-cap"><span>演示</span><span class="demo-note">本页内置 4 段文字 · 离线运行</span></figcaption>
+      <form class="demo-form" id="demo-form" autocomplete="off">
+        <label class="visually-hidden" for="demo-q">输入引文</label>
+        <input id="demo-q" type="search" placeholder="试试：密涅瓦的猫头鹰" value="密涅瓦的猫头鹰">
+        <button class="btn btn-primary" type="submit">检索</button>
+      </form>
+      <div class="demo-modes" role="group" aria-label="检索模式">
+        <button type="button" class="chip is-on" data-mode="auto">自动</button>
+        <button type="button" class="chip" data-mode="exact">精确</button>
+        <button type="button" class="chip" data-mode="ignore-punct">忽略标点</button>
+        <button type="button" class="chip" data-mode="fuzzy">模糊</button>
+      </div>
+      <div class="demo-out" id="demo-out" aria-live="polite"></div>
+      <p class="demo-foot">书里印的是「密纳发」。换个译名、记错两个字，模糊模式照样把它找回来，并给出引用页码。真实软件检索的是你整个文献库，不是这四段。</p>
+    </figure>
+  </section>
+
+  <!-- ============ 六个功能 ============ -->
+  <section class="features" id="features" aria-labelledby="features-h">
+    <header class="sec-head">
+      <p class="eyebrow">功能</p>
+      <h2 class="sec-h2" id="features-h">从收书到出处，六步都在本机</h2>
+    </header>
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">01</p>
+        <h3>收书</h3>
+        <div class="plate-text">
+          <p>PDF、Word、EPUB 直接进库，文本型文件在本机解析。扫描件、乱码文本层和复杂版面，才由你决定是否交给 MinerU 或其他视觉 API。</p>
+          <p class="note">Zotero 分类可以只读同步过来；换设备时导出 <code>.mefinder.zip</code> 文档包，重新导入即可，不必重跑 OCR。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/10-intake.png" width="2880" height="1800" loading="lazy" alt="文献导入页：PDF 解析方式三选一（自动选择、强制 MinerU、其他视觉 API），下方是拖放文献与文档包的接收区，标出 PDF、DOCX、EPUB 与 MEFinder 文档包四种格式"></div><figcaption>文献导入：解析路线三选一，四种格式走同一个接收区。</figcaption></figure>
+    </article>
+
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">02</p>
+        <h3>文献库</h3>
+        <div class="plate-text">
+          <p>每本文献带上作者、译者、出版社、页数和页码状态。书目待补全、页码待处理单独列在底部，点进去就能处理；同一部作品的不同版本在这里互相关联。</p>
+          <p class="note">可按来源、格式和文献范围筛选，也可把指定页按原书页码或 PDF 物理页码导出成 Markdown。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/20-library.png" width="2880" height="1800" loading="lazy" alt="文献库列表：三本文献带 PDF 与 EPUB 格式徽标、页数与体积，两条 EPUB 记录右侧标出所属作品组，底部是页码待处理与书目待补全入口"></div><figcaption>文献库：格式、页数、体积与所属作品组并列，待处理事项收在底部。</figcaption></figure>
+    </article>
+
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">03</p>
+        <h3>找回原句</h3>
+        <div class="plate-text">
+          <p>五种模式：自动、精确、忽略空格、忽略标点、模糊。残缺的半句话、记混的译名、OCR 留下的错字都能命中，旁边就是它引用的那一页。</p>
+          <p class="note">繁简统一检索默认开启：用简体关键词命中繁体原文，结果与导出保留原文写法。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/30-search.png" width="2880" height="1800" loading="lazy" alt="检索结果：查询密涅瓦的猫头鹰命中四段，选中引用页码为序言第15至16页的一条，右侧上下文面板把书中的密纳发的猫头鹰以琥珀色高亮"></div><figcaption>查询「密涅瓦的猫头鹰」，命中的是印作「密纳发」的那一句，引用页码 序言第15—16页。</figcaption></figure>
+    </article>
+
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">04</p>
+        <h3>结构化阅读</h3>
+        <div class="plate-text">
+          <p>从命中处直接打开结构化文本，读命中段落和相邻内容，也能翻回原始 PDF 页面。目录读取已入库的一、二级标题。</p>
+          <p class="note">可在设置里开启独立阅读窗口，让阅读与对照单独移动、缩放；关闭时仍在主窗口内读。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/40-reader.png" width="2880" height="1800" loading="lazy" alt="结构化阅读视图，正文居中成段，命中句以琥珀色框出，右上角显示引用页码"></div><figcaption>结构化阅读：正文占主要空间，书目与导出收进次级入口。</figcaption></figure>
+    </article>
+
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">05</p>
+        <h3>译本对照</h3>
+        <div class="plate-text">
+          <p>把同一部作品的原文与译本、或不同版本归入作品组，选两版逐段对齐，双栏对照阅读，在版本之间定位对应文字。对齐在本机完成。</p>
+          <p class="note">两栏跟随滚动同步推进，对齐到的段落用琥珀色框出，选中即可复制引文；页码状态按栏各自标注——英文基准有出版方页码，中译本没有，就如实显示「页码尚未解析」。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/50-compare.png" width="2880" height="1800" loading="lazy" alt="对照阅读视图：左栏中文译本、右栏英文原文并列，顶部是版本选择器、跟随滚动开关与复制引文按钮；右栏一段英文被琥珀色框出，表示与左栏对应段落已对齐；左栏标「页码尚未解析」，右栏正文里标出出版方页码「第 3 页」"></div><figcaption>对照阅读：对齐结果落在正文里，页码状态按栏各自说明，不推算。</figcaption></figure>
+    </article>
+
+    <article class="plate">
+      <div class="plate-cap">
+        <p class="plate-num">06</p>
+        <h3>出处与引文</h3>
+        <div class="plate-text">
+          <p>识别并补全书目信息，把出处一次排成中文脚注、GB/T 7714、APA、MLA 或 Chicago。已配对的脚注随正文带出。</p>
+          <p class="note">页码区分 PDF 物理页与书内引用页，自动映射之外还能人工分段校准。</p>
+        </div>
+      </div>
+      <figure class="plate-media"><div class="frame"><img src="assets/60-cite.png" width="2880" height="1800" loading="lazy" alt="引文格式设置页，中文脚注、GB/T 7714 已勾选，Chicago、APA、MLA 未启用"></div><figcaption>引文格式：状态用文字说明，不只靠颜色区分。</figcaption></figure>
+    </article>
+  </section>
+
+  <!-- ============ 模块 · F3 tabular spec sheet ============ -->
+  <section class="modules" id="modules">
+    <p class="eyebrow">模块</p>
+    <h2 class="sec-h2">每一环都可以单独换掉</h2>
+    <p class="sec-p">软件的设置页就是这张表：来源、解析、引用、应用各自成组，用不到的一直留着也不会碍事。下面按环节列出当前实现，以及它的边界。</p>
+    <table class="spec">
+      <caption class="visually-hidden">MEFinder 的模块化环节、当前实现与边界</caption>
+      <thead><tr><th scope="col">环节</th><th scope="col">现在能做什么</th><th scope="col">边界</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">来源</th><td>手动导入 · <code>.mefinder.zip</code> 文档包 · Zotero 7 本机只读接口同步分类</td><td>Zotero 同步本版只支持「我的文库」，群组文库不在范围内</td></tr>
+        <tr><th scope="row">解析</th><td>PDF / Word / EPUB 本机解析 · MinerU API · 其他视觉解析 API · 本机离线 OCR</td><td>本机 OCR 覆盖日文、日文古籍与繁体竖排古籍，不提供现代中文 OCR</td></tr>
+        <tr><th scope="row">检索</th><td>FTS5 trigram 全文 · 自动 / 精确 / 忽略空格 / 忽略标点 / 模糊 · 繁简统一</td><td>模糊模式给的是候选与可信度，不保证唯一正确答案</td></tr>
+        <tr><th scope="row">页码</th><td>PDF 物理页与书内引用页分开 · 自动映射 · 人工分段校准 · EPUB page-list / pagebreak</td><td>没有出版方页码时如实标注「页码尚未解析」，不推算、不补数</td></tr>
+        <tr><th scope="row">对照</th><td>作品组 · 原文与译本逐段自动对齐 · 双栏阅读 · 正文范围人工修正 · 一次全部重跑</td><td>自动对齐只支持 PDF 与 EPUB 文献</td></tr>
+        <tr><th scope="row">引用</th><td>书目识别与补全 · 中文脚注 / GB&#47;T 7714 / APA / MLA / Chicago · 按页导出 Markdown 与 EPUB</td><td>EPUB 页外脚注暂不保证随正文带出</td></tr>
+        <tr><th scope="row">MCP</th><td>13 个工具接入支持 MCP 的 AI 助手：批量核对引文是否逐字命中、比对错引差异、按主题召回段落、读取版权页与题录缺口、辅助修正对齐</td><td>侧车读的是同一个本机库；库被桌面端占用时以桌面端为准</td></tr>
+        <tr><th scope="row">数据</th><td>SQLite schema 版本化迁移 · 嵌入向量携带 <code>model_id</code>，不跨模型混用</td><td>旧版本无法打开升级后的库</td></tr>
+      </tbody>
+    </table>
+    <figure class="shot"><div class="frame"><img src="assets/70-settings.png" width="2880" height="1800" loading="lazy" alt="设置页，左侧目录按译本对齐、来源、解析、引用、应用分组，右侧是 Zotero 连接状态"></div><figcaption>设置页的目录分组，就是上面这张表在界面里的样子。</figcaption></figure>
+  </section>
+
+  <!-- ============ 边界与数据 · 全页唯一的染色断带 ============ -->
+  <section class="limits" id="limits">
+    <p class="eyebrow">边界</p>
+    <h2 class="sec-h2">数据在哪里，以及它不做什么</h2>
+    <p class="sec-p">索引、检索、页码映射、对齐和大部分元数据处理都在你本机完成，文件留在原处，数据库是一个你自己能备份的 SQLite 文件。没有账号，没有云端同步，没有遥测上传你的阅读记录。下面这几条是设计约束，不是待补功能。</p>
+    <ul class="limits-list">
+      <li><b>不猜出处。</b><span>没找到就是没找到，它不会给一个像模像样的答案。</span></li>
+      <li><b>不虚构页码。</b><span>EPUB 只用出版方给的页码表；没有就标「页码尚未解析」——上面的演示里就能看到一条。</span></li>
+      <li><b>不默认联网。</b><span>只有扫描件、乱码文本层或复杂版面 PDF 才由你决定是否交给外部解析服务。</span></li>
+      <li><b>不扩成知识库。</b><span>它的定位是找回原句与核对引文，不做笔记工作台、文献计量或推荐内容。</span></li>
+      <li><b>不动你的 Zotero。</b><span>只读取本机接口，增删与题录以 Zotero 为准。</span></li>
+    </ul>
+  </section>
+
+  <!-- ============ 下载 ============ -->
+  <section class="get" id="get">
+    <p class="eyebrow">下载</p>
+    <h2 class="sec-h2">装到你自己的电脑上</h2>
+    <p class="version-line">Version <b data-rel="released">0.5.5</b> · 发布于 <span data-rel="date">2026-09-24</span> · <a href="https://github.com/sabercomo/MEFinder/releases">更新日志</a><span data-rel-dev-only> · v<span data-rel="dev">0.5.6</span> 迭代中（主题：<span data-rel="devTopic">Zotero 来源同步</span>）</span></p>
+    <div class="get-actions">
+      <a class="btn btn-primary" href="https://github.com/sabercomo/MEFinder/releases/latest">到 GitHub Releases 下载</a>
+      <a class="btn btn-quiet" href="https://github.com/sabercomo/MEFinder/releases">查看历史版本</a>
+    </div>
+    <table class="spec get-table">
+      <caption class="visually-hidden">v<span data-rel="released">0.5.5</span> 可下载文件</caption>
+      <thead><tr><th scope="col">平台</th><th scope="col">文件</th><th scope="col">大小</th><th scope="col">校验</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Windows</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-windows-setup.exe" data-asset="windows-setup.exe">安装包 setup.exe</a></td><td class="num" data-size="windows-setup.exe">74.9 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-windows-setup.exe.sha256.txt" data-asset-sha="windows-setup.exe">SHA-256</a></td></tr>
+        <tr><th scope="row">Windows</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-windows-portable.zip" data-asset="windows-portable.zip">便携包 portable.zip</a></td><td class="num" data-size="windows-portable.zip">89.7 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-windows-portable.zip.sha256.txt" data-asset-sha="windows-portable.zip">SHA-256</a></td></tr>
+        <tr><th scope="row">macOS · Apple 芯片</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-arm64.dmg" data-asset="macos-arm64.dmg">dmg</a> · <a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-arm64.zip" data-asset="macos-arm64.zip">zip</a></td><td class="num" data-size="macos-arm64.dmg">95.6 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/tag/v0.5.5" data-rel-tag>随附 sidecar</a></td></tr>
+        <tr><th scope="row">macOS · Intel</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.dmg" data-asset="macos-x86_64.dmg">dmg</a> · <a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.zip" data-asset="macos-x86_64.zip">zip</a></td><td class="num" data-size="macos-x86_64.dmg">99.0 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/tag/v0.5.5" data-rel-tag>随附 sidecar</a></td></tr>
+      </tbody>
+    </table>
+    <p class="get-also">装好后先看这两处：<a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a> 讲怎么建库和导入；<a href="https://github.com/sabercomo/MEFinder/blob/main/MCP_CLIENT_SETUP.md">MCP 配置</a> 讲怎么让 AI 助手读你的库。</p>
+  </section>
+
+  <section class="origin">
+    <header class="origin-head">
+      <p class="eyebrow">缘起</p>
+      <h2 class="sec-h2">为什么做这个</h2>
+    </header>
+    <div class="origin-body">
+      <p>作者是文科在读硕士。写小论文时，每到定稿前都要把正文里的引文一条条重新核对：原文有没有抄错，出处有没有写对，页码准不准，对上下文的理解有没有偏差。写大论文时文献更多了，于是一遍遍在几个 PDF 之间打开、搜索、翻页、核对。</p>
+      <p>找了一圈没有贴合这种需求的软件，就自己做了一个。这也是第一次完整做完一个软件项目，很多东西边做边学。如果它没找到你确定存在的句子，或者页码、题录处理得不对，欢迎附上具体样例提 Issue。</p>
+      <p class="origin-star"><a class="btn btn-quiet" href="https://github.com/sabercomo/MEFinder/stargazers">觉得有用的话，点个 Star</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="foot-band">
+    <p class="foot-mark">文献原句定位器<span class="foot-tag">MEFinder · 找回原句，也核对引文</span></p>
+    <nav class="foot-links" aria-label="页脚导航">
+      <a href="https://github.com/sabercomo/MEFinder/releases/latest">最新版</a>
+      <a href="https://github.com/sabercomo/MEFinder/releases">历史版本</a>
+      <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/RELEASE_NOTES.md">更新日志</a>
+      <a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a>
+      <a href="https://github.com/sabercomo/MEFinder/blob/main/MCP_CLIENT_SETUP.md">MCP 配置</a>
+      <a href="https://github.com/sabercomo/MEFinder/issues">提交 Issue</a>
+      <a href="https://github.com/sabercomo/MEFinder">GitHub 仓库</a>
+      <a href="https://github.com/sabercomo/MEFinder/blob/main/LICENSE">AGPL-3.0</a>
+      <a href="https://github.com/sabercomo/MEFinder/blob/main/THIRD_PARTY_LICENSES">第三方声明</a>
+    </nav>
+  </div>
+  <p class="colophon">MEFinder <span data-rel-dev-only>v<span data-rel="dev">0.5.6</span>（迭代中）· </span>最新已发布 v<span data-rel="released">0.5.5</span> · <span data-rel="date">2026-09-24</span> · 支持格式 <code>.pdf .docx .epub</code> · 检索模式 5 · 引文格式 5 · MCP 工具 13 · 数据库 schema v8 · 本页界面截图均来自 MEFinder 真实运行画面，演示语料为四段短引文并标注引用页码；未使用统计指标、用户数或推荐内容。</p>
+</footer>
+
+<script src="release.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>
