@@ -388,7 +388,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("async function guardLeaveDetail()", HTML)
         self.assertIn("async function requestCloseLibDrawer()", HTML)
         # 关闭按钮走带确认的入口，程序化 closeLibDrawer 仍可静默关闭。
-        self.assertIn('onclick="requestCloseLibDrawer()"', HTML)
+        self.assertIn('data-action="templateClick049"', HTML)
         # 切到别的文献前拦截；同一文献重选不打扰。
         self.assertIn("var switchingDoc = sourceId !== libraryStore.selectedId;", HTML)
         self.assertIn(
@@ -495,7 +495,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
 
         self.assertIn('id="library-return-banner"', HTML)
         self.assertIn("function returnToSearch()", HTML)
-        self.assertIn('onclick="returnToSearch()"', HTML)
+        self.assertIn('data-action="templateClick048"', HTML)
         # 跳转时点亮横幅；任何 navigateTo 先清掉。
         self.assertIn("if (banner) banner.hidden = false;", HTML)
         self.assertIn("if (returnBanner) returnBanner.hidden = true;", HTML)
@@ -662,7 +662,7 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
     def test_sidebar_can_collapse_to_an_icon_rail_and_persists(self) -> None:
         # Toggle control, handler, and persisted state.
         self.assertIn('class="sidebar-collapse-btn"', HTML)
-        self.assertIn('onclick="toggleSidebar()"', HTML)
+        self.assertIn('data-action="templateClick005"', HTML)
         self.assertIn('function toggleSidebar(force)', HTML)
         self.assertIn("localStorage.setItem('meFinderSidebarCollapsed'", HTML)
         # Early head script applies the class before paint to avoid a flash.

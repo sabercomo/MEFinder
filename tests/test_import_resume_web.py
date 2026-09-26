@@ -187,7 +187,8 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_cancel_all_button_preserves_item_dismiss_and_cancels_serially(self) -> None:
         self.assertIn('id="import-cancel-all-btn"', TEMPLATE_SOURCE)
-        self.assertIn('onclick="cancelAllImports()"', TEMPLATE_SOURCE)
+        self.assertIn('id="import-cancel-all-btn"', TEMPLATE_SOURCE)
+        self.assertIn('data-action="templateClick068"', TEMPLATE_SOURCE)
         self.assertIn(">全部取消</button>", TEMPLATE_SOURCE)
         self.assertIn("function cancelAllImports()", APP_SOURCE)
         self.assertIn("function cancellableImportQueue()", APP_SOURCE)

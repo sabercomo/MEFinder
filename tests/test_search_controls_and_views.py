@@ -89,7 +89,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn('id="library-sort-field-select"', HTML)
         # 排序方向合并成一个可点按钮（升/降切换），不再是独立下拉。
         self.assertIn('id="library-sort-dir"', HTML)
-        self.assertIn('onclick="toggleLibrarySortDirection()"', HTML)
+        self.assertIn('data-action="templateClick039"', HTML)
         self.assertIn("function toggleLibrarySortDirection()", HTML)
         self.assertIn("setLibrarySortOption(event,'field','title')", HTML)
         self.assertIn("setLibrarySortOption(event,'field','source_type')", HTML)
@@ -331,7 +331,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function setPdfParseMode(mode)", HTML)
         self.assertIn("pdf_parse_mode: mode", HTML)
         self.assertIn("settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode)", HTML)
-        self.assertIn('onchange="setPdfParseMode(this.value)"', HTML)
+        self.assertIn('data-action-change="templateChange056"', HTML)
         self.assertIn(
             "['auto','mineru','mineru-local','vision','general-local-model']", HTML
         )
@@ -611,7 +611,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("function showSettingsCategory(sectionId)", HTML)
         self.assertIn('class="vision-fallback-toggle"', HTML)
         self.assertIn('id="vision-fallback-summary"', HTML)
-        self.assertIn('onchange="setVisionAutoFallback(this.checked)"', HTML)
+        self.assertIn('data-action-change="templateChange148"', HTML)
         self.assertIn("function setVisionAutoFallback(enabled)", HTML)
         self.assertNotIn('id="vision-default-provider"', HTML)
         self.assertNotIn('class="vision-default-select-wrap"', HTML)
@@ -669,7 +669,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "showSettingsCategory('backup-settings')",
             HTML,
         )
-        self.assertIn('onclick="exportBackup()"', HTML)
+        self.assertIn('data-action="templateClick169"', HTML)
         self.assertIn('id="backup-import-choose"', HTML)
         self.assertNotIn('id="backup-import-path"', HTML)
         self.assertIn("function exportBackup()", HTML)
@@ -732,7 +732,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         for classes, section_id in sections:
             self.assertIn("settings-section", classes)
             self.assertIn(f'data-target="{section_id}"', settings_html)
-            self.assertIn(f"showSettingsCategory('{section_id}')", settings_html)
+            self.assertRegex(settings_html, rf'data-target="{section_id}" data-action="templateClick\d+"')
 
     def test_batch_metadata_detection_is_wired(self) -> None:
         self.assertIn('id="batch-metadata-btn"', HTML)

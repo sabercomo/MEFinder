@@ -17,16 +17,16 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
   <span class="macos-titlebar-title">文献原句定位器</span>
 </div>
 <div class="windows-titlebar" role="banner" aria-label="窗口标题栏">
-  <div class="windows-titlebar-drag pywebview-drag-region" ondblclick="toggleWindowsMaximize()">
+  <div class="windows-titlebar-drag pywebview-drag-region" data-action-dblclick="templateDblclick001">
     <span class="windows-titlebar-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V9h5"/><circle cx="9" cy="13.5" r="2.4"/><path d="m10.8 15.3 2.1 2.1"/></svg>
     </span>
     <span class="windows-titlebar-title">文献原句定位器</span>
   </div>
   <div class="windows-titlebar-controls">
-    <button type="button" aria-label="最小化窗口" title="最小化" onclick="minimizeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5h8"/></svg></button>
-    <button class="windows-maximize-button" type="button" aria-label="最大化窗口" title="最大化" onclick="toggleWindowsMaximize()"><svg class="windows-maximize-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg><svg class="windows-restore-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3V1.75h6.25V8H9M1.75 4h6.25v6.25H1.75Z"/></svg></button>
-    <button class="windows-close-button" type="button" aria-label="关闭窗口" title="关闭" onclick="closeWindowsWindow()"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5"/></svg></button>
+    <button type="button" aria-label="最小化窗口" title="最小化" data-action="templateClick002"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 8.5h8"/></svg></button>
+    <button class="windows-maximize-button" type="button" aria-label="最大化窗口" title="最大化" data-action="templateClick003"><svg class="windows-maximize-icon" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.25" y="2.25" width="7.5" height="7.5"/></svg><svg class="windows-restore-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 3V1.75h6.25V8H9M1.75 4h6.25v6.25H1.75Z"/></svg></button>
+    <button class="windows-close-button" type="button" aria-label="关闭窗口" title="关闭" data-action="templateClick004"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.25 2.25 7.5 7.5m0-7.5-7.5 7.5"/></svg></button>
   </div>
 </div>
 <div class="app-shell">
@@ -35,37 +35,37 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
   <aside class="sidebar">
     <div class="sidebar-head">
       <div class="sidebar-brand">文献原句定位器</div>
-      <button class="sidebar-collapse-btn" type="button" aria-label="收起侧边栏" title="收起侧边栏" onclick="toggleSidebar()">
+      <button class="sidebar-collapse-btn" type="button" aria-label="收起侧边栏" title="收起侧边栏" data-action="templateClick005">
         <svg class="sidebar-collapse-icon" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 5l-5 5 5 5"/></svg>
       </button>
     </div>
     <nav class="sidebar-nav">
-      <button class="sidebar-item active" data-page="search" title="文献检索" onclick="navigateTo('search')">
+      <button class="sidebar-item active" data-page="search" title="文献检索" data-action="templateClick006">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
         </span>
         <span>文献检索</span>
       </button>
-      <button class="sidebar-item" data-page="library" title="文献库" onclick="navigateTo('library')">
+      <button class="sidebar-item" data-page="library" title="文献库" data-action="templateClick007">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><line x1="7" y1="3" x2="7" y2="17"/></svg>
         </span>
         <span>文献库</span>
       </button>
-      <button class="sidebar-item" data-page="works" title="译本对照" onclick="navigateTo('works')" hidden>
+      <button class="sidebar-item" data-page="works" title="译本对照" data-action="templateClick008" hidden>
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>
         </span>
         <span>译本对照</span>
         <span class="sidebar-item-tag" hidden>只读</span>
       </button>
-      <button class="sidebar-item" data-page="import" title="文献导入" onclick="navigateTo('import')">
+      <button class="sidebar-item" data-page="import" title="文献导入" data-action="templateClick009">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>
         </span>
         <span>文献导入</span>
       </button>
-      <button class="sidebar-item" data-page="settings" title="设置" onclick="navigateTo('settings')">
+      <button class="sidebar-item" data-page="settings" title="设置" data-action="templateClick010">
         <span class="sidebar-icon">
           <svg class="sidebar-settings-gear" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg>
         </span>
@@ -98,35 +98,35 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
           </span>
           <input type="text" id="query" class="search-box" placeholder="搜索引文" autocomplete="off">
-          <button class="search-submit" id="search-btn" onclick="runSearch()">搜索</button>
+          <button class="search-submit" id="search-btn" data-action="templateClick011">搜索</button>
         </div>
         <div class="search-controls-row">
           <div class="segmented-control" id="mode-control">
-            <button class="seg-btn active" data-mode="auto" onclick="setMode(this)">综合检索</button>
-            <button class="seg-btn" data-mode="exact" onclick="setMode(this)">精确匹配</button>
-            <button class="seg-btn" data-mode="fuzzy" onclick="setMode(this)">模糊检索</button>
+            <button class="seg-btn active" data-mode="auto" data-action="templateClick012">综合检索</button>
+            <button class="seg-btn" data-mode="exact" data-action="templateClick012">精确匹配</button>
+            <button class="seg-btn" data-mode="fuzzy" data-action="templateClick012">模糊检索</button>
           </div>
           <div class="search-filter-controls">
             <div class="search-control-group">
               <span class="search-control-label">来源</span>
               <div class="source-type-control" id="source-type-control" role="group" aria-label="来源类型">
-                <button class="source-type-btn active" type="button" data-source="all" onclick="setSearchSourceType('all')">全部</button>
-                <button class="source-type-btn" type="button" data-source="word" onclick="setSearchSourceType('word')">Word</button>
-                <button class="source-type-btn" type="button" data-source="epub" onclick="setSearchSourceType('epub')">EPUB</button>
-                <button class="source-type-btn" type="button" data-source="pdf" onclick="setSearchSourceType('pdf')">PDF</button>
+                <button class="source-type-btn active" type="button" data-source="all" data-action="templateClick013">全部</button>
+                <button class="source-type-btn" type="button" data-source="word" data-action="templateClick014">Word</button>
+                <button class="source-type-btn" type="button" data-source="epub" data-action="templateClick015">EPUB</button>
+                <button class="source-type-btn" type="button" data-source="pdf" data-action="templateClick016">PDF</button>
               </div>
             </div>
             <div class="search-control-group">
               <span class="search-control-label">文献范围</span>
               <div class="app-select document-select" id="document-select">
-                <button class="app-select-trigger" id="document-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSearchSelect(event,'document-select')">
+                <button class="app-select-trigger" id="document-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="templateClick017">
                   <span class="app-select-value" id="document-select-label">全部文献</span>
                   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
                 </button>
                 <div class="app-select-menu document-menu" role="listbox">
                   <div class="document-menu-search-wrap">
                     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.7"/><path d="m13 13 4 4"/></svg>
-                    <input class="document-menu-search" id="document-filter-query" type="search" placeholder="搜索书名或文件名…" autocomplete="off" oninput="renderSearchDocumentOptions()">
+                    <input class="document-menu-search" id="document-filter-query" type="search" placeholder="搜索书名或文件名…" autocomplete="off" data-action-input="templateInput018">
                   </div>
                   <div class="document-options" id="document-options"></div>
                 </div>
@@ -135,17 +135,17 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="search-control-group">
               <span class="search-control-label">返回数量</span>
               <div class="app-select" id="limit-select">
-                <button class="app-select-trigger" id="limit-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleSearchSelect(event,'limit-select')">
+                <button class="app-select-trigger" id="limit-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="templateClick019">
                   <span class="app-select-value" id="limit-select-label">10 条</span>
                   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
                 </button>
                 <div class="app-select-menu" role="listbox" id="limit-options">
-                  <button class="app-select-option is-selected" type="button" data-value="10" onclick="setSearchLimit(event,10)"><span>10 条</span></button>
-                  <button class="app-select-option" type="button" data-value="20" onclick="setSearchLimit(event,20)"><span>20 条</span></button>
-                  <button class="app-select-option" type="button" data-value="50" onclick="setSearchLimit(event,50)"><span>50 条</span></button>
-                  <button class="app-select-option" type="button" data-value="100" onclick="setSearchLimit(event,100)"><span>100 条</span></button>
-                  <button class="app-select-option" type="button" data-value="200" onclick="setSearchLimit(event,200)"><span>200 条</span></button>
-                  <button class="app-select-option" type="button" data-value="all" onclick="setSearchLimit(event,'all')"><span>全部</span></button>
+                  <button class="app-select-option is-selected" type="button" data-value="10" data-action="templateClick020"><span>10 条</span></button>
+                  <button class="app-select-option" type="button" data-value="20" data-action="templateClick021"><span>20 条</span></button>
+                  <button class="app-select-option" type="button" data-value="50" data-action="templateClick022"><span>50 条</span></button>
+                  <button class="app-select-option" type="button" data-value="100" data-action="templateClick023"><span>100 条</span></button>
+                  <button class="app-select-option" type="button" data-value="200" data-action="templateClick024"><span>200 条</span></button>
+                  <button class="app-select-option" type="button" data-value="all" data-action="templateClick025"><span>全部</span></button>
                 </div>
               </div>
             </div>
@@ -187,10 +187,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="page-title library-title">文献库</div>
             <div class="library-search-wrap">
               <span class="library-search-icon"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg></span>
-              <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" oninput="filterLibrary()">
+              <input type="text" id="lib-search" class="library-search" placeholder="搜索书名、作者、译者、出版社或文件名…" autocomplete="off" data-action-input="templateInput026">
             </div>
               <div class="app-select library-filter" id="library-filter">
-                <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" onclick="toggleAppSelect(event,'library-filter')">
+                <button class="app-select-trigger library-filter-btn" type="button" aria-haspopup="dialog" aria-expanded="false" data-action="templateClick027">
                   <svg class="library-filter-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
                   <span>筛选</span>
                   <span class="library-filter-badge" id="library-filter-badge" hidden>0</span>
@@ -209,47 +209,47 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     <div class="filter-facet-opts" id="filter-opts-type" role="listbox" aria-label="文件类型"></div>
                   </div>
                   <div class="filter-pop-foot">
-                    <button type="button" class="filter-pop-clear" onclick="clearLibraryFilters()">清除全部</button>
-                    <button type="button" class="filter-pop-done" onclick="closeAppSelects()">完成</button>
+                    <button type="button" class="filter-pop-clear" data-action="templateClick028">清除全部</button>
+                    <button type="button" class="filter-pop-done" data-action="templateClick029">完成</button>
                   </div>
                 </div>
               </div>
               <div class="library-filter-chips" id="library-filter-chips"></div>
               <div class="view-switch" role="group" aria-label="文献库显示方式">
-                <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" onclick="setLibraryView('list')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
-                <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" onclick="setLibraryView('grid')"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
+                <button class="view-switch-btn active" id="library-view-list" type="button" title="列表显示" aria-label="列表显示" aria-pressed="true" data-action="templateClick030"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 5h11M6 10h11M6 15h11"/><circle cx="3" cy="5" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="10" r=".7" fill="currentColor" stroke="none"/><circle cx="3" cy="15" r=".7" fill="currentColor" stroke="none"/></svg></button>
+                <button class="view-switch-btn" id="library-view-grid" type="button" title="卡片显示" aria-label="卡片显示" aria-pressed="false" data-action="templateClick031"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="2.5" width="6" height="6" rx="1"/><rect x="11.5" y="2.5" width="6" height="6" rx="1"/><rect x="2.5" y="11.5" width="6" height="6" rx="1"/><rect x="11.5" y="11.5" width="6" height="6" rx="1"/></svg></button>
               </div>
               <div class="library-sort" id="library-sort">
                 <div class="app-select library-sort-field-select" id="library-sort-field-select">
-                  <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,'library-sort-field-select')"><svg class="library-sort-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M4 10h6M4 14h3"/></svg><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
-                  <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" onclick="setLibrarySortOption(event,'field','imported_at')">导入时间</button><button class="app-select-option" type="button" data-value="title" onclick="setLibrarySortOption(event,'field','title')">书名</button><button class="app-select-option" type="button" data-value="author" onclick="setLibrarySortOption(event,'field','author')">作者</button><button class="app-select-option" type="button" data-value="modified_at" onclick="setLibrarySortOption(event,'field','modified_at')">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" onclick="setLibrarySortOption(event,'field','source_type')">来源类型</button><button class="app-select-option" type="button" data-value="status" onclick="setLibrarySortOption(event,'field','status')">校准状态</button></div>
+                  <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="templateClick032"><svg class="library-sort-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M4 10h6M4 14h3"/></svg><span class="app-select-value" id="library-sort-field-label">导入时间</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                  <div class="app-select-menu" role="listbox"><button class="app-select-option is-selected" type="button" data-value="imported_at" data-action="templateClick033">导入时间</button><button class="app-select-option" type="button" data-value="title" data-action="templateClick034">书名</button><button class="app-select-option" type="button" data-value="author" data-action="templateClick035">作者</button><button class="app-select-option" type="button" data-value="modified_at" data-action="templateClick036">最近修改时间</button><button class="app-select-option" type="button" data-value="source_type" data-action="templateClick037">来源类型</button><button class="app-select-option" type="button" data-value="status" data-action="templateClick038">校准状态</button></div>
                 </div>
-                <button class="library-sort-dir" id="library-sort-dir" type="button" title="切换升序 / 降序" aria-label="降序，点击改为升序" onclick="toggleLibrarySortDirection()">
+                <button class="library-sort-dir" id="library-sort-dir" type="button" title="切换升序 / 降序" aria-label="降序，点击改为升序" data-action="templateClick039">
                   <span id="library-sort-dir-label">降序</span>
                   <svg class="library-sort-dir-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M6 12l4 4 4-4"/></svg>
                 </button>
               </div>
               <div class="app-select library-overflow" id="library-overflow">
-                <button class="app-select-trigger library-overflow-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作" onclick="toggleAppSelect(event,'library-overflow')"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button>
+                <button class="app-select-trigger library-overflow-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作" title="更多操作" data-action="templateClick040"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="4" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="10" cy="16" r="1.5"/></svg></button>
                 <div class="app-select-menu library-overflow-menu" role="menu">
-                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-metadata-btn" onclick="closeAppSelects();runBatchMetadataDetection()">补全书目</button>
-                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-cnki-btn" title="联网补全期刊信息" onclick="closeAppSelects();runCnkiBatchButton()">联网补全期刊信息</button>
+                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-metadata-btn" data-action="templateClick041">补全书目</button>
+                  <button class="app-select-option library-metadata-btn" type="button" role="menuitem" id="batch-cnki-btn" title="联网补全期刊信息" data-action="templateClick042">联网补全期刊信息</button>
                 </div>
               </div>
           </div>
           <div class="library-selection-bar" id="library-selection-bar" role="toolbar" aria-label="批量操作" aria-live="polite" hidden>
-            <button class="library-selection-cancel" type="button" aria-label="取消选择" title="取消选择" onclick="clearLibrarySelection()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+            <button class="library-selection-cancel" type="button" aria-label="取消选择" title="取消选择" data-action="templateClick043"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
             <span class="library-selection-count" id="library-selection-count">已选 0 项</span>
             <span class="library-selection-spacer"></span>
-            <button class="action-btn" type="button" id="library-select-visible-btn" onclick="toggleSelectVisibleLibraryDocuments()">全选当前</button>
-            <button class="action-btn" type="button" id="library-export-selected-btn" disabled onclick="exportSelectedLibraryDocuments()">导出所选文档包</button>
-            <button class="action-btn" type="button" id="library-assign-work-btn" hidden disabled onclick="MEFinder.works.assignSelection()">加入作品…</button>
-            <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled onclick="openRemoveSelectedDocumentsModal()">删除所选</button>
+            <button class="action-btn" type="button" id="library-select-visible-btn" data-action="templateClick044">全选当前</button>
+            <button class="action-btn" type="button" id="library-export-selected-btn" disabled data-action="templateClick045">导出所选文档包</button>
+            <button class="action-btn" type="button" id="library-assign-work-btn" hidden disabled data-action="templateClick046">加入作品…</button>
+            <button class="action-btn danger-outline" type="button" id="library-remove-selected-btn" disabled data-action="templateClick047">删除所选</button>
           </div>
         </div>
       </div>
       <div class="library-return-banner" id="library-return-banner" hidden>
-        <button class="library-return-btn" type="button" onclick="returnToSearch()">
+        <button class="library-return-btn" type="button" data-action="templateClick048">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5l-5 5 5 5"/><path d="M6 10h9"/></svg>
           返回搜索结果
         </button>
@@ -262,11 +262,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <div class="library-drawer" id="library-drawer" role="complementary" aria-label="文献详情">
           <div class="library-drawer-inner">
             <div class="drawer-close-bar">
-              <button class="drawer-close" type="button" onclick="requestCloseLibDrawer()">关闭</button>
+              <button class="drawer-close" type="button" data-action="templateClick049">关闭</button>
             </div>
             <div id="library-drawer-content"></div>
             <div id="library-drawer-calibration" style="display:none">
-              <button class="cal-collapse-head" type="button" id="cal-collapse-toggle" aria-expanded="false" onclick="toggleDrawerCalibration()">
+              <button class="cal-collapse-head" type="button" id="cal-collapse-toggle" aria-expanded="false" data-action="templateClick050">
                 <span class="drawer-section-title">页码校准</span>
                 <span class="cal-collapse-summary" id="cal-collapse-summary"></span>
                 <svg class="cal-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
@@ -285,7 +285,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <div class="cal-section">
                     <div class="cal-section-head">
                       <span class="cal-section-title">页码映射分段</span>
-                      <button class="action-btn" onclick="addCalSegment()">+ 添加分段</button>
+                      <button class="action-btn" data-action="templateClick051">+ 添加分段</button>
                     </div>
                     <div class="segment-table-wrap">
                       <table class="segment-table">
@@ -317,18 +317,18 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <div class="cal-preview">
                     <div class="cal-preview-row">
                       <span class="cal-preview-label">预览：PDF 第</span>
-                      <input type="number" class="seg-input narrow" id="cal-preview-input" min="1" value="1" oninput="updateCalPreview()">
+                      <input type="number" class="seg-input narrow" id="cal-preview-input" min="1" value="1" data-action-input="templateInput052">
                       <span class="cal-preview-label">页 →</span>
                       <span class="cal-preview-result" id="cal-preview-result">—</span>
                     </div>
                   </div>
                   <div class="cal-actions">
-                    <button class="action-btn primary" onclick="saveCalibration()">保存校准配置</button>
-                    <button class="action-btn" onclick="loadCalibrationDoc()">放弃修改</button>
+                    <button class="action-btn primary" data-action="templateClick053">保存校准配置</button>
+                    <button class="action-btn" data-action="templateClick054">放弃修改</button>
                     <span class="cal-save-hint">保存后自动重建索引</span>
                   </div>
                   </div>
-                  <div class="cal-danger-zone"><button class="action-btn danger-outline" onclick="openRemoveDocumentModal()">从文献库移除</button></div>
+                  <div class="cal-danger-zone"><button class="action-btn danger-outline" data-action="templateClick055">从文献库移除</button></div>
                 </div>
               </div>
             </div>
@@ -362,50 +362,50 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </div>
           <div class="pdf-parse-mode" role="radiogroup" aria-label="PDF 解析方式">
             <label class="pdf-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="auto" checked onchange="setPdfParseMode(this.value)">
+              <input type="radio" name="pdf-parse-mode" value="auto" checked data-action-change="templateChange056">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>自动选择</strong><span class="pdf-parse-tag pdf-parse-tag-default">默认</span></span>
                 <small>原生快速解析；文字层不可靠时自动转 MinerU，适合绝大多数文献</small>
               </span>
             </label>
             <label class="pdf-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="mineru" onchange="setPdfParseMode(this.value)">
+              <input type="radio" name="pdf-parse-mode" value="mineru" data-action-change="templateChange056">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>强制 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-free">免费</span></span>
                 <small>强制上传并 OCR，适合乱码、断字或复杂排版的扫描件</small>
               </span>
             </label>
             <label class="pdf-parse-option" id="mineru-local-parse-option" hidden>
-              <input type="radio" name="pdf-parse-mode" value="mineru-local" onchange="setPdfParseMode(this.value)">
+              <input type="radio" name="pdf-parse-mode" value="mineru-local" data-action-change="templateChange056">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>本地 MinerU</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">高级</span></span>
                 <small>直接使用你在设置中启用的本地部署服务，不上传到 MinerU 在线服务</small>
               </span>
             </label>
             <label class="pdf-parse-option" id="general-model-parse-option" hidden>
-              <input type="radio" name="pdf-parse-mode" value="general-local-model" onchange="setPdfParseMode(this.value)">
+              <input type="radio" name="pdf-parse-mode" value="general-local-model" data-action-change="templateChange056">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>通用本地模型</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">高级</span></span>
                 <small>用你在设置中启用的自部署 OpenAI 兼容模型逐页解析，不上传到在线服务</small>
               </span>
             </label>
             <label class="pdf-parse-option pdf-parse-option-vision" id="vision-parse-option">
-              <input type="radio" name="pdf-parse-mode" value="vision" onchange="setPdfParseMode(this.value)">
+              <input type="radio" name="pdf-parse-mode" value="vision" data-action-change="templateChange056">
               <span class="pdf-parse-card">
                 <span class="pdf-parse-card-head"><strong>其他视觉 API</strong></span>
                 <small>用已配置的视觉模型逐页强制解析</small>
-                <span class="pdf-parse-provider" onclick="event.stopPropagation()">
+                <span class="pdf-parse-provider" data-action="templateClick057">
                   <div class="app-select import-vision-select" id="import-vision-provider" data-value="">
-                    <button class="app-select-trigger" type="button" aria-haspopup="dialog" aria-controls="import-vision-provider-list" aria-expanded="false" aria-label="选择视觉解析 API" onclick="toggleImportVisionProvider(event)" onkeydown="importVisionTriggerKeydown(event)"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                    <button class="app-select-trigger" type="button" aria-haspopup="dialog" aria-controls="import-vision-provider-list" aria-expanded="false" aria-label="选择视觉解析 API" data-action="templateClick058" data-action-keydown="templateKeydown059"><span class="app-select-value" id="import-vision-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div class="app-select-menu import-vision-menu" role="dialog" aria-label="视觉解析 API 与模型" id="import-vision-provider-options"></div>
                   </div>
-                  <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" onclick="event.stopPropagation();openVisionSettings()" hidden>尚未配置，去设置里添加接口 →</a>
+                  <a id="vision-parse-config-link" class="pdf-provider-config-link" href="javascript:void(0)" data-action="templateClick060" hidden>尚未配置，去设置里添加接口 →</a>
                 </span>
               </span>
             </label>
           </div>
         </div>
-        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="选择要导入的文献或 MEFinder 文档包" onclick="document.getElementById('file-input').click()">
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="选择要导入的文献或 MEFinder 文档包" data-action="templateClick061">
           <div class="drop-zone-icon">
             <svg width="52" height="52" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8v20M16 20l8-8 8 8"/><path d="M8 32v6a2 2 0 002 2h28a2 2 0 002-2v-6"/></svg>
           </div>
@@ -418,17 +418,17 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <span class="format-tag">MEFinder 文档包</span>
           </div>
         </div>
-        <input type="file" id="file-input" accept=".pdf,.docx,.epub,.mefinder.zip" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <input type="file" id="file-input" accept=".pdf,.docx,.epub,.mefinder.zip" multiple style="display:none" data-action-change="templateChange062">
         <div class="scan-section" id="scan-section">
           <div class="scan-section-head">
             <div class="import-queue-title">文献目录扫描</div>
             <div class="scan-section-actions">
-              <input id="scan-dir-input" class="scan-dir-add" type="text" spellcheck="false" placeholder="或粘贴文件夹路径后回车…" onkeydown="if(event.key==='Enter')addScanDirectory()">
-              <button class="scan-dir-pick" type="button" id="scan-dir-pick" onclick="chooseScanDirectory()">
+              <input id="scan-dir-input" class="scan-dir-add" type="text" spellcheck="false" placeholder="或粘贴文件夹路径后回车…" data-action-keydown="templateKeydown063">
+              <button class="scan-dir-pick" type="button" id="scan-dir-pick" data-action="templateClick064">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v6M9 14h6"/></svg>
                 选择文件夹（可多选）
               </button>
-              <button class="action-btn" type="button" id="scan-run-btn" onclick="runDirectoryScan()">开始扫描</button>
+              <button class="action-btn" type="button" id="scan-run-btn" data-action="templateClick065">开始扫描</button>
             </div>
           </div>
           <div class="scan-section-hint">扫描只列出文件、不直接导入；可一次选择多个文件夹，扫描后勾选要导入的文件。原始文件永远不会被移动或删除；导入时会复制到应用语料目录</div>
@@ -438,7 +438,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="scan-results-head" id="scan-results-head" style="display:none">
             <span class="scan-subhead">扫描结果</span>
             <span class="scan-results-summary" id="scan-results-summary"></span>
-            <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" onclick="importSelectedScanned()">导入所选</button>
+            <button class="action-btn primary" type="button" id="scan-import-btn" style="display:none" data-action="templateClick066">导入所选</button>
           </div>
           <div id="scan-results"></div>
         </div>
@@ -446,8 +446,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <div class="import-queue-head">
             <div class="import-queue-title">导入队列</div>
             <div class="import-queue-batch-actions">
-              <button class="action-btn primary import-queue-resume-all" type="button" id="import-resume-all-btn" style="display:none" onclick="resumeAllImports()">全部继续导入</button>
-              <button class="action-btn import-queue-cancel-all" type="button" id="import-cancel-all-btn" style="display:none" onclick="cancelAllImports()">全部取消</button>
+              <button class="action-btn primary import-queue-resume-all" type="button" id="import-resume-all-btn" style="display:none" data-action="templateClick067">全部继续导入</button>
+              <button class="action-btn import-queue-cancel-all" type="button" id="import-cancel-all-btn" style="display:none" data-action="templateClick068">全部取消</button>
             </div>
           </div>
           <div class="import-recovery-panel" id="import-recovery-panel" hidden>
@@ -458,10 +458,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="import-recovery-provider">
               <span class="import-recovery-label">视觉解析 API</span>
               <div class="app-select import-recovery-select" id="import-recovery-provider" data-value="">
-                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-controls="import-recovery-provider-list" aria-expanded="false" aria-label="选择失败后重试使用的视觉解析 API" onclick="toggleImportRecoveryProvider(event)"><span class="app-select-value" id="import-recovery-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                <button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-controls="import-recovery-provider-list" aria-expanded="false" aria-label="选择失败后重试使用的视觉解析 API" data-action="templateClick069"><span class="app-select-value" id="import-recovery-provider-label">请先在设置中配置</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                 <div class="app-select-menu import-recovery-menu" id="import-recovery-provider-options"><div class="import-vision-option-list" id="import-recovery-provider-list" role="listbox" aria-label="失败后重试使用的 API"></div></div>
               </div>
-              <button class="action-btn import-recovery-settings" type="button" onclick="openVisionSettings()">解析设置</button>
+              <button class="action-btn import-recovery-settings" type="button" data-action="templateClick070">解析设置</button>
             </div>
           </div>
           <div id="import-items"></div>
@@ -482,25 +482,25 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       <div class="settings-page-content">
         <nav class="settings-nav" role="tablist" aria-label="设置分类">
           <div class="settings-nav-group plat-desktop" role="presentation">阅读</div>
-          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" onclick="showSettingsCategory('pdf-reader-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" onclick="showSettingsCategory('text-alignment-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
+          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" data-action="templateClick071"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" data-action="templateClick072"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
           <div class="settings-nav-group" role="presentation">来源</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="zotero-settings" onclick="showSettingsCategory('zotero-settings');MEFinder.zotero.open()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h12L6 19h12"/></svg><span>Zotero</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="zotero-settings" data-action="templateClick073"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h12L6 19h12"/></svg><span>Zotero</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" onclick="showSettingsCategory('mineru-api-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" onclick="showSettingsCategory('vision-api-settings');loadParserStatistics()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" onclick="showSettingsCategory('local-ocr-settings');loadLocalOCRConfig()"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" onclick="showSettingsCategory('statistics-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>解析统计</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" data-action="templateClick074"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" data-action="templateClick075"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" data-action="templateClick076"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" data-action="templateClick077"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>解析统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" onclick="showSettingsCategory('citation-format-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" onclick="showSettingsCategory('bib-completion-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" data-action="templateClick078"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" data-action="templateClick079"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span></button>
           <div class="settings-nav-group" role="presentation">应用</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="appearance-card" onclick="showSettingsCategory('appearance-card')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg><span>外观</span></button>
-          <button class="settings-nav-item cap-data-location" type="button" role="tab" aria-selected="false" data-target="data-location-settings" onclick="showSettingsCategory('data-location-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg><span>数据位置</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="document-transfer-settings" onclick="showSettingsCategory('document-transfer-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5h16v12H4z"/><path d="M7 4.5h10v3H7zM9 12h6"/></svg><span>文档传输</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="backup-settings" onclick="showSettingsCategory('backup-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg><span>数据备份</span></button>
-          <button class="settings-nav-item plat-win" type="button" role="tab" aria-selected="false" data-target="software-update-settings" onclick="showSettingsCategory('software-update-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
-          <button class="settings-nav-item plat-macos" type="button" role="tab" aria-selected="false" data-target="macos-update-settings" onclick="showSettingsCategory('macos-update-settings')"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="appearance-card" data-action="templateClick080"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg><span>外观</span></button>
+          <button class="settings-nav-item cap-data-location" type="button" role="tab" aria-selected="false" data-target="data-location-settings" data-action="templateClick081"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg><span>数据位置</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="document-transfer-settings" data-action="templateClick082"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5h16v12H4z"/><path d="M7 4.5h10v3H7zM9 12h6"/></svg><span>文档传输</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="backup-settings" data-action="templateClick083"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg><span>数据备份</span></button>
+          <button class="settings-nav-item plat-win" type="button" role="tab" aria-selected="false" data-target="software-update-settings" data-action="templateClick084"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
+          <button class="settings-nav-item plat-macos" type="button" role="tab" aria-selected="false" data-target="macos-update-settings" data-action="templateClick085"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
         </nav>
         <div class="settings-content">
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
@@ -517,14 +517,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small id="pdf-system-description" data-pdf-open-description="system" hidden>用系统默认应用打开，命中页码需要手动翻到</small>
               </span>
               <span class="app-select settings-choice-select pdf-open-options" id="pdf-open-select">
-                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" onclick="toggleSearchSelect(event,'pdf-open-select')"><span class="app-select-value" id="pdf-open-select-label">内置 PDF 阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="app-select-trigger" id="pdf-open-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="打开 PDF 原文的方式" data-action="templateClick086"><span class="app-select-value" id="pdf-open-select-label">内置 PDF 阅读器</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
                 <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="PDF 打开方式">
                   <label class="app-select-option is-selected" data-pdf-open-choice="native">
-                    <input type="radio" name="pdf-open-mode" value="native" checked onchange="setPdfOpenMode(this.value)">
+                    <input type="radio" name="pdf-open-mode" value="native" checked data-action-change="templateChange087">
                     <span id="pdf-native-title">内置 PDF 阅读器</span>
                   </label>
                   <label class="app-select-option" data-pdf-open-choice="system">
-                    <input type="radio" name="pdf-open-mode" value="system" onchange="setPdfOpenMode(this.value)">
+                    <input type="radio" name="pdf-open-mode" value="system" data-action-change="templateChange087">
                     <span id="pdf-system-title">系统默认 PDF 阅读器</span>
                   </label>
                 </span>
@@ -533,7 +533,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-subhead"><span class="settings-section-title">阅读窗口</span></div>
             <label class="setting-switch-row reading-window-row">
               <span class="setting-switch-copy"><strong>在独立窗口中阅读</strong><small>可单独移动与缩放，下次打开文献时生效</small></span>
-              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled onchange="MEFinder.readerHost.setEnabled(this.checked)">
+              <input type="checkbox" id="reader-window-enabled" class="setting-switch-input" role="switch" disabled data-action-change="templateChange088">
               <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="reader-window-state" aria-hidden="true">关闭</span>
             </label>
             <div class="settings-subhead"><span class="settings-section-title">正文排版</span></div>
@@ -544,14 +544,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small data-reader-line-description="physical" hidden>保留原书的换行位置，便于逐行核对</small>
               </span>
               <span class="app-select settings-choice-select reader-line-options" id="reader-line-select">
-                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" onclick="toggleSearchSelect(event,'reader-line-select')"><span class="app-select-value" id="reader-line-select-label">流式排版</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                <button class="app-select-trigger" id="reader-line-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="段落显示方式" data-action="templateClick089"><span class="app-select-value" id="reader-line-select-label">流式排版</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
                 <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="正文排版">
                   <label class="app-select-option is-selected" data-reader-line-choice="flow">
-                    <input type="radio" name="reader-line-mode" value="flow" checked onchange="setReaderLineMode(this.value)">
+                    <input type="radio" name="reader-line-mode" value="flow" checked data-action-change="templateChange090">
                     <span>流式排版</span>
                   </label>
                   <label class="app-select-option" data-reader-line-choice="physical">
-                    <input type="radio" name="reader-line-mode" value="physical" onchange="setReaderLineMode(this.value)">
+                    <input type="radio" name="reader-line-mode" value="physical" data-action-change="templateChange090">
                     <span>保留原始换行</span>
                   </label>
                 </span>
@@ -560,7 +560,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-subhead"><span class="settings-section-title">文献检索</span></div>
               <label class="setting-switch-row" id="script-folding-option">
                 <span class="setting-switch-copy"><strong>繁简统一检索</strong><small id="script-folding-status" role="status">正在读取设置…</small></span>
-                <input type="checkbox" id="script-folding-enabled" class="setting-switch-input" role="switch" checked onchange="setScriptFolding(this.checked)" aria-describedby="script-folding-status">
+                <input type="checkbox" id="script-folding-enabled" class="setting-switch-input" role="switch" checked data-action-change="templateChange091" aria-describedby="script-folding-status">
                 <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="script-folding-state" aria-hidden="true">开启</span>
               </label>
             <p class="settings-footnote">设置变更自动保存</p>
@@ -596,7 +596,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">
                   <div class="local-ocr-component-head">
                     <label class="embedding-model-choice">
-                      <input type="radio" name="alignment-embedding-model" value="minilm-l12-v2" checked onchange="setAlignmentEmbeddingModel(this.value)">
+                      <input type="radio" name="alignment-embedding-model" value="minilm-l12-v2" checked data-action-change="templateChange092">
                       <span class="embedding-model-check" aria-hidden="true"></span>
                       <span class="embedding-model-copy"><strong>MiniLM 多语言模型 <em>默认</em></strong><small>384 维 · 约 220 MB · 速度更快</small></span>
                     </label>
@@ -607,13 +607,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <span id="embedding-model-hint-minilm-l12-v2" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
                       <div id="embedding-model-progress-minilm-l12-v2" class="local-ocr-progress" role="progressbar" aria-label="MiniLM 模型下载进度" hidden><span></span></div>
                     </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-minilm-l12-v2" type="button" onclick="downloadAlignmentModel('minilm-l12-v2', this)">下载安装</button></div>
+                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-minilm-l12-v2" type="button" data-action="templateClick093">下载安装</button></div>
                   </div>
                 </section>
                 <section class="embedding-model-option local-ocr-component" data-embedding-model-choice="multilingual-e5-large">
                   <div class="local-ocr-component-head">
                     <label class="embedding-model-choice">
-                      <input type="radio" name="alignment-embedding-model" value="multilingual-e5-large" onchange="setAlignmentEmbeddingModel(this.value)">
+                      <input type="radio" name="alignment-embedding-model" value="multilingual-e5-large" data-action-change="templateChange092">
                       <span class="embedding-model-check" aria-hidden="true"></span>
                       <span class="embedding-model-copy"><strong>E5 Large 多语言模型</strong><small>1024 维 · 约 2.24 GB · 更准但更慢</small></span>
                     </label>
@@ -624,7 +624,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <span id="embedding-model-hint-multilingual-e5-large" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
                       <div id="embedding-model-progress-multilingual-e5-large" class="local-ocr-progress" role="progressbar" aria-label="E5 Large 模型下载进度" hidden><span></span></div>
                     </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-multilingual-e5-large" type="button" onclick="downloadAlignmentModel('multilingual-e5-large', this)">下载安装</button></div>
+                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-multilingual-e5-large" type="button" data-action="templateClick094">下载安装</button></div>
                   </div>
                 </section>
               </div>
@@ -641,13 +641,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <span class="settings-choice-copy"><strong>Zotero 本机接口</strong><small id="zotero-connection-note">127.0.0.1:23119 · 我的文库</small></span>
               <span class="zotero-row-controls">
                 <span class="zotero-state" id="zotero-connection-state" role="status" aria-live="polite">检测中</span>
-                <button class="action-btn" type="button" id="zotero-recheck" onclick="MEFinder.zotero.recheck()">重新检测</button>
+                <button class="action-btn" type="button" id="zotero-recheck" data-action="templateClick095">重新检测</button>
               </span>
             </div>
             <p class="zotero-hint" id="zotero-connection-hint" hidden></p>
             <label class="setting-switch-row">
               <span class="setting-switch-copy"><strong>同步 Zotero 分类</strong><small>关闭后不再导入或移除，已导入的文献保留</small></span>
-              <input type="checkbox" id="zotero-sync-enabled" class="setting-switch-input" role="switch" onchange="MEFinder.zotero.setEnabled(this.checked)">
+              <input type="checkbox" id="zotero-sync-enabled" class="setting-switch-input" role="switch" data-action-change="templateChange096">
               <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="zotero-sync-enabled-state" aria-hidden="true">关闭</span>
             </label>
             <div class="zotero-body" id="zotero-body">
@@ -659,7 +659,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="settings-choice-copy"><strong>PDF 解析方式</strong><small>跟随「导入 → PDF 解析方式」。EPUB 与 Word 走文本通道，不经过 MinerU</small></span>
                 <span class="zotero-row-controls">
                   <span class="zotero-value" id="zotero-parse-mode">自动选择</span>
-                  <button class="action-btn zotero-quiet-btn" type="button" onclick="navigateTo('import')">修改</button>
+                  <button class="action-btn zotero-quiet-btn" type="button" data-action="templateClick009">修改</button>
                 </span>
               </div>
               <div class="settings-subhead"><span class="settings-section-title">以 Zotero 为准</span></div>
@@ -673,17 +673,17 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div class="settings-choice-row">
                 <span class="settings-choice-copy"><strong>自动同步</strong><small>只拉取有变化的条目</small></span>
                 <span class="app-select settings-choice-select" id="zotero-frequency-select">
-                  <button class="app-select-trigger" id="zotero-frequency-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="自动同步" onclick="toggleSearchSelect(event,'zotero-frequency-select')"><span class="app-select-value" id="zotero-frequency-label">启动 MEFinder 时</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                  <button class="app-select-trigger" id="zotero-frequency-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="自动同步" data-action="templateClick097"><span class="app-select-value" id="zotero-frequency-label">启动 MEFinder 时</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
                   <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="自动同步">
-                    <button class="app-select-option" type="button" data-zotero-frequency="manual" onclick="MEFinder.zotero.setFrequency('manual')">仅手动</button>
-                    <button class="app-select-option is-selected" type="button" data-zotero-frequency="launch" onclick="MEFinder.zotero.setFrequency('launch')">启动 MEFinder 时</button>
-                    <button class="app-select-option" type="button" data-zotero-frequency="interval" onclick="MEFinder.zotero.setFrequency('interval')">启动时及每 30 分钟</button>
+                    <button class="app-select-option" type="button" data-zotero-frequency="manual" data-action="templateClick098">仅手动</button>
+                    <button class="app-select-option is-selected" type="button" data-zotero-frequency="launch" data-action="templateClick099">启动 MEFinder 时</button>
+                    <button class="app-select-option" type="button" data-zotero-frequency="interval" data-action="templateClick100">启动时及每 30 分钟</button>
                   </span>
                 </span>
               </div>
               <div class="settings-choice-row zotero-sync-row">
                 <span class="settings-choice-copy"><strong>立即同步</strong><small id="zotero-sync-note">还没有同步过</small><span class="zotero-progress" id="zotero-progress" hidden><span></span></span></span>
-                <button class="action-btn primary" type="button" id="zotero-sync-button" onclick="MEFinder.zotero.sync()">立即同步</button>
+                <button class="action-btn primary" type="button" id="zotero-sync-button" data-action="templateClick101">立即同步</button>
               </div>
               <div class="zotero-log" id="zotero-log" aria-live="polite" hidden></div>
             </div>
@@ -693,7 +693,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">MinerU API</span><span class="settings-section-note">用于扫描版、乱码或复杂排版 PDF 的精准解析</span></span>
               <span id="mineru-config-status" class="settings-status">读取中…</span>
-              <button class="action-btn primary mineru-add-account" id="mineru-add-account" type="button" onclick="startAddMineruAccount()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
+              <button class="action-btn primary mineru-add-account" id="mineru-add-account" type="button" data-action="templateClick102"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加账号</span></button>
             </div>
             <div class="settings-collapse-body" id="mineru-api-body">
               <section class="mineru-service-settings" aria-labelledby="mineru-service-title">
@@ -701,12 +701,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <strong id="mineru-service-title">服务地址</strong>
                   <code id="mineru-service-address">https://mineru.net</code>
                 </div>
-                <button id="mineru-service-edit" class="action-btn quiet" type="button" onclick="MEFinder.parserRuntime.startEditMineruService()">修改</button>
+                <button id="mineru-service-edit" class="action-btn quiet" type="button" data-action="templateClick103">修改</button>
                 <div class="mineru-service-control" id="mineru-service-control" hidden>
                   <label class="visually-hidden" for="mineru-api-base">MinerU API 地址</label>
                   <input id="mineru-api-base" class="settings-input settings-input-address" type="url" value="https://mineru.net" spellcheck="false">
-                  <button id="mineru-service-save" class="action-btn primary" type="button" onclick="saveMineruServiceAddress()">保存地址</button>
-                  <button class="action-btn" type="button" onclick="MEFinder.parserRuntime.cancelEditMineruService()">取消</button>
+                  <button id="mineru-service-save" class="action-btn primary" type="button" data-action="templateClick104">保存地址</button>
+                  <button class="action-btn" type="button" data-action="templateClick105">取消</button>
                 </div>
               </section>
               <section class="mineru-account-management">
@@ -731,10 +731,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                         <label for="mineru-token">API Token</label>
                         <div class="settings-secret">
                           <input id="mineru-token" class="settings-input settings-input--mono" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴 MinerU API Token">
-                          <button id="mineru-token-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('mineru-token','mineru-token-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
+                          <button id="mineru-token-toggle" class="settings-secret-toggle" type="button" aria-label="显示" data-action="templateClick106"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
                         </div>
                         <div class="settings-field-aside">
-                          <a id="mineru-token-link" class="settings-field-link" href="javascript:void(0)" onclick="openMineruTokenPage()">前往 MinerU 获取 Token</a>
+                          <a id="mineru-token-link" class="settings-field-link" href="javascript:void(0)" data-action="templateClick107">前往 MinerU 获取 Token</a>
                           <small id="mineru-token-help">可粘贴原始 Token 或完整 Bearer 值，只保存在本机</small>
                         </div>
                       </div>
@@ -744,10 +744,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       </div>
                       <div class="settings-editor-actions">
                         <span id="mineru-dialog-error" class="settings-hint" role="alert" aria-live="polite" hidden></span>
-                        <button id="mineru-account-remove" class="action-btn danger" type="button" hidden onclick="deleteMineruAccount(document.getElementById('mineru-account-id').value)">移除账号</button>
-                        <button id="mineru-account-test" class="action-btn" type="button" hidden onclick="testMineruConnection(document.getElementById('mineru-account-id').value, this)">测试连接</button>
-                        <button id="mineru-account-cancel" class="action-btn" type="button" onclick="closeMineruAccountDialog()">取消</button>
-                        <button id="mineru-account-save" class="action-btn primary" type="button" onclick="saveMineruConfig(event)">保存账号</button>
+                        <button id="mineru-account-remove" class="action-btn danger" type="button" hidden data-action="templateClick108">移除账号</button>
+                        <button id="mineru-account-test" class="action-btn" type="button" hidden data-action="templateClick109">测试连接</button>
+                        <button id="mineru-account-cancel" class="action-btn" type="button" data-action="templateClick110">取消</button>
+                        <button id="mineru-account-save" class="action-btn primary" type="button" data-action="templateClick111">保存账号</button>
                       </div>
                     </div>
                   </div>
@@ -758,23 +758,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">本地 OCR 组件</span><span class="settings-section-note">离线识别日文扫描件与古籍；自动导入只使用已启用的组件</span></span>
               <span id="local-ocr-status" class="settings-status">读取中…</span>
-              <button class="action-btn" id="local-ocr-reload" type="button" hidden onclick="loadLocalOCRConfig()">重新读取</button>
+              <button class="action-btn" id="local-ocr-reload" type="button" hidden data-action="templateClick112">重新读取</button>
             </div>
             <div class="settings-collapse-body" id="local-ocr-body">
               
               <div class="local-ocr-component-list">
                 <section class="local-ocr-component" data-local-ocr-engine="ndlocr-lite">
                   <div class="local-ocr-component-head"><span><strong>日文 OCR</strong><small>NDLOCR-Lite 1.2.3 · 现代图书与杂志</small></span><div class="local-ocr-head-actions"><span id="local-ocr-modern-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-modern-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装时会一并下载模型，首次耗时取决于网络</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','install',this)">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlocr-lite','cancel',this)" hidden>取消</button></div></div>
-                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlocr-lite', this)">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-modern-install-hint" role="status" aria-live="polite">安装时会一并下载模型，首次耗时取决于网络</span><div id="local-ocr-modern-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-modern-install" class="action-btn" type="button" data-action="templateClick113">下载安装</button><button id="local-ocr-modern-validate" class="action-btn" type="button" data-action="templateClick114" hidden>重新验证</button><button id="local-ocr-modern-uninstall" class="action-btn danger" type="button" data-action="templateClick115" hidden>卸载</button><button id="local-ocr-modern-cancel" class="action-btn" type="button" data-action="templateClick116" hidden>取消</button></div></div>
+                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-modern-python">Python</label><div class="settings-control"><input id="local-ocr-modern-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>该组件独立环境中的 Python 可执行文件</small></div><label class="settings-label" for="local-ocr-modern-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-modern-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDLOCR-Lite 1.2.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" data-action="templateClick117">测试手动入口</button><span id="local-ocr-modern-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
                 <section class="local-ocr-component" data-local-ocr-engine="ndlkotenocr-lite">
                   <div class="local-ocr-component-head"><span><strong>古籍 OCR</strong><small>NDL古典籍OCR-Lite 1.4.3 · 日文古籍与繁体竖排古籍</small></span><div class="local-ocr-head-actions"><span id="local-ocr-ancient-managed-state" class="settings-status warning">未安装</span><label class="ui-switch"><input id="local-ocr-ancient-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用</span></label></div></div>
-                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','install',this)">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','validate',this)" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this)" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" onclick="manageLocalOCRComponent('ndlkotenocr-lite','cancel',this)" hidden>取消</button></div></div>
-                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" onclick="testLocalOCREngine('ndlkotenocr-lite', this)">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
+                  <div class="local-ocr-install-row"><div class="local-ocr-install-copy"><span id="local-ocr-ancient-install-hint" role="status" aria-live="polite">可与日文 OCR 分别安装和启用</span><div id="local-ocr-ancient-progress" class="local-ocr-progress" hidden><span></span></div></div><div class="settings-actions local-ocr-install-actions"><button id="local-ocr-ancient-install" class="action-btn" type="button" data-action="templateClick118">下载安装</button><button id="local-ocr-ancient-validate" class="action-btn" type="button" data-action="templateClick119" hidden>重新验证</button><button id="local-ocr-ancient-uninstall" class="action-btn danger" type="button" data-action="templateClick120" hidden>卸载</button><button id="local-ocr-ancient-cancel" class="action-btn" type="button" data-action="templateClick121" hidden>取消</button></div></div>
+                  <details class="local-ocr-manual"><summary>高级：手动指定运行时</summary><div class="settings-grid local-ocr-grid"><label class="settings-label" for="local-ocr-ancient-python">Python</label><div class="settings-control"><input id="local-ocr-ancient-python" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\Scripts\\python.exe"><small>必须与日文 OCR 使用独立环境</small></div><label class="settings-label" for="local-ocr-ancient-script">OCR 入口</label><div class="settings-control"><input id="local-ocr-ancient-script" class="settings-input" type="text" spellcheck="false" placeholder="C:\\...\\src\\ocr.py"><small>NDL古典籍OCR-Lite 1.4.3 的 ocr.py</small></div><span class="settings-label"></span><div class="settings-control settings-actions"><button class="action-btn" type="button" data-action="templateClick122">测试手动入口</button><span id="local-ocr-ancient-hint" class="settings-hint" role="status" aria-live="polite"></span></div></div></details>
                 </section>
               </div>
-              <details class="settings-disclose"><summary>自动解析如何使用这些引擎</summary><div class="settings-disclose-body">启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</div></details><div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" onclick="saveLocalOCRConfig()">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+              <details class="settings-disclose"><summary>自动解析如何使用这些引擎</summary><div class="settings-disclose-body">启用后，导入 PDF 时保持「自动选择」即可：日文扫描件优先走日文 OCR，古籍优先走古籍 OCR；本地识别失败会自动改用 MinerU 完成。点击「下载安装」会配置独立的 Python 环境和 CPU 模型，全部文件只保存在本机，不随备份导出</div></details><div class="settings-actions settings-save-row local-ocr-save-row"><button id="local-ocr-save" class="action-btn primary" type="button" data-action="templateClick123">保存设置</button><span id="local-ocr-save-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
               <section class="mineru-local-settings" id="mineru-local-settings">
                 <div class="mineru-local-section-head">
                   <span class="mineru-local-summary-copy"><strong>MinerU 本地部署</strong><small>一键安装 Pipeline 或 VLM；也可连接自行部署的 MinerU 服务</small></span>
@@ -782,17 +782,17 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
                 <div class="mineru-local-body">
                   <section class="managed-mineru" aria-labelledby="managed-mineru-title">
-                    <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">MEFinder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><span class="settings-actions"><button id="managed-mineru-check-updates" class="action-btn" type="button" onclick="checkManagedMineruUpdates(this)">检查新版本</button><button id="managed-mineru-auto-install" class="action-btn primary" type="button" onclick="manageMineruComponent('auto','install',this)">安装推荐配置</button></span></div>
+                    <div class="managed-mineru-heading"><span><strong id="managed-mineru-title">MEFinder 托管运行时</strong><small id="managed-mineru-hardware">正在检测硬件…</small></span><span class="settings-actions"><button id="managed-mineru-check-updates" class="action-btn" type="button" data-action="templateClick124">检查新版本</button><button id="managed-mineru-auto-install" class="action-btn primary" type="button" data-action="templateClick125">安装推荐配置</button></span></div>
                     <div class="managed-mineru-profile-list">
                       <article class="managed-mineru-profile" data-mineru-profile="pipeline">
                         <div><strong>Pipeline</strong><small>兼容性优先 · 支持纯 CPU</small><small id="managed-mineru-pipeline-progress" class="managed-mineru-profile-progress" role="status" aria-live="polite" hidden></small><div id="managed-mineru-pipeline-progress-bar" class="managed-mineru-progress" hidden><span></span></div></div>
                         <span id="managed-mineru-pipeline-state" class="settings-status warning">未安装</span>
-                        <div class="settings-actions"><button id="managed-mineru-pipeline-install" class="action-btn primary" type="button" onclick="manageMineruComponent('pipeline','install',this)">下载安装</button><button id="managed-mineru-pipeline-start" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','start',this)" hidden>启动</button><button id="managed-mineru-pipeline-stop" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','stop',this)" hidden>停止</button><button id="managed-mineru-pipeline-uninstall" class="action-btn danger" type="button" onclick="manageMineruComponent('pipeline','uninstall',this)" hidden>卸载</button><button id="managed-mineru-pipeline-cancel" class="action-btn" type="button" onclick="manageMineruComponent('pipeline','cancel',this)" hidden>取消</button></div>
+                        <div class="settings-actions"><button id="managed-mineru-pipeline-install" class="action-btn primary" type="button" data-action="templateClick126">下载安装</button><button id="managed-mineru-pipeline-start" class="action-btn" type="button" data-action="templateClick127" hidden>启动</button><button id="managed-mineru-pipeline-stop" class="action-btn" type="button" data-action="templateClick128" hidden>停止</button><button id="managed-mineru-pipeline-uninstall" class="action-btn danger" type="button" data-action="templateClick129" hidden>卸载</button><button id="managed-mineru-pipeline-cancel" class="action-btn" type="button" data-action="templateClick130" hidden>取消</button></div>
                       </article>
                       <article class="managed-mineru-profile" data-mineru-profile="vlm">
                         <div><strong>VLM 高精度</strong><small>需要 Apple Silicon 或兼容 NVIDIA GPU（8GB+ 显存）</small><small id="managed-mineru-vlm-progress" class="managed-mineru-profile-progress" role="status" aria-live="polite" hidden></small><div id="managed-mineru-vlm-progress-bar" class="managed-mineru-progress" hidden><span></span></div></div>
                         <span id="managed-mineru-vlm-state" class="settings-status warning">未安装</span>
-                        <div class="settings-actions"><button id="managed-mineru-vlm-install" class="action-btn primary" type="button" onclick="manageMineruComponent('vlm','install',this)">下载安装</button><button id="managed-mineru-vlm-start" class="action-btn" type="button" onclick="manageMineruComponent('vlm','start',this)" hidden>启动</button><button id="managed-mineru-vlm-stop" class="action-btn" type="button" onclick="manageMineruComponent('vlm','stop',this)" hidden>停止</button><button id="managed-mineru-vlm-uninstall" class="action-btn danger" type="button" onclick="manageMineruComponent('vlm','uninstall',this)" hidden>卸载</button><button id="managed-mineru-vlm-cancel" class="action-btn" type="button" onclick="manageMineruComponent('vlm','cancel',this)" hidden>取消</button></div>
+                        <div class="settings-actions"><button id="managed-mineru-vlm-install" class="action-btn primary" type="button" data-action="templateClick131">下载安装</button><button id="managed-mineru-vlm-start" class="action-btn" type="button" data-action="templateClick132" hidden>启动</button><button id="managed-mineru-vlm-stop" class="action-btn" type="button" data-action="templateClick133" hidden>停止</button><button id="managed-mineru-vlm-uninstall" class="action-btn danger" type="button" data-action="templateClick134" hidden>卸载</button><button id="managed-mineru-vlm-cancel" class="action-btn" type="button" data-action="templateClick135" hidden>取消</button></div>
                       </article>
                     </div>
                     <small id="managed-mineru-hint" class="settings-hint" role="status" aria-live="polite"></small>
@@ -809,7 +809,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                         <span class="settings-label">本地部署选项</span>
                         <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页可以选择「本地 MinerU」；在线 MinerU 失败后可手动切换，不会自动切换</small></div>
                         <span class="settings-label"></span>
-                        <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" onclick="saveMineruLocalSettings()">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" onclick="testMineruLocalConnection()">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                        <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" data-action="templateClick136">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" data-action="templateClick137">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
                       </div>
                     </div>
                   </details>
@@ -831,7 +831,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                     <div class="settings-field">
                       <label for="general-model-key">API Key <span class="settings-field-optional">（可选）</span></label>
-                      <div class="settings-secret"><input id="general-model-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="本地部署通常留空"><button id="general-model-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('general-model-key','general-model-key-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button></div>
+                      <div class="settings-secret"><input id="general-model-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="本地部署通常留空"><button id="general-model-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" data-action="templateClick138"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button></div>
                       <small>只保存在本机；编辑时留空即保留原 Key</small>
                     </div>
                     <div class="settings-field">
@@ -840,7 +840,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                     </div>
                     <div class="settings-field">
                       <label for="general-model-model">模型</label>
-                      <div class="settings-model-row"><input id="general-model-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" list="general-model-model-list" placeholder="选择或手动输入模型名"><datalist id="general-model-model-list"></datalist><button id="general-model-fetch" class="action-btn settings-model-fetch" type="button" onclick="fetchGeneralModelModels()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button></div>
+                      <div class="settings-model-row"><input id="general-model-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" list="general-model-model-list" placeholder="选择或手动输入模型名"><datalist id="general-model-model-list"></datalist><button id="general-model-fetch" class="action-btn settings-model-fetch" type="button" data-action="templateClick139"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button></div>
                       <small id="general-model-model-hint" class="vision-model-hint">填好地址后可自动读取模型列表；读取失败也可手动输入型号</small>
                     </div>
                     <div class="settings-field">
@@ -848,7 +848,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <div class="mineru-local-enable-control"><label class="ui-switch"><input id="general-model-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用为导入解析选项</span></label></div>
                       <small>启用后，导入页可以选择「通用本地模型」；不会自动使用</small>
                     </div>
-                    <div class="settings-editor-actions"><span id="general-model-hint" class="settings-hint" role="status" aria-live="polite"></span><button id="general-model-test" class="action-btn" type="button" onclick="testGeneralModel()">检测连接</button><button id="general-model-save" class="action-btn primary" type="button" onclick="saveGeneralModel()">保存设置</button></div>
+                    <div class="settings-editor-actions"><span id="general-model-hint" class="settings-hint" role="status" aria-live="polite"></span><button id="general-model-test" class="action-btn" type="button" data-action="templateClick140">检测连接</button><button id="general-model-save" class="action-btn primary" type="button" data-action="templateClick141">保存设置</button></div>
                   </div>
                   </div>
                 </div>
@@ -859,7 +859,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
               <span class="settings-section-heading-copy"><span class="settings-section-title">解析统计</span><span class="settings-section-note">当前文献库的页级解析来源</span></span>
               <span id="parser-statistics-status" class="settings-status">本地记录</span>
-              <button class="action-btn" type="button" onclick="loadParserStatistics()">刷新</button>
+              <button class="action-btn" type="button" data-action="templateClick142">刷新</button>
             </div>
             <div class="settings-collapse-body" id="statistics-settings-body">
               <section class="parser-overview" aria-labelledby="parser-overview-title">
@@ -882,7 +882,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-section-head">
             <span class="settings-section-heading-copy"><span class="settings-section-title">其他解析 API</span><span class="settings-section-note">可选的视觉模型接口，兼容 OpenAI 协议，支持中转服务</span></span>
             <span id="vision-config-status" class="settings-status">读取中…</span>
-            <button class="action-btn vision-add-btn" type="button" onclick="startAddVisionProvider()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
+            <button class="action-btn vision-add-btn" type="button" data-action="templateClick143"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11"/></svg><span>添加接口</span></button>
             </div>
             <div class="settings-collapse-body" id="vision-api-body">
             <div class="vision-provider-layout">
@@ -903,7 +903,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <label for="vision-api-base">API 地址</label>
                   <div class="vision-model-combo vision-base-combo">
                     <input id="vision-api-base" class="settings-input settings-input--mono" type="url" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-base-pop" placeholder="选择服务商，或粘贴接口地址">
-                    <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" onclick="toggleVisionBaseList(event)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
+                    <button id="vision-base-toggle" class="combo-toggle" type="button" tabindex="-1" aria-label="展开常见服务商列表" title="换一个服务商" data-action="templateClick144"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>
                     <div id="vision-base-pop" class="vision-model-pop" hidden></div>
                   </div>
                   <small>选择服务商会自动填写名称和地址；也可以直接粘贴 OpenAI 兼容接口地址</small>
@@ -912,7 +912,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   <label for="vision-api-key">API Key</label>
                   <div class="settings-secret">
                     <input id="vision-api-key" class="settings-input settings-input--mono" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key">
-                    <button id="vision-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" onclick="toggleMineruSecret('vision-api-key','vision-key-toggle')"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
+                    <button id="vision-key-toggle" class="settings-secret-toggle" type="button" aria-label="显示" data-action="templateClick145"><svg class="icon-eye" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-5.2 8-5.2S18 10 18 10s-3 5.2-8 5.2S2 10 2 10Z"/><circle cx="10" cy="10" r="2.3"/></svg><svg class="icon-eye-off" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.2 5.2A7 7 0 0 1 10 5c5 0 8 5 8 5a13 13 0 0 1-2.3 2.7M5.2 6.4A13 13 0 0 0 2 10s3 5 8 5c1.1 0 2.1-.2 3-.6M3 3l14 14"/></svg></button>
                   </div>
                   <small>只保存在本机；编辑时留空即保留原密钥</small>
                 </div>
@@ -927,14 +927,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                       <input id="vision-model" class="settings-input" type="text" maxlength="160" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="vision-model-pop" placeholder="选择模型，或手动输入">
                       <div id="vision-model-pop" class="vision-model-pop" hidden></div>
                     </div>
-                    <button id="vision-model-refresh" class="action-btn settings-model-fetch" type="button" onclick="fetchVisionModels()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button>
+                    <button id="vision-model-refresh" class="action-btn settings-model-fetch" type="button" data-action="templateClick146"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 6.5A7 7 0 1 0 17 10M16 3.5v3h-3"/></svg>获取模型</button>
                   </div>
                   <small id="vision-model-hint" class="vision-model-hint">填好地址和 Key 后会自动读取模型列表；读取失败也可以手动输入型号</small>
                 </div>
                 <div class="settings-editor-actions">
                   <span id="vision-save-hint" class="settings-hint"></span>
-                  <button class="action-btn" id="vision-cancel-edit" type="button" onclick="startAddVisionProvider()" hidden>取消编辑</button>
-                  <button class="action-btn primary" type="button" onclick="saveVisionProvider()">保存接口</button>
+                  <button class="action-btn" id="vision-cancel-edit" type="button" data-action="templateClick143" hidden>取消编辑</button>
+                  <button class="action-btn primary" type="button" data-action="templateClick147">保存接口</button>
                 </div>
               </div>
             </div>
@@ -945,7 +945,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small id="vision-fallback-summary">关闭时只提示失败；开启后自动改用首个可用接口，可能产生调用费用</small>
               </div>
               <label class="ui-switch vision-auto-check">
-                <input id="vision-auto-fallback" type="checkbox" aria-describedby="vision-fallback-summary" onchange="setVisionAutoFallback(this.checked)">
+                <input id="vision-auto-fallback" type="checkbox" aria-describedby="vision-fallback-summary" data-action-change="templateChange148">
                 <span class="ui-switch-track" aria-hidden="true"></span>
                 <span class="ui-switch-text">自动切换</span>
               </label>
@@ -960,23 +960,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-collapse-body" id="citation-format-body">
             <div class="citation-format-options" id="citation-format-options" aria-label="启用的引文格式">
               <label class="citation-format-option selected" data-citation-style="chinese">
-                <input type="checkbox" name="citation-format" value="chinese" checked onchange="setCitationStyleEnabled(this.value,this.checked)">
+                <input type="checkbox" name="citation-format" value="chinese" checked data-action-change="templateChange149">
                 <span class="citation-format-copy"><strong>中文脚注</strong><small>中文人文社科常用脚注体例</small></span><span class="citation-format-check" aria-hidden="true"></span>
               </label>
               <label class="citation-format-option selected" data-citation-style="gb">
-                <input type="checkbox" name="citation-format" value="gb" checked onchange="setCitationStyleEnabled(this.value,this.checked)">
+                <input type="checkbox" name="citation-format" value="gb" checked data-action-change="templateChange149">
                 <span class="citation-format-copy"><strong>GB/T 7714</strong><small>中文参考文献国家标准格式</small></span><span class="citation-format-check" aria-hidden="true"></span>
               </label>
               <label class="citation-format-option" data-citation-style="chicago">
-                <input type="checkbox" name="citation-format" value="chicago" onchange="setCitationStyleEnabled(this.value,this.checked)">
+                <input type="checkbox" name="citation-format" value="chicago" data-action-change="templateChange149">
                 <span class="citation-format-copy"><strong>Chicago</strong><small>Notes-Bibliography 脚注体例</small></span><span class="citation-format-check" aria-hidden="true"></span>
               </label>
               <label class="citation-format-option" data-citation-style="apa">
-                <input type="checkbox" name="citation-format" value="apa" onchange="setCitationStyleEnabled(this.value,this.checked)">
+                <input type="checkbox" name="citation-format" value="apa" data-action-change="templateChange149">
                 <span class="citation-format-copy"><strong>APA</strong><small>第 7 版参考文献格式</small></span><span class="citation-format-check" aria-hidden="true"></span>
               </label>
               <label class="citation-format-option" data-citation-style="mla">
-                <input type="checkbox" name="citation-format" value="mla" onchange="setCitationStyleEnabled(this.value,this.checked)">
+                <input type="checkbox" name="citation-format" value="mla" data-action-change="templateChange149">
                 <span class="citation-format-copy"><strong>MLA</strong><small>第 9 版 Works Cited 格式</small></span><span class="citation-format-check" aria-hidden="true"></span>
               </label>
             </div>
@@ -992,7 +992,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="auto-match-label">自动匹配阈值</span>
                 <span class="auto-match-value" id="online-auto-match-value">90%</span>
               </div>
-              <input class="auto-match-range" id="online-auto-match-range" type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" oninput="setOnlineAutoMatchThreshold(this.value)">
+              <input class="auto-match-range" id="online-auto-match-range" type="range" min="80" max="100" step="1" value="90" aria-label="自动匹配阈值" data-action-input="templateInput150">
               <div class="auto-match-scale"><span>80%（更宽松）</span><span>100%（最严格）</span></div>
               <small class="auto-match-hint">批量补全时，如果只有一个候选且匹配分达到此值，就自动采用；低于此值则弹出候选列表，由你核对后选择。调低更省事，调高更稳妥</small>
             </div>
@@ -1001,8 +1001,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <span class="auto-match-label">文献默认语言</span>
               </div>
               <div class="segmented-control" id="lib-default-lang-control">
-                <button class="seg-btn active" type="button" data-deflang="chinese" onclick="setLibDefaultLanguage(this)">中文</button>
-                <button class="seg-btn" type="button" data-deflang="foreign" onclick="setLibDefaultLanguage(this)">外文</button>
+                <button class="seg-btn active" type="button" data-deflang="chinese" data-action="templateClick151">中文</button>
+                <button class="seg-btn" type="button" data-deflang="foreign" data-action="templateClick151">外文</button>
               </div>
               <small class="auto-match-hint">选「中文」时，简体中文、繁体中文等细类排在外语前；选「外文」时，英语、德语等排在中文前。这里只影响文献库语言筛选的排序，不改变联网补全的数据源——中文期刊始终查知网</small>
             </div>
@@ -1018,54 +1018,54 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div class="appearance-field">
                 <div class="appearance-field-label">外观模式</div>
                 <div class="appearance-modes" id="appearance-mode-seg" role="radiogroup" aria-label="外观模式">
-                  <button type="button" class="appearance-mode-card" data-appearance-mode="system" role="radio" aria-checked="false" onclick="setAppearanceMode('system')">
+                  <button type="button" class="appearance-mode-card" data-appearance-mode="system" role="radio" aria-checked="false" data-action="templateClick152">
                     <span class="mode-preview mode-preview-split" aria-hidden="true">
                       <span class="mode-preview-half is-light"><span class="mode-mock" id="mode-mock-system-light"><span class="mode-mock-side"></span><span class="mode-mock-main"><span class="mode-mock-bar"></span><span class="mode-mock-line"></span><span class="mode-mock-line is-short"></span><span class="mode-mock-accent"></span></span></span></span>
                       <span class="mode-preview-half is-dark"><span class="mode-mock" id="mode-mock-system-dark"><span class="mode-mock-side"></span><span class="mode-mock-main"><span class="mode-mock-bar"></span><span class="mode-mock-line"></span><span class="mode-mock-line is-short"></span><span class="mode-mock-accent"></span></span></span></span>
                     </span>
                     <span class="appearance-mode-label"><svg class="mode-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>跟随系统</span>
                   </button>
-                  <button type="button" class="appearance-mode-card" data-appearance-mode="light" role="radio" aria-checked="false" onclick="setAppearanceMode('light')">
+                  <button type="button" class="appearance-mode-card" data-appearance-mode="light" role="radio" aria-checked="false" data-action="templateClick153">
                     <span class="mode-preview" aria-hidden="true"><span class="mode-mock" id="mode-mock-light"><span class="mode-mock-side"></span><span class="mode-mock-main"><span class="mode-mock-bar"></span><span class="mode-mock-line"></span><span class="mode-mock-line is-short"></span><span class="mode-mock-accent"></span></span></span></span>
                     <span class="appearance-mode-label"><svg class="mode-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>浅色</span>
                   </button>
-                  <button type="button" class="appearance-mode-card" data-appearance-mode="dark" role="radio" aria-checked="false" onclick="setAppearanceMode('dark')">
+                  <button type="button" class="appearance-mode-card" data-appearance-mode="dark" role="radio" aria-checked="false" data-action="templateClick154">
                     <span class="mode-preview" aria-hidden="true"><span class="mode-mock" id="mode-mock-dark"><span class="mode-mock-side"></span><span class="mode-mock-main"><span class="mode-mock-bar"></span><span class="mode-mock-line"></span><span class="mode-mock-line is-short"></span><span class="mode-mock-accent"></span></span></span></span>
                     <span class="appearance-mode-label"><svg class="mode-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>深色</span>
                   </button>
                 </div>
               </div>
               <div class="appearance-pair" id="appearance-pair" role="radiogroup" aria-label="白天与夜晚各用哪套主题" hidden>
-                <button type="button" class="appearance-pair-slot" data-appearance-edit="light" role="radio" aria-checked="false" onclick="setAppearanceEdit('light')">
+                <button type="button" class="appearance-pair-slot" data-appearance-edit="light" role="radio" aria-checked="false" data-action="templateClick155">
                   <span class="appearance-pair-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg></span>
                   <span class="appearance-pair-copy"><span class="appearance-pair-when">白天</span><span class="appearance-pair-theme" id="appearance-pair-light"></span></span>
                 </button>
-                <button type="button" class="appearance-pair-slot" data-appearance-edit="dark" role="radio" aria-checked="false" onclick="setAppearanceEdit('dark')">
+                <button type="button" class="appearance-pair-slot" data-appearance-edit="dark" role="radio" aria-checked="false" data-action="templateClick156">
                   <span class="appearance-pair-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A7.5 7.5 0 0 1 9.5 4 6.5 6.5 0 1 0 20 14.5Z"/></svg></span>
                   <span class="appearance-pair-copy"><span class="appearance-pair-when">夜晚</span><span class="appearance-pair-theme" id="appearance-pair-dark"></span></span>
                 </button>
               </div>
               <div id="theme-options" class="theme-options" role="radiogroup" aria-label="应用主题"></div>
               <div class="appearance-custom" id="appearance-custom">
-                <button type="button" class="appearance-custom-toggle" id="appearance-custom-toggle" aria-expanded="true" aria-controls="appearance-custom-body" onclick="toggleAppearanceCustom()">
+                <button type="button" class="appearance-custom-toggle" id="appearance-custom-toggle" aria-expanded="true" aria-controls="appearance-custom-body" data-action="templateClick157">
                   <svg class="appearance-custom-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
                   <span class="appearance-custom-title">自定义配色</span>
                   <span class="appearance-custom-note">在选中主题上微调，改动会存为一份副本</span>
                 </button>
                 <div class="appearance-custom-body" id="appearance-custom-body">
                   <div class="appearance-custom-grid">
-                    <label class="appearance-color"><span>按钮色</span><input type="color" id="appearance-accent" oninput="onCustomColorInput()"></label>
-                    <label class="appearance-color"><span>强调色</span><input type="color" id="appearance-highlight" oninput="onCustomColorInput()"></label>
-                    <label class="appearance-color"><span>背景色</span><input type="color" id="appearance-background" oninput="onCustomColorInput()"></label>
-                    <label class="appearance-color"><span>前景色</span><input type="color" id="appearance-foreground" oninput="onCustomColorInput()"></label>
-                    <label class="appearance-range"><span>对比度 <b id="appearance-contrast-value">55</b></span><input type="range" min="0" max="100" step="1" id="appearance-contrast" oninput="onCustomColorInput()"></label>
+                    <label class="appearance-color"><span>按钮色</span><input type="color" id="appearance-accent" data-action-input="templateInput158"></label>
+                    <label class="appearance-color"><span>强调色</span><input type="color" id="appearance-highlight" data-action-input="templateInput158"></label>
+                    <label class="appearance-color"><span>背景色</span><input type="color" id="appearance-background" data-action-input="templateInput158"></label>
+                    <label class="appearance-color"><span>前景色</span><input type="color" id="appearance-foreground" data-action-input="templateInput158"></label>
+                    <label class="appearance-range"><span>对比度 <b id="appearance-contrast-value">55</b></span><input type="range" min="0" max="100" step="1" id="appearance-contrast" data-action-input="templateInput158"></label>
                   </div>
                   <div class="appearance-custom-actions">
-                    <button type="button" class="appearance-btn" onclick="duplicateCurrentTheme()">复制为自定义</button>
-                    <button type="button" class="appearance-btn" onclick="exportCurrentTheme()">导出</button>
-                    <button type="button" class="appearance-btn" onclick="triggerThemeImport()">导入</button>
-                    <button type="button" class="appearance-btn appearance-delete-btn" id="appearance-delete-custom" onclick="deleteCurrentCustomTheme()" hidden>删除当前自定义</button>
-                    <input type="file" id="appearance-import-file" accept="application/json,.json" hidden onchange="onThemeImportFile(event)">
+                    <button type="button" class="appearance-btn" data-action="templateClick159">复制为自定义</button>
+                    <button type="button" class="appearance-btn" data-action="templateClick160">导出</button>
+                    <button type="button" class="appearance-btn" data-action="templateClick161">导入</button>
+                    <button type="button" class="appearance-btn appearance-delete-btn" id="appearance-delete-custom" data-action="templateClick162" hidden>删除当前自定义</button>
+                    <input type="file" id="appearance-import-file" accept="application/json,.json" hidden data-action-change="templateChange163">
                   </div>
                 </div>
               </div>
@@ -1084,7 +1084,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <strong>读不到当前数据位置</strong>
                 <span id="data-location-error-reason">读取失败</span>
               </div>
-              <button class="action-btn data-location-error-retry" type="button" onclick="loadDataLocation()">重新读取</button>
+              <button class="action-btn data-location-error-retry" type="button" data-action="templateClick164">重新读取</button>
             </div>
             <div class="data-location-card">
               <span class="data-location-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/><path d="M7.5 15.5h9"/></svg></span>
@@ -1097,11 +1097,11 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="data-location-actions">
               <div class="data-location-action">
                 <div><strong>打开已有资料库</strong><small>读取从另一台电脑同步来的 MEFinder 文件夹，不复制或覆盖资料</small></div>
-                <button class="action-btn" type="button" id="data-location-open" onclick="chooseDataLocation('existing')">选择已有库</button>
+                <button class="action-btn" type="button" id="data-location-open" data-action="templateClick165">选择已有库</button>
               </div>
               <div class="data-location-action">
                 <div><strong>迁移当前资料库</strong><small>将当前资料复制到新位置，原位置的数据保留</small></div>
-                <button class="action-btn" type="button" id="data-location-choose" onclick="chooseDataLocation('migrate')">选择新位置</button>
+                <button class="action-btn" type="button" id="data-location-choose" data-action="templateClick166">选择新位置</button>
               </div>
             </div>
             <div class="data-location-pending" id="data-location-pending" style="display:none">
@@ -1110,7 +1110,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <code id="data-location-target"></code>
                 <small id="data-location-pending-note" role="status" aria-live="polite">会复制索引、语料和本机设置。迁移完成后重启应用生效，旧位置的数据会保留</small>
               </div>
-              <button class="action-btn primary" type="button" id="data-location-migrate" onclick="migrateDataLocation()">迁移并切换</button>
+              <button class="action-btn primary" type="button" id="data-location-migrate" data-action="templateClick167">迁移并切换</button>
             </div>
             <div class="data-location-warning">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 6.5v4.5M10 14h.01"/></svg>
@@ -1126,13 +1126,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <div class="settings-collapse-body" id="document-transfer-body">
               <div class="document-export-options" id="document-export-options" role="radiogroup" aria-label="文档包导出内容">
                 <label class="document-export-option" data-document-export-choice="data_only">
-                  <input type="radio" name="document-export-mode" value="data_only" onchange="setDocumentExportMode(this.value)">
+                  <input type="radio" name="document-export-mode" value="data_only" data-action-change="templateChange168">
                   <span class="document-export-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5h16v12H4z"/><path d="M7 4.5h10v3H7zM9 12h6"/></svg></span>
                   <span class="document-export-option-copy"><strong>MEFinder 文档包</strong><small>包含页级文本、书目和页码映射；文件较小，导入后没有原 PDF 可打开</small></span>
                   <span class="document-export-option-check" aria-hidden="true"></span>
                 </label>
                 <label class="document-export-option" data-document-export-choice="with_pdf">
-                  <input type="radio" name="document-export-mode" value="with_pdf" onchange="setDocumentExportMode(this.value)">
+                  <input type="radio" name="document-export-mode" value="with_pdf" data-action-change="templateChange168">
                   <span class="document-export-option-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg></span>
                   <span class="document-export-option-copy"><strong>MEFinder 文档包＋原 PDF <em>跨设备推荐</em></strong><small>把原 PDF 一并装入文档包；导入后可直接搜索和打开原文，不重新 OCR</small></span>
                   <span class="document-export-option-check" aria-hidden="true"></span>
@@ -1154,14 +1154,14 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <strong>导出备份</strong>
                 <small id="backup-export-hint">仅备份页码、书目和偏好，不含 PDF</small>
               </span>
-              <button class="action-btn primary" type="button" onclick="exportBackup()">导出备份</button>
+              <button class="action-btn primary" type="button" data-action="templateClick169">导出备份</button>
             </div>
             <div class="settings-choice-row">
               <span class="settings-choice-copy">
                 <strong>从备份恢复</strong>
                 <small>导入会覆盖当前的页码映射与书目信息（原文件会先备份为 .pre-restore），随后自动重建索引。语料 PDF 不含在备份内</small>
               </span>
-              <button class="action-btn settings-toggle" id="backup-import-choose" type="button" onclick="importBackup()">选择备份并恢复</button>
+              <button class="action-btn settings-toggle" id="backup-import-choose" type="button" data-action="templateClick170">选择备份并恢复</button>
             </div>
             <p class="settings-footnote" id="backup-last-export">还没有导出过备份</p>
             </div>
@@ -1181,13 +1181,13 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </div>
               <div class="software-update-actions">
-                <button class="action-btn" type="button" id="update-check-btn" onclick="checkForUpdates(false)">检查更新</button>
-                <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" onclick="runUpdateAction()">下载更新</button>
+                <button class="action-btn" type="button" id="update-check-btn" data-action="templateClick171">检查更新</button>
+                <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" data-action="templateClick172">下载更新</button>
                 <a class="action-btn update-release-link" id="update-release-link" href="#" target="_blank" rel="noreferrer" style="display:none">查看发布页</a>
               </div>
             </div>
             <label class="update-auto-option" for="auto-update-enabled">
-              <input id="auto-update-enabled" type="checkbox" onchange="setAutoUpdate(this.checked)">
+              <input id="auto-update-enabled" type="checkbox" data-action-change="templateChange173">
               <span class="update-auto-copy"><strong>启动时自动检查并下载更新</strong><small id="update-auto-description">仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认</small></span>
             </label>
             </div>
@@ -1205,7 +1205,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <small id="macos-update-message">只检查 GitHub Releases，不会后台下载或自动替换应用</small>
               </div>
               <div class="macos-update-actions">
-                <button class="action-btn" type="button" id="macos-update-check" onclick="checkMacosUpdate()">检查更新</button>
+                <button class="action-btn" type="button" id="macos-update-check" data-action="templateClick174">检查更新</button>
                 <a class="action-btn primary macos-update-release" id="macos-update-release" href="#" target="_blank" rel="noreferrer" style="display:none">打开 Releases 下载 DMG</a>
               </div>
             </div>
@@ -1219,8 +1219,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
 </div><!-- /app-shell -->
 
 
-<dialog id="markdown-page-dialog" class="markdown-page-dialog" aria-labelledby="md-page-title" aria-describedby="md-page-note" oncancel="MEFinder.library.pageExport.cancel(event)">
-  <form class="md-page-form" onsubmit="MEFinder.library.pageExport.submit(event)">
+<dialog id="markdown-page-dialog" class="markdown-page-dialog" aria-labelledby="md-page-title" aria-describedby="md-page-note" data-action-cancel="templateCancel175">
+  <form class="md-page-form" data-action-submit="templateSubmit176">
     <header class="md-page-head">
       <h2 id="md-page-title">按页导出 Markdown</h2>
       <p id="md-page-note" class="md-page-note"></p>
@@ -1235,23 +1235,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         <span class="md-page-typerow-label">页码依据</span>
         <div class="md-page-segment md-page-segment-compact" role="radiogroup" aria-label="页码依据" aria-describedby="md-page-mode-help">
           <label class="md-page-segment-item" id="md-page-mode-printed-item">
-            <input type="radio" name="md-page-mode" id="md-page-mode-printed" value="printed" checked onchange="MEFinder.library.pageExport.updateHelp()">
+            <input type="radio" name="md-page-mode" id="md-page-mode-printed" value="printed" checked data-action-change="templateChange177">
             <span class="md-page-segment-face">原书页码</span>
           </label>
           <label class="md-page-segment-item" id="md-page-mode-physical-item">
-            <input type="radio" name="md-page-mode" id="md-page-mode-physical" value="physical" onchange="MEFinder.library.pageExport.updateHelp()">
+            <input type="radio" name="md-page-mode" id="md-page-mode-physical" value="physical" data-action-change="templateChange177">
             <span class="md-page-segment-face">PDF 物理页</span>
           </label>
         </div>
       </div>
       <p id="md-page-mode-help" class="md-page-help">按书中印刷页码导出；序言页可输入 iv、v 等页码标签</p>
       <p id="md-page-error" class="md-page-error" role="alert"></p>
-      <div class="app-dialog-actions"><button class="action-btn" type="button" onclick="MEFinder.library.pageExport.close()">取消</button><button class="action-btn primary" type="submit">导出所选页</button></div>
+      <div class="app-dialog-actions"><button class="action-btn" type="button" data-action="templateClick178">取消</button><button class="action-btn primary" type="submit">导出所选页</button></div>
     </fieldset>
   </form>
 </dialog>
 <div id="toast-stack" class="toast-stack" role="status" aria-live="polite" aria-atomic="false"></div>
-<div id="app-dialog-backdrop" class="app-dialog-backdrop" aria-hidden="true" onclick="appDialogBackdropClick(event)">
+<div id="app-dialog-backdrop" class="app-dialog-backdrop" aria-hidden="true" data-action="templateClick179">
   <div class="app-dialog" id="app-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message" data-tone="info">
     <div class="app-dialog-heading">
       <span class="app-dialog-icon" aria-hidden="true">!</span>
@@ -1259,12 +1259,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
     </div>
     <div class="app-dialog-message" id="app-dialog-message"></div>
     <div class="app-dialog-actions">
-      <button class="action-btn" type="button" id="app-dialog-cancel" onclick="settleAppDialog(false)">取消</button>
-      <button class="action-btn primary" type="button" id="app-dialog-confirm" onclick="settleAppDialog(true)">确定</button>
+      <button class="action-btn" type="button" id="app-dialog-cancel" data-action="templateClick180">取消</button>
+      <button class="action-btn primary" type="button" id="app-dialog-confirm" data-action="templateClick181">确定</button>
     </div>
   </div>
 </div>
-<div id="remove-document-modal" class="remove-modal-backdrop" onclick="removeModalBackdropClick(event)">
+<div id="remove-document-modal" class="remove-modal-backdrop" data-action="templateClick182">
   <div class="remove-modal" role="dialog" aria-modal="true" aria-labelledby="remove-modal-title">
     <div class="remove-modal-title" id="remove-modal-title">从文献库移除？</div>
     <div class="remove-modal-copy" id="remove-modal-copy"></div>
@@ -1273,23 +1273,23 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
       <label class="remove-option" id="remove-internal-option"><input type="checkbox" id="remove-internal-copy"><span>同时删除应用内保存的 PDF 副本<small>默认不勾选。外部原始文件永远不会被删除</small></span></label>
     </div>
     <div class="remove-modal-warning" id="remove-modal-warning">删除应用内副本后无法恢复。请再次确认此操作</div>
-    <div class="remove-modal-actions"><button class="action-btn" onclick="closeRemoveDocumentModal()">取消</button><button class="action-btn danger-outline" id="confirm-remove-btn" onclick="confirmRemoveDocument()">从文献库移除</button></div>
+    <div class="remove-modal-actions"><button class="action-btn" data-action="templateClick183">取消</button><button class="action-btn danger-outline" id="confirm-remove-btn" data-action="templateClick184">从文献库移除</button></div>
   </div>
 </div>
-<div id="cnki-batch-modal" class="cnki-batch-backdrop" aria-hidden="true" onclick="cnkiBatchBackdropClick(event)">
+<div id="cnki-batch-modal" class="cnki-batch-backdrop" aria-hidden="true" data-action="templateClick185">
   <div class="cnki-batch-modal" role="dialog" aria-modal="true" aria-labelledby="cnki-batch-title">
     <div class="cnki-batch-head">
       <div>
         <div class="cnki-batch-title" id="cnki-batch-title">选择正确的记录</div>
         <div class="cnki-batch-progress" id="cnki-batch-progress"></div>
       </div>
-      <button class="action-btn" type="button" onclick="resolveCnkiBatchChoice({action:'stop'})">停止补全</button>
+      <button class="action-btn" type="button" data-action="templateClick186">停止补全</button>
     </div>
     <div class="cnki-batch-doc" id="cnki-batch-doc"></div>
     <div class="cnki-batch-list cnki-candidate-list" id="cnki-batch-list"></div>
     <div class="cnki-batch-actions">
-      <button class="action-btn" type="button" onclick="openCnkiBatchCurrentRecord()">打开知网检索</button>
-      <button class="action-btn" type="button" onclick="resolveCnkiBatchChoice({action:'skip'})">跳过这篇</button>
+      <button class="action-btn" type="button" data-action="templateClick187">打开知网检索</button>
+      <button class="action-btn" type="button" data-action="templateClick188">跳过这篇</button>
     </div>
   </div>
 </div>

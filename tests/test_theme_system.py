@@ -646,9 +646,9 @@ class ThemeMarkupTests(unittest.TestCase):
         for marker in (
             'class="windows-titlebar"',
             'class="windows-titlebar-drag pywebview-drag-region"',
-            'onclick="minimizeWindowsWindow()"',
-            'onclick="toggleWindowsMaximize()"',
-            'onclick="closeWindowsWindow()"',
+            'data-action="templateClick002"',
+            'data-action="templateClick003"',
+            'data-action="templateClick004"',
             "window.pywebview.api[method]()",
             "callWindowsWindow('is_maximized').then(setWindowsMaximized)",
         ):
@@ -684,7 +684,7 @@ class ThemeMarkupTests(unittest.TestCase):
             "macos-update-settings": "macos-update-body",
         }
         # One left-rail entry per category switches which panel is active.
-        self.assertEqual(HTML.count("onclick=\"showSettingsCategory('"), len(sections))
+        self.assertEqual(len(re.findall(r'<button class="settings-nav-item[^>]*data-action="templateClick\d+"', HTML)), len(sections))
         for section_id, body_id in sections.items():
             self.assertRegex(
                 HTML,

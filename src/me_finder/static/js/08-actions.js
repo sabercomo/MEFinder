@@ -6,15 +6,39 @@
     actions[name] = callback;
   }
 
+  function registerInline(name, callback) {
+    register(name, function(event, target) {
+      const inlineEvent = new Proxy(event, {get: function(source, key) {
+        if (key === 'currentTarget') return target;
+        if (key === 'stopPropagation') return function() { source.stopImmediatePropagation(); };
+        const value = Reflect.get(source, key, source);
+        return typeof value === 'function' ? value.bind(source) : value;
+      }});
+      if (callback.call(target, inlineEvent, target) === false) event.preventDefault();
+    });
+  }
+
+  function dispatch(event, attribute, key) {
+    if (!event.target.closest) return false;
+    const target = event.target.closest('[' + attribute + ']');
+    if (!target || !actions[target.dataset[key]]) return false;
+    actions[target.dataset[key]](event, target);
+    return true;
+  }
+
   document.addEventListener('click', function(event) {
-    if (!event.target.closest) return;
-    const target = event.target.closest('[data-action]');
-    if (target && actions[target.dataset.action]) {
-      actions[target.dataset.action](event, target);
-    }
+    dispatch(event, 'data-action', 'action');
+  });
+
+  ['change', 'input', 'paste', 'submit', 'cancel', 'dblclick'].forEach(function(type) {
+    document.addEventListener(type, function(event) {
+      const suffix = type.charAt(0).toUpperCase() + type.slice(1);
+      dispatch(event, 'data-action-' + type, 'action' + suffix);
+    }, type === 'cancel');
   });
 
   document.addEventListener('keydown', function(event) {
+    if (dispatch(event, 'data-action-keydown', 'actionKeydown')) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (!event.target.closest) return;
     const target = event.target.closest('[data-action][role="button"]');
@@ -24,5 +48,5 @@
     }
   });
 
-  global.MEFinderActions = {register: register};
+  global.MEFinderActions = {register: register, registerInline: registerInline};
 }(typeof window !== 'undefined' ? window : globalThis));

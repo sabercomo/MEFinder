@@ -70,7 +70,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_c4_inline_events_and_inner_html_do_not_increase(self):
         template = _read("templates/index.html")
         self.assertLessEqual(
-            len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 205
+            len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 0
         )
         inner_html_baseline = {
             "20-search.js": 11, "25-toast.js": 1, "30-library.js": 10,
@@ -86,6 +86,19 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
                                    "40-bibliography.js": 0}
         for name, ceiling in dynamic_inline_baseline.items():
             self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
+
+    def test_template_has_no_inline_events(self):
+        template = _read("templates/index.html")
+        self.assertNotRegex(template, r"\bon(?:click|change|input|keydown|dblclick|cancel|submit)\s*=")
+        self.assertIn('data-action="', template)
+        self.assertIn('data-action-change="', template)
+        self.assertIn('data-action-input="', template)
+        names = set(re.findall(r'data-action(?:-[a-z]+)?="(template\w+)"', template))
+        registered = set(re.findall(
+            r"MEFinderActions\.registerInline\('(template\w+)'",
+            _read("static/js/09-template-actions.js"),
+        ))
+        self.assertEqual(names, registered)
 
     def test_library_entries_use_delegated_click(self):
         library = _read("static/js/30-library.js")
@@ -589,11 +602,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：文献库筛选项与 chip 点击改为委托事件。
+    # 0.5.7 C4：模板静态事件迁到 09-template-actions.js。
     BASELINE_SHA256 = (
-        "033f5ff4ffde1a44daf749180da136f9162d5c5c2296f1dc876e58721b91fa4a"
+        "46f4abdcb72048ec06b77cecdf04550971235cff462dc005886e1252003cf01e"
     )
-    BASELINE_BYTES = 1269874
+    BASELINE_BYTES = 1290967
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

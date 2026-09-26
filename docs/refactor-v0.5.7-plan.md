@@ -240,6 +240,8 @@
 
 2026-09-26(C4 第七步):文献库筛选项和已生效筛选 chip 改用 `data-action`、`data-kind`、`data-value`,从属性读取筛选参数;保留未保存书目信息的离开确认。撤销 `setLibFacet`、`removeLibFacet` 两个直接全局入口,预算 19→17;`30-library.js` 的 `onclick=` 17→15。模板 205 处未动。
 
+2026-09-26(C4 第八步):`index.html` 的 210 个静态内联事件属性(其中计划跟踪的 `onclick/onchange/oninput` 为 205 个)迁为 `data-action[-事件]`;对应 188 种固定动作登记在 `09-template-actions.js`,不在 HTML 中执行字符串代码。`08-actions.js` 为变更、输入、键盘、粘贴、提交、取消和双击提供委托,适配器保留内联处理器原先的 `this`、`event.currentTarget` 和阻止冒泡语义。模板内联事件计数降为 0;动态生成的 HTML 仍待后续迁移。
+
 **前端 C5 DOM 构造与拆文件**
 - 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
 - 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。

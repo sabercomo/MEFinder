@@ -14,6 +14,29 @@ NODE = shutil.which("node")
 
 @unittest.skipUnless(NODE, "node 不可用，跳过事件委托测试")
 class DelegatedActionTests(unittest.TestCase):
+    def test_inline_event_adapter_keeps_target_and_stops_later_listeners(self):
+        script = r"""
+const listeners = {};
+global.document = {addEventListener(type, callback) { listeners[type] = callback; }};
+require(process.argv[1]);
+const calls = [];
+MEFinderActions.registerInline('changeMode', function(event) {
+  calls.push([this.dataset.id, event.currentTarget.dataset.id]);
+  event.stopPropagation();
+});
+const button = {dataset: {id: 'mode', actionChange: 'changeMode'}};
+const child = {closest(selector) {
+  return selector === '[data-action-change]' ? button : null;
+}};
+let stopped = 0;
+listeners.change({target: child, stopImmediatePropagation() { stopped++; }});
+if (JSON.stringify(calls) !== JSON.stringify([['mode', 'mode']]) || stopped !== 1) {
+  throw new Error(JSON.stringify({calls, stopped}));
+}
+"""
+        subprocess.run([NODE, "-e", script, str(ACTIONS_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
     def test_library_facets_keep_unsaved_edit_guard(self):
         script = r"""
 const calls = [];
@@ -133,6 +156,7 @@ const calls = [];
 MEFinderActions.register('enterBibEdit', (event, button) => calls.push(button.dataset.focusField));
 const row = {dataset: {action: 'enterBibEdit', focusField: 'title'}, role: 'button'};
 const child = {closest(selector) {
+  if (selector === '[data-action-keydown]') return null;
   if (selector !== '[data-action][role="button"]') throw new Error(selector);
   return row;
 }};
