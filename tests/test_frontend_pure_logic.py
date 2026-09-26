@@ -981,7 +981,7 @@ class ThemeMarkupTests(unittest.TestCase):
                  "builtinCss": True}
         html = _call("themeOptionMarkup", theme)
         self.assertTrue(html.startswith('<button class="theme-option" type="button" data-theme-choice="dawn"'))
-        self.assertIn('onclick="selectThemeChoice(\'dawn\')"', html)
+        self.assertIn('data-action="selectThemeChoice"', html)
         # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
         self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
         self.assertIn('class="theme-swatch-highlight"', html)
@@ -1143,7 +1143,8 @@ class StatusStatButtonTests(unittest.TestCase):
         self.assertIn(" active", html)
         self.assertIn(">已校准<", html)
         self.assertIn(">5<", html)
-        self.assertIn("applyLibStatusFilter('manual_mapped')", html)
+        self.assertIn('data-status="manual_mapped"', html)
+        self.assertIn('data-action="applyLibStatusFilter"', html)
 
     def test_inactive_button_omits_active_class(self):
         html = _call("statusStatButton", "manual_mapped", "已校准", 5,
@@ -1306,7 +1307,7 @@ class SegmentNumberStyleControlTests(unittest.TestCase):
     def test_index_threaded_into_ids_and_handlers(self):
         html = _call("segmentNumberStyleControl", "none", 3)
         self.assertIn('id="segment-style-select-3"', html)
-        self.assertIn("setSegmentNumberStyle(event,3,'roman_lower')", html)
+        self.assertIn('data-value="roman_lower" data-index="3" data-action="setSegmentNumberStyle"', html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
@@ -1327,7 +1328,7 @@ class SegmentLayoutControlTests(unittest.TestCase):
         self.assertIn(
             '<button class="app-select-option is-selected" type="button"'
             ' data-value="spread"', html)
-        self.assertIn("setSegmentLayout(event,2,'single')", html)
+        self.assertIn('data-value="single" data-index="2" data-action="setSegmentLayout"', html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")

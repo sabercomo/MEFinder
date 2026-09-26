@@ -1911,10 +1911,13 @@
   renderThemeOptions();
   syncAppearanceControls();
 
+  MEFinderActions.register('selectThemeChoice', function(event, target) {
+    selectThemeChoice(target.dataset.themeChoice);
+  });
+
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
   global.setAppearanceMode = setAppearanceMode;
   global.setAppearanceEdit = setAppearanceEdit;
-  global.selectThemeChoice = selectThemeChoice;
   global.toggleAppearanceCustom = toggleAppearanceCustom;
   global.onCustomColorInput = onCustomColorInput;
   global.duplicateCurrentTheme = duplicateCurrentTheme;

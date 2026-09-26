@@ -738,7 +738,14 @@
     }
   }
 
-  // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
+  MEFinderActions.registerInline('toggleSegmentSelect', function(event, target) {
+    toggleAppSelect(event, target.dataset.selectId);
+  });
+  MEFinderActions.register('toggleDetailContext', function(event, target) {
+    toggleDetailContext(target);
+  });
+
+  // 浏览器公共面：仅这些符号可被其它 static/js 文件与模板动作访问。
   global.setMode = setMode;
   global.setSearchSourceType = setSearchSourceType;
   global.closeAppSelects = closeAppSelects;
@@ -752,7 +759,6 @@
   global.renderSearchDocumentOptions = renderSearchDocumentOptions;
   global.updateSearchDocumentLabel = updateSearchDocumentLabel;
   global.runSearch = runSearch;
-  global.toggleDetailContext = toggleDetailContext;
   global.showDetail = showDetail;
   global.selectSearchScopeAll = selectSearchScopeAll;
   global.selectSearchGroup = selectSearchGroup;

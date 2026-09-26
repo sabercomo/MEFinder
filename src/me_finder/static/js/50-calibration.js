@@ -207,7 +207,7 @@
 
 
   function setSegmentNumberStyle(event, index, value) {
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     updateCalSeg(index, 'number_style', value);
     closeAppSelects();
     renderCalSegments();
@@ -216,7 +216,7 @@
 
 
   function setSegmentLayout(event, index, value) {
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     updateCalSeg(index, 'layout_mode', value);
     closeAppSelects();
     renderCalSegments();
@@ -658,7 +658,20 @@
   }
 
 
-  // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
+  MEFinderActions.register('setSegmentNumberStyle', function(event, target) {
+    setSegmentNumberStyle(event, Number(target.dataset.index), target.dataset.value);
+  });
+  MEFinderActions.register('setSegmentLayout', function(event, target) {
+    setSegmentLayout(event, Number(target.dataset.index), target.dataset.value);
+  });
+  MEFinderActions.register('setSegmentReadingDirection', function(event, target) {
+    setSegmentReadingDirection(Number(target.dataset.index), target.dataset.direction);
+  });
+  MEFinderActions.register('updateSegmentGutter', function(event, target) {
+    updateSegmentGutter(Number(target.dataset.index), target.value);
+  });
+
+  // 浏览器公共面：仅这些符号可被其它 static/js 文件与模板动作访问。
   global.calPinyinCollator = calPinyinCollator;
   global.calibrationSortText = calibrationSortText;
   global.loadCalibrationDoc = loadCalibrationDoc;
@@ -666,10 +679,6 @@
   global.applyAutoDetection = applyAutoDetection;
   global.editAutoDetectionResult = editAutoDetectionResult;
   global.cancelAutoDetection = cancelAutoDetection;
-  global.setSegmentNumberStyle = setSegmentNumberStyle;
-  global.setSegmentLayout = setSegmentLayout;
-  global.setSegmentReadingDirection = setSegmentReadingDirection;
-  global.updateSegmentGutter = updateSegmentGutter;
   global.addCalSegment = addCalSegment;
   global.updateCalSeg = updateCalSeg;
   global.removeCalSegment = removeCalSegment;

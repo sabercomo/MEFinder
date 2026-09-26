@@ -14,6 +14,7 @@ const nodes = {}, calls = [], messages = [];
 let finish, confirm = true;
 const node = id => nodes[id] || (nodes[id] = {style: {}, hidden: false, disabled: false});
 const context = {
+  MEFinderActions: {register() {}},
   THEME_BUILTIN_CSS_IDS: [], THEME_PRESET_MAP: {light: {}}, THEME_MODE_DEFAULT: {light: 'light'},
   settingsStore: {appearanceState: {mode: 'light', light: 'light'}},
   initAppearanceSystemWatch() {},

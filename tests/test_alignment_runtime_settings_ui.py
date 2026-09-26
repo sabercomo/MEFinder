@@ -28,6 +28,7 @@ function node(id) {
   return nodes[id];
 }
 const context = {
+  MEFinderActions: {register() {}},
   THEME_BUILTIN_CSS_IDS:[], THEME_PRESET_MAP:{light:{}}, THEME_MODE_DEFAULT:{light:'light'},
   settingsStore:{appearanceState:{mode:'light',light:'light'}, currentAlignmentEmbeddingModel:'minilm-l12-v2'},
   initAppearanceSystemWatch(){}, alignmentModelDownloadProgress(){return null;},

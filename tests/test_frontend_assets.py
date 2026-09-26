@@ -82,7 +82,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             name = Path(relative).name
             self.assertLessEqual(_read(relative).count("innerHTML"),
                                  inner_html_baseline.get(name, 0), name)
-        dynamic_inline_baseline = {"06-pure.js": 9, "30-library.js": 15,
+        dynamic_inline_baseline = {"06-pure.js": 0, "30-library.js": 15,
                                    "40-bibliography.js": 0}
         for name, ceiling in dynamic_inline_baseline.items():
             self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
@@ -121,6 +121,27 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertNotIn('onclick="removeLibFacet(', library)
         self.assertNotIn('global.setLibFacet =', library)
         self.assertNotIn('global.removeLibFacet =', library)
+
+    def test_pure_markup_has_no_inline_events(self):
+        pure = _read("static/js/06-pure.js")
+        self.assertNotRegex(pure, r"\bon(?:click|change|input)\s*=")
+        self.assertIn('data-action="selectThemeChoice"', pure)
+        self.assertIn('data-action-input="updateSegmentGutter"', pure)
+        self.assertIn('data-action-change="handleScanCheckChange"', pure)
+        owners = {
+            "selectThemeChoice": "60-settings.js",
+            "setSegmentReadingDirection": "50-calibration.js",
+            "updateSegmentGutter": "50-calibration.js",
+            "setSegmentNumberStyle": "50-calibration.js",
+            "setSegmentLayout": "50-calibration.js",
+            "applyLibStatusFilter": "30-library.js",
+            "toggleSegmentSelect": "20-search.js",
+            "handleScanCheckChange": "80-import.js",
+            "toggleDetailContext": "20-search.js",
+        }
+        for action, owner in owners.items():
+            self.assertRegex(_read("static/js/" + owner),
+                             rf"MEFinderActions\.register(?:Inline)?\('{action}'")
 
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
@@ -385,7 +406,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
             # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
             # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
-            "static/js/30-library.js": 17,
+            "static/js/30-library.js": 16,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
@@ -393,7 +414,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
-            "static/js/80-import.js": 20,
+            "static/js/80-import.js": 19,
             # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
             # 命名空间 MEFinder 本身），不新增直接全局命令。
             "static/js/62-zotero.js": 1,
@@ -602,11 +623,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：模板静态事件迁到 09-template-actions.js。
+    # 0.5.7 C4：06-pure.js 动态控件迁到数据属性与所属模块委托。
     BASELINE_SHA256 = (
-        "46f4abdcb72048ec06b77cecdf04550971235cff462dc005886e1252003cf01e"
+        "53113f0e56c16776801df307368143d2908138b6709b819562ee7bca4296ba44"
     )
-    BASELINE_BYTES = 1290967
+    BASELINE_BYTES = 1291919
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -1491,6 +1491,10 @@
     loadResumableImports: loadResumableImports
   };
 
+  MEFinderActions.register('handleScanCheckChange', function(event, target) {
+    handleScanCheckChange(target);
+  });
+
   // 浏览器公共面：动态内联处理器调用的命令入口。
   global.runBatchMetadataDetection = runBatchMetadataDetection;
   global.runCnkiBatchButton = runCnkiBatchButton;
@@ -1500,7 +1504,6 @@
   global.resolveCnkiBatchChoice = resolveCnkiBatchChoice;
   global.cnkiBatchBackdropClick = cnkiBatchBackdropClick;
   global.runDirectoryScan = runDirectoryScan;
-  global.handleScanCheckChange = handleScanCheckChange;
   global.importSelectedScanned = importSelectedScanned;
   global.setPdfParseMode = setPdfParseMode;
   global.handleFileSelect = handleFileSelect;

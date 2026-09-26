@@ -1172,11 +1172,13 @@
   MEFinderActions.register('removeLibraryFacet', function(event, target) {
     return removeLibFacet(event, target.dataset.kind);
   });
+  MEFinderActions.register('applyLibStatusFilter', function(event, target) {
+    return applyLibStatusFilter(target.dataset.status);
+  });
 
   // 浏览器公共面：动态内联处理器只能通过这些命令入口访问本模块。
   global.openVersionSelect = openVersionSelect;
   global.toggleLibrarySortDirection = toggleLibrarySortDirection;
-  global.applyLibStatusFilter = applyLibStatusFilter;
   global.setLibDefaultLanguage = setLibDefaultLanguage;
   global.clearLibraryFilters = clearLibraryFilters;
   global.filterLibrary = filterLibrary;

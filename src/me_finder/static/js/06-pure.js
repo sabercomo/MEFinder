@@ -595,7 +595,7 @@ function themeOptionMarkup(preset) {
   var desc = preset.desc || '';
   var styleAttr = preset.builtinCss ? '' : themePreviewInlineStyle(preset);
   var chip = preset.custom ? '<span class="theme-option-tag">自定义</span>' : '';
-  return '<button class="theme-option" type="button" data-theme-choice="' + preset.id + '" role="radio" aria-checked="false" onclick="selectThemeChoice(\'' + preset.id + '\')">'
+  return '<button class="theme-option" type="button" data-theme-choice="' + esc(preset.id) + '" role="radio" aria-checked="false" data-action="selectThemeChoice">'
     + themePreviewMarkup(preset.id, styleAttr)
     + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span>' + chip + '</span>'
     + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
@@ -661,11 +661,11 @@ function segmentSpreadPanelRow(seg, index) {
   var controls = '<div class="spread-controls">'
     + '<div class="spread-field"><span class="spread-field-label">阅读方向</span>'
     + '<div class="segment-direction-control" role="group" aria-label="双开页阅读方向">'
-    + '<button class="segment-direction-btn' + (direction === 'ltr' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'ltr' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'ltr\')">左→右</button>'
-    + '<button class="segment-direction-btn' + (direction === 'rtl' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'rtl' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'rtl\')">右→左</button>'
+    + '<button class="segment-direction-btn' + (direction === 'ltr' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'ltr' ? 'true' : 'false') + '" data-action="setSegmentReadingDirection" data-index="' + index + '" data-direction="ltr">左→右</button>'
+    + '<button class="segment-direction-btn' + (direction === 'rtl' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'rtl' ? 'true' : 'false') + '" data-action="setSegmentReadingDirection" data-index="' + index + '" data-direction="rtl">右→左</button>'
     + '</div></div>'
     + '<div class="spread-field"><div class="spread-field-row"><span class="spread-field-label">中缝位置</span><span class="spread-gutter-out" id="spread-gutter-out-' + index + '">' + gp + '%</span></div>'
-    + '<input class="spread-gutter-range" type="range" min="30" max="70" step="1" value="' + gp + '" aria-label="中缝横向位置" oninput="updateSegmentGutter(' + index + ',this.value)">'
+    + '<input class="spread-gutter-range" type="range" min="30" max="70" step="1" value="' + gp + '" aria-label="中缝横向位置" data-action-input="updateSegmentGutter" data-index="' + index + '">'
     + '</div></div>';
   var summary = '<div class="spread-summary" id="spread-summary-' + index + '">' + spreadSummaryHtml(seg) + '</div>';
   return '<tr class="segment-spread-row"><td colspan="7">'
@@ -716,7 +716,7 @@ function statusChipIcon(group) {
 
 // 校准状态统计按钮。原在 50-calibration.js，纯字符串，依赖 statusStatIcon。
 function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName) {
-  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" onclick="' + handlerName + '(\'' + status + '\')">'
+  return '<button type="button" data-status="' + esc(status) + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" data-action="' + esc(handlerName) + '">'
     + statusStatIcon(icon)
     + '<span class="status-stat__label">' + label + '</span>'
     + '<span class="status-stat__count">' + value + '</span></button>';
@@ -853,9 +853,9 @@ function dragSelectionHits(element, box, scroller) {
 function segmentNumberStyleControl(style, index) {
   var values = ['arabic','roman_lower','roman_upper','none'];
   return '<div class="app-select segment-style-select" id="segment-style-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-style-select-' + index + '\')"><span class="app-select-value">' + segmentNumberStyleLabel(style) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="toggleSegmentSelect" data-select-id="segment-style-select-' + index + '"><span class="app-select-value">' + segmentNumberStyleLabel(style) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
     + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (style === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentNumberStyle(event,' + index + ',\'' + value + '\')">' + segmentNumberStyleLabel(value) + '</button>';
+      return '<button class="app-select-option' + (style === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" data-index="' + index + '" data-action="setSegmentNumberStyle">' + segmentNumberStyleLabel(value) + '</button>';
     }).join('') + '</div></div>';
 }
 
@@ -863,9 +863,9 @@ function segmentNumberStyleControl(style, index) {
 function segmentLayoutControl(layout, index) {
   var values = ['single','spread'];
   return '<div class="app-select segment-layout-select" id="segment-layout-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-layout-select-' + index + '\')"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
+    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="toggleSegmentSelect" data-select-id="segment-layout-select-' + index + '"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
     + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentLayout(event,' + index + ',\'' + value + '\')">' + segmentLayoutLabel(value) + '</button>';
+      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" data-index="' + index + '" data-action="setSegmentLayout">' + segmentLayoutLabel(value) + '</button>';
     }).join('') + '</div></div>';
 }
 
@@ -879,7 +879,7 @@ function scanEntryRow(entry, index, checkable, checked) {
   else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
   return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
     + (checkable
-      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
+      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' data-action-change="handleScanCheckChange">'
       : '<span class="scan-check-placeholder"></span>')
     + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : entry.file_type === 'epub' ? 'EPUB' : 'DOCX') + '</span>'
     + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
@@ -912,7 +912,7 @@ function detailContextHTML(items, side) {
   return '<section class="detail-context-section detail-context-' + side + '">'
     + '<div class="detail-context-heading">'
     + '<span class="detail-context-label">' + label + '</span>'
-    + '<button class="detail-context-toggle" type="button" aria-label="展开' + label + '" aria-expanded="false" aria-controls="' + contentId + '" data-context-label="' + label + '" data-character-truncated="' + (characterTruncated ? 'true' : 'false') + '"' + (characterTruncated ? '' : ' hidden') + ' onclick="toggleDetailContext(this)">展开</button>'
+    + '<button class="detail-context-toggle" type="button" aria-label="展开' + label + '" aria-expanded="false" aria-controls="' + contentId + '" data-context-label="' + label + '" data-character-truncated="' + (characterTruncated ? 'true' : 'false') + '"' + (characterTruncated ? '' : ' hidden') + ' data-action="toggleDetailContext">展开</button>'
     + '</div>'
     + '<div class="detail-context" id="' + contentId + '" role="region" aria-label="' + label + '">'
     + '<span class="detail-context-preview">' + esc(detailContextPreview(fullText, side)) + '</span>'
