@@ -48,6 +48,10 @@ def _split_js_assets():
     return _split_dir_assets("static/js", ".js")
 
 
+def _reader_js_assets():
+    return _split_dir_assets("static/reader", ".js") or ("static/reader.js",)
+
+
 def _split_css_assets():
     return _split_dir_assets("static/css", ".css")
 
@@ -55,7 +59,7 @@ def _split_css_assets():
 # 必须被装进产物的静态资源；拆分后在此追加新文件即可。
 CSS_ASSETS = _split_css_assets() + ("static/reader.css",)
 
-JS_ASSETS = _split_js_assets() + ("static/reader.js",)
+JS_ASSETS = _split_js_assets() + _reader_js_assets()
 
 
 def _read(relative):
@@ -408,7 +412,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         allowed = {"static/js/07-api.js": 1, "static/reader-window.js": 1}
         counts = {}
         for relative in sorted(
-            set(_split_js_assets()) | {"static/reader.js", "static/reader-window.js"}
+            set(_split_js_assets()) | set(_reader_js_assets()) | {"static/reader-window.js"}
         ):
             found = len(bare_fetch.findall(_read(relative)))
             if found:

@@ -51,12 +51,19 @@ def _load_app_css() -> str:
     return bundled if bundled else _load_asset("static/app.css")
 
 
+def _load_reader_js() -> str:
+    """Return the reader script shared by both application windows."""
+
+    bundled = _load_asset_dir("static/reader", ".js")
+    return bundled if bundled else _load_asset("static/reader.js")
+
+
 HTML = (
     _load_asset("templates/index.html")
     .replace("/*__APP_CSS__*/", _load_app_css(), 1)
     .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
     .replace("//__APP_JS__", _load_app_js(), 1)
-    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
+    .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("__APP_VERSION__", __version__)
 )
 
@@ -66,7 +73,7 @@ READER_WINDOW_HTML = (
     .replace("/*__APP_CSS__*/", _load_app_css(), 1)
     .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
     .replace("//__THEME_JS__", _load_asset("static/js/05-theme-engine.js"), 1)
-    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
+    .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("//__WINDOW_JS__", _load_asset("static/reader-window.js"), 1)
 )
 

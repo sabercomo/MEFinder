@@ -6,11 +6,11 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from tests.reader_source import reader_js_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
-READER_JS = (ROOT / "src" / "me_finder" / "static" / "reader.js").read_text(
-    encoding="utf-8"
-)
+READER_JS = reader_js_source()
 READER_CSS = (ROOT / "src" / "me_finder" / "static" / "reader.css").read_text(
     encoding="utf-8"
 )

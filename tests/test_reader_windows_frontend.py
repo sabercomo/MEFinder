@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import unittest
 
+from tests.reader_source import reader_js_source
+
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderWindowFrontendTests(unittest.TestCase):
@@ -72,7 +74,7 @@ events.DOMContentLoaded[0]();
   await context.MEFinder.readerHost.setEnabled(true); // duplicate submit is suppressed
   resolveSave(); await saving;
   assert.equal(input.checked,true);
-  vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
+  vm.runInContext(fs.readFileSync(0,'utf8'),context);
   context.MEFinderReader.configure({openExternal:route});
   const spans=[{pdf_page_id:'PAGE-12',page_char_start:2,page_char_end:4}];
   await context.MEFinderReader.openForSearchResult({source_file_id:'book',source_type:'pdf',
@@ -95,8 +97,7 @@ events.DOMContentLoaded[0]();
 '''
         result = subprocess.run(
             [shutil.which("node"), "-e", script,
-             str(root / "src/me_finder/static/js/16-reader-host.js"),
-             str(root / "src/me_finder/static/reader.js")],
-            capture_output=True, text=True, timeout=15,
+             str(root / "src/me_finder/static/js/16-reader-host.js")],
+            input=reader_js_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

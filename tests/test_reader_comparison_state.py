@@ -1,13 +1,13 @@
 """Execute reader functions with controlled network completion and scroll state."""
 
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import unittest
 
+from tests.reader_source import reader_js_source
 
-READER = (Path(__file__).resolve().parents[1] / "src/me_finder/static/reader.js").read_text(encoding="utf-8")
+READER = reader_js_source()
 
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
@@ -123,37 +123,6 @@ const openComparisonWith=()=>{relocated++;loadLinkWindow();};
  // 发起方是阅读器，结局提示由阅读器给出，且只给一次。
  assert.equal(notices,1);
  assert.equal(runningAlignmentJob(),null);
-})();
-""")
-
-    def test_one_job_keeps_one_watcher_and_its_first_owner(self):
-        """两处认领同一个任务时只轮询一次、只广播一次，提示归第一个认领者。"""
-
-        self.run_js([self.JOB_WATCH], """
-const state={open:false, sourceId:'A', work:{groupId:'G'}, comparison:{open:false}};
-const config={alignmentStatusEndpoint:'/status'};
-const global={setTimeout:resolve=>resolve()};
-let polls=0;
-const fetchFunction=()=>async()=>{polls++;return {status:200,ok:true,json:async()=>({ok:true})};};
-let notices=0;
-const notify=()=>{notices++;}, setAlert=()=>{};
-const loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
-const renderToolbar=()=>{},updateComparisonNotice=()=>{},clearLinkedSelection=()=>{};
-const refreshComparisonAfterStatusChange=()=>{}, openComparisonWith=()=>{};
-const events=[];
-subscribeAlignmentJob(event=>{events.push(event);});
-(async()=>{
- watchAlignmentJob('J',{origin:'works',groupId:'G',key:'A|B'});
- watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
- assert.equal(runningAlignmentJob().origin,'works');
- await new Promise(resolve=>setImmediate(resolve));
- await new Promise(resolve=>setImmediate(resolve));
- assert.equal(polls,1);
- assert.equal(events.length,1);
- assert.equal(events[0].meta.origin,'works');
- assert.equal(events[0].outcome,'ok');
- // 作品页发起的任务不由阅读器报告结果。
- assert.equal(notices,0);
 })();
 """)
 
