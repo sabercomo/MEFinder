@@ -1585,7 +1585,9 @@ class BibliographicDetailDelegationTests(unittest.TestCase):
         names = _bib_eval("return Object.keys(MEFinderActions.actions);")
         for name in ("enterBibEdit", "exitBibEdit", "bibEditAndRun", "bibRunLookup",
                      "setBibliographicType", "lookupGoogleBooks",
-                     "detectBibliographicMetadata", "saveBibliographicMetadata"):
+                     "detectBibliographicMetadata", "saveBibliographicMetadata",
+                     "pickBibLanguage", "openBibLanguageSelect", "bibToggleMenu",
+                     "parseCnkiCitationText"):
             self.assertIn(name, names)
 
     def test_special_source_id_is_data_in_read_and_edit_views(self):
@@ -1601,6 +1603,7 @@ return MEFinder.bibliography.renderSection(src);
             self.assertNotIn("onclick=\"enterBibEdit", html)
             self.assertNotIn("onclick=\"bibEditAndRun", html)
             if edit:
+                self.assertNotIn("onclick=", html)
                 for name in ("setBibliographicType", "bibRunLookup",
                              "lookupGoogleBooks", "detectBibliographicMetadata",
                              "exitBibEdit", "saveBibliographicMetadata"):
@@ -1608,9 +1611,52 @@ return MEFinder.bibliography.renderSection(src);
                 self.assertIn('data-action="saveBibliographicMetadata"', html)
                 self.assertIn('data-action="setBibliographicType"', html)
                 self.assertIn('data-overwrite="false"', html)
+                self.assertIn('data-action="pickBibLanguage"', html)
+                self.assertIn('data-action="openBibLanguageSelect"', html)
             else:
                 self.assertIn('data-action="enterBibEdit"', html)
                 self.assertIn('data-focus-field="title"', html)
+
+    def test_language_selection_marks_clicked_option(self):
+        result = _bib_eval("""
+var hidden = {value: ''};
+var label = {textContent: ''};
+var selected = [];
+var menu = {querySelectorAll: function() { return selected; }};
+var button = {dataset: {code: 'fr', label: 'Français'},
+  classList: {add: function(name) { selected.push(name); }}};
+var stopped = 0;
+var document = {
+  getElementById: function(id) {
+    return id === 'bib-language' ? hidden : (id === 'bib-language-value' ? label : null);
+  },
+  querySelector: function() { return menu; }
+};
+MEFinderActions.actions.pickBibLanguage(
+  {stopPropagation: function() { stopped++; }}, button);
+return {code: hidden.value, label: label.textContent,
+  selected: selected, stopped: stopped};
+""")
+        self.assertEqual(result, {"code": "fr", "label": "Français",
+                                  "selected": ["is-selected"], "stopped": 1})
+
+    def test_menu_triggers_forward_event_and_id(self):
+        result = _bib_eval("""
+var calls = [];
+var openVersionSelect = function(event, id) { calls.push(['language', event.tag, id]); };
+var document = {getElementById: function(id) {
+  calls.push(['lookup', id]);
+  return null;
+}};
+MEFinderActions.actions.openBibLanguageSelect(
+  {tag: 'click'}, {dataset: {selectId: 'bib-language-select'}});
+MEFinderActions.actions.bibToggleMenu(
+  {stopPropagation: function() { calls.push(['stop']); }},
+  {dataset: {menuId: 'bib-source-menu'}});
+return calls;
+""")
+        self.assertEqual(result, [["language", "click", "bib-language-select"],
+                                  ["stop"], ["lookup", "bib-source-menu"]])
 
 
 def _import_eval(tail):

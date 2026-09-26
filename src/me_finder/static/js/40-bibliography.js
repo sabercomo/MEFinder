@@ -41,7 +41,7 @@
     var chevron = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>';
     function opt(code, label, selected) {
       return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" role="option"'
-        + ' onclick="pickBibLanguage(event,\'' + code + '\',\'' + esc(label) + '\')">' + esc(label) + '</button>';
+        + ' data-action="pickBibLanguage" data-code="' + esc(code) + '" data-label="' + esc(label) + '">' + esc(label) + '</button>';
     }
     var options = opt('', autoOptLabel, !manual)
       + BIB_LANGUAGE_OPTIONS.map(function(o){ return opt(o[0], o[1], o[0] === manual); }).join('');
@@ -49,14 +49,14 @@
       + '<label for="bib-language-trigger">语言</label>'
       + '<input type="hidden" id="bib-language" value="' + esc(manual) + '">'
       + '<div class="app-select bib-language-select" id="bib-language-select">'
-      + '<button class="app-select-trigger" id="bib-language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="openVersionSelect(event,\'bib-language-select\')">'
+      + '<button class="app-select-trigger" id="bib-language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" data-action="openBibLanguageSelect" data-select-id="bib-language-select">'
       + '<span class="app-select-value" id="bib-language-value">' + esc(currentLabel) + '</span>' + chevron + '</button>'
       + '<div class="app-select-menu bib-language-menu" role="listbox">' + options + '</div>'
       + '</div></div>';
   }
 
   // 选语言：写隐藏 input（供 collectBibliographicForm 读取）+ 更新触发器文案与选中态。
-  function pickBibLanguage(event, code, label) {
+  function pickBibLanguage(event, code, label, button) {
     if (event) event.stopPropagation();
     var hidden = document.getElementById('bib-language');
     if (hidden) hidden.value = code;
@@ -64,7 +64,7 @@
     if (value) value.textContent = label;
     var menu = document.querySelector('#bib-language-select .app-select-menu');
     if (menu) menu.querySelectorAll('.app-select-option').forEach(function(o){ o.classList.remove('is-selected'); });
-    if (event && event.currentTarget) event.currentTarget.classList.add('is-selected');
+    button.classList.add('is-selected');
     if (typeof closeAppSelects === 'function') closeAppSelects();
   }
   function bibFieldCacheFromMeta(meta) {
@@ -132,7 +132,7 @@
         + '<span class="bib-menu-wrap">'
         + '<span class="bib-split">'
         + '<button class="action-btn primary bib-main" id="bib-primary-btn" type="button" data-action="bibRunLookup" data-source-id="' + sid + '">' + esc(bibPrimaryLabel(lookupSource)) + '</button>'
-        + '<button class="action-btn primary bib-caret" type="button" aria-label="选择补全方式" aria-haspopup="true" onclick="bibToggleMenu(event,\'bib-source-menu\')">' + chevronSvg + '</button>'
+        + '<button class="action-btn primary bib-caret" type="button" aria-label="选择补全方式" aria-haspopup="true" data-action="bibToggleMenu" data-menu-id="bib-source-menu">' + chevronSvg + '</button>'
         + '</span>'
         + '<span class="bib-menu" id="bib-source-menu" role="menu">' + bibSourceMenuHTML(src.source_file_id, lookupSource) + '</span>'
         + '</span>'
@@ -159,7 +159,7 @@
     var citationPanelHTML = isJournal
       ? '<div id="bib-citation-panel" class="bib-citation-panel" hidden>'
         + '<textarea id="bib-cnki-citation" maxlength="8000" rows="3" placeholder="粘贴知网 GB/T 7714 引文，如：作者.篇名[J].刊名,2020,49(04):15-27." onpaste="window.setTimeout(parseCnkiCitationText,0)"></textarea>'
-        + '<div class="cnki-citation-actions"><button class="action-btn" type="button" onclick="parseCnkiCitationText()">从引用文字补全</button><span id="bib-cnki-citation-result" class="cnki-citation-result" role="status" aria-live="polite"></span></div>'
+        + '<div class="cnki-citation-actions"><button class="action-btn" type="button" data-action="parseCnkiCitationText">从引用文字补全</button><span id="bib-cnki-citation-result" class="cnki-citation-result" role="status" aria-live="polite"></span></div>'
         + '</div>'
       : '';
     return '<div id="bibliographic-editor">'
@@ -1025,6 +1025,12 @@
   MEFinderActions.register('bibMenuAction', function(event, button) {
     bibMenuAction(event, button.dataset.menuAction, button.dataset.sourceId);
   });
+  MEFinderActions.register('bibToggleMenu', function(event, button) {
+    bibToggleMenu(event, button.dataset.menuId);
+  });
+  MEFinderActions.register('openBibLanguageSelect', function(event, button) {
+    openVersionSelect(event, button.dataset.selectId);
+  });
   global.bibToggleMenu = bibToggleMenu;
   global.bibCloseMenus = bibCloseMenus;
   MEFinderActions.register('setBibliographicType', function(event, button) {
@@ -1050,7 +1056,12 @@
     openCnkiCandidate(button.dataset.sourceId, Number(button.dataset.index));
   });
   global.parseCnkiCitationText = parseCnkiCitationText;
-  global.pickBibLanguage = pickBibLanguage;
+  MEFinderActions.register('parseCnkiCitationText', function() {
+    parseCnkiCitationText();
+  });
+  MEFinderActions.register('pickBibLanguage', function(event, button) {
+    pickBibLanguage(event, button.dataset.code, button.dataset.label, button);
+  });
   MEFinderActions.register('detectBibliographicMetadata', function(event, button) {
     detectBibliographicMetadata(button.dataset.sourceId, button.dataset.overwrite === 'true');
   });
