@@ -236,6 +236,8 @@
 
 2026-09-26(C4 第五步):文献库网格卡片和列表行的打开详情点击改为 `data-action` 委托,沿用已有 `data-id` 读取文献 ID;拖拽后抑制点击时阻止同一根节点上的后续监听器,保持原有行为。撤销 `handleLibraryEntryClick` 直接全局入口,预算 21→20;`30-library.js` 的 `onclick=` 21→19。复选框与作品链接留待下一步,模板 205 处未动。
 
+2026-09-26(C4 第六步):文献库卡片/行内的删除选择框和作品链接改用各自 `data-action`,在委托回调里阻止后续根节点点击监听,避免误开详情或关闭浮层。选择框沿用点击后的 `checked` 值;撤销 `toggleLibraryDeleteSelection` 直接全局入口,预算 20→19;`30-library.js` 的 `onclick=` 19→17。模板 205 处未动。
+
 **前端 C5 DOM 构造与拆文件**
 - 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
 - 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。

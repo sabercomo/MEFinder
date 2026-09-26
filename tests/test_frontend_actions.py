@@ -14,6 +14,41 @@ NODE = shutil.which("node")
 
 @unittest.skipUnless(NODE, "node 不可用，跳过事件委托测试")
 class DelegatedActionTests(unittest.TestCase):
+    def test_library_nested_controls_do_not_open_entry(self):
+        script = r"""
+global.libraryStore = {
+  sources: [{source_file_id: "a'\"<b>&", source_type: 'pdf'}],
+  deleteSelection: new Set(), exportRunning: false
+};
+global.isLibraryDeleteSelectable = source => !!source && source.source_type === 'pdf';
+global.document = {querySelectorAll() { return []; }, getElementById() { return null; }};
+const opened = [];
+global.MEFinder = {works: {
+  open(id) { opened.push(id); }, syncLibraryAssignButton() {}
+}};
+global.MEFinderActions = {actions: {}, register(name, callback) {
+  this.actions[name] = callback;
+}};
+require(process.argv[1]);
+let stopped = 0;
+const event = {stopImmediatePropagation() { stopped++; }};
+const id = "a'\"<b>&";
+MEFinderActions.actions.toggleLibraryEntrySelection(event, {
+  dataset: {sourceId: id}, checked: true
+});
+if (!libraryStore.deleteSelection.has(id)) throw new Error('checkbox did not select');
+MEFinderActions.actions.toggleLibraryEntrySelection(event, {
+  dataset: {sourceId: id}, checked: false
+});
+if (libraryStore.deleteSelection.has(id)) throw new Error('checkbox did not clear');
+MEFinderActions.actions.openLibraryWork(event, {dataset: {workId: id}});
+if (JSON.stringify(opened) !== JSON.stringify([id]) || stopped !== 3) {
+  throw new Error(JSON.stringify({opened, stopped}));
+}
+"""
+        subprocess.run([NODE, "-e", script, str(LIBRARY_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
     def test_library_entry_click_is_registered_and_preserves_suppression(self):
         script = r"""
 global.libraryStore = {suppressSelectionClick: true};

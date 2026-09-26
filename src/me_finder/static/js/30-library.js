@@ -639,11 +639,11 @@
     // while a selection is active. Word removal also clears the managed corpus
     // copy so a later full rebuild cannot silently add it back.
     var selectionControl = isDeleteSelectable
-      ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + 'onclick="event.stopPropagation();toggleLibraryDeleteSelection(\'' + esc(src.source_file_id) + '\',this.checked)">'
+      ? '<input class="library-delete-check" type="checkbox" aria-label="选择 ' + esc(title) + '" ' + (isDeleteSelected ? 'checked ' : '') + 'data-action="toggleLibraryEntrySelection" data-source-id="' + esc(src.source_file_id) + '">'
       : '';
     var work = global.MEFinder && global.MEFinder.works ? global.MEFinder.works.workLinkFor(src.source_file_id) : null;
     var workLink = work
-      ? '<button class="library-row-work" type="button" title="在译本对照中打开《' + esc(work.title) + '》" onclick="event.stopPropagation();MEFinder.works.open(\'' + esc(work.id) + '\')">' + esc(work.title) + '</button>'
+      ? '<button class="library-row-work" type="button" title="在译本对照中打开《' + esc(work.title) + '》" data-action="openLibraryWork" data-work-id="' + esc(work.id) + '">' + esc(work.title) + '</button>'
       : '';
     if (libraryStore.viewMode === 'grid') {
       var imported = formatCalDate(src.imported_at || src.last_modified);
@@ -1158,6 +1158,14 @@
   MEFinderActions.register('openLibraryEntry', function(event, target) {
     handleLibraryEntryClick(event, target.dataset.id);
   });
+  MEFinderActions.register('toggleLibraryEntrySelection', function(event, target) {
+    event.stopImmediatePropagation();
+    toggleLibraryDeleteSelection(target.dataset.sourceId, target.checked);
+  });
+  MEFinderActions.register('openLibraryWork', function(event, target) {
+    event.stopImmediatePropagation();
+    MEFinder.works.open(target.dataset.workId);
+  });
 
   // 浏览器公共面：动态内联处理器只能通过这些命令入口访问本模块。
   global.openVersionSelect = openVersionSelect;
@@ -1171,7 +1179,6 @@
   global.setLibraryView = setLibraryView;
   global.setLibrarySortOption = setLibrarySortOption;
   global.clearLibrarySelection = clearLibrarySelection;
-  global.toggleLibraryDeleteSelection = toggleLibraryDeleteSelection;
   global.toggleSelectVisibleLibraryDocuments = toggleSelectVisibleLibraryDocuments;
   global.exportLibraryDocument = exportLibraryDocument;
   global.exportLibraryDocumentMarkdown = exportLibraryDocumentMarkdown;
