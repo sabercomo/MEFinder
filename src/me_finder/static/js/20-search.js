@@ -216,13 +216,13 @@
     });
     var check = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 10 3 3 7-7"/></svg>';
     var noScope = !searchStore.documentId && !searchStore.groupId;
-    var allOption = '<button class="app-select-option' + (noScope ? ' is-selected' : '') + '" type="button" onclick="selectSearchScopeAll(event)"><span>全部文献</span>' + (noScope ? check : '') + '</button>';
+    var allOption = '<button class="app-select-option' + (noScope ? ' is-selected' : '') + '" type="button" data-action="selectSearchScopeAll"><span>全部文献</span>' + (noScope ? check : '') + '</button>';
     var groupsHtml = '';
     if (typeof libraryStore.documentGroups !== 'undefined' && libraryStore.documentGroups.length) {
       groupsHtml = '<div class="document-options-head">作品</div>' + libraryStore.documentGroups.map(function(group) {
         var selected = group.document_group_id === searchStore.groupId;
         var count = (group.members || []).length;
-        return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" onclick="selectSearchGroup(event,\'' + esc(group.document_group_id) + '\')"><span class="document-option-main"><span class="document-option-title">' + esc(group.title) + '</span><span class="document-option-meta">' + count + ' 个版本</span></span>' + (selected ? check : '') + '</button>';
+        return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-action="selectSearchGroup" data-group-id="' + esc(group.document_group_id) + '"><span class="document-option-main"><span class="document-option-title">' + esc(group.title) + '</span><span class="document-option-meta">' + count + ' 个版本</span></span>' + (selected ? check : '') + '</button>';
       }).join('');
     }
     if (!sources.length && !groupsHtml) {
@@ -233,7 +233,7 @@
     options.innerHTML = allOption + groupsHtml + singleHead + sources.map(function(source) {
       var view = searchDocumentView(source);
       var selected = !searchStore.groupId && source.source_file_id === searchStore.documentId;
-      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-value="' + esc(source.source_file_id) + '" onclick="selectSearchDocument(event,this.dataset.value)"><span class="document-option-main"><span class="document-option-title">' + esc(view.title) + '</span><span class="document-option-meta">' + esc([view.sourceType, view.author].filter(Boolean).join(' · ')) + '</span></span>' + (selected ? check : '') + '</button>';
+      return '<button class="app-select-option' + (selected ? ' is-selected' : '') + '" type="button" data-value="' + esc(source.source_file_id) + '" data-action="selectSearchDocument"><span class="document-option-main"><span class="document-option-title">' + esc(view.title) + '</span><span class="document-option-meta">' + esc([view.sourceType, view.author].filter(Boolean).join(' · ')) + '</span></span>' + (selected ? check : '') + '</button>';
     }).join('');
   }
 
@@ -336,7 +336,7 @@
     const page = esc(formatCitationPageLabel(item));
     const sourceIcon = sourceFormatLabel(item);
     const snippet = item.highlighted_html ? truncateHTML(item.highlighted_html, 100) : esc(truncate(item.paragraph_text || '', 100));
-    return '<div class="result-row" data-index="' + index + '" onclick="selectResult(' + index + ')">'
+    return '<div class="result-row" data-index="' + index + '" data-action="selectSearchResult">'
       + '<div class="result-row-head">'
       + '<span class="result-score">' + score + '%</span>'
       + '<span class="result-match-type">' + typeLabel + '</span>'
@@ -451,7 +451,7 @@
 
     let pageDetail = '';
     if (item.source_type === 'pdf') {
-      pageDetail = '<div class="page-detail-toggle" onclick="togglePageDetail(this)">页码详情 ▸</div>'
+      pageDetail = '<div class="page-detail-toggle" data-action="togglePageDetail">页码详情 ▸</div>'
         + '<div class="page-detail-body">'
         + pdRow('引用页码', pageLabel)
         + pdRow('PDF 页码标签', item.pdf_page_start_label || '无')
@@ -470,7 +470,7 @@
 
     panel.innerHTML = '<div class="detail-card">'
       + '<div class="detail-mobile-toolbar">'
-      + '<button class="detail-back-button" type="button" onclick="showSearchResultsList()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-5 5 5 5"/><path d="M7 10h8"/></svg><span>返回结果列表</span></button>'
+      + '<button class="detail-back-button" type="button" data-action="showSearchResultsList"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5-5 5 5 5"/><path d="M7 10h8"/></svg><span>返回结果列表</span></button>'
       + '</div>'
       + '<div class="detail-scroll">'
       + '<div class="detail-header">'
@@ -492,14 +492,14 @@
       + '</div>'
       + '<div class="detail-actions" role="toolbar" aria-label="检索结果操作">'
       + '<span class="app-select detail-format-control" id="detail-format-control">'
-      + '<button class="action-btn app-select-trigger detail-format-trigger" type="button" aria-label="选择出处格式" aria-haspopup="menu" aria-expanded="false" onclick="toggleAppSelect(event,\'detail-format-control\')"><span id="detail-citation-style-label">' + citationStyleLabel + '</span>' + detailMenuChevron + '</button>'
+      + '<button class="action-btn app-select-trigger detail-format-trigger" type="button" aria-label="选择出处格式" aria-haspopup="menu" aria-expanded="false" data-action="toggleDetailFormatSelect"><span id="detail-citation-style-label">' + citationStyleLabel + '</span>' + detailMenuChevron + '</button>'
       + '<span class="app-select-menu detail-format-menu" role="menu" aria-label="出处格式">'
       + '<span class="detail-citation-style-options" id="citation-style-control">' + citationStyleMenuMarkup() + '</span>'
       + '</span>'
       + '</span>'
-      + '<button class="action-btn" type="button" onclick="copySelectedCitation()">复制出处</button>'
-      + (item.source_file_id ? '<button class="action-btn" type="button" onclick="openSelectedStructuredReader()">查看结构化文本</button>' : '')
-      + (item.source_file_id ? '<button class="action-btn primary" type="button" onclick="openSource(\'' + esc(item.source_file_id) + '\',' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : 'null') + ')">打开原文</button>' : '')
+      + '<button class="action-btn" type="button" data-action="copySelectedCitation">复制出处</button>'
+      + (item.source_file_id ? '<button class="action-btn" type="button" data-action="openSelectedStructuredReader">查看结构化文本</button>' : '')
+      + (item.source_file_id ? '<button class="action-btn primary" type="button" data-action="openSearchSource" data-source-id="' + esc(item.source_file_id) + '" data-pdf-page="' + (item.pdf_page_start_index != null ? item.pdf_page_start_index + 1 : '') + '">打开原文</button>' : '')
       + '</div>'
       + '</div>';
 
@@ -642,8 +642,7 @@
       return enabledCitationStyles.indexOf(option.id) >= 0;
     }).map(function(option) {
       return '<button class="app-select-option' + (citationStyle === option.id ? ' is-selected' : '')
-        + '" type="button" data-value="' + option.id + '" onclick="selectCitationStyle(event,\''
-        + option.id + '\')">' + option.label + '</button>';
+        + '" type="button" data-value="' + esc(option.id) + '" data-action="selectCitationStyle">' + option.label + '</button>';
     }).join('');
   }
 
@@ -744,6 +743,39 @@
   MEFinderActions.register('toggleDetailContext', function(event, target) {
     toggleDetailContext(target);
   });
+  MEFinderActions.registerInline('selectSearchScopeAll', function(event) {
+    selectSearchScopeAll(event);
+  });
+  MEFinderActions.registerInline('selectSearchGroup', function(event, target) {
+    selectSearchGroup(event, target.dataset.groupId);
+  });
+  MEFinderActions.registerInline('selectSearchDocument', function(event, target) {
+    selectSearchDocument(event, target.dataset.value);
+  });
+  MEFinderActions.register('selectSearchResult', function(event, target) {
+    selectResult(Number(target.dataset.index));
+  });
+  MEFinderActions.register('togglePageDetail', function(event, target) {
+    togglePageDetail(target);
+  });
+  MEFinderActions.register('showSearchResultsList', function() {
+    showSearchResultsList();
+  });
+  MEFinderActions.registerInline('toggleDetailFormatSelect', function(event) {
+    toggleAppSelect(event, 'detail-format-control');
+  });
+  MEFinderActions.register('copySelectedCitation', function() {
+    copySelectedCitation();
+  });
+  MEFinderActions.register('openSelectedStructuredReader', function() {
+    openSelectedStructuredReader();
+  });
+  MEFinderActions.register('openSearchSource', function(event, target) {
+    openSource(target.dataset.sourceId, target.dataset.pdfPage ? Number(target.dataset.pdfPage) : null);
+  });
+  MEFinderActions.registerInline('selectCitationStyle', function(event, target) {
+    selectCitationStyle(event, target.dataset.value);
+  });
 
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与模板动作访问。
   global.setMode = setMode;
@@ -760,16 +792,7 @@
   global.updateSearchDocumentLabel = updateSearchDocumentLabel;
   global.runSearch = runSearch;
   global.showDetail = showDetail;
-  global.selectSearchScopeAll = selectSearchScopeAll;
-  global.selectSearchGroup = selectSearchGroup;
-  global.selectSearchDocument = selectSearchDocument;
-  global.selectResult = selectResult;
-  global.togglePageDetail = togglePageDetail;
-  global.showSearchResultsList = showSearchResultsList;
   global.selectedResult = selectedResult;
   global.setCitationStyle = setCitationStyle;
-  global.selectCitationStyle = selectCitationStyle;
-  global.copySelectedCitation = copySelectedCitation;
-  global.openSelectedStructuredReader = openSelectedStructuredReader;
   global.openSource = openSource;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

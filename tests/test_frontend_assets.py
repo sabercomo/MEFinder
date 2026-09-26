@@ -82,7 +82,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             name = Path(relative).name
             self.assertLessEqual(_read(relative).count("innerHTML"),
                                  inner_html_baseline.get(name, 0), name)
-        dynamic_inline_baseline = {"06-pure.js": 0, "30-library.js": 15,
+        dynamic_inline_baseline = {"06-pure.js": 0, "20-search.js": 0,
+                                   "30-library.js": 15,
                                    "40-bibliography.js": 0}
         for name, ceiling in dynamic_inline_baseline.items():
             self.assertLessEqual(_read("static/js/" + name).count("onclick="), ceiling, name)
@@ -142,6 +143,12 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         for action, owner in owners.items():
             self.assertRegex(_read("static/js/" + owner),
                              rf"MEFinderActions\.register(?:Inline)?\('{action}'")
+
+    def test_search_markup_has_no_inline_events(self):
+        search = _read("static/js/20-search.js")
+        self.assertNotRegex(search, r"\bon(?:click|change|input)\s*=")
+        self.assertIn('data-action="selectSearchGroup"', search)
+        self.assertIn('data-action="openSearchSource"', search)
 
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
@@ -623,11 +630,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：06-pure.js 动态控件迁到数据属性与所属模块委托。
+    # 0.5.7 C4：检索模块的动态事件也已迁入委托。
     BASELINE_SHA256 = (
-        "53113f0e56c16776801df307368143d2908138b6709b819562ee7bca4296ba44"
+        "76429744a6e4c1a2d3f04dd379b767f196a32a1a139ec98c05956ae289c043aa"
     )
-    BASELINE_BYTES = 1291919
+    BASELINE_BYTES = 1292828
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

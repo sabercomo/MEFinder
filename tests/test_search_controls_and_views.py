@@ -139,15 +139,15 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         )
         self.assertNotRegex(HTML, r"\.detail-actions\s*\{[^}]*position:\s*sticky")
         self.assertRegex(HTML, r"\.detail-card\s*\{[^}]*overflow:\s*visible")
-        primary_open_action = '<button class="action-btn primary" type="button" onclick="openSource('
+        primary_open_action = '<button class="action-btn primary" type="button" data-action="openSearchSource"'
         self.assertIn(primary_open_action, detail_source)
         self.assertIn('id="detail-format-control"', detail_source)
         self.assertIn('aria-label="选择出处格式"', detail_source)
         self.assertIn('aria-haspopup="menu"', detail_source)
         self.assertIn('role="menu" aria-label="出处格式"', detail_source)
         format_control = detail_source.index('id="detail-format-control"')
-        copy_action = detail_source.index('onclick="copySelectedCitation()">复制出处</button>')
-        structured_action = detail_source.index('onclick="openSelectedStructuredReader()">查看结构化文本</button>')
+        copy_action = detail_source.index('data-action="copySelectedCitation">复制出处</button>')
+        structured_action = detail_source.index('data-action="openSelectedStructuredReader">查看结构化文本</button>')
         open_action = detail_source.index(primary_open_action)
         self.assertLess(format_control, copy_action)
         self.assertLess(copy_action, structured_action)
@@ -198,7 +198,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("area.classList.add('is-detail-open')", HTML)
         self.assertIn("function showSearchResultsList()", HTML)
         self.assertIn("area.classList.remove('is-detail-open')", HTML)
-        self.assertIn('onclick="showSearchResultsList()"', HTML)
+        self.assertIn('data-action="showSearchResultsList"', HTML)
         self.assertIn("返回结果列表", HTML)
         self.assertIn("@media (max-width: 959px)", HTML)
         self.assertIn(".results-area.is-detail-open > .results-list-pane { display: none; }", HTML)
@@ -214,22 +214,17 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertLess(row_source.index("result-score"), row_source.index("result-match-type"))
         self.assertLess(row_source.index("result-match-type"), row_source.index("result-title"))
 
-    def test_dynamic_search_handlers_are_exported_from_the_iife(self) -> None:
-        handlers = (
-            "selectSearchScopeAll",
-            "selectSearchGroup",
-            "selectSearchDocument",
-            "selectResult",
-            "togglePageDetail",
-            "showSearchResultsList",
-            "selectCitationStyle",
-            "copySelectedCitation",
-            "openSelectedStructuredReader",
-            "openSource",
+    def test_dynamic_search_handlers_are_registered(self) -> None:
+        actions = (
+            "selectSearchScopeAll", "selectSearchGroup", "selectSearchDocument",
+            "selectSearchResult", "togglePageDetail", "showSearchResultsList",
+            "selectCitationStyle", "copySelectedCitation",
+            "openSelectedStructuredReader", "openSearchSource",
         )
-        for handler in handlers:
-            with self.subTest(handler=handler):
-                self.assertIn(f"global.{handler} = {handler};", HTML)
+        for action in actions:
+            with self.subTest(action=action):
+                self.assertRegex(HTML, rf"MEFinderActions\.register(?:Inline)?\('{action}'")
+        self.assertIn("global.openSource = openSource;", HTML)
 
     def test_search_detail_warns_before_incomplete_citation_copy(self) -> None:
         detail_start = HTML.index("function showDetail(item)")
