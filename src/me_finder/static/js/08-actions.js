@@ -39,6 +39,8 @@
 
   document.addEventListener('keydown', function(event) {
     if (dispatch(event, 'data-action-keydown', 'actionKeydown')) return;
+    // 元素自有监听已处理（如导入拖放区自行 click()）时不重复触发。
+    if (event.defaultPrevented) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (!event.target.closest) return;
     const target = event.target.closest('[data-action][role="button"]');

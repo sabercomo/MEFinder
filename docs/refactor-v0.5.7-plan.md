@@ -258,6 +258,8 @@
 
 2026-09-26(C5 校准回归修复):检查校准页时发现 `updateSpreadPanel` 仍按旧的 `onclick` 属性查找阅读方向按钮;C4 已将按钮迁为 `data-direction`,故切换后高亮不会刷新。选择器同步改为 `data-direction`,补回归守卫。
 
+2026-09-26(C4 审阅修复):复查 C4 委托语义时发现,`08-actions.js` 的根节点 Enter/空格委托会命中导入拖放区(`role="button"` + `data-action`);拖放区自带键盘监听已 `preventDefault` 并 `click()`,于是键盘选择文件会连开两次文件框。根委托改为跳过已被元素处理(`defaultPrevented`)的按键,书目查看态行的键盘编辑不受影响;补 `test_role_button_skips_keys_already_handled_by_element`。同时核对:模板 105 个动作所调函数在页面中均可解析;嵌套动作仅弹窗遮罩一类(自判 `event.target`)与导入视觉 API 外层 `stopPropagation`,语义不变;动态 `data-*` 属性均经 `esc()`。
+
 ### 阶段 D — `reader.js` 拆分(阶段 B1 之后;可与阶段 C 并行)
 
 **现状(2026-09-25 实测)**

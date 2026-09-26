@@ -171,3 +171,23 @@ if (JSON.stringify(calls) !== JSON.stringify(['title', 'title']) || prevented !=
 """
         subprocess.run([NODE, "-e", script, str(ACTIONS_JS)], check=True,
                        capture_output=True, text=True, encoding="utf-8")
+
+    def test_role_button_skips_keys_already_handled_by_element(self):
+        # 导入拖放区自带 Enter/空格监听并 preventDefault 后 click()；
+        # 根委托不得再触发同一动作，否则文件选择框被打开两次。
+        script = r"""
+const fs = require('fs');
+const listeners = {};
+global.document = {addEventListener(type, callback) { listeners[type] = callback; }};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const calls = [];
+MEFinderActions.register('templateClick061', () => calls.push('open'));
+const zone = {dataset: {action: 'templateClick061'}, role: 'button'};
+const target = {closest(selector) {
+  return selector === '[data-action][role="button"]' ? zone : null;
+}};
+listeners.keydown({target, key: 'Enter', defaultPrevented: true, preventDefault() {}});
+if (calls.length !== 0) throw new Error(JSON.stringify(calls));
+"""
+        subprocess.run([NODE, "-e", script, str(ACTIONS_JS)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")

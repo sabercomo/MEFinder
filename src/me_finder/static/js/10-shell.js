@@ -211,7 +211,7 @@
     }
   })();
 
-  // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
+  // 浏览器公共面：仅这些符号可被其它 static/js 文件与 09-template-actions.js 的模板动作访问。
   global.minimizeWindowsWindow = minimizeWindowsWindow;
   global.toggleWindowsMaximize = toggleWindowsMaximize;
   global.closeWindowsWindow = closeWindowsWindow;

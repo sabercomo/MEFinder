@@ -604,7 +604,7 @@ function spreadSummaryHtml(seg) {
     + ' PDF 第 ' + firstPdf + ' 页 → 左半页 <b>引文 ' + pair.left + ' 页</b>，右半页 <b>引文 ' + pair.right + ' 页</b>';
 }
 
-// 双开页分段设置面板的 HTML。原在 50-calibration.js，纯字符串拼接（onclick 均为字面量）。
+// 双开页分段设置面板的 HTML。原在 50-calibration.js，纯字符串拼接（动作走 data-action 委托）。
 function segmentSpreadPanelRow(seg, index) {
   if ((seg.layout_mode || 'single') !== 'spread') return '';
   var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
