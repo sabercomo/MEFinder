@@ -380,12 +380,12 @@ class ThemeMarkupTests(unittest.TestCase):
         # 六套内置 CSS 主题之外，新官方预设仅是配置，不新增 CSS 主题块。
         for preset in ("warm-paper", "sepia", "oled-black", "midnight-blue"):
             self.assertIn(f"id: '{preset}'", HTML)
-        self.assertEqual(HTML.count('function themePreviewMarkup(themeId, styleAttr)'), 1)
+        self.assertIn('function themeOptionNode(preset)', HTML)
         # 预览缩略图现为「Aa 色板样张」：背景=纸、Aa=墨，并分开展示按钮色与正文强调色。
-        self.assertIn('class="theme-swatch-aa"', HTML)
-        self.assertIn('class="theme-swatch-accent"', HTML)
-        self.assertIn('class="theme-swatch-highlight"', HTML)
-        self.assertIn('class="theme-swatch-card"', HTML)
+        self.assertIn("'theme-swatch-aa'", HTML)
+        self.assertIn("'theme-swatch-accent'", HTML)
+        self.assertIn("'theme-swatch-highlight'", HTML)
+        self.assertIn("'theme-swatch-card'", HTML)
         for description in (
             "清爽理性，适合日间使用", "低刺激、安静，适合长时间阅读",
             "温暖柔和，带轻微纸张气质", "清柔克制，带淡粉强调",
@@ -394,14 +394,14 @@ class ThemeMarkupTests(unittest.TestCase):
             self.assertIn(description, HTML)
         self.assertIn('.theme-option:focus-visible', HTML)
         self.assertIn('role="radiogroup"', HTML)
-        self.assertIn('role="radio"', HTML)
+        self.assertIn("button.setAttribute('role', 'radio')", HTML)
         self.assertIn('<span>按钮色</span><input type="color" id="appearance-accent"', HTML)
         self.assertIn('<span>强调色</span><input type="color" id="appearance-highlight"', HTML)
         self.assertIn('id="appearance-delete-custom"', HTML)
         self.assertIn("async function deleteCurrentCustomTheme()", HTML)
         self.assertIn("settingsStore.appearanceState[slot] = THEME_MODE_DEFAULT[slot];", HTML)
         # 网格由当前生效的那一套（浅/深，由外观模式派生）筛选出的预设 + 自定义主题渲染。
-        self.assertIn("container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('')", HTML)
+        self.assertIn("container.replaceChildren(...themeChoicesForMode(currentSlot()).map(themeOptionNode))", HTML)
         # 引擎把选中主题真正落到 data-theme（内置切 id、自定义切 custom）。
         self.assertIn("document.documentElement.dataset.theme = id", HTML)
         self.assertIn("fetch('/api/preferences'", HTML)

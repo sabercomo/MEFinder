@@ -967,30 +967,6 @@ class MatchTypeLabelTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class ThemeMarkupTests(unittest.TestCase):
-    """主题预览/选项的纯字符串构造：只校验结构骨架，不锁死整段 HTML。"""
-
-    def test_preview_wraps_theme_id(self):
-        html = _call("themePreviewMarkup", "dawn")
-        self.assertTrue(html.startswith('<span class="theme-preview" data-preview-theme="dawn"'))
-
-    def test_option_wraps_choice_and_embeds_preview(self):
-        # 新契约：主题选项由 THEME_PRESETS/自定义主题驱动，字段为 label/mode/desc，
-        # 点击走引擎的 selectThemeChoice。
-        theme = {"id": "dawn", "label": "晨", "mode": "light", "desc": "desc",
-                 "builtinCss": True}
-        html = _call("themeOptionMarkup", theme)
-        self.assertTrue(html.startswith('<button class="theme-option" type="button" data-theme-choice="dawn"'))
-        self.assertIn('data-action="selectThemeChoice"', html)
-        # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
-        self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
-        self.assertIn('class="theme-swatch-highlight"', html)
-        self.assertIn(">晨<", html)
-        self.assertIn(">desc<", html)
-        # 画廊已按明暗模式过滤，浅/深徽标是废话，已去掉；仅自定义主题才标徽标。
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class DetailContextTextTests(unittest.TestCase):
     """详情上下文拼接：取每条 item.text，非空的用换行连成一段。"""
 

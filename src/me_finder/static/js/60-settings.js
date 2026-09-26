@@ -33,10 +33,60 @@
     return settingsStore.appearanceEditMode === 'dark' ? 'dark' : 'light';
   }
 
+  function appendSettingsNode(parent, tag, className, text) {
+    var node = document.createElement(tag);
+    node.className = className;
+    if (text !== undefined) node.textContent = text;
+    parent.appendChild(node);
+    return node;
+  }
+
+  function themeOptionNode(preset) {
+    var button = document.createElement('button');
+    button.className = 'theme-option';
+    button.type = 'button';
+    button.dataset.themeChoice = preset.id;
+    button.dataset.action = 'selectThemeChoice';
+    button.setAttribute('role', 'radio');
+    button.setAttribute('aria-checked', 'false');
+
+    var preview = appendSettingsNode(button, 'span', 'theme-preview');
+    preview.dataset.previewTheme = preset.id;
+    preview.setAttribute('aria-hidden', 'true');
+    if (!preset.builtinCss) preview.style.cssText = themePreviewInlineStyle(preset);
+    var top = appendSettingsNode(preview, 'span', 'theme-swatch-top');
+    appendSettingsNode(top, 'span', 'theme-swatch-aa', 'Aa');
+    var colors = appendSettingsNode(top, 'span', 'theme-swatch-colors');
+    appendSettingsNode(colors, 'span', 'theme-swatch-accent');
+    appendSettingsNode(colors, 'span', 'theme-swatch-highlight');
+    var card = appendSettingsNode(preview, 'span', 'theme-swatch-card');
+    appendSettingsNode(card, 'span', 'theme-swatch-line');
+    appendSettingsNode(card, 'span', 'theme-swatch-line is-short');
+
+    var head = appendSettingsNode(button, 'span', 'theme-option-head');
+    var identity = appendSettingsNode(head, 'span', 'theme-option-identity');
+    appendSettingsNode(identity, 'span', 'theme-option-name', preset.label || preset.name || preset.id);
+    if (preset.custom) appendSettingsNode(identity, 'span', 'theme-option-tag', '自定义');
+    var check = appendSettingsNode(head, 'span', 'theme-option-check');
+    check.setAttribute('aria-hidden', 'true');
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    [['viewBox', '0 0 24 24'], ['width', '13'], ['height', '13'], ['fill', 'none'],
+      ['stroke', 'currentColor'], ['stroke-width', '2.2'], ['stroke-linecap', 'round'],
+      ['stroke-linejoin', 'round']].forEach(function(attribute) {
+      svg.setAttribute(attribute[0], attribute[1]);
+    });
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'm5 12 4 4L19 6');
+    svg.appendChild(path);
+    check.appendChild(svg);
+    if (preset.desc) appendSettingsNode(button, 'span', 'theme-option-description', preset.desc);
+    return button;
+  }
+
   function renderThemeOptions() {
     var container = document.getElementById('theme-options');
     if (!container) return;
-    container.innerHTML = themeChoicesForMode(currentSlot()).map(themeOptionMarkup).join('');
+    container.replaceChildren(...themeChoicesForMode(currentSlot()).map(themeOptionNode));
     renderThemeSelection();
   }
 
@@ -64,7 +114,9 @@
     var modeLabel = settingsStore.appearanceState.mode === 'system' ? '跟随系统'
       : (settingsStore.appearanceState.mode === 'dark' ? '深色' : '浅色');
     var activeId = resolveActiveThemeId(settingsStore.appearanceState, teSystemPrefersDark());
-    el.innerHTML = '<span class="settings-theme-dot"></span>' + esc(modeLabel + ' · ' + themeDisplayName(activeId));
+    el.replaceChildren();
+    appendSettingsNode(el, 'span', 'settings-theme-dot');
+    el.appendChild(document.createTextNode(modeLabel + ' · ' + themeDisplayName(activeId)));
   }
 
   // 把某个模式预览 mock 涂成对应主题的真实配色（复用引擎派生，token 驱动）。
@@ -1725,17 +1777,31 @@
   function renderScanDirectories() {
     var container = document.getElementById('scan-dir-list');
     if (!container) return;
+    container.replaceChildren();
     if (!settingsStore.scanDirectories.length) {
-      container.innerHTML = '<div class="scan-dir-empty">还没有添加文献文件夹</div>';
+      appendSettingsNode(container, 'div', 'scan-dir-empty', '还没有添加文献文件夹');
       return;
     }
-    container.innerHTML = settingsStore.scanDirectories.map(function(dir, index) {
-      return '<div class="scan-dir-row" title="' + esc(dir) + '">'
-        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>'
-        + '<span class="scan-dir-row-path">' + esc(dir) + '</span>'
-        + '<button class="scan-dir-remove" type="button" aria-label="移除目录" data-action="removeScanDirectory" data-index="' + index + '">移除</button>'
-        + '</div>';
-    }).join('');
+    settingsStore.scanDirectories.forEach(function(dir, index) {
+      var row = appendSettingsNode(container, 'div', 'scan-dir-row');
+      row.title = dir;
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      [['viewBox', '0 0 24 24'], ['fill', 'none'], ['stroke', 'currentColor'],
+        ['stroke-width', '1.8'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'],
+        ['aria-hidden', 'true']].forEach(function(attribute) {
+        svg.setAttribute(attribute[0], attribute[1]);
+      });
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z');
+      svg.appendChild(path);
+      row.appendChild(svg);
+      appendSettingsNode(row, 'span', 'scan-dir-row-path', dir);
+      var button = appendSettingsNode(row, 'button', 'scan-dir-remove', '移除');
+      button.type = 'button';
+      button.setAttribute('aria-label', '移除目录');
+      button.dataset.action = 'removeScanDirectory';
+      button.dataset.index = String(index);
+    });
   }
 
   // The desktop shells expose a real folder picker; a plain browser session has

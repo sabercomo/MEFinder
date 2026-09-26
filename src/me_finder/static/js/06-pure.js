@@ -560,22 +560,6 @@ function bibliographicMissingText(meta) {
   }).join('、') : '';
 }
 
-// 主题预览缩略图标记。原在 60-settings.js，纯字符串拼接。
-// styleAttr 非空时（新预设/自定义主题）以内联派生 token 着色；内置 CSS 主题
-// 仍靠 data-preview-theme 的样式块，缩略图内部一律用 var(--token)，天然复用真实设计 token。
-function themePreviewMarkup(themeId, styleAttr) {
-  // 色板样张同时展示按钮色与正文强调色，避免把两个不同角色误认成同一颜色。
-  return '<span class="theme-preview" data-preview-theme="' + themeId + '"' + (styleAttr ? ' style="' + styleAttr + '"' : '') + ' aria-hidden="true">'
-    + '<span class="theme-swatch-top">'
-    + '<span class="theme-swatch-aa">Aa</span>'
-    + '<span class="theme-swatch-colors"><span class="theme-swatch-accent"></span><span class="theme-swatch-highlight"></span></span>'
-    + '</span>'
-    + '<span class="theme-swatch-card">'
-    + '<span class="theme-swatch-line"></span>'
-    + '<span class="theme-swatch-line is-short"></span>'
-    + '</span></span>';
-}
-
 // 派生 token 的内联 style 串（新预设/自定义主题的缩略图与卡片着色用）。
 function themePreviewInlineStyle(def) {
   if (typeof deriveThemeTokens !== 'function') return '';
@@ -585,22 +569,6 @@ function themePreviewInlineStyle(def) {
     if (tokens.hasOwnProperty(key)) out.push(key + ':' + tokens[key]);
   }
   return out.join(';');
-}
-
-// 主题选项按钮标记。现由 THEME_PRESETS/自定义主题驱动，点击走 selectThemeChoice。
-// preset: { id, name, label, mode, builtinCss, desc, accent, background, foreground, contrast }
-function themeOptionMarkup(preset) {
-  // 画廊已按当前明暗模式过滤，浅/深徽标是废话，去掉；仅自定义主题标一枚小徽标。
-  var name = preset.label || preset.name || preset.id;
-  var desc = preset.desc || '';
-  var styleAttr = preset.builtinCss ? '' : themePreviewInlineStyle(preset);
-  var chip = preset.custom ? '<span class="theme-option-tag">自定义</span>' : '';
-  return '<button class="theme-option" type="button" data-theme-choice="' + esc(preset.id) + '" role="radio" aria-checked="false" data-action="selectThemeChoice">'
-    + themePreviewMarkup(preset.id, styleAttr)
-    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span>' + chip + '</span>'
-    + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
-    + (desc ? '<span class="theme-option-description">' + esc(desc) + '</span>' : '')
-    + '</button>';
 }
 
 // 卷册索引：source_file_id → volume。原在 20-search.js，纯。
