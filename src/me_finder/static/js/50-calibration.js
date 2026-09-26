@@ -263,8 +263,8 @@
     document.getElementById('spread-page-left-' + index).textContent = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
     document.getElementById('spread-page-right-' + index).textContent = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
     document.getElementById('spread-summary-' + index).innerHTML = spreadSummaryHtml(seg);
-    var ltrBtn = diagram.parentNode.querySelector('.segment-direction-btn[onclick*="\'ltr\'"]');
-    var rtlBtn = diagram.parentNode.querySelector('.segment-direction-btn[onclick*="\'rtl\'"]');
+    var ltrBtn = diagram.parentNode.querySelector('.segment-direction-btn[data-direction="ltr"]');
+    var rtlBtn = diagram.parentNode.querySelector('.segment-direction-btn[data-direction="rtl"]');
     if (ltrBtn && rtlBtn) {
       ltrBtn.classList.toggle('is-active', direction === 'ltr');
       ltrBtn.setAttribute('aria-pressed', direction === 'ltr' ? 'true' : 'false');

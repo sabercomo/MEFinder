@@ -256,6 +256,8 @@
 
 2026-09-26(C5 第二步):`60-settings.js` 的主题画廊、当前主题摘要和扫描目录改为 DOM 节点构造,`innerHTML` 4→0;主题预览、单选语义和移除按钮保留。原来仅供字符串渲染的 `themePreviewMarkup`/`themeOptionMarkup` 已删,对应测试改验 DOM 装配。
 
+2026-09-26(C5 校准回归修复):检查校准页时发现 `updateSpreadPanel` 仍按旧的 `onclick` 属性查找阅读方向按钮;C4 已将按钮迁为 `data-direction`,故切换后高亮不会刷新。选择器同步改为 `data-direction`,补回归守卫。
+
 ### 阶段 D — `reader.js` 拆分(阶段 B1 之后;可与阶段 C 并行)
 
 **现状(2026-09-25 实测)**
