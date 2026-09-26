@@ -404,12 +404,12 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_http_requests_go_through_the_api_module(self):
         """前端请求只能经 07-api.js 发出（v0.5.7 B1 棘轮，只降不升）。
 
-        reader-window.js 是独立阅读窗口的宿主脚本，不装配 static/js/，暂留 1 处，
-        待阶段 D1 接入 07-api.js 后清零；reader.js 走可注入的 fetchFunction。
+        阶段 D1 起独立阅读窗口也装配 07-api.js，reader-window.js 已清零；
+        reader.js 的 configure({fetch}) 注入经 MEFinderApi.withFetch 走同一出口。
         """
 
         bare_fetch = re.compile(r"(?<![\w.$])fetch\(")
-        allowed = {"static/js/07-api.js": 1, "static/reader-window.js": 1}
+        allowed = {"static/js/07-api.js": 1}
         counts = {}
         for relative in sorted(
             set(_split_js_assets()) | set(_reader_js_assets()) | {"static/reader-window.js"}
@@ -657,10 +657,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     # 0.5.7 C5：toast 与设置页改用 DOM 构造。
     # 书目编辑器切换文献类型时，可见字段按编辑值整值回填（修书名被原值覆盖）。
+    # 0.5.7 D1：07-api.js 新增 withFetch 可注入客户端；reader.js 的 JSON 请求
+    #   改走统一客户端，原始状态请求默认出口改为 MEFinderApi.fetch。
     BASELINE_SHA256 = (
-        "4fa92e29109b37889ee47fcf0fb01cc00a20bc02fa2059f046c8437f49076fe3"
+        "039d08ffffd3163270759fadb67bf2e974681d417e7462a87f9ea1663e1433c9"
     )
-    BASELINE_BYTES = 1314461
+    BASELINE_BYTES = 1314785
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

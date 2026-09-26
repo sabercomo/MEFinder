@@ -27,6 +27,8 @@ const context = {
 };
 context.window=context;
 vm.createContext(context);
+// 独立阅读窗口在宿主脚本前装配 07-api.js。
+vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 (async()=>{
   await events.pywebviewready();
@@ -37,7 +39,8 @@ vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 '''
         result = subprocess.run(
             [shutil.which("node"), "-e", script,
-             str(root / "src/me_finder/static/reader-window.js")],
+             str(root / "src/me_finder/static/reader-window.js"),
+             str(root / "src/me_finder/static/js/07-api.js")],
             capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

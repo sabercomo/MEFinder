@@ -4,8 +4,8 @@ import shutil
 import subprocess
 import unittest
 
-from src.me_finder.web_assets import HTML, READER_WINDOW_HTML
-from tests.reader_source import reader_js_source
+from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _load_asset
+from tests.reader_source import reader_js_source, reader_runtime_source
 
 
 class ReaderPublicContractTests(unittest.TestCase):
@@ -16,6 +16,94 @@ class ReaderPublicContractTests(unittest.TestCase):
         self.assertEqual(READER_WINDOW_HTML.count(source), 1)
         self.assertNotIn("//__READER_JS__", HTML)
         self.assertNotIn("//__READER_JS__", READER_WINDOW_HTML)
+
+    def test_both_windows_load_the_request_module_before_the_reader(self) -> None:
+        api = _load_asset("static/js/07-api.js")
+        reader = reader_js_source()
+        for html in (HTML, READER_WINDOW_HTML):
+            self.assertEqual(html.count(api), 1)
+            self.assertLess(html.index(api), html.index(reader))
+        self.assertNotIn("//__API_JS__", READER_WINDOW_HTML)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_reader_requests_use_the_shared_client_unless_fetch_is_injected(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const calls = [];
+let resolver = null;
+const context = {
+  document: {readyState:'loading', documentElement:{dataset:{}}, addEventListener(){}},
+  location:{pathname:'/',search:''},
+  addEventListener(){}, setTimeout(resolve){resolve();},
+  MEFinderApi: {
+    fetch: async url => { calls.push(['shared', url]); return {status:404, ok:false, json:async()=>({})}; },
+    withFetch(resolve) { resolver = resolve; return {requestJSON(){}, postJSON(){}}; }
+  }
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const reader = context.MEFinderReader;
+(async()=>{
+  // JSON 请求的客户端在装配时建好，但每次请求才解析实际 fetch。
+  assert.equal(typeof resolver, 'function');
+  await resolver()('/json-default');
+  // 需要原始状态码的轮询默认也走共享出口。
+  reader.alignmentJobs.watch('J1', {origin:'reader'});
+  for (let i=0;i<5 && calls.length < 2;i++) await new Promise(setImmediate);
+  reader.configure({fetch: async url => { calls.push(['injected', url]); return {status:404, ok:false, json:async()=>({})}; }});
+  await resolver()('/json-injected');
+  reader.alignmentJobs.watch('J2', {origin:'reader'});
+  for (let i=0;i<5 && calls.length < 4;i++) await new Promise(setImmediate);
+  assert.deepEqual(calls.map(call=>call[0]), ['shared','shared','injected','injected']);
+  assert.equal(calls[0][1], '/json-default');
+  assert.match(calls[1][1], /job_id=J1/);
+  assert.equal(calls[2][1], '/json-injected');
+  assert.match(calls[3][1], /job_id=J2/);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_injected_client_keeps_json_error_shape_and_live_resolution(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const seen = [];
+const context = {fetch: async (url, options) => { seen.push(['global', url, options]); return {ok:true, status:200, json:async()=>({ok:1})}; }};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const api = context.MEFinderApi;
+let current = async (url, options) => { seen.push(['first', url, options]); return {ok:false, status:409, json:async()=>({error:'冲突', code:'busy'})}; };
+const client = api.withFetch(() => current);
+(async()=>{
+  const options = {headers:{'Accept':'application/json'}};
+  await assert.rejects(client.requestJSON('/a', options), error => {
+    assert.equal(error.message, '冲突'); assert.equal(error.status, 409); assert.equal(error.code, 'busy');
+    return true;
+  });
+  assert.equal(seen[0][2], options); // options pass through untouched (no cache flag added)
+  current = async (url, options) => { seen.push(['second', url, JSON.parse(options.body)]); return {ok:true, status:200, json:async()=>({saved:true})}; };
+  assert.deepEqual(await client.postJSON('/b', {x:1}), {saved:true});
+  assert.deepEqual(seen[1], ['second', '/b', {x:1}]);
+  assert.deepEqual(await api.requestJSON('/c'), {ok:1});
+  assert.equal(seen[2][0], 'global');
+  assert.equal(Object.isFrozen(client), true);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=_load_asset("static/js/07-api.js"), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_public_methods_are_frozen_and_state_shape_is_stable(self) -> None:
@@ -60,7 +148,7 @@ assert.equal(reader.alignmentJobs.running(), null);
 """
         result = subprocess.run(
             [shutil.which("node"), "-e", script],
-            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -125,7 +213,7 @@ const page = {ok:true, json:async()=>({items:[], total:0, start:0, has_more:fals
 """
         result = subprocess.run(
             [shutil.which("node"), "-e", script],
-            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -183,7 +271,7 @@ const unsubscribe = reader.alignmentJobs.subscribe(event=>events.push(event));
 """
         result = subprocess.run(
             [shutil.which("node"), "-e", script],
-            input=reader_js_source(), capture_output=True, text=True, timeout=15,
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

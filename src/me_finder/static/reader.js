@@ -993,24 +993,15 @@
     if (typeof config[name] === 'function') config[name](argument);
   }
 
-  async function readJSON(url, options) {
-    var response = await fetchFunction()(url, options || {headers: {'Accept': 'application/json'}});
-    var payload = {};
-    try { payload = await response.json(); } catch (_error) { payload = {}; }
-    if (!response.ok || payload.error) {
-      var error = new Error(payload.error || '请求失败');
-      error.status = response.status;
-      throw error;
-    }
-    return payload;
+  /* 普通 JSON 请求走统一客户端；需要看原始状态码的请求直接用 fetchFunction()。 */
+  var api = global.MEFinderApi.withFetch(fetchFunction);
+
+  function readJSON(url, options) {
+    return api.requestJSON(url, options || {headers: {'Accept': 'application/json'}});
   }
 
   function postJSON(url, body) {
-    return readJSON(url, {
-      method: 'POST',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-      body: JSON.stringify(body || {})
-    });
+    return api.postJSON(url, body);
   }
 
   /* ── 作品上下文：成员、每对版本的状态、组件可用性 ─────────────── */
@@ -3692,7 +3683,7 @@
   }
 
   function fetchFunction() {
-    var candidate = config.fetch || global.fetch;
+    var candidate = config.fetch || global.MEFinderApi.fetch;
     if (typeof candidate !== 'function') {
       throw new Error('当前环境不支持读取结构化文本');
     }

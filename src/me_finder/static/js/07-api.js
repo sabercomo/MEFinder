@@ -4,42 +4,57 @@
    - MEFinderApi.requestJSON / getJSON / postJSON：解析 JSON，
      !resp.ok 或 data.error 时抛出带 status / code / payload 的 Error，
      message 取后端的中文 error。
+   - MEFinderApi.withFetch(resolveFetch)：同一套封装，但每次请求时调用
+     resolveFetch() 取实际的 fetch（阅读器 configure({fetch}) 注入用）。
    其他文件禁止直接调用原生 fetch（test_frontend_assets 棘轮守卫）。 */
 (function (global) {  // module: 07-api.js
-  function request(url, options) {
-    return fetch(url, options);
-  }
-
-  async function requestJSON(url, options) {
-    var response = await request(url, options);
-    var data = {};
-    try { data = await response.json(); } catch (_) { data = {}; }
-    if (!response.ok || (data && data.error)) {
-      var error = new Error((data && data.error) || '请求失败');
-      error.status = response.status;
-      error.code = (data && data.code) || '';
-      error.payload = data;
-      throw error;
+  function createClient(resolveFetch) {
+    function request(url, options) {
+      if (resolveFetch) return resolveFetch()(url, options);
+      return fetch(url, options);
     }
-    return data;
+
+    async function requestJSON(url, options) {
+      var response = await request(url, options);
+      var data = {};
+      try { data = await response.json(); } catch (_) { data = {}; }
+      if (!response.ok || (data && data.error)) {
+        var error = new Error((data && data.error) || '请求失败');
+        error.status = response.status;
+        error.code = (data && data.code) || '';
+        error.payload = data;
+        throw error;
+      }
+      return data;
+    }
+
+    function getJSON(url, options) {
+      return requestJSON(url, Object.assign({cache: 'no-store'}, options || {}));
+    }
+
+    function postJSON(url, payload, options) {
+      return requestJSON(url, Object.assign({
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify(payload || {})
+      }, options || {}));
+    }
+
+    return Object.freeze({
+      fetch: request,
+      requestJSON: requestJSON,
+      getJSON: getJSON,
+      postJSON: postJSON
+    });
   }
 
-  function getJSON(url, options) {
-    return requestJSON(url, Object.assign({cache: 'no-store'}, options || {}));
-  }
-
-  function postJSON(url, payload, options) {
-    return requestJSON(url, Object.assign({
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-      body: JSON.stringify(payload || {})
-    }, options || {}));
-  }
+  var defaultClient = createClient(null);
 
   global.MEFinderApi = Object.freeze({
-    fetch: request,
-    requestJSON: requestJSON,
-    getJSON: getJSON,
-    postJSON: postJSON
+    fetch: defaultClient.fetch,
+    requestJSON: defaultClient.requestJSON,
+    getJSON: defaultClient.getJSON,
+    postJSON: defaultClient.postJSON,
+    withFetch: createClient
   });
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));
