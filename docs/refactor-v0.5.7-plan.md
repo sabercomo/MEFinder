@@ -226,6 +226,8 @@
 - 随之收缩全局符号预算(内联事件不再需要全局函数)。
 - 守卫:`index.html` 内联事件数、各文件 `innerHTML` 数,棘轮只降不升。
 
+2026-09-26(C4 第一步):新增 `08-actions.js` 注册式点击委托;联网书目候选卡的五种按钮改用 `data-action`、`data-source-id`、`data-index`,不再把文献 ID 拼进 JavaScript。`40-bibliography.js` 对应五个直接全局入口撤销,预算 27→22。守卫固定模板 `onclick/onchange/oninput` 上限 205 和各 JS 文件 `innerHTML` 上限;此步尚未触碰模板 205 处或其余动态 HTML,下一步继续迁移带文献 ID 的动态事件。
+
 **前端 C5 DOM 构造与拆文件**
 - 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
 - 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。

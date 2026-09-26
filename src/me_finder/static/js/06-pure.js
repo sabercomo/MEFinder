@@ -761,7 +761,7 @@ function candidateCardHTML(sourceId, candidate, index, config) {
   var extra = config.detailExtra && meta[config.detailExtra.field]
     ? ' · ' + config.detailExtra.label + ' ' + esc(meta[config.detailExtra.field]) : '';
   var actions = config.actions.map(function(btn) {
-    return '<button class="action-btn' + (btn.primary ? ' primary' : '') + '" type="button" onclick="' + btn.handler + '(\'' + esc(sourceId) + '\',' + index + ')">' + btn.label + '</button>';
+    return '<button class="action-btn' + (btn.primary ? ' primary' : '') + '" type="button" data-action="' + btn.handler + '" data-source-id="' + esc(sourceId) + '" data-index="' + index + '">' + btn.label + '</button>';
   }).join('');
   return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
     + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || config.titleFallback) + '</div>'

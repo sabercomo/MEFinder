@@ -1479,6 +1479,7 @@ process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
 """
 
 _FRONTEND_STORE_STUB = r"""
+var MEFinderActions = {register: function() {}};
 var searchStore = {documentId:'', groupId:'', sourceFiles:[], libraryCatalog:null};
 var libraryStore = {
   sources:[], volumes:[], volumeBySource:new Map(), works:[], stats:null,
@@ -2163,11 +2164,11 @@ class CnkiLookupConfigTests(unittest.TestCase):
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class CandidateCardHTMLGoldenTests(unittest.TestCase):
-    """联网补全候选卡抽出 candidateCardHTML 后，三套源的渲染必须逐字不变。
+    """联网补全候选卡三套源保持统一结构与文案，仅动作属性改为数据。
 
-    夹具的 expected 是重构前 cnki/book/crossref 三个 List 函数的真实输出（golden
-    baseline）。这里用重构后的 candidateCardHTML + 三套真实配置重新渲染同一批候选，
-    断言与 golden 逐字一致——覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、
+    夹具原本来自重构前 cnki/book/crossref 三个 List 函数；C4 仅把候选按钮的
+    onclick 属性替换成 data-action/data-source-id/data-index。断言与基线逐字一致，
+    覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、
     ISBN/DOI 后缀与标题/详情兜底，以及知网 3 按钮 vs 图书/Crossref 1 按钮的差异。
     """
 
@@ -2189,7 +2190,7 @@ class CandidateCardHTMLGoldenTests(unittest.TestCase):
             self.assertEqual(
                 got[key],
                 fixture["expected"][key],
-                f"{key} 候选卡渲染与重构前 golden 不一致",
+                f"{key} 候选卡渲染与 C4 golden 不一致",
             )
 
     def test_cnki_has_three_action_buttons(self):
@@ -2209,6 +2210,18 @@ class CandidateCardHTMLGoldenTests(unittest.TestCase):
         self.assertEqual(html.count("<button"), 3)
         self.assertIn('class="cnki-candidate ', html)
         self.assertIn("cnki-candidate-actions", html)
+
+    def test_source_id_is_data_not_inline_code(self):
+        source_id = "a'\"<b>&"
+        html = _call("candidateCardHTML", source_id,
+                     {"metadata": {"title": "x"}, "match": {}}, 2,
+                     {"titleFallback": "x", "detailMidField": "journal_name",
+                      "detailFallback": "x", "detailExtra": None,
+                      "actions": [{"handler": "applyBookCandidate", "label": "补全", "primary": True}]})
+        self.assertNotIn("onclick=", html)
+        self.assertIn('data-action="applyBookCandidate"', html)
+        self.assertIn('data-source-id="a&#39;&quot;&lt;b&gt;&amp;"', html)
+        self.assertIn('data-index="2"', html)
 
 
 if __name__ == "__main__":

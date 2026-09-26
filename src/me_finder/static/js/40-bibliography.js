@@ -1017,13 +1017,23 @@
   global.bibToggleMenu = bibToggleMenu;
   global.bibCloseMenus = bibCloseMenus;
   global.setBibliographicType = setBibliographicType;
-  global.applyCnkiSearchCandidate = applyCnkiSearchCandidate;
+  MEFinderActions.register('applyCnkiSearchCandidate', function(event, button) {
+    applyCnkiSearchCandidate(button.dataset.sourceId, Number(button.dataset.index));
+  });
   global.lookupGoogleBooks = lookupGoogleBooks;
-  global.applyBookCandidate = applyBookCandidate;
-  global.applyCrossrefCandidate = applyCrossrefCandidate;
-  global.fetchCnkiCandidate = fetchCnkiCandidate;
+  MEFinderActions.register('applyBookCandidate', function(event, button) {
+    applyBookCandidate(button.dataset.sourceId, Number(button.dataset.index));
+  });
+  MEFinderActions.register('applyCrossrefCandidate', function(event, button) {
+    applyCrossrefCandidate(button.dataset.sourceId, Number(button.dataset.index));
+  });
+  MEFinderActions.register('fetchCnkiCandidate', function(event, button) {
+    fetchCnkiCandidate(button.dataset.sourceId, Number(button.dataset.index));
+  });
   global.openCnkiExternal = openCnkiExternal;
-  global.openCnkiCandidate = openCnkiCandidate;
+  MEFinderActions.register('openCnkiCandidate', function(event, button) {
+    openCnkiCandidate(button.dataset.sourceId, Number(button.dataset.index));
+  });
   global.parseCnkiCitationText = parseCnkiCitationText;
   global.pickBibLanguage = pickBibLanguage;
   global.detectBibliographicMetadata = detectBibliographicMetadata;

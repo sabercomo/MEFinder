@@ -67,6 +67,22 @@ def _existing(relatives):
 
 
 class FrontendAssetAssemblyTests(unittest.TestCase):
+    def test_c4_inline_events_and_inner_html_do_not_increase(self):
+        template = _read("templates/index.html")
+        self.assertLessEqual(
+            len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 205
+        )
+        inner_html_baseline = {
+            "20-search.js": 11, "25-toast.js": 1, "30-library.js": 10,
+            "40-bibliography.js": 5, "50-calibration.js": 9,
+            "60-settings.js": 4, "62-zotero.js": 1, "70-vision.js": 10,
+            "71-vision-providers.js": 11, "80-import.js": 5,
+        }
+        for relative in _split_js_assets():
+            name = Path(relative).name
+            self.assertLessEqual(_read(relative).count("innerHTML"),
+                                 inner_html_baseline.get(name, 0), name)
+
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
             self.assertNotIn(
@@ -334,7 +350,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
-            "static/js/40-bibliography.js": 27,
+            "static/js/40-bibliography.js": 22,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 25,
             "static/js/71-vision-providers.js": 18,
@@ -547,10 +563,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
+    # 0.5.7 C4 第一步：候选卡动作改为事件委托，增加 08-actions.js。
     BASELINE_SHA256 = (
-        "f41253a8a137440824e470a0ec018f9c77338078f11f01621acd605762d4626b"
+        "167cfa9332273848017408a4a15ee8b309fd6c2828ed2e339fedf55f6740c358"
     )
-    BASELINE_BYTES = 1265942
+    BASELINE_BYTES = 1267123
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
