@@ -1354,6 +1354,94 @@ return calls;
                                   ["stop"], ["lookup", "bib-source-menu"]])
 
 
+# 在 _FAKE_DOM 之上补一层“活” DOM：按 id 查找、replaceWith、类型按钮选择器，
+# 让 setBibliographicType 能在 Node 里真实地收集表单、重建编辑器、回填字段。
+_LIVE_BIB_DOM = r"""
+var __root = {children: []};
+function __walk(node, visit) {
+  if (!node || !node.children) return null;
+  for (var i = 0; i < node.children.length; i++) {
+    var child = node.children[i];
+    if (visit(child, node, i)) return child;
+    var hit = __walk(child, visit);
+    if (hit) return hit;
+  }
+  return null;
+}
+var __baseElement = __element;
+__element = function(tag) {
+  var node = __baseElement(tag);
+  node.classList = {add: function() {}, remove: function() {}};
+  node.insertBefore = function(child) { node.children.unshift(child); return child; };
+  node.replaceWith = function(next) {
+    __walk(__root, function(child, parent, i) {
+      if (child === node) { parent.children[i] = next; return true; }
+      return false;
+    });
+  };
+  return node;
+};
+document.createElement = __element;
+document.createElementNS = function(_ns, tag) { return __element(tag); };
+document.getElementById = function(id) {
+  return __walk(__root, function(child) { return child.id === id; });
+};
+document.querySelector = function(selector) {
+  if (selector !== '#bib-doctype-control .seg-btn.active') return null;
+  var control = document.getElementById('bib-doctype-control');
+  return control ? __walk(control, function(child) {
+    return / seg-btn(?= |$)|^seg-btn(?= |$)/.test(child.className || '') && / active(?= |$)/.test(child.className || '');
+  }) : null;
+};
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过书目类型切换测试")
+class BibliographicTypeSwitchTests(unittest.TestCase):
+    """切换文献类型重建表单时，已编辑的字段值不得被原始元数据覆盖。"""
+
+    def _run(self, script):
+        tail = _FAKE_DOM + _LIVE_BIB_DOM + r"""
+var src = {source_file_id: 's1', source_type: 'epub', bibliographic_metadata: {
+  document_type: 'book', title: '原书名', author: '原作者', journal_name: '原刊名'}};
+libraryStore.sources = [src];
+libraryStore.selectedId = 's1';
+var host = __element('div');
+host.id = 'bib-host';
+host.replaceChildren = function(node) { host.children = [node]; };
+host.querySelector = function() { return null; };
+__root.children.push(host);
+MEFinderActions.actions.enterBibEdit(null, {dataset: {sourceId: 's1'}});
+function setBibliographicType(sid, docType) {
+  MEFinderActions.actions.setBibliographicType(null, {dataset: {sourceId: sid, doctype: docType}});
+}
+function val(id) { var el = document.getElementById('bib-' + id); return el ? el.value : null; }
+function set(id, v) { document.getElementById('bib-' + id).value = v; }
+""" + script
+        return _bib_eval(tail)
+
+    def test_edited_title_survives_type_round_trip(self):
+        result = self._run(r"""
+set('title', '新书名'); set('translator', '某译者');
+setBibliographicType('s1', 'journal_article');
+var journal = {title: val('title'), journal: val('journal-name')};
+setBibliographicType('s1', 'book');
+return {journal: journal, book: {title: val('title'), translator: val('translator')}};
+""")
+        self.assertEqual(result, {
+            "journal": {"title": "新书名", "journal": "原刊名"},
+            "book": {"title": "新书名", "translator": "某译者"},
+        })
+
+    def test_cleared_field_stays_cleared_after_type_switch(self):
+        result = self._run(r"""
+set('author', '');
+setBibliographicType('s1', 'thesis');
+return val('author');
+""")
+        self.assertEqual(result, "")
+
+
 def _import_eval(tail):
     """在 06-pure.js + 80-import.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
 

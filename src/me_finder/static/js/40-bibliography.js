@@ -493,12 +493,17 @@
     var src = libraryStore.sources.find(function(item) { return item.source_file_id === sourceId; });
     var editor = document.getElementById('bibliographic-editor');
     if (!src || !editor) return;
+    function inputFor(key) { return document.getElementById('bib-' + key.replace(/_/g, '-')); }
+    // 旧表单里可见的字段是用户实时编辑值（含清空），新表单按原始元数据预填，
+    // 必须整值覆盖；否则预填非空的字段（如书名）会把编辑值丢掉。
+    var visible = Object.keys(current).filter(function(key) { return key !== 'document_type' && inputFor(key); });
     editor.replaceWith(bibliographicEditorNode(src));
-    // 切换字段集时保留已填写的公共字段。
     Object.keys(current).forEach(function(key) {
-      if (key === 'document_type' || !current[key]) return;
-      var input = document.getElementById('bib-' + key.replace(/_/g, '-'));
-      if (input && !input.value) input.value = current[key];
+      if (key === 'document_type') return;
+      var input = inputFor(key);
+      if (!input) return;
+      if (visible.indexOf(key) >= 0) input.value = current[key] || '';
+      else if (current[key] && !input.value) input.value = current[key];
     });
   }
 

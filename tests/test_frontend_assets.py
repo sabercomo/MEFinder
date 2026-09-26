@@ -652,10 +652,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
     # 0.5.7 C5：toast 与设置页改用 DOM 构造。
+    # 书目编辑器切换文献类型时，可见字段按编辑值整值回填（修书名被原值覆盖）。
     BASELINE_SHA256 = (
-        "1dfaee3e73a38ec52ad549162a686813ce13930e68fdb77abb993a0ee2e8bc5f"
+        "4fa92e29109b37889ee47fcf0fb01cc00a20bc02fa2059f046c8437f49076fe3"
     )
-    BASELINE_BYTES = 1314052
+    BASELINE_BYTES = 1314461
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
