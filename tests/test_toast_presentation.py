@@ -3,11 +3,46 @@
 from __future__ import annotations
 
 import unittest
+import shutil
+import subprocess
+from pathlib import Path
 
 from src.me_finder.web import HTML
 
 
 class ToastPresentationTests(unittest.TestCase):
+    def test_toast_dom_preserves_text_and_icon(self) -> None:
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node 不可用")
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/25-toast.js"
+        script = r"""
+const fs = require('fs');
+const vm = require('vm');
+function element(tag) {
+  return {tag, children: [], attrs: {}, dataset: {}, classList: {add() {}},
+    appendChild(child) { this.children.push(child); },
+    setAttribute(name, value) { this.attrs[name] = value; },
+    remove() { this.removed = true; }};
+}
+const stack = element('div');
+const context = {document: {
+  getElementById(id) { return id === 'toast-stack' ? stack : null; },
+  createElement: element,
+  createElementNS(ns, tag) { if (ns !== 'http://www.w3.org/2000/svg') throw Error(ns); return element(tag); }
+}, setTimeout() { return 1; }, clearTimeout() {}, toastDuration() { return 2400; }};
+Object.defineProperty(stack, 'firstElementChild', {get() { return this.children[0]; }});
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+const toast = context.showToast('<b>原文</b>', 'success');
+const icon = toast.children[0].children[0];
+if (toast.children[1].textContent !== '<b>原文</b>' || icon.tag !== 'svg'
+    || icon.children.length !== 2 || icon.children[1].attrs.d !== 'm5.8 9.2 2.2 2.2 4.2-4.4'
+    || icon.attrs['aria-hidden'] !== 'true') throw Error('toast DOM differs');
+"""
+        subprocess.run([node, "-e", script, str(source)], check=True,
+                       capture_output=True, text=True, encoding="utf-8")
+
     def test_toast_uses_the_app_surface_instead_of_a_black_pill(self) -> None:
         self.assertIn('id="toast-stack"', HTML)
         self.assertNotIn('<div id="toast" class="toast"></div>', HTML)

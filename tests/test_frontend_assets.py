@@ -73,7 +73,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 0
         )
         inner_html_baseline = {
-            "20-search.js": 11, "25-toast.js": 1, "30-library.js": 10,
+            "20-search.js": 11, "25-toast.js": 0, "30-library.js": 10,
             "40-bibliography.js": 5, "50-calibration.js": 9,
             "60-settings.js": 4, "62-zotero.js": 1, "70-vision.js": 10,
             "71-vision-providers.js": 11, "80-import.js": 5,
@@ -643,11 +643,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
     #   注入装配文档；字节数不变，仅摘要变化）。
     # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
-    # 0.5.7 C4：模板及动态生成的内联事件全部迁入委托。
+    # 0.5.7 C5：toast 改用 DOM 构造。
     BASELINE_SHA256 = (
-        "2800dc582c885bb9625cdd04614189c82160d04226e2619e19facd3d3687f4a6"
+        "b74e4e995736bc6c34ac4deb2ef1899a3b04df2269df9bf130426034f4c18186"
     )
-    BASELINE_BYTES = 1297187
+    BASELINE_BYTES = 1297818
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
