@@ -682,10 +682,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   设置页「译本对齐模型」行改由 64-settings-model-view.js 渲染，模板两行静态标记删除。
     # Vue 试点第二块：托管 MinerU 卡片改由 70-managed-mineru-view.js 渲染；字节与剩余时间
     #   两个格式化函数移入 06-pure.js；.managed-mineru-profile[hidden] 真正收起 VLM 行。
+    # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
     BASELINE_SHA256 = (
-        "2b3f10d161292d8cbc2e8be271cfe8625f414c9b8d3aa6b348c8bf837b07e173"
+        "4c0ada0b0b6279a2084caa0a71ab2e3ce721369570a9101a14c8d2a7e0a313fc"
     )
-    BASELINE_BYTES = 1499421
+    BASELINE_BYTES = 1505566
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

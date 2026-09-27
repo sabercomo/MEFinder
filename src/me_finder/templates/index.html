@@ -480,27 +480,28 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </div>
       </div>
       <div class="settings-page-content">
+        <!-- Settings icons: Lucide v0.468.0 (ISC); license: static/vendor/lucide.LICENSE.txt -->
         <nav class="settings-nav" role="tablist" aria-label="设置分类">
           <div class="settings-nav-group plat-desktop" role="presentation">阅读</div>
-          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" data-action="templateClick071"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V8h4M8 12.5h6M8 15.5h6"/></svg><span>阅读与检索</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" data-action="templateClick072"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 11h5M13 13h7M15 17h5"/><path d="m9 16 3-3-3-3M15 8l-3-3 3-3"/></svg><span>译本对齐</span></button>
+          <button class="settings-nav-item plat-desktop active" type="button" role="tab" aria-selected="true" data-target="pdf-reader-settings" data-action="templateClick071"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></svg><span>阅读与检索</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="text-alignment-settings" data-action="templateClick072"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" /><path d="m22 22-5-10-5 10" /><path d="M14 18h6" /></svg><span>译本对齐</span></button>
           <div class="settings-nav-group" role="presentation">来源</div>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="zotero-settings" data-action="templateClick073"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h12L6 19h12"/></svg><span>Zotero</span></button>
           <div class="settings-nav-group" role="presentation">解析</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" data-action="templateClick074"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 12h7"/></svg><span>MinerU API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" data-action="templateClick075"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7 4 12l4 5M16 7l4 5-4 5M13.5 5l-3 14"/></svg><span>其他解析 API</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" data-action="templateClick076"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9V7h2M14 7h2v2M16 15v2h-2M10 17H8v-2M9 12h6"/></svg><span>本地 OCR</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" data-action="templateClick077"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19v-7M12 19V5M19 19v-10"/><path d="M3.5 19.5h17"/></svg><span>解析统计</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="mineru-api-settings" data-action="templateClick074"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 12h10" /></svg><span>MinerU API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="vision-api-settings" data-action="templateClick075"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg><span>其他解析 API</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="local-ocr-settings" data-action="templateClick076"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" /></svg><span>本地 OCR</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="statistics-settings" data-action="templateClick077"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg><span>解析统计</span></button>
           <div class="settings-nav-group" role="presentation">引用</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" data-action="templateClick078"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6.5h10M7 10.5h7M7 14.5h8"/><path d="M5 3.5h14a1.5 1.5 0 0 1 1.5 1.5v14A1.5 1.5 0 0 1 19 20.5H5A1.5 1.5 0 0 1 3.5 19V5A1.5 1.5 0 0 1 5 3.5Z"/></svg><span>引文格式</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" data-action="templateClick079"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 4.95 11.95M20 20l-4.05-4.05"/><path d="M8.5 11h5M11 8.5v5"/></svg><span>书目补全</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="citation-format-settings" data-action="templateClick078"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" /><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z" /></svg><span>引文格式</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="bib-completion-settings" data-action="templateClick079"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14" /><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></svg><span>书目补全</span></button>
           <div class="settings-nav-group" role="presentation">应用</div>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="appearance-card" data-action="templateClick080"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none"/></svg><span>外观</span></button>
-          <button class="settings-nav-item cap-data-location" type="button" role="tab" aria-selected="false" data-target="data-location-settings" data-action="templateClick081"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5h6l2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/></svg><span>数据位置</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="document-transfer-settings" data-action="templateClick082"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5h16v12H4z"/><path d="M7 4.5h10v3H7zM9 12h6"/></svg><span>文档传输</span></button>
-          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="backup-settings" data-action="templateClick083"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.6 3.1 3 7 3s7-1.4 7-3V6M5 12v6c0 1.6 3.1 3 7 3s7-1.4 7-3v-6"/></svg><span>数据备份</span></button>
-          <button class="settings-nav-item plat-win" type="button" role="tab" aria-selected="false" data-target="software-update-settings" data-action="templateClick084"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
-          <button class="settings-nav-item plat-macos" type="button" role="tab" aria-selected="false" data-target="macos-update-settings" data-action="templateClick085"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span>软件更新</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="appearance-card" data-action="templateClick080"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 18a6 6 0 0 0 0-12v12z" /></svg><span>外观</span></button>
+          <button class="settings-nav-item cap-data-location" type="button" role="tab" aria-selected="false" data-target="data-location-settings" data-action="templateClick081"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg><span>数据位置</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="document-transfer-settings" data-action="templateClick082"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg><span>文档传输</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="backup-settings" data-action="templateClick083"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 21 19V5" /><path d="M3 12A9 3 0 0 0 21 12" /></svg><span>数据备份</span></button>
+          <button class="settings-nav-item plat-win" type="button" role="tab" aria-selected="false" data-target="software-update-settings" data-action="templateClick084"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg><span>软件更新</span></button>
+          <button class="settings-nav-item plat-macos" type="button" role="tab" aria-selected="false" data-target="macos-update-settings" data-action="templateClick085"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg><span>软件更新</span></button>
         </nav>
         <div class="settings-content">
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
@@ -599,60 +600,75 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           </section>
           <section class="settings-section zotero-settings" id="zotero-settings" role="tabpanel">
             <div class="settings-section-head">
-              <span class="settings-section-heading-copy"><span class="settings-section-title">Zotero</span><span class="settings-section-note">从 Zotero 分类导入文献，增删与题录以 Zotero 为准。MEFinder 只读取，不会改动你的 Zotero 库</span></span>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">Zotero</span><span class="settings-section-note">选择分类，让文献随 Zotero 更新</span></span>
+              <button class="action-btn primary" type="button" id="zotero-sync-button" data-action="templateClick101" disabled>立即同步</button>
             </div>
             <div class="settings-collapse-body" id="zotero-settings-body">
-            <div class="settings-subhead"><span class="settings-section-title">连接</span></div>
-            <div class="settings-choice-row zotero-connection-row">
-              <span class="settings-choice-copy"><strong>Zotero 本机接口</strong><small id="zotero-connection-note">127.0.0.1:23119 · 我的文库</small></span>
-              <span class="zotero-row-controls">
-                <span class="zotero-state" id="zotero-connection-state" role="status" aria-live="polite">检测中</span>
-                <button class="action-btn" type="button" id="zotero-recheck" data-action="templateClick095">重新检测</button>
-              </span>
-            </div>
-            <p class="zotero-hint" id="zotero-connection-hint" hidden></p>
-            <label class="setting-switch-row">
-              <span class="setting-switch-copy"><strong>同步 Zotero 分类</strong><small>关闭后不再导入或移除，已导入的文献保留</small></span>
-              <input type="checkbox" id="zotero-sync-enabled" class="setting-switch-input" role="switch" data-action-change="templateChange096">
-              <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="zotero-sync-enabled-state" aria-hidden="true">关闭</span>
-            </label>
-            <div class="zotero-body" id="zotero-body">
-              <div class="settings-subhead"><span class="settings-section-title">同步的分类</span></div>
-              <div class="zotero-tree" id="zotero-tree" role="tree" aria-label="我的文库"></div>
-              <p class="zotero-tree-foot" id="zotero-tree-foot"></p>
-              <div class="settings-subhead"><span class="settings-section-title">解析</span></div>
-              <div class="settings-choice-row">
-                <span class="settings-choice-copy"><strong>PDF 解析方式</strong><small>跟随「导入 → PDF 解析方式」。EPUB 与 Word 走文本通道，不经过 MinerU</small></span>
-                <span class="zotero-row-controls">
-                  <span class="zotero-value" id="zotero-parse-mode">自动选择</span>
-                  <button class="action-btn zotero-quiet-btn" type="button" data-action="templateClick009">修改</button>
-                </span>
+              <div class="zotero-overview">
+                <div class="zotero-connection-copy">
+                  <span class="zotero-state" id="zotero-connection-state" role="status" aria-live="polite">检测中</span>
+                  <span id="zotero-connection-note">127.0.0.1:23119 · 我的文库</span>
+                </div>
+                <div class="zotero-sync-summary" role="status" aria-live="polite">
+                  <span id="zotero-sync-note">还没有同步过</span>
+                  <span class="zotero-progress" id="zotero-progress" hidden><span></span></span>
+                </div>
               </div>
-              <div class="settings-subhead"><span class="settings-section-title">以 Zotero 为准</span></div>
-              <dl class="zotero-rules">
-                <dt>分类里新增条目</dt><dd>导入并解析</dd>
-                <dt>题录有改动</dt><dd>覆盖 MEFinder 题录，不重新解析</dd>
-                <dt>更换 PDF 附件</dt><dd>重新解析</dd>
-                <dt>条目删除、移出所选分类或取消勾选</dt><dd class="zotero-rule-warn">从 MEFinder 移除，对齐记录一并删除</dd>
-              </dl>
-              <div class="settings-subhead"><span class="settings-section-title">同步</span></div>
-              <div class="settings-choice-row">
-                <span class="settings-choice-copy"><strong>自动同步</strong><small>只拉取有变化的条目</small></span>
-                <span class="app-select settings-choice-select" id="zotero-frequency-select">
-                  <button class="app-select-trigger" id="zotero-frequency-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="自动同步" data-action="templateClick097"><span class="app-select-value" id="zotero-frequency-label">启动 MEFinder 时</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
-                  <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="自动同步">
-                    <button class="app-select-option" type="button" data-zotero-frequency="manual" data-action="templateClick098">仅手动</button>
-                    <button class="app-select-option is-selected" type="button" data-zotero-frequency="launch" data-action="templateClick099">启动 MEFinder 时</button>
-                    <button class="app-select-option" type="button" data-zotero-frequency="interval" data-action="templateClick100">启动时及每 30 分钟</button>
-                  </span>
-                </span>
+              <p class="zotero-hint" id="zotero-connection-hint" hidden></p>
+              <p class="zotero-hint" id="zotero-paused-note" role="status" hidden>同步已暂停。已导入的文献保留，重新开启后继续同步。</p>
+              <details class="zotero-log-details" id="zotero-log-details" hidden>
+                <summary>本次同步明细</summary>
+                <div class="zotero-log" id="zotero-log" aria-live="polite" hidden></div>
+              </details>
+              <div class="zotero-body" id="zotero-body">
+                <div class="zotero-collections">
+                  <div class="zotero-section-head"><h3 id="zotero-collections-title">同步的分类</h3><span id="zotero-selection-summary" aria-live="polite">还没有选择分类</span></div>
+                  <fieldset class="zotero-collection-controls" id="zotero-collection-controls" aria-labelledby="zotero-collections-title" disabled>
+                    <div class="zotero-tree" id="zotero-tree" role="tree" aria-label="我的文库"></div>
+                  </fieldset>
+                  <p class="zotero-tree-foot" id="zotero-tree-foot" aria-live="polite"></p>
+                  <p class="zotero-removal-note">取消勾选后，不再属于所选分类的同步文献及其对齐记录将在同步时移除。同步前已在文库中的文献只解除关联。</p>
+                </div>
+                <div class="zotero-options">
+                  <div class="zotero-section-head"><h3>同步设置</h3></div>
+                  <label class="setting-switch-row">
+                    <span class="setting-switch-copy"><strong>同步 Zotero 分类</strong><small>关闭后保留已导入的文献</small></span>
+                    <input type="checkbox" id="zotero-sync-enabled" class="setting-switch-input" role="switch" data-action-change="templateChange096">
+                    <span class="setting-switch-track" aria-hidden="true"><span class="setting-switch-thumb"></span></span><span class="setting-switch-state" id="zotero-sync-enabled-state" aria-hidden="true">关闭</span>
+                  </label>
+                  <fieldset class="settings-choice-row zotero-frequency-controls" id="zotero-frequency-controls" aria-label="自动同步" disabled>
+                    <span class="settings-choice-copy"><strong>自动同步</strong><small>只拉取有变化的条目</small></span>
+                    <span class="app-select settings-choice-select" id="zotero-frequency-select">
+                      <button class="app-select-trigger" id="zotero-frequency-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="自动同步" data-action="templateClick097"><span class="app-select-value" id="zotero-frequency-label">启动 MEFinder 时</span><svg class="app-select-caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg></button>
+                      <span class="app-select-menu settings-choice-menu" role="listbox" aria-label="自动同步">
+                        <button class="app-select-option" type="button" data-zotero-frequency="manual" data-action="templateClick098">仅手动</button>
+                        <button class="app-select-option is-selected" type="button" data-zotero-frequency="launch" data-action="templateClick099">启动 MEFinder 时</button>
+                        <button class="app-select-option" type="button" data-zotero-frequency="interval" data-action="templateClick100">启动时及每 30 分钟</button>
+                      </span>
+                    </span>
+                  </fieldset>
+                  <div class="settings-choice-row zotero-parse-row">
+                    <span class="settings-choice-copy"><strong>PDF 解析方式</strong><small>与导入设置一致。EPUB、Word 直接提取文字。</small></span>
+                    <span class="zotero-row-controls">
+                      <span class="zotero-value" id="zotero-parse-mode">自动选择</span>
+                      <button class="action-btn zotero-quiet-btn" type="button" data-action="templateClick009" aria-label="前往导入页修改 PDF 解析方式">修改</button>
+                    </span>
+                  </div>
+                  <details class="zotero-rules-disclosure">
+                    <summary>同步会改变什么</summary>
+                    <dl class="zotero-rules">
+                      <dt>分类里新增条目</dt><dd>导入并解析</dd>
+                      <dt>题录有改动</dt><dd>以 Zotero 为准更新 MEFinder 题录，不重新解析</dd>
+                      <dt>更换 PDF 附件</dt><dd>重新解析</dd>
+                      <dt>条目删除、移出所选分类或取消勾选</dt><dd class="zotero-rule-warn">移除不再属于所选分类的同步文献及其对齐记录；同步前已在文库中的文献只解除关联</dd>
+                    </dl>
+                  </details>
+                </div>
               </div>
-              <div class="settings-choice-row zotero-sync-row">
-                <span class="settings-choice-copy"><strong>立即同步</strong><small id="zotero-sync-note">还没有同步过</small><span class="zotero-progress" id="zotero-progress" hidden><span></span></span></span>
-                <button class="action-btn primary" type="button" id="zotero-sync-button" data-action="templateClick101">立即同步</button>
+              <div class="zotero-footer">
+                <span>MEFinder 只读取，不会改动你的 Zotero 库</span>
+                <button class="action-btn zotero-quiet-btn" type="button" id="zotero-recheck" data-action="templateClick095">重新检测连接</button>
               </div>
-              <div class="zotero-log" id="zotero-log" aria-live="polite" hidden></div>
-            </div>
             </div>
           </section>
           <section class="settings-section" id="mineru-api-settings" role="tabpanel">

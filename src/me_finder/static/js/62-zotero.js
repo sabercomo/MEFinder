@@ -221,14 +221,14 @@
   }
 
   function renderFoot() {
+    // 不显示「共 N 篇」：各分类计数相加会把跨分类的同一条目算两次。
+    var keys = Object.keys(effectiveKeys());
+    var summary = document.getElementById('zotero-selection-summary');
+    if (summary) summary.textContent = keys.length ? '已选 ' + keys.length + ' 个分类（含子分类）' : '还没有选择分类';
     var foot = document.getElementById('zotero-tree-foot');
     if (!foot) return;
     foot.replaceChildren();
-    // 不显示「共 N 篇」：各分类计数相加会把跨分类的同一条目算两次。
-    var keys = Object.keys(effectiveKeys());
-    foot.appendChild(el('span', '', keys.length
-      ? '已选 ' + keys.length + ' 个分类；同一条目在多个分类中只导入一次'
-      : '还没有选择分类'));
+    foot.appendChild(el('span', '', '同一条目在多个分类中只导入一次'));
     var preview = state.preview;
     if (preview && preview.known && preview.remove_count > 0) {
       foot.appendChild(el('span', 'zotero-state is-warn', '同步时移除 ' + preview.remove_count + ' 篇'));
@@ -243,7 +243,6 @@
     var stateEl = document.getElementById('zotero-connection-state');
     var note = document.getElementById('zotero-connection-note');
     var hint = document.getElementById('zotero-connection-hint');
-    var body = document.getElementById('zotero-body');
     if (stateEl) {
       stateEl.textContent = info.label || '';
       stateEl.className = 'zotero-state ' + ({ connected: 'is-ok', api_disabled: 'is-warn', error: 'is-warn', unsupported: 'is-warn' }[info.state] || '');
@@ -254,7 +253,7 @@
       hint.textContent = CONNECTION_HINTS[info.state] || '';
       hint.hidden = !CONNECTION_HINTS[info.state];
     }
-    if (body) body.classList.toggle('is-dim', info.state !== 'connected');
+    renderSettings();
   }
 
   function renderSettings() {
@@ -262,6 +261,12 @@
     if (toggle) toggle.checked = state.enabled;
     var toggleState = document.getElementById('zotero-sync-enabled-state');
     if (toggleState) toggleState.textContent = state.enabled ? '开启' : '关闭';
+    var paused = document.getElementById('zotero-paused-note');
+    if (paused) paused.hidden = state.enabled;
+    var collections = document.getElementById('zotero-collection-controls');
+    if (collections) collections.disabled = !state.enabled || !state.connection || state.connection.state !== 'connected';
+    var frequency = document.getElementById('zotero-frequency-controls');
+    if (frequency) frequency.disabled = !state.enabled;
     var label = document.getElementById('zotero-frequency-label');
     if (label) label.textContent = FREQUENCY_LABELS[state.frequency] || FREQUENCY_LABELS.launch;
     document.querySelectorAll('[data-zotero-frequency]').forEach(function (option) {
@@ -304,6 +309,8 @@
     var log = document.getElementById('zotero-log');
     if (!log) return;
     var rows = status.rows || [];
+    var details = document.getElementById('zotero-log-details');
+    if (details) details.hidden = !rows.length;
     log.hidden = !rows.length;
     log.replaceChildren();
     rows.forEach(function (row) {

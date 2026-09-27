@@ -2135,10 +2135,38 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 #data-location-settings .data-location-warning { color: var(--text-secondary); }
 
 /* Hallmark · component: Zotero source sync settings · genre: utilitarian · theme: existing MEFinder
- * structure: flat settings ledger + collection tree · pre-emit critique: P5 H4 E4 S5 R5 V4
- * contrast: pass (text/semantic tokens only) · slop: pass · chrome: pass · tokens: pass · responsive: pass
+ * structure: sync overview + collection workspace · design-system: DESIGN.md · designed-as-app
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · checks: contrast / slop / chrome / tokens / responsive
+ * contrast: existing semantic tokens · slop: pass · chrome: pass · tokens: pass · responsive: browser QA pending
  * 状态只用文字（DESIGN.md §6）：已同步 / 待同步 / 同步时移除 各用语义色文字，不套色块、不加徽章。 */
-.zotero-settings .setting-switch-row { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 12px; }
+.zotero-settings { container-type: inline-size; }
+.zotero-settings .settings-section-head { flex-wrap: wrap; margin-bottom: 20px; }
+.zotero-settings .setting-switch-row { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 8px; padding: 16px 0; }
+.zotero-overview { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 32px; padding-bottom: 20px; border-bottom: 1px solid var(--border-subtle); }
+.zotero-connection-copy { display: grid; gap: 4px; min-width: 0; }
+.zotero-connection-copy > .zotero-state { font-size: 14px; white-space: normal; }
+#zotero-connection-note { color: var(--text-secondary); font-size: 13px; overflow-wrap: anywhere; }
+.zotero-sync-summary { max-width: 48%; color: var(--text-secondary); font-size: 13px; text-align: right; overflow-wrap: anywhere; }
+.zotero-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.zotero-section-head h3 { margin: 0; color: var(--text-primary); font-size: 15px; font-weight: 600; }
+#zotero-selection-summary { color: var(--text-secondary); font-size: 13px; }
+.zotero-collections, .zotero-options { min-width: 0; }
+.zotero-options { border-left: 1px solid var(--border-subtle); padding-left: 28px; }
+.zotero-collection-controls { min-width: 0; margin: 0; padding: 0; border: 0; }
+.zotero-options .settings-choice-row { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px 0; }
+.zotero-frequency-controls { min-width: 0; margin: 0; border: 0; border-bottom: 1px solid var(--border-subtle); }
+.zotero-frequency-controls .settings-choice-select { width: 100%; }
+.zotero-frequency-controls .app-select-trigger { width: 100%; min-width: 0; }
+.zotero-frequency-controls:disabled .app-select-trigger { opacity: .55; cursor: not-allowed; }
+.zotero-collection-controls:disabled .zotero-check { color: var(--text-secondary); cursor: not-allowed; }
+.zotero-collection-controls:disabled .zotero-box { opacity: .55; }
+.zotero-parse-row .zotero-row-controls { justify-content: space-between; }
+.zotero-removal-note { margin: 12px 0 0; padding: 12px 14px; border-radius: var(--radius-md); background: var(--surface-secondary); color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.zotero-rules-disclosure { margin-top: 12px; }
+.zotero-rules-disclosure > summary, .zotero-log-details > summary { padding: 10px 0; color: var(--text-secondary); font-size: 13px; cursor: pointer; }
+.zotero-rules-disclosure > summary:focus-visible, .zotero-log-details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+.zotero-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 28px; padding-top: 12px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 13px; }
+.zotero-log-details[hidden] { display: none; }
 .zotero-row-controls { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .zotero-state { color: var(--text-tertiary); font-size: 13px; white-space: nowrap; }
 .zotero-state.is-ok { color: var(--success); }
@@ -2160,16 +2188,21 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   line-height: 1.6;
 }
 .zotero-hint[hidden] { display: none; }
-.zotero-body { transition: opacity var(--transition-fast); }
-.zotero-body.is-dim { opacity: .45; pointer-events: none; }
-.zotero-tree { border-bottom: 1px solid var(--border-subtle); }
+.zotero-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(240px, 1fr); gap: 28px; padding-top: 24px; }
+.zotero-tree { padding: 4px 8px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-primary); }
 .zotero-tree-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  min-height: 46px;
-  padding-left: calc(var(--zotero-depth, 0) * 32px);
-  border-top: 1px solid var(--border-subtle);
+  gap: 0 8px;
+  min-height: 48px;
+  padding: 0 8px 0 calc(4px + min(var(--zotero-depth, 0), 4) * 16px);
+  border-radius: var(--radius-sm);
+}
+.zotero-tree-row > .zotero-state:empty { display: none; }
+.zotero-tree-row > .zotero-state { white-space: normal; }
+@media (hover: hover) and (pointer: fine) {
+  .zotero-collection-controls:enabled .zotero-tree-row:hover { background: var(--surface-hover); }
 }
 .zotero-fold, .zotero-fold-spacer { flex: 0 0 22px; width: 22px; height: 22px; }
 .zotero-fold {
@@ -2215,22 +2248,21 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 .zotero-box.is-on { border-color: var(--accent); background: var(--accent); }
-.zotero-name { overflow: hidden; color: var(--text-primary); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.zotero-name { min-width: 0; color: var(--text-primary); font-size: 15px; overflow-wrap: anywhere; }
 .zotero-name.is-parent { font-weight: 500; }
-.zotero-count { flex: 0 0 auto; color: var(--text-tertiary); font-size: 13px; }
+.zotero-count { flex: 0 0 auto; margin-left: auto; color: var(--text-secondary); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .zotero-empty { margin: 0; padding: 18px 0; color: var(--text-tertiary); font-size: 13.5px; }
 .zotero-tree-foot {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
   margin: 12px 0 0;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 .zotero-rules {
   display: grid;
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
-  max-width: 760px;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
 }
 .zotero-rules dt, .zotero-rules dd {
@@ -2239,14 +2271,15 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   border-bottom: 1px solid var(--border-subtle);
   font-size: 14px;
 }
-.zotero-rules dt { padding-right: 16px; color: var(--text-secondary); }
-.zotero-rules dd { color: var(--text-primary); }
+.zotero-rules dt { padding: 12px 0 2px; border-bottom: 0; color: var(--text-primary); }
+.zotero-rules dd { padding: 0 0 12px; color: var(--text-secondary); }
 .zotero-rules dd.zotero-rule-warn { color: var(--warning); }
 .zotero-rules dt:last-of-type, .zotero-rules dd:last-of-type { border-bottom: 0; }
 .zotero-progress {
   position: relative;
   display: block;
   width: 220px;
+  max-width: 100%;
   height: 4px;
   margin-top: 10px;
   overflow: hidden;
@@ -2263,7 +2296,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   animation: zotero-progress 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 @keyframes zotero-progress { from { transform: translateX(-100%); } to { transform: translateX(280%); } }
-.zotero-log { max-width: 860px; margin-top: 4px; }
+.zotero-log { margin-top: 4px; }
 .zotero-log[hidden] { display: none; }
 .zotero-log-row {
   display: grid;
@@ -2279,13 +2312,20 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .zotero-log-meta { display: block; margin-top: 2px; color: var(--text-tertiary); font-size: 13px; }
 .zotero-log-row > .zotero-state { white-space: normal; text-align: right; }
 @media (max-width: 760px) {
-  .zotero-connection-row, .zotero-sync-row { grid-template-columns: 1fr; }
-  .zotero-rules { grid-template-columns: 1fr; }
-  .zotero-rules dt { padding-bottom: 2px; border-bottom: 0; }
   .zotero-log-row { grid-template-columns: minmax(0, 1fr) auto; }
   .zotero-log-kind { grid-column: 1 / -1; }
 }
+@container (max-width: 1000px) {
+  .zotero-tree-row { grid-template-columns: 22px minmax(0, 1fr); }
+  .zotero-tree-row > .zotero-state { grid-column: 2; padding-bottom: 8px; }
+}
+@container (max-width: 700px) {
+  .zotero-body { grid-template-columns: minmax(0, 1fr); }
+  .zotero-options { border-left: 0; border-top: 1px solid var(--border-subtle); padding: 24px 0 0; }
+  .zotero-overview { flex-direction: column; gap: 12px; }
+  .zotero-sync-summary { max-width: 100%; text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) {
   .zotero-progress > span { animation: none; width: 100%; opacity: .5; }
-  .zotero-fold svg, .zotero-box, .zotero-body { transition: none; }
+  .zotero-fold svg, .zotero-box { transition: none; }
 }
