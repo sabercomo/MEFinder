@@ -52,10 +52,9 @@ def _load_app_css() -> str:
 
 
 def _load_reader_js() -> str:
-    """Return the reader script shared by both application windows."""
+    """Return the ordered reader modules shared by both application windows."""
 
-    bundled = _load_asset_dir("static/reader", ".js")
-    return bundled if bundled else _load_asset("static/reader.js")
+    return _load_asset_dir("static/reader", ".js")
 
 
 HTML = (

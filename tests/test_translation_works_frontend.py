@@ -63,7 +63,9 @@ class TranslationWorksFrontendTests(unittest.TestCase):
             "不代表对应一定准确",
         ):
             self.assertIn(phrase, status)
-        combined = WORKS_JS + (STATIC / "reader.js").read_text(encoding="utf-8")
+        from tests.reader_source import reader_js_source
+
+        combined = WORKS_JS + reader_js_source()
         self.assertNotIn("覆盖率", combined)
         self.assertNotIn("准确率", combined)
         # 没有真实批次进度，不显示百分比。

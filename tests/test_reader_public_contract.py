@@ -4,11 +4,31 @@ import shutil
 import subprocess
 import unittest
 
-from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _load_asset
+from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _PACKAGE_DIR, _load_asset
 from tests.reader_source import alignment_jobs_source, reader_js_source, reader_runtime_source
 
 
 class ReaderPublicContractTests(unittest.TestCase):
+    def test_reader_modules_are_ordered_bounded_and_dom_safe(self) -> None:
+        directory = _PACKAGE_DIR / "static" / "reader"
+        modules = sorted(directory.glob("*.js"))
+        self.assertEqual([path.name for path in modules], [
+            "00-core.js", "05-dom.js", "10-citation.js", "20-work-context.js",
+            "30-alignment.js", "35-links.js", "40-comparison.js", "45-review.js",
+            "50-deeplink.js", "60-window.js", "70-render.js", "90-lifecycle.js",
+        ])
+        assembled = reader_js_source()
+        previous = -1
+        for path in modules:
+            source = path.read_text(encoding="utf-8")
+            self.assertLessEqual(len(source.splitlines()), 800, path.name)
+            self.assertNotIn("innerHTML", source, path.name)
+            self.assertTrue(source.startswith("(function (global) {"), path.name)
+            self.assertEqual(assembled.count(source), 1, path.name)
+            position = assembled.index(source)
+            self.assertGreater(position, previous, path.name)
+            previous = position
+
     def test_both_windows_embed_the_same_reader_script_once(self) -> None:
         source = reader_js_source()
         self.assertTrue(source)
@@ -135,6 +155,7 @@ assert.deepEqual(Object.keys(reader).sort(), [
   'openForSearchResult', 'restore'
 ].sort());
 assert.equal(Object.isFrozen(reader), true);
+assert.equal(Object.hasOwn(context, '__MEFinderReaderInternal'), false);
 assert.deepEqual(Object.keys(reader.alignmentJobs).sort(), ['running', 'subscribe', 'watch']);
 assert.equal(Object.isFrozen(reader.alignmentJobs), true);
 assert.equal(reader.isOpen(), false);

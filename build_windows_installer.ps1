@@ -125,8 +125,12 @@ try {
             & $nodeCommand.Source --check $script.FullName
             if ($LASTEXITCODE -ne 0) { throw "$($script.Name) syntax check failed." }
         }
-        & $nodeCommand.Source --check "src\me_finder\static\reader.js"
-        if ($LASTEXITCODE -ne 0) { throw "reader.js syntax check failed." }
+        $readerScripts = @(Get-ChildItem -LiteralPath "src\me_finder\static\reader" -Filter "*.js" -File | Sort-Object Name)
+        if ($readerScripts.Count -eq 0) { throw "static\reader contains no JavaScript files." }
+        foreach ($script in $readerScripts) {
+            & $nodeCommand.Source --check $script.FullName
+            if ($LASTEXITCODE -ne 0) { throw "$($script.Name) syntax check failed." }
+        }
     }
 
     & $packagerPythonCommand @packagerPythonArgs -m PyInstaller "packaging\desktop.spec" --clean --noconfirm

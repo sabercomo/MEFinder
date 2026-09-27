@@ -14,8 +14,8 @@ READER = reader_js_source()
 class ReaderComparisonStateTests(unittest.TestCase):
     def test_body_is_loaded_before_work_metadata_and_overview_is_scoped(self):
         body = READER[READER.index("  async function openReader("):READER.index("  async function goTo(")]
-        self.assertLess(body.index("await loadWindow("), body.index("loadWorkContext(sourceId)"))
-        self.assertLess(body.index("await loadWindow("), body.index("loadAlignmentTargets(sourceId)"))
+        self.assertLess(body.index("await r.loadWindow("), body.index("r.loadWorkContext(sourceId)"))
+        self.assertLess(body.index("await r.loadWindow("), body.index("r.loadAlignmentTargets(sourceId)"))
         self.run_js([("  async function loadWorkContext(", "  /* ── 自绘下拉")], """
 const state={sourceId:'A',workRequestSerial:0,comparison:{open:false}};
 const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/job'};
@@ -32,9 +32,15 @@ const loadAvailability=async()=>{},renderToolbar=()=>{};
         bodies = []
         for start, end in functions:
             offset = READER.index(start)
-            bodies.append(READER[offset:READER.index(end, offset)])
+            if start == ReaderComparisonStateTests.JOB_WATCH[0]:
+                offset = READER.index("  alignmentJobs.subscribe(")
+                bodies.append(READER[offset:READER.index("  document.addEventListener('keydown'", offset)])
+            else:
+                bodies.append(READER[offset:READER.index("\n  }\n", offset) + len("\n  }\n")])
         program = (
-            "const assert = require('assert/strict');\n" + prelude + "\n"
+            "const assert = require('assert/strict');\n"
+            "const r = new Proxy({}, {get: (_, name) => eval(String(name))});\n"
+            + prelude + "\n"
             + "\n".join(bodies) + "\n" + script
         )
         result = subprocess.run(
@@ -63,11 +69,12 @@ finish(false);
 setImmediate(() => assert.deepEqual(shown, []));
 """.replace("REPLACEMENT", json.dumps(replacement)))
 
-    JOB_WATCH = ("  /* ── 对齐任务：监听在 MEFinderAlignmentJobs", "  /* ── 新窗口")
+    JOB_WATCH = ("  alignmentJobs.subscribe(", "  document.addEventListener('keydown'")
     # 阅读器片段读 global.MEFinderAlignmentJobs：先把真实任务服务装进受控的 global。
     JOB_SERVICE_PRELUDE = (
         "const global={setTimeout:resolve=>resolve()};\n"
         "new Function('window', " + json.dumps(alignment_jobs_source()) + ")(global);"
+        "const alignmentJobs=global.MEFinderAlignmentJobs;"
     )
 
     def test_finished_job_does_not_invalidate_the_next_books_context(self):
@@ -102,6 +109,7 @@ const reads=[];const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}
     def test_completed_alignment_invalidates_links_and_relocates_open_pair(self):
         self.run_js([
             self.JOB_WATCH,
+            ("  async function applyAlignmentJobEnd(", "  function currentReadingSession("),
             ("  function refreshComparisonAfterStatusChange(", "  /* ── 对齐任务"),
             ("  function loadLinkWindow(", "  // 低置信"),
         ], """
@@ -154,7 +162,7 @@ assert.equal(read('?source=A&page=A-P1&c=%20'),null);
         """位置只写一次，宿主直接采用；不再清空缓存后靠定时器重新查询。"""
 
         self.run_js([
-            ("  /* ── 阅读会话", "  function openInNewWindow("),
+            ("  function currentReadingSession(", "  function openInNewWindow("),
             ("  function saveReadingPositionNow(", "  function scheduleReadingPositionSave("),
         ], """
 const state={open:true,positionTimer:null,sourceId:'A',title:'T',currentIndex:7,

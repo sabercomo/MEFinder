@@ -49,7 +49,7 @@ def _split_js_assets():
 
 
 def _reader_js_assets():
-    return _split_dir_assets("static/reader", ".js") or ("static/reader.js",)
+    return _split_dir_assets("static/reader", ".js")
 
 
 def _split_css_assets():
@@ -662,9 +662,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.7 D2：对齐任务监听迁到 15-alignment-jobs.js（MEFinderAlignmentJobs），
     #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
     BASELINE_SHA256 = (
-        "749a2449c3900507742d283f8bd9c1626d9bd30931427541ab49d0a68fbad155"
+        "2f2e4181efd7877e08d854a535459a80df041fd26969ed438c092a8151883e38"
     )
-    BASELINE_BYTES = 1315767
+    BASELINE_BYTES = 1322495
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
