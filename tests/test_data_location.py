@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.bibliographic_metadata import update_metadata_in_database
+from src.me_finder.component_catalog import ComponentCatalog
 from src.me_finder.database import build_database
 from src.me_finder.data_location import (
     DATA_ROOT_MARKER,
@@ -134,12 +135,13 @@ def _make_web_runtime(
         app_data_root=app_data,
         default_app_data_root=app_data,
     )
-    handler = make_handler(
-        index_path,
-        app_context=context,
-        native_directory_chooser=native_directory_chooser,
-        native_export_directory_chooser=native_export_directory_chooser,
-    )
+    with patch.object(ComponentCatalog, "start_background_check", return_value=False):
+        handler = make_handler(
+            index_path,
+            app_context=context,
+            native_directory_chooser=native_directory_chooser,
+            native_export_directory_chooser=native_export_directory_chooser,
+        )
     handler.log_message = lambda *_args: None
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

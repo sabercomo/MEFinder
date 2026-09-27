@@ -1,4 +1,4 @@
-2026-09-27:macOS Apple Silicon 本机验收包已生成并通过构建门禁；对照链接/复核完整交互与其他平台打包仍待验收，v0.5.7 尚未正式发布。
+2026-09-27:macOS Apple Silicon 与 Windows 本机验收包已生成并通过构建门禁；对照链接/复核完整交互仍待验收，v0.5.7 尚未正式发布。
 
 # v0.5.7 迭代说明
 
@@ -21,4 +21,15 @@
 | `release/MEFinder-v0.5.7-macos-arm64.dmg` | 101,278,953 | `4f6c5dac0ad1c153bde56ac4ee47f0a89714cfb2ff28a4237aed6a9122d01ea9` |
 | `release/MEFinder-v0.5.7-macos-arm64.zip` | 93,439,257 | `7740b0cd0a85b3a5bee20b43b1ee2ca502424b801f08b6982a773cb6e1525d83` |
 
-两份产物各附同名 `.sha256.txt`。这是未公证的本机验收包；尚未在安装后的冻结应用中完成阅读器对照链接与复核的完整人工验收，也未构建 Windows 或 macOS Intel 包。
+两份产物各附同名 `.sha256.txt`。这是未公证的本机验收包；尚未在安装后的冻结应用中完成阅读器对照链接与复核的完整人工验收，也未构建 macOS Intel 包。
+
+## 本机验收包（Windows x64）
+
+2026-09-27 从远端 `refactor/v0.5.7-architecture` 的 `9826f4a` 建立独立检出，并修复数据位置测试夹具触发无关远端组件目录检查所导致的 Windows SQLite 文件占用。安装版与便携版脚本各自通过全量 `unittest`（2584 项，36 项环境跳过）及脚本内打包门禁。两份文件均为本机构建验收包，尚未正式发布。
+
+| 本地文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `release/MEFinder-v0.5.7-windows-setup.exe` | 78,992,417 | `26463789832d06ff6d1f507ac59065ece5d0f5c3076b435481764f4f1f1a24a8` |
+| `release/MEFinder-v0.5.7-windows-portable.zip` | 94,489,690 | `7d0e5a5f2728f5d264cace3d8f7fb27406d8b77c7be26dee20fe7972155b113d` |
+
+两份产物各附同名 `.sha256.txt`；阅读器对照链接与复核的冻结应用完整人工验收仍待进行。
