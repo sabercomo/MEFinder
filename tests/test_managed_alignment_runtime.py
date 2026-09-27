@@ -345,8 +345,69 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         release.set()
         worker.join(5)
         summary = self._wait(manager)
-        self.assertFalse(summary["installed"])
+        self.assertFalse(summary["installed"], summary)
+        self.assertEqual(summary["error"], "", summary)
+        self.assertFalse(manager.runtime_dir.exists(), summary)
+
+    def _sharing_violation(self, path) -> PermissionError:
+        exc = PermissionError(13, "file is being used by another process", str(path))
+        exc.winerror = 32  # ERROR_SHARING_VIOLATION, as Windows raises it
+        return exc
+
+    def test_uninstall_retries_transient_windows_sharing_lock(self) -> None:
+        # Windows CI reproduction: rmtree deletes installed.json first, then hits a
+        # file still held by a just-exited interpreter / scanner. Before the retry
+        # this left installed=False with the runtime directory still on disk.
+        manager = self._manager()
+        manager.perform({"action": "install"})
+        self.assertTrue(self._wait(manager)["installed"])
+        real_rmtree = align_runtime.shutil.rmtree
+        runtime_calls = []
+
+        def flaky_rmtree(path, *args, **kwargs):
+            if Path(path) == manager.runtime_dir:
+                runtime_calls.append(path)
+                if len(runtime_calls) == 1:
+                    (Path(path) / "installed.json").unlink()
+                    raise self._sharing_violation(path)
+            return real_rmtree(path, *args, **kwargs)
+
+        with mock.patch.object(align_runtime.shutil, "rmtree", flaky_rmtree):
+            manager.perform({"action": "uninstall"})
+            summary = self._wait(manager)
+        self.assertEqual(len(runtime_calls), 2)
+        self.assertEqual(summary["error"], "", summary)
+        self.assertFalse(summary["installed"], summary)
         self.assertFalse(manager.runtime_dir.exists())
+
+    def test_strict_remove_tree_gives_up_on_persistent_or_real_errors(self) -> None:
+        target = self.root / "locked"
+        target.mkdir()
+        calls = []
+
+        def locked(path, *args, **kwargs):
+            calls.append(path)
+            raise self._sharing_violation(path)
+
+        with mock.patch.object(align_runtime, "_REMOVE_TREE_ATTEMPTS", 3), \
+                mock.patch.object(align_runtime, "_REMOVE_TREE_INITIAL_DELAY_SECONDS", 0), \
+                mock.patch.object(align_runtime.shutil, "rmtree", locked):
+            with self.assertRaises(PermissionError):
+                ManagedAlignmentRuntime._remove_tree(target, strict=True)
+        self.assertEqual(len(calls), 3)
+
+        calls.clear()
+
+        def denied(path, *args, **kwargs):
+            calls.append(path)
+            raise PermissionError(13, "permission denied", str(path))
+
+        # An error that is not a Windows sharing lock is surfaced at once.
+        with mock.patch.object(align_runtime.shutil, "rmtree", denied):
+            with self.assertRaises(PermissionError):
+                ManagedAlignmentRuntime._remove_tree(target, strict=True)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(target.exists())
 
     def test_compute_status_reports_builtin_when_stack_present(self) -> None:
         import src.me_finder.managed_alignment_runtime as mod
