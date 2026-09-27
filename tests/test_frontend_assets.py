@@ -663,10 +663,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
     # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
     # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
+    # 0.5.7 D4 审阅：05-dom 缩进与 destroyDom 命名，移除四个无人使用的内部注册。
     BASELINE_SHA256 = (
-        "fc2fc31f00bce35a1422900fe23ac9c4f0395285702f19f54caec1da50216527"
+        "6f22c19b4898107be14e1146d53ae1448858dad6494d8a65fc03ed47d333ae8f"
     )
-    BASELINE_BYTES = 1324510
+    BASELINE_BYTES = 1324336
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

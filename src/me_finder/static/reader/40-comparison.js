@@ -612,8 +612,6 @@
   r.markComparisonOpen = markComparisonOpen;
   r.isPageContinuation = isPageContinuation;
   r.updateComparisonControls = updateComparisonControls;
-  r.renderComparisonWindow = renderComparisonWindow;
-  r.loadComparisonWindow = loadComparisonWindow;
   r.closeComparison = closeComparison;
   r.pauseComparisonForChapter = pauseComparisonForChapter;
   r.clearComparisonHighlights = clearComparisonHighlights;

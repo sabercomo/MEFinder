@@ -423,7 +423,7 @@
     });
     global.addEventListener('resize', r.scheduleFlagLayout, {passive: true});
 
-  state.elements = {
+    state.elements = {
       root: root,
       panel: panel,
       header: header,
@@ -477,12 +477,14 @@
     return state.elements;
   }
 
+  function destroyDom() {
+    if (state.elements && state.elements.root.isConnected) state.elements.root.remove();
+    state.elements = null;
+  }
+
 
   r.createButton = createButton;
   r.createIcon = createIcon;
   r.ensureDom = ensureDom;
-  r.destroyDom = function () {
-    if (state.elements && state.elements.root.isConnected) state.elements.root.remove();
-    state.elements = null;
-  };
+  r.destroyDom = destroyDom;
 }(window));

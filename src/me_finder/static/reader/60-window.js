@@ -441,8 +441,6 @@
   r.clearWindowItems = clearWindowItems;
   r.setWindowTarget = setWindowTarget;
   r.attachObservers = attachObservers;
-  r.createPageObserver = createPageObserver;
-  r.createBoundaryObserver = createBoundaryObserver;
   r.handleReaderNavigationKey = handleReaderNavigationKey;
   r.scheduleScrollBoundaryCheck = scheduleScrollBoundaryCheck;
   r.findAnchorNode = findAnchorNode;
