@@ -662,8 +662,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.7 D2：对齐任务监听迁到 15-alignment-jobs.js（MEFinderAlignmentJobs），
     #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
     # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
+    # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
     BASELINE_SHA256 = (
-        "d2d8a1740e74c293ea3c2fcd362484cb8e1d1c9ec0090a08b3a97a100305b67c"
+        "fc2fc31f00bce35a1422900fe23ac9c4f0395285702f19f54caec1da50216527"
     )
     BASELINE_BYTES = 1324510
 
