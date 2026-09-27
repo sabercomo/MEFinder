@@ -88,7 +88,7 @@
           r.notify(kind === 'none' ? '已记录：译本无对应' : '已保存校正，对应 ' + checked.size + ' 段译文');
         }
         closeReviewPopover(false);
-        state.links = null;
+        r.invalidateLinks();
         r.loadLinkWindow();
         // 校正与暂缓都会改变「N 处待检查」：同一条失效通道通知宿主。
         if (typeof config.onAlignmentDataChanged === 'function') {

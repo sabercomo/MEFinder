@@ -68,58 +68,13 @@
     }
     state.open = true;
     state.sourceId = sourceId;
-    state.outline = {items: null, loading: false, error: ''};
-    state.outlineJumpSerial += 1;
-    state.outlineNavigating = false;
-    state.source = null;
+    r.resetWorkContext(options.compareWith);
     if (options.returnLabel || !wasOpen) state.returnLabel = String(options.returnLabel || '');
-    state.pendingCompareWith = String(options.compareWith || '');
-    state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
-    state.links = null;
-    state.linkedRanges.clear();
-    state.selectedLinkKey = '';
+    r.resetLinks();
     state.elements.jumpForm.hidden = true;
-    state.title = String(options.title || options.documentTitle || options.document_title || '');
-    state.targetAnchorId = String(
-      options.anchorId ||
-      options.anchor_id ||
-      options.pdfPageId ||
-      options.pdf_page_id ||
-      ((options.pageMatchSpans || options.page_match_spans || [])[0] || {}).pdf_page_id ||
-      ''
-    );
-    state.onCurrentChange = typeof options.onCurrentChange === 'function'
-      ? options.onCurrentChange
-      : null;
-    state.items.clear();
-    state.total = 0;
-    state.lastPosition = null;
-    state.windowStart = 0;
-    state.windowEnd = 0;
-    state.hasPrevious = false;
-    state.hasMore = false;
-    state.previousStart = null;
-    state.nextStart = null;
-    state.currentAnchorId = '';
-    state.lastHistoryAnchor = '';
-    state.lastHistoryCompare = '';
-    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
-    if (state.scrollBoundaryTimer !== null) {
-      global.clearTimeout(state.scrollBoundaryTimer);
-    }
-    state.deepLinkTimer = null;
-    state.pendingDeepLink = null;
-    state.scrollBoundaryTimer = null;
-    state.citationRequestSerial += 1;
-    state.alignmentRequestSerial += 1;
-    state.citationRange = null;
-    state.selectionDragging = false;
-    state.citationMenuOpen = false;
-    state.citationLoading = false;
-    state.alignmentTargets = [];
-    state.alignmentSourceLanguage = '';
-    state.alignmentLoading = false;
-    state.currentIndex = r.resolveTargetIndex(options);
+    r.resetWindow(options);
+    r.resetReadingSession();
+    r.resetCitation();
     r.prepareHighlights(options);
 
     state.elements.title.textContent = r.cleanReaderTitle(state.title) || '文献阅读';
@@ -161,8 +116,7 @@
 
   async function goTo(target) {
     if (!state.open) return false;
-    state.outlineJumpSerial += 1;
-    state.outlineNavigating = false;
+    r.invalidateOutlineJump();
     var options = typeof target === 'object' && target !== null
       ? target
       : (typeof target === 'number' ? {targetIndex: target} : {anchorId: target});
@@ -177,8 +131,7 @@
       var inferred = r.inferIndexFromAnchor(anchorId);
       if (inferred !== null) index = inferred;
     }
-    state.targetAnchorId = anchorId;
-    state.currentIndex = index;
+    r.setWindowTarget(index, anchorId);
     return r.loadWindow(index, anchorId);
   }
 
@@ -226,40 +179,17 @@
     // 关闭前立即写一次当前位置（含右栏），再收起对照；收起对照排队的保存随之取消。
     var savedPosition = r.saveReadingPositionNow();
     r.closeComparison();
-    if (state.positionTimer !== null) {
-      global.clearTimeout(state.positionTimer);
-      state.positionTimer = null;
-    }
+    r.stopReadingSession();
     state.open = false;
-    state.outlineJumpSerial += 1;
-    state.outlineNavigating = false;
-    state.requestSerial += 1;
-    state.citationRequestSerial += 1;
-    state.alignmentRequestSerial += 1;
-    if (state.abortController) state.abortController.abort();
-    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
-    if (state.scrollBoundaryTimer !== null) {
-      global.clearTimeout(state.scrollBoundaryTimer);
-    }
-    state.deepLinkTimer = null;
-    state.pendingDeepLink = null;
-    state.scrollBoundaryTimer = null;
-    r.disconnectObservers();
-    state.items.clear();
-    state.highlights.clear();
-    state.resolvedHighlights.clear();
-    state.citationRange = null;
-    state.alignmentTargets = [];
-    state.alignmentSourceLanguage = '';
-    state.alignmentLoading = false;
-    state.selectionDragging = false;
-    state.citationMenuOpen = false;
+    r.resetWorkContext('');
+    r.stopWindow();
+    r.clearWindowItems();
+    r.clearHighlights();
+    r.resetCitation();
     state.elements.content.replaceChildren();
     state.elements.root.hidden = true;
     state.elements.root.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('mef-reader-open');
-    state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
-    state.pendingCompareWith = '';
     // 把刚写出的位置交给宿主：它不必重新查询，也就没有「写入是否已落库」的赌博。
     if (typeof config.onOpenChange === 'function') config.onOpenChange(false, savedPosition);
     if (
@@ -286,8 +216,7 @@
 
   function destroy() {
     closeReader();
-    if (state.elements && state.elements.root.isConnected) state.elements.root.remove();
-    state.elements = null;
+    r.destroyDom();
   }
 
   function getState() {

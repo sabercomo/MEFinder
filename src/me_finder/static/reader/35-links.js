@@ -109,6 +109,17 @@
     changed.forEach(refreshSourceItem);
   }
 
+  function invalidateLinks() {
+    state.links = null;
+    state.linkRequestSerial += 1;
+  }
+
+  function resetLinks() {
+    invalidateLinks();
+    state.linkedRanges.clear();
+    state.selectedLinkKey = '';
+  }
+
   function refreshSourceItem(index) {
     if (!state.elements) return;
     var article = state.elements.content.querySelector('[data-reader-index="' + index + '"]');
@@ -155,8 +166,7 @@
     if (!link) return;
     if (state.selectedLinkKey === linkKey(link)) {
       clearLinkedSelection();
-      state.comparison.indexHighlights.clear();
-      r.renderComparisonWindow();
+      r.clearComparisonLinkHighlights();
       return;
     }
     highlightLink(link);
@@ -171,22 +181,7 @@
       state.linkedRanges.get(span.item_index).push({start: span.char_start, end: span.char_end});
     });
     previous.concat(Array.from(state.linkedRanges.keys())).forEach(refreshSourceItem);
-    var comparison = state.comparison;
-    comparison.indexHighlights.clear();
-    comparison.highlights.clear();
-    (link.target_spans || []).forEach(function (span) {
-      if (!comparison.indexHighlights.has(span.item_index)) comparison.indexHighlights.set(span.item_index, []);
-      comparison.indexHighlights.get(span.item_index).push({start: span.char_start, end: span.char_end});
-    });
-    var first = (link.target_spans || [])[0];
-    if (!first) {
-      r.renderComparisonWindow();
-      r.setAlert(link.manual === 'no_counterpart' ? '已人工确认：另一版本中没有对应段落' : '这一段在另一版本中没有找到对应段落', 'info');
-      return;
-    }
-    comparison.currentIndex = first.item_index;
-    if (comparison.items.has(first.item_index)) r.renderComparisonWindow();
-    else r.loadComparisonWindow(first.item_index);
+    r.highlightComparisonLink(link);
   }
 
 
@@ -194,5 +189,7 @@
   r.renderFlags = renderFlags;
   r.scheduleFlagLayout = scheduleFlagLayout;
   r.clearLinkedSelection = clearLinkedSelection;
+  r.invalidateLinks = invalidateLinks;
+  r.resetLinks = resetLinks;
   r.selectLinkAtClick = selectLinkAtClick;
 }(window));

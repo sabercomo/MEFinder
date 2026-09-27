@@ -82,7 +82,7 @@
       comparison.items.clear();
       comparison.highlights.clear();
       comparison.indexHighlights.clear();
-      state.links = null;
+      r.invalidateLinks();
       r.clearLinkedSelection();
     }
     comparison.open = true;
@@ -435,8 +435,7 @@
     comparison.nextStart = null;
     comparison.hasMore = false;
     comparison.loading = false;
-    state.links = null;
-    state.linkRequestSerial += 1;
+    r.invalidateLinks();
     r.closeReviewPopover();
     if (!state.elements) return;
     r.clearLinkedSelection();
@@ -449,6 +448,57 @@
     state.elements.comparisonContent.replaceChildren();
     r.renderToolbar();
     noteReadingSessionChanged();
+  }
+
+  function pauseComparisonForChapter() {
+    var comparison = state.comparison;
+    comparison.locateSerial += 1;
+    comparison.requestSerial += 1;
+    if (comparison.followTimer !== null) global.clearTimeout(comparison.followTimer);
+    comparison.followTimer = null;
+    comparison.lastSourceRange = '';
+    return comparison.locateSerial;
+  }
+
+  function clearComparisonHighlights() {
+    var comparison = state.comparison;
+    comparison.highlights.clear();
+    comparison.indexHighlights.clear();
+    var previousTop = state.elements.comparisonViewport.scrollTop;
+    renderComparisonWindow();
+    state.elements.comparisonViewport.scrollTop = previousTop;
+  }
+
+  function clearComparisonLinkHighlights() {
+    state.comparison.indexHighlights.clear();
+    renderComparisonWindow();
+  }
+
+  function highlightComparisonLink(link) {
+    var comparison = state.comparison;
+    comparison.indexHighlights.clear();
+    comparison.highlights.clear();
+    (link.target_spans || []).forEach(function (span) {
+      if (!comparison.indexHighlights.has(span.item_index)) comparison.indexHighlights.set(span.item_index, []);
+      comparison.indexHighlights.get(span.item_index).push({start: span.char_start, end: span.char_end});
+    });
+    var first = (link.target_spans || [])[0];
+    if (!first) {
+      renderComparisonWindow();
+      r.setAlert(link.manual === 'no_counterpart' ? '已人工确认：另一版本中没有对应段落' : '这一段在另一版本中没有找到对应段落', 'info');
+      return;
+    }
+    comparison.currentIndex = first.item_index;
+    if (comparison.items.has(first.item_index)) renderComparisonWindow();
+    else loadComparisonWindow(first.item_index);
+  }
+
+  function refreshComparisonLinksAfterJob() {
+    r.invalidateLinks();
+    r.clearLinkedSelection();
+    state.comparison.lastSourceRange = '';
+    openComparisonWith(state.comparison.targetSourceId);
+    r.renderToolbar();
   }
 
   // 开关右栏同样改变会话：地址栏深链与服务端位置一起更新，否则刷新后右栏
@@ -510,8 +560,7 @@
     var serial = state.comparison.locateSerial + 1;
     state.comparison.locateSerial = serial;
     if (!automatic) {
-      state.alignmentLoading = true;
-      r.updateCitationControls();
+      r.setAlignmentLoading(true);
     }
     try {
       var response = await r.fetchFunction()(config.alignmentLocateEndpoint, {
@@ -551,8 +600,7 @@
       return false;
     } finally {
       if (!automatic) {
-        state.alignmentLoading = false;
-        r.updateCitationControls();
+        r.setAlignmentLoading(false);
       }
     }
   }
@@ -567,6 +615,11 @@
   r.renderComparisonWindow = renderComparisonWindow;
   r.loadComparisonWindow = loadComparisonWindow;
   r.closeComparison = closeComparison;
+  r.pauseComparisonForChapter = pauseComparisonForChapter;
+  r.clearComparisonHighlights = clearComparisonHighlights;
+  r.clearComparisonLinkHighlights = clearComparisonLinkHighlights;
+  r.highlightComparisonLink = highlightComparisonLink;
+  r.refreshComparisonLinksAfterJob = refreshComparisonLinksAfterJob;
   r.noteReadingSessionChanged = noteReadingSessionChanged;
   r.toggleComparisonFollow = toggleComparisonFollow;
   r.loadComparisonPrevious = loadComparisonPrevious;

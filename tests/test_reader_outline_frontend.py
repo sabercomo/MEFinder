@@ -22,13 +22,21 @@ const global={clearTimeout:()=>{}};
 const calls=[];
 """
 
+JUMP_FUNCTIONS = [
+    ("  function pauseComparisonForChapter(", "  function clearComparisonHighlights("),
+    ("  function clearComparisonHighlights(", "  function highlightComparisonLink("),
+    ("  function invalidateCitationForJump(", "  function elementForRangeNode("),
+    ("  function setWindowTarget(", "  function attachObservers("),
+    ("  async function jumpToChapter(", "  function pickerFor("),
+]
+
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderOutlineTests(unittest.TestCase):
     run_js = reader_test.ReaderComparisonStateTests.run_js
 
     def test_chapter_synchronizes_exact_span_even_when_follow_is_paused(self):
-        self.run_js([("  async function jumpToChapter(", "  function pickerFor(")], SETUP + """
+        self.run_js(JUMP_FUNCTIONS, SETUP + """
 const loadWindow=async()=>true;
 const locateInAlignedVersion=async(target,selection)=>{
  state.comparison.locateSerial++; calls.push({target,selection}); return true;
@@ -42,7 +50,7 @@ const locateInAlignedVersion=async(target,selection)=>{
 """)
 
     def test_rapid_chapter_clicks_or_close_do_not_apply_old_target(self):
-        self.run_js([("  async function jumpToChapter(", "  function pickerFor(")], SETUP + """
+        self.run_js(JUMP_FUNCTIONS, SETUP + """
 const loads=[];const loadWindow=()=>new Promise(resolve=>loads.push(resolve));
 const locateInAlignedVersion=async(target,selection)=>{
  state.comparison.locateSerial++;calls.push(selection.startIndex);return true;
@@ -57,7 +65,7 @@ const locateInAlignedVersion=async(target,selection)=>{
 """)
 
     def test_unmatched_chapter_keeps_right_position_and_clears_old_highlight(self):
-        self.run_js([("  async function jumpToChapter(", "  function pickerFor(")], SETUP + """
+        self.run_js(JUMP_FUNCTIONS, SETUP + """
 const loadWindow=async()=>true;
 const locateInAlignedVersion=async()=>{state.comparison.locateSerial++;setAlert('没有对应段落');return false;};
 (async()=>{

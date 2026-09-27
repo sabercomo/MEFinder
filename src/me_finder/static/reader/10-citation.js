@@ -105,6 +105,23 @@
     updateCitationControls();
   }
 
+  function beginSelectionDrag() {
+    state.selectionDragging = true;
+  }
+
+  function resetCitation() {
+    state.citationRequestSerial += 1;
+    state.citationRange = null;
+    state.selectionDragging = false;
+    state.citationMenuOpen = false;
+    state.citationLoading = false;
+  }
+
+  function invalidateCitationForJump() {
+    state.citationRequestSerial += 1;
+    state.citationRange = null;
+  }
+
   function elementForRangeNode(node) {
     if (!node) return null;
     return node.nodeType === 1 ? node : node.parentElement;
@@ -359,6 +376,9 @@
   r.updateCitationControls = updateCitationControls;
   r.toggleCitationMenu = toggleCitationMenu;
   r.clearCitationRange = clearCitationRange;
+  r.beginSelectionDrag = beginSelectionDrag;
+  r.resetCitation = resetCitation;
+  r.invalidateCitationForJump = invalidateCitationForJump;
   r.elementForRangeNode = elementForRangeNode;
   r.textOffsetWithin = textOffsetWithin;
   r.scheduleSelectionCapture = scheduleSelectionCapture;

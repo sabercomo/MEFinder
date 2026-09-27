@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import re
 import unittest
 
 from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _PACKAGE_DIR, _load_asset
@@ -9,6 +10,30 @@ from tests.reader_source import alignment_jobs_source, reader_js_source, reader_
 
 
 class ReaderPublicContractTests(unittest.TestCase):
+    def test_reader_state_has_one_writer_per_domain(self) -> None:
+        directory = _PACKAGE_DIR / "static" / "reader"
+        owners = {
+            "05-dom.js": "elements",
+            "10-citation.js": "citationLoading citationMenuOpen citationRange citationRequestSerial selectionDragging",
+            "20-work-context.js": "alignmentGroupId alignmentLoading alignmentRequestSerial alignmentSourceLanguage alignmentTargets availability defaultComparisonTarget openMenu outline outlineJumpSerial outlineNavigating pendingCompareWith work workRequestSerial",
+            "30-alignment.js": "",
+            "35-links.js": "flagLayoutTimer linkRequestSerial linkedRanges links selectedLinkKey",
+            "40-comparison.js": "",
+            "45-review.js": "review",
+            "50-deeplink.js": "deepLinkTimer lastDeepLink lastHistoryAnchor lastHistoryCompare lastSession pendingDeepLink positionTimer",
+            "60-window.js": "abortController boundaryObserver currentAnchorId currentIndex hasMore hasPrevious items lastPosition loading nextStart onCurrentChange pageObserver previousStart requestSerial scrollBoundaryTimer source targetAnchorId title total visibleRatios windowEnd windowStart",
+            "70-render.js": "hashRecoveryNotice highlights matchQuote preciseHighlight resolvedHighlights showDecorations",
+            "90-lifecycle.js": "open originalUrl restoreFocus returnLabel sourceId",
+        }
+        write = re.compile(
+            r"(?<![.\w])state\.([A-Za-z]\w*)\s*(?:=(?!=)|\+=|-=|\+\+|--|\.clear\(|\.set\(|\.delete\(|\.push\()"
+        )
+        for name, expected in owners.items():
+            source = (directory / name).read_text(encoding="utf-8")
+            self.assertEqual(set(write.findall(source)), set(expected.split()), name)
+            if name != "40-comparison.js":
+                self.assertNotRegex(source, r"\bstate\.comparison\.[A-Za-z]\w*\s*(?:=(?!=)|\+=|\.clear\(|\.set\()")
+
     def test_reader_modules_are_ordered_bounded_and_dom_safe(self) -> None:
         directory = _PACKAGE_DIR / "static" / "reader"
         modules = sorted(directory.glob("*.js"))

@@ -137,6 +137,32 @@
     }
   }
 
+  function resetWorkContext(compareWith) {
+    state.workRequestSerial += 1;
+    state.outline = {items: null, loading: false, error: ''};
+    state.outlineJumpSerial += 1;
+    state.outlineNavigating = false;
+    state.alignmentRequestSerial += 1;
+    state.alignmentTargets = [];
+    state.alignmentSourceLanguage = '';
+    state.alignmentGroupId = '';
+    state.alignmentLoading = false;
+    state.availability = 'unknown';
+    state.defaultComparisonTarget = '';
+    state.pendingCompareWith = String(compareWith || '');
+    state.work = {groupId: '', title: '', baseId: '', members: [], pairs: {}, languages: {}};
+  }
+
+  function invalidateOutlineJump() {
+    state.outlineJumpSerial += 1;
+    state.outlineNavigating = false;
+  }
+
+  function setAlignmentLoading(loading) {
+    state.alignmentLoading = loading;
+    r.updateCitationControls();
+  }
+
   function alignmentTargetName(targetSourceId) {
     var member = workMember(targetSourceId);
     if (member) return member.name;
@@ -210,11 +236,11 @@
       var selected = (results[0].models || []).find(function (model) {
         return model.id === results[1].alignment_embedding_model_id;
       });
-      if (!compute) state.availability = 'unknown';
-      else if (compute.available !== true) state.availability = 'unavailable';
-      else state.availability = selected && selected.installed ? 'ready' : 'model_missing';
+      if (!compute) return 'unknown';
+      if (compute.available !== true) return 'unavailable';
+      return selected && selected.installed ? 'ready' : 'model_missing';
     } catch (_error) {
-      state.availability = 'unknown';
+      return 'unknown';
     }
   }
 
@@ -229,6 +255,7 @@
         loadAvailability()
       ]);
       if (serial !== state.workRequestSerial || state.sourceId !== sourceId) return;
+      state.availability = results[3];
       var group = (results[0].document_groups || []).find(function (candidate) {
         return (candidate.members || []).some(function (member) { return member.source_file_id === sourceId; });
       });
@@ -304,20 +331,14 @@
     var sourceId = state.sourceId;
     var targetId = state.comparison.open ? state.comparison.targetSourceId : '';
     var serial = ++state.outlineJumpSerial;
-    var locateSerial = ++state.comparison.locateSerial;
-    state.comparison.requestSerial += 1;
+    var locateSerial = r.pauseComparisonForChapter();
     state.outlineNavigating = true;
-    if (state.comparison.followTimer !== null) global.clearTimeout(state.comparison.followTimer);
-    state.comparison.followTimer = null;
-    state.comparison.lastSourceRange = '';
-    state.citationRange = null;
-    state.citationRequestSerial += 1;
+    r.invalidateCitationForJump();
     r.clearLinkedSelection();
     var anchorId = entry.anchor_id || r.itemAnchor({}, entry.item_index);
     r.prepareHighlights({pageMatchSpans: [{anchor_id: anchorId,
       page_char_start: entry.char_start, page_char_end: entry.char_end}]});
-    state.targetAnchorId = anchorId;
-    state.currentIndex = entry.item_index;
+    r.setWindowTarget(entry.item_index, anchorId);
     r.setAlert('', 'info');
     try {
       var loaded = await r.loadWindow(entry.item_index, state.targetAnchorId);
@@ -336,11 +357,7 @@
         }, true);
         if (!located && serial === state.outlineJumpSerial && state.open &&
             state.comparison.targetSourceId === targetId && state.comparison.locateSerial === locateSerial + 1) {
-          state.comparison.highlights.clear();
-          state.comparison.indexHighlights.clear();
-          var previousTop = state.elements.comparisonViewport.scrollTop;
-          r.renderComparisonWindow();
-          state.elements.comparisonViewport.scrollTop = previousTop;
+          r.clearComparisonHighlights();
           r.setAlert('已跳到章节；右栏未同步，保留原位置：' + state.elements.alert.textContent, 'warning');
         }
       }
@@ -595,6 +612,9 @@
   r.rememberComparisonTarget = rememberComparisonTarget;
   r.renderAlignmentActions = renderAlignmentActions;
   r.loadAlignmentTargets = loadAlignmentTargets;
+  r.resetWorkContext = resetWorkContext;
+  r.invalidateOutlineJump = invalidateOutlineJump;
+  r.setAlignmentLoading = setAlignmentLoading;
   r.alignmentTargetName = alignmentTargetName;
   r.runHost = runHost;
   r.readJSON = readJSON;

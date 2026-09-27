@@ -411,7 +411,7 @@
       r.submitJumpForm();
     });
     viewport.addEventListener('mousedown', function () {
-      state.selectionDragging = true;
+      r.beginSelectionDrag();
     });
     viewport.addEventListener('keyup', r.scheduleSelectionCapture);
     viewport.addEventListener('keydown', r.handleReaderNavigationKey);
@@ -423,7 +423,7 @@
     });
     global.addEventListener('resize', r.scheduleFlagLayout, {passive: true});
 
-    state.elements = {
+  state.elements = {
       root: root,
       panel: panel,
       header: header,
@@ -481,4 +481,8 @@
   r.createButton = createButton;
   r.createIcon = createIcon;
   r.ensureDom = ensureDom;
+  r.destroyDom = function () {
+    if (state.elements && state.elements.root.isConnected) state.elements.root.remove();
+    state.elements = null;
+  };
 }(window));

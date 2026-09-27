@@ -182,12 +182,7 @@
     if (event.outcome === 'ok' && event.meta.groupId &&
         event.meta.groupId === state.work.groupId && state.comparison.open) {
       // A base-leg update also changes indirect pairs within this work.
-      state.links = null;
-      state.linkRequestSerial += 1;
-      r.clearLinkedSelection();
-      state.comparison.lastSourceRange = '';
-      r.openComparisonWith(state.comparison.targetSourceId);
-      r.renderToolbar();
+      r.refreshComparisonLinksAfterJob();
     } else {
       refreshComparisonAfterStatusChange();
     }

@@ -262,7 +262,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         render_body = READER_JS[render_start:render_end]
         self.assertLess(
             render_body.index("r.positionSourceTarget(target)"),
-            render_body.index("state.boundaryObserver = r.createBoundaryObserver()"),
+            render_body.index("r.attachObservers(elements, beforeBoundary, afterBoundary)"),
         )
         self.assertNotIn("scrollIntoView", render_body)
 

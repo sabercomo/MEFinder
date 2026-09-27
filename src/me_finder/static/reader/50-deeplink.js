@@ -57,6 +57,22 @@
     state.positionTimer = global.setTimeout(saveReadingPositionNow, 1500);
   }
 
+  function resetReadingSession() {
+    state.lastHistoryAnchor = '';
+    state.lastHistoryCompare = '';
+    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
+    state.deepLinkTimer = null;
+    state.pendingDeepLink = null;
+  }
+
+  function stopReadingSession() {
+    if (state.positionTimer !== null) global.clearTimeout(state.positionTimer);
+    state.positionTimer = null;
+    if (state.deepLinkTimer !== null) global.clearTimeout(state.deepLinkTimer);
+    state.deepLinkTimer = null;
+    state.pendingDeepLink = null;
+  }
+
   /* ── 逐段对应：选中段落高亮对应段，低置信段落标「!」 ───────────── */
   function truncateCodePoints(value, maximum) {
     return Array.from(String(value || '')).slice(0, maximum).join('');
@@ -268,6 +284,8 @@
   r.returnToMainWindow = returnToMainWindow;
   r.saveReadingPositionNow = saveReadingPositionNow;
   r.scheduleReadingPositionSave = scheduleReadingPositionSave;
+  r.resetReadingSession = resetReadingSession;
+  r.stopReadingSession = stopReadingSession;
   r.parseReaderDeepLink = parseReaderDeepLink;
   r.scheduleReaderDeepLink = scheduleReaderDeepLink;
   r.flushPendingReaderDeepLink = flushPendingReaderDeepLink;

@@ -661,10 +661,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   改走统一客户端，原始状态请求默认出口改为 MEFinderApi.fetch。
     # 0.5.7 D2：对齐任务监听迁到 15-alignment-jobs.js（MEFinderAlignmentJobs），
     #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
+    # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
     BASELINE_SHA256 = (
-        "2f2e4181efd7877e08d854a535459a80df041fd26969ed438c092a8151883e38"
+        "d2d8a1740e74c293ea3c2fcd362484cb8e1d1c9ec0090a08b3a97a100305b67c"
     )
-    BASELINE_BYTES = 1322495
+    BASELINE_BYTES = 1324510
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

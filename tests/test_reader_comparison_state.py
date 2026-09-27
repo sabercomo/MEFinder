@@ -12,6 +12,41 @@ READER = reader_js_source()
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderComparisonStateTests(unittest.TestCase):
+    def test_deselecting_link_keeps_comparison_search_highlight(self):
+        self.run_js([("  function clearComparisonLinkHighlights(", "  function highlightComparisonLink(")], """
+const state={comparison:{highlights:new Map([['search',[{start:1,end:3}]]]),
+ indexHighlights:new Map([[2,[{start:4,end:5}]]])}};
+let renders=0;const renderComparisonWindow=()=>{renders++;};
+clearComparisonLinkHighlights();
+assert.equal(state.comparison.highlights.size,1);
+assert.equal(state.comparison.indexHighlights.size,0);
+assert.equal(renders,1);
+""")
+
+    def test_replaced_book_invalidates_pending_work_context(self):
+        self.run_js([
+            ("  function resetWorkContext(", "  function invalidateOutlineJump("),
+            ("  async function loadWorkContext(", "  /* ── 自绘下拉"),
+        ], """
+const state={sourceId:'A',workRequestSerial:0,alignmentRequestSerial:0,
+  work:{groupId:'old'},comparison:{open:false}};
+const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/job'};
+const reads=[];
+const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}));
+const loadAvailability=async()=> 'ready',renderToolbar=()=>{};
+(async()=>{
+ const pending=loadWorkContext('A');
+ state.sourceId='B';
+ resetWorkContext('');
+ reads.forEach(({url,resolve})=>resolve(url==='/groups'
+   ? {document_groups:[{document_group_id:'GA',members:[{source_file_id:'A'}]}]}
+   : {works:[],running:false}));
+ await pending;
+ assert.equal(state.work.groupId,'');
+ assert.equal(state.availability,'unknown');
+})();
+""")
+
     def test_body_is_loaded_before_work_metadata_and_overview_is_scoped(self):
         body = READER[READER.index("  async function openReader("):READER.index("  async function goTo(")]
         self.assertLess(body.index("await r.loadWindow("), body.index("r.loadWorkContext(sourceId)"))
@@ -111,6 +146,7 @@ const reads=[];const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}
             self.JOB_WATCH,
             ("  async function applyAlignmentJobEnd(", "  function currentReadingSession("),
             ("  function refreshComparisonAfterStatusChange(", "  /* ── 对齐任务"),
+            ("  function refreshComparisonLinksAfterJob(", "  // 开关右栏"),
             ("  function loadLinkWindow(", "  // 低置信"),
         ], """
 const old = {key:'A:B:0:0',items:[{target_segment_ids:['old-target']}]};
@@ -124,6 +160,7 @@ const pairKey=(a,b)=>[a,b].sort().join('|');
 let notices=0;
 const notify=()=>{notices++;}, setAlert=()=>{}, loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
 const renderToolbar=()=>{},updateComparisonNotice=()=>{},renderFlags=()=>{},clearLinkedSelection=()=>{};
+const invalidateLinks=()=>{state.links=null;state.linkRequestSerial++;};
 let reads=0, relocated=0;
 const readJSON=async()=>{reads++;return {links:[]};};
 const openComparisonWith=()=>{relocated++;loadLinkWindow();};

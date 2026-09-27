@@ -351,18 +351,7 @@
       r.positionSourceTarget(target);
     }
 
-    state.pageObserver = r.createPageObserver();
-    if (state.pageObserver) {
-      elements.content.querySelectorAll('.mef-reader-item').forEach(function (node) {
-        state.pageObserver.observe(node);
-      });
-    }
-
-    state.boundaryObserver = r.createBoundaryObserver();
-    if (state.boundaryObserver) {
-      state.boundaryObserver.observe(beforeBoundary);
-      state.boundaryObserver.observe(afterBoundary);
-    }
+    r.attachObservers(elements, beforeBoundary, afterBoundary);
     if (state.comparison.open) r.loadLinkWindow();
   }
 
@@ -421,10 +410,16 @@
     if (!state.highlights.size) state.preciseHighlight = false;
   }
 
+  function clearHighlights() {
+    state.highlights.clear();
+    state.resolvedHighlights.clear();
+  }
+
 
   r.applyDecorationVisibility = applyDecorationVisibility;
   r.toggleDecorationVisibility = toggleDecorationVisibility;
   r.appendHighlightedText = appendHighlightedText;
   r.renderWindow = renderWindow;
   r.prepareHighlights = prepareHighlights;
+  r.clearHighlights = clearHighlights;
 }(window));

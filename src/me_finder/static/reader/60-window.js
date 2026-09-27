@@ -11,6 +11,60 @@
     state.visibleRatios.clear();
   }
 
+  function resetWindow(options) {
+    state.source = null;
+    state.title = String(options.title || options.documentTitle || options.document_title || '');
+    state.targetAnchorId = String(
+      options.anchorId || options.anchor_id || options.pdfPageId || options.pdf_page_id ||
+      ((options.pageMatchSpans || options.page_match_spans || [])[0] || {}).pdf_page_id || ''
+    );
+    state.onCurrentChange = typeof options.onCurrentChange === 'function'
+      ? options.onCurrentChange : null;
+    state.items.clear();
+    state.total = 0;
+    state.lastPosition = null;
+    state.windowStart = 0;
+    state.windowEnd = 0;
+    state.hasPrevious = false;
+    state.hasMore = false;
+    state.previousStart = null;
+    state.nextStart = null;
+    state.currentAnchorId = '';
+    state.currentIndex = r.resolveTargetIndex(options);
+    stopWindow();
+  }
+
+  function stopWindow() {
+    state.requestSerial += 1;
+    if (state.abortController) state.abortController.abort();
+    if (state.scrollBoundaryTimer !== null) global.clearTimeout(state.scrollBoundaryTimer);
+    state.scrollBoundaryTimer = null;
+    disconnectObservers();
+  }
+
+  function clearWindowItems() {
+    state.items.clear();
+  }
+
+  function setWindowTarget(index, anchorId) {
+    state.currentIndex = index;
+    state.targetAnchorId = anchorId;
+  }
+
+  function attachObservers(elements, beforeBoundary, afterBoundary) {
+    state.pageObserver = createPageObserver();
+    if (state.pageObserver) {
+      elements.content.querySelectorAll('.mef-reader-item').forEach(function (node) {
+        state.pageObserver.observe(node);
+      });
+    }
+    state.boundaryObserver = createBoundaryObserver();
+    if (state.boundaryObserver) {
+      state.boundaryObserver.observe(beforeBoundary);
+      state.boundaryObserver.observe(afterBoundary);
+    }
+  }
+
   function updateCurrentFromObserver() {
     var bestIndex = null;
     var bestRatio = -1;
@@ -382,6 +436,11 @@
 
 
   r.disconnectObservers = disconnectObservers;
+  r.resetWindow = resetWindow;
+  r.stopWindow = stopWindow;
+  r.clearWindowItems = clearWindowItems;
+  r.setWindowTarget = setWindowTarget;
+  r.attachObservers = attachObservers;
   r.createPageObserver = createPageObserver;
   r.createBoundaryObserver = createBoundaryObserver;
   r.handleReaderNavigationKey = handleReaderNavigationKey;
