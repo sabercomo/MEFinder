@@ -91,9 +91,6 @@
   MEFinderActions.registerInline('templateClick089', function(event, target) { toggleSearchSelect(event,'reader-line-select'); });
   MEFinderActions.registerInline('templateChange090', function(event, target) { setReaderLineMode(this.value); });
   MEFinderActions.registerInline('templateChange091', function(event, target) { setScriptFolding(this.checked); });
-  MEFinderActions.registerInline('templateChange092', function(event, target) { setAlignmentEmbeddingModel(this.value); });
-  MEFinderActions.registerInline('templateClick093', function(event, target) { downloadAlignmentModel('minilm-l12-v2', this); });
-  MEFinderActions.registerInline('templateClick094', function(event, target) { downloadAlignmentModel('multilingual-e5-large', this); });
   MEFinderActions.registerInline('templateClick095', function(event, target) { MEFinder.zotero.recheck(); });
   MEFinderActions.registerInline('templateChange096', function(event, target) { MEFinder.zotero.setEnabled(this.checked); });
   MEFinderActions.registerInline('templateClick097', function(event, target) { toggleSearchSelect(event,'zotero-frequency-select'); });
@@ -123,18 +120,6 @@
   MEFinderActions.registerInline('templateClick121', function(event, target) { manageLocalOCRComponent('ndlkotenocr-lite','cancel',this); });
   MEFinderActions.registerInline('templateClick122', function(event, target) { testLocalOCREngine('ndlkotenocr-lite', this); });
   MEFinderActions.registerInline('templateClick123', function(event, target) { saveLocalOCRConfig(); });
-  MEFinderActions.registerInline('templateClick124', function(event, target) { checkManagedMineruUpdates(this); });
-  MEFinderActions.registerInline('templateClick125', function(event, target) { manageMineruComponent('auto','install',this); });
-  MEFinderActions.registerInline('templateClick126', function(event, target) { manageMineruComponent('pipeline','install',this); });
-  MEFinderActions.registerInline('templateClick127', function(event, target) { manageMineruComponent('pipeline','start',this); });
-  MEFinderActions.registerInline('templateClick128', function(event, target) { manageMineruComponent('pipeline','stop',this); });
-  MEFinderActions.registerInline('templateClick129', function(event, target) { manageMineruComponent('pipeline','uninstall',this); });
-  MEFinderActions.registerInline('templateClick130', function(event, target) { manageMineruComponent('pipeline','cancel',this); });
-  MEFinderActions.registerInline('templateClick131', function(event, target) { manageMineruComponent('vlm','install',this); });
-  MEFinderActions.registerInline('templateClick132', function(event, target) { manageMineruComponent('vlm','start',this); });
-  MEFinderActions.registerInline('templateClick133', function(event, target) { manageMineruComponent('vlm','stop',this); });
-  MEFinderActions.registerInline('templateClick134', function(event, target) { manageMineruComponent('vlm','uninstall',this); });
-  MEFinderActions.registerInline('templateClick135', function(event, target) { manageMineruComponent('vlm','cancel',this); });
   MEFinderActions.registerInline('templateClick136', function(event, target) { saveMineruLocalSettings(); });
   MEFinderActions.registerInline('templateClick137', function(event, target) { testMineruLocalConnection(); });
   MEFinderActions.registerInline('templateClick138', function(event, target) { toggleMineruSecret('general-model-key','general-model-key-toggle'); });

@@ -792,3 +792,12 @@ else:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HardwareDetectionWindowTests(unittest.TestCase):
+    def test_windows_nvidia_smi_probe_hides_console_window(self):
+        from src.me_finder.managed_mineru import detect_mineru_hardware
+
+        runner = mock.Mock(side_effect=OSError("no nvidia-smi"))
+        detect_mineru_hardware(platform_key="win32-x86_64", command_runner=runner)
+        self.assertTrue(runner.call_args.kwargs.get("creationflags", 0) & 0x08000000)

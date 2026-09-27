@@ -52,6 +52,10 @@ const context = {
 vm.createContext(context);
 // 被测文件经 07-api.js 发请求:先装配统一请求出口。
 vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context);
+// 64-settings-model.js 的轮询与操作共用请求代次(14-task-state.js)。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'14-task-state.js'),'utf8'),context);
+// 模型行视图(Vue 试点);此处没有 Vue,只用它的纯状态与 rowView。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'64-settings-model-view.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'64-settings-model.js'),'utf8'),context);
 const settle = async()=>{for(let i=0;i<15;i++) await Promise.resolve();};
@@ -87,7 +91,7 @@ node('alignment-runtime-uninstall').onclick();await settle();
 modelInstalled=false;
 runtime={...runtime,installed:false,state:'not_installed',operation:null,compute:{available:false,provider:'none'}};
 await poll();
-assert.equal(node('embedding-model-state-minilm-l12-v2').textContent,'未下载');
+assert.equal(context.MEFinderAlignmentModelView.rowView('minilm-l12-v2').stateText,'未下载');
 assert.match(node('alignment-compute-status').textContent,/不可用/);
 ''')
 

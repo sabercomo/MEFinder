@@ -402,6 +402,11 @@ def detect_mineru_hardware(
             text=True,
             timeout=10,
             check=True,
+            creationflags=(
+                getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                if key == "win32-x86_64"
+                else 0
+            ),
         )
     except (OSError, subprocess.SubprocessError):
         return {

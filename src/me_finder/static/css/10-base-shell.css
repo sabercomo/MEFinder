@@ -148,6 +148,32 @@ html[data-desktop-shell="win32"] .windows-titlebar-controls svg {
 .windows-restore-icon { display: none; }
 html.windows-maximized .windows-maximize-icon { display: none; }
 html.windows-maximized .windows-restore-icon { display: block; }
+/* 无边框窗口的缩放边：WebView2 盖满整个客户区，原生 WM_NCHITTEST 收不到边缘，
+   由这几条透明热区显示缩放光标，按下后交给原生 WM_NCLBUTTONDOWN 进入系统缩放。
+   左右边从标题栏下方起，右上角的关闭按钮保持可点。 */
+.windows-resize-edge { display: none; }
+html[data-desktop-shell="win32"] .windows-resize-edge {
+  position: fixed;
+  z-index: var(--z-window-edge);
+  display: block;
+  -webkit-app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .windows-resize-edge[data-edge="left"] {
+  top: var(--windows-titlebar-height); bottom: 0; left: 0; width: 5px; cursor: ew-resize;
+}
+html[data-desktop-shell="win32"] .windows-resize-edge[data-edge="right"] {
+  top: var(--windows-titlebar-height); bottom: 0; right: 0; width: 5px; cursor: ew-resize;
+}
+html[data-desktop-shell="win32"] .windows-resize-edge[data-edge="bottom"] {
+  right: 0; bottom: 0; left: 0; height: 5px; cursor: ns-resize;
+}
+html[data-desktop-shell="win32"] .windows-resize-edge[data-edge="bottom-left"] {
+  bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize;
+}
+html[data-desktop-shell="win32"] .windows-resize-edge[data-edge="bottom-right"] {
+  right: 0; bottom: 0; width: 12px; height: 12px; cursor: nwse-resize;
+}
+html.windows-maximized .windows-resize-edge { display: none; }
 html[data-desktop-shell="win32"] .app-shell {
   height: calc(100vh - var(--windows-titlebar-height));
   margin-top: var(--windows-titlebar-height);

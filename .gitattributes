@@ -1,0 +1,2 @@
+# 第三方随包文件原样入库：禁止换行符转换，测试按字节钉死 SHA-256。
+src/me_finder/static/vendor/** -text

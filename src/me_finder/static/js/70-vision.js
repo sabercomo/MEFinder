@@ -2,6 +2,22 @@
    —— #7 前端全局作用域收敛（模式同 reader.js / 05-theme-engine.js）。
    IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 70-vision.js
+  // 本地 OCR 与托管 MinerU 各一份请求代次：轮询与安装/卸载等操作谁最后发起就采信谁，
+  // 晚到的旧轮询不得覆盖操作后的状态、也不得停掉轮询（14-task-state.js）。
+  var localOCRRequests = global.MEFinderTaskState.createLatest();
+  var managedMineruRequests = global.MEFinderTaskState.createLatest();
+  var managedMineruView = global.MEFinderManagedMineruView;
+
+  function stopLocalOCRPoll() {
+    if (parserStore.localOCRPollTimer) clearTimeout(parserStore.localOCRPollTimer);
+    parserStore.localOCRPollTimer = null;
+  }
+
+  function stopManagedMineruPoll() {
+    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
+    parserStore.managedMineruPollTimer = null;
+  }
+
   /* ═══ MinerU API settings ═══ */
   function visionNode(tag, className, text) {
     var node = document.createElement(tag);
@@ -25,23 +41,6 @@
       uninstall: document.getElementById(prefix + '-uninstall'),
       cancel: document.getElementById(prefix + '-cancel')
     };
-  }
-
-  function localOCRByteSize(value) {
-    var bytes = Number(value) || 0;
-    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function localOCREstimatedWait(value) {
-    var seconds = Math.max(0, Number(value) || 0);
-    if (!seconds) return '即将完成';
-    if (seconds < 60) return '预计剩余约 ' + Math.max(10, Math.ceil(seconds / 10) * 10) + ' 秒';
-    if (seconds < 3600) return '预计剩余约 ' + Math.ceil(seconds / 60) + ' 分钟';
-    var hours = Math.floor(seconds / 3600);
-    var minutes = Math.ceil((seconds % 3600) / 60);
-    return '预计剩余约 ' + hours + ' 小时' + (minutes ? ' ' + minutes + ' 分钟' : '');
   }
 
   function localOCRTransferSummary(managed) {
@@ -133,10 +132,7 @@
 
   function renderLocalOCRUnknown(reason) {
     parserStore.localOCRConfig = null;
-    if (parserStore.localOCRPollTimer) {
-      clearTimeout(parserStore.localOCRPollTimer);
-      parserStore.localOCRPollTimer = null;
-    }
+    stopLocalOCRPoll();
     var status = document.getElementById('local-ocr-status');
     if (status) { status.className = 'settings-status warning'; status.textContent = '状态未知'; }
     var reload = document.getElementById('local-ocr-reload');
@@ -185,12 +181,15 @@
   async function loadLocalOCRConfig() {
     var status = document.getElementById('local-ocr-status');
     if (status && !parserStore.localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+    var token = localOCRRequests.begin();
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr');
       var data = await response.json();
+      if (!localOCRRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
     } catch (error) {
+      if (!localOCRRequests.isCurrent(token)) return;
       // DESIGN.md §2/§6：读取失败意味着状态未知，不是未安装；此时不得据错误状态
       // 触发安装或启用，只给「重新读取」。
       renderLocalOCRUnknown(error.message);
@@ -243,6 +242,8 @@
       });
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+      // 保存成功才作废在途轮询（它会把表单改回保存前的值）；失败时轮询照常继续。
+      localOCRRequests.invalidate();
       renderLocalOCRConfig(data);
       if (hint) hint.textContent = data.available ? '已保存；扫描类 PDF 将优先使用本地 OCR' : '已保存；当前不会改变导入路由';
     } catch (error) {
@@ -258,6 +259,9 @@
       '将删除该组件的模型、独立 Python 环境和自动填入的路径',
       {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
     )) return;
+    // 操作一开始就作废在途轮询：它带回的是操作前的快照。
+    localOCRRequests.invalidate();
+    stopLocalOCRPoll();
     if (button) button.disabled = true;
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr/component', {
@@ -270,6 +274,7 @@
       await loadLocalOCRConfig();
     } catch (error) {
       showToast('本地 OCR 组件操作失败：' + error.message, 'danger');
+      loadLocalOCRConfig();
     } finally {
       if (button) button.disabled = false;
     }
@@ -303,6 +308,8 @@
     if (!status) return;
     status.className = 'settings-status';
     status.textContent = '读取中…';
+    // 这份配置也带托管运行时快照，与托管轮询、操作共用同一份代次。
+    var token = managedMineruRequests.begin();
     try {
       var resp = await MEFinderApi.fetch('/api/mineru-accounts');
       var data = await resp.json();
@@ -319,7 +326,7 @@
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
       var serviceAddress = document.getElementById('mineru-service-address');
       if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
-      renderMineruLocalSettings(data.local_deployment || {});
+      renderMineruLocalSettings(data.local_deployment || {}, managedMineruRequests.isCurrent(token));
       renderMineruAccountList();
       var addButton = document.getElementById('mineru-add-account');
       if (addButton) addButton.hidden = !parserStore.mineruAccounts.length;
@@ -337,10 +344,12 @@
       status.className = 'settings-status warning';
       status.textContent = '读取失败';
       showToast('读取 MinerU 配置失败：' + e.message);
+      // 本次读取已作废了在途的托管轮询；运行时仍在忙时要把轮询接上，否则卡片停在旧进度。
+      if (managedMineruRequests.isCurrent(token) && parserStore.managedMineruWasBusy) loadManagedMineruStatus();
     }
   }
 
-  function renderMineruLocalSettings(config) {
+  function renderMineruLocalSettings(config, runtimeIsCurrent) {
     parserStore.mineruLocalConfig = config;
     var endpoint = document.getElementById('mineru-local-endpoint');
     var backend = document.getElementById('mineru-local-backend');
@@ -348,7 +357,8 @@
     if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
     if (backend) backend.value = config.backend || 'pipeline';
     if (enabled) enabled.checked = !!config.enabled;
-    renderManagedMineru(config.managed_runtime || {});
+    // 旧快照只更新表单，不改托管运行时卡片；更新的请求会渲染它。
+    if (runtimeIsCurrent !== false) renderManagedMineru(config.managed_runtime || {});
     syncMineruLocalImportOption(!!config.enabled);
     var label = managedMineruSummaryLabel(config, config.managed_runtime || {});
     updateMineruLocalStatus(!!config.enabled, label);
@@ -362,152 +372,28 @@
     return (profile === 'vlm' ? 'VLM' : 'Pipeline') + ' 运行中';
   }
 
-  function managedMineruFields(profileId) {
-    var prefix = 'managed-mineru-' + profileId;
-    return {
-      state: document.getElementById(prefix + '-state'),
-      install: document.getElementById(prefix + '-install'),
-      start: document.getElementById(prefix + '-start'),
-      stop: document.getElementById(prefix + '-stop'),
-      uninstall: document.getElementById(prefix + '-uninstall'),
-      cancel: document.getElementById(prefix + '-cancel'),
-      progressHint: document.getElementById(prefix + '-progress'),
-      progress: document.getElementById(prefix + '-progress-bar')
-    };
-  }
-
-  function managedMineruTransferSummary(profile) {
-    if (!profile.total_bytes) return '';
-    var total = (profile.total_is_estimate ? '约 ' : '') + localOCRByteSize(profile.total_bytes);
-    var summary = '已下载 ' + localOCRByteSize(profile.downloaded_bytes) + ' / ' + total;
-    if (profile.downloaded_bytes >= profile.total_bytes) return summary + ' · 即将完成';
-    if (!profile.download_speed_bps || profile.eta_seconds == null) {
-      return summary + (profile.downloaded_bytes ? ' · 网络波动或正在处理分片…' : ' · 正在检测网速…');
-    }
-    return summary + ' · ' + localOCRByteSize(profile.download_speed_bps) + '/s · ' + localOCREstimatedWait(profile.eta_seconds);
-  }
-
-  function managedMineruErrorText(value) {
-    var message = String(value || '').replace(/\s+/g, ' ').trim();
-    if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
-      return '无法连接 PyPI，请检查网络或代理后重试';
-    }
-    if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror|i\/o error|decoding response body)/i.test(message)) {
-      return '模型下载网络中断，请检查网络或代理后重试';
-    }
-    return message.length > 180 ? message.slice(0, 177) + '…' : message;
-  }
-
+  // 托管运行时卡片由 70-managed-mineru-view.js（Vue）渲染；这里只写它的 store，
+  // 并负责依赖运行时状态的轮询与「本地部署」总状态。
   function renderManagedMineru(runtime) {
-    var externalConfigured = !!parserStore.mineruLocalConfig.enabled && !parserStore.mineruLocalConfig.managed;
-    var hardware = runtime.hardware || {};
-    var hardwareText = document.getElementById('managed-mineru-hardware');
-    if (hardwareText) {
-      var memory = hardware.vram_mb ? ' · ' + (hardware.vram_mb / 1024).toFixed(0) + 'GB 显存' : '';
-      hardwareText.textContent = hardware.detection_error
-        ? hardware.detection_error + ' · 默认推荐 Pipeline'
-        : hardware.name
-        ? '当前设备：' + hardware.name + memory + ' · 推荐 ' + (hardware.recommended_profile === 'vlm' ? 'VLM' : 'Pipeline')
-        : '未检测到可用的本地推理硬件';
-    }
-    var service = runtime.service || {};
-    var vlmProfile = (runtime.profiles || []).find(function(item) { return item.profile === 'vlm'; });
-    var vlmSection = document.querySelector('[data-mineru-profile="vlm"]');
-    if (vlmSection) vlmSection.hidden = !hardware.vlm_supported && !(vlmProfile && vlmProfile.installed);
-    var active = false;
-    var errors = [];
-    (runtime.profiles || []).forEach(function(profile) {
-      var fields = managedMineruFields(profile.profile);
-      var busy = ['provisioning','downloading_models','validating','starting','cleaning'].indexOf(profile.state) >= 0;
-      var running = !!service.running && service.profile === profile.profile;
-      active = active || busy;
-      if (profile.error) errors.push(profile.display_name);
-      var labels = {
-        provisioning:'安装依赖中', downloading_models:'下载模型中', validating:'验证中',
-        starting:'启动中', cleaning:'清理中'
-      };
-      if (fields.state) {
-        fields.state.className = 'settings-status ' + (profile.installed ? 'ready' : 'warning');
-        fields.state.textContent = labels[profile.state]
-          || (running ? '运行中' : profile.error ? '安装失败' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? (externalConfigured ? '未由 MEFinder 安装' : '未安装') : '平台不支持');
-      }
-      if (fields.install) {
-        fields.install.hidden = (profile.installed && !profile.update_available) || busy;
-        fields.install.disabled = !profile.supported || (profile.profile === 'vlm' && !hardware.vlm_supported);
-        fields.install.textContent = profile.update_available ? '更新组件' : externalConfigured ? '改用托管安装' : '下载安装';
-        fields.install.onclick = function() {
-          manageMineruComponent(profile.profile, profile.update_available ? 'update' : 'install', fields.install);
-        };
-      }
-      if (fields.start) fields.start.hidden = !profile.installed || busy || running;
-      if (fields.stop) fields.stop.hidden = !running || busy;
-      if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
-      if (fields.cancel) fields.cancel.hidden = !busy;
-      if (fields.progressHint) {
-        var detail = running && service.endpoint
-          ? '运行于 ' + service.endpoint
-          : profile.error ? '安装失败：' + managedMineruErrorText(profile.error) : (profile.message || '');
-        var transfer = busy ? managedMineruTransferSummary(profile) : '';
-        if (transfer) detail += (detail ? ' · ' : '') + transfer;
-        fields.progressHint.hidden = !detail;
-        fields.progressHint.textContent = detail;
-      }
-      if (fields.progress) {
-        fields.progress.hidden = !busy;
-        var bar = fields.progress.firstElementChild;
-        if (bar) bar.style.width = profile.progress == null ? '18%' : Math.round(profile.progress * 100) + '%';
-        fields.progress.classList.toggle('indeterminate', busy && profile.progress == null);
-      }
-    });
-    var autoButton = document.getElementById('managed-mineru-auto-install');
-    if (autoButton) {
-      var recommended = hardware.recommended_profile || 'pipeline';
-      var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
-      autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
-      autoButton.textContent = recommendedProfile && recommendedProfile.installed
-        ? '已安装'
-        : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
-    }
-    var checkButton = document.getElementById('managed-mineru-check-updates');
-    if (checkButton) {
-      checkButton.disabled = active || !runtime.supported;
-      checkButton.textContent = '检查新版本';
-    }
-    var hint = document.getElementById('managed-mineru-hint');
-    if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
-      ? ''
-      : active ? '安装需要约 20GB 可用空间，请保持应用开启'
-      : externalConfigured ? '已配置自部署服务 ' + parserStore.mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案'
-      : '组件按需下载，不会随主程序更新自动安装');
-    if (hint && !errors.length) {
-      var versionLine = managedMineruVersionText(runtime);
-      if (versionLine) hint.textContent = (hint.textContent ? hint.textContent + ' · ' : '') + versionLine;
-    }
+    managedMineruView.setRuntime(runtime, parserStore.mineruLocalConfig);
+    var active = managedMineruView.cardView().active;
     if (parserStore.mineruLocalConfig.managed) {
       updateMineruLocalStatus(
         !!parserStore.mineruLocalConfig.enabled,
         managedMineruSummaryLabel(parserStore.mineruLocalConfig, runtime)
       );
     }
-    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
-    parserStore.managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
+    stopManagedMineruPoll();
+    if (active) parserStore.managedMineruPollTimer = setTimeout(loadManagedMineruStatus, 900);
     if (parserStore.managedMineruWasBusy && !active) loadMineruConfig();
     parserStore.managedMineruWasBusy = active;
   }
 
-  function managedMineruVersionText(runtime) {
-    // 如实说明安装目标是从 PyPI 取到的还是清单固定版本，别让用户以为一定是最新
-    var target = String(runtime.version || '').trim();
-    if (!target) return '';
-    var detail = String(runtime.version_detail || '').trim();
-    var source = String(runtime.version_source || '') === 'pypi' ? '兼容区间内最新' : '清单固定版本';
-    return '安装目标 MinerU ' + target + '（' + source + '）' + (detail ? ' · ' + detail : '');
-  }
-
-  async function checkManagedMineruUpdates(button) {
-    var hint = document.getElementById('managed-mineru-hint');
-    if (button) { button.disabled = true; button.textContent = '检查中…'; }
-    if (hint) hint.textContent = '正在查询可用版本…';
+  async function checkManagedMineruUpdates() {
+    managedMineruView.setChecking(true);
+    managedMineruView.setNotice('正在查询可用版本…');
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method: 'POST',
@@ -515,27 +401,31 @@
         body: JSON.stringify({action: 'check-updates'})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '查询失败');
       renderManagedMineru(data.managed_runtime || data);
     } catch (error) {
-      if (hint) hint.textContent = '查询版本失败：' + error.message;
-      if (button) { button.disabled = false; button.textContent = '检查新版本'; }
+      if (!managedMineruRequests.isCurrent(token)) return;
+      managedMineruView.setChecking(false);
+      managedMineruView.setNotice('查询版本失败：' + error.message);
     }
   }
 
   async function loadManagedMineruStatus() {
+    var token = managedMineruRequests.begin();
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component');
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderManagedMineru(data);
     } catch (error) {
-      var hint = document.getElementById('managed-mineru-hint');
-      if (hint) hint.textContent = '读取托管运行时失败：' + error.message;
+      if (!managedMineruRequests.isCurrent(token)) return;
+      managedMineruView.setNotice('读取托管运行时失败：' + error.message);
     }
   }
 
-  async function manageMineruComponent(profile, action, button) {
+  async function manageMineruComponent(profile, action) {
     if ((action === 'install' || action === 'update') && !await showAppConfirm(
       '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘',
       {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
@@ -544,7 +434,9 @@
       '将删除该配置的 MinerU 运行时、依赖和本地模型',
       {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
     )) return;
-    if (button) button.disabled = true;
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
+    managedMineruView.setPending(profile, action, true);
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method:'POST',
@@ -552,12 +444,15 @@
         body:JSON.stringify({profile:profile, action:action})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '操作失败');
       renderManagedMineru(data.managed_runtime || {});
     } catch (error) {
+      if (!managedMineruRequests.isCurrent(token)) return;
       showToast('本地 MinerU 组件操作失败：' + error.message, 'danger');
+      loadManagedMineruStatus();
     } finally {
-      if (button) button.disabled = false;
+      managedMineruView.setPending(profile, action, false);
     }
   }
 
@@ -1170,9 +1065,7 @@
 
   if (typeof module !== "undefined" && module.exports) {
     Object.assign(module.exports, {
-      managedMineruErrorText: managedMineruErrorText,
       managedMineruSummaryLabel: managedMineruSummaryLabel,
-      managedMineruTransferSummary: managedMineruTransferSummary,
       renderManagedMineru: renderManagedMineru
     });
   }
