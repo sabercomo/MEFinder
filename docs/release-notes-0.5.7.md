@@ -1,4 +1,4 @@
-2026-09-27:macOS Apple Silicon 与 Windows 本机验收包已生成并通过构建门禁，但早于设置页请求代次与 Vue 试点合入，发布前须按新提交重打；对照链接/复核完整交互仍待验收，v0.5.7 尚未正式发布。
+2026-09-27:Windows 本机验收包已按 5449593 重打（含设置页请求代次与 Vue 试点），通过构建门禁；macOS 验收包仍早于这些改动，须在 Mac 上重打；对照链接/复核完整交互仍待验收，v0.5.7 尚未正式发布。
 
 # v0.5.7 迭代说明
 
@@ -29,11 +29,11 @@
 
 ## 本机验收包（Windows x64）
 
-2026-09-27 从远端 `refactor/v0.5.7-architecture` 的 `9826f4a` 建立独立检出，并修复数据位置测试夹具触发无关远端组件目录检查所导致的 Windows SQLite 文件占用。Zotero 分类默认折叠与解析方式即时同步后，两份 Windows 包已重建；安装版与便携版脚本各自通过全量 `unittest`（2585 项，36 项环境跳过）及脚本内打包门禁。两份文件均为本机构建验收包，尚未正式发布。
+2026-09-27 按 `codex/v0.5.7-windows` 的 `5449593`（含设置页组件卡片请求代次、译本对齐模型行与托管 MinerU 卡片的 Vue 试点）重打。安装版与便携版脚本各自通过全量 `unittest`（2596 项，36 项环境跳过）及脚本内打包门禁；便携包内已核对 `vue.global.prod.js`（SHA-256 与源码一致）、`14-task-state.js`、两个 Vue 视图文件，程序版本信息为 `0.5.7`。两份文件均为本机构建验收包，尚未正式发布。
 
 | 本地文件 | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `release/MEFinder-v0.5.7-windows-setup.exe` | 78,988,861 | `2debfa3dcfccfede7059a0c4a452c2f933a62f665f4f5763ebd26a739f9da32c` |
-| `release/MEFinder-v0.5.7-windows-portable.zip` | 94,490,530 | `eb3e044c5e7e1f52a9fcaee61c573fe602c330b09ad1a8e1ba15583c94eb6841` |
+| `release/MEFinder-v0.5.7-windows-setup.exe` | 78,785,174 | `796bb43895347c44353e9494480b2bb35f455e89d691d0334835606e15208942` |
+| `release/MEFinder-v0.5.7-windows-portable.zip` | 94,321,742 | `a8e82561bda0418b71ea7f262aa7ea7b397f6fccdfb0da8a9e2cf5f8933db21b` |
 
-两份产物各附同名 `.sha256.txt`；阅读器对照链接与复核的冻结应用完整人工验收仍待进行。
+两份产物各附同名 `.sha256.txt`。此前按 `571504b` 构建的一对（安装包 `2debfa3d…`、便携包 `eb3e044c…`）已被取代。阅读器对照链接与复核的冻结应用完整人工验收仍待进行。
