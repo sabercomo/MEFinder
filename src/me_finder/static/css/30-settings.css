@@ -1101,6 +1101,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   padding: 20px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
+/* display:grid 会盖掉 [hidden]：硬件不支持 VLM 时这一行要真的收起。 */
+.managed-mineru-profile[hidden] { display: none; }
 .managed-mineru-profile-progress { font-variant-numeric: tabular-nums; }
 .managed-mineru-progress { overflow: hidden; width: 100%; height: 5px; margin-top: 5px; border-radius: var(--radius-pill); background: var(--surface-tertiary); }
 .managed-mineru-progress > span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease-out; }

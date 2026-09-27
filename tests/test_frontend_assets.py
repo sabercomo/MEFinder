@@ -450,6 +450,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/64-settings-model.js": 7,
             # Vue 试点：模型行视图只暴露 MEFinderAlignmentModelView 一个命名空间。
             "static/js/64-settings-model-view.js": 1,
+            # Vue 试点第二块：托管 MinerU 卡片只暴露 MEFinderManagedMineruView。
+            "static/js/70-managed-mineru-view.js": 1,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 23,
             "static/js/71-vision-providers.js": 10,
@@ -678,10 +680,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   托管 MinerU 的轮询与操作只采信最后发起的请求。
     # Vue 3 试点：内联 static/vendor/vue.global.prod.js（3.5.43）为独立 <script>；
     #   设置页「译本对齐模型」行改由 64-settings-model-view.js 渲染，模板两行静态标记删除。
+    # Vue 试点第二块：托管 MinerU 卡片改由 70-managed-mineru-view.js 渲染；字节与剩余时间
+    #   两个格式化函数移入 06-pure.js；.managed-mineru-profile[hidden] 真正收起 VLM 行。
     BASELINE_SHA256 = (
-        "7d6cfcf2113266e9b07b4224a4e16539851796895000a416254d23bdb66088f0"
+        "2b3f10d161292d8cbc2e8be271cfe8625f414c9b8d3aa6b348c8bf837b07e173"
     )
-    BASELINE_BYTES = 1497818
+    BASELINE_BYTES = 1499421
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

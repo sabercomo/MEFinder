@@ -9,4 +9,5 @@
 - 文件 SHA-256 钉在 `tests/test_frontend_assets.py`（`VendorAssetTests`）；升级 Vue 时同步更新哈希与本表。
 - `.gitattributes` 对本目录关闭换行符转换，保证检出后字节不变。
 - 装配：`web_assets.py` 把它内联进主窗口独立的 `<script>` 块，位于应用脚本之前；阅读器独立窗口不加载。
-- 当前用途：设置页「译本对齐模型」行（`static/js/64-settings-model-view.js`，Vue 试点）。
+- 当前用途（Vue 试点）：设置页「译本对齐模型」行（`static/js/64-settings-model-view.js`）、托管 MinerU 卡片（`static/js/70-managed-mineru-view.js`）。
+- 渲染测试：`tests/test_vue_components.py` 用 `tests/fixtures/vue_mini_dom.js` 在 node 里执行本文件；模板里不要写 `&`。

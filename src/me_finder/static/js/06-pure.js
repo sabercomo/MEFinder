@@ -670,3 +670,21 @@ function detailContextPreview(text, side) {
   }
   return characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS).join('') + '…';
 }
+
+// 纯函数：组件下载的字节数与剩余时间文案（本地 OCR 与托管 MinerU 共用，原在 70-vision.js）。
+function localOCRByteSize(value) {
+  var bytes = Number(value) || 0;
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function localOCREstimatedWait(value) {
+  var seconds = Math.max(0, Number(value) || 0);
+  if (!seconds) return '即将完成';
+  if (seconds < 60) return '预计剩余约 ' + Math.max(10, Math.ceil(seconds / 10) * 10) + ' 秒';
+  if (seconds < 3600) return '预计剩余约 ' + Math.ceil(seconds / 60) + ' 分钟';
+  var hours = Math.floor(seconds / 3600);
+  var minutes = Math.ceil((seconds % 3600) / 60);
+  return '预计剩余约 ' + hours + ' 小时' + (minutes ? ' ' + minutes + ' 分钟' : '');
+}

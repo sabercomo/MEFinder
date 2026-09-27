@@ -176,7 +176,9 @@ global.MEFinderApi = {fetch(url, options) {
 const calls = (url, method) => pending.filter(p => p.url === url && p.method === (method || 'GET'));
 function load(name) { eval.call(global, fs.readFileSync(require('path').join(process.argv[1], name), 'utf8')); }
 global.module = {exports: {}};
+load('06-pure.js');
 load('14-task-state.js');
+load('70-managed-mineru-view.js');
 load('70-vision.js');
 const flush = () => new Promise(r => setImmediate(r));
 function ocr(state) {
@@ -234,7 +236,7 @@ class ParserComponentRequestOrderingTests(unittest.TestCase):
   staleGet.call.resolve(reply(mineru('not_installed')));
   await flush(); await flush();
   process.stdout.write(JSON.stringify({
-    state: node('managed-mineru-pipeline-state').textContent, polls: livePolls()}));
+    state: MEFinderManagedMineruView.profileView('pipeline').stateText, polls: livePolls()}));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """)
         self.assertEqual(observed, {"state": "安装依赖中", "polls": 1})

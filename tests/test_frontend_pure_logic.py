@@ -1469,10 +1469,14 @@ def _vision_eval(tail):
     providers = js_dir / "71-vision-providers.js"
     api = js_dir / "07-api.js"  # 两个模块经统一请求出口发请求
     task_state = js_dir / "14-task-state.js"  # 70-vision 的轮询与操作共用请求代次
-    expr = "(function(){%s\n%s\n%s\n%s\n%s\n%s})()" % (
+    pure = js_dir / "06-pure.js"  # 字节数与剩余时间文案
+    mineru_view = js_dir / "70-managed-mineru-view.js"  # 托管 MinerU 卡片视图（无 Vue 时只有 store）
+    expr = "(function(){%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
+        pure.read_text(encoding="utf-8"),
         api.read_text(encoding="utf-8"),
         task_state.read_text(encoding="utf-8"),
+        mineru_view.read_text(encoding="utf-8"),
         runtime.read_text(encoding="utf-8"),
         providers.read_text(encoding="utf-8"),
         tail,
@@ -1706,11 +1710,12 @@ class MineruLocalDisplayTests(unittest.TestCase):
           service:{running:false},
           profiles:[{profile:'pipeline', display_name:'Pipeline', supported:true, installed:false, state:'not_installed'}]
         });
+        var view = MEFinderManagedMineruView;
         return {
-          state:elements['managed-mineru-pipeline-state'].textContent,
-          install:elements['managed-mineru-pipeline-install'].textContent,
-          auto:elements['managed-mineru-auto-install'].textContent,
-          hint:elements['managed-mineru-hint'].textContent
+          state:view.profileView('pipeline').stateText,
+          install:view.profileView('pipeline').install.label,
+          auto:view.cardView().auto.label,
+          hint:view.cardView().hint
         };
         """
         self.assertEqual(_vision_eval(tail), {
@@ -1747,12 +1752,13 @@ class MineruLocalDisplayTests(unittest.TestCase):
           service:{running:true, profile:'pipeline', endpoint:'http://127.0.0.1:8000'},
           profiles:[profile]
         });
+        var view = MEFinderManagedMineruView;
         var whileRunning = elements['mineru-local-status'].textContent;
-        var runningEndpoint = elements['managed-mineru-pipeline-progress'].textContent;
-        var runningEndpointHidden = elements['managed-mineru-pipeline-progress'].hidden;
-        var hardware = elements['managed-mineru-hardware'].textContent;
-        var autoInstall = elements['managed-mineru-auto-install'].textContent;
-        var runningHint = elements['managed-mineru-hint'].textContent;
+        var runningEndpoint = view.profileView('pipeline').progressHint.text;
+        var runningEndpointHidden = !view.profileView('pipeline').progressHint.visible;
+        var hardware = view.cardView().hardware;
+        var autoInstall = view.cardView().auto.label;
+        var runningHint = view.cardView().hint;
         var whileVlmRunning = module.exports.managedMineruSummaryLabel(
           {enabled:true, managed:true, managed_profile:'vlm'},
           {service:{running:true, profile:'vlm'}}
@@ -1772,9 +1778,9 @@ class MineruLocalDisplayTests(unittest.TestCase):
           runningHint:runningHint,
           whileVlmRunning:whileVlmRunning,
           afterStop:elements['mineru-local-status'].textContent,
-          state:elements['managed-mineru-pipeline-state'].textContent,
-          startHidden:elements['managed-mineru-pipeline-start'].hidden,
-          stopHidden:elements['managed-mineru-pipeline-stop'].hidden
+          state:view.profileView('pipeline').stateText,
+          startHidden:!view.profileView('pipeline').start.visible,
+          stopHidden:!view.profileView('pipeline').stop.visible
         };
         """
         self.assertEqual(_vision_eval(tail), {
@@ -1824,15 +1830,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_vlm_option_is_hidden_only_when_hardware_is_not_qualified(self):
         tail = r"""
-        var vlmSection = {hidden:null};
-        globalThis.document = {
-          getElementById:function() { return null; },
-          querySelector:function() { return vlmSection; }
-        };
+        globalThis.document = {getElementById:function() { return null; }};
         module.exports.renderManagedMineru({hardware:{vlm_supported:false}, profiles:[], service:{}});
-        var cpuOnly = vlmSection.hidden;
+        var cpuOnly = MEFinderManagedMineruView.cardView().vlmHidden;
         module.exports.renderManagedMineru({hardware:{vlm_supported:true}, profiles:[], service:{}});
-        return {cpuOnly:cpuOnly, gpuCapable:vlmSection.hidden};
+        return {cpuOnly:cpuOnly, gpuCapable:MEFinderManagedMineruView.cardView().vlmHidden};
         """
         self.assertEqual(_vision_eval(tail), {
             "cpuOnly": True,
@@ -1841,7 +1843,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_uses_gigabytes_speed_and_estimated_total(self):
         tail = r"""
-        return module.exports.managedMineruTransferSummary({
+        return MEFinderManagedMineruView.transferSummary({
           downloaded_bytes:1073741824,
           total_bytes:2147483648,
           total_is_estimate:true,
@@ -1856,7 +1858,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_marks_paused_payload_as_network_or_processing(self):
         tail = r"""
-        return module.exports.managedMineruTransferSummary({
+        return MEFinderManagedMineruView.transferSummary({
           downloaded_bytes:686817280,
           total_bytes:2328028720,
           total_is_estimate:true,
@@ -1871,7 +1873,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_proxy_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return module.exports.managedMineruErrorText(
+        return MEFinderManagedMineruView.errorText(
           'MinerU 安装子进程退出 2：Failed to fetch: `https://pypi.org/simple/mineru/` Caused by: tunnel error: unsuccessful'
         );
         """
@@ -1882,7 +1884,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_huggingface_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return module.exports.managedMineruErrorText(
+        return MEFinderManagedMineruView.errorText(
           'huggingface_hub/file_download.py xet_get OSError: I/O error: error decoding response body'
         );
         """
