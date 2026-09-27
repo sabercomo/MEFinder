@@ -1,5 +1,23 @@
 /* Alignment model and compute runtime settings. */
 (function (global) {  // module: 64-settings-model.js
+  // 模型行与运行时卡片各一份请求代次：轮询与用户操作谁最后发起就采信谁（14-task-state.js）。
+  var modelRequests = global.MEFinderTaskState.createLatest();
+  var runtimeRequests = global.MEFinderTaskState.createLatest();
+
+  function stopAlignmentModelPoll() {
+    if (settingsStore.alignmentModelPollTimer) {
+      clearTimeout(settingsStore.alignmentModelPollTimer);
+      settingsStore.alignmentModelPollTimer = null;
+    }
+  }
+
+  function stopAlignmentRuntimePoll() {
+    if (settingsStore.alignmentRuntimePollTimer) {
+      clearTimeout(settingsStore.alignmentRuntimePollTimer);
+      settingsStore.alignmentRuntimePollTimer = null;
+    }
+  }
+
   function renderAlignmentEmbeddingModel() {
     var modelId = settingsStore.currentAlignmentEmbeddingModel;
     document.querySelectorAll('.embedding-model-option').forEach(function(option) {
@@ -173,26 +191,22 @@
         status.textContent = '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
       }
     }
-    if (settingsStore.alignmentModelPollTimer) {
-      clearTimeout(settingsStore.alignmentModelPollTimer);
-      settingsStore.alignmentModelPollTimer = null;
-    }
+    stopAlignmentModelPoll();
     if (downloading) {
       settingsStore.alignmentModelPollTimer = setTimeout(loadAlignmentModelComponent, 1000);
     }
   }
 
   async function loadAlignmentModelComponent() {
-    var revision = (settingsStore.alignmentModelLoadRevision || 0) + 1;
-    settingsStore.alignmentModelLoadRevision = revision;
+    var token = modelRequests.begin();
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/models');
       var data = await resp.json();
-      if (revision !== settingsStore.alignmentModelLoadRevision) return;
+      if (!modelRequests.isCurrent(token)) return;
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       renderAlignmentModelComponent(data);
     } catch (e) {
-      if (revision !== settingsStore.alignmentModelLoadRevision) return;
+      if (!modelRequests.isCurrent(token)) return;
       var status = document.getElementById('alignment-model-status');
       if (status) {
         status.className = 'settings-status warning';
@@ -202,6 +216,9 @@
   }
 
   async function downloadAlignmentModel(modelId, button) {
+    // 操作一开始就作废在途轮询：它带回的是操作前的快照。
+    var token = modelRequests.begin();
+    stopAlignmentModelPoll();
     if (button) {
       button.disabled = true;
       button.textContent = '正在启动…';
@@ -213,9 +230,11 @@
         body: JSON.stringify({model_id: modelId, action: 'download'})
       });
       var data = await resp.json();
+      if (!modelRequests.isCurrent(token)) return;
       if (!resp.ok || data.error) throw new Error(data.error || '下载启动失败');
       renderAlignmentModelComponent(data);
     } catch (e) {
+      if (!modelRequests.isCurrent(token)) return;
       showToast('译本对齐模型下载失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
@@ -234,6 +253,8 @@
       confirmText: '删除',
       tone: 'danger'
     })) return;
+    var token = modelRequests.begin();
+    stopAlignmentModelPoll();
     if (button) { button.disabled = true; button.textContent = '删除中…'; }
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/models', {
@@ -242,12 +263,14 @@
         body: JSON.stringify({model_id: modelId, action: 'delete'})
       });
       var data = await resp.json();
+      if (!modelRequests.isCurrent(token)) return;
       if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
       renderAlignmentModelComponent(data);
       // 后端回报实际释放的字节数，不用目录里的估算值冒充
       showToast('已删除「' + name + '」的模型文件' + (data.freed_bytes
         ? '，释放 ' + formatFileSize(data.freed_bytes) : ''));
     } catch (e) {
+      if (!modelRequests.isCurrent(token)) return;
       showToast('删除模型文件失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
@@ -289,10 +312,7 @@
       }
     }
     if (!show) {
-      if (settingsStore.alignmentRuntimePollTimer) {
-        clearTimeout(settingsStore.alignmentRuntimePollTimer);
-        settingsStore.alignmentRuntimePollTimer = null;
-      }
+      stopAlignmentRuntimePoll();
       return;
     }
     var stateEl = document.getElementById('alignment-runtime-state');
@@ -383,28 +403,24 @@
       actionBtn.onclick = function() { manageAlignmentRuntime('install', actionBtn); };
     }
 
-    if (settingsStore.alignmentRuntimePollTimer) {
-      clearTimeout(settingsStore.alignmentRuntimePollTimer);
-      settingsStore.alignmentRuntimePollTimer = null;
-    }
+    stopAlignmentRuntimePoll();
     if (busy) {
       settingsStore.alignmentRuntimePollTimer = setTimeout(loadAlignmentRuntime, 1000);
     }
   }
 
   async function loadAlignmentRuntime() {
-    var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
-    settingsStore.alignmentRuntimeLoadRevision = revision;
+    var token = runtimeRequests.begin();
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/runtime', {cache: 'no-store'});
       var data = await resp.json();
-      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
+      if (!runtimeRequests.isCurrent(token)) return;
       // 成功响应就是 summary，其顶层 error 是「上次操作失败」的业务字段（渲染时呈现），
       // 不是请求失败；只有 HTTP 非 2xx（后端 400/500）才算读取失败。
       if (!resp.ok) throw new Error(data.error || '读取失败');
       renderAlignmentRuntimeComponent(data);
     } catch (e) {
-      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
+      if (!runtimeRequests.isCurrent(token)) return;
       var card = document.getElementById('alignment-runtime-component');
       if (card) {
         card.hidden = false;
@@ -421,18 +437,13 @@
         retry.textContent = '重新读取';
         retry.onclick = loadAlignmentRuntime;
       }
-      if (settingsStore.alignmentRuntimePollTimer) {
-        clearTimeout(settingsStore.alignmentRuntimePollTimer);
-        settingsStore.alignmentRuntimePollTimer = null;
-      }
+      stopAlignmentRuntimePoll();
     }
   }
 
   async function manageAlignmentRuntime(action, button) {
-    var revision = (settingsStore.alignmentRuntimeLoadRevision || 0) + 1;
-    settingsStore.alignmentRuntimeLoadRevision = revision;
-    clearTimeout(settingsStore.alignmentRuntimePollTimer);
-    settingsStore.alignmentRuntimePollTimer = null;
+    var token = runtimeRequests.begin();
+    stopAlignmentRuntimePoll();
     if (button) { button.disabled = true; }
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/runtime', {
@@ -441,13 +452,13 @@
         body: JSON.stringify({action: action})
       });
       var data = await resp.json();
-      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
+      if (!runtimeRequests.isCurrent(token)) return;
       // 成功响应是 {ok, ...summary}；summary 顶层 error 是业务字段（上次操作失败），
       // 由渲染呈现，不当作请求失败。只有 HTTP 非 2xx 才是操作失败。
       if (!resp.ok) throw new Error(data.error || '操作失败');
       renderAlignmentRuntimeComponent(data);
     } catch (e) {
-      if (revision !== settingsStore.alignmentRuntimeLoadRevision) return;
+      if (!runtimeRequests.isCurrent(token)) return;
       var labels = {install: '安装', update: '升级', uninstall: '卸载', cancel: '取消'};
       showToast('对齐计算组件' + (labels[action] || '操作') + '失败：' + e.message, 'danger');
       loadAlignmentRuntime();

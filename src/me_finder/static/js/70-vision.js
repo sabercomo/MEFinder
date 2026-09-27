@@ -2,6 +2,21 @@
    —— #7 前端全局作用域收敛（模式同 reader.js / 05-theme-engine.js）。
    IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 70-vision.js
+  // 本地 OCR 与托管 MinerU 各一份请求代次：轮询与安装/卸载等操作谁最后发起就采信谁，
+  // 晚到的旧轮询不得覆盖操作后的状态、也不得停掉轮询（14-task-state.js）。
+  var localOCRRequests = global.MEFinderTaskState.createLatest();
+  var managedMineruRequests = global.MEFinderTaskState.createLatest();
+
+  function stopLocalOCRPoll() {
+    if (parserStore.localOCRPollTimer) clearTimeout(parserStore.localOCRPollTimer);
+    parserStore.localOCRPollTimer = null;
+  }
+
+  function stopManagedMineruPoll() {
+    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
+    parserStore.managedMineruPollTimer = null;
+  }
+
   /* ═══ MinerU API settings ═══ */
   function visionNode(tag, className, text) {
     var node = document.createElement(tag);
@@ -133,10 +148,7 @@
 
   function renderLocalOCRUnknown(reason) {
     parserStore.localOCRConfig = null;
-    if (parserStore.localOCRPollTimer) {
-      clearTimeout(parserStore.localOCRPollTimer);
-      parserStore.localOCRPollTimer = null;
-    }
+    stopLocalOCRPoll();
     var status = document.getElementById('local-ocr-status');
     if (status) { status.className = 'settings-status warning'; status.textContent = '状态未知'; }
     var reload = document.getElementById('local-ocr-reload');
@@ -185,12 +197,15 @@
   async function loadLocalOCRConfig() {
     var status = document.getElementById('local-ocr-status');
     if (status && !parserStore.localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+    var token = localOCRRequests.begin();
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr');
       var data = await response.json();
+      if (!localOCRRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
     } catch (error) {
+      if (!localOCRRequests.isCurrent(token)) return;
       // DESIGN.md §2/§6：读取失败意味着状态未知，不是未安装；此时不得据错误状态
       // 触发安装或启用，只给「重新读取」。
       renderLocalOCRUnknown(error.message);
@@ -243,6 +258,8 @@
       });
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+      // 保存成功才作废在途轮询（它会把表单改回保存前的值）；失败时轮询照常继续。
+      localOCRRequests.invalidate();
       renderLocalOCRConfig(data);
       if (hint) hint.textContent = data.available ? '已保存；扫描类 PDF 将优先使用本地 OCR' : '已保存；当前不会改变导入路由';
     } catch (error) {
@@ -258,6 +275,9 @@
       '将删除该组件的模型、独立 Python 环境和自动填入的路径',
       {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
     )) return;
+    // 操作一开始就作废在途轮询：它带回的是操作前的快照。
+    localOCRRequests.invalidate();
+    stopLocalOCRPoll();
     if (button) button.disabled = true;
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr/component', {
@@ -270,6 +290,7 @@
       await loadLocalOCRConfig();
     } catch (error) {
       showToast('本地 OCR 组件操作失败：' + error.message, 'danger');
+      loadLocalOCRConfig();
     } finally {
       if (button) button.disabled = false;
     }
@@ -303,6 +324,8 @@
     if (!status) return;
     status.className = 'settings-status';
     status.textContent = '读取中…';
+    // 这份配置也带托管运行时快照，与托管轮询、操作共用同一份代次。
+    var token = managedMineruRequests.begin();
     try {
       var resp = await MEFinderApi.fetch('/api/mineru-accounts');
       var data = await resp.json();
@@ -319,7 +342,7 @@
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
       var serviceAddress = document.getElementById('mineru-service-address');
       if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
-      renderMineruLocalSettings(data.local_deployment || {});
+      renderMineruLocalSettings(data.local_deployment || {}, managedMineruRequests.isCurrent(token));
       renderMineruAccountList();
       var addButton = document.getElementById('mineru-add-account');
       if (addButton) addButton.hidden = !parserStore.mineruAccounts.length;
@@ -337,10 +360,12 @@
       status.className = 'settings-status warning';
       status.textContent = '读取失败';
       showToast('读取 MinerU 配置失败：' + e.message);
+      // 本次读取已作废了在途的托管轮询；运行时仍在忙时要把轮询接上，否则卡片停在旧进度。
+      if (managedMineruRequests.isCurrent(token) && parserStore.managedMineruWasBusy) loadManagedMineruStatus();
     }
   }
 
-  function renderMineruLocalSettings(config) {
+  function renderMineruLocalSettings(config, runtimeIsCurrent) {
     parserStore.mineruLocalConfig = config;
     var endpoint = document.getElementById('mineru-local-endpoint');
     var backend = document.getElementById('mineru-local-backend');
@@ -348,7 +373,8 @@
     if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
     if (backend) backend.value = config.backend || 'pipeline';
     if (enabled) enabled.checked = !!config.enabled;
-    renderManagedMineru(config.managed_runtime || {});
+    // 旧快照只更新表单，不改托管运行时卡片；更新的请求会渲染它。
+    if (runtimeIsCurrent !== false) renderManagedMineru(config.managed_runtime || {});
     syncMineruLocalImportOption(!!config.enabled);
     var label = managedMineruSummaryLabel(config, config.managed_runtime || {});
     updateMineruLocalStatus(!!config.enabled, label);
@@ -489,8 +515,8 @@
         managedMineruSummaryLabel(parserStore.mineruLocalConfig, runtime)
       );
     }
-    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
-    parserStore.managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
+    stopManagedMineruPoll();
+    if (active) parserStore.managedMineruPollTimer = setTimeout(loadManagedMineruStatus, 900);
     if (parserStore.managedMineruWasBusy && !active) loadMineruConfig();
     parserStore.managedMineruWasBusy = active;
   }
@@ -508,6 +534,8 @@
     var hint = document.getElementById('managed-mineru-hint');
     if (button) { button.disabled = true; button.textContent = '检查中…'; }
     if (hint) hint.textContent = '正在查询可用版本…';
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method: 'POST',
@@ -515,21 +543,26 @@
         body: JSON.stringify({action: 'check-updates'})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '查询失败');
       renderManagedMineru(data.managed_runtime || data);
     } catch (error) {
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (hint) hint.textContent = '查询版本失败：' + error.message;
       if (button) { button.disabled = false; button.textContent = '检查新版本'; }
     }
   }
 
   async function loadManagedMineruStatus() {
+    var token = managedMineruRequests.begin();
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component');
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderManagedMineru(data);
     } catch (error) {
+      if (!managedMineruRequests.isCurrent(token)) return;
       var hint = document.getElementById('managed-mineru-hint');
       if (hint) hint.textContent = '读取托管运行时失败：' + error.message;
     }
@@ -544,6 +577,8 @@
       '将删除该配置的 MinerU 运行时、依赖和本地模型',
       {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
     )) return;
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
     if (button) button.disabled = true;
     try {
       var response = await MEFinderApi.fetch('/api/mineru-local/component', {
@@ -552,10 +587,13 @@
         body:JSON.stringify({profile:profile, action:action})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '操作失败');
       renderManagedMineru(data.managed_runtime || {});
     } catch (error) {
+      if (!managedMineruRequests.isCurrent(token)) return;
       showToast('本地 MinerU 组件操作失败：' + error.message, 'danger');
+      loadManagedMineruStatus();
     } finally {
       if (button) button.disabled = false;
     }

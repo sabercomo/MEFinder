@@ -1468,9 +1468,11 @@ def _vision_eval(tail):
     runtime = js_dir / "70-vision.js"
     providers = js_dir / "71-vision-providers.js"
     api = js_dir / "07-api.js"  # 两个模块经统一请求出口发请求
-    expr = "(function(){%s\n%s\n%s\n%s\n%s})()" % (
+    task_state = js_dir / "14-task-state.js"  # 70-vision 的轮询与操作共用请求代次
+    expr = "(function(){%s\n%s\n%s\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
         api.read_text(encoding="utf-8"),
+        task_state.read_text(encoding="utf-8"),
         runtime.read_text(encoding="utf-8"),
         providers.read_text(encoding="utf-8"),
         tail,

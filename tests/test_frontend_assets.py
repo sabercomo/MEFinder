@@ -665,10 +665,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
     # 0.5.7 D4 审阅：05-dom 缩进与 destroyDom 命名，移除四个无人使用的内部注册。
     # 0.5.7 Zotero：分类默认折叠，PDF 解析方式与导入页即时同步。
+    # 任务状态请求代次：新增 14-task-state.js，对齐模型/运行时、本地 OCR、
+    #   托管 MinerU 的轮询与操作只采信最后发起的请求。
     BASELINE_SHA256 = (
-        "90576948aeb46085a5d9dfcfb067a57de5641b474671155f1c6b7b6f6f12ac83"
+        "3a99efb6356b891f98d7068e6dc7802afe9d56d72c2ec67126657ba6c07a799e"
     )
-    BASELINE_BYTES = 1324563
+    BASELINE_BYTES = 1327952
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
