@@ -14,6 +14,7 @@ from src.me_finder.windows_desktop import (
     WindowsPDFViewer,
     WindowsWindowController,
     apply_windows_titlebar,
+    begin_windows_resize,
     configure_windows_chromeless,
     frameless_resize_hit,
     pdf_file_url,
@@ -382,6 +383,58 @@ class WindowsWindowControllerTests(unittest.TestCase):
         window.events.closed.callbacks[0]()
         self.assertFalse(controller.is_maximized())
         self.assertIsNone(controller._bound_window())
+
+
+class WindowsEdgeResizeTests(unittest.TestCase):
+    """WebView2 covers the frameless window, so HTML handles start the resize."""
+
+    def test_html_edges_map_to_native_resize_hit_codes(self) -> None:
+        window = _FakeWindow()
+        poster = mock.Mock(return_value=True)
+        expected = {
+            "left": windows_desktop._HTLEFT,
+            "right": windows_desktop._HTRIGHT,
+            "bottom": windows_desktop._HTBOTTOM,
+            "bottom-left": windows_desktop._HTBOTTOMLEFT,
+            "bottom-right": windows_desktop._HTBOTTOMRIGHT,
+        }
+        with mock.patch.object(windows_desktop.sys, "platform", "win32"):
+            for edge, hit in expected.items():
+                self.assertTrue(begin_windows_resize(window, edge, resize_poster=poster))
+                poster.assert_called_with(windows_desktop._window_handle(window), hit)
+
+    def test_unknown_edge_or_non_windows_does_not_resize(self) -> None:
+        window = _FakeWindow()
+        poster = mock.Mock(return_value=True)
+        with mock.patch.object(windows_desktop.sys, "platform", "win32"):
+            self.assertFalse(begin_windows_resize(window, "top", resize_poster=poster))
+        with mock.patch.object(windows_desktop.sys, "platform", "darwin"):
+            self.assertFalse(begin_windows_resize(window, "left", resize_poster=poster))
+        poster.assert_not_called()
+
+    def test_controller_forwards_resize_only_while_restored(self) -> None:
+        window = _FakeWindow()
+        starter = mock.Mock(return_value=True)
+        controller = WindowsWindowController(
+            maximize_bounds_preparer=mock.Mock(return_value=True),
+            resize_starter=starter,
+        )
+        self.assertFalse(controller.start_resize("left"))
+        controller._bind(window)
+
+        self.assertTrue(controller.start_resize("bottom-right"))
+        starter.assert_called_once_with(window, "bottom-right")
+
+        window.events.maximized.callbacks[0]()
+        self.assertFalse(controller.start_resize("left"))
+        starter.assert_called_once()
+
+    def test_controller_swallows_native_resize_failures(self) -> None:
+        controller = WindowsWindowController(
+            resize_starter=mock.Mock(side_effect=RuntimeError("no handle"))
+        )
+        controller._bind(_FakeWindow())
+        self.assertFalse(controller.start_resize("left"))
 
 
 class WindowsPDFViewerTests(unittest.TestCase):

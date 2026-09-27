@@ -1949,9 +1949,11 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   #page-settings .page-title { font-size: 28px; }
   #page-settings .page-subtitle { font-size: 16px; }
 
-  .settings-nav { width: 252px; padding: 22px 14px; gap: 3px; }
-  .settings-nav-group { padding: 5px 13px 4px; margin-top: 14px; font-size: 13px; }
-  .settings-nav-item { gap: 12px; padding: 11px 13px; font-size: 16px; }
+  /* 导航项纵向保持紧凑：Windows 下 14 项 + 5 组在 1080p/125% 这类最大化窗口里
+     须一屏放下，不出滚动条；只有足够高的窗口才放开行距（见下方 min-height 档）。 */
+  .settings-nav { width: 252px; padding: 18px 14px; gap: 2px; }
+  .settings-nav-group { padding: 4px 13px 3px; margin-top: 10px; font-size: 13px; }
+  .settings-nav-item { gap: 12px; padding: 7px 13px; font-size: 16px; }
   .settings-nav-icon { width: 20px; height: 20px; }
 
   .settings-content { padding: 36px 48px 56px; }
@@ -2328,4 +2330,11 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 @media (prefers-reduced-motion: reduce) {
   .zotero-progress > span { animation: none; width: 100%; opacity: .5; }
   .zotero-fold svg, .zotero-box { transition: none; }
+}
+
+/* 足够高的大窗口才放开设置导航行距。 */
+@media (min-width: 1500px) and (min-height: 1100px) {
+  .settings-nav { padding: 22px 14px; gap: 3px; }
+  .settings-nav-group { padding: 5px 13px 4px; margin-top: 14px; }
+  .settings-nav-item { padding: 11px 13px; }
 }

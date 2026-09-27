@@ -684,9 +684,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   两个格式化函数移入 06-pure.js；.managed-mineru-profile[hidden] 真正收起 VLM 行。
     # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
     BASELINE_SHA256 = (
-        "4c0ada0b0b6279a2084caa0a71ab2e3ce721369570a9101a14c8d2a7e0a313fc"
+        "32ff492505dcdeaac43d4bf76066ecd6e023bbcc8022cc0e2cd49f1596765c64"
     )
-    BASELINE_BYTES = 1505566
+    BASELINE_BYTES = 1508370
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

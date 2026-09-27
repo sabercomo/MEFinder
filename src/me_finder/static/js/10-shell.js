@@ -43,8 +43,28 @@
     return data.path;
   }
 
+  /* WebView2 盖满无边框窗口，原生边缘命中测试到不了窗体；
+     用透明热区接住按下，再交给原生系统缩放（最大化时 CSS 隐藏）。 */
+  function installWindowsResizeEdges() {
+    if (document.querySelector('.windows-resize-edge')) return;
+    ['left', 'right', 'bottom', 'bottom-left', 'bottom-right'].forEach(function(edge) {
+      var handle = document.createElement('div');
+      handle.className = 'windows-resize-edge';
+      handle.dataset.edge = edge;
+      handle.setAttribute('aria-hidden', 'true');
+      handle.addEventListener('mousedown', function(event) {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        var api = window.pywebview && window.pywebview.api;
+        if (api && typeof api.start_resize === 'function') api.start_resize(edge);
+      });
+      document.body.appendChild(handle);
+    });
+  }
+
   window.addEventListener('pywebviewready', function() {
     if (desktopShell === 'win32') {
+      installWindowsResizeEdges();
       callWindowsWindow('is_maximized').then(setWindowsMaximized);
     }
   });
