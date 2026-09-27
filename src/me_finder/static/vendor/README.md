@@ -1,0 +1,12 @@
+# static/vendor
+
+随安装包分发的第三方前端文件。用户运行时不联网、不需要 Node。
+
+| 文件 | 版本 | 来源 | 许可 |
+|---|---|---|---|
+| `vue.global.prod.js` | Vue 3.5.43 | npm `vue@3.5.43` 包内 `dist/vue.global.prod.js`（`npm pack` 取得，tarball shasum `bab91368e7b9aad9b89dd92e866b120081deb094`） | MIT，见 `vue.LICENSE.txt` |
+
+- 文件 SHA-256 钉在 `tests/test_frontend_assets.py`（`VendorAssetTests`）；升级 Vue 时同步更新哈希与本表。
+- `.gitattributes` 对本目录关闭换行符转换，保证检出后字节不变。
+- 装配：`web_assets.py` 把它内联进主窗口独立的 `<script>` 块，位于应用脚本之前；阅读器独立窗口不加载。
+- 当前用途：设置页「译本对齐模型」行（`static/js/64-settings-model-view.js`，Vue 试点）。

@@ -1,6 +1,8 @@
 /* Alignment model and compute runtime settings. */
 (function (global) {  // module: 64-settings-model.js
   // 模型行与运行时卡片各一份请求代次：轮询与用户操作谁最后发起就采信谁（14-task-state.js）。
+  // 模型行的界面由 64-settings-model-view.js（Vue 试点）渲染；本文件只经它的写入口改状态。
+  var modelView = global.MEFinderAlignmentModelView;
   var modelRequests = global.MEFinderTaskState.createLatest();
   var runtimeRequests = global.MEFinderTaskState.createLatest();
 
@@ -19,16 +21,8 @@
   }
 
   function renderAlignmentEmbeddingModel() {
-    var modelId = settingsStore.currentAlignmentEmbeddingModel;
-    document.querySelectorAll('.embedding-model-option').forEach(function(option) {
-      var selected = option.dataset.embeddingModelChoice === modelId;
-      option.classList.toggle('selected', selected);
-      var input = option.querySelector('input[name="alignment-embedding-model"]');
-      if (input) {
-        input.checked = selected;
-        input.disabled = settingsStore.alignmentEmbeddingModelSaving;
-      }
-    });
+    modelView.setSelection(settingsStore.currentAlignmentEmbeddingModel,
+      settingsStore.alignmentEmbeddingModelSaving);
   }
 
   async function setAlignmentEmbeddingModel(modelId) {
@@ -98,99 +92,10 @@
     settingsStore.alignmentModelInstalledSignature = installedSignature;
     settingsStore.alignmentModelComponent = component;
     if (component.compute && !settingsStore.alignmentRuntime) renderAlignmentComputeStatus(component.compute);
-    var downloading = false;
-    component.models.forEach(function(model) {
-      var button = document.getElementById('embedding-model-download-' + model.id);
-      var state = document.getElementById('embedding-model-state-' + model.id);
-      var hint = document.getElementById('embedding-model-hint-' + model.id);
-      var progress = document.getElementById('embedding-model-progress-' + model.id);
-      if (!button || !state || !hint || !progress) return;
-      var progressFill = progress.querySelector('span');
-      button.title = model.error || '';
-      if (model.state === 'downloading') {
-        var transfer = alignmentModelDownloadProgress(model);
-        downloading = true;
-        state.className = 'settings-status';
-        state.textContent = transfer ? '下载中 ' + transfer.percent + '%' : '下载中';
-        hint.textContent = transfer ? transfer.text : (model.message || '正在下载模型…');
-        progress.hidden = false;
-        progress.classList.toggle('indeterminate', !transfer);
-        if (progressFill) progressFill.style.width = transfer ? (transfer.ratio * 100) + '%' : '0%';
-        progress.setAttribute('aria-valuemin', '0');
-        progress.setAttribute('aria-valuemax', '100');
-        if (transfer) {
-          progress.setAttribute('aria-valuenow', String(transfer.percent));
-          progress.setAttribute('aria-valuetext', transfer.text);
-        } else {
-          progress.removeAttribute('aria-valuenow');
-          progress.removeAttribute('aria-valuetext');
-        }
-        button.hidden = false;
-        button.disabled = true;
-        button.textContent = '正在下载…';
-      } else if (model.state === 'verifying') {
-        // 字节已齐、安装回执未落：校验/落盘阶段。此时若仍显示"正在下载 99%"，
-        // 用户无法区分"快好了"与"卡死"（2026-09-13 E5 卡 99% 反馈）。
-        downloading = true;
-        state.className = 'settings-status';
-        state.textContent = '校验中';
-        hint.textContent = '模型文件已就绪，正在校验并写入安装记录…';
-        progress.hidden = false;
-        progress.classList.remove('indeterminate');
-        if (progressFill) progressFill.style.width = '99%';
-        progress.setAttribute('aria-valuemin', '0');
-        progress.setAttribute('aria-valuemax', '100');
-        progress.setAttribute('aria-valuenow', '99');
-        progress.setAttribute('aria-valuetext', '校验中');
-        button.hidden = false;
-        button.disabled = true;
-        button.textContent = '校验中…';
-      } else if (model.installed) {
-        state.className = 'settings-status ready';
-        state.textContent = '已下载';
-        hint.textContent = '模型保存在 MEFinder 组件目录，可离线使用';
-        progress.hidden = true;
-        progress.classList.remove('indeterminate');
-        if (progressFill) progressFill.style.width = '100%';
-        button.hidden = false;
-        button.disabled = false;
-        button.textContent = '删除模型';
-        button.classList.add('danger');
-        button.onclick = function() { deleteAlignmentModel(model.id, button); };
-      } else {
-        state.className = 'settings-status' + (model.state === 'failed' ? ' warning' : '');
-        state.textContent = model.state === 'failed' ? '下载失败' : '未下载';
-        hint.textContent = model.error ? '上次下载失败：' + model.error : '首次使用前需下载，文件只保存在本机';
-        progress.hidden = true;
-        progress.classList.remove('indeterminate');
-        if (progressFill) progressFill.style.width = '0%';
-        button.hidden = false;
-        button.disabled = false;
-        button.textContent = model.state === 'failed' ? '重试下载' : '下载安装';
-        button.classList.remove('danger');
-        button.onclick = function() { downloadAlignmentModel(model.id, button); };
-      }
+    modelView.setComponent(component);
+    var downloading = component.models.some(function(model) {
+      return model.state === 'downloading' || model.state === 'verifying';
     });
-    var selected = component.models.find(function(model) {
-      return model.id === settingsStore.currentAlignmentEmbeddingModel;
-    });
-    var status = document.getElementById('alignment-model-status');
-    if (status && selected) {
-      // 当前用哪个模型由选中的单选行表达，标题右侧不再重复模型名
-      // （DESIGN.md §5：避免徽章、选中底色、单选圆点多重重复强调）。
-      var selectedTransfer = alignmentModelDownloadProgress(selected);
-      var installedCount = component.models.filter(function(model) { return model.installed; }).length;
-      status.className = 'settings-status' + (selected.installed ? ' ready' : (selected.state === 'failed' ? ' warning' : ''));
-      if (selected.state === 'downloading') {
-        status.textContent = '下载中' + (selectedTransfer ? ' ' + selectedTransfer.percent + '%' : '');
-      } else if (selected.state === 'verifying') {
-        status.textContent = '校验中';
-      } else if (selected.installed) {
-        status.textContent = '当前模型已下载';
-      } else {
-        status.textContent = '当前模型未下载 · 已下载 ' + installedCount + ' / ' + component.models.length;
-      }
-    }
     stopAlignmentModelPoll();
     if (downloading) {
       settingsStore.alignmentModelPollTimer = setTimeout(loadAlignmentModelComponent, 1000);
@@ -207,22 +112,15 @@
       renderAlignmentModelComponent(data);
     } catch (e) {
       if (!modelRequests.isCurrent(token)) return;
-      var status = document.getElementById('alignment-model-status');
-      if (status) {
-        status.className = 'settings-status warning';
-        status.textContent = '读取失败';
-      }
+      modelView.setLoadError();
     }
   }
 
-  async function downloadAlignmentModel(modelId, button) {
+  async function downloadAlignmentModel(modelId) {
     // 操作一开始就作废在途轮询：它带回的是操作前的快照。
     var token = modelRequests.begin();
     stopAlignmentModelPoll();
-    if (button) {
-      button.disabled = true;
-      button.textContent = '正在启动…';
-    }
+    modelView.setPending(modelId, 'starting');
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/models', {
         method: 'POST',
@@ -235,12 +133,13 @@
       renderAlignmentModelComponent(data);
     } catch (e) {
       if (!modelRequests.isCurrent(token)) return;
+      modelView.setPending(modelId, '');
       showToast('译本对齐模型下载失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }
   }
 
-  async function deleteAlignmentModel(modelId, button) {
+  async function deleteAlignmentModel(modelId) {
     var component = settingsStore.alignmentModelComponent || {};
     var model = (component.models || []).find(function(item) { return item.id === modelId; });
     var name = (model && model.display_name) || '该模型';
@@ -255,7 +154,7 @@
     })) return;
     var token = modelRequests.begin();
     stopAlignmentModelPoll();
-    if (button) { button.disabled = true; button.textContent = '删除中…'; }
+    modelView.setPending(modelId, 'deleting');
     try {
       var resp = await MEFinderApi.fetch('/api/text-alignment/models', {
         method: 'POST',
@@ -271,6 +170,7 @@
         ? '，释放 ' + formatFileSize(data.freed_bytes) : ''));
     } catch (e) {
       if (!modelRequests.isCurrent(token)) return;
+      modelView.setPending(modelId, '');
       showToast('删除模型文件失败：' + e.message, 'danger');
       loadAlignmentModelComponent();
     }

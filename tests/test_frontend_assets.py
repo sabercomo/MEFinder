@@ -24,6 +24,7 @@ PLACEHOLDERS = (
     "/*__READER_CSS__*/",
     "//__APP_JS__",
     "//__READER_JS__",
+    "//__VUE_JS__",
     "__APP_VERSION__",
 )
 
@@ -60,6 +61,9 @@ def _split_css_assets():
 CSS_ASSETS = _split_css_assets() + ("static/reader.css",)
 
 JS_ASSETS = _split_js_assets() + _reader_js_assets()
+
+# 第三方随包文件：压缩代码不走自有 JS 的逐行守卫，单独钉版本与哈希。
+VENDOR_JS_ASSETS = ("static/vendor/vue.global.prod.js",)
 
 
 def _read(relative):
@@ -218,7 +222,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """产物长度 = 模板 + 各资源 - 占位标记，容差为版本号替换带来的差值。"""
 
         template = _read("templates/index.html")
-        assets = sum(len(_read(rel)) for rel in _existing(CSS_ASSETS + JS_ASSETS))
+        assets = sum(
+            len(_read(rel)) for rel in _existing(CSS_ASSETS + JS_ASSETS + VENDOR_JS_ASSETS)
+        )
         consumed = sum(
             len(marker) for marker in PLACEHOLDERS if marker != "__APP_VERSION__"
         )
@@ -236,7 +242,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """资源内联进 <style>/<script>，不引入额外的外部请求。"""
 
         self.assertEqual(HTML.count("<style>"), 2)
-        self.assertEqual(HTML.count("<script>"), 3)
+        # 首屏侧栏折叠探测 / Vue（试点）/ 应用脚本 / 阅读器脚本。
+        self.assertEqual(HTML.count("<script>"), 4)
         self.assertNotIn('src="/static/app.js', HTML)
         self.assertNotIn('href="/static/app.css', HTML)
         self.assertNotIn("<script src=", HTML)
@@ -441,6 +448,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/61-settings-data.js": 3,
             "static/js/63-settings-update.js": 5,
             "static/js/64-settings-model.js": 7,
+            # Vue 试点：模型行视图只暴露 MEFinderAlignmentModelView 一个命名空间。
+            "static/js/64-settings-model-view.js": 1,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
             "static/js/70-vision.js": 23,
             "static/js/71-vision-providers.js": 10,
@@ -667,10 +676,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.7 Zotero：分类默认折叠，PDF 解析方式与导入页即时同步。
     # 任务状态请求代次：新增 14-task-state.js，对齐模型/运行时、本地 OCR、
     #   托管 MinerU 的轮询与操作只采信最后发起的请求。
+    # Vue 3 试点：内联 static/vendor/vue.global.prod.js（3.5.43）为独立 <script>；
+    #   设置页「译本对齐模型」行改由 64-settings-model-view.js 渲染，模板两行静态标记删除。
     BASELINE_SHA256 = (
-        "3a99efb6356b891f98d7068e6dc7802afe9d56d72c2ec67126657ba6c07a799e"
+        "7d6cfcf2113266e9b07b4224a4e16539851796895000a416254d23bdb66088f0"
     )
-    BASELINE_BYTES = 1327952
+    BASELINE_BYTES = 1497818
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
@@ -681,6 +692,33 @@ class FrontendAssetBaselineTests(unittest.TestCase):
             "装配产物与基线不一致。纯搬移时应完全相同；"
             "若确实改了前端内容，请更新本类的基线常量。",
         )
+
+
+class VendorAssetTests(unittest.TestCase):
+    """随包的第三方前端文件：版本与字节钉死，装配位置固定。"""
+
+    VUE_SHA256 = "b72394052eef1eeda1752db3758ce1be6f88016903f22e5241cc732ea307478e"
+
+    def test_vue_bytes_match_pinned_release(self):
+        payload = (_PACKAGE_DIR / VENDOR_JS_ASSETS[0]).read_bytes()
+        self.assertTrue(payload.startswith(b"/**\n* vue v3.5.43\n"))
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            self.VUE_SHA256,
+            "vue.global.prod.js 与钉住的 3.5.43 不一致；升级请同步 static/vendor/README.md",
+        )
+        self.assertTrue((_PACKAGE_DIR / "static/vendor/vue.LICENSE.txt").is_file())
+
+    def test_vue_loads_in_own_block_before_app_js(self):
+        vue_at = HTML.index("* vue v3.5.43")
+        self.assertLess(HTML.rindex("<script>", 0, vue_at), vue_at)
+        self.assertLess(vue_at, HTML.index("// module: 64-settings-model-view.js"))
+        self.assertIn("</script>", HTML[vue_at:HTML.index("(function (global) {  // module: 05-theme-engine.js")])
+
+    def test_reader_window_does_not_load_vue(self):
+        from src.me_finder.web_assets import READER_WINDOW_HTML
+
+        self.assertNotIn("vue v3.5.43", READER_WINDOW_HTML)
 
 
 if __name__ == "__main__":

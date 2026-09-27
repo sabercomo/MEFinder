@@ -10,6 +10,9 @@ from . import __version__
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 
+# 随包分发的 Vue 3 全局构建（试点，见 static/vendor/README.md）；离线可用，不引入 Node 构建。
+VUE_ASSET = "static/vendor/vue.global.prod.js"
+
 
 def _load_asset(relative: str) -> str:
     return (_PACKAGE_DIR / relative).read_text(encoding="utf-8")
@@ -64,6 +67,8 @@ HTML = (
     .replace("//__APP_JS__", _load_app_js(), 1)
     .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("__APP_VERSION__", __version__)
+    # Vue 最后替换：它是第三方压缩代码，放在最后可保证前面的占位替换不会扫进它的正文。
+    .replace("//__VUE_JS__", _load_asset(VUE_ASSET), 1)
 )
 
 

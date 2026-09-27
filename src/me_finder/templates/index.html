@@ -592,42 +592,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 </div>
               </section>
               <div class="settings-subhead"><span class="settings-section-title">对齐模型</span></div>
-              <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型">
-                <section class="embedding-model-option local-ocr-component selected" data-embedding-model-choice="minilm-l12-v2">
-                  <div class="local-ocr-component-head">
-                    <label class="embedding-model-choice">
-                      <input type="radio" name="alignment-embedding-model" value="minilm-l12-v2" checked data-action-change="templateChange092">
-                      <span class="embedding-model-check" aria-hidden="true"></span>
-                      <span class="embedding-model-copy"><strong>MiniLM 多语言模型 <em>默认</em></strong><small>384 维 · 约 220 MB · 速度更快</small></span>
-                    </label>
-                    <span id="embedding-model-state-minilm-l12-v2" class="settings-status">读取中…</span>
-                  </div>
-                  <div class="local-ocr-install-row">
-                    <div class="local-ocr-install-copy">
-                      <span id="embedding-model-hint-minilm-l12-v2" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
-                      <div id="embedding-model-progress-minilm-l12-v2" class="local-ocr-progress" role="progressbar" aria-label="MiniLM 模型下载进度" hidden><span></span></div>
-                    </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-minilm-l12-v2" type="button" data-action="templateClick093">下载安装</button></div>
-                  </div>
-                </section>
-                <section class="embedding-model-option local-ocr-component" data-embedding-model-choice="multilingual-e5-large">
-                  <div class="local-ocr-component-head">
-                    <label class="embedding-model-choice">
-                      <input type="radio" name="alignment-embedding-model" value="multilingual-e5-large" data-action-change="templateChange092">
-                      <span class="embedding-model-check" aria-hidden="true"></span>
-                      <span class="embedding-model-copy"><strong>E5 Large 多语言模型</strong><small>1024 维 · 约 2.24 GB · 更准但更慢</small></span>
-                    </label>
-                    <span id="embedding-model-state-multilingual-e5-large" class="settings-status">读取中…</span>
-                  </div>
-                  <div class="local-ocr-install-row">
-                    <div class="local-ocr-install-copy">
-                      <span id="embedding-model-hint-multilingual-e5-large" role="status" aria-live="polite">首次使用前需下载，文件只保存在本机</span>
-                      <div id="embedding-model-progress-multilingual-e5-large" class="local-ocr-progress" role="progressbar" aria-label="E5 Large 模型下载进度" hidden><span></span></div>
-                    </div>
-                    <div class="settings-actions local-ocr-install-actions"><button class="action-btn" id="embedding-model-download-multilingual-e5-large" type="button" data-action="templateClick094">下载安装</button></div>
-                  </div>
-                </section>
-              </div>
+              <!-- 模型行由 64-settings-model-view.js 的 Vue 组件渲染（Vue 试点）。 -->
+              <div class="embedding-model-options local-ocr-component-list" id="embedding-model-options" role="radiogroup" aria-label="译本对齐模型"></div>
             <p class="settings-footnote">切换模型不会覆盖旧结果；需要更新的配对请重新运行对齐</p>
             </div>
           </section>
@@ -1294,6 +1260,8 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
   </div>
 </div>
 
+<script>
+//__VUE_JS__</script>
 <script>
 //__APP_JS__</script>
 <script>

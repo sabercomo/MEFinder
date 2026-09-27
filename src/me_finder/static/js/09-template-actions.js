@@ -91,9 +91,6 @@
   MEFinderActions.registerInline('templateClick089', function(event, target) { toggleSearchSelect(event,'reader-line-select'); });
   MEFinderActions.registerInline('templateChange090', function(event, target) { setReaderLineMode(this.value); });
   MEFinderActions.registerInline('templateChange091', function(event, target) { setScriptFolding(this.checked); });
-  MEFinderActions.registerInline('templateChange092', function(event, target) { setAlignmentEmbeddingModel(this.value); });
-  MEFinderActions.registerInline('templateClick093', function(event, target) { downloadAlignmentModel('minilm-l12-v2', this); });
-  MEFinderActions.registerInline('templateClick094', function(event, target) { downloadAlignmentModel('multilingual-e5-large', this); });
   MEFinderActions.registerInline('templateClick095', function(event, target) { MEFinder.zotero.recheck(); });
   MEFinderActions.registerInline('templateChange096', function(event, target) { MEFinder.zotero.setEnabled(this.checked); });
   MEFinderActions.registerInline('templateClick097', function(event, target) { toggleSearchSelect(event,'zotero-frequency-select'); });

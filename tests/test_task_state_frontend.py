@@ -60,7 +60,9 @@ global.MEFinderApi = {fetch(url, options) {
 function load(name) { eval.call(global, fs.readFileSync(require('path').join(process.argv[1], name), 'utf8')); }
 load('06-pure.js');
 load('14-task-state.js');
+load('64-settings-model-view.js');
 load('64-settings-model.js');
+const view = global.MEFinderAlignmentModelView;
 const flush = () => new Promise(r => setImmediate(r));
 """
 
@@ -91,8 +93,8 @@ class ComponentRequestOrderingTests(unittest.TestCase):
   await flush(); await flush();
   process.stdout.write(JSON.stringify({
     methods: pending.map(p => p.method),
-    state: node('embedding-model-state-minilm-l12-v2').textContent,
-    summary: node('alignment-model-status').textContent,
+    state: view.rowView('minilm-l12-v2').stateText,
+    summary: view.summaryView().text,
     pollsAfterPost, pollsAtEnd: livePolls()
   }));
 })().catch(e => { console.error(e); process.exitCode = 1; });
@@ -117,7 +119,7 @@ class ComponentRequestOrderingTests(unittest.TestCase):
   await removal; await flush();
   staleGet.call.resolve(reply(installed));
   await flush(); await flush();
-  process.stdout.write(JSON.stringify({state: node('embedding-model-state-minilm-l12-v2').textContent}));
+  process.stdout.write(JSON.stringify({state: view.rowView('minilm-l12-v2').stateText}));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """)
         self.assertEqual(observed["state"], "未下载")
