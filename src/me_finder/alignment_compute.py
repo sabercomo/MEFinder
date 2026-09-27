@@ -399,7 +399,11 @@ class SubprocessAlignmentComputeRunner:
             env["PYTHONPATH"] = os.pathsep.join(p for p in (str(root), existing) if p)
         kwargs: dict = {}
         if os.name == "nt":
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            # The installed compute runtime is a console python.exe; without
+            # CREATE_NO_WINDOW the windowed app pops a terminal on every run.
+            kwargs["creationflags"] = getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+            ) | getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         else:
             kwargs["start_new_session"] = True
         try:
