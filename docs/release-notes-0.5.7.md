@@ -22,15 +22,16 @@
 - Windows 上每次（重新）对齐不再弹出终端窗口：已安装的独立对齐计算组件是控制台程序，启动时补上隐藏窗口标志；托管 MinerU 硬件检测调用 `nvidia-smi` 同样不再闪窗。本机开发版 `dist/MEFinder` 已按 55f3354 重建替换（构建门禁 2598 项通过）；`release/` 下的 Windows 安装包与便携包仍早于此修复，需重打。
 - Windows 主窗口恢复拖边改变大小：WebView2 盖满无边框窗口后，原生边缘命中测试收不到鼠标，左/右/下边和两个下角既无缩放光标也拉不动。现由页面边缘的透明热区显示缩放光标，按下后交给系统原生缩放（最大化时关闭）。已用真实 pywebview 窗口模拟拖拽实测左边和下边均能缩放。
 - 最大化后设置目录不再被截断：大窗口档把目录行距放得过大，1080p 级最大化窗口里「软件更新」等末项掉出视口。行距改为紧凑，只在窗口高度 ≥1100px 时放开；2048×1113 与 1920×1032 视口下 14 项均一屏放下、无滚动条。
+- 设置目录与内容区不再常驻灰色滚动条：目录只差十来像素留白时也会出滚动条，现收紧目录上下留白与内容区底部留白，两栏滚动条改为指针停留时才显示（仍可滚动）。已在安装后的 macOS 应用中人工确认。
 
 ## 本机验收包（macOS Apple Silicon）
 
-2026-09-27 以 `refactor/v0.5.7-architecture` 上的 D4 提交 `442a052` 加版本号更新构建；`build_macos.sh` 全量 `unittest` 2584 项通过、28 项环境跳过，逐文件 Node 语法、PyInstaller、ad-hoc 签名、内置 MCP 侧车冒烟、ZIP 解包验签、DMG 挂载/复制验签和 SHA-256 校验通过。ZIP 中应用的 `CFBundleShortVersionString` 为 `0.5.7`。本机还通过 Ruff 检查。
+2026-09-28 在 `b51af9a` 加上设置滚动条修复后重打（覆盖 09-27 同名包）；`build_macos.sh` 全量 `unittest` 2608 项通过、28 项环境跳过，逐文件 Node 语法、PyInstaller、ad-hoc 签名、内置 MCP 侧车冒烟、ZIP 解包验签、DMG 挂载/复制验签和 SHA-256 校验通过。ZIP 中应用的 `CFBundleShortVersionString` 为 `0.5.7`。
 
 | 本地文件 | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `release/MEFinder-v0.5.7-macos-arm64.dmg` | 101,278,953 | `4f6c5dac0ad1c153bde56ac4ee47f0a89714cfb2ff28a4237aed6a9122d01ea9` |
-| `release/MEFinder-v0.5.7-macos-arm64.zip` | 93,439,257 | `7740b0cd0a85b3a5bee20b43b1ee2ca502424b801f08b6982a773cb6e1525d83` |
+| `release/MEFinder-v0.5.7-macos-arm64.dmg` | 101,376,483 | `1ab9ba3d035cd8b9fcafc0fbe67b5f970bc0a31b924553464502b66b1b606fae` |
+| `release/MEFinder-v0.5.7-macos-arm64.zip` | 93,515,811 | `1fa4a4288fea3158732202fb1ed058c5caf5376c5180904a20821784711a1ac8` |
 
 两份产物各附同名 `.sha256.txt`。这是未公证的本机验收包；尚未在安装后的冻结应用中完成阅读器对照链接与复核的完整人工验收，也未构建 macOS Intel 包。
 
