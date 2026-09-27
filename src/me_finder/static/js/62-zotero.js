@@ -176,7 +176,7 @@
       line.setAttribute('role', 'treeitem');
       line.style.setProperty('--zotero-depth', String(depth));
       if (kids.length) {
-        var folded = !!state.folded[row.key];
+        var folded = state.folded[row.key] !== false;
         line.setAttribute('aria-expanded', folded ? 'false' : 'true');
         var fold = el('button', 'zotero-fold' + (folded ? '' : ' is-open'));
         fold.type = 'button';
@@ -203,7 +203,7 @@
       var status = rowStatus(row, aria === 'true');
       line.appendChild(el('span', 'zotero-state ' + status[1], status[0]));
       container.appendChild(line);
-      if (kids.length && !state.folded[row.key]) appendRows(container, row.key, depth + 1);
+      if (kids.length && !folded) appendRows(container, row.key, depth + 1);
     });
   }
 
@@ -346,8 +346,6 @@
       var overview = await getJSON('/api/zotero/overview');
       state.connection = overview.connection;
       state.collections = overview.collections || [];
-      var parse = document.getElementById('zotero-parse-mode');
-      if (parse && overview.pdf_parse_mode) parse.textContent = overview.pdf_parse_mode.label;
     } catch (e) {
       state.connection = { state: 'error', label: '连接失败', message: e.message };
       state.collections = [];
@@ -365,6 +363,8 @@
       state.enabled = !!prefs.zotero_sync_enabled;
       state.selected = prefs.zotero_sync_collections || [];
       state.frequency = prefs.zotero_sync_frequency || 'launch';
+      settingsStore.currentPdfParseMode = global.MEFinder.imports.normalizePdfParseMode(prefs.pdf_parse_mode);
+      global.MEFinder.imports.renderPdfParseMode();
       renderSettings();
       await loadStatus();
       await loadOverview();

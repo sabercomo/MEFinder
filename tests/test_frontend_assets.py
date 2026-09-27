@@ -664,10 +664,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
     # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
     # 0.5.7 D4 审阅：05-dom 缩进与 destroyDom 命名，移除四个无人使用的内部注册。
+    # 0.5.7 Zotero：分类默认折叠，PDF 解析方式与导入页即时同步。
     BASELINE_SHA256 = (
-        "6f22c19b4898107be14e1146d53ae1448858dad6494d8a65fc03ed47d333ae8f"
+        "90576948aeb46085a5d9dfcfb067a57de5641b474671155f1c6b7b6f6f12ac83"
     )
-    BASELINE_BYTES = 1324336
+    BASELINE_BYTES = 1324563
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

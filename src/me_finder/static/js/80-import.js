@@ -598,8 +598,12 @@
   }
 
   function renderPdfParseMode() {
+    var zoteroLabel = document.getElementById('zotero-parse-mode');
     document.querySelectorAll('input[name="pdf-parse-mode"]').forEach(function(input) {
       input.checked = input.value === settingsStore.currentPdfParseMode;
+      if (input.checked && zoteroLabel) {
+        zoteroLabel.textContent = input.parentElement.querySelector('.pdf-parse-card-head strong').textContent;
+      }
     });
   }
 
