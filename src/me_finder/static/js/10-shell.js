@@ -62,6 +62,20 @@
     });
   }
 
+  /* 窗口等页面就绪后才 show()，WinForms 激活时 WebView2 按 Tab 方式把焦点送进页面，
+     落到第一个可聚焦元素（最小化按钮）并画出键盘焦点框。标题栏按钮只在
+     键盘导航时保留焦点，其余来源的焦点直接移走。 */
+  var windowsFocusByKeyboard = false;
+  if (desktopShell === 'win32') {
+    document.addEventListener('keydown', function() { windowsFocusByKeyboard = true; }, true);
+    document.addEventListener('pointerdown', function() { windowsFocusByKeyboard = false; }, true);
+    document.addEventListener('focusin', function(event) {
+      var target = event.target;
+      if (windowsFocusByKeyboard || !target || typeof target.closest !== 'function') return;
+      if (target.closest('.windows-titlebar-controls')) target.blur();
+    });
+  }
+
   window.addEventListener('pywebviewready', function() {
     if (desktopShell === 'win32') {
       installWindowsResizeEdges();

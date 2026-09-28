@@ -433,6 +433,49 @@ assert.strictEqual(handles.length, 8);
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    @unittest.skipUnless(shutil.which("node"), "node is required for frontend behavior tests")
+    def test_titlebar_buttons_drop_focus_unless_reached_by_keyboard(self) -> None:
+        """Showing the window after load lets WebView2 tab focus onto 最小化."""
+        script = r"""
+const assert = require('assert');
+const fs = require('fs');
+const docHandlers = {};
+global.window = global;
+global.desktopShell = 'win32';
+global.addEventListener = () => {};
+global.document = {
+  documentElement: {classList: {contains: () => false, toggle: () => {}}},
+  querySelector: () => null,
+  addEventListener: (name, fn) => { (docHandlers[name] = docHandlers[name] || []).push(fn); },
+};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const fire = (name, event) => docHandlers[name].forEach(fn => fn(event));
+function button(inTitlebar) {
+  return {blurred: false, blur() { this.blurred = true; },
+    closest: sel => (inTitlebar && sel === '.windows-titlebar-controls') ? {} : null};
+}
+const minimize = button(true);
+fire('focusin', {target: minimize});
+assert(minimize.blurred, 'focus arriving on window show must not stay on 最小化');
+const search = button(false);
+fire('focusin', {target: search});
+assert(!search.blurred, 'page controls keep focus');
+fire('keydown', {key: 'Tab'});
+const tabbed = button(true);
+fire('focusin', {target: tabbed});
+assert(!tabbed.blurred, 'keyboard users keep titlebar focus');
+fire('pointerdown', {});
+const clicked = button(true);
+fire('focusin', {target: clicked});
+assert(clicked.blurred);
+"""
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/10-shell.js"
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(source)],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_html_edges_map_to_native_resize_hit_codes(self) -> None:
         window = _FakeWindow()
         poster = mock.Mock(return_value=True)
