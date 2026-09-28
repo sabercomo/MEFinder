@@ -5,7 +5,7 @@
   "release": "0.5.1",
   "server": {
     "name": "mefinder",
-    "instructions": "定位原句用 locate_quote；译本或原文对应用 find_parallel_passages：只把既有对齐当召回中心，必须比较源句、前后文与全部候选，按跨语言语义、专名和引文结构校准；anchor_distance 仅表示位置。唯一证据充分才回答 confirmed；多个合理候选回答 ambiguous 并列出；证据不足回答 unavailable，不得硬选或自行翻译。批量核对用 verify_quotes；大意检索用 search_passages，再以 locate_quote 逐字定位；错引比对用 diff_quote；题录补全先读元数据缺口再读书目页；未知文献先用 list_documents；上下文不足用 read_document_window，按章阅读先用 list_sections；判断页码能否引用及 PDF 页与印刷页偏移用 describe_page_mapping，不要逐页试探。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现。"
+    "instructions": "定位原句用 locate_quote；译本或原文对应用 find_parallel_passages：只把既有对齐当召回中心，必须比较源句、前后文与全部候选，按跨语言语义、专名和引文结构校准；anchor_distance 仅表示位置。唯一证据充分才回答 confirmed；多个合理候选回答 ambiguous 并列出；证据不足回答 unavailable，不得硬选或自行翻译。批量核对用 verify_quotes；大意检索用 search_passages，再以 locate_quote 逐字定位；错引比对用 diff_quote；题录补全先读元数据缺口再读书目页，据原书用 propose_bibliographic_update 提议，经用户同意后才 confirm；未知文献先用 list_documents；上下文不足用 read_document_window，按章阅读先用 list_sections；判断页码能否引用及 PDF 页与印刷页偏移用 describe_page_mapping，不要逐页试探。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现。"
   },
   "terminology": {
     "physical_page": "PDF 文件中的物理位置；索引从 0 开始，不能自动作为正式引用页码。",
@@ -633,7 +633,7 @@
     {
       "name": "read_bibliographic_metadata",
       "title": "读取题录字段与缺口",
-      "description": "返回一篇文献当前已存的题录字段及其取值，并逐字段标注 present（已填）、invalid（存疑，需复核）或 missing（缺失），同时给出文献类型与现有元数据来源。用于在补全题录前看清缺哪些字段；配合 read_bibliographic_pages 从原书自身提取填补。只读现有题录，不改写、不联网、不推断。",
+      "description": "返回一篇文献当前已存的题录字段及其取值，并逐字段标注 present（已填）、invalid（存疑，需复核）或 missing（缺失），同时给出文献类型与现有元数据来源。用于在补全题录前看清缺哪些字段；配合 read_bibliographic_pages 从原书自身提取填补。update_requests 列出最近的书目补全请求及写入结果。只读现有题录，不改写、不联网、不推断。",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -664,6 +664,11 @@
           "invalid_fields": {
             "type": "array",
             "items": {"type": "string"}
+          },
+          "update_requests": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {"$ref": "#/$defs/bibliographic_update_request"}
           }
         },
         "required": [
@@ -674,12 +679,109 @@
           "metadata_status",
           "fields",
           "missing_fields",
-          "invalid_fields"
+          "invalid_fields",
+          "update_requests"
         ],
         "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "propose_bibliographic_update",
+      "title": "提议补全书目信息",
+      "description": "从原书自身（read_bibliographic_pages 读到的版权页、CIP 页、书名页）提取题录后，用本工具提议补全：每项给出 field、value、evidence_text（原书中支撑该值的原文）与 source_page（该页的页码或物理页标签）。只会填空字段：已有值即使不同也不覆盖，标为 conflict 并保留原值。返回逐字段预览（fill / same / conflict）；有可填字段时记录一条待确认请求并返回 request_id 与 confirmation_token，此时尚未写入任何题录。必须把每个 fill 字段的值与依据交给用户复核，用户明确同意后才可调用 confirm_bibliographic_update。不得凭记忆、联网结果或推测提议，找不到原书依据的字段不要提议。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source_file_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "fields": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 14,
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": ["title", "author", "country", "translator", "publisher", "publish_place", "publish_year", "isbn", "journal_name", "volume", "issue", "page_range", "doi", "issn"]
+                },
+                "value": {"type": "string", "minLength": 1, "maxLength": 500},
+                "evidence_text": {"type": "string", "minLength": 1, "maxLength": 2000},
+                "source_page": {"type": ["string", "null"], "maxLength": 40}
+              },
+              "required": ["field", "value", "evidence_text"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["source_file_id", "fields"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "request_id": {"$ref": "#/$defs/nullable_string"},
+          "confirmation_token": {"$ref": "#/$defs/nullable_string"},
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {"type": "string"},
+                "current_value": {"$ref": "#/$defs/nullable_string"},
+                "proposed_value": {"type": "string"},
+                "action": {"type": "string", "enum": ["fill", "same", "conflict"]},
+                "source_page": {"$ref": "#/$defs/nullable_string"}
+              },
+              "required": ["field", "current_value", "proposed_value", "action", "source_page"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["schema_version", "request_id", "confirmation_token", "fields"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "confirm_bibliographic_update",
+      "title": "确认补全书目信息",
+      "description": "在用户明确同意某条书目补全提议后，用 propose_bibliographic_update 返回的 request_id 与 confirmation_token 确认。确认后由 MEFinder 桌面端写入（运行中几秒内，未运行则下次启动时），写入时再次只填空字段、保留已有值；结果见 read_bibliographic_metadata 的 update_requests（applied / failed）。不要在用户未确认时调用本工具。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {"type": "string", "pattern": "^BIBFILL-[0-9a-f]{32}$"},
+          "confirmation_token": {"type": "string", "pattern": "^[A-Za-z0-9_-]{20,64}$"}
+        },
+        "required": ["request_id", "confirmation_token"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "schema_version": {"const": "1"},
+          "request_id": {"type": "string"},
+          "status": {"type": "string", "enum": ["confirmed", "applied", "failed"]},
+          "fields": {"type": "array", "items": {"type": "string"}},
+          "note": {"type": "string"}
+        },
+        "required": ["schema_version", "request_id", "status", "fields", "note"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
         "destructiveHint": false,
         "openWorldHint": false
       }
@@ -1562,6 +1664,39 @@
         }
       },
       "required": ["field", "value", "status"],
+      "additionalProperties": false
+    },
+    "bibliographic_update_request": {
+      "type": "object",
+      "properties": {
+        "request_id": {"type": "string"},
+        "status": {"type": "string", "enum": ["pending", "confirmed", "applied", "failed"]},
+        "fields": {"type": "array", "items": {"type": "string"}},
+        "created_at": {"type": "string"},
+        "result": {
+          "type": ["object", "null"],
+          "properties": {
+            "filled": {"type": "array", "items": {"type": "string"}},
+            "unchanged": {"type": "array", "items": {"type": "string"}},
+            "conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {"type": "string"},
+                  "kept_value": {"$ref": "#/$defs/nullable_string"},
+                  "proposed_value": {"type": "string"}
+                },
+                "required": ["field", "kept_value", "proposed_value"],
+                "additionalProperties": false
+              }
+            },
+            "message": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["request_id", "status", "fields", "created_at", "result"],
       "additionalProperties": false
     },
     "document_section": {

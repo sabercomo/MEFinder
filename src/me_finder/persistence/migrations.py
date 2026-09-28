@@ -11,6 +11,7 @@ from typing import Callable, Sequence
 from .connection import open_writable_index, table_exists
 from .index_schema import DATABASE_SCHEMA_VERSION
 from .schema_installers import (
+    install_bibliographic_update_schema,
     install_document_group_schema,
     install_text_alignment_schema,
     install_translation_workspace_schema,
@@ -59,7 +60,7 @@ def _install_text_segment_paragraph_spans(
 
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 through v8 are pure additive DDL and belong here.
+# file atomically. v3 through v9 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=install_document_group_schema),
     Migration(target_version=4, apply=install_text_alignment_schema),
@@ -67,6 +68,7 @@ INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=6, apply=install_text_alignment_schema),
     Migration(target_version=7, apply=install_translation_workspace_schema),
     Migration(target_version=8, apply=install_zotero_sync_schema),
+    Migration(target_version=9, apply=install_bibliographic_update_schema),
 )
 
 

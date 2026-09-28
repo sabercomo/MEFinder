@@ -207,9 +207,12 @@ class MCPServerProtocolTests(unittest.TestCase):
                             },
                             "read_bibliographic_metadata": {
                                 "bibliographic_field",
+                                "bibliographic_update_request",
                                 "nullable_string",
                                 "reader_source",
                             },
+                            "propose_bibliographic_update": {"nullable_string"},
+                            "confirm_bibliographic_update": set(),
                             "propose_alignment_correction": {"override_segment"},
                             "confirm_alignment_correction": set(),
                             "revoke_alignment_correction": set(),

@@ -400,3 +400,39 @@ def install_zotero_sync_schema(connection: sqlite3.Connection) -> bool:
         )
         changed = True
     return changed
+
+
+def install_bibliographic_update_schema(connection: sqlite3.Connection) -> bool:
+    """Install the v9 queue of agent-proposed bibliographic fills.
+
+    An MCP agent records a ``pending`` request; the user confirms it in chat
+    (``confirmed``). Only the desktop runtime, which owns the import-config
+    lock, writes the fill (``applied`` or ``failed``), so the sidecar never
+    touches ``pdf_imports.json``. No foreign key points at ``source_files``:
+    requests must survive a full index rebuild (see the snapshot helpers).
+    """
+
+    if table_exists(connection, "bibliographic_update_requests"):
+        return False
+    connection.execute(
+        """
+        CREATE TABLE bibliographic_update_requests (
+            request_id TEXT PRIMARY KEY,
+            source_file_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(
+                status IN ('pending', 'confirmed', 'applied', 'failed')
+            ),
+            fields_json TEXT NOT NULL,
+            token_sha256 TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            confirmed_at TEXT,
+            applied_at TEXT,
+            result_json TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX idx_bibliographic_update_requests_status "
+        "ON bibliographic_update_requests(status, source_file_id)"
+    )
+    return True

@@ -178,7 +178,7 @@ claude mcp list
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下会列出十五个工具：
+正常情况下会列出十七个工具：
 
 ```text
 list_documents
@@ -192,6 +192,8 @@ search_passages
 find_parallel_passages
 read_bibliographic_pages
 read_bibliographic_metadata
+propose_bibliographic_update
+confirm_bibliographic_update
 list_alignment_corrections
 propose_alignment_correction
 confirm_alignment_correction
@@ -359,7 +361,7 @@ D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下应该能看到十五个工具：
+正常情况下应该能看到十七个工具：
 
 ```text
 list_documents
@@ -373,6 +375,8 @@ search_passages
 find_parallel_passages
 read_bibliographic_pages
 read_bibliographic_metadata
+propose_bibliographic_update
+confirm_bibliographic_update
 list_alignment_corrections
 propose_alignment_correction
 confirm_alignment_correction
@@ -468,7 +472,7 @@ Windows 路径中的反斜杠在 JSON 里必须写成两个。编辑器也接受
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-能列出十五个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
+能列出十七个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
 
 ```text
 请只使用 mefinder，列出当前已经导入的文献。
@@ -722,11 +726,11 @@ macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。
 
 #### 3. 保存并验证
 
-点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十五个工具就说明接入成功。
+点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十七个工具就说明接入成功。
 
 ## 九、配置成功后能做什么
 
-MEFinder MCP 提供十五个工具，分为两组。
+MEFinder MCP 提供十七个工具，分为三组。
 
 ### 只读检索工具（12 个）
 
@@ -742,6 +746,15 @@ MEFinder MCP 提供十五个工具，分为两组。
 - `read_bibliographic_pages`：读取文献首尾的版权页和 CIP 页候选，供 AI 直接从原书文本提取题录；
 - `read_bibliographic_metadata`：查看已存题录字段及缺口（标注 present / invalid / missing），配合上一个工具补全；
 - `list_alignment_corrections`：只读列出已记录的人工对齐修正（待确认 / 已确认 / 已撤销），用于复核与审计。
+
+### 书目补全（2 个，写操作）
+
+AI 从原书版权页 / CIP 页读出题录后，替你把缺的字段补进去，经你确认才会写入。
+
+- `propose_bibliographic_update`：提议补全，每个字段附原书依据原文与页码；只填空字段，已有值即使不同也不覆盖（标为冲突并保留原值）；只记录待确认请求，不改动任何题录；
+- `confirm_bibliographic_update`：在你明确同意后确认；由 MEFinder 桌面端按人工保存的同一流程写入（桌面端运行中几秒内生效，未运行则下次启动时写入），写入时再次检查只填空字段。写入结果可让 AI 用 `read_bibliographic_metadata` 查看。
+
+> **注意**：书目面板上来源会显示为「人工维护」（这是你确认过的内容；「自动识别」不会覆盖它，只有你主动点「重新识别」才会）；每个补上的字段都记录了 AI 依据的原书页码与原文。
 
 ### 译本对齐人工修正（3 个，写操作）
 

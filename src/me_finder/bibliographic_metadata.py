@@ -534,13 +534,15 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
                 continue
             source = str(raw_item.get("source") or "")
             value = str(raw_item.get("value") or "").strip()
-            if source not in {"cnki_lookup", "cnki_search_result", "cnki_citation", "google_books", "crossref", "k10plus"}:
+            if source not in {"cnki_lookup", "cnki_search_result", "cnki_citation", "google_books", "crossref", "k10plus", "mcp_agent"}:
                 continue
             if not value or value != str(result.get(field) or "").strip():
                 continue
+            # Only an agent fill confirmed by the user cites a page of the book itself.
+            source_page = raw_item.get("source_page") if source == "mcp_agent" else None
             item = {
                 "source": source,
-                "source_page": None,
+                "source_page": str(source_page)[:40] if source_page else None,
                 "evidence_text": str(raw_item.get("evidence_text") or value)[:500],
                 "value": value,
             }

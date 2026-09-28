@@ -211,10 +211,12 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         read_zotero_sync_snapshot,
         restore_zotero_sync_snapshot,
     )
+    from .persistence.bibliographic_update_store import read_bibliographic_update_snapshot, restore_bibliographic_update_snapshot
 
     preserved_document_groups = read_document_group_snapshot(db_path)
     preserved_alignments = read_alignment_recipe_snapshot(db_path)
     preserved_zotero_links = read_zotero_sync_snapshot(db_path)
+    preserved_bibliographic_updates = read_bibliographic_update_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
     _sanitize_surrogates_in_place(index)
@@ -320,6 +322,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         connection.row_factory = sqlite3.Row
         restore_alignment_recipe_snapshot(connection, preserved_alignments)
         restore_zotero_sync_snapshot(connection, preserved_zotero_links)
+        restore_bibliographic_update_snapshot(connection, preserved_bibliographic_updates)
 
         fts_installed = _install_fts5_search_index(connection, rebuild=True)
         connection.commit()

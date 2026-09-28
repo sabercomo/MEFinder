@@ -6,7 +6,7 @@
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十五个工具：前十一个只读；最后四个用于对齐修正，其中三个为带确认门槛的写工具，只有用户在对话中明确同意后才会永久生效，其余读写路径不受影响。
+MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十七个工具：十二个只读；五个为带确认门槛的写工具（书目补全 2 个、对齐修正 3 个），只有用户在对话中明确同意后才会生效，其余读写路径不受影响。
 
 - `list_documents`：按题名、作者、文件名或类型查找已导入文献，并标出所属作品与已对齐的其他版本；
 - `locate_quote`：定位原句、近似引文和多个候选；
@@ -18,7 +18,9 @@ MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十五个工具：前�
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；
 - `find_parallel_passages`：输入任一版本的句子，以已生成的版本对齐为中心返回英文、原文或其他译本的多个附近候选、定位和前后文；Codex 必须重新比较语义与上下文，只在证据唯一时确认，否则报告 `ambiguous` 或 `unavailable`；
 - `read_bibliographic_pages`：返回书首与书尾的版权页候选文本并标注书目线索，供从原书自身提取题录（不联网）；
-- `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全；
+- `read_bibliographic_metadata`：返回已存题录字段与 present/invalid/missing 缺口诊断，配合上一个工具补全；`update_requests` 显示最近的书目补全请求及写入结果；
+- `propose_bibliographic_update`：按原书依据（原文与页码）提议补全题录，只填空字段、已有值标为冲突并保留；只记录待确认请求，返回 `confirmation_token`，必须交用户复核；
+- `confirm_bibliographic_update`：用户明确同意后确认；由 MEFinder 桌面端写入（运行中几秒内，未运行则下次启动时），写入时再次只填空字段；未经用户确认不得调用；
 - `propose_alignment_correction`：当既有对齐把某句指到错误译文段时，用源/目标 Segment ID 与判断依据记录一条“待确认”的修正提议——它不改变任何查询，只返回 `confirmation_token`，必须交用户复核；
 - `confirm_alignment_correction`：在用户明确同意后，用 `override_id` 和 `confirmation_token` 让修正永久生效，普通双栏阅读与 MCP 查询随后都优先采用它；未经用户确认不得调用；
 - `revoke_alignment_correction`：撤销待确认或已确认的修正，恢复自动对齐，可逆；
@@ -199,7 +201,7 @@ tool_timeout_sec = 60
 1. 运行 `codex mcp list`，应看到启用的 `mefinder`；
 2. 运行 `codex mcp get mefinder --json`，核对命令、参数和工作目录；
 3. 在 Codex TUI 或桌面端输入 `/mcp`，应看到服务器已连接；
-4. 工具列表应包含本页“当前可用范围”列出的十五个工具（十一个只读 + 四个对齐修正）；
+4. 工具列表应包含本页“当前可用范围”列出的十七个工具（十二个只读 + 五个带确认门槛的写工具）；
 5. 先在 MEFinder 中导入至少一篇文献，再询问：“只使用 MEFinder 核对这句话出自哪篇文献、哪一页。”
 
 建议继续检查以下自然语言任务：

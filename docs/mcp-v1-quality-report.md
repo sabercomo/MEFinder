@@ -74,3 +74,7 @@ Server instructions 的前 512 个字符已经完整包含以下约束：
 | `describe_page_mapping`（2 页 PDF） | — | 930 字节 |
 
 增量几乎都来自每次会话都会下发的工具定义；单次调用结果基本不变。换来的是：页码偏移不再需要用 `read_document_window` 逐页试探（一次调用代替多次试读），通读可以按章节切分。未新增写工具，更长语境仍通过命中的 `reader.start` 调 `read_document_window` 获取，没有给 `verify_quotes` 加上下文参数，以免批量核对结果膨胀。
+
+## 2026-09-29 补充：书目补全写工具
+
+新增 `propose_bibliographic_update`、`confirm_bibliographic_update`（工具 15 → 17）；`read_bibliographic_metadata` 增加 `update_requests`。模型可见工具上下文 49,480 → 54,174 字节（相对最初 41,385 字节 +30.9%）；server instructions 510 字符，仍在 512 字符内。`read_bibliographic_metadata` 单次结果 1,152 → 1,173 字节，其余调用结果不变。

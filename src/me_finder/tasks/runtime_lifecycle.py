@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .. import translation_works
+from ..application.bibliographic_update_applier import run_applier
 from ..embedding_runtime import request_embedding_cancel
 from ..import_assembly import ImportAssembly
 from ..managed_component_assembly import ManagedComponents
@@ -33,6 +34,11 @@ class RuntimeLifecycle:
 
         self.zotero_sync.start_scheduler()
         translation_works.start_body_bounds_warm_up(index_path, self.background_tasks)
+        fill_empty_fields = self.imports.metadata_coordinator.fill_empty_fields
+        self.background_tasks.start(
+            "bibliographic-update-applier",
+            lambda stop: run_applier(index_path, fill_empty_fields, stop),
+        )
 
     def begin_shutdown(self) -> None:
         """Reject new writes and request every background owner to stop."""

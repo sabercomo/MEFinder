@@ -673,28 +673,13 @@ class LiteratureVerificationService:
     ) -> dict[str, object]:
         from ..bibliographic_metadata import (
             METADATA_FIELDS,
-            canonical_metadata,
             invalid_metadata_fields,
             is_valid_bibliographic_value,
         )
-        from ..database import load_database_index
-        from ..structured_reader import SourceNotFound
+        from .bibliographic_update_service import recent_update_requests
 
         validated_source_id = _validate_source_id(source_file_id)
-        catalog = load_database_index(self._existing_index_path())
-        source = next(
-            (
-                item
-                for item in catalog.get("source_files", [])
-                if isinstance(item, Mapping)
-                and str(item.get("source_file_id") or "") == validated_source_id
-            ),
-            None,
-        )
-        if source is None:
-            raise SourceNotFound(f"未找到文献：{validated_source_id}")
-
-        record = canonical_metadata(source)
+        source, record = self._bibliographic_record(validated_source_id)
         invalid = set(invalid_metadata_fields(record))
         fields: list[dict[str, object]] = []
         missing_fields: list[str] = []
@@ -735,7 +720,58 @@ class LiteratureVerificationService:
             "fields": fields,
             "missing_fields": missing_fields,
             "invalid_fields": invalid_fields,
+            "update_requests": recent_update_requests(
+                self._existing_index_path(), validated_source_id
+            ),
         }
+
+    def propose_bibliographic_update(
+        self, *, source_file_id: str, fields: object
+    ) -> dict[str, object]:
+        """Preview agent fills and queue the empty-field ones for confirmation."""
+
+        from .bibliographic_update_service import propose_bibliographic_update
+
+        validated_source_id = _validate_source_id(source_file_id)
+        _, record = self._bibliographic_record(validated_source_id)
+        return propose_bibliographic_update(
+            self._existing_index_path(),
+            source_file_id=validated_source_id,
+            current=record,
+            fields=fields,
+        )
+
+    def confirm_bibliographic_update(
+        self, *, request_id: str, confirmation_token: str
+    ) -> dict[str, object]:
+        from .bibliographic_update_service import confirm_bibliographic_update
+
+        return confirm_bibliographic_update(
+            self._existing_index_path(),
+            request_id=request_id,
+            confirmation_token=confirmation_token,
+        )
+
+    def _bibliographic_record(
+        self, source_file_id: str
+    ) -> tuple[Mapping[str, object], dict[str, object]]:
+        from ..bibliographic_metadata import canonical_metadata
+        from ..database import load_database_index
+        from ..structured_reader import SourceNotFound
+
+        catalog = load_database_index(self._existing_index_path())
+        source = next(
+            (
+                item
+                for item in catalog.get("source_files", [])
+                if isinstance(item, Mapping)
+                and str(item.get("source_file_id") or "") == source_file_id
+            ),
+            None,
+        )
+        if source is None:
+            raise SourceNotFound(f"未找到文献：{source_file_id}")
+        return source, canonical_metadata(source)
 
     def _existing_index_path(self) -> Path:
         path = self.index_path

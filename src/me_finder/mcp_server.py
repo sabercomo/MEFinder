@@ -170,6 +170,18 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
             f"页码映射分 {len(result['segments'])} 段，"
             f"{result['calibrated_units']}/{result['total_units']} 个位置有可引用页码。"
         )
+    if tool_name == "propose_bibliographic_update":
+        fills = sum(1 for item in result["fields"] if item["action"] == "fill")
+        conflicts = sum(1 for item in result["fields"] if item["action"] == "conflict")
+        if result["request_id"] is None:
+            return f"没有可补的空字段（{conflicts} 项与已有值冲突，已有值保留），未记录请求。"
+        return (
+            f"已记录待确认的书目补全：{fills} 个空字段待填，{conflicts} 项冲突不会覆盖。"
+            "尚未写入。请把每个字段的值与原书依据交给用户复核，用户明确同意后再用 "
+            f"request_id 与 confirmation_token 确认。request_id={result['request_id']}"
+        )
+    if tool_name == "confirm_bibliographic_update":
+        return str(result["note"])
     if tool_name == "propose_alignment_correction":
         return (
             "已记录待确认的对齐修正提议，尚未生效。请向用户复核源句与目标段及判断依据，"
@@ -282,6 +294,18 @@ TOOL_HANDLERS: dict[
     ),
     "describe_page_mapping": lambda service, arguments: (
         service.describe_page_mapping(arguments["source_file_id"])
+    ),
+    "propose_bibliographic_update": lambda service, arguments: (
+        service.propose_bibliographic_update(
+            source_file_id=arguments["source_file_id"],
+            fields=arguments["fields"],
+        )
+    ),
+    "confirm_bibliographic_update": lambda service, arguments: (
+        service.confirm_bibliographic_update(
+            request_id=arguments["request_id"],
+            confirmation_token=arguments["confirmation_token"],
+        )
     ),
     "propose_alignment_correction": lambda service, arguments: (
         service.propose_alignment_correction(

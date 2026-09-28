@@ -168,6 +168,29 @@ class BibliographicMetadataCoordinator:
         metadata = self._build_manual_metadata(payload, document)
         return self.persist_detected(source_file_id, metadata)
 
+    def fill_empty_fields(
+        self,
+        source_file_id: str,
+        build_payload: Callable[[Mapping[str, object]], Optional[Mapping[str, object]]],
+    ) -> Optional[Dict[str, object]]:
+        """Save a manual payload derived from the document read under the lock.
+
+        ``build_payload`` receives the stored document fresh, inside the same
+        lock as the write, so a concurrent manual edit is never overwritten
+        by a payload computed from stale values. Returning ``None`` skips the
+        write (nothing left to fill).
+        """
+
+        with self._durable_operations.operation():
+            return self._persist(
+                source_file_id,
+                lambda document: (
+                    None
+                    if (payload := build_payload(document)) is None
+                    else self._build_manual_metadata(payload, document)
+                ),
+            )
+
     def start_batch(
         self,
         *,
@@ -227,8 +250,9 @@ class BibliographicMetadataCoordinator:
     def _persist(
         self,
         source_file_id: str,
-        payload: Mapping[str, object],
-    ) -> Dict[str, object]:
+        payload: Mapping[str, object]
+        | Callable[[Mapping[str, object]], Optional[Mapping[str, object]]],
+    ) -> Optional[Dict[str, object]]:
         with self._metadata_lock, self._index_runtime.mutation():
             with self._lock_config(self.config_path) as config:
                 document = next(
@@ -243,6 +267,10 @@ class BibliographicMetadataCoordinator:
                     raise BibliographicMetadataError(
                         "PDF 配置中找不到该文献。"
                     )
+                if callable(payload):
+                    payload = payload(copy.deepcopy(document))
+                    if payload is None:
+                        return None
                 original_config = copy.deepcopy(config)
                 metadata = self._canonicalize(payload)
                 if not metadata.get("metadata_missing_fields"):
