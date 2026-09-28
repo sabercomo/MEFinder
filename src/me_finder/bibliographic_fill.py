@@ -83,6 +83,24 @@ def plan_fill(
     return plan
 
 
+def merge_current(
+    shown: Mapping[str, object], stored: Mapping[str, object]
+) -> Dict[str, object]:
+    """Current metadata as the user sees it, never losing a stored value.
+
+    ``shown`` is the indexed record the metadata panel displays; ``stored``
+    is the import-config entry the manual save rewrites. A legacy config entry
+    may lack values the index still shows, so each field takes the shown value
+    and falls back to the stored one.
+    """
+
+    merged: Dict[str, object] = {}
+    for field in (*METADATA_FIELDS, "document_type", "responsibility_status"):
+        value = shown.get(field)
+        merged[field] = value if value not in (None, "") else stored.get(field)
+    return merged
+
+
 def manual_save_payload(
     current: Mapping[str, object], plan: Sequence[Mapping[str, object]]
 ) -> Dict[str, object]:

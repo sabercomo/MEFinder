@@ -674,6 +674,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
     # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
     # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
+    # 0.5.8 版本号落库：同上，仅摘要变化。
     # 0.5.7 D4 审阅：05-dom 缩进与 destroyDom 命名，移除四个无人使用的内部注册。
     # 0.5.7 Zotero：分类默认折叠，PDF 解析方式与导入页即时同步。
     # 任务状态请求代次：新增 14-task-state.js，对齐模型/运行时、本地 OCR、
@@ -685,7 +686,7 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
     # 设置导航与内容区滚动条改为悬停才显示，导航收紧上下留白以免多余滚动。
     BASELINE_SHA256 = (
-        "ff3a588392843d51ac129d7975fc40d746baab839d7c3a964b291a878fa14045"
+        "2a1351f287884267c928eb63db8205376652873311eb1367c167db6d89389a24"
     )
     BASELINE_BYTES = 1510203
 

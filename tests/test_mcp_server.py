@@ -16,6 +16,7 @@ from jsonschema import Draft202012Validator
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+from src.me_finder import __version__
 from src.me_finder.mcp_server import (
     CONTRACT,
     INPUT_VALIDATORS,
@@ -96,7 +97,7 @@ class MCPServerProtocolTests(unittest.TestCase):
                         initialized = await session.initialize()
                         self.assertLess(time.monotonic() - started, 10)
                         self.assertEqual(initialized.server_info.name, "mefinder")
-                        self.assertEqual(initialized.server_info.version, "0.5.1")
+                        self.assertEqual(initialized.server_info.version, __version__)
                         self.assertEqual(
                             initialized.instructions,
                             CONTRACT["server"]["instructions"],

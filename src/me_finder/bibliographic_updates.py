@@ -5,6 +5,7 @@ from .persistence.bibliographic_update_store import (
     confirm_pending_request,
     insert_pending_request,
     list_requests,
+    read_source_payload,
     record_request_result,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "confirm_pending_request",
     "insert_pending_request",
     "list_requests",
+    "read_source_payload",
     "record_request_result",
 ]

@@ -177,6 +177,24 @@ def record_request_result(
         connection.close()
 
 
+def read_source_payload(database_path: Path, source_file_id: str) -> Dict[str, object]:
+    """The indexed source payload (what the metadata panel shows), or ``{}``."""
+
+    path = Path(database_path)
+    if not path.is_file():
+        return {}
+    connection = open_readonly_index(path)
+    try:
+        row = connection.execute(
+            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+            (source_file_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+    payload = json.loads(row[0]) if row and row[0] else {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def read_bibliographic_update_snapshot(db_path: Path) -> List[Dict[str, object]]:
     """Copy every request row out of an index about to be replaced."""
 

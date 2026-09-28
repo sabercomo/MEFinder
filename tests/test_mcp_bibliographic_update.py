@@ -209,6 +209,30 @@ class McpProposalTests(unittest.TestCase):
             self.service.read_bibliographic_metadata(PDF_SOURCE_ID)
         )
 
+    def test_sparse_config_record_never_blanks_values_shown_from_the_index(self) -> None:
+        proposal = self.call(
+            "propose_bibliographic_update",
+            {"source_file_id": PDF_SOURCE_ID, "fields": [ISBN]},
+        )
+        self.call(
+            "confirm_bibliographic_update",
+            {
+                "request_id": proposal["request_id"],
+                "confirmation_token": proposal["confirmation_token"],
+            },
+        )
+        payloads = []
+        # A legacy config entry can lack the metadata the panel shows from the index.
+        apply_confirmed_updates(
+            self.index_path,
+            lambda _sid, build: payloads.append(build({"source_file_id": PDF_SOURCE_ID})),
+        )
+        [payload] = payloads
+        self.assertEqual(payload["isbn"], "9787010000000")
+        self.assertEqual(payload["title"], "MCP 合成 PDF 样例")
+        self.assertEqual(payload["author"], "测试作者甲")
+        self.assertEqual(payload["publisher"], "测试出版社")
+
     def test_value_filled_meanwhile_becomes_a_conflict_not_an_overwrite(self) -> None:
         proposal = self.call(
             "propose_bibliographic_update",

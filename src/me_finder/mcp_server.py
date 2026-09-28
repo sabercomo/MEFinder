@@ -26,6 +26,7 @@ from mcp_types import (
     ToolAnnotations,
 )
 
+from . import __version__
 from .application import LiteratureVerificationService
 from .structured_reader import SourceNotFound, UnsupportedSourceType
 
@@ -411,7 +412,8 @@ def create_server(
     server_contract = CONTRACT["server"]
     return Server(
         str(server_contract["name"]),
-        version=str(CONTRACT["release"]),
+        # Clients see the app build; the contract file keeps its own revision.
+        version=__version__,
         instructions=str(server_contract["instructions"]),
         on_list_tools=list_tools,
         on_call_tool=call_tool,

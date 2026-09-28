@@ -15,8 +15,12 @@ import threading
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
-from ..bibliographic_fill import manual_save_payload, plan_fill
-from ..bibliographic_updates import list_requests, record_request_result
+from ..bibliographic_fill import manual_save_payload, merge_current, plan_fill
+from ..bibliographic_updates import (
+    list_requests,
+    read_source_payload,
+    record_request_result,
+)
 from ..bibliographic_values import canonical_metadata
 
 POLL_SECONDS = 5.0
@@ -37,7 +41,11 @@ def apply_confirmed_updates(index_path: Path, fill_empty_fields: FillEmptyFields
         plan: list[dict[str, object]] = []
 
         def build(document: Mapping[str, object]) -> Optional[Mapping[str, object]]:
-            current = canonical_metadata(document)
+            # Read the index inside the write lock too: it is what the user sees.
+            shown = read_source_payload(index_path, str(request["source_file_id"]))
+            current = merge_current(
+                canonical_metadata(shown), canonical_metadata(document)
+            )
             plan[:] = plan_fill(current, request["fields"])
             if not any(item["action"] == "fill" for item in plan):
                 return None
