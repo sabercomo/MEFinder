@@ -49,10 +49,13 @@ _DWMWA_COLOR_NONE = 0xFFFFFFFE
 _HTCLIENT = 1
 _HTLEFT = 10
 _HTRIGHT = 11
+_HTTOP = 12
+_HTTOPLEFT = 13
+_HTTOPRIGHT = 14
 _HTBOTTOM = 15
 _HTBOTTOMLEFT = 16
 _HTBOTTOMRIGHT = 17
-# Grab thickness (px) for the invisible resize border on left/right/bottom edges.
+# Grab thickness (px) for the invisible resize border on all four edges.
 _FRAMELESS_RESIZE_GRAB = 8
 
 
@@ -67,15 +70,20 @@ def frameless_resize_hit(
 ) -> int:
     """Resize hit-test for a frameless window whose frame border was removed.
 
-    The HTML titlebar owns the top edge, so top-edge (and top-corner) resizing
-    is intentionally not offered — only the left, right and bottom edges plus
-    the two bottom corners report resize codes. Everything else is client area,
-    which keeps the titlebar drag region and web content interactive.
+    All four edges and corners report resize codes. The titlebar below the
+    narrow top grab remains client area for dragging and window controls.
     """
 
     on_left = left <= x < left + grab
     on_right = right - grab <= x < right
+    on_top = top <= y < top + grab
     on_bottom = bottom - grab <= y < bottom
+    if on_top and on_left:
+        return _HTTOPLEFT
+    if on_top and on_right:
+        return _HTTOPRIGHT
+    if on_top:
+        return _HTTOP
     if on_bottom and on_left:
         return _HTBOTTOMLEFT
     if on_bottom and on_right:
@@ -90,6 +98,9 @@ def frameless_resize_hit(
 
 # HTML resize handles (see 10-shell.js) name the edge they cover.
 _RESIZE_EDGE_HITS = {
+    "top": _HTTOP,
+    "top-left": _HTTOPLEFT,
+    "top-right": _HTTOPRIGHT,
     "left": _HTLEFT,
     "right": _HTRIGHT,
     "bottom": _HTBOTTOM,
@@ -303,9 +314,9 @@ def remove_windows_top_resize_inset(hwnd: int) -> bool:
     active-window frame line shows through (a bright border that appears only
     while the window is focused). To make the shell look identical on Windows 10
     and 11, we collapse *all four* insets so the client area fills the entire
-    window (no frame line on any edge), then restore left/right/bottom + the two
-    bottom corners as resize zones via ``WM_NCHITTEST``. Top-edge resizing stays
-    given up so the HTML titlebar drag region is unobstructed.
+    window (no frame line on any edge), then restore all edges and corners as
+    resize zones via ``WM_NCHITTEST``. The titlebar below the narrow top grab
+    remains available for dragging.
     """
 
     if hwnd in _top_inset_subclasses:

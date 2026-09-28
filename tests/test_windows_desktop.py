@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ctypes
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -22,7 +24,7 @@ from src.me_finder.windows_desktop import (
 
 
 class FramelessResizeHitTests(unittest.TestCase):
-    # Window rect 100,100 → 500,400; grab 8px. Top edge is client (titlebar).
+    # Window rect 100,100 → 500,400; grab 8px on each edge.
     RECT = dict(left=100, top=100, right=500, bottom=400, grab=8)
 
     def hit(self, x: int, y: int) -> int:
@@ -31,8 +33,10 @@ class FramelessResizeHitTests(unittest.TestCase):
     def test_interior_is_client(self) -> None:
         self.assertEqual(self.hit(300, 250), windows_desktop._HTCLIENT)
 
-    def test_top_edge_stays_client_for_the_titlebar(self) -> None:
-        self.assertEqual(self.hit(300, 101), windows_desktop._HTCLIENT)
+    def test_top_edge_resizes_but_titlebar_below_it_stays_client(self) -> None:
+        self.assertEqual(self.hit(300, 100), 12)  # HTTOP
+        self.assertEqual(self.hit(300, 107), 12)
+        self.assertEqual(self.hit(300, 108), windows_desktop._HTCLIENT)
 
     def test_left_and_right_edges_resize(self) -> None:
         self.assertEqual(self.hit(101, 250), windows_desktop._HTLEFT)
@@ -43,10 +47,9 @@ class FramelessResizeHitTests(unittest.TestCase):
         self.assertEqual(self.hit(101, 399), windows_desktop._HTBOTTOMLEFT)
         self.assertEqual(self.hit(499, 399), windows_desktop._HTBOTTOMRIGHT)
 
-    def test_top_corners_fall_back_to_side_resize_not_top(self) -> None:
-        # Top-edge resize is given up, so a top corner is a plain side grab.
-        self.assertEqual(self.hit(101, 101), windows_desktop._HTLEFT)
-        self.assertEqual(self.hit(499, 101), windows_desktop._HTRIGHT)
+    def test_top_corners_resize_diagonally(self) -> None:
+        self.assertEqual(self.hit(101, 101), 13)  # HTTOPLEFT
+        self.assertEqual(self.hit(499, 101), 14)  # HTTOPRIGHT
 
 
 class _FakeHandle:
@@ -388,10 +391,55 @@ class WindowsWindowControllerTests(unittest.TestCase):
 class WindowsEdgeResizeTests(unittest.TestCase):
     """WebView2 covers the frameless window, so HTML handles start the resize."""
 
+    @unittest.skipUnless(shutil.which("node"), "node is required for frontend behavior tests")
+    def test_html_handles_forward_all_edges_and_ignore_other_mouse_buttons(self) -> None:
+        script = r"""
+const assert = require('assert');
+const fs = require('fs');
+const handlers = {}, handles = [], calls = [];
+global.window = global;
+global.desktopShell = 'win32';
+global.addEventListener = (name, fn) => { handlers[name] = fn; };
+global.pywebview = {api: {
+  start_resize: edge => calls.push(edge), is_maximized: () => Promise.resolve(false)
+}};
+global.document = {
+  documentElement: {classList: {contains: () => false, toggle: () => {}}},
+  querySelector: selector => selector === '.windows-resize-edge' ? handles[0] : null,
+  addEventListener: () => {},
+  createElement: () => ({dataset: {}, setAttribute: () => {},
+    addEventListener(name, fn) { this[name] = fn; }}),
+  body: {appendChild: handle => handles.push(handle)}
+};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+handlers.pywebviewready();
+const expected = ['bottom','bottom-left','bottom-right','left','right','top','top-left','top-right'];
+assert.deepStrictEqual(handles.map(h => h.dataset.edge).sort(), expected);
+handles.forEach(handle => {
+  let prevented = false;
+  handle.mousedown({button: 0, preventDefault() { prevented = true; }});
+  assert(prevented);
+  assert.strictEqual(calls[calls.length - 1], handle.dataset.edge);
+  handle.mousedown({button: 2, preventDefault() { assert.fail('right-click consumed'); }});
+});
+assert.strictEqual(calls.length, 8);
+handlers.pywebviewready();
+assert.strictEqual(handles.length, 8);
+"""
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/10-shell.js"
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(source)],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_html_edges_map_to_native_resize_hit_codes(self) -> None:
         window = _FakeWindow()
         poster = mock.Mock(return_value=True)
         expected = {
+            "top": 12,
+            "top-left": 13,
+            "top-right": 14,
             "left": windows_desktop._HTLEFT,
             "right": windows_desktop._HTRIGHT,
             "bottom": windows_desktop._HTBOTTOM,
@@ -407,7 +455,7 @@ class WindowsEdgeResizeTests(unittest.TestCase):
         window = _FakeWindow()
         poster = mock.Mock(return_value=True)
         with mock.patch.object(windows_desktop.sys, "platform", "win32"):
-            self.assertFalse(begin_windows_resize(window, "top", resize_poster=poster))
+            self.assertFalse(begin_windows_resize(window, "unknown", resize_poster=poster))
         with mock.patch.object(windows_desktop.sys, "platform", "darwin"):
             self.assertFalse(begin_windows_resize(window, "left", resize_poster=poster))
         poster.assert_not_called()

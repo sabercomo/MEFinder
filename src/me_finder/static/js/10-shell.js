@@ -47,7 +47,7 @@
      用透明热区接住按下，再交给原生系统缩放（最大化时 CSS 隐藏）。 */
   function installWindowsResizeEdges() {
     if (document.querySelector('.windows-resize-edge')) return;
-    ['left', 'right', 'bottom', 'bottom-left', 'bottom-right'].forEach(function(edge) {
+    ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach(function(edge) {
       var handle = document.createElement('div');
       handle.className = 'windows-resize-edge';
       handle.dataset.edge = edge;
