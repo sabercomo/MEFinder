@@ -47,4 +47,4 @@
 
 两份产物各附同名 `.sha256.txt`。此前按 `5449593` 构建的一对已留备份。阅读器对照链接与复核的冻结应用完整人工验收仍待进行。
 
-2026-09-28 创建 [GitHub Draft Release](https://github.com/sabercomo/MEFinder/releases/tag/untagged-96d4d219fa1c2015b6e4)（`v0.5.7`，目标源码 `ef0008b`），先上传 Windows 安装包、便携包及各自的 `.sha256.txt`，共四个文件；GitHub 返回的两个二进制文件大小与 SHA-256 均与本地一致。草稿正文按 Zotero 来源同步、其他更新、技术与架构、修复顺序编排。Draft 保持未发布，macOS 产物与完整人工验收后续补齐。
+2026-09-28 创建 [GitHub Draft Release](https://github.com/sabercomo/MEFinder/releases/tag/untagged-3bee4718575880586a87)（`v0.5.7`，目标源码 `ef0008b`），先上传 Windows 安装包、便携包及各自的 `.sha256.txt`，共四个文件；GitHub 返回的两个二进制文件大小与 SHA-256 均与本地一致。草稿正文按 Zotero 来源同步、其他更新、技术与架构、修复顺序编排，并参考此前发布说明改写为面向用户的表述。Draft 保持未发布，macOS 产物与完整人工验收后续补齐。
