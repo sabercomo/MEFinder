@@ -11,6 +11,7 @@ from typing import Callable
 from .connection import PROJECT_BUSY_TIMEOUT_MS, connect_index
 
 from .index_schema import DATABASE_SCHEMA_VERSION, PARAGRAPH_FTS_VERSION
+from .short_gram_index import install_short_gram_index
 
 
 def _fts_objects_present(connection: sqlite3.Connection) -> bool:
@@ -113,6 +114,9 @@ def _install_fts5_search_index(
             connection.execute(
                 "INSERT INTO paragraphs_fts(paragraphs_fts) VALUES ('rebuild')"
             )
+        # The short-query index rides every FTS (re)install; it degrades to
+        # the plain scan on its own when this SQLite cannot build it.
+        install_short_gram_index(connection, rebuild=rebuild)
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
             ("paragraph_fts_version", json.dumps(PARAGRAPH_FTS_VERSION)),

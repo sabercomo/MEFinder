@@ -153,6 +153,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "persistence/storage_optimization.py": 170,
             "persistence/source_replace.py": 380,
             "persistence/paragraph_payload.py": 100,
+            "persistence/short_gram_index.py": 245,
             "database_backup.py": 220,
             "index_identity.py": 240,
             # MCP 用例层：0.5.0 一轮加了 5 个工具就从 431 涨到 951 行，
@@ -189,7 +190,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
             # 新模块按当前行数封顶。
             "search.py": 350,
-            "search_recall.py": 650,
+            # JSON 后端内存召回拆为 search_recall_memory（短查询两字索引同轮接入），
+            # 上限随之下调。
+            "search_recall.py": 580,
+            "search_recall_memory.py": 98,
             "search_scoring.py": 250,
             "search_anchors.py": 240,
             "search_citation.py": 140,

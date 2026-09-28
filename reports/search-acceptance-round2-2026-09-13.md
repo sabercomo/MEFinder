@@ -53,6 +53,8 @@ budget=`max(64, limit*8)`。钉住:命中 <budget → total 精确、`total_is_e
 
 两者都涉及 schema 迁移与同步目录(OneDrive rollback-journal)兼容性评估,须先出"收益/体积/迁移时间/写入成本/兼容性"完整方案并获授权,再实施与验收;数值收益不能仅凭"很小/很大"接受。
 
+> 2026-09-29 补充：经三方案原型对照（统一简繁列 / 两字辅助索引 / 两者都加），只有"保留简繁双路 + 两字辅助索引"在真实库 30 组查询上完整响应逐字段不变，已按该方案实施（DB v10）。统一简繁列会改变同段多位置、繁体优先与截断标志，未采用。详见 [short-query-gram-index-2026-09-29](short-query-gram-index-2026-09-29.md)。
+
 ## 附:正式服务器级基准(normal 场景,3 轮,真实 localhost HTTP)
 
 2026-09-13 机器安静后补跑 `bench_real_library.py --scenario normal --rounds 3 --repeats 5`(同冻结快照,`valid=true`,全 200,`identity_mismatches=0`,`overlapping_requests=0`;数据 [JSON](search-acceptance-round2-normal-bench-2026-09-13.json))。**四场景中的 alignment 场景因本地无模型缓存未跑**,仅 normal(搜索)场景;故此非完整四场景 `--compare`,是搜索半场的服务器级绝对基准。

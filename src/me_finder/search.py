@@ -33,6 +33,7 @@ from .database import (
     open_database,
 )
 from .indexer import DEFAULT_INDEX_PATH, load_index
+from .persistence.short_gram_index import short_gram_prefilter_ready
 from .search_assembly import format_passage, format_result, highlight_html, paragraph_context
 from .search_citation import hit_page
 from .search_contract import SEARCH_MODES
@@ -131,6 +132,7 @@ class SearchEngine:
             paragraphs=self.paragraphs,
             ngram_index=self.ngram_index,
             ensure_fts=self._ensure_fts_ready,
+            short_gram_ready=lambda: self.db is not None and short_gram_prefilter_ready(self.db),
         )
 
     def search(

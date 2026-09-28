@@ -7,11 +7,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "exact",
@@ -143,11 +144,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "exact",
@@ -272,11 +274,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -408,11 +411,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "exact",
@@ -537,11 +541,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -1647,11 +1652,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -6771,11 +6777,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -7881,11 +7888,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -8017,11 +8025,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "punctuation",
@@ -8041,11 +8050,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "compact",
@@ -8504,11 +8514,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "fuzzy",
@@ -8640,11 +8651,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -9755,11 +9767,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "exact",
@@ -9779,11 +9792,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -10959,11 +10973,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -12139,11 +12154,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",
@@ -13319,11 +13335,12 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 9,
+     "database_schema_version": 10,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
      "paragraph_payload_storage": "sparse_text_v1",
+     "paragraph_short_gram_version": 1,
      "source_count": 8
     },
     "mode": "auto",

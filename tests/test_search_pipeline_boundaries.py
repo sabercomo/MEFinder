@@ -22,7 +22,8 @@ ALLOWED: dict[str, set[str]] = {
     "search_anchors": set(),
     "search_citation": set(),
     "search_scoring": {"search_anchors"},
-    "search_recall": {"search_contract", "search_scoring"},
+    "search_recall_memory": set(),
+    "search_recall": {"search_contract", "search_recall_memory", "search_scoring"},
     "search_assembly": {"search_anchors", "search_citation", "search_scoring"},
     "search": FACADE_ALLOWED,
 }

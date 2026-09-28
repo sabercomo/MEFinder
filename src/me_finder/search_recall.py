@@ -8,7 +8,6 @@ It never orders the final list and never formats results — scoring lives in
 
 from __future__ import annotations
 
-from collections import Counter
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .database import (
@@ -21,18 +20,20 @@ from .normalization import (
     normalize_with_spans,
     punctuationless_text,
 )
+from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
     FUZZY_RESCORE_LIMIT,
     MAX_FTS_QUERY_TRIGRAMS,
     SQL_CANDIDATE_FLOOR,
     SQL_CANDIDATE_MULTIPLIER,
 )
+from .search_recall_memory import InMemoryRecallPasses
 from .search_scoring import best_window_ratio
 
 Scope = Optional[frozenset]
 
 
-class CandidateRecall:
+class CandidateRecall(InMemoryRecallPasses):
     """Recall candidates for one query from a SQLite or in-memory index."""
 
     def __init__(
@@ -43,12 +44,14 @@ class CandidateRecall:
         paragraphs: List[Dict[str, object]],
         ngram_index: Dict[str, List[int]],
         ensure_fts: Callable[[], bool],
+        short_gram_ready: Callable[[], bool] = lambda: False,
     ) -> None:
         self._db_provider = db_provider
         self.backend = backend
         self.paragraphs = paragraphs
         self.ngram_index = ngram_index
         self._ensure_fts = ensure_fts
+        self._short_gram_ready = short_gram_ready
 
     def db(self) -> object:
         """Current backend connection; FTS reinstallation may reopen it."""
@@ -151,6 +154,11 @@ class CandidateRecall:
             return "+p.eligible_for_search = 1"
         return "p.eligible_for_search = 1"
 
+    def _short_gram_clause(self, strings: List[str]) -> Tuple[str, List[object]]:
+        """Superset prefilter for the non-FTS scans; empty until the index is ready."""
+
+        return short_gram_prefilter(strings) if self._short_gram_ready() else ("", [])
+
     def sql_source_filter(
         self,
         source_type: str,
@@ -216,14 +224,16 @@ class CandidateRecall:
             )
             args: List[object] = [fts_query, *source_args, query, q_norm]
         else:
+            gram_clause, gram_args = self._short_gram_clause([query, q_norm])
             sql = (
                 f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE "
                 + self._instr_eligibility_clause(source_type, source_file_id, scope)
                 + source_clause
+                + gram_clause
                 + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
                 "ORDER BY p.rowid"
             )
-            args = [*source_args, query, q_norm]
+            args = [*source_args, *gram_args, query, q_norm]
         processed = 0
         truncated = False
         sql = self._limit_sql(sql, candidate_budget)
@@ -273,13 +283,15 @@ class CandidateRecall:
             )
             args: List[object] = [fts_query, *source_args, query]
         else:
+            gram_clause, gram_args = self._short_gram_clause([query])
             sql = (
                 f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE "
                 + self._instr_eligibility_clause(source_type, source_file_id, scope)
                 + source_clause
+                + gram_clause
                 + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
             )
-            args = [*source_args, query]
+            args = [*source_args, *gram_args, query]
         processed = 0
         truncated = False
         sql = self._limit_sql(sql, candidate_budget)
@@ -357,12 +369,15 @@ class CandidateRecall:
                     break
             return truncated
 
+        query_grams = self._ngrams_set(q_plain)
+        # Paragraphs sharing no query gram score zero overlap and are dropped
+        # below anyway; the prefilter keeps the driving index, so tie order holds.
+        gram_clause, gram_args = self._short_gram_clause(sorted(query_grams))
         rows = self.db().execute(
             f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
-            "WHERE p.eligible_for_search = 1" + source_clause,
-            source_args,
+            "WHERE p.eligible_for_search = 1" + source_clause + gram_clause,
+            [*source_args, *gram_args],
         )
-        query_grams = self._ngrams_set(q_plain)
         ranked: List[Tuple[int, str, Dict[str, object]]] = []
         for row in rows:
             plain = str(row["plain_text"] or "")
@@ -399,91 +414,6 @@ class CandidateRecall:
         start = max(0, min(start, len(spans) - 1))
         end = max(start, min(end, len(spans) - 1))
         return min(0.9, max(0.58, ratio)), spans[start][0], spans[end][1]
-
-    # ------------------------------------------------------------------
-    # In-memory recall passes (legacy JSON backend)
-    # ------------------------------------------------------------------
-
-    def _exact_pass(
-        self,
-        query: str,
-        q_norm: str,
-        candidates: Dict[str, Dict[str, object]],
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-    ) -> None:
-        for paragraph in self.paragraphs:
-            if not self._source_allowed(paragraph, source_type, source_file_id, scope):
-                continue
-            raw = str(paragraph.get("text_raw") or "")
-            normalized = str(paragraph.get("normalized_text") or "")
-            raw_pos = raw.find(query)
-            if raw_pos >= 0:
-                self._add_candidate(paragraph, "exact", 1.0, raw_pos, raw_pos + len(query), candidates)
-                continue
-            norm_pos = normalized.find(q_norm)
-            if norm_pos >= 0:
-                span = self._mapped_span(paragraph, raw, q_norm, "normalized")
-                self._add_candidate(paragraph, "normalized_exact", 0.985, span[0], span[1], candidates)
-
-    def _mapped_substring_pass(
-        self,
-        query: str,
-        mode: str,
-        match_type: str,
-        score: float,
-        candidates: Dict[str, Dict[str, object]],
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-    ) -> None:
-        if not query:
-            return
-        field = "compact_text" if mode == "compact" else "plain_text"
-        for paragraph in self.paragraphs:
-            if not self._source_allowed(paragraph, source_type, source_file_id, scope):
-                continue
-            haystack = str(paragraph.get(field) or "")
-            pos = haystack.find(query)
-            if pos < 0:
-                continue
-            raw = str(paragraph.get("text_raw") or "")
-            _, spans = self._normalization_spans(paragraph, raw, mode)
-            if pos >= len(spans):
-                continue
-            end_pos = min(pos + len(query) - 1, len(spans) - 1)
-            start_raw = spans[pos][0]
-            end_raw = spans[end_pos][1]
-            self._add_candidate(paragraph, match_type, score, start_raw, end_raw, candidates)
-
-    def _fuzzy_pass(
-        self,
-        q_plain: str,
-        candidates: Dict[str, Dict[str, object]],
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-    ) -> None:
-        if not q_plain:
-            return
-        grams = self._ngrams(q_plain)
-        counts: Counter[int] = Counter()
-        for gram in grams:
-            counts.update(self.ngram_index.get(gram, []))
-        if not counts:
-            search_space = list(range(min(len(self.paragraphs), 800)))
-        else:
-            search_space = [idx for idx, _ in counts.most_common(700)]
-        for idx in search_space:
-            paragraph = self.paragraphs[idx]
-            if not self._source_allowed(paragraph, source_type, source_file_id, scope):
-                continue
-            plain = str(paragraph.get("plain_text") or "")
-            score = self._score_fuzzy_window(q_plain, paragraph, plain)
-            if score is None:
-                continue
-            self._add_candidate(paragraph, "ngram_fuzzy", score[0], score[1], score[2], candidates)
 
     # ------------------------------------------------------------------
     # Relevance retrieval (passage search; never claims a verbatim hit)

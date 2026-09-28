@@ -13,6 +13,7 @@ from ..import_assembly import ImportAssembly
 from ..managed_component_assembly import ManagedComponents
 from ..zotero_sync import ZoteroSyncService
 from .background_tasks import BackgroundTasks
+from .short_gram_backfill import run_short_gram_backfill
 
 
 class RuntimeLifecycle:
@@ -38,6 +39,11 @@ class RuntimeLifecycle:
         self.background_tasks.start(
             "bibliographic-update-applier",
             lambda stop: run_applier(index_path, fill_empty_fields, stop),
+        )
+        run_when_ready = self.imports.index_runtime.run_when_ready
+        self.background_tasks.start(
+            "short-gram-backfill",
+            lambda stop: run_short_gram_backfill(run_when_ready, stop),
         )
 
     def begin_shutdown(self) -> None:
