@@ -554,6 +554,9 @@ def create_main_window(
         "resizable": True,
         "text_select": True,
         "background_color": palette["app_bg"],
+        # 原生窗口建好到首个页面画出之间只有整块底色（Windows 约一秒浅蓝，macOS 同样
+        # 可见一两秒）。先隐藏开窗，首个页面 loaded 后再显示，见 _show_after_first_page。
+        "hidden": True,
     }
     # 就绪后直接以正式页面开窗：单次导航，没有「加载页→换页」的蓝白闪烁。
     # 只有后端尚未就绪（极慢冷启动）或启动失败时才退回加载页/错误页。
@@ -574,7 +577,6 @@ def create_main_window(
                 "frameless": True,
                 "easy_drag": False,
                 "shadow": True,
-                "hidden": True,
             }
         )
 
@@ -582,23 +584,48 @@ def create_main_window(
     if controller is not None:
         controller._bind(window)
         window.events.before_show += configure_windows_main_window
-        # WebView2 初始化和首个页面导航期间只有原生底色。页面就绪后才显示，
-        # 只显示一次，避免后续刷新/加载页换页把已最小化的窗口弹回前台。
-        initial_page_shown = False
-
-        def show_initial_page() -> None:
-            nonlocal initial_page_shown
-            if not initial_page_shown:
-                initial_page_shown = True
-                window.show()
-
-        window.events.loaded += show_initial_page
     elif sys.platform == "darwin":
         window.events.before_show += configure_macos_titlebar
         window.events.before_show += functools.partial(
             configure_macos_webview_underlay, app_bg=palette["app_bg"]
         )
+    _show_after_first_page(window)
     return window, controller
+
+
+# 首个页面一直不触发 loaded（例如导航失败）时的兜底显示时限，避免应用隐形。
+INITIAL_SHOW_FALLBACK_SECONDS = 8.0
+
+
+def _show_after_first_page(window) -> None:
+    """Show the hidden main window once, when its first page has loaded.
+
+    Only the first show counts: later refreshes or the loading page swapping to
+    the real page must not pull a minimized window back to the front. A timer
+    armed when the native window is created shows it anyway if loaded never
+    arrives.
+    """
+
+    lock = threading.Lock()
+    done = False
+
+    def show_once() -> None:
+        nonlocal done
+        with lock:
+            if done:
+                return
+            done = True
+        window.show()
+
+    def arm_fallback() -> None:
+        timer = threading.Timer(INITIAL_SHOW_FALLBACK_SECONDS, show_once)
+        timer.daemon = True
+        timer.start()
+
+    window.events.loaded += show_once
+    shown = getattr(window.events, "shown", None)
+    if shown is not None:
+        shown += arm_fallback
 
 
 def setup_logging(root: Path) -> None:
