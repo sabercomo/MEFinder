@@ -23,6 +23,63 @@ class _Event:
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_macos_main_window_waits_for_page_then_shows_only_once(self) -> None:
+        """macOS 同样先隐藏开窗，首个页面 loaded 后才显示，避免整窗底色闪一两秒。"""
+        for initial_page in (
+            {"url": "http://127.0.0.1:52345/"}, {},
+            {"error": ("未找到索引数据库", "详情")},
+        ):
+            with self.subTest(initial_page=initial_page):
+                events = types.SimpleNamespace(before_show=_Event(), loaded=_Event())
+                window = mock.Mock(events=events)
+                webview = mock.Mock()
+                webview.create_window.return_value = window
+                with mock.patch.object(desktop.sys, "platform", "darwin"):
+                    desktop.create_main_window(webview, "frost-blue", **initial_page)
+
+                self.assertTrue(webview.create_window.call_args.kwargs.get("hidden"))
+                window.show.assert_not_called()
+                for callback in events.loaded.callbacks:
+                    callback()
+                window.show.assert_called_once_with()
+                for callback in list(events.loaded.callbacks):
+                    callback()
+                window.show.assert_called_once_with()
+
+    def test_main_window_shows_after_timeout_when_first_page_never_loads(self) -> None:
+        """首个页面迟迟不触发 loaded 时，兜底计时到点也要显示窗口，不能让应用隐形。"""
+        events = types.SimpleNamespace(before_show=_Event(), loaded=_Event(), shown=_Event())
+        window = mock.Mock(events=events)
+        webview = mock.Mock()
+        webview.create_window.return_value = window
+        timers = []
+
+        class FakeTimer:
+            def __init__(self, interval, function):
+                self.interval, self.function, self.daemon = interval, function, False
+                timers.append(self)
+
+            def start(self):
+                pass
+
+        with (
+            mock.patch.object(desktop.sys, "platform", "darwin"),
+            mock.patch.object(desktop.threading, "Timer", FakeTimer),
+        ):
+            desktop.create_main_window(webview, "frost-blue", url="http://127.0.0.1:52345/")
+            for callback in events.shown.callbacks:
+                callback()
+
+        self.assertEqual(len(timers), 1)
+        self.assertTrue(timers[0].daemon)
+        window.show.assert_not_called()
+        timers[0].function()
+        window.show.assert_called_once_with()
+        # A late loaded after the fallback must not show again.
+        for callback in events.loaded.callbacks:
+            callback()
+        window.show.assert_called_once_with()
+
     def test_windows_main_window_waits_for_page_then_shows_only_once(self) -> None:
         for initial_page in (
             {"url": "http://127.0.0.1:52345/"}, {},
@@ -99,7 +156,7 @@ class DesktopPortableTests(unittest.TestCase):
                 self.callbacks.append(callback)
                 return self
 
-        events = types.SimpleNamespace(before_show=Event())
+        events = types.SimpleNamespace(before_show=Event(), loaded=Event())
         window = types.SimpleNamespace(events=events)
         webview = mock.Mock()
         webview.create_window.return_value = window
@@ -112,7 +169,7 @@ class DesktopPortableTests(unittest.TestCase):
         options = webview.create_window.call_args.kwargs
         self.assertNotIn("frameless", options)
         self.assertNotIn("js_api", options)
-        self.assertNotIn("hidden", options)
+        self.assertTrue(options["hidden"])
         self.assertTrue(options["text_select"])
         self.assertEqual(options["min_size"], (960, 640))
         self.assertEqual(events.before_show.callbacks[0], desktop.configure_macos_titlebar)
@@ -124,7 +181,7 @@ class DesktopPortableTests(unittest.TestCase):
     def test_macos_main_window_loads_the_backend_url_directly(self) -> None:
         """后端就绪后开窗即正式页面：单次导航，没有加载页与换页闪烁。"""
 
-        events = types.SimpleNamespace(before_show=_Event())
+        events = types.SimpleNamespace(before_show=_Event(), loaded=_Event())
         window = types.SimpleNamespace(events=events)
         webview = mock.Mock()
         webview.create_window.return_value = window
@@ -137,7 +194,7 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertNotIn("html", options)
 
     def test_main_window_falls_back_to_loading_page_without_ready_backend(self) -> None:
-        events = types.SimpleNamespace(before_show=_Event())
+        events = types.SimpleNamespace(before_show=_Event(), loaded=_Event())
         window = types.SimpleNamespace(events=events)
         webview = mock.Mock()
         webview.create_window.return_value = window
@@ -150,7 +207,7 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertIn("正在加载索引", options["html"])
 
     def test_main_window_opens_the_error_page_when_backend_fails(self) -> None:
-        events = types.SimpleNamespace(before_show=_Event())
+        events = types.SimpleNamespace(before_show=_Event(), loaded=_Event())
         window = types.SimpleNamespace(events=events)
         webview = mock.Mock()
         webview.create_window.return_value = window

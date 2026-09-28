@@ -32,14 +32,14 @@
 
 ## 发布包（macOS）
 
-2026-09-28 在 `227de1c`（代码与 Windows 包的 `24bba67` 相同，之后只有文档提交）于干净工作树重打，覆盖此前 `b51af9a` 的本机 arm64 包。arm64 直接构建，`build_macos.sh` 全量 `unittest` 2611 项通过、28 项环境跳过；x86_64 经 Rosetta 同源构建，2611 项通过、33 项环境跳过，反查主应用与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion` 为 12.0。两架构均通过逐文件 Node 语法、PyInstaller、ad-hoc 签名、MCP 侧车冒烟、ZIP 解包验签、DMG 挂载/复制验签和 SHA-256 校验；ZIP 中应用版本为 `0.5.7`。
+2026-09-28 发布当天在 `e2e2dbd`（`24bba67` 加 macOS 启动整窗底色修复）于干净工作树重打并覆盖上传，取代同日按 `227de1c` 构建的首批 macOS 包（arm64 DMG `61061624…`、ZIP `49034414…`，x86_64 DMG `cfbe7238…`、ZIP `15a85d69…`）。arm64 直接构建，`build_macos.sh` 全量 `unittest` 2613 项通过、28 项环境跳过；x86_64 经 Rosetta 同源构建，2613 项通过、33 项环境跳过，反查主应用与 `MEFinderMCP` 均为纯 x86_64，`LSMinimumSystemVersion` 为 12.0。两架构均通过逐文件 Node 语法、PyInstaller、ad-hoc 签名、MCP 侧车冒烟、ZIP 解包验签、DMG 挂载/复制验签和 SHA-256 校验；ZIP 中应用版本为 `0.5.7`。
 
 | 文件 | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `MEFinder-v0.5.7-macos-arm64.dmg` | 101,277,116 | `61061624cee5c9d69977e5c18295b894ce1335f1fce8db0b3f130baf48ada211` |
-| `MEFinder-v0.5.7-macos-arm64.zip` | 93,517,696 | `49034414be5e5d01307a37e924bb38e75632888e4641f2ce1f346a8ae3d0e591` |
-| `MEFinder-v0.5.7-macos-x86_64.dmg` | 104,255,059 | `cfbe7238b091c36702ed504fa55588ea6210da15142c95e5366e8065fc777277` |
-| `MEFinder-v0.5.7-macos-x86_64.zip` | 98,522,564 | `15a85d696eb14e2fe1b848d36ad5bdb8ef80adef8a491b58bdb250e404da924a` |
+| `MEFinder-v0.5.7-macos-arm64.dmg` | 101,274,610 | `1655ccef1b641ab8b33436bd63975e2537757a0e410c4d7621cafaa334c440c9` |
+| `MEFinder-v0.5.7-macos-arm64.zip` | 93,518,424 | `7ca80c22ddfae786c8d085f9ce936d7aa903c346bc4a618e88faab93613ec915` |
+| `MEFinder-v0.5.7-macos-x86_64.dmg` | 104,045,254 | `1e1605b03be794263a29eb23707674395c8961cb151a9c399075581aca5b021c` |
+| `MEFinder-v0.5.7-macos-x86_64.zip` | 98,524,349 | `c3a86ea2aa3519cb9792342c0fb0cfad4bc8fe4b229770fa36a85e925dc41e26` |
 
 四份产物各附同名 `.sha256.txt`，已上传 GitHub Release，GitHub 返回的大小与摘要均与本地一致。应用未经公证；Intel 包未在 Intel 真机验收。
 
@@ -59,3 +59,5 @@
 2026-09-28 以上述 `24bba67` 产物覆盖上传 Draft 的四个文件（`--clobber`），GitHub 返回的两个二进制文件大小与 SHA-256 均与本地一致；Draft 目标源码改为 `24bba67`，链接变为 [GitHub Draft Release](https://github.com/sabercomo/MEFinder/releases/tag/untagged-4e950af8b139b482c0a9)。正文同步改写：三项窗口修复转为已含于下载包；补记设置滚动条仅悬停显示、Vue 3 设置卡片试点（主页面约 +13%）、书目切换文献类型保留已编辑字段、不支持 VLM 时隐藏 VLM 选项、MinerU 硬件检测不再闪终端；拖边缩放改列为 Bug 修复（0.5.5 起边缘即拉不动）。本轮内引入又修复的问题（拖放区连开两次文件框、切换模型被拒后单选全空、C5 渲染偏差）不列入。Draft 保持未发布。
 
 2026-09-28 上传 macOS arm64 / x86_64 四个安装文件及校验文件，正文补 macOS 下载表与构建验证，去掉草稿提示后正式发布 v0.5.7（标签指向 `24bba67`）；`refactor/v0.5.7-architecture` 合入 `main`，官网随之部署并切到 0.5.7 下载。
+
+2026-09-28 发布后发现 macOS 启动同样先露一两秒整窗底色（Windows 已由 `4f0aa8a` 修复）。`e2e2dbd` 把「先隐藏、首个页面 loaded 后显示一次」推广到 macOS，并加 8 秒兜底显示防止导航失败时应用隐形；回归测试 `test_macos_main_window_waits_for_page_then_shows_only_once`、`test_main_window_shows_after_timeout_when_first_page_never_loads` 先红后绿。macOS 四个文件重打后以 `--clobber` 覆盖上传，GitHub 摘要与本地一致；Release 正文同步新校验值，并手动重跑 Homebrew tap 更新。Windows 包未变（其已含 Windows 侧修复，兜底计时属新增代码、未进 Windows 包）。

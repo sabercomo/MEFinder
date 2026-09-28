@@ -15,7 +15,7 @@
 - 文献库首屏无须等整份译本对照总览加载；同一构建中的正文范围核对结果可复用缓存。
 - Zotero 设置页重新整理了连接状态、分类、同步选项和结果明细；设置目录换用了更容易辨认的图标。
 - 设置目录与内容区的滚动条改为鼠标停留时才显示；最大化后，设置目录末尾的选项也能完整显示。
-- Windows 主窗口改为首个页面加载完成后再显示，减少启动时的整窗空白。
+- 主窗口改为首个页面加载完成后再显示，减少启动时一两秒的整窗底色（Windows 与 macOS）。
 
 ## 技术与架构
 
@@ -46,10 +46,10 @@
 
 | 使用方式 | 下载文件 | SHA-256 |
 | --- | --- | --- |
-| Apple Silicon DMG（推荐） | **MEFinder-v0.5.7-macos-arm64.dmg** | `61061624cee5c9d69977e5c18295b894ce1335f1fce8db0b3f130baf48ada211` |
-| Apple Silicon ZIP（备用） | **MEFinder-v0.5.7-macos-arm64.zip** | `49034414be5e5d01307a37e924bb38e75632888e4641f2ce1f346a8ae3d0e591` |
-| Intel（x86_64）DMG（推荐） | **MEFinder-v0.5.7-macos-x86_64.dmg** | `cfbe7238b091c36702ed504fa55588ea6210da15142c95e5366e8065fc777277` |
-| Intel（x86_64）ZIP（备用） | **MEFinder-v0.5.7-macos-x86_64.zip** | `15a85d696eb14e2fe1b848d36ad5bdb8ef80adef8a491b58bdb250e404da924a` |
+| Apple Silicon DMG（推荐） | **MEFinder-v0.5.7-macos-arm64.dmg** | `1655ccef1b641ab8b33436bd63975e2537757a0e410c4d7621cafaa334c440c9` |
+| Apple Silicon ZIP（备用） | **MEFinder-v0.5.7-macos-arm64.zip** | `7ca80c22ddfae786c8d085f9ce936d7aa903c346bc4a618e88faab93613ec915` |
+| Intel（x86_64）DMG（推荐） | **MEFinder-v0.5.7-macos-x86_64.dmg** | `1e1605b03be794263a29eb23707674395c8961cb151a9c399075581aca5b021c` |
+| Intel（x86_64）ZIP（备用） | **MEFinder-v0.5.7-macos-x86_64.zip** | `c3a86ea2aa3519cb9792342c0fb0cfad4bc8fe4b229770fa36a85e925dc41e26` |
 
 - Apple Silicon 包要求 macOS 14 及以上；Intel 包要求 macOS 12 及以上。
 - 每个发布文件都附带同名 `.sha256.txt` 校验文件；SHA-256 只能证明文件下载完整，不等同于代码签名。Windows 安装包未做数字签名；macOS 应用未经公证，首次打开可能需要在访达中右键应用选「打开」。
@@ -58,7 +58,8 @@
 ## 构建验证
 
 - Windows 安装版与便携版的构建脚本各自通过全量 `unittest`（2611 项，36 项按条件跳过）。
-- macOS 双架构包经官方构建流程：arm64 直接构建，全量 2611 项通过（28 项按条件跳过）；x86_64 经 Rosetta 同源构建，全量 2611 项通过（33 项按条件跳过），反查主应用与 MCP 组件均为纯 x86_64、最低系统 macOS 12.0。严格签名校验、MCP 组件冒烟、ZIP 解包、DMG 挂载与复制校验通过。
+- macOS 双架构包经官方构建流程：arm64 直接构建，全量 2613 项通过（28 项按条件跳过）；x86_64 经 Rosetta 同源构建，全量 2613 项通过（33 项按条件跳过），反查主应用与 MCP 组件均为纯 x86_64、最低系统 macOS 12.0。严格签名校验、MCP 组件冒烟、ZIP 解包、DMG 挂载与复制校验通过。
+- macOS 包于 2026-09-28 发布当天覆盖重传，补入启动整窗底色修复；Windows 包未变。
 - 以上为自动化验证，不替代安装与升级的实机验收。
 
 ---
