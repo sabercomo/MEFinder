@@ -574,6 +574,7 @@ def create_main_window(
                 "frameless": True,
                 "easy_drag": False,
                 "shadow": True,
+                "hidden": True,
             }
         )
 
@@ -581,6 +582,17 @@ def create_main_window(
     if controller is not None:
         controller._bind(window)
         window.events.before_show += configure_windows_main_window
+        # WebView2 初始化和首个页面导航期间只有原生底色。页面就绪后才显示，
+        # 只显示一次，避免后续刷新/加载页换页把已最小化的窗口弹回前台。
+        initial_page_shown = False
+
+        def show_initial_page() -> None:
+            nonlocal initial_page_shown
+            if not initial_page_shown:
+                initial_page_shown = True
+                window.show()
+
+        window.events.loaded += show_initial_page
     elif sys.platform == "darwin":
         window.events.before_show += configure_macos_titlebar
         window.events.before_show += functools.partial(
